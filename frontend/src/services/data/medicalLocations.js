@@ -1,0 +1,419 @@
+// Fichier de données pour les structures médicales des HUG
+// Mis à jour avec une structure détaillée (bâtiment et étage séparés)
+
+export const medicalLocations = [
+  {
+    service: "Addictologie",
+    unit: "CAAP Grand-Pré",
+    address: "Rue du Grand-Pré 70C, 1202 Genève",
+    building: null,
+    floor: null
+  },
+  {
+    service: "Addictologie",
+    unit: "CAAP Arve",
+    address: "Route des Acacias 3, 1227 Genève",
+    building: null,
+    floor: null
+  },
+  {
+    service: "Immunologie et allergologie",
+    unit: "Unité d'allergologie",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Jean-Louis Prévost",
+    floor: "4ème étage"
+  },
+  {
+    service: "Anesthésiologie",
+    unit: "Consultation d'anesthésie",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Opéra",
+    floor: "4ème étage"
+  },
+  {
+    service: "Angiologie et hémostase",
+    unit: "Unité d'angiologie",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Prévost",
+    floor: "5ème étage"
+  },
+  {
+    service: "Laboratoire de bactériologie",
+    unit: "Analyse des bactéries et champignons",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "BATLab",
+    floor: "4ème étage"
+  },
+  {
+    service: "Laboratoire de virologie",
+    unit: "Analyse des virus",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "BATLab",
+    floor: "5ème étage"
+  },
+  {
+    service: "Cardiologie",
+    unit: "Consultation ambulatoire de cardiologie",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Prévost",
+    floor: "6ème étage"
+  },
+  {
+    service: "Cardiologie pédiatrique",
+    unit: "Unité de cardiologie pédiatrique",
+    address: "Rue Willy-Donzé 6, 1205 Genève",
+    building: "Hôpital des enfants",
+    floor: null
+  },
+  {
+    service: "Chirurgie cardiovasculaire",
+    unit: "Consultation de chirurgie cardiaque",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Prévost",
+    floor: "7ème étage"
+  },
+  {
+    service: "Chirurgie cardiovasculaire",
+    unit: "Consultation de chirurgie vasculaire",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Prévost",
+    floor: "7ème étage"
+  },
+  {
+    service: "ORL et Chirurgie cervico-faciale",
+    unit: "Consultation de chirurgie cervico-faciale",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Policlinique",
+    floor: "1er étage"
+  },
+  {
+    service: "Chirurgie maxillo-faciale et buccale",
+    unit: "Consultation de chirurgie maxillo-faciale et buccale",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Policlinique",
+    floor: "2ème étage"
+  },
+  {
+    service: "Chirurgie orthopédique et traumatologie",
+    unit: "Consultation d'orthopédie et traumatologie",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Policlinique",
+    floor: "1er étage"
+  },
+  {
+    service: "Chirurgie plastique, reconstructive et esthétique",
+    unit: "Consultation de chirurgie plastique",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Louise-Morier",
+    floor: "3ème étage"
+    
+  },
+  {
+    service: "Chirurgie viscérale",
+    unit: "Consultation de chirurgie générale et viscérale",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Prévost",
+    floor: "8ème étage"
+  },
+  {
+    service: "Chirurgie viscérale",
+    unit: "Consultation de proctologie",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Policlinique",
+    floor: "1er étage"
+  },
+  {
+    service: "Chirurgie viscérale",
+    unit: "Consultation de l'œsophage et de l'estomac",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Prévost",
+    floor: "8ème étage"
+  },
+  {
+    service: "Chirurgie viscérale",
+    unit: "Consultation du foie, du pancréas et des voies biliaires",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Prévost",
+    floor: "8ème étage"
+  },
+  {
+    service: "Chirurgie viscérale",
+    unit: "Consultation de chirurgie de l'obésité (bariatrique)",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Prévost",
+    floor: "8ème étage"
+  },
+  {
+    service: "Chirurgie viscérale",
+    unit: "Consultation de chirurgie endocrinienne",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Prévost",
+    floor: "8ème étage"
+  },
+  {
+    service: "Médecine interne de réhabilitation",
+    unit: "Clinique de Crans-Montana",
+    address: "Impasse Clairmont 2, 3963 Crans-Montana",
+    building: "Clinique de Crans-Montana",
+    floor: null
+  },
+  {
+    service: "Spécialités psychiatriques",
+    unit: "Consultation (Humeur, Anxiété, Régulation émotionnelle, Sexologie)",
+    address: "Rue de Lausanne 20 bis, 1201 Genève",
+    building: null,
+    floor: null
+  },
+  {
+    service: "Spécialités psychiatriques",
+    unit: "Unité de psychiatrie du développement mental",
+    address: "Chemin du Petit-Bel-Air 2, 1226 Thônex",
+    building: null,
+    floor: null
+  },
+  {
+    service: "Spécialités psychiatriques",
+    unit: "Consultation psychothérapeutique pour Familles et Couples",
+    address: "Chemin du Petit-Bel-Air 2, 1226 Thônex",
+    building: null,
+    floor: null
+  },
+  {
+    service: "Cybersanté et télémédecine",
+    unit: "Service de soutien",
+    address: "Boulevard de la Tour 8, 1205 Genève",
+    building: "Extra-hospitalier",
+    floor: "2ème étage"
+  },
+  {
+    service: "Dermatologie et vénéréologie",
+    unit: "Consultation de dermatologie et vénéréologie",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Prévost",
+    floor: "4ème étage"
+  },
+  {
+    service: "Endocrinologie, diabétologie et métabolisme",
+    unit: "Consultation d'endocrinologie (Morier)",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Morier",
+    floor: "4ème étage"
+  },
+  {
+    service: "Endocrinologie, diabétologie et métabolisme",
+    unit: "Consultation d'endocrinologie (Klein)",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Klein",
+    floor: "1er étage"
+  },
+  {
+    service: "Endocrinologie, diabétologie et métabolisme",
+    unit: "Consultation de diabétologie (Morier)",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Morier",
+    floor: "4ème étage"
+  },
+  {
+    service: "Endocrinologie, diabétologie et métabolisme",
+    unit: "Consultation de diabétologie (Klein)",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Klein",
+    floor: "1er étage"
+  },
+  {
+    service: "Endocrinologie, diabétologie et métabolisme",
+    unit: "Consultation commune diabétologie et cardiologie",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: null,
+    floor: null
+  },
+  {
+    service: "Pharmacologie et toxicologie cliniques",
+    unit: "Centre multidisciplinaire de la douleur",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Morier",
+    floor: "Niveau 0"
+  },
+  {
+    service: "Pharmacologie et toxicologie cliniques",
+    unit: "Centre d'informations thérapeutiques et de pharmacovigilance",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment principal (Entrée A)",
+    floor: "4ème étage"
+  },
+  {
+    service: "Don du sang",
+    unit: "Centre de transfusion sanguine",
+    address: "Rue Gabrielle-Perret-Gentil 6, 1205 Genève",
+    building: "Centre de transfusion sanguine",
+    floor: null
+  },
+  {
+    service: "Gastro-entérologie et hépatologie",
+    unit: "Consultation de gastro-entérologie et hépatologie",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Stern",
+    floor: "Étage P"
+  },
+  {
+    service: "Gastro-entérologie, hépatologie et nutrition",
+    unit: "Consultation de nutrition",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Prévost",
+    floor: "2ème étage"
+  },
+  {
+    service: "Gynécologie",
+    unit: "Consultation générale de gynécologie",
+    address: "Boulevard de la Cluse 30, 1205 Genève",
+    building: "Maternité",
+    floor: "1er étage"
+  },
+  {
+    service: "Gynécologie",
+    unit: "Urgences de gynécologie",
+    address: "Boulevard de la Cluse 30, 1205 Genève",
+    building: "Maternité",
+    floor: "Rez-de-chaussée"
+  },
+  {
+    service: "Gynécologie",
+    unit: "Gynécologie pédiatrique et de l'adolescente",
+    address: "Boulevard de la Cluse 30, 1205 Genève",
+    building: "Maternité",
+    floor: "1er étage"
+  },
+  {
+    service: "Gynécologie",
+    unit: "Gynécologie oncologique",
+    address: "Boulevard de la Cluse 30, 1205 Genève",
+    building: "Maternité",
+    floor: "1er étage"
+  },
+{
+    service: "Hématologie",
+    unit: "Consultation d'hématologie clinique",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Klein",
+    floor: "4ème étage"
+  },
+{
+    service: "Hématologie",
+    unit: "Consultation d'hématologie-oncologie",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Klein",
+    floor: "4ème étage"
+  },
+  {
+    service: "Immunologie et allergologie",
+    unit: "Consultation d'allergologie",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Jean-Louis Prévost",
+    floor: "4ème étage"
+  },
+  {
+    service: "Immunologie et allergologie",
+    unit: "Consultation d'immunologie clinique",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Jean-Louis Prévost",
+    floor: "4ème étage"
+  },
+  {
+    service: "Maladies infectieuses",
+    unit: "Consultation ambulatoire (Secrétariat 1)",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Policlinique de médecine",
+    floor: "2ème étage"
+  },
+  {
+    service: "Maladies osseuses",
+    unit: "Consultation des maladies osseuses",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Prévost",
+    floor: "8ème étage"
+  },
+  {
+    service: "Médecine de la reproduction et d'endocrinologie gynécologique",
+    unit: "Consultation de médecine de la reproduction",
+    address: "Boulevard de la Cluse 30, 1205 Genève",
+    building: "Maternité",
+    floor: "1er étage"
+  },
+  {
+    service: "Médecine de premier recours",
+    unit: "Santé asile et réfugiés (USAR)",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Policlinique",
+    floor: null
+  },
+  {
+    service: "Médecine de premier recours",
+    unit: "Santé asile et réfugiés BIS (USAR BIS)",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Policlinique",
+    floor: null
+  },
+  {
+    service: "Médecine de premier recours",
+    unit: "Consultation Post-COVID",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Morier",
+    floor: "2e étage"
+  },
+  {
+    service: "Médecine de premier recours",
+    unit: "Unité d'urgences ambulatoire (UUA)",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Policlinique",
+    floor: "Rez-de-chaussée"
+  },
+  {
+    service: "Médecine de premier recours",
+    unit: "Unité de médecine et soins dans la communauté (UMSCOM)",
+    address: "Rue Hugo-de-Senger, 2-4, 1205 Genève",
+    building: null,
+    floor: null
+  },
+  {
+    service: "Médecine de premier recours",
+    unit: "Consultation tabac, alcool et autres substances (UDMPR)",
+    address: "Boulevard de la Cluse 75, 1205 Genève",
+    building: null,
+    floor: "1er étage"
+  },
+  {
+    service: "Médecine de premier recours",
+    unit: "Consultation de santé sexuelle et planning familial",
+    address: "Boulevard de la Cluse 47, 1205 Genève",
+    building: null,
+    floor: "4e étage"
+  },
+  {
+    service: "Médecine de premier recours",
+    unit: "Consultation de l'hypertension",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Bâtiment Prévost", // Souvent lié à la cardiologie
+    floor: "6ème étage"
+  },
+  {
+    service: "Médecine de premier recours",
+    unit: "Unité de médecine et de prévention de la violence (UIMPV)",
+    address: "Boulevard de la Cluse 75, 1205 Genève",
+    building: null,
+    floor: null
+  },
+  {
+    service: "Médecine de premier recours",
+    unit: "Consultation MPR (Site Cluse Roseraie)",
+    address: "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+    building: "Policlinique",
+    floor: null
+  },
+  {
+    service: "Médecine de premier recours",
+    unit: "Consultation MPR (Site Nations)",
+    address: "La Voie-Creuse 16, 1202 Genève",
+    building: "Centre Archimed",
+    floor: null
+  },
+];

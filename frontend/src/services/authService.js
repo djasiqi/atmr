@@ -1,0 +1,65 @@
+// frontend/src/services/authService.js
+import apiClient from "../utils/apiClient";
+
+// ✅ Inscription d'un utilisateur
+export const registerUser = async (userData) => {
+  try {
+    const response = await apiClient.post("/auth/register", userData);
+    return response.data; // Retourne les données de la réponse
+  } catch (error) {
+    console.error("❌ Erreur lors de l'inscription :", error);
+    throw error; // Remonte l'erreur pour la gérer ultérieurement
+  }
+};
+
+// ✅ Connexion d'un utilisateur
+export const loginUser = async (credentials) => {
+  try {
+    const response = await apiClient.post("/auth/login", credentials);
+    const { token, user } = response.data;
+
+    console.log("🔐 Connexion réussie. Données reçues :", response.data);
+
+    if (!user || !user.public_id) {
+      throw new Error("Public ID manquant");
+    }
+
+    // ✅ Stocke les informations utilisateur
+    localStorage.setItem("authToken", token);
+    localStorage.setItem("user", JSON.stringify(user));
+    localStorage.setItem("public_id", user.public_id);
+
+    // ✅ Vérifie si l'utilisateur doit changer son mot de passe
+    if (user.force_password_change) {
+      return { redirectToReset: true }; // ✅ Retourne un flag pour redirection
+    }
+
+    return { success: true }; // ✅ Connexion réussie
+  } catch (error) {
+    console.error("❌ Erreur lors de la connexion :", error);
+    throw error;
+  }
+};
+
+// ✅ Déconnexion d'un utilisateur
+export const logoutUser = () => {
+  localStorage.removeItem("authToken");
+  localStorage.removeItem("user");
+  localStorage.removeItem("public_id");
+  console.log("🚪 Déconnexion réussie.");
+};
+
+// ✅ Réinitialisation du mot de passe (page utilisateur)
+export const resetPassword = async (newPassword) => {
+  try {
+    const response = await apiClient.post("/auth/update-password", {
+      new_password: newPassword,
+    });
+
+    console.log("🔑 Mot de passe mis à jour :", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("❌ Erreur lors de la mise à jour du mot de passe :", error);
+    throw error;
+  }
+};

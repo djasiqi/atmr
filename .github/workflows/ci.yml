@@ -1,0 +1,82 @@
+# Nom du workflow qui apparaîtra dans l'onglet "Actions" de GitHub
+name: ATMR CI - Tests & Build
+
+# Déclencheurs : quand exécuter le workflow
+on:
+  push:
+    branches: [ "main", "develop" ] # Se lance à chaque push sur les branches main ou develop
+  pull_request:
+    branches: [ "main", "develop" ] # Se lance à chaque création/mise à jour de Pull Request vers ces branches
+
+# Les "jobs" sont les différentes tâches à exécuter.
+# Ils peuvent tourner en parallèle pour accélérer le processus.
+jobs:
+  # --- JOB POUR LE BACKEND PYTHON ---
+  backend-ci:
+    runs-on: ubuntu-latest # Le type de machine virtuelle à utiliser
+    
+    defaults:
+      run:
+        working-directory: ./backend # Spécifie le répertoire de travail pour ce job
+
+    steps:
+      - name: 1. Récupération du code
+        uses: actions/checkout@v4 # Action standard pour cloner votre dépôt
+
+      - name: 2. Mise en place de Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 3. Installation des dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 4. Analyse du style de code (Linting) avec Flake8
+        run: |
+          pip install flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+      
+      - name: 5. Lancement des tests avec Pytest
+        # Cette étape suppose que vos tests sont configurés pour être lancés avec la commande `pytest`
+        # Vous aurez besoin d'un fichier .env.test ou de secrets GitHub pour la BDD de test
+        run: |
+          pip install pytest
+          pytest
+
+  # --- JOB POUR LE FRONTEND REACT ---
+  frontend-ci:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./frontend # Spécifie le répertoire de travail pour ce job
+
+    steps:
+      - name: 1. Récupération du code
+        uses: actions/checkout@v4
+
+      - name: 2. Mise en place de Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18' # Utilisez la version de Node.js de votre projet
+          cache: 'npm' # Met en cache les dépendances pour accélérer les futurs builds
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 3. Installation des dépendances
+        run: npm install
+
+      - name: 4. Analyse du style de code et des erreurs (Linting) avec ESLint
+        # Assurez-vous d'avoir un script "lint" dans votre package.json
+        run: npm run lint 
+
+      - name: 5. Lancement des tests avec Jest
+        run: npm test -- --watchAll=false # `--watchAll=false` est important pour que le test se termine
+
+      - name: 6. Build de l'application de production
+        run: npm run build # Vérifie que votre application est "buildable" sans erreurs
+
+  # --- JOB POUR LES APPLICATIONS MOBILES (EXPO) ---
+  # Ce job peut être ajouté plus tard. La logique est similaire : install, lint, test.
+  # Le build avec "eas build" nécessite une configuration plus avancée avec des secrets.

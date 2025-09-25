@@ -1,0 +1,68 @@
+/* src/components/layout/Sidebar/AdminSidebar/AdminSidebar.module.css */
+
+/* Sidebar principal */
+/* Sidebar principal */
+.sidebar {
+  width: 220px;
+  /* On décale la sidebar de 100px vers le bas pour qu'elle soit sous le header */
+  margin-top: 110px;
+  /* Ajustez la valeur selon la hauteur exacte de votre header */
+
+  /* Optionnel : ajuster la hauteur pour éviter que la sidebar ne dépasse la fenêtre */
+  min-height: calc(100vh - 100px);
+
+  padding: 20px;
+  border-right: 1px solid #ddd;
+  box-sizing: border-box;
+}
+
+/* Liste principale (menu) */
+.menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Chaque élément de la liste */
+.menu li {
+  margin-bottom: 5px;
+}
+
+/* Style de base des liens */
+.menu a {
+  color: #333; /* Texte gris foncé */
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1em;
+  transition: color 0.2s ease, background-color 0.2s ease;
+  padding: 8px 0;
+}
+
+/* Effet hover */
+.menu a:hover {
+  color: #00796b; /* Texte vert turquoise au survol */
+}
+
+/* Lien actif (utilisé par NavLink avec activeClassName) */
+.active {
+  font-weight: bold;
+  border-left: 4px solid #00796b; /* Indicateur visuel à gauche */
+  padding-left: 10px;
+  color: #00796b;
+}
+
+/* Icônes (facultatif) */
+.icon {
+  font-size: 1.2em; /* Ajustez la taille si nécessaire */
+}
+
+/* Responsive : Sidebar en pleine largeur sur écrans étroits */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #ddd;
+  }
+}

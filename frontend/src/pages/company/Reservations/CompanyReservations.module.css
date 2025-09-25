@@ -1,0 +1,112 @@
+/* ========================
+   Mise en page générale
+   ======================== */
+.companyContainer {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-top: 0;
+  background-color: #f4f7fc;
+  box-sizing: border-box;
+}
+.dashboard {
+  display: flex;
+  flex-grow: 1;
+  height: 100%;
+  /* 👇 décale toute la zone droite selon la largeur courante de la sidebar */
+  margin-left: var(--sidebar-w);
+}
+
+/* Zone de contenu principal */
+.content {
+  flex: 1;
+  padding: 24px;
+  margin: 20px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.content h1 {
+  margin-bottom: 20px;
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* ========================
+   Filtres
+   ======================== */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.searchInput,
+.statusFilter,
+.sortSelect {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background-color: #fff;
+  transition: border 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.searchInput:focus,
+.statusFilter:focus,
+.sortSelect:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  outline: none;
+}
+
+/* ========================
+   Pagination
+   ======================== */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+  gap: 16px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.pagination button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #3b82f6;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease-in-out;
+}
+
+.pagination button:disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+}
+
+.pagination button:not(:disabled):hover {
+  background: #2563eb;
+}
+
+/* ========================
+   Messages & erreurs
+   ======================== */
+.error {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}

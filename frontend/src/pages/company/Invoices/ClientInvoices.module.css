@@ -1,0 +1,127 @@
+/* ===== Mise en page générale (header fixe 80px) ===== */
+.companyContainer {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-top: 0;
+  background-color: #f4f7fc;
+  box-sizing: border-box;
+}
+
+.dashboard {
+  display: flex;
+  flex-grow: 1;
+  height: 100%;
+  /* 👇 décale toute la zone droite selon la largeur courante de la sidebar */
+  margin-left: var(--sidebar-w);
+}
+
+.content {
+  flex: 1;
+  padding: 24px;
+  margin: 20px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0,0,0,.08);
+}
+
+.content h1 {
+  margin: 0 0 18px 0;
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* ===== Messages ===== */
+.error {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+/* ===== Sélecteurs / Filtres ===== */
+.monthSelect {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+  transition: border .2s, box-shadow .2s;
+}
+
+.monthSelect:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.2);
+}
+
+/* ===== Bouton Export PDF ===== */
+.exportBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #0ea5e9;           /* sky-500 */
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  transition: background .15s ease-in-out, transform .02s;
+}
+
+.exportBtn:hover { background: #0284c7; }
+.exportBtn:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ===== Tableau des réservations ===== */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  color: #374151;
+  margin-top: 10px;
+}
+
+.table thead {
+  background: #f1f5f9;
+}
+
+.table th,
+.table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.table th {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.table tbody tr:hover { background: #f9fafb; }
+
+/* ===== Responsive ===== */
+@media (max-width: 900px) {
+  .content { margin: 12px; padding: 18px; }
+
+  .table th,
+  .table td { padding: 10px 12px; font-size: 13px; }
+
+  .content h1 { font-size: 1.6rem; }
+}
+
+@media (max-width: 640px) {
+  .table { display: block; overflow-x: auto; }
+  .exportBtn { width: 100%; justify-content: center; }
+  .monthSelect { width: 100%; }
+}

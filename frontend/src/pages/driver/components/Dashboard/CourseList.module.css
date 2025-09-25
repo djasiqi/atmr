@@ -1,0 +1,14 @@
+/* src/components/CourseList.module.css */
+.courseList {
+  margin: 20px 0;
+}
+.courseItem {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  justify-content: space-between;
+  cursor: pointer;
+}
+.courseItem:hover {
+  background-color: #f9f9f9;
+}

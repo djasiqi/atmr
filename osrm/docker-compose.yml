@@ -1,0 +1,26 @@
+version: "3.8"
+services:
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: osrm
+    command: osrm-routed --algorithm mld /data/switzerland-latest.osrm
+    volumes:
+      - "C:/Users/jasiq/atmr/osrm/data:/data:ro"   # chemin ABSOLU Windows
+    ports:
+      - "5001:5000"                                 # host:container
+    restart: unless-stopped
+
+  osrm_prepare:
+    image: osrm/osrm-backend:latest
+    container_name: osrm_prepare
+    working_dir: /data
+    volumes:
+      - "C:/Users/jasiq/atmr/osrm/data:/data"       # chemin ABSOLU Windows
+    entrypoint: ["/bin/sh","-lc"]
+    command:
+      - >
+        test -f /data/switzerland-latest.osrm ||
+        (wget -q https://download.geofabrik.de/europe/switzerland-latest.osm.pbf -O /data/switzerland-latest.osm.pbf &&
+         osrm-extract -p /opt/car.lua /data/switzerland-latest.osm.pbf &&
+         osrm-partition /data/switzerland-latest.osrm &&
+         osrm-customize /data/switzerland-latest.osrm)

@@ -1,0 +1,203 @@
+/* Conteneur principal */
+.container {
+  font-family: Arial, sans-serif;
+  margin: 0 auto;
+  max-width: 1200px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Section principale */
+.main {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 20px;
+  flex-wrap: wrap; /* Empile les sections sur petits écrans */
+}
+
+/* Section gauche */
+.leftSection {
+  flex: 1;
+  min-width: 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px; /* Ajoute un espace entre les sections */
+}
+
+.title {
+  font-size: 2.5em;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+/* Formulaire */
+.form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.inputWrapper {
+  width: 100%;
+  position: relative;
+}
+
+.input {
+  font-size: 1.2em;
+  padding: 10px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.input:focus {
+  border-color: #00796b; /* Vert turquoise */
+  box-shadow: 0 0 8px rgba(0, 121, 107, 0.5);
+  outline: none;
+}
+
+/* Autocomplete styles */
+.pac-container {
+  width: 100% !important;
+}
+
+.pac-target-input {
+  width: 100% !important;
+  box-sizing: border-box;
+}
+
+/* DateTime Inputs */
+.dateTime {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.dateTime .input {
+  flex: 1;
+  padding: 10px;
+}
+
+/* Select Dropdown */
+.select {
+  appearance: none;
+  padding: 10px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  background: #fff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23212121'%3E%3Cpath d='M7 10l5 5 5-5H7z'/%3E%3C/svg%3E")
+    no-repeat right 10px center;
+  background-size: 16px;
+  cursor: pointer;
+  width: 100%;
+}
+
+/* Bouton principal */
+.primaryButton {
+  padding: 15px;
+  background-color: #00796b; /* Vert turquoise */
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1.1em;
+  text-align: center;
+  transition: background-color 0.3s ease;
+}
+
+.primaryButton:hover {
+  background-color: #004d40; /* Vert foncé */
+}
+
+/* Section droite (carte) */
+.rightSection {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.mapPlaceholder {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  background-color: #f5f5f5; /* Gris clair */
+  border-radius: 10px;
+}
+
+/* Suggestions Section */
+.suggestionsSection {
+  margin-top: 50px;
+  padding: 20px;
+}
+
+.suggestionsContainer {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.suggestionCard {
+  flex: 1;
+  background-color: #f9f9f9; /* Gris clair */
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.cardButton {
+  background-color: #00796b; /* Vert turquoise */
+  color: #fff;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.cardButton:hover {
+  background-color: #004d40; /* Vert foncé */
+}
+
+/* Media Queries */
+@media (max-width: 1024px) {
+  .main {
+    flex-direction: column;
+    gap: 30px;
+  }
+
+  .mapPlaceholder {
+    min-height: 300px; /* Réduit la hauteur pour tablettes */
+  }
+
+  .suggestionsContainer {
+    flex-direction: column;
+    gap: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .title {
+    font-size: 1.8em;
+  }
+
+  .primaryButton {
+    width: 100%;
+  }
+
+  .mapPlaceholder {
+    min-height: 250px;
+  }
+
+  .suggestionCard {
+    padding: 15px;
+  }
+}

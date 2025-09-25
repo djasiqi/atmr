@@ -1,0 +1,17 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "baseUrl": ".",                     // Point de départ des imports
+    "paths": {
+      "@/*": ["./*"],                  // "@/services/api" = "./services/api.ts"
+      "@types/*": ["app/types/*"]      // "@types/driver" = "app/types/driver.ts"
+    },
+    "strict": true
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
+}

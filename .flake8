@@ -1,0 +1,13 @@
+[flake8]
+# Ignore les dossiers des environnements virtuels et les dépendances
+exclude =
+    .git,
+    __pycache__,
+    venv,
+    .venv,
+    env,
+    .env,
+    */site-packages/*
+
+# Vous pouvez aussi augmenter la longueur max des lignes si besoin
+max-line-length = 88

@@ -1,0 +1,163 @@
+/* src/components/layout/Sidebar/CompanySidebar/CompanySidebar.module.css */
+
+:root {
+  --hdr-h: 64px;            /* hauteur du header sticky */
+  --sidebar-w: 72px;        /* largeur dynamique (modifiée par JS) */
+
+  /* Palette marque */
+  --brand: #0b7a6b;
+  --brand-dark: #095f56;    /* hover / état ouvert */
+  --border: #e5e7eb;
+  --ink: #374151;
+  --ink-strong: #111827;
+  --bg-hover: #f3f4f6;
+  --bg-active: #ecfdf5;     /* léger highlight sur l’item actif */
+}
+
+.sidebar {
+  position: fixed;
+  top: var(--hdr-h);
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-w);
+  background: #ffffff;
+  border-right: 1px solid var(--border);
+  padding: 8px 8px;
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  z-index: 20;
+  transition: width 0.2s ease;
+}
+
+/* === TOGGLER (bouton ouvrir/fermer) === */
+.toggler {
+  width: 40px;
+  height: 40px;
+  margin: 12px;
+
+  border: none;
+  border-radius: 9999px;
+  background: var(--brand);        /* vert principal */
+  color: #ffffff;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+
+  box-shadow: 0 4px 12px rgba(11, 122, 107, 0.28);
+  transition:
+    background-color .18s ease,
+    box-shadow .18s ease,
+    transform .06s ease;
+}
+
+/* Hover (desktop only) */
+@media (hover: hover) {
+  .toggler:hover {
+    background: var(--brand-dark);
+    box-shadow: 0 6px 16px rgba(11, 122, 107, 0.35);
+  }
+}
+
+/* État OUVERT : plus foncé (pas de “vert clair” résiduel) */
+.toggler[aria-expanded="true"] {
+  background: var(--brand-dark);
+}
+
+/* Press feedback */
+.toggler:active { transform: translateY(1px) scale(0.98); }
+
+/* Focus accessible */
+.toggler:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 0 0 4px rgba(11,122,107,.55),
+    0 6px 16px rgba(11,122,107,.35);
+}
+
+/* Icône chevron dans le bouton */
+.toggler svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* === MENU === */
+.menu {
+  list-style: none;
+  padding: 8px 0;
+  margin: 0;
+}
+
+.menu li + li { margin-top: 4px; }
+
+.menu a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden; /* masque le texte quand réduit */
+
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.menu a:hover {
+  background: var(--bg-hover);
+}
+
+/* Lien actif */
+.active {
+  background: var(--bg-active);
+  color: var(--brand-dark);
+  font-weight: 600;
+}
+
+/* Icône */
+.icon {
+  font-size: 18px;
+  flex: 0 0 24px;
+  text-align: center;
+}
+
+/* Label texte */
+.text {
+  opacity: 1;
+  transition: opacity 0.15s ease, width 0.15s ease;
+}
+
+/* Sidebar réduite : on masque proprement le texte */
+.sidebar.collapsed .text {
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  overflow: hidden;
+}
+
+/* Sidebar ouverte : texte visible */
+.sidebar.open .text {
+  opacity: 1;
+  width: auto;
+}
+
+/* Mobile : bouton un poil plus compact */
+@media (max-width: 640px) {
+  .toggler {
+    width: 36px;
+    height: 36px;
+    margin: 10px;
+  }
+  .toggler svg {
+    width: 16px;
+    height: 16px;
+  }
+}

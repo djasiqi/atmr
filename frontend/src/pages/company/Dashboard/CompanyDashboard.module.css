@@ -1,0 +1,382 @@
+/* src/pages/company/Dashboard/CompanyDashboard.module.css */
+
+:root {
+  /* Doit matcher la hauteur réelle de ton header (CompanyHeader) */
+  --hdr-h: 64px;
+
+  /* Couleurs / tokens simples (optionnels) */
+  --brand: #0b7a6b;
+  --brand-dark: #075e52;
+  --bg: #f4f7fc;
+  --panel: #ffffff;
+  --border: #e5e7eb;
+  --shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+
+  --text: #0f172a;
+  --text-light: #374151;
+
+  /* États */
+  --ok: #16a34a;
+  --warn: #ca8a04;
+  --error: #ef4444;
+}
+
+/* Page globale : espace en haut = hauteur du header */
+.companyContainer {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-top: var(--hdr-h);
+  background-color: var(--bg);
+  box-sizing: border-box;
+}
+
+/* Zone principale : sidebar + contenu */
+.dashboard {
+  display: flex;
+  flex-grow: 1;
+  height: 100%;
+
+  /* décale toute la zone droite selon la largeur courante de la sidebar */
+  margin-left: var(--sidebar-w);
+}
+
+/* Contenu à droite du sidebar */
+.content {
+  flex: 1 1 auto;
+  min-width: 0;                 /* évite l’overflow quand le contenu est large */
+  padding: 20px;
+  background-color: var(--panel);
+  border-radius: 10px;
+  margin: 20px;
+  box-shadow: var(--shadow);
+
+  /* IMPORTANT : pas de scroll interne, on laisse la page gérer le défilement */
+  overflow: visible;
+}
+
+.separator {
+  margin-bottom: 30px;
+}
+
+/* Message d'erreur */
+.error {
+  color: var(--error);
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+/* Titre principal (si utilisé) */
+.dashboard h1 {
+  text-align: center;
+  font-size: 2rem;
+  margin-bottom: 24px;
+  color: var(--brand);
+}
+
+/* ================== Sections communes ================== */
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.sectionHeader h2 {
+  font-size: 1.25rem;
+  margin: 0;
+  color: var(--brand);
+}
+
+.inlineControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-light);
+  font-size: 0.95rem;
+}
+
+.inlineControls input[type="date"] {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+}
+
+/* Petits textes d’aide / états async */
+.hint {
+  display: inline-block;
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+/* ================== Carte chauffeurs ================== */
+
+.mapSection {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+}
+
+/* ================== Planification & suivi (DispatchTable) ================== */
+
+.dispatchSection {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+/* Effets visuels selon l’état du moteur reçu via data-dispatch-status */
+.dispatchSection[data-dispatch-status*="running"],
+.dispatchSection[data-dispatch-status*="optim"] {
+  border-color: #fde68a; /* jaune clair */
+  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.25), var(--shadow);
+}
+
+.dispatchSection[data-dispatch-status*="completed"] {
+  border-color: #bbf7d0; /* vert clair */
+}
+
+/* ================== Réservations & Chauffeurs ================== */
+
+.reservationsSection,
+.driverSection {
+  margin-bottom: 40px;
+}
+
+.reservationsSection h2,
+.driverSection h2 {
+  font-size: 1.4rem;
+  margin-bottom: 12px;
+  color: var(--brand);
+}
+
+/* Table générique (si utilisée directement ici) */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  table-layout: auto;
+}
+
+.table th,
+.table td {
+  padding: 12px 15px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th {
+  background-color: #f9fafb;
+  font-weight: 600;
+  color: #374151;
+}
+
+.table tbody tr:hover {
+  background-color: #f3f4f6;
+}
+
+/* Boutons dans le tableau */
+.table button {
+  padding: 8px 12px;
+  margin-right: 5px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background-color: var(--brand);
+  color: #fff;
+  transition: background-color 0.2s ease;
+}
+
+.table button:hover {
+  background-color: var(--brand-dark);
+}
+
+/* ================== Modal générique (si non MUI) ================== */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modalContent {
+  background: #fff;
+  padding: 20px;
+  border-radius: 10px;
+  width: 90%;
+  max-width: 520px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+
+.modalContent h3 {
+  margin-top: 0;
+  font-size: 1.25rem;
+  color: var(--brand);
+}
+
+.modalContent p {
+  margin-bottom: 12px;
+}
+
+.modalContent ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+
+.modalContent ul li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.modalContent ul li:last-child {
+  border-bottom: none;
+}
+
+.modalContent button {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background-color: var(--brand);
+  color: #fff;
+  transition: background-color 0.2s ease;
+}
+
+.modalContent button:hover {
+  background-color: var(--brand-dark);
+}
+
+/* ================== Cartes Overview ================== */
+
+.overviewCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.card {
+  background-color: #fff;
+  padding: 16px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+  text-align: center;
+  color: var(--brand);
+}
+
+.card h3 {
+  font-size: 1rem;
+  margin-bottom: 8px;
+  color: #064e3b;
+}
+
+.card p {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* ================== Zone graphiques ================== */
+
+.chartContainer {
+  margin-bottom: 32px;
+}
+
+/* ================== Section réservation manuelle ================== */
+
+.manualBookingSection {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 24px 0 8px;
+  box-shadow: var(--shadow);
+}
+
+/* ================== Responsive ================== */
+
+@media (max-width: 1024px) {
+  .content {
+    margin: 16px;
+    padding: 18px;
+  }
+}
+
+@media (max-width: 768px) {
+  .table th,
+  .table td {
+    padding: 8px 10px;
+  }
+
+  .content {
+    margin: 12px;
+    padding: 16px;
+  }
+
+  .sectionHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .inlineControls {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* ================== Dark mode (préférences système) ================== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1220;
+    --panel: #0f172a;
+    --border: #1f2937;
+    --text: #e5e7eb;
+    --text-light: #9ca3af;
+    --shadow: none;
+  }
+
+  .content,
+  .mapSection,
+  .dispatchSection,
+  .manualBookingSection {
+    box-shadow: none;
+  }
+
+  .inlineControls input[type="date"] {
+    background: #0b1220;
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  .table th {
+    background: #111827;
+    color: var(--text-light);
+  }
+
+  .table tbody tr:hover {
+    background: #0f172a;
+  }
+}

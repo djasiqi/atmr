@@ -1,0 +1,322 @@
+.pageContainer {
+  padding-top: 100px; /* Ajustez la valeur en fonction de la hauteur du header */
+}
+
+/* Conteneur principal */
+.container {
+  font-family: Arial, sans-serif;
+  margin: 0 auto;
+  max-width: 1200px;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Titre principal */
+.title {
+  font-size: 2.5em;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+/* Section principale */
+.mainRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex; /* Assure que les deux sections ont la même hauteur */
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+/* Section gauche */
+.leftSection {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between; /* Remplit l'espace disponible */
+  gap: 20px;
+  min-height: 400px; /* Même hauteur que la carte */
+}
+
+/* Formulaire */
+.form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.inputWrapper {
+  width: 100%;
+  position: relative;
+}
+
+.input {
+  font-size: 1.2em;
+  padding: 10px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.input:focus {
+  border-color: #00796b; /* Vert turquoise */
+  box-shadow: 0 0 8px rgba(0, 121, 107, 0.5);
+  outline: none;
+}
+
+/* DateTime Inputs */
+.dateTime {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.dateTime .input {
+  flex: 1;
+  padding: 10px;
+}
+
+/* Bouton principal */
+.primaryButton {
+  padding: 15px;
+  background-color: #00796b; /* Vert turquoise */
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1.1em;
+  text-align: center;
+  transition: background-color 0.3s ease;
+}
+
+.primaryButton:hover {
+  background-color: #004d40; /* Vert foncé */
+}
+
+/* Section suggestions */
+/* Ajustement de la largeur du conteneur pour qu'il soit aligné avec le bouton */
+.suggestionsSection {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 10px;
+  box-sizing: border-box;
+  padding: 15px 10px;
+  width: 100%;
+  min-height: 160px; /* 🔥 Fixe une hauteur minimale stable */
+  overflow: hidden;
+}
+
+/* Conteneur du slider */
+.sliderWrapper {
+  max-width: 460px; /* ✅ Fixe la largeur pour éviter les déplacements horizontaux */
+  height: 140px; /* ✅ Fixe la hauteur pour éviter les déplacements verticaux */
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Conteneur des suggestions */
+.suggestionsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0px;
+  max-height: 140px;
+  overflow-y: hidden;
+  width: 100%; /* ✅ Prend toute la largeur */
+  align-items: center;
+  justify-content: center;
+}
+
+/* Style des cartes */
+.suggestionCard {
+  margin: 0 auto;
+  padding: 8px 15px;
+  font-size: 1.2em;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 6px;
+  background-color: #f9f9f9;
+  cursor: pointer;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+/* Centrage et correction des slides */
+.slick-slide {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+/* Empêche le texte de bouger et assure un alignement stable */
+.suggestionCard span {
+  display: block;
+
+  text-align: center;
+}
+
+/* Effet au survol */
+.suggestionCard:hover {
+  transform: translateY(-3px);
+  background-color: #e0f2f1;
+}
+
+/* Élément actif mis en avant */
+.slick-center .suggestionCard {
+  background-color: #e0f2f1;
+  color: #00796b;
+  opacity: 1;
+}
+
+/* Réduire légèrement la transparence des éléments latéraux */
+.suggestionCard:not(.slick-center) {
+  opacity: 0.6;
+  transform: scale(0.9);
+}
+
+/* ✅ Empêche le changement de hauteur dynamique */
+.slick-slide {
+  height: 40px !important; /* 🔥 Bloque la hauteur */
+}
+
+/* ✅ Empêche le changement de largeur dynamique */
+.slick-slide > div {
+  width: 700px !important; /* 🔥 Bloque la largeur pour éviter les mouvements */
+}
+
+/* Section droite (carte) */
+.rightSection {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px; /* Assure la même hauteur que le formulaire */
+  padding: 20px;
+}
+
+.mapPlaceholder {
+  width: 100%;
+  height: 100%;
+  min-height: 400px; /* Garde une hauteur minimum */
+  background-color: #f5f5f5; /* Fond gris clair */
+  border-radius: 10px;
+}
+
+.activityContainer {
+  width: 100%;
+  max-width: 1200px; /* 🔥 Même largeur que la première ligne */
+  margin: 0 auto; /* ❗ Centre bien l'élément */
+  margin-top: 40px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden; /* ❗ Empêche tout dépassement */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box; /* 🔥 Empêche le débordement lié aux padding */
+}
+
+.activityColumns {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: nowrap; /* Force l'affichage sur une seule ligne */
+  align-items: stretch; /* Assure un alignement vertical uniforme */
+  max-width: 100%;
+}
+
+.upcomingBookings,
+.ongoingBookings,
+.pastBookings {
+  flex: 1;
+  min-width: 300px;
+  max-width: 32%;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between; /* S'assure que le contenu est bien espacé */
+  overflow: hidden;
+}
+
+.bookingCard {
+  background-color: #f9f9f9;
+  border-radius: 10px;
+  padding: 15px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 15px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.bookingCard:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.bookingCard p {
+  font-size: 1.1em;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.bookingCard strong {
+  color: #00796b;
+}
+
+.bookingCard button {
+  background-color: #00796b;
+  color: white;
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  text-align: center;
+}
+
+.bookingCard button:hover {
+  background-color: #004d40;
+}
+
+/* Titres des sections */
+.upcomingBookings h3,
+.ongoingBookings h3,
+.pastBookings h3 {
+  font-size: 1.8em;
+  color: #00796b;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+/* Adaptation pour les petits écrans */
+@media (max-width: 768px) {
+  .activityColumns {
+    flex-direction: column; /* Les colonnes deviennent empilées sur petits écrans */
+    gap: 15px;
+  }
+
+  .leftSection,
+  .rightSection {
+    min-width: 100%; /* Les sections prennent toute la largeur sur petits écrans */
+  }
+
+  .suggestionsSection {
+    margin-top: 30px; /* Moins d'espace sur mobile */
+  }
+}

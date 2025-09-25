@@ -1,0 +1,103 @@
+/* Fichier: C:\Users\jasiq\atmr\frontend\src\pages\company\components\AddDriverForm.module.css */
+
+/* --- Structure générale du formulaire --- */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 400px;
+  color: #334155;
+}
+
+/* --- Groupe : Label + Input --- */
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.formGroup label {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.formGroup input {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background-color: #f8fafc;
+  transition: all 0.2s ease;
+}
+
+.formGroup input:focus {
+  outline: none;
+  border-color: #4338ca;
+  box-shadow: 0 0 0 3px rgba(67, 56, 202, 0.1);
+  background-color: #ffffff;
+}
+
+/* --- Conteneur pour les boutons --- */
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 10px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+}
+
+/* --- CORRECTION ICI : On utilise un sélecteur groupé --- */
+/* Style de base partagé par les deux boutons */
+.submitButton,
+.cancelButton {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Styles spécifiques au bouton de soumission */
+.submitButton {
+  background-color: #4338ca;
+  color: #ffffff;
+}
+
+.submitButton:hover {
+  background-color: #3730a3;
+}
+
+/* Styles spécifiques au bouton d'annulation */
+.cancelButton {
+  background-color: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.cancelButton:hover {
+  background-color: #e2e8f0;
+  border-color: #cbd5e1;
+}
+
+/* --- Styles pour les boutons désactivés (partagé) --- */
+.submitButton:disabled,
+.cancelButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* --- Style pour les messages d'erreur --- */
+.error {
+  color: #ef4444;
+  font-size: 0.8rem;
+  margin-top: 2px;
+}

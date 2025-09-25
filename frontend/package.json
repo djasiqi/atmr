@@ -1,0 +1,81 @@
+{
+  "name": "frontend",
+  "description": "Final fix for dependencies",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@craco/craco": "^5.9.0",
+    "@date-io/date-fns": "^3.2.1",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mapbox/polyline": "^1.2.1",
+    "@mui/material": "^7.1.2",
+    "@mui/x-date-pickers": "^8.5.3",
+    "@reduxjs/toolkit": "^2.5.0",
+    "@tanstack/react-query": "^5.67.1",
+    "axios": "^1.7.9",
+    "browserify-zlib": "^0.2.0",
+    "cra-template": "1.2.0",
+    "date-fns": "^4.1.0",
+    "exif-js": "^2.3.0",
+    "file-saver": "^2.0.5",
+    "jwt-decode": "^4.0.0",
+    "leaflet": "^1.9.4",
+    "path-browserify": "^1.0.1",
+    "pdf-lib": "^1.17.1",
+    "pdfkit": "^0.16.0",
+    "process": "^0.11.10",
+    "react": "^18.2.0",
+    "react-app-rewired": "^2.2.1",
+    "react-dom": "^18.2.0",
+    "react-icons": "^5.4.0",
+    "react-leaflet": "^4.2.1",
+    "react-redux": "^9.2.0",
+    "react-router-dom": "^6.23.1",
+    "react-select": "^5.10.1",
+    "react-slick": "^0.30.3",
+    "react-toastify": "^11.0.5",
+    "react-yearly-calendar": "^1.2.6",
+    "recharts": "^2.15.1",
+    "redux": "^5.0.1",
+    "slick-carousel": "^1.8.1",
+    "socket.io-client": "^4.8.1",
+    "sonner": "^2.0.3",
+    "stream-browserify": "^3.0.0",
+    "swissqrbill": "^4.1.1",
+    "util": "^0.12.5",
+    "web-vitals": "^4.2.4"
+  },
+  "scripts": {
+    "start": "react-app-rewired start",
+    "build": "react-app-rewired build",
+    "test": "react-app-rewired test",
+    "eject": "react-scripts eject",
+    "lint": "eslint ."
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@testing-library/jest-dom": "^6.6.4",
+    "@testing-library/react": "^16.3.0",
+    "http-proxy-middleware": "^3.0.5",
+    "react-scripts": "^5.0.1"
+  }
+}

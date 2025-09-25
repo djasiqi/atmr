@@ -1,0 +1,15 @@
+{
+  // pointe VS Code sur votre venv
+  "python.defaultInterpreterPath": "${workspaceFolder}/venv/Scripts/python.exe",
+
+  // active la découverte automatique des sites-packages
+  "python.analysis.autoSearchPaths": true,
+
+  // ajoute explicitement le site-packages de votre venv
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/venv/Lib/site-packages"
+  ],
+
+  // autorise Pylance à utiliser le code source des bibliothèques pour l’inférence de types
+  "python.analysis.useLibraryCodeForTypes": true
+}

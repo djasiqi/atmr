@@ -1,0 +1,51 @@
+# Forcer Prebuild côté EAS
+android/
+ios/
+
+# Dépendances (reinstallées sur EAS)
+node_modules/
+.npm/
+.yarn/cache/
+.pnpm-store/
+
+# Builds & caches Android
+android/app/build/
+android/build/
+android/.gradle/
+android/.cxx/
+android/local.properties
+**/.cxx/
+**/.gradle/
+
+# Builds & caches iOS
+ios/build/
+ios/Pods/
+ios/DerivedData/
+
+# Expo/Metro caches
+.expo/
+.expo-shared/
+dist/
+build/
+
+# IDE & OS
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Binaires générés
+*.apk
+*.aab
+*.ipa
+*.log
+
+# Env locaux (sur EAS on utilise eas env)
+.env
+.env.*
+!.env.example
+
+# VCS
+.git/
+.git-lfs/

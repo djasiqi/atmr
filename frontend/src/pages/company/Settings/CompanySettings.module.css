@@ -1,0 +1,272 @@
+/* ====== Layout ====== */
+.companyContainer {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-top: 0;
+  background-color: #f4f7fc;
+  box-sizing: border-box;
+}
+
+.dashboard {
+  display: flex;
+  flex-grow: 1;
+  height: 100%;
+  /* 👇 décale toute la zone droite selon la largeur courante de la sidebar */
+  margin-left: var(--sidebar-w);
+}
+
+.content {
+  flex: 1;
+  padding: 20px;
+  margin: 20px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0,0,0,.08);
+  
+}
+
+/* ====== Header ====== */
+.settingsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.settingsHeader h1 {
+  font-size: 1.6rem;
+  color: #1f2937;
+  margin: 0;
+}
+
+/* ====== Section ====== */
+.section {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.section h2 {
+  font-size: 1.1rem;
+  color: #0f766e;
+  margin: 0 0 12px 0;
+}
+
+/* Spécifique logo (non vide pour éviter le warning) */
+.logoSection {
+  margin-top: 4px;
+}
+
+/* ====== Form ====== */
+.settingsForm {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 20px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.formGroupFull {
+  grid-column: 1 / -1; /* occupe les 2 colonnes */
+}
+
+.formGroup label {
+  font-weight: 600;
+  color: #28304b;
+  font-size: 0.95rem;
+}
+
+.settingsForm input,
+.settingsForm textarea,
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d2d6e0;
+  border-radius: 8px;
+  background: #f9fafb;
+  font-size: 0.98rem;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+}
+
+.settingsForm textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.settingsForm input:focus,
+.settingsForm textarea:focus,
+.input:focus {
+  outline: none;
+  background: #fff;
+  border-color: #3777f7;
+  box-shadow: 0 0 0 3px rgba(55, 119, 247, .12);
+}
+
+/* Erreurs champ */
+.fieldError {
+  color: #b00020;
+  font-size: 0.85rem;
+}
+
+/* ====== Readonly ====== */
+.readonlyField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.readonlyBox {
+  padding: 10px 12px;
+  background: #f7f8fa;
+  border: 1px dashed #e5e7eb;
+  border-radius: 8px;
+  color: #111827;
+}
+
+/* ====== Logo ====== */
+.logoRow {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  align-items: center;
+}
+
+.logoBox {
+  width: 96px;
+  height: 96px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.logoPreview {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.logoPlaceholder {
+  width: 100%;
+  height: 100%;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+}
+
+.logoActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #374151;
+  background: #eef2ff;
+  border: 1px solid #e0e7ff;
+  border-radius: 999px;
+  padding: 6px 10px;
+  width: fit-content;
+}
+
+.actionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.urlRow {
+  display: flex;
+  gap: 8px;
+}
+
+.urlRow .input {
+  flex: 1;
+}
+
+/* ====== Buttons & Alerts ====== */
+.button,
+.submitButton {
+  appearance: none;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: transform .02s, box-shadow .15s, background .15s, opacity .15s;
+  box-shadow: 0 2px 10px rgba(0,0,0,.04);
+}
+
+.button:disabled,
+.submitButton:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.primary,
+.submitButton.primary {
+  background: #0f766e;
+  color: #fff;
+}
+.primary:hover:not(:disabled) { background: #0b5e58; }
+
+.secondary {
+  background: #e5e7eb;
+  color: #111827;
+}
+.secondary:hover:not(:disabled) { background: #d1d5db; }
+
+.danger {
+  background: #b00020;
+  color: #fff;
+}
+.danger:hover:not(:disabled) { background: #8d001a; }
+
+.success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+/* ====== Responsive ====== */
+@media (max-width: 1024px) {
+  .settingsForm {
+    grid-template-columns: 1fr;
+  }
+  .logoRow {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+}

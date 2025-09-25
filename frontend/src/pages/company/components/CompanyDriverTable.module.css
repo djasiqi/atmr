@@ -1,0 +1,130 @@
+/* Fichier: C:\Users\jasiq\atmr\frontend\src\pages\company\components\CompanyDriverTable.module.css */
+
+.tableContainer {
+  margin-top: 20px;
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background-color: #ffffff;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.table th {
+  padding: 12px 16px;
+  background-color: #f8fafc;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+  color: #334155;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover {
+  background-color: #f1f5f9;
+}
+
+/* --- Styles pour la cellule utilisateur (avatar + nom) --- */
+.userCell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px #e2e8f0;
+}
+
+.fullName {
+  font-weight: 600;
+}
+
+.username {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+/* --- Styles pour la cellule véhicule --- */
+.vehicleCell {
+  line-height: 1.4;
+}
+
+.vehicleModel {
+  font-weight: 500;
+}
+
+.vehicleBrand {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+/* --- Styles pour les badges de statut --- */
+.statusBadge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-weight: 500;
+  font-size: 0.8rem;
+}
+
+.active {
+  background-color: #dcfce7; /* Vert clair */
+  color: #16a34a;
+}
+
+.inactive {
+  background-color: #f1f5f9; /* Gris clair */
+  color: #64748b;
+}
+
+/* --- Styles pour la cellule des actions --- */
+.actionsCell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.actionButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  margin: 0 4px;
+  border-radius: 50%;
+  color: #64748b;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.actionButton:hover {
+  background-color: #e5e7eb;
+  color: #334155;
+}
+
+.deleteButton:hover {
+  background-color: #fee2e2; /* Rouge clair au survol */
+  color: #dc2626; /* Rouge foncé */
+}

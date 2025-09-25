@@ -1,0 +1,120 @@
+.manual-booking-form {
+  background: #fff;
+  border-radius: 16px;
+  padding: 2rem 2.5rem;
+  box-shadow: 0 2px 24px 0 rgba(40, 40, 70, 0.07);
+  max-width: 540px;
+  margin: 0 auto;
+  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+}
+
+.manual-booking-form label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: #28304b;
+  font-size: 1rem;
+  letter-spacing: .01em;
+}
+
+.manual-booking-form input,
+.manual-booking-form textarea,
+.manual-booking-form .react-select__control {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d2d6e0;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  background: #f9fafb;
+  font-size: 1rem;
+  transition: border 0.2s;
+}
+
+.manual-booking-form input:focus,
+.manual-booking-form textarea:focus,
+.manual-booking-form .react-select__control--is-focused {
+  border: 1.5px solid #3777f7;
+  outline: none;
+  background: #fff;
+}
+
+.manual-booking-form textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+.manual-booking-form .react-select__control {
+  margin-bottom: 16px;
+  min-height: 48px;
+}
+
+.manual-booking-form .flex {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+  margin-bottom: 14px;
+}
+
+.manual-booking-form .primaryButton,
+.manual-booking-form button[type="submit"] {
+  width: 100%;
+  background: linear-gradient(90deg, #3a89ff, #3777f7 80%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-top: 10px;
+  transition: background 0.15s;
+  cursor: pointer;
+  box-shadow: 0 2px 12px 0 rgba(30, 80, 200, 0.10);
+}
+
+.manual-booking-form .primaryButton:disabled,
+.manual-booking-form button[disabled] {
+  background: #b9cbf9;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.manual-booking-form .form-section {
+  margin-bottom: 24px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e7eaf0;
+}
+
+.manual-booking-form .form-section:last-child {
+  border-bottom: none;
+}
+
+.manual-booking-form .error {
+  color: #ff3647;
+  margin-bottom: 12px;
+  font-size: 0.98rem;
+}
+
+.manual-booking-form .react-select__menu {
+  z-index: 99;
+}
+
+.manual-booking-form input[type="checkbox"] {
+  width: 19px;
+  height: 19px;
+  accent-color: #3777f7;
+  margin: 0;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: box-shadow 0.2s;
+}
+
+.manual-booking-form label[for="roundtrip"] {
+  margin-left: 4px;
+  margin-bottom: 0;
+  font-weight: 500;
+  font-size: 1rem;
+  color: #28304b;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1;
+}

@@ -1,0 +1,193 @@
+/* Fichier: C:\Users\jasiq\atmr\frontend\src\pages\driver\components\Dashboard\DriverMap.module.css */
+
+/* --- Design tokens locaux --- */
+:root {
+  --brand: #0b7a6b;
+  --border: #e2e8f0;
+  --bg: #ffffff;
+  --panel: #f8fafc;
+  --text: #334155;
+  --text-light: #64748b;
+
+  --success: #16a34a;
+  --success-bg: #dcfce7;
+
+  --warn: #ca8a04;
+  --warn-bg: #fef9c3;
+
+  --danger: #b91c1c;
+  --danger-bg: #fee2e2;
+
+  --shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -2px rgba(0,0,0,.1);
+}
+
+/* --- Conteneur principal de la carte --- */
+.driverMapContainer {
+  width: 100%;
+  height: 400px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  position: relative;
+}
+
+/* Si tu veux facilement changer la hauteur via une classe utilitaire */
+.h480 { height: 480px; }
+.h600 { height: 600px; }
+
+/* --- Carte Leaflet --- */
+.leafletMap, /* à passer sur <MapContainer className={styles.leafletMap} /> */
+.driverMapContainer :global(.leaflet-container) {
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+/* Bordures douces aux tuiles et éléments internes */
+.driverMapContainer :global(.leaflet-container) {
+  font-family: inherit;
+}
+
+/* Popup look & feel */
+.driverMapContainer :global(.leaflet-popup-content-wrapper) {
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.driverMapContainer :global(.leaflet-popup-content) {
+  margin: 10px 12px;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+.driverMapContainer :global(.leaflet-popup-tip) {
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+/* Focus ring accessible quand on navigue au clavier */
+.driverMapContainer:focus-within {
+  outline: 2px solid color-mix(in oklab, var(--brand), white 30%);
+  outline-offset: 3px;
+}
+
+/* --- Markers P/D (L.divIcon) --- */
+/* On ajoute un halo pour lisibilité + une animation discrète */
+.pickup-marker,
+.dropoff-marker {
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,.25));
+}
+.pickup-marker .marker-dot,
+.dropoff-marker .marker-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 12px;
+  color: #fff;
+  border: 2px solid #fff;
+}
+
+/* Si un jour tu remplaces l'HTML inline par un wrapper <div class="marker-dot">P</div> */
+.pickup-marker .marker-dot { background: #52c41a; }   /* vert */
+.dropoff-marker .marker-dot { background: #f5222d; }  /* rouge */
+
+/* Animation douce (respect reduced motion) */
+@keyframes pinPulse {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+.pickup-marker,
+.dropoff-marker {
+  animation: pinPulse 2.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pickup-marker,
+  .dropoff-marker { animation: none; }
+}
+
+/* --- Légende optionnelle (si tu l’ajoutes plus tard) --- */
+.legend {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+  min-width: 160px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(4px);
+}
+.legendTitle {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.legendItem {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
+  color: var(--text-light);
+}
+.swatch {
+  width: 14px;
+  height: 4px;
+  border-radius: 999px;
+}
+.swatchRoute { background: #3388ff; } /* route par défaut */
+.swatchLateMild { background: #faad14; } /* <10 min */
+.swatchLateHigh { background: #f5222d; } /* >=10 min */
+
+/* --- Badges d’état si besoin dans la légende --- */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.badgeOk { background: var(--success-bg); color: var(--success); }
+.badgeWarn { background: var(--warn-bg); color: var(--warn); }
+.badgeDanger { background: var(--danger-bg); color: var(--danger); }
+
+/* --- Responsiveness --- */
+@media (max-width: 900px) {
+  .driverMapContainer { height: 360px; }
+}
+@media (max-width: 640px) {
+  .driverMapContainer { height: 320px; }
+  .legend { right: 8px; bottom: 8px; padding: 6px 8px; }
+}
+
+/* --- Dark mode --- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1220;
+    --panel: #0f172a;
+    --border: #1f2937;
+    --text: #e5e7eb;
+    --text-light: #9ca3af;
+  }
+  .driverMapContainer { box-shadow: none; }
+  .driverMapContainer :global(.leaflet-popup-content-wrapper) {
+    background: var(--bg);
+    border-color: var(--border);
+  }
+  .driverMapContainer :global(.leaflet-popup-content) { color: var(--text); }
+  .driverMapContainer :global(.leaflet-popup-tip) { border-color: var(--border); }
+}
+
+/* --- Scroll & touch tweaks --- */
+.driverMapContainer {
+  touch-action: pan-x pan-y;
+  -webkit-tap-highlight-color: transparent;
+}

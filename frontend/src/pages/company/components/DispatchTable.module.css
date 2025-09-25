@@ -1,0 +1,309 @@
+/* Fichier: C:\Users\jasiq\atmr\frontend\src\pages\company\components\DispatchTable.module.css */
+
+/* --- Conteneur principal --- */
+.dispatchTableContainer {
+  margin-top: 20px;
+  overflow-x: auto;
+  margin-bottom: 20px;
+
+  /* Variables thème locales (faciles à surcharger) */
+  --bg: #ffffff;
+  --panel-bg: #f8fafc;
+  --border: #e2e8f0;
+  --text: #334155;
+  --text-light: #64748b;
+  --header-bg: #f8fafc;
+  --hover: #f1f5f9;
+  --brand: #0b7a6b;
+  --success-bg: #dcfce7;
+  --success: #16a34a;
+  --warn-bg: #fef9c3;
+  --warn: #ca8a04;
+  --info-bg: #e0e7ff;
+  --info: #4338ca;
+}
+
+/* --- Barre planification (planner intégré) --- */
+.plannerBar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.plannerRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+/* --- Structure de base de la table --- */
+.dispatchTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  color: var(--text);
+  background-color: var(--bg);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+}
+.dispatchTable thead { position: sticky; top: 0; z-index: 1; }
+
+/* --- En-têtes --- */
+.dispatchTable th {
+  padding: 12px 16px;
+  background-color: var(--header-bg);
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  border-bottom: 2px solid var(--border);
+}
+
+/* ===== Header statut & actions ===== */
+.headerBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 10px;
+}
+.left { display: flex; align-items: center; gap: 10px; min-height: 24px; }
+.right { display: flex; align-items: center; gap: 10px; }
+.progressWrap { min-width: 160px; max-width: 260px; width: 25vw; }
+.updatedAt { font-size: 0.85rem; color: var(--text-light); }
+
+.refreshBtn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.08s ease;
+}
+.refreshBtn:hover { background: var(--hover); }
+.refreshBtn:active { transform: translateY(1px); }
+.refreshBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* --- Cellules et lignes --- */
+.dispatchTable td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.dispatchTable tbody tr:hover {
+  background-color: var(--hover);
+}
+.dispatchTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* --- Badges de statut --- */
+.statusPill,
+.statusBadge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  text-align: center;
+  border: 1px solid transparent;
+}
+.assigned {
+  background-color: var(--info-bg);
+  color: var(--info);
+}
+.inProgress,
+.optimizing {
+  background-color: var(--warn-bg);
+  color: var(--warn);
+  animation: pulse 2s infinite ease-in-out;
+}
+.completed {
+  background-color: var(--success-bg);
+  color: var(--success);
+  border-color: #bbf7d0;
+}
+
+/* --- Boutons d'action (cohérents avec les autres tableaux) --- */
+.actionButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  margin: 0 4px;
+  border-radius: 50%;
+  color: var(--text-light);
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Cellule d’actions */
+.actionsCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Bouton icône pour la réassignation */
+.iconBtn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.08s ease, box-shadow 0.15s ease;
+}
+.iconBtn:hover { background: var(--hover); }
+.iconBtn:active { transform: translateY(1px); }
+.iconBtn:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--brand), white 30%);
+  outline-offset: 2px;
+}
+
+/* --- Formulaires planner --- */
+.inlineCheckbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.92rem;
+  color: var(--text);
+}
+.optimizeBtn {
+  background: var(--brand);        /* couleur marque */
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.08s ease;
+}
+.optimizeBtn:hover { filter: brightness(1.05); }
+.optimizeBtn:active { transform: translateY(1px); }
+.optimizeBtn:disabled { filter: grayscale(0.4); opacity: 0.7; cursor: not-allowed; }
+.hint { color: var(--text-light); font-size: 0.85rem; }
+
+/* --- Tags (Retour, etc.) --- */
+.tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+.tagPrimary {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+.tagReturn {
+  background: #dbeafe;  /* bleu clair */
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+/* Pied de tableau */
+.footerStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 0.92rem;
+  color: var(--text-light);
+}
+.warning {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+/* --- Responsiveness --- */
+@media (max-width: 900px) {
+  .plannerRow { gap: 8px; }
+  .progressWrap { min-width: 120px; width: 35vw; }
+  .dispatchTable th, .dispatchTable td { padding: 10px 12px; }
+
+  /* Aide à la lisibilité sur tablettes : fixe quelques largeurs minimales */
+  .dispatchTable th:nth-child(1),
+  .dispatchTable td:nth-child(1) { min-width: 64px; }   /* ID */
+  .dispatchTable th:nth-child(2),
+  .dispatchTable td:nth-child(2) { min-width: 160px; }  /* Client */
+  .dispatchTable th:nth-child(3),
+  .dispatchTable td:nth-child(3) { min-width: 160px; }  /* Date/Heure */
+  .dispatchTable th:nth-child(6),
+  .dispatchTable td:nth-child(6) { min-width: 160px; }  /* Chauffeur */
+}
+@media (max-width: 640px) {
+  .plannerBar { padding: 8px 10px; }
+  .updatedAt { display: none; } /* compacter l'en-tête sur mobile */
+  .actionsCell { gap: 6px; }
+}
+
+/* --- Dark mode --- */
+@media (prefers-color-scheme: dark) {
+  .plannerBar { background: #0b1220; border-color: #1f2937; }
+  .dispatchTable { background: #0b1220; color: #e5e7eb; }
+  .dispatchTable th { background: #111827; color: #9ca3af; border-bottom-color: #1f2937; }
+  .dispatchTable td { border-bottom-color: #1f2937; }
+  .dispatchTable tbody tr:hover { background: #0f172a; }
+  .updatedAt { color: #9ca3af; }
+  .refreshBtn { background: #0b1220; border-color: #1f2937; color: #e5e7eb; }
+  .refreshBtn:hover { background: #111827; }
+  .tagPrimary { background: #1f2937; color: #e5e7eb; }
+  .tagReturn { background: #0b3b70; color: #bfdbfe; border-color: #1e40af; }
+
+  /* Teinte marque en dark */
+  .iconBtn:focus-visible {
+    outline-color: color-mix(in oklab, #0b7a6b, white 20%);
+  }
+}
+
+/* --- Animation pulse --- */
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+/* --- Respect Reduced Motion --- */
+@media (prefers-reduced-motion: reduce) {
+  .inProgress, .optimizing { animation: none; }
+  .refreshBtn, .optimizeBtn { transition: none; }
+}
+
+/* --- Accessibilité & scrollbars (optionnel) --- */
+.dispatchTableContainer:focus-within .dispatchTable thead th {
+  box-shadow: inset 0 -2px 0 0 color-mix(in oklab, var(--brand), white 40%);
+}
+/* Scrollbar light touch (WebKit) */
+.dispatchTableContainer::-webkit-scrollbar { height: 10px; }
+.dispatchTableContainer::-webkit-scrollbar-track { background: transparent; }
+.dispatchTableContainer::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 8px;
+}
+.dispatchTableContainer:hover::-webkit-scrollbar-thumb { background: #94a3b8; }

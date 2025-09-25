@@ -1,0 +1,192 @@
+.pageContainer {
+  padding-top: 100px; /* Ajustez la valeur en fonction de la hauteur du header */
+}
+
+
+/* 📌 Conteneur principal */
+.reservationsContainer {
+  max-width: 900px;
+  margin: 20px auto;
+  padding: 20px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* 📌 En-tête */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* 📌 Bouton d'exportation */
+.exportBtn {
+  background: #d32f2f;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.exportBtn:hover {
+  background: #b71c1c;
+}
+
+/* 📌 Bouton de rafraîchissement */
+.refreshBtn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.refreshBtn:hover {
+  background: #0056b3;
+}
+
+/* 📌 Filtres et tri */
+.controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.sortSelect,
+.filterSelect {
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s ease-in-out;
+}
+
+.sortSelect:hover,
+.filterSelect:hover {
+  border-color: #007bff;
+}
+
+/* 📌 Liste des réservations */
+.reservationList {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* 📌 Carte de réservation */
+.reservationCard {
+  background: #f5f5f5;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease-in-out;
+}
+
+.reservationCard:hover {
+  transform: scale(1.02);
+}
+
+/* 📌 Header de réservation */
+.reservationHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 📌 Statut */
+.status {
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.status.pending {
+  background: #fdd835;
+  color: #333;
+}
+.status.completed {
+  background: #43a047;
+  color: white;
+}
+.status.canceled {
+  background: #d32f2f;
+  color: white;
+}
+.status.in_progress {
+  background: #ff9800;
+  color: white;
+}
+
+/* 📌 Bouton d'annulation */
+.cancelBtn {
+  background: #ff5252;
+  color: white;
+  border: none;
+  padding: 8px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.cancelBtn:hover {
+  background: #d32f2f;
+}
+
+/* 📌 Affichage de l'entreprise et du chauffeur */
+.bookingDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+.bookingDetails p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.bookingDetails strong {
+  color: #007bff;
+}
+
+/* 📌 Responsive */
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .reservationHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .reservationCard {
+    padding: 10px;
+  }
+
+  .status {
+    font-size: 12px;
+  }
+}

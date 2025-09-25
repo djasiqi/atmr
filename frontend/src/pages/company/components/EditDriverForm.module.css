@@ -1,0 +1,148 @@
+/* Fichier: C:\Users\jasiq\atmr\frontend\src\pages\company\components\EditDriverForm.module.css */
+
+/* --- Structure générale du formulaire --- */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 450px; /* Un peu plus large pour le contenu */
+  color: #334155;
+}
+
+/* --- Section d'informations en lecture seule --- */
+.readOnlySection {
+  background-color: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.readOnlySection h4,
+.form h4 { /* Style commun pour tous les titres h4 du formulaire */
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: #334155;
+  font-size: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+}
+
+.readOnlySection p {
+  margin: 4px 0;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.readOnlySection p strong {
+  color: #334155;
+}
+
+/* --- Séparateur visuel --- */
+.divider {
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  margin: 8px 0;
+}
+
+/* --- Groupe : Label + Input --- */
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.formGroup label {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.formGroup input[type="text"] {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background-color: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.formGroup input[type="text"]:focus {
+  outline: none;
+  border-color: #4338ca;
+  box-shadow: 0 0 0 3px rgba(67, 56, 202, 0.1);
+}
+
+/* --- Groupe pour la Checkbox --- */
+.checkboxGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: #f8fafc;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.checkboxGroup input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.checkboxGroup label {
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: #334155;
+  cursor: pointer;
+  margin: 0;
+}
+
+/* --- Conteneur pour les boutons --- */
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 16px;
+}
+
+/* --- Style de base partagé par les deux boutons --- */
+.submitButton,
+.cancelButton {
+  padding: 10px 20px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* --- Styles spécifiques au bouton de soumission --- */
+.submitButton {
+  background-color: #4338ca;
+  color: #ffffff;
+}
+
+.submitButton:hover {
+  background-color: #3730a3;
+}
+
+/* --- Styles spécifiques au bouton d'annulation --- */
+.cancelButton {
+  background-color: #ffffff;
+  color: #64748b;
+  border-color: #e2e8f0;
+}
+
+.cancelButton:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+/* --- Styles pour les boutons désactivés (partagé) --- */
+.submitButton:disabled,
+.cancelButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

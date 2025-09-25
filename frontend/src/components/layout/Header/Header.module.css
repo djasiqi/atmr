@@ -1,0 +1,141 @@
+/* Header styles */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background-color: #00796b; /* Vert turquoise */
+  color: #fff;
+  position: relative;
+  font-family: Arial, sans-serif;
+  z-index: 1000; /* Assure que le header est au-dessus des autres éléments */
+}
+
+/* Logo */
+.logo {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #e0f7fa; /* Couleur claire pour le logo */
+  text-decoration: none; /* Supprimer soulignement */
+  cursor: pointer;
+}
+
+.logo:hover {
+  color: #b2dfdb; /* Couleur légèrement plus claire au survol */
+}
+
+/* Navigation */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 20px; /* Espacement entre les liens */
+}
+
+.navList {
+  display: flex;
+  list-style: none;
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+}
+
+.navList li a {
+  color: #e0f7fa; /* Teinte claire */
+  text-decoration: none;
+  font-size: 0.9em;
+  transition: color 0.3s ease;
+}
+
+.navList li a:hover {
+  color: #b2dfdb; /* Couleur plus claire au survol */
+}
+
+/* Auth and Hamburger */
+.authAndMenu {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.login {
+  color: #e0f7fa; /* Teinte claire */
+  text-decoration: none;
+  font-size: 0.9em;
+  transition: color 0.3s ease;
+}
+
+.login:hover {
+  color: #b2dfdb;
+}
+
+.signUp {
+  padding: 8px 15px;
+  background-color: #ffffff; /* Fond blanc */
+  color: #003d33; /* Texte foncé */
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.signUp:hover {
+  background-color: #003d33;
+  color: #fff;
+}
+
+/* Hamburger button */
+.hamburgerButton {
+  display: none; /* Caché sur grands écrans */
+  background-color: transparent;
+  border: none;
+  color: #e0f7fa; /* Teinte claire */
+  font-size: 1.8em;
+  cursor: pointer;
+  transition: color 0.3s ease;
+  z-index: 1001; /* Assure que le bouton est toujours au-dessus des autres éléments */
+  position: relative;
+}
+
+.hamburgerButton:hover {
+  color: #b2dfdb;
+}
+
+/* Responsive behavior */
+@media (max-width: 768px) {
+  .hamburgerButton {
+    display: block; /* Afficher le bouton hamburger sur petits écrans */
+  }
+
+  .navList {
+    display: none; /* Masquer les liens par défaut */
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: #004d40; /* Fond vert foncé */
+    flex-direction: column;
+    width: 100%;
+    padding: 20px;
+    border-radius: 5px;
+    text-align: center; /* Centrer le texte */
+    transition: all 0.3s ease; /* Transition fluide */
+    z-index: 1000; /* Mettre le menu au-dessus des autres éléments */
+  }
+
+  .navListOpen {
+    display: flex; /* Afficher la navigation lorsque le menu est ouvert */
+  }
+
+  .navListClosed {
+    display: none; /* Masquer lorsque le menu est fermé */
+  }
+
+  .navList li {
+    margin: 15px 0; /* Espacement uniforme entre les liens */
+  }
+
+  .signUp {
+    align-self: center;
+  }
+}
+

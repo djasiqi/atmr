@@ -1,0 +1,135 @@
+:root {
+  --hdr-h: 64px;             /* hauteur du header */
+  --pad-x: 16px;
+
+  /* Palette */
+  --brand: #0b7a6b;          /* vert principal */
+  --brand-dark: #095f56;     /* vert foncé hover/focus */
+  --hdr-bg: #ffffff;         /* fond du header */
+  --hdr-border: rgba(11, 122, 107, 0.18); /* liseré bas teinté brand */
+  --text-strong: #111827;    /* texte foncé */
+  --text-dim: #6b7280;       /* texte atténué */
+  --brand-gap: 0px;          /* pas d’espace si pas de nom */
+  --brand-max-w: 48vw;       /* coupe les logos très longs */
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: var(--hdr-h);
+  background: var(--hdr-bg);
+  /* liseré bas légèrement teinté brand + ombre douce */
+  border-bottom: 1px solid var(--hdr-border);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--pad-x);
+  box-sizing: border-box;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-gap);
+  text-decoration: none;
+  min-width: 0; /* pour ellipsis éventuels */
+  transition: opacity .15s ease;
+}
+.brand:hover { opacity: .92; }
+
+/* Wrapper du logo (pas de bordure/ombre, fond neutre) */
+.logoWrap {
+  height: calc(var(--hdr-h) - 16px); /* ~48px si header=64px */
+  max-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  box-sizing: content-box;
+}
+
+/* Image : conserve les proportions, limite la largeur */
+.logoImg {
+  height: 100%;
+  width: auto;
+  max-width: 260px;
+  object-fit: contain;
+  display: block;
+}
+
+/* Initiales en fallback, teinte brand pour cohérence */
+.logoFallback {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--brand);
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+/* on masque explicitement le nom si jamais présent */
+.companyName { display: none !important; }
+
+.rightZone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+/* Bouton “Déconnexion” en plein brand */
+.logoutBtn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: var(--brand);
+  color: #ffffff;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+
+  box-shadow: 0 6px 16px rgba(11, 122, 107, 0.28);
+  transition:
+    background-color .18s ease,
+    box-shadow .18s ease,
+    transform .06s ease;
+}
+
+.logoutBtn:hover {
+  background: var(--brand-dark);
+  box-shadow: 0 8px 20px rgba(11, 122, 107, 0.35);
+}
+
+.logoutBtn:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.logoutBtn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 0 0 4px rgba(11,122,107,.55),
+    0 8px 20px rgba(11,122,107,.35);
+}
+
+@media (max-width: 640px) {
+  .logoWrap {
+    max-height: 40px;
+    height: 40px;
+  }
+  .logoImg { max-width: 200px; }
+}

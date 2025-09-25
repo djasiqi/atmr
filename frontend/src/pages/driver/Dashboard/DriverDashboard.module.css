@@ -1,0 +1,150 @@
+/* Fichier : C:\Users\jasiq\atmr\frontend\src\pages\driver\Dashboard\DriverDashboard.module.css */
+
+/* --- Vos styles existants pour la page --- */
+.driverDashboard {
+  display: flex;
+  flex-direction: row;
+  min-height: 100vh;
+  background-color: #f4f7fc;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  margin-top: 100px;
+}
+
+.mainContent {
+  flex: 1;
+  padding: 20px;
+  background-color: #ffffff;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+  overflow-y: auto;
+}
+
+/* --- STYLES POUR LE TABLEAU DES CHAUFFEURS (À AJOUTER) --- */
+
+/* Définition des couleurs pour une personnalisation facile */
+:root {
+  --border-color: #e2e8f0;
+  --header-bg: #f8fafc;
+  --row-hover-bg: #f1f5f9;
+  --text-color: #334155;
+  --text-color-light: #64748b;
+  --button-hover-bg: #e5e7eb;
+  
+  --available-bg: #dcfce7;
+  --available-text: #16a34a;
+  
+  --unavailable-bg: #fee2e2;
+  --unavailable-text: #dc2626;
+
+  --emergency-bg: #fef9c3;
+  --emergency-text: #ca8a04;
+}
+
+/* --- Structure générale de la table --- */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px; /* Ajoute un peu d'espace au-dessus du tableau */
+  font-size: 0.9rem;
+  color: var(--text-color);
+  background-color: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+}
+
+/* --- En-têtes de colonnes --- */
+.table thead tr {
+  background-color: var(--header-bg);
+  text-align: left;
+}
+
+.table th {
+  padding: 12px 16px;
+  font-weight: 600;
+  color: var(--text-color-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid var(--border-color);
+}
+
+/* --- Cellules et lignes du tableau --- */
+.table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle; /* Aligne le contenu verticalement */
+}
+
+/* Effet de survol sur les lignes */
+.table tbody tr:hover {
+  background-color: var(--row-hover-bg);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* --- Styles des indicateurs de statut ("badges") --- */
+.available, .unavailable, .emergency {
+  display: inline-flex; /* Pour aligner l'icône et le texte */
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-weight: 500;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.available {
+  background-color: var(--available-bg);
+  color: var(--available-text);
+}
+
+.unavailable {
+  background-color: var(--unavailable-bg);
+  color: var(--unavailable-text);
+}
+
+.emergency {
+    background-color: var(--emergency-bg);
+    color: var(--emergency-text);
+}
+
+/* --- Style des boutons d'action --- */
+.actionButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  margin: 0 4px;
+  border-radius: 50%;
+  color: var(--text-color-light);
+  transition: background-color 0.2s ease, color 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.actionButton:hover {
+  background-color: var(--button-hover-bg);
+  color: var(--text-color);
+}
+
+/* Aligner les actions à gauche */
+.table td:last-child {
+  display: flex;
+  justify-content: flex-start; /* Aligne les boutons à gauche */
+  align-items: center;
+  gap: 8px;
+}
+
+
+/* --- Vos styles responsive existants --- */
+@media (max-width: 768px) {
+  .driverDashboard {
+    flex-direction: column;
+    margin-top: 80px;
+  }
+  .mainContent {
+    padding: 10px;
+  }
+}

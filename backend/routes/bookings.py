@@ -1,0 +1,283 @@
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone, timedelta
+
+from flask import request
+from flask_restx import Namespace, Resource, fields
+from flask_jwt_extended import jwt_required, get_jwt_identity
+
+from ext import db, role_required
+from models import Booking, BookingStatus, Client, User, UserRole
+from shared.time_utils import to_utc
+from services.maps import get_distance_duration, geocode_address
+from services.unified_dispatch import queue
+import sentry_sdk
+
+app_logger = logging.getLogger('app')
+
+# Création du Namespace pour les réservations
+bookings_ns = Namespace('bookings', description="Opérations relatives aux réservations")
+
+# Modèle Swagger (ajout is_round_trip)
+booking_create_model = bookings_ns.model(
+    "BookingCreate",
+    {
+        "customer_name": fields.String(required=True),
+        "pickup_location": fields.String(required=True),
+        "dropoff_location": fields.String(required=True),
+        "scheduled_time": fields.String(required=True, description="ISO 8601"),
+        "amount": fields.Float(required=True),
+        "medical_facility": fields.String(description="Établissement médical", default=""),
+        "doctor_name": fields.String(description="Nom du médecin", default=""),
+        "is_round_trip": fields.Boolean(description="Créer également un retour", default=False),
+    },
+)
+
+
+# =====================================================
+# Création d'une réservation pour un client
+# =====================================================
+@bookings_ns.route("/clients/<string:public_id>/bookings")
+class CreateBooking(Resource):
+    @jwt_required()
+    @role_required(UserRole.client)
+    @bookings_ns.expect(booking_create_model)
+    def post(self, public_id):
+        """Créer une réservation pour un client (statut PENDING)."""
+        try:
+            data = request.get_json() or {}
+            jwt_public_id = get_jwt_identity()
+
+            user = User.query.filter_by(public_id=jwt_public_id).one_or_none()
+            if not user:
+                return {"message": "Utilisateur non authentifié"}, 401
+
+            # Client propriétaire (via public_id fourni dans l’URL)
+            client = Client.query.join(User).filter(User.public_id == public_id).one_or_none()
+            if not client or client.user_id != user.id:
+                return {"message": "Client non trouvé ou non associé à cet utilisateur"}, 403
+
+            # Horaire (UTC-aware via helper) — interprète les naïfs en Europe/Zurich puis convertit en UTC
+            try:
+                scheduled_time = to_utc(data["scheduled_time"])
+            except Exception as date_error:
+                app_logger.error(f"Erreur de conversion scheduled_time: {date_error}")
+                return {"error": "Invalid scheduled_time format"}, 400
+
+            # Durée/Distance (grâce à Google DM ou fallback coord si disponible)
+            try:
+                duration_seconds, distance_meters = get_distance_duration(
+                    data["pickup_location"], data["dropoff_location"]
+                )
+            except Exception as e:
+                app_logger.error(f"Distance Matrix error: {e}")
+                return {"error": f"Erreur lors du calcul durée/distance: {e}"}, 400
+
+            # Crée l’aller (PENDING)
+            new_booking = Booking(
+                customer_name=data["customer_name"],
+                pickup_location=data["pickup_location"],
+                dropoff_location=data["dropoff_location"],
+                scheduled_time=scheduled_time,
+                amount=float(data["amount"]),
+                status=BookingStatus.PENDING,
+                user_id=user.id,
+                client_id=client.id,
+                company_id=client.company_id,  # lie déjà à l’entreprise si modèle le prévoit
+                medical_facility=data.get("medical_facility", ""),
+                doctor_name=data.get("doctor_name", ""),
+                duration_seconds=duration_seconds,
+                distance_meters=distance_meters,
+                is_return=False,
+            )
+            db.session.add(new_booking)
+            db.session.flush()  # pour obtenir new_booking.id
+
+            # Géocodage (best effort, pas bloquant)
+            try:
+                if new_booking.pickup_lat is None or new_booking.pickup_lon is None:
+                    c = geocode_address(new_booking.pickup_location)
+                    if c:
+                        new_booking.pickup_lat, new_booking.pickup_lon = c
+                if new_booking.dropoff_lat is None or new_booking.dropoff_lon is None:
+                    c = geocode_address(new_booking.dropoff_location)
+                    if c:
+                        new_booking.dropoff_lat, new_booking.dropoff_lon = c
+            except Exception as e:
+                app_logger.warning(f"Géocodage best-effort échoué: {e}")
+
+            # Retour « placeholder » si demandé (toujours PENDING, éventuellement sans horaire)
+            if bool(data.get("is_round_trip", False)):
+                return_booking = Booking(
+                    customer_name=new_booking.customer_name,
+                    pickup_location=new_booking.dropoff_location,
+                    dropoff_location=new_booking.pickup_location,
+                    scheduled_time=None,  # sera fixé par /trigger-return
+                    amount=0,
+                    status=BookingStatus.PENDING,
+                    is_return=True,
+                    parent_booking_id=new_booking.id,
+                    user_id=user.id,
+                    client_id=client.id,
+                    company_id=client.company_id,
+                    duration_seconds=duration_seconds,
+                    distance_meters=distance_meters,
+                    pickup_lat=new_booking.dropoff_lat,
+                    pickup_lon=new_booking.dropoff_lon,
+                    dropoff_lat=new_booking.pickup_lat,
+                    dropoff_lon=new_booking.pickup_lon,
+                )
+                db.session.add(return_booking)
+
+            db.session.commit()
+
+            # ⚠️ Pas de dispatch ici (PENDING seulement). L’entreprise acceptera -> ACCEPTED.
+            return {"message": "Réservation créée avec succès", "booking_id": new_booking.id}, 201
+
+        except Exception as e:
+            db.session.rollback()
+            app_logger.error(f"❌ ERREUR create_booking: {type(e).__name__} - {e}", exc_info=True)
+            return {"error": "Une erreur interne est survenue."}, 500
+
+#=====================================================
+# Récupération, mise à jour et annulation d'une réservation
+#=====================================================
+@bookings_ns.route("/<int:booking_id>")
+class BookingResource(Resource):
+    @jwt_required()
+    def get(self, booking_id):
+        """Récupère une réservation (contrôle d'accès par rôle)."""
+        try:
+            public_id = get_jwt_identity()
+            user = User.query.filter_by(public_id=public_id).one_or_none()
+            if not user:
+                return {"error": "Utilisateur non authentifié"}, 401
+
+            booking = Booking.query.get(booking_id)
+            if not booking:
+                return {"error": "Réservation introuvable"}, 404
+
+            if user.role == UserRole.admin:
+                return booking.serialize, 200
+
+            # Client propriétaire ?
+            client = getattr(user, "clients", None)
+            if client and client.id == booking.client_id:
+                return booking.serialize, 200
+
+            # Chauffeur assigné ?
+            if booking.driver and booking.driver.user.public_id == public_id:
+                return booking.serialize, 200
+
+            return {"error": "Accès non autorisé à cette réservation"}, 403
+
+        except Exception as e:
+            app_logger.error(f"❌ ERREUR get_booking: {type(e).__name__} - {e}", exc_info=True)
+            return {"error": "Une erreur interne est survenue."}, 500
+
+    @jwt_required()
+    def put(self, booking_id):
+        """Met à jour une réservation (si PENDING). Déclenche queue si utile."""
+        try:
+            public_id = get_jwt_identity()
+            user = User.query.filter_by(public_id=public_id).one_or_none()
+            if not user:
+                return {"error": "Utilisateur non authentifié"}, 401
+
+            booking = Booking.query.get(booking_id)
+            if not booking:
+                return {"error": "Réservation introuvable"}, 404
+
+            # Admin ou client propriétaire
+            client = getattr(user, "clients", None)
+            if not (user.role == UserRole.admin or (client and client.id == booking.client_id)):
+                return {"error": "Accès non autorisé à la modification"}, 403
+
+            if booking.status != BookingStatus.PENDING:
+                return {"error": "Seules les réservations en attente peuvent être modifiées"}, 400
+
+            data = request.get_json() or {}
+            booking.pickup_location = data.get("pickup_location", booking.pickup_location)
+            booking.dropoff_location = data.get("dropoff_location", booking.dropoff_location)
+            if "scheduled_time" in data:
+                try:
+                    booking.scheduled_time = to_utc(data["scheduled_time"])
+                except Exception:
+                    return {"error": "Format de date invalide"}, 400
+
+            db.session.commit()
+
+            # Pas de trigger si PENDING (non pris par l’engine). On log juste.
+            return {"message": "Réservation mise à jour avec succès"}, 200
+
+        except Exception as e:
+            db.session.rollback()
+            app_logger.error(f"❌ ERREUR update_booking: {type(e).__name__} - {e}", exc_info=True)
+            return {"error": "Une erreur interne est survenue."}, 500
+
+    @jwt_required()
+    def delete(self, booking_id):
+        """Annule une réservation (PENDING ou ASSIGNED). Déclenche queue si nécessaire."""
+        try:
+            public_id = get_jwt_identity()
+            user = User.query.filter_by(public_id=public_id).one_or_none()
+            if not user:
+                return {"error": "Utilisateur non authentifié"}, 401
+
+            booking = Booking.query.get(booking_id)
+            if not booking:
+                return {"error": "Réservation introuvable"}, 404
+
+            client = getattr(user, "clients", None)
+            if not (user.role == UserRole.admin or (client and client.id == booking.client_id)):
+                return {"error": "Accès non autorisé à l'annulation"}, 403
+
+            if booking.status not in {BookingStatus.PENDING, BookingStatus.ASSIGNED}:
+                return {"error": "Seules les réservations en attente ou confirmées peuvent être annulées"}, 400
+
+            company_id = booking.company_id
+            booking.status = BookingStatus.CANCELED
+            db.session.commit()
+
+            # Déclenche la queue seulement si la course impacte le dispatch
+            if company_id and booking.status == BookingStatus.CANCELED:
+                queue.trigger_on_booking_change(company_id, "cancel")
+
+            return {"message": "Réservation annulée avec succès"}, 200
+
+        except Exception as e:
+            db.session.rollback()
+            app_logger.error(f"❌ ERREUR cancel_booking: {type(e).__name__} - {e}", exc_info=True)
+            return {"error": "Une erreur interne est survenue."}, 500
+
+# =====================================================
+# Liste selon le rôle (admin / client)
+# =====================================================
+@bookings_ns.route("/")
+class ListBookings(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            jwt_public_id = get_jwt_identity()
+            user = User.query.filter_by(public_id=jwt_public_id).one_or_none()
+            if not user:
+                return {"error": "User not found"}, 401
+
+            if user.role == UserRole.admin:
+                bookings = Booking.query.all()
+            elif user.role == UserRole.client:
+                client = Client.query.filter_by(user_id=user.id).one_or_none()
+                if not client:
+                    return {"error": "Unauthorized: No client profile found"}, 403
+                bookings = Booking.query.filter_by(client_id=client.id).all()
+            else:
+                return {"error": "Unauthorized: You don't have permission"}, 403
+
+            result = [b.serialize for b in bookings]
+            return {"bookings": result, "total": len(result)}, 200
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            app_logger.error(f"❌ ERREUR list_bookings: {type(e).__name__} - {e}", exc_info=True)
+            return {"error": "Une erreur interne est survenue."}, 500
