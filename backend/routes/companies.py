@@ -2,7 +2,8 @@ import os, glob
 from flask_restx import Namespace, Resource, fields, reqparse
 from flask import request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import Company, Booking, Driver, User, BookingStatus, Invoice, UserRole, Client, ClientType, InvoiceStatus, DriverType, Vehicle
+from models import Company, Booking, Driver, User, BookingStatus, Invoice, UserRole, Client, ClientType, InvoiceStatus, DriverType, Vehicle, Assignment, AssignmentStatus, DispatchRun
+
 from datetime import datetime, timedelta, date
 from shared.time_utils import to_utc, now_utc, parse_local_naive, now_local
 from sqlalchemy.orm import joinedload
@@ -209,11 +210,11 @@ def get_company_from_token():
     return company, None, None
 
 def _maybe_trigger_dispatch(company_id: int, action: str = "update"):
-    """Déclenche dispatch seulement si dispatch_enabled=True (défaut False)."""
     company = Company.query.get(company_id)
     if company and getattr(company, "dispatch_enabled", False):
         from services.unified_dispatch import queue
-    queue.trigger_on_booking_change(company_id, action=action)
+        queue.trigger_on_booking_change(company_id, action=action)
+
 
 def _driver_trigger(company, action: str):
     # Le comportement par défaut DOIT être False pour éviter les déclenchements non sollicités.
@@ -402,6 +403,33 @@ class AssignDriver(Resource):
         else:
             booking.driver_id = driver.id
             booking.status = BookingStatus.ASSIGNED
+        
+            # Get or create a DispatchRun for today
+            from shared.time_utils import to_geneva_local
+            day_local = (to_geneva_local(booking.scheduled_time).date()
+                        if booking.scheduled_time else date.today())
+            dispatch_run = DispatchRun.query.filter_by(company_id=company.id, day=day_local).first()
+            if not dispatch_run:
+                dispatch_run = DispatchRun(company_id=company.id, day=day_local, status="completed")
+                db.session.add(dispatch_run)
+                db.session.flush()  # Get the ID
+            
+            # Check if an Assignment already exists
+            assignment = Assignment.query.filter_by(booking_id=booking.id).first()
+            if not assignment:
+                # Create new Assignment
+                assignment = Assignment(
+                    booking_id=booking.id,
+                    driver_id=driver.id,
+                    dispatch_run_id=dispatch_run.id,
+                    status=AssignmentStatus.SCHEDULED
+                )
+                db.session.add(assignment)
+            else:
+                # Update existing Assignment
+                assignment.driver_id = driver.id
+                assignment.dispatch_run_id = dispatch_run.id
+                assignment.status = AssignmentStatus.SCHEDULED
 
         db.session.commit()
         notify_driver_new_booking(driver.id, booking)
@@ -1359,7 +1387,12 @@ class ScheduleReservation(Resource):
         if booking.status not in [BookingStatus.PENDING, BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]:
             return {"error": f"Statut '{booking.status.value}' non modifiable."}, 400
 
-        booking.scheduled_time = sched_utc
+        from shared.time_utils import parse_local_naive
+        try:
+            sched_local = parse_local_naive(iso)
+        except Exception as e:
+            return {"error": f"Format de date invalide: {e}"}, 400
+        booking.scheduled_time = sched_local
 
         # Si elle était PENDING et qu'on veut qu'elle entre dans le moteur, on peut la passer en ACCEPTED
         if booking.status == BookingStatus.PENDING:

@@ -1385,13 +1385,13 @@ class Payment(db.Model):
             "booking_info": {
                 "pickup_location": self.booking.pickup_location if self.booking else None,
                 "dropoff_location": self.booking.dropoff_location if self.booking else None,
-                "scheduled_time": (iso_utc_z(to_utc_from_db(self.booking.scheduled_time))),
+                # Choisir UNE convention (ex: naïf local comme Booking)
                 "scheduled_time": (
-                                    self.booking.scheduled_time.isoformat()
-                                    if (self.booking and self.booking.scheduled_time) else None
-                                )
-                            } 
+                    self.booking.scheduled_time.isoformat()
+                    if (self.booking and self.booking.scheduled_time) else None
+                )
             }
+        }
     @validates('user_id')
     def validate_user_id(self, key, user_id):
         state = inspect(self)

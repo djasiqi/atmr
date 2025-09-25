@@ -63,7 +63,12 @@ def apply_assignments(
                 chosen_by_booking[b_id] = a
 
     booking_ids = list(chosen_by_booking.keys())
-    driver_ids = sorted({int(chosen_by_booking[b].driver_id) for b in booking_ids})
+    # Utiliser le helper _aget pour supporter objets ET dicts
+    driver_ids = sorted({
+        int(_aget(chosen_by_booking[b], "driver_id"))
+        for b in booking_ids
+        if _aget(chosen_by_booking[b], "driver_id") is not None
+    })
 
     # 2) Chargements + (optionnel) verrouillage
     bookings_q = (
@@ -168,12 +173,10 @@ def apply_assignments(
             # Upsert côté Assignment (y compris ETA si fournies)
             if desired_assignments:
                 target_bids = list(desired_assignments.keys())
+                # ⚠️ Ne PAS filtrer par status (les labels peuvent varier) — on prendra la plus récente par booking_id
                 existing = (
                     Assignment.query
-                    .filter(
-                        Assignment.booking_id.in_(target_bids),
-                        Assignment.status.in_(("assigned", "in_progress")),
-                    )
+                    .filter(Assignment.booking_id.in_(target_bids))
                     .all()
                 )
                 by_booking: Dict[int, Assignment] = {}
@@ -192,8 +195,8 @@ def apply_assignments(
                             driver_id=payload["driver_id"],
                             status=payload.get("status", "assigned"),
                             # map to model column names:
-                            eta_pickup_at=payload.get("estimated_pickup_arrival"),
-                            eta_dropoff_at=payload.get("estimated_dropoff_arrival"),
+                            eta_pickup_at=payload.get("estimated_pickup_arrival") or payload.get("eta_pickup_at"),
+                            eta_dropoff_at=payload.get("estimated_dropoff_arrival") or payload.get("eta_dropoff_at"),
                             dispatch_run_id=dispatch_run_id or payload.get("dispatch_run_id"),
                         )
                         # timestamps si champs présents dans le modèle
@@ -207,13 +210,15 @@ def apply_assignments(
                         cur.driver_id = payload["driver_id"]
                         cur.status = payload.get("status", "assigned")
                         if payload.get("estimated_pickup_arrival") is not None:
-                            cur.eta_pickup_at = payload["estimated_pickup_arrival"]
-                        if payload.get("estimated_dropoff_arrival") is not None:
-                            cur.eta_dropoff_at = payload["estimated_dropoff_arrival"]
+                            cur.eta_pickup_at = payload.get("estimated_pickup_arrival") or payload.get("eta_pickup_at")
+                        if payload.get("estimated_dropoff_arrival") is not None or payload.get("eta_dropoff_at") is not None:
+                            cur.eta_dropoff_at = payload.get("estimated_dropoff_arrival") or payload.get("eta_dropoff_at")
                         if payload.get("dispatch_run_id") is not None:
                             cur.dispatch_run_id = payload["dispatch_run_id"]
                         if hasattr(cur, "updated_at"):
                             cur.updated_at = now
+            else:
+                logger.info("[Apply] No desired assignments to upsert (company_id=%s)", company_id)
         db.session.commit()
     except Exception as e:
         logger.exception("[Apply] DB error while applying assignments (company_id=%s)", company_id)

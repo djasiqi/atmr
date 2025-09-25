@@ -4,10 +4,17 @@ import apiClient from "../utils/apiClient";
 /* -------------------------- RÉSERVATIONS ENTREPRISE -------------------------- */
 
 export const fetchCompanyReservations = async () => {
-  const { data } = await apiClient.get("/companies/me/reservations");
-  // L’API renvoie { reservations: [...], total } → normaliser en tableau
-  return Array.isArray(data) ? data : (Array.isArray(data?.reservations) ? data.reservations : []);
- };
+  try {
+    const payload = await apiClient.get("/companies/me/reservations");
+    const reservations = Array.isArray(payload.data)
+      ? payload.data
+      : (Array.isArray(payload.data?.reservations) ? payload.data.reservations : []);
+    return reservations;               // ✅ manquait
+  } catch (e) {
+    console.error("fetchCompanyReservations failed:", e?.response?.data || e);
+    return [];                         // ✅ safe fallback
+  }
+};
 
 export const acceptReservation = async (reservationId) => {
   const { data } = await apiClient.post(
@@ -504,6 +511,18 @@ export const fetchAssignedReservations = async (forDate) => {
       const scheduled_time = when;
       const dropoff_time = b.dropoff_time || b.drop_time || null;
 
+      // Create a synthetic assignment if booking has driver_id but no assignment
+      const syntheticAssignment = !a && b.driver_id ? {
+        id: null, // Synthetic assignment has no ID
+        booking_id: b.id,
+        driver_id: b.driver_id,
+        status: "assigned", // Default status
+        estimated_pickup_arrival: null,
+        estimated_dropoff_arrival: null,
+        is_synthetic: true, // Flag to identify synthetic assignments
+      } : null;
+
+
       return {
         id: b.id,
         customer_name: clientName,
@@ -525,7 +544,7 @@ export const fetchAssignedReservations = async (forDate) => {
           status: a.status,
           estimated_pickup_arrival: a.estimated_pickup_arrival || a.eta_pickup_at || null,
           estimated_dropoff_arrival: a.estimated_dropoff_arrival || a.eta_dropoff_at || null,
-        } : null,
+        } : syntheticAssignment,
       };
     });
 

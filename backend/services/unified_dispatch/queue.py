@@ -108,14 +108,40 @@ def _get_state(company_id: int) -> CompanyDispatchState:
 def get_status(company_id: int) -> Dict[str, Any]:
     """
     Utilisé par GET /company_dispatch/status
+    Enrichi avec des informations de diagnostic plus détaillées
     """
     last = _LAST_RESULT.get(company_id) or {}
+    last_error = _LAST_ERROR.get(company_id)
+    
+    # Get counts from the last result
+    bookings_count = len(last.get("bookings", []))
+    drivers_count = len(last.get("drivers", []))
+    assignments_count = len(last.get("assignments", []))
+    
+    # Determine reason if there are no assignments
+    reason = None
+    if assignments_count == 0:
+        if bookings_count == 0:
+            reason = "no_bookings_for_day"
+        elif drivers_count == 0:
+            reason = "no_drivers"
+        elif last_error:
+            reason = "apply_failed"
+        else:
+            reason = "unknown"
     return {
         "is_running": bool(_RUNNING.get(company_id, False)),
         "progress": int(_PROGRESS.get(company_id, 0)),
         "last_result": last,
         "last_result_meta": last.get("meta"),
-        "last_error": _LAST_ERROR.get(company_id),
+        "last_error": last_error,
+        "reason": reason,
+        "counters": {
+            "bookings": bookings_count,
+            "drivers": drivers_count,
+            "assignments": assignments_count,
+        },
+        "dispatch_run_id": last.get("dispatch_run_id") or (last.get("meta", {}) or {}).get("dispatch_run_id"),
     }
 
 def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:

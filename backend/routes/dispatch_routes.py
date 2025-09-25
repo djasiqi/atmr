@@ -18,6 +18,7 @@ from models import (
     Assignment,
     Driver,
     DispatchRun,
+    AssignmentStatus
 )
 from services.unified_dispatch import data
 from services.unified_dispatch import settings as ud_settings
@@ -475,8 +476,8 @@ class AssignmentsListResource(Resource):
         """Liste des assignations pour un jour."""
         
         d = _parse_date(request.args.get("date"))
-        from shared.time_utils import day_local_bounds
-        d0, d1 = day_local_bounds(d.strftime("%Y-%m-%d"))
+        # Fenêtre locale naïve du jour (inclusif)
+        d0 = datetime(d.year, d.month, d.day, 0, 0, 0)
         d1 = datetime(d.year, d.month, d.day, 23, 59, 59)
 
         # 🔒 Filtre multi-colonnes temps (comme le front)
@@ -677,7 +678,13 @@ class DelaysResource(Resource):
                 Booking.company_id == company.id,
                 time_expr >= d0,
                 time_expr <= d1,
-                Assignment.status.in_(("assigned", "in_progress")),
+                Assignment.status.in_((
+                    AssignmentStatus.SCHEDULED,
+                    AssignmentStatus.EN_ROUTE_PICKUP,
+                    AssignmentStatus.ARRIVED_PICKUP,
+                    AssignmentStatus.ONBOARD,
+                    AssignmentStatus.EN_ROUTE_DROPOFF,
+                )),
             )
             .all()
         )

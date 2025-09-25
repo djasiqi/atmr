@@ -38,7 +38,8 @@ const CompanyReservations = () => {
       setLoading(true);
       setError(null);
       const data = await fetchCompanyReservations();
-      setReservations(data.reservations);
+      // Ensure we're handling both array and {reservations: [...]} formats
+      setReservations(Array.isArray(data) ? data : (data.reservations || []));
       if (!didShowToast.current) {
         toast.success("Réservations chargées !");
         didShowToast.current = true;
