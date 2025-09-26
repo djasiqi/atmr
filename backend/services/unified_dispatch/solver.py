@@ -11,7 +11,8 @@ from datetime import datetime, timedelta
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
 from models import Booking, Driver
-from services.unified_dispatch.settings import DEFAULT_SETTINGS, Settings
+from services.unified_dispatch.settings import Settings
+DEFAULT_SETTINGS = Settings()
 import os
 
 SAFE_MAX_NODES = int(os.getenv("UD_SOLVER_MAX_NODES", "800"))           # total nodes = drivers + 2*bookings

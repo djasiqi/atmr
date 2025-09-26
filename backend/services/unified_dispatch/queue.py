@@ -2,36 +2,16 @@
 from __future__ import annotations
 
 import logging
-import faulthandler, signal, sys
-import threading
-import time
 import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Optional, List, Any  # <-- Any ajouté
+from typing import Dict, Optional, List, Any
 
+from celery.result import AsyncResult
 from flask import current_app
 
-from services.unified_dispatch import engine
-
 logger = logging.getLogger(__name__)
-
-# ============================================================
-# Native threading (bypass Eventlet monkey patch)
-# ============================================================
-try:
-    # Si Eventlet a monkey-patché threading, on récupère les originaux
-    from eventlet import patcher as _el_patcher  # type: ignore
-    _orig_threading = _el_patcher.original('threading')
-    NativeThread = _orig_threading.Thread
-    NativeTimer = _orig_threading.Timer
-except Exception:
-    # Fallback: pas d'Eventlet, on garde threading standard
-    NativeThread = threading.Thread
-    NativeTimer = threading.Timer
-
-# coalescing + lock par company_id (anti-collisions)
 
 # ============================================================
 # Valeurs par défaut raisonnables, surchargées via ENV.
@@ -61,9 +41,9 @@ def init_app(app):
 class CompanyDispatchState:
     company_id: int
     # Sémaphore/lock pour empêcher deux runs concurrents sur la même entreprise
-    lock: threading.Lock = field(default_factory=threading.Lock)
+    lock: Any = field(default_factory=lambda: __import__('threading').Lock())
     # Timer de déclenchement différé (coalescing)
-    timer: Optional[threading.Timer] = None
+    timer: Optional[Any] = None
     # Indique si un run est en cours
     running: bool = False
     # Pour éviter un run bloqué : timestamp du dernier start
@@ -76,6 +56,8 @@ class CompanyDispatchState:
     params: Dict[str, Any] = field(default_factory=dict)
     # Référence à l'app Flask (capturée sur trigger() si contexte dispo)
     app_ref: Optional[Any] = None  # type: ignore
+    # 🔴 NEW: ID de la dernière tâche Celery
+    last_task_id: Optional[str] = None
 
 
 # Mémoire globale in‑process (une entrée par company_id)
@@ -85,11 +67,12 @@ _LAST_RESULT: Dict[int, Dict[str, Any]] = {}
 _LAST_ERROR: Dict[int, Optional[str]] = {}
 _RUNNING: Dict[int, bool] = {}
 _PROGRESS: Dict[int, int] = {}  # 0..100 approximation de progression
+_CELERY_STATE: Dict[int, str] = {}  # État Celery (PENDING, STARTED, SUCCESS, FAILURE, etc.)
 
 # Lock global pour l'accès au dict
-_STATE_LOCK = threading.Lock()
+_STATE_LOCK = __import__('threading').Lock()
 # Interrupteur global (stop propre)
-_STOP_EVENT = threading.Event()
+_STOP_EVENT = __import__('threading').Event()
 
 
 def _get_state(company_id: int) -> CompanyDispatchState:
@@ -100,10 +83,6 @@ def _get_state(company_id: int) -> CompanyDispatchState:
             _STATE[company_id] = st
         return st
 
-
-# ============================================================
-# API publique
-# ============================================================
 
 def get_status(company_id: int) -> Dict[str, Any]:
     """
@@ -118,6 +97,44 @@ def get_status(company_id: int) -> Dict[str, Any]:
     drivers_count = len(last.get("drivers", []))
     assignments_count = len(last.get("assignments", []))
     
+    # Check Celery task status if we have a task_id
+    celery_state = "UNKNOWN"
+    st = _get_state(company_id)
+    task_id = st.last_task_id
+    
+    if task_id:
+        try:
+            # Import here to avoid circular imports
+            from celery_app import celery
+            task_result = AsyncResult(task_id, app=celery)
+            celery_state = task_result.state
+            
+            # Update running state based on Celery task state
+            is_running = celery_state in ('PENDING', 'RECEIVED', 'STARTED')
+            _RUNNING[company_id] = is_running
+            _CELERY_STATE[company_id] = celery_state
+            
+            # If task has failed, get the error
+            if celery_state == 'FAILURE' and task_result.failed():
+                _LAST_ERROR[company_id] = str(task_result.result)
+                last_error = _LAST_ERROR[company_id]
+            
+            # If task has succeeded, update the last result
+            if celery_state == 'SUCCESS' and task_result.ready():
+                try:
+                    result = task_result.get()
+                    if isinstance(result, dict):
+                        _LAST_RESULT[company_id] = result
+                        last = result
+                        bookings_count = len(last.get("bookings", []))
+                        drivers_count = len(last.get("drivers", []))
+                        assignments_count = len(last.get("assignments", []))
+                except Exception as e:
+                    logger.exception(f"[Queue] Error getting task result: {e}")
+        
+        except Exception as e:
+            logger.exception(f"[Queue] Error checking task status: {e}")
+    
     # Determine reason if there are no assignments
     reason = None
     if assignments_count == 0:
@@ -129,6 +146,7 @@ def get_status(company_id: int) -> Dict[str, Any]:
             reason = "apply_failed"
         else:
             reason = "unknown"
+            
     return {
         "is_running": bool(_RUNNING.get(company_id, False)),
         "progress": int(_PROGRESS.get(company_id, 0)),
@@ -142,7 +160,10 @@ def get_status(company_id: int) -> Dict[str, Any]:
             "assignments": assignments_count,
         },
         "dispatch_run_id": last.get("dispatch_run_id") or (last.get("meta", {}) or {}).get("dispatch_run_id"),
+        "celery_state": _CELERY_STATE.get(company_id, celery_state),
+        "last_task_id": st.last_task_id,
     }
+
 
 def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -217,7 +238,9 @@ def _schedule_run(st: CompanyDispatchState, mode: str) -> None:
         except Exception:
             pass
 
-    st.timer = NativeTimer(delay_sec, _try_run, kwargs={"st": st, "mode": mode})
+    # Utiliser threading.Timer pour le debounce/coalesce
+    timer_cls = __import__('threading').Timer
+    st.timer = timer_cls(delay_sec, _try_run, kwargs={"st": st, "mode": mode})
     st.timer.daemon = True
     st.timer.start()
 
@@ -254,21 +277,22 @@ def _try_run(st: CompanyDispatchState, mode: str) -> None:
         st.running = True
         st.last_start = now
         _RUNNING[st.company_id] = True
+        _PROGRESS[st.company_id] = 5
     finally:
         st.lock.release()
 
-    # Lancer le worker dans un thread dédié (non bloquant pour l'appelant)
-    t = NativeThread(target=_run_worker, kwargs={"st": st, "mode": mode}, daemon=True)
-    t.start()
+    # Lancer la tâche Celery au lieu d'un thread
+    _enqueue_celery_task(st, mode)
 
 
-def _run_worker(st: CompanyDispatchState, mode: str) -> None:
-    start_ts = time.time()
+def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
+    """
+    Enqueue a Celery task instead of running in a thread.
+    """
     company_id = st.company_id
     reasons = list(st.backlog)
     st.backlog.clear()
-    _PROGRESS[company_id] = 5
-
+    
     # Choisit l'app : celle capturée sur trigger() ou celle injectée globalement
     app = getattr(st, "app_ref", None) or _APP
     if app is None:
@@ -276,34 +300,22 @@ def _run_worker(st: CompanyDispatchState, mode: str) -> None:
         st.running = False
         st.last_start = None
         _RUNNING[company_id] = False
-        _PROGRESS[company_id] = 0       
+        _PROGRESS[company_id] = 0
         return
-
+    
     try:
         with app.app_context():
-            # Dump auto si crash natif (SIGABRT/SIGSEGV) pour laisser une trace dans les logs
-            try:
-                faulthandler.enable(file=sys.stderr, all_threads=True)
-                for _sig in (signal.SIGABRT, signal.SIGSEGV):
-                    try:
-                        faulthandler.register(_sig, file=sys.stderr, all_threads=True)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
             logger.info(
                 "[Queue] Dispatch start company=%s mode=%s reasons=%s params_keys=%s",
                 company_id, mode, reasons[-3:], list(getattr(st, "params", {}).keys()),
             )
+            
             # Déballer proprement les params coalescés
             run_kwargs = dict(getattr(st, "params", {}))
             # Garantir company_id (sécurité)
             run_kwargs["company_id"] = company_id
             # Ajouter mode si absent
             run_kwargs.setdefault("mode", mode)
-            # Attend: company_id, for_date, regular_first, allow_emergency, overrides
-            _PROGRESS[company_id] = max(_PROGRESS.get(company_id, 5), 20)
             
             # Log the parameters being used for the run
             logger.info(
@@ -315,102 +327,26 @@ def _run_worker(st: CompanyDispatchState, mode: str) -> None:
                 run_kwargs.get("mode", "auto")
             )
             
-            result = engine.run(**run_kwargs)
-            if not result:
-                result = {}
-            if not isinstance(result, dict):
-                result = {"meta": {"raw": result}}
-            # Fallbacks pour une structure toujours définie
-            result.setdefault("assignments", [])
-            result.setdefault("bookings", [])
-            result.setdefault("drivers", [])
-            result.setdefault("meta", {})
-            result.setdefault("dispatch_run_id", None)
-            _PROGRESS[company_id] = max(_PROGRESS.get(company_id, 20), 90)
-            assigned = len(result.get("assignments", []))
-            unassigned = len(result.get("unassigned", []))
-            logger.info("[Queue] Dispatch done company=%s assigned=%d unassigned=%d duration=%.3fs",
-                        company_id, assigned, unassigned, time.time() - start_ts)
-            st.recent_failures = 0
-            _LAST_RESULT[company_id] = result
+            # Import here to avoid circular imports
+            from tasks.dispatch_tasks import run_dispatch_task
             
-            # Émettre un événement Socket.IO pour signaler la fin du run
-            try:
-                from services.notification_service import notify_dispatch_run_completed
-                dispatch_run_id = result.get("dispatch_run_id") or result.get("meta", {}).get("dispatch_run_id")
-                if dispatch_run_id:
-                    logger.info("[Queue] Emitting dispatch_run_completed event for company=%s run_id=%s", 
-                                company_id, dispatch_run_id)
-                    
-                    # Récupérer la date du run pour l'inclure dans la notification
-                    day_str = None
-                    try:
-                        from models import DispatchRun
-                        dispatch_run = DispatchRun.query.get(dispatch_run_id)
-                        if dispatch_run and dispatch_run.day:
-                            day_str = dispatch_run.day.isoformat()
-                    except Exception as e:
-                        logger.warning("[Queue] Failed to get day_str from DispatchRun: %s", e)
-                    
-                    # Envoyer la notification avec la date si disponible
-                    notify_dispatch_run_completed(company_id, dispatch_run_id, assigned, day_str)
-            except Exception as e:
-                logger.warning("[Queue] Failed to emit dispatch_run_completed: %s", e)
-  
-            _LAST_ERROR[company_id] = None
-            _PROGRESS[company_id] = 100
+            # Enqueue Celery task
+            task = run_dispatch_task.delay(**run_kwargs)
+            st.last_task_id = task.id
+            _CELERY_STATE[company_id] = task.state
+            
+            logger.info(
+                "[Queue] Enqueued Celery task company=%s task_id=%s",
+                company_id, task.id
+            )
+            
+            # Update state
+            _PROGRESS[company_id] = 20
+            
     except Exception as e:
-        st.recent_failures += 1
-        delay = min(30, 2 ** min(st.recent_failures, 4))
-        logger.exception("[Queue] Dispatch error company=%s failures=%d -> retry in %ss",
-                         company_id, st.recent_failures, delay)
-        _LAST_ERROR[company_id] = str(e)
-        _PROGRESS[company_id] = 0
-        if not _STOP_EVENT.is_set():
-            try:
-                if st.timer is not None:
-                    st.timer.cancel()
-            except Exception:
-                pass
-            st.timer = NativeTimer(delay, _try_run, kwargs={"st": st, "mode": mode})
-            st.timer.daemon = True
-            st.timer.start()
-    finally:
-        # Important: nettoyer la session SQLAlchemy quand on sort du thread
-        try:
-            from ext import db
-            db.session.remove()
-        except Exception:
-            pass
-        try:
-            st.params.clear()
-        except Exception:
-            st.params = {}
+        logger.exception("[Queue] Failed to enqueue Celery task company=%s: %s", company_id, e)
         st.running = False
         st.last_start = None
         _RUNNING[company_id] = False
-        # Ne pas supprimer _PROGRESS ici pour garder une valeur finale 0/100 lisible
-
-
-
-# ============================================================
-# Hooks utilitaires (optionnels)
-# ============================================================
-
-def trigger_on_booking_change(company_id: int, action: str) -> None:
-    """
-    À appeler depuis vos routes/modèles :
-      - action ∈ {"create","update","cancel","return_request"}
-    Regroupe les changements et déclenche un run "auto".
-    """
-    reason = f"booking_{action}"
-    trigger(company_id, reason=reason, mode="auto")
-
-
-def trigger_on_driver_status(company_id: int, action: str) -> None:
-    """
-    À appeler lorsqu'un chauffeur change de statut (dispo/actif/localisation).
-      - action ∈ {"availability","activation","location"}
-    """
-    reason = f"driver_{action}"
-    trigger(company_id, reason=reason, mode="auto")
+        _PROGRESS[company_id] = 0
+        _LAST_ERROR[company_id] = str(e)

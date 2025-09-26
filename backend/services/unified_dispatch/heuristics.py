@@ -8,7 +8,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Tuple, Optional
 
 from models import Booking, Driver, BookingStatus
-from services.unified_dispatch.settings import DEFAULT_SETTINGS, Settings
+from services.unified_dispatch.settings import Settings
+DEFAULT_SETTINGS = Settings()
 from shared.time_utils import minutes_from_now, sort_key_utc, now_local
 
 

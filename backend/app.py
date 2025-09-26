@@ -76,6 +76,14 @@ def create_app(config_name=os.getenv("FLASK_CONFIG", "development")):
     migrate.init_app(app, db)
     if app.config.get("RATELIMIT_ENABLED", True):
         limiter.init_app(app)
+        
+    # Initialize Celery
+    try:
+        from celery_app import init_app as init_celery
+        init_celery(app)
+        app.logger.info("Celery initialized successfully")
+    except Exception as e:
+        app.logger.error(f"Failed to initialize Celery: {e}")
 
     # --- Socket.IO
     async_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet")

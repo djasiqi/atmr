@@ -18,7 +18,8 @@ from services.maps import geocode_address
 from services.osrm_client import build_distance_matrix_osrm
 from services.dispatch_utils import count_assigned_bookings_for_day
 from functools import lru_cache
-from services.unified_dispatch.settings import DEFAULT_SETTINGS, driver_work_window_from_config
+from services.unified_dispatch.settings import Settings, driver_work_window_from_config
+DEFAULT_SETTINGS = Settings()
 from services.unified_dispatch.heuristics import haversine_minutes
 from shared.time_utils import parse_local_naive, now_local, day_local_bounds
 logger = logging.getLogger(__name__)
