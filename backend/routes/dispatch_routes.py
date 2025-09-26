@@ -678,15 +678,18 @@ class DelaysResource(Resource):
                 Booking.company_id == company.id,
                 time_expr >= d0,
                 time_expr <= d1,
-                Assignment.status.in_((
-                    AssignmentStatus.SCHEDULED,
-                    AssignmentStatus.EN_ROUTE_PICKUP,
-                    AssignmentStatus.ARRIVED_PICKUP,
-                    AssignmentStatus.ONBOARD,
-                    AssignmentStatus.EN_ROUTE_DROPOFF,
-                )),
-            )
-            .all()
+                   # Use the correct status values from AssignmentStatus enum
+                   Assignment.status.in_([
+                       AssignmentStatus.SCHEDULED,        # "scheduled"
+                       AssignmentStatus.EN_ROUTE_PICKUP,  # "en_route_pickup"
+                       AssignmentStatus.ARRIVED_PICKUP,   # "arrived_pickup"
+                       AssignmentStatus.ONBOARD,          # "onboard"
+                       AssignmentStatus.EN_ROUTE_DROPOFF, # "en_route_dropoff"
+                       AssignmentStatus.ARRIVED_DROPOFF,  # "arrived_dropoff"
+                       # Don't include COMPLETED, CANCELLED, NO_SHOW, REASSIGNED
+                   ]),
+                )
+                .all()
         )
 
         out: List[Dict[str, Any]] = []

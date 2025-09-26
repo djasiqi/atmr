@@ -254,8 +254,9 @@ const CompanyDashboard = () => {
   const pendingReservations = (reservations || []).filter(
     (r) => r.status?.toLowerCase() === "pending"
   );
-  const assignedReservations = (reservations || []).filter((r) =>
-    ["assigned", "accepted"].includes(r.status?.toLowerCase())
+  // Fix: Filter for reservations that are accepted but don't have a driver assigned
+  const assignedReservations = (reservations || []).filter((r) => 
+    r.status?.toLowerCase() === "accepted" && !r.driver_id
   );
 
   // Callbacks chauffeurs (liste)
@@ -418,7 +419,13 @@ const CompanyDashboard = () => {
             />
           </section>
 
-          <OverviewCards reservations={reservations} driver={driver} />
+          <OverviewCards
+            reservations={reservations}
+            pendingReservations={pendingReservations}
+            assignedReservations={assignedReservations}
+            driver={driver}
+            day={dispatchDay}
+          />
           <ReservationChart reservations={reservations} />
 
           <section className={styles.reservationsSection}>

@@ -32,7 +32,8 @@ const useCompanyData = () => {
     try {
       setLoadingReservations(true);
       const data = await fetchCompanyReservations();
-      setReservations(data.reservations || []);
+      // Le service renvoie déjà un ARRAY normalisé
+      setReservations(Array.isArray(data) ? data : (data?.reservations ?? []));
     } catch (err) {
       console.error("❌ Erreur lors du chargement des réservations :", err);
       setError("Erreur lors du chargement des réservations.");
@@ -45,7 +46,8 @@ const useCompanyData = () => {
     try {
       setLoadingDriver(true);
       const data = await fetchCompanyDriver();
-      setDriver(data.driver || []);
+      // Le service renvoie déjà un ARRAY normalisé
+      setDriver(Array.isArray(data) ? data : (data?.driver ?? []));
     } catch (err) {
       console.error("❌ Erreur lors du chargement des chauffeurs :", err);
       setError("Erreur lors du chargement des chauffeurs.");

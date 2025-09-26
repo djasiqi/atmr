@@ -5,7 +5,7 @@ import apiClient from "../utils/apiClient";
 
 export const fetchCompanyReservations = async () => {
   try {
-    const payload = await apiClient.get("/companies/me/reservations");
+    const payload = await apiClient.get("/companies/me/reservations?flat=true");
     const reservations = Array.isArray(payload.data)
       ? payload.data
       : (Array.isArray(payload.data?.reservations) ? payload.data.reservations : []);
@@ -95,8 +95,16 @@ export const triggerReturnBooking = async (reservationId, payload = {}) => {
 /* --------------------------------- CHAUFFEURS -------------------------------- */
 
 export const fetchCompanyDriver = async () => {
-  const { data } = await apiClient.get("/companies/me/driver");
-  return data;
+  try {
+    const { data } = await apiClient.get("/companies/me/driver");
+    // backend: { driver: [...] } ou parfois déjà un tableau
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.driver)) return data.driver;
+    return []; // fallback sûr
+  } catch (e) {
+    console.error("fetchCompanyDriver failed:", e?.response?.data || e);
+    return [];
+  }
 };
 
 /**
@@ -347,7 +355,7 @@ export const runDispatchNow = async ({
     overrides,
   });
   try {
-    const { data } = await apiClient.post("/company_dispatch/run", payload);
+    const { data } = await apiClient.post("/company_dispatch/trigger", { ...payload, run_async: true });
     return {
       ...data,
       dispatch_run_id: data.dispatch_run_id || data.meta?.dispatch_run_id || null,
@@ -389,37 +397,43 @@ export const runDispatchForDay = async ({
   });
   
   try {
+    // --- bloc principal : /run ---
     console.log("Sending dispatch request with payload:", payload);
-    
-    // 1) on tente /run (renvoie 200 si sync, 202 si async selon implémentation)
+
+    // 1) on tente /run (200 si sync, 202 si async)
     const { data } = await apiClient.post("/company_dispatch/run", payload);
-    
+
     console.log("Dispatch response:", data);
-    
+
     return {
       ...data,
       status: data.status || (runAsync ? "queued" : "completed"),
-      dispatch_run_id: data.dispatch_run_id || data.meta?.dispatch_run_id
+      dispatch_run_id: data.dispatch_run_id || data.meta?.dispatch_run_id || null,
     };
+
   } catch (e) {
+    // --- fallback : /trigger ---
     console.error("Dispatch request failed:", e);
     console.error("Error details:", e?.response?.data);
-    
-    // 2) fallback robuste → /trigger (toujours 202 queued)
     console.log("Falling back to /trigger endpoint");
+
     try {
-      const { data } = await apiClient.post("/company_dispatch/trigger", payload);
+      const { data } = await apiClient.post("/company_dispatch/trigger", {
+        ...payload,
+        run_async: true, // force async pour cohérence
+      });
       console.log("Trigger fallback response:", data);
       return {
         ...data,
-        status: data.status || (runAsync ? "queued" : "completed"),
-        dispatch_run_id: data.dispatch_run_id || data.meta?.dispatch_run_id
+        status: data.status || "queued",
+        dispatch_run_id: data.dispatch_run_id || data.meta?.dispatch_run_id || null,
       };
     } catch (triggerError) {
       console.error("Trigger fallback also failed:", triggerError);
-      throw triggerError; // Re-throw the error from the trigger attempt
+      throw triggerError; // on remonte l'erreur
     }
   }
+
 };
 
 // --- utilitaires date robustes ---
@@ -454,7 +468,9 @@ export const fetchAssignedReservations = async (forDate) => {
   
   try {
     const [reservationsRes, assignmentsRes] = await Promise.all([
-      apiClient.get("/companies/me/reservations"),
+      apiClient.get("/companies/me/reservations", {
+        params: forDate ? { date: forDate, flat: true } : { flat: true },
+      }),
       apiClient.get("/company_dispatch/assignments", {
         params: forDate ? { date: forDate } : undefined,
       }),

@@ -397,7 +397,6 @@ class AssignDriver(Resource):
             return {"error": "Driver not found for this company"}, 404
 
         # Si déjà assigné au même chauffeur → log mais OK
-        # dans AssignDriver.post
         if booking.driver_id == driver.id and booking.status == BookingStatus.ASSIGNED:
             app_logger.info("... déjà assignée ...")
         else:

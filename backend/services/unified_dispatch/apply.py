@@ -195,8 +195,8 @@ def apply_assignments(
                             driver_id=payload["driver_id"],
                             status=payload.get("status", "assigned"),
                             # map to model column names:
-                            eta_pickup_at=payload.get("estimated_pickup_arrival") or payload.get("eta_pickup_at"),
-                            eta_dropoff_at=payload.get("estimated_dropoff_arrival") or payload.get("eta_dropoff_at"),
+                            eta_pickup_at=payload.get("estimated_pickup_arrival", None) or payload.get("eta_pickup_at", None),
+                            eta_dropoff_at=payload.get("estimated_dropoff_arrival", None) or payload.get("eta_dropoff_at", None),
                             dispatch_run_id=dispatch_run_id or payload.get("dispatch_run_id"),
                         )
                         # timestamps si champs présents dans le modèle
@@ -209,9 +209,9 @@ def apply_assignments(
                         # mise à jour
                         cur.driver_id = payload["driver_id"]
                         cur.status = payload.get("status", "assigned")
-                        if payload.get("estimated_pickup_arrival") is not None:
-                            cur.eta_pickup_at = payload.get("estimated_pickup_arrival") or payload.get("eta_pickup_at")
-                        if payload.get("estimated_dropoff_arrival") is not None or payload.get("eta_dropoff_at") is not None:
+                        if payload.get("estimated_pickup_arrival") is not None or payload.get("eta_pickup_at") is not None:
+                            cur.eta_pickup_at = payload.get("estimated_pickup_arrival", None) or payload.get("eta_pickup_at", None)
+                        if payload.get("estimated_dropoff_arrival") is not None or payload.get("eta_dropoff_at", None) is not None:
                             cur.eta_dropoff_at = payload.get("estimated_dropoff_arrival") or payload.get("eta_dropoff_at")
                         if payload.get("dispatch_run_id") is not None:
                             cur.dispatch_run_id = payload["dispatch_run_id"]
