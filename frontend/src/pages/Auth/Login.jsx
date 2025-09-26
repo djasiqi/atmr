@@ -50,7 +50,10 @@ const Login = () => {
 
     setIsLoading(true);
     try {
-      const response = await apiClient.post("/auth/login", formData);
+      localStorage.removeItem("authToken");
+      const response = await apiClient.post("/auth/login", formData, {
+        headers: { 'X-Skip-Auth': '1' }, // voir point 4 ci-dessous
+      });
       const { token, user } = response.data;
 
       if (!user || !user.role || !user.public_id) {

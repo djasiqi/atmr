@@ -32,13 +32,11 @@ module.exports = function override(config, env) {
   (config.module?.rules || []).forEach(visit);
 
   // Ignore “Failed to parse source map” (optionnel)
-  config.ignoreWarnings = [
-    ...(config.ignoreWarnings || []),
-    /Failed to parse source map/,
-  ];
+config.ignoreWarnings = [
+  ...(config.ignoreWarnings || []),
+  /Failed to parse source map/,
+];
 
-  // (optionnel) couper complètement les sourcemaps en dev
-  // if (env === "development") config.devtool = false;
 
   return config;
 };

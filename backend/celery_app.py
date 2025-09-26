@@ -1,16 +1,14 @@
 # backend/celery_app.py
 from __future__ import annotations
-
 import os
 import logging
 from celery import Celery
-from celery.schedules import crontab
 from flask import Flask
 
 logger = logging.getLogger(__name__)
 
-# Default configuration
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+# Default configuration (⚠️ par défaut on pointe vers le service Docker 'redis', pas localhost)
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
 CELERY_TIMEZONE = os.getenv("CELERY_TIMEZONE", "Europe/Zurich")
@@ -36,6 +34,7 @@ celery.conf.update(
     worker_prefetch_multiplier=1,  # One task at a time
     task_acks_late=True,  # Acknowledge task after execution
     task_reject_on_worker_lost=True,  # Requeue task if worker dies
+    broker_connection_retry_on_startup=True,  # important avec Docker
 )
 
 # Configure Beat schedule

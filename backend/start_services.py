@@ -1,54 +1,40 @@
 #!/usr/bin/env python3
-import os
-import subprocess
-import sys
-import time
+import os, sys, time, subprocess, pathlib
 
-# Load environment variables
-with open('.env', 'r') as f:
-    for line in f:
+ROOT = pathlib.Path(__file__).resolve().parent
+BACKEND = ROOT  # ce script est dans backend
+
+# Charger .env simplement
+env_path = ROOT / '.env'
+if env_path.exists():
+    for line in env_path.read_text(encoding='utf-8').splitlines():
         line = line.strip()
-        if line and not line.startswith('#'):
-            if '=' in line:
-                key, value = line.split('=', 1)
-                os.environ[key] = value
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        k, v = line.split('=', 1)
+        os.environ.setdefault(k, v)
 
-print("Environment loaded. Starting services...")
+broker = os.environ.get('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
 
-# Start Flask app
-print("Starting Flask app on port 5000...")
-flask_process = subprocess.Popen([
-    sys.executable, 'app.py'
-], cwd='/workspace/atmr/backend')
+print("Starting Flask app on port", os.environ.get('FLASK_RUN_PORT', '5000'))
+flask = subprocess.Popen([sys.executable, 'app.py'], cwd=str(BACKEND))
+time.sleep(2)
 
-# Wait a bit for Flask to start
-time.sleep(3)
-
-# Start Celery worker
 print("Starting Celery worker...")
-celery_process = subprocess.Popen([
-    sys.executable, '-m', 'celery', '-A', 'celery_app.celery', 'worker', '--loglevel=info'
-], cwd='/workspace/atmr/backend')
+worker = subprocess.Popen([
+    sys.executable, '-m', 'celery', '-A', 'celery_app.celery', '-b', broker,
+    'worker', '--loglevel=info'
+], cwd=str(BACKEND))
 
-# Start Celery beat
 print("Starting Celery beat...")
-beat_process = subprocess.Popen([
-    sys.executable, '-m', 'celery', '-A', 'celery_app.celery', 'beat', '--loglevel=info'
-], cwd='/workspace/atmr/backend')
+beat = subprocess.Popen([
+    sys.executable, '-m', 'celery', '-A', 'celery_app.celery', '-b', broker,
+    'beat', '--loglevel=info'
+], cwd=str(BACKEND))
 
-print("Services started!")
-print("Flask PID:", flask_process.pid)
-print("Celery Worker PID:", celery_process.pid)
-print("Celery Beat PID:", beat_process.pid)
-
+print("PIDs -> Flask:", flask.pid, " Worker:", worker.pid, " Beat:", beat.pid)
 try:
-    flask_process.wait()
-except KeyboardInterrupt:
-    print("\nShutting down services...")
-    flask_process.terminate()
-    celery_process.terminate()
-    beat_process.terminate()
-    flask_process.wait()
-    celery_process.wait()
-    beat_process.wait()
-    print("Services stopped.")
+    flask.wait()
+finally:
+    for p in (worker, beat):
+        p.terminate()

@@ -1,25 +1,23 @@
 FROM python:3.11-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-# Installer les dépendances système
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Dépendances système (inclut curl pour tes tests depuis le conteneur)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ libpq-dev curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
-# Copier les fichiers de requirements
+# Dépendances Python
 COPY requirements.txt .
-
-# Installer les dépendances Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copier le code source
+# Code source
 COPY . .
 
-# Exposer le port
 EXPOSE 5000
 
-# Commande par défaut
+# Commande par défaut (API)
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--threads", "2", "--timeout", "120", "wsgi:app"]

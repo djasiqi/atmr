@@ -1,19 +1,19 @@
-version: '3.8'
 
 services:
-  # API Service
   api:
     build:
       context: ./backend
       dockerfile: Dockerfile
     command: >
       gunicorn --bind 0.0.0.0:5000
-      --workers 4
-      --threads 2
+      --worker-class sync
+      --workers 1
+      --threads 1
       --timeout 120
       --access-logfile -
       --error-logfile -
-      --log-level info
+      --log-level debug
+      --no-sendfile
       wsgi:app
     ports:
       - "5000:5000"
@@ -22,6 +22,7 @@ services:
       - FLASK_ENV=production
       - FLASK_CONFIG=production
       - REDIS_URL=redis://redis:6379/0
+      - APP_ENCRYPTION_KEY_B64=uIwgXNsfLhyJ02GHJivmpoh4f9jdmhQkovKfWX8k_zQ
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - CELERY_TIMEZONE=Europe/Zurich
@@ -34,6 +35,7 @@ services:
       - redis
       - osrm
     restart: unless-stopped
+
 
   # Celery Worker
   celery-worker:
@@ -49,6 +51,7 @@ services:
       - FLASK_APP=app.py
       - FLASK_ENV=production
       - FLASK_CONFIG=production
+      - APP_ENCRYPTION_KEY_B64=uIwgXNsfLhyJ02GHJivmpoh4f9jdmhQkovKfWX8k_zQ
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
@@ -77,6 +80,7 @@ services:
       - FLASK_APP=app.py
       - FLASK_ENV=production
       - FLASK_CONFIG=production
+      - APP_ENCRYPTION_KEY_B64=uIwgXNsfLhyJ02GHJivmpoh4f9jdmhQkovKfWX8k_zQ
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
@@ -104,6 +108,7 @@ services:
       - FLASK_APP=app.py
       - FLASK_ENV=production
       - FLASK_CONFIG=production
+      - APP_ENCRYPTION_KEY_B64=uIwgXNsfLhyJ02GHJivmpoh4f9jdmhQkovKfWX8k_zQ
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
@@ -127,10 +132,8 @@ services:
   # OSRM - Routing Engine
   osrm:
     image: osrm/osrm-backend:latest
-    ports:
-      - "5000:5000"
     volumes:
-      - ./osrm:/data
+      - ./osrm/data:/data
     command: osrm-routed --algorithm mld /data/switzerland-latest.osrm
     restart: unless-stopped
 
