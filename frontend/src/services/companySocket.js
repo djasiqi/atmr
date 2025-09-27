@@ -5,11 +5,22 @@ let socket = null;
 let connectPromise = null;
 const listeners = new Map(); // event -> callback
 
-// Fallback si la variable n'est pas définie dans .env
-const API_URL =
-  process.env.REACT_APP_API_BASE_URL ||
-  process.env.REACT_APP_API_URL ||
-  "http://localhost:5000";
+// Normalize API URL from environment variables
+const API_URL = (() => {
+  const baseUrl = process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_API_URL || "/api";
+  // If it's a full URL, extract the origin
+  if (baseUrl.startsWith('http')) {
+    try {
+      const url = new URL(baseUrl);
+      return url.origin;
+    } catch (e) {
+      console.error("Invalid API URL:", baseUrl);
+      return "http://localhost:5000";
+    }
+  }
+  // If it's a relative path like "/api", use window.location.origin
+  return window.location.origin;
+})();
 const IS_DEV = process.env.NODE_ENV === "development";
 
 function buildSocketOptions(token) {
@@ -104,7 +115,7 @@ export async function onDriverLocationUpdate(callback) {
   const s = await ensureCompanySocket();
   if (!s) return;
   // Remplace l’éventuel listener existant pour éviter les doublons
-  const evt = "driver_location_update";
+  const evt = "driver_location";
   const prev = listeners.get(evt);
   if (prev) s.off(evt, prev);
   s.on(evt, callback);
@@ -115,7 +126,7 @@ export async function onDriverLocationUpdate(callback) {
 export async function offDriverLocationUpdate() {
   const s = await ensureCompanySocket();
   if (!s) return;
-  const evt = "driver_location_update";
+  const evt = "driver_location";
   const prev = listeners.get(evt);
   if (prev) {
     s.off(evt, prev);

@@ -60,7 +60,9 @@ class CreateBooking(Resource):
 
             # Horaire (UTC-aware via helper) — interprète les naïfs en Europe/Zurich puis convertit en UTC
             try:
-                scheduled_time = to_utc(data["scheduled_time"])
+                # Interprète "YYYY-MM-DD HH:mm" (ou ISO sans Z) en Europe/Zurich et garde NAÏF (pas de tzinfo)
+                from shared.time_utils import parse_local_naive
+                scheduled_time = parse_local_naive(data["scheduled_time"])
             except Exception as date_error:
                 app_logger.error(f"Erreur de conversion scheduled_time: {date_error}")
                 return {"error": "Invalid scheduled_time format"}, 400

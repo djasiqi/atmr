@@ -169,6 +169,13 @@ export default function DriverLiveMap() {
 
     socket.on("driver_location", onLoc);
     socket.on("driver_location_update", onLoc);
+    
+    // Explicitly request driver locations when component mounts
+    try {
+      socket.emit("get_driver_locations");
+    } catch (e) {
+      console.error("Failed to request driver locations:", e);
+    }
 
     return () => {
       socket.off("driver_location", onLoc);

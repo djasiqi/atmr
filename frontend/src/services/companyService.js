@@ -96,9 +96,10 @@ export const triggerReturnBooking = async (reservationId, payload = {}) => {
 
 export const fetchCompanyDriver = async () => {
   try {
-    const { data } = await apiClient.get("/companies/me/driver");
+    const { data } = await apiClient.get("/companies/me/drivers");
     // backend: { driver: [...] } ou parfois déjà un tableau
     if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.drivers)) return data.drivers;
     if (Array.isArray(data?.driver)) return data.driver;
     return []; // fallback sûr
   } catch (e) {
@@ -177,8 +178,22 @@ export const setDispatchEnabled = async (enabled) => {
 };
 
 export const fetchCompanyInfo = async () => {
-  const { data } = await apiClient.get("/companies/me");
-  return data;
+  try {
+    const { data } = await apiClient.get("/companies/me");
+    return data;
+  } catch (error) {
+    console.error("Error fetching company info:", error?.response?.data || error);
+    // Return a minimal valid company object to prevent UI from breaking
+    return {
+      id: null,
+      name: "Error loading company",
+      email: "",
+      phone: "",
+      address: "",
+      logo_url: null,
+      error: true
+    };
+  }
 };
 
 export const updateCompanyInfo = async (payload) => {
@@ -218,10 +233,16 @@ export const fetchClientReservations = async (clientId) => {
 };
 
 export const searchClients = async (query) => {
-  const { data } = await apiClient.get(
-    `/companies/me/clients?search=${encodeURIComponent(query)}`
-  );
-  return data;
+  try {
+    const { data } = await apiClient.get(
+      `/companies/me/clients?search=${encodeURIComponent(query)}`
+    );
+    // Ensure we always return an array
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error("Error searching clients:", error?.response?.data || error);
+    return []; // Return empty array on error
+  }
 };
 
 export const createClient = async (payload) => {
@@ -467,27 +488,41 @@ export const fetchAssignedReservations = async (forDate) => {
   console.log(`Fetching assigned reservations for date: ${forDate}`);
   
   try {
-    const [reservationsRes, assignmentsRes] = await Promise.all([
-      apiClient.get("/companies/me/reservations", {
+    // Use separate try/catch blocks to handle each request independently
+    let reservations = [];
+    let assignments = [];
+    
+    try {
+      const reservationsRes = await apiClient.get("/companies/me/reservations", {
         params: forDate ? { date: forDate, flat: true } : { flat: true },
-      }),
-      apiClient.get("/company_dispatch/assignments", {
+      });
+      
+      // Normalise la charge utile en tableau
+      const payload = reservationsRes.data;
+      reservations = Array.isArray(payload)
+        ? payload
+        : (Array.isArray(payload?.reservations) ? payload.reservations : []);
+      console.log(`Received ${reservations.length} reservations`);
+    } catch (error) {
+      console.error("Error fetching reservations:", error?.response?.data || error);
+      // Continue with empty reservations array
+    }
+    
+    try {
+      const assignmentsRes = await apiClient.get("/company_dispatch/assignments", {
         params: forDate ? { date: forDate } : undefined,
-      }),
-    ]);
-
-    // Normalise la charge utile en tableau
-    const payload = reservationsRes.data;
-    const reservations = Array.isArray(payload)
-      ? payload
-      : (Array.isArray(payload?.reservations) ? payload.reservations : []);
-    console.log(`Received ${reservations.length} reservations and ${assignmentsRes.data?.length || 0} assignments`);
-
-    // /company_dispatch/assignments doit rester un tableau
-    const assignments = Array.isArray(assignmentsRes.data) ? assignmentsRes.data : [];
-
+      });
+      
+      // /company_dispatch/assignments doit rester un tableau
+      assignments = Array.isArray(assignmentsRes.data) ? assignmentsRes.data : [];
+      console.log(`Received ${assignments.length} assignments`);
+    } catch (error) {
+      console.error("Error fetching assignments:", error?.response?.data || error);
+      // Continue with empty assignments array
+    }
+    
     console.log(
-      `Received ${reservations.length} reservations and ${assignments.length} assignments`
+      `Processing ${reservations.length} reservations and ${assignments.length} assignments`
     );
 
     const byBookingId = new Map(assignments.map((a) => [a.booking_id, a]));
@@ -504,71 +539,89 @@ export const fetchAssignedReservations = async (forDate) => {
 
     // 🔧 filtre plus tolérant : accepte scheduled_time, pickup_time, date_time, datetime
     const bookingsOfDay = reservations.filter((r) => {
-      const rawWhen = pickBestDateField(r);
-      const ymd = toYMD(rawWhen);
-      return !targetDay || (ymd === targetDay);
+      try {
+        const rawWhen = pickBestDateField(r);
+        const ymd = toYMD(rawWhen);
+        return !targetDay || (ymd === targetDay);
+      } catch (e) {
+        console.error("Error filtering booking:", e);
+        return false;
+      }
     });
 
     console.log(`Found ${bookingsOfDay.length} bookings for the target day`);
 
     // Construction des lignes
     const rows = bookingsOfDay.map((b) => {
-      const a = byBookingId.get(b.id) || null;
+      try {
+        const a = byBookingId.get(b.id) || null;
 
-      const clientName =
-        b.customer_name ||
-        b.client?.full_name ||
-        b.client_name ||
-        b.client?.name ||
-        "Non spécifié";
+        const clientName =
+          b.customer_name ||
+          b.client?.full_name ||
+          b.client_name ||
+          b.client?.name ||
+          "Non spécifié";
 
-      // ✅ Source temporelle unifiée
-      const when = pickBestDateField(b);
-      const scheduled_time = when;
-      const dropoff_time = b.dropoff_time || b.drop_time || null;
+        // ✅ Source temporelle unifiée
+        const when = pickBestDateField(b);
+        const scheduled_time = when;
+        const dropoff_time = b.dropoff_time || b.drop_time || null;
 
-      // Create a synthetic assignment if booking has driver_id but no assignment
-      const syntheticAssignment = !a && b.driver_id ? {
-        id: null, // Synthetic assignment has no ID
-        booking_id: b.id,
-        driver_id: b.driver_id,
-        status: "assigned", // Default status
-        estimated_pickup_arrival: null,
-        estimated_dropoff_arrival: null,
-        is_synthetic: true, // Flag to identify synthetic assignments
-      } : null;
+        // Create a synthetic assignment if booking has driver_id but no assignment
+        const syntheticAssignment = !a && b.driver_id ? {
+          id: null, // Synthetic assignment has no ID
+          booking_id: b.id,
+          driver_id: b.driver_id,
+          status: "assigned", // Default status
+          estimated_pickup_arrival: null,
+          estimated_dropoff_arrival: null,
+          is_synthetic: true, // Flag to identify synthetic assignments
+        } : null;
 
-
-      return {
-        id: b.id,
-        customer_name: clientName,
-        client: b.client || { full_name: clientName },
-        scheduled_time,
-        pickup_time: scheduled_time, // compat
-        dropoff_time,
-        pickup_location: b.pickup_location || b.pickup_address || b.origin || "",
-        dropoff_location: b.dropoff_location || b.dropoff_address || b.destination || "",
-        is_return: !!b.is_return,
-        status: b.status || "scheduled",
-        driver_username: b.driver_username || b.driver?.username,
-        driver: b.driver || null,
-        // accepte ancienne/ nouvelle forme (eta_* vs estimated_*)
-        assignment: a ? {
-          id: a.id,
-          booking_id: a.booking_id,
-          driver_id: a.driver_id,
-          status: a.status,
-          estimated_pickup_arrival: a.estimated_pickup_arrival || a.eta_pickup_at || null,
-          estimated_dropoff_arrival: a.estimated_dropoff_arrival || a.eta_dropoff_at || null,
-        } : syntheticAssignment,
-      };
-    });
+        return {
+          id: b.id,
+          customer_name: clientName,
+          client: b.client || { full_name: clientName },
+          scheduled_time,
+          pickup_time: scheduled_time, // compat
+          dropoff_time,
+          pickup_location: b.pickup_location || b.pickup_address || b.origin || "",
+          dropoff_location: b.dropoff_location || b.dropoff_address || b.destination || "",
+          is_return: !!b.is_return,
+          status: b.status || "scheduled",
+          driver_username: b.driver_username || b.driver?.username,
+          driver: b.driver || null,
+          // accepte ancienne/ nouvelle forme (eta_* vs estimated_*)
+          assignment: a ? {
+            id: a.id,
+            booking_id: a.booking_id,
+            driver_id: a.driver_id,
+            status: a.status,
+            estimated_pickup_arrival: a.estimated_pickup_arrival || a.eta_pickup_at || null,
+            estimated_dropoff_arrival: a.estimated_dropoff_arrival || a.eta_dropoff_at || null,
+          } : syntheticAssignment,
+        };
+      } catch (e) {
+        console.error("Error processing booking:", e);
+        // Return a minimal valid row to avoid breaking the UI
+        return {
+          id: b.id || Math.random().toString(36).substring(2, 15),
+          customer_name: "Error processing booking",
+          scheduled_time: new Date().toISOString(),
+          pickup_location: "",
+          dropoff_location: "",
+          status: "error",
+        };
+      }
+    }).filter(Boolean); // Remove any undefined entries
 
     console.log(`Returning ${rows.length} formatted rows for dispatch table`);
     return rows;
   } catch (error) {
     console.error("Error fetching assigned reservations:", error);
-    throw error;
+    // Return empty array instead of throwing to prevent UI from breaking
+    return [];
   }
 };
 

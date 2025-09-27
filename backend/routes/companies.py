@@ -285,8 +285,21 @@ class CompanyReservations(Resource):
             return error_response, status_code
         
         flat = (request.args.get('flat', 'false').lower() == 'true')
+        day_str = (request.args.get('date') or '').strip()
+        # Fenêtre locale Europe/Zurich → objets naïfs pour coller au modèle Booking.scheduled_time (naïf)
+        from shared.time_utils import day_local_bounds
+        if day_str:
+            start_local, end_local = day_local_bounds(day_str)  # renvoie naïfs locaux
+        else:
+            # défaut = aujourd'hui (local)
+            from datetime import datetime
+            start_local, end_local = day_local_bounds(datetime.now().strftime("%Y-%m-%d"))
         status_filter = request.args.get('status')
-        query = Booking.query.filter(Booking.company_id == company.id)
+        from sqlalchemy import and_, or_
+        query = Booking.query.filter(
+            Booking.company_id == company.id,
+            and_(Booking.scheduled_time >= start_local, Booking.scheduled_time < end_local)
+        )
         if status_filter:
             try:
                 status_enum = BookingStatus[status_filter.upper()]
@@ -476,6 +489,17 @@ class CompleteReservation(Resource):
 # ======================================================
 # 6. Liste des chauffeurs de l'entreprise
 # ======================================================
+@companies_ns.route('/me/drivers')
+class CompanyDriversList(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        company, err, code = get_company_from_token()
+        if err: return err, code
+        drivers = Driver.query.options(joinedload(Driver.user)).filter_by(company_id=company.id).all()
+        return {"drivers": [d.serialize for d in drivers], "total": len(drivers)}, 200
+
+
 @companies_ns.route('/me/driver')
 class CompanyDrivers(Resource):
     @jwt_required()
@@ -1650,3 +1674,22 @@ class CompanyLogo(Resource):
         company.logo_url = None
         db.session.commit()
         return {"message": "Logo supprimé."}, 200
+
+@companies_ns.route("/me/reservations")
+class CompanyReservations(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        company = Company.query.filter_by(user_id=get_jwt_identity()).first()
+        if not company:
+            return {"error": "Entreprise non trouvée"}, 404
+
+        day = request.args.get("date") or datetime.now().strftime("%Y-%m-%d")
+        d0, d1 = day_local_bounds(day)
+        bookings = Booking.query.filter(
+            Booking.company_id == company.id,
+            Booking.scheduled_time >= d0,
+            Booking.scheduled_time < d1
+        ).all()
+        return [b.serialize for b in bookings], 200
+

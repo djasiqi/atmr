@@ -452,7 +452,9 @@ class AssignmentsListResource(Resource):
         
         d = _parse_date(request.args.get("date"))
         # Utiliser day_local_bounds pour obtenir les bornes locales du jour
-        d0, d1 = day_local_bounds(d.strftime("%Y-%m-%d"))
+        from shared.time_utils import to_utc
+        d0_local, d1_local = day_local_bounds(d.strftime("%Y-%m-%d"))
+        d0, d1 = to_utc(d0_local), to_utc(d1_local)
 
         # 🔒 Filtre multi-colonnes temps (comme le front)
         company = _get_current_company()

@@ -80,9 +80,14 @@ class Login(Resource):
                 return {"error": "Email ou mot de passe invalide."}, 401
 
             # Création du token avec le rôle dans additional_claims
+            claims = {
+                "role": user.role.value,
+                "company_id": getattr(user, "company_id", None),
+                "driver_id": getattr(user, "driver_id", None),
+            }
             access_token = create_access_token(
-                identity=user.public_id,
-                additional_claims={"role": user.role.value},
+                identity=user.id,  # ⚠️ ID numérique attendu par dispatch_routes
+                additional_claims=claims,
                 expires_delta=timedelta(hours=1)
             )
 
@@ -117,15 +122,19 @@ class RefreshToken(Resource):
         et inclut également le rôle si vous le désirez.
         """
         try:
-            current_user_public_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=current_user_public_id).first()
+            current_user_id = get_jwt_identity()
+            user = User.query.get(current_user_id)
             if not user:
                 return {"error": "User not found"}, 404
 
-            # Créer un nouveau token avec le rôle actualisé
+            claims = {
+                "role": user.role.value,
+                "company_id": getattr(user, "company_id", None),
+                "driver_id": getattr(user, "driver_id", None),
+            }
             new_token = create_access_token(
-                identity=user.public_id,
-                additional_claims={"role": user.role.value},
+                identity=user.id,
+                additional_claims=claims,
                 expires_delta=timedelta(hours=1)
             )
             return {"access_token": new_token}, 200

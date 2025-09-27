@@ -262,6 +262,111 @@ def init_chat_socket(socketio: SocketIO):
             logger.exception(f"❌ Erreur driver_location : {e}")
             emit("error", {"error": str(e)})
 
+
+       
+    @socketio.on("join_company")
+    def handle_join_company(data=None):
+           try:
+               user_id = session.get("user_id")
+               user_role = session.get("role")
+               if not user_id:
+                   emit("error", {"error": "Session utilisateur introuvable."})
+                   return
+
+               if user_role == "company":
+                   company = Company.query.filter_by(user_id=user_id).first()
+                   if not company:
+                       emit("error", {"error": "Entreprise introuvable."})
+                       return
+
+                   room = f"company_{company.id}"
+                   join_room(room)
+                   emit("joined_company", {"company_id": company.id, "room": room})
+                   logger.info(f"🏢 Company {company.id} joined room: {room}")
+               elif user_role == "driver":
+                   driver = Driver.query.filter_by(user_id=user_id).first()
+                   if not driver or not driver.company_id:
+                       emit("error", {"error": "Chauffeur ou entreprise associée introuvable."})
+                       return
+
+                   room = f"company_{driver.company_id}"
+                   join_room(room)
+                   emit("joined_company", {"company_id": driver.company_id, "room": room})
+                   logger.info(f"🚗 Driver {driver.id} joined company room: {room}")
+               else:
+                   emit("error", {"error": "Rôle non autorisé pour rejoindre une room entreprise."})
+           except Exception as e:
+               logger.exception(f"❌ Error in join_company: {e}")
+               emit("error", {"error": str(e)})
+
+
+    @socketio.on("get_driver_locations")
+    def handle_get_driver_locations():
+           try:
+               user_id = session.get("user_id")
+               user_role = session.get("role")
+               if not user_id or user_role != "company":
+                   emit("error", {"error": "Accès non autorisé pour la demande de localisation."})
+                   return
+
+               # Get company ID from session
+               company_info = _SID_INDEX.get(request.sid, {})
+               company_id = company_info.get("company_id")
+
+               if not company_id:
+                   emit("error", {"error": "Entreprise non identifiée."})
+                   return
+
+               # Get all drivers for this company
+               drivers = Driver.query.filter_by(company_id=company_id).all()
+
+               # For each driver, get location from Redis or DB
+               for driver in drivers:
+                   try:
+                       # Try Redis first
+                       key = f"driver:{driver.id}:loc"
+                       h = redis_client.hgetall(key)
+
+                       if h:
+                           # Redis returns bytes -> decode
+                           def _dec(v):
+                               try: return v.decode()
+                               except: return v
+
+                           loc_data = {k.decode(): _dec(v) for k, v in h.items()}
+
+                           # Cast numeric fields
+                           for kf in ("lat","lon","speed","heading","accuracy"):
+                               if kf in loc_data:
+                                   try: loc_data[kf] = float(loc_data[kf])
+                                   except: pass
+
+                           # Emit location to the company room
+                           emit("driver_location_update", {
+                               "driver_id": driver.id,
+                               "first_name": driver.user.first_name,
+                               "latitude": loc_data.get("lat"),
+                               "longitude": loc_data.get("lon"),
+                               "timestamp": loc_data.get("ts") or datetime.now(timezone.utc).isoformat(),
+                           })
+                       elif driver.latitude and driver.longitude:
+                           # Fallback to DB if Redis doesnt have data
+                           emit("driver_location_update", {
+                               "driver_id": driver.id,
+                               "first_name": driver.user.first_name,
+                               "latitude": driver.latitude,
+                               "longitude": driver.longitude,
+                               "timestamp": datetime.now(timezone.utc).isoformat(),
+                           })
+                   except Exception as e:
+                       logger.exception(f"❌ Error sending driver location for driver {driver.id}: {e}")
+
+               logger.info(f"📡 Sent locations for {len(drivers)} drivers to company {company_id}")
+
+           except Exception as e:
+               logger.exception(f"❌ Error in get_driver_locations: {e}")
+               emit("error", {"error": str(e)})
+
     @socketio.on("disconnect")
     def handle_disconnect():
         info = _SID_INDEX.pop(request.sid, None)

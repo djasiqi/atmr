@@ -28,7 +28,6 @@ import CompanyDriverPlanning from "./pages/company/Driver/CompanyDriverPlanning"
 import CompanyInvoices from "./pages/company/Invoices/CompanyInvoices";
 import ClientInvoices from "./pages/company/Invoices/ClientInvoices";
 import CompanySettings from "./pages/company/Settings/CompanySettings";
-import AIOptimizedRoute from "./pages/ai/AIOptimizedRoute";
 import Dashboard from "./pages/Home/Dashboard";
 import Unauthorized from "./pages/Error/Unauthorized";
 import NotFound from "./pages/Error/NotFound";
@@ -164,8 +163,6 @@ const App = () => {
           <Route path="/dashboard/company/:public_id/settings" element={
             <ProtectedRoute allowedRoles={["company"]}><CompanySettings /></ProtectedRoute>
           }/>
-
-          <Route path="/ai-route" element={<AIOptimizedRoute />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -1,7 +1,10 @@
 // frontend/src/utils/apiClient.js
 import axios from 'axios';
 
-const apiBase = process.env.REACT_APP_API_BASE_URL || '/api';
+const apiBase =
+  process.env.REACT_APP_API_BASE_URL ||
+  process.env.REACT_APP_API_URL ||
+  '/api';
 
 const apiClient = axios.create({
   baseURL: apiBase,
