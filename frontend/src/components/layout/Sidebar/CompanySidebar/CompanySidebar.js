@@ -29,7 +29,7 @@ const CompanySidebar = ({ isOpen, onToggle }) => {
         to: `/dashboard/company/${public_id}`,
         label: "Tableau de bord",
         icon: <FaHome className={styles.icon} />,
-        exact: true,
+        end: true,
       },
       {
         to: `/dashboard/company/${public_id}/reservations`,
@@ -76,8 +76,8 @@ const CompanySidebar = ({ isOpen, onToggle }) => {
           <li key={item.to}>
             <NavLink
               to={item.to}
-              exact={item.exact}
-              activeClassName={styles.active}
+              end={!!item.end} // v6
+              className={({ isActive }) => (isActive ? styles.active : undefined)} // v6
             >
               {item.icon}
               <span className={styles.text}>{item.label}</span>

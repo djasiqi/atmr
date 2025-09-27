@@ -3,7 +3,13 @@ import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 import { getAccessToken } from "./useAuthToken";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+// On dérive l'URL Socket depuis la base API.
+// - Si REACT_APP_API_BASE_URL = "http://127.0.0.1:5000/api" -> "http://127.0.0.1:5000"
+// - Si baseURL = "/api" (proxy CRA) -> window.location.origin (http://localhost:3000) et proxy /socket.io fera le reste.
+const API_BASE = process.env.REACT_APP_API_BASE_URL || "/api";
+const SOCKET_ORIGIN = API_BASE.startsWith("http")
+  ? API_BASE.replace(/\/api\/?$/, "")
+  : window.location.origin;
 
 // --- Singleton au niveau module ---
 let SOCKET_SINGLETON = null;
@@ -18,24 +24,32 @@ export default function useCompanySocket() {
       console.warn("❌ Aucun token JWT disponible pour WebSocket.");
       return;
     }
+
     if (!SOCKET_SINGLETON) {
-      SOCKET_SINGLETON = io(API_URL, {
-        transports: ["websocket", "polling"],
-        withCredentials: true,
-        autoConnect: false,
+      SOCKET_SINGLETON = io(SOCKET_ORIGIN, {
+        path: "/socket.io",
+        transports: ["websocket", "polling"],   // tente WS, retombe sur polling si besoin
+        timeout: 20000,                         // 20s, plus tolérant
         reconnection: true,
         reconnectionAttempts: Infinity,
         reconnectionDelay: 500,
         reconnectionDelayMax: 5000,
-        timeout: 8000,
-        path: "/socket.io",
+        autoConnect: false,
+        // withCredentials est inutile en JWT header/auth payload (cookies non utilisés)
+        withCredentials: false,
+        // Le token est passé dans le "auth" du handshake (côté serveur: socket.handshake.auth.token)
+        auth: { token },
       });
+    } else {
+      // met à jour le token du handshake
+      SOCKET_SINGLETON.auth = { token };
     }
-    // met à jour le token et (re)connecte si besoin
-    SOCKET_SINGLETON.auth = { token };
+
+    // connect si pas déjà en cours/établi
     if (!SOCKET_SINGLETON.connected && !SOCKET_SINGLETON.connecting) {
       SOCKET_SINGLETON.connect();
     }
+
     if (!BASE_LISTENERS_ATTACHED) {
       SOCKET_SINGLETON.on("connect", () => {
         console.log("✅ WebSocket connecté (entreprise)", new Date().toISOString());
@@ -52,11 +66,12 @@ export default function useCompanySocket() {
       });
       BASE_LISTENERS_ATTACHED = true;
     }
+
     setSocket(SOCKET_SINGLETON);
 
-    // écoute rafraîchissement token entre onglets
+    // 🔁 Rafraîchissement token entre onglets — corrige la clé (authToken)
     const onStorage = (e) => {
-      if (e.key === "access_token") {
+      if (e.key === "authToken") {
         const t = getAccessToken();
         if (t) {
           SOCKET_SINGLETON.auth = { token: t };

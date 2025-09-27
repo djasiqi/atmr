@@ -51,9 +51,7 @@ const Login = () => {
     setIsLoading(true);
     try {
       localStorage.removeItem("authToken");
-      const response = await apiClient.post("/auth/login", formData, {
-        headers: { 'X-Skip-Auth': '1' }, // voir point 4 ci-dessous
-      });
+      const response = await apiClient.post("/auth/login", formData);
       const { token, user } = response.data;
 
       if (!user || !user.role || !user.public_id) {
@@ -86,9 +84,13 @@ const Login = () => {
       }
     } catch (error) {
       console.error("❌ Erreur lors de la connexion :", error);
-      setErrorMessage(
-        error.response?.data?.error || "Une erreur inattendue est survenue."
-      );
+      const msg =
+        error.response?.data?.error ??
+        error.response?.data?.message ??
+        error.response?.data?.detail ??
+        (typeof error.response?.data === "string" ? error.response.data : null) ??
+        error.message;
+      setErrorMessage(msg);
     } finally {
       setIsLoading(false);
     }

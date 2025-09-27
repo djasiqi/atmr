@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import axios from "axios";
+import apiClient from "./utils/apiClient";
 
 import DefaultLayout from "./store/layouts/DefaultLayout";
 import Home from "./pages/Home/Home";
@@ -55,8 +55,8 @@ function setupTokenAutoRefresh() {
     const token = localStorage.getItem("authToken");
     if (token && now - lastActivity < 55 * 60 * 1000) {
       try {
-        const { data } = await axios.post(
-          `${process.env.REACT_APP_API_BASE_URL}/auth/refresh-token`,
+        const { data } = await apiClient.post(
+          "/auth/refresh-token",
           {},
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -86,8 +86,8 @@ const App = () => {
       const refreshToken = localStorage.getItem("refreshToken");
       if (!refreshToken) return;
       try {
-        const { data } = await axios.post(
-          `${process.env.REACT_APP_API_BASE_URL}/auth/refresh-token`,
+        const { data } = await apiClient.post(
+          "/auth/refresh-token",
           {},
           { headers: { Authorization: `Bearer ${refreshToken}` } }
         );

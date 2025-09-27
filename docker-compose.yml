@@ -29,6 +29,7 @@ services:
       - DISPATCH_AUTORUN_INTERVAL_SEC=300
       - DISPATCH_AUTORUN_ENABLED=true
       - UD_OSRM_URL=http://osrm:5000
+      - SOCKETIO_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
     volumes:
       - ./backend:/app
     depends_on:

@@ -151,26 +151,38 @@ const CompanyDashboard = () => {
     return () => socket.off("new_reservation", handleNewReservation);
   }, [socket, handleNewReservation]);
 
-  // WS: fin / statut d'optimisation -> rafraîchir dispatches + réservations + retards
+  // WS: changements d'assignations & progression du dispatch
   useEffect(() => {
     if (!socket) return;
-    const handleDispatchCompleted = () => {
+    const refetchAll = () => {
       refetchAssigned?.();
       reloadReservations?.();
       refetchDelays?.();
     };
-    const handleDispatchStatus = (payload = {}) => {
-      if (payload.is_running === false) {
-        refetchAssigned?.();
-        reloadReservations?.();
-        refetchDelays?.();
-      }
+    const onAssignCreated = () => refetchAll();
+    const onAssignUpdated = () => refetchAll();
+    const onAssignDeleted = () => refetchAll();
+    const onDispatchProgress = (p) => {
+      // Optionnel: logger ou afficher un toast/loader granulaire
+      // console.debug("dispatch_progress", p);
     };
-    socket.on("dispatch_completed", handleDispatchCompleted);
-    socket.on("dispatch_status", handleDispatchStatus);
+    const onDispatchError = (err) => {
+      console.error("dispatch_error:", err);
+      // Optionnel: notifier l’utilisateur
+      // window.alert(err?.message || "Une erreur est survenue pendant l'optimisation.");
+      refetchAll();
+    };
+    socket.on("assignment_created", onAssignCreated);
+    socket.on("assignment_updated", onAssignUpdated);
+    socket.on("assignment_deleted", onAssignDeleted);
+    socket.on("dispatch_progress", onDispatchProgress);
+    socket.on("dispatch_error", onDispatchError);
     return () => {
-      socket.off("dispatch_completed", handleDispatchCompleted);
-      socket.off("dispatch_status", handleDispatchStatus);
+      socket.off("assignment_created", onAssignCreated);
+      socket.off("assignment_updated", onAssignUpdated);
+      socket.off("assignment_deleted", onAssignDeleted);
+      socket.off("dispatch_progress", onDispatchProgress);
+      socket.off("dispatch_error", onDispatchError);
     };
   }, [socket, refetchAssigned, reloadReservations, refetchDelays]);
 

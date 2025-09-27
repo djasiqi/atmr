@@ -1,4 +1,3 @@
-// src/services/companySocket.js
 import { io } from "socket.io-client";
 import { getAccessToken } from "../hooks/useAuthToken";
 
@@ -6,25 +5,37 @@ let socket = null;
 let connectPromise = null;
 const listeners = new Map(); // event -> callback
 
-const API_URL = process.env.REACT_APP_API_BASE_URL;
+// Fallback si la variable n'est pas définie dans .env
+const API_URL =
+  process.env.REACT_APP_API_BASE_URL ||
+  process.env.REACT_APP_API_URL ||
+  "http://localhost:5000";
 const IS_DEV = process.env.NODE_ENV === "development";
 
 function buildSocketOptions(token) {
   // Dev: polling-only + no upgrade (Android/proxy-friendly)
   // Prod: laissez Socket.IO faire (WS prioritaire, fallback polling)
   const base = {
-    path: "/socket.io", // ⚠️ sans slash final
-    auth: { token },
-    extraHeaders: { Authorization: `Bearer ${token}` },
+    path: "/socket.io", // par défaut côté serveur
+    // 🔒 Auth dynamique : sera rappelé à chaque (re)connexion
+    auth: () => ({ token: getAccessToken() }),
+    // NOTE: extraHeaders est ignoré par les navigateurs → on s'appuie sur auth.token
+    // extraHeaders: { Authorization: `Bearer ${token}` },
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 500,
     reconnectionDelayMax: 5000,
     timeout: 20000,
     forceNew: true,
+    withCredentials: false,
   };
   return IS_DEV
-    ? { ...base, transports: ["polling"], upgrade: false }
+    ? {
+        ...base,
+        // 💡 Si tu veux tester WS en local : commente la ligne suivante
+        transports: ["polling"],
+        upgrade: false,
+      }
     : base; // en prod: upgrade WS autorisé par défaut
 }
 
@@ -32,14 +43,10 @@ export function getCompanySocket() {
   if (socket && socket.connected) return socket;
 
   if (!connectPromise) {
-    const token = getAccessToken();
-    if (!token) {
-      console.warn("❌ Aucun token pour WebSocket");
-      return null;
-    }
     connectPromise = new Promise((resolve, reject) => {
       try {
-        socket = io(API_URL, buildSocketOptions(token));
+        // token lu dynamiquement via buildSocketOptions.auth()
+        socket = io(API_URL, buildSocketOptions());
 
         socket.on("connect", () => {
           console.log("✅ WebSocket connecté (company)", socket.id);
@@ -59,7 +66,7 @@ export function getCompanySocket() {
 
         socket.on("unauthorized", (err) => {
           console.error("⛔ Unauthorized WebSocket:", err);
-        });
+         });
       } catch (e) {
         console.error("❌ Socket init error:", e);
         connectPromise = null;
@@ -114,6 +121,46 @@ export async function offDriverLocationUpdate() {
     s.off(evt, prev);
     listeners.delete(evt);
   }
+}
+
+// 🔧 Utilitaires génériques d'abonnement (évite la multiplication de helpers spécifiques)
+export async function on(event, callback) {
+  const s = await ensureCompanySocket();
+  if (!s) return;
+  const prev = listeners.get(event);
+  if (prev) s.off(event, prev);
+  s.on(event, callback);
+  listeners.set(event, callback);
+}
+
+export async function once(event, callback) {
+  const s = await ensureCompanySocket();
+  if (!s) return;
+  s.once(event, callback);
+}
+
+export async function off(event) {
+  const s = await ensureCompanySocket();
+  if (!s) return;
+  const prev = listeners.get(event);
+  if (prev) {
+    s.off(event, prev);
+    listeners.delete(event);
+  }
+}
+
+export async function waitUntilConnected(timeoutMs = 10000) {
+  const start = Date.now();
+  let s = await ensureCompanySocket();
+  while (s && !s.connected && Date.now() - start < timeoutMs) {
+    await new Promise(r => setTimeout(r, 100));
+    s = socket;
+  }
+  return s?.connected ? s : null;
+}
+
+export function getSocketId() {
+  return socket?.id || null;
 }
 
 // ✅ Fermeture propre (ex. au logout)

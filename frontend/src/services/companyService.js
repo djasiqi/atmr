@@ -330,6 +330,7 @@ export const triggerDispatch = async ({ forDate, regularFirst = true, allowEmerg
     runAsync: false,    // trigger est toujours async côté backend
     overrides,
   });
+  // /trigger est l’API “queue” historique → on force run_async côté backend
   const { data } = await apiClient.post("/company_dispatch/trigger", { ...payload, run_async: true });
   return data; // { status: "queued", job_id }
 };
@@ -355,7 +356,8 @@ export const runDispatchNow = async ({
     overrides,
   });
   try {
-    const { data } = await apiClient.post("/company_dispatch/trigger", { ...payload, run_async: true });
+    // ▶️ Chemin principal : /run (200 si sync, 202 si async selon runAsync)
+    const { data } = await apiClient.post("/company_dispatch/run", payload);
     return {
       ...data,
       dispatch_run_id: data.dispatch_run_id || data.meta?.dispatch_run_id || null,
@@ -365,7 +367,7 @@ export const runDispatchNow = async ({
     const status = e?.response?.status;
     if (status === 400 || status === 422) {
       console.error("RUN 400/422 body:", e?.response?.data || e);
-      const { data } = await apiClient.post("/company_dispatch/trigger", payload);
+      const { data } = await apiClient.post("/company_dispatch/trigger", { ...payload, run_async: true });
       return data;
     }
     throw e;
@@ -418,10 +420,8 @@ export const runDispatchForDay = async ({
     console.log("Falling back to /trigger endpoint");
 
     try {
-      const { data } = await apiClient.post("/company_dispatch/trigger", {
-        ...payload,
-        run_async: true, // force async pour cohérence
-      });
+      // /trigger = file d'attente → on force run_async côté backend
+      const { data } = await apiClient.post("/company_dispatch/trigger", { ...payload, run_async: true });
       console.log("Trigger fallback response:", data);
       return {
         ...data,

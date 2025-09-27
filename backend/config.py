@@ -29,7 +29,7 @@ class Config:
 
     # --- Redis / Socket.IO ---
     REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
-    # Liste d’origines autorisées pour Socket.IO (séparées par des virgules).
+    # Liste d'origines autorisées pour Socket.IO (séparées par des virgules).
     # Exemple: SOCKETIO_CORS_ORIGINS="https://app.example.com,https://admin.example.com,http://localhost:3000"
     SOCKETIO_CORS_ORIGINS = os.getenv("SOCKETIO_CORS_ORIGINS", "")
 
@@ -50,6 +50,14 @@ class DevelopmentConfig(Config):
     MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
     # Supporte DATABASE_URL (standard) ou fallback local SQLite
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL') or os.getenv('DATABASE_URI', f"sqlite:///{base_dir}/development.db")
+    
+    # CORRECTION: Ajout des configurations de cookies pour le développement
+    SESSION_COOKIE_SECURE = False
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SECURE = False
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = "Lax"
 
 class ProductionConfig(Config):
     """Configuration pour la production."""

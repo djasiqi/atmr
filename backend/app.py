@@ -8,13 +8,14 @@ from dotenv import load_dotenv
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"), override=True)
 
-from flask import Flask, request, jsonify, make_response, send_from_directory, redirect
+from flask import Flask, request, jsonify, make_response, send_from_directory, redirect, current_app
 from flask_cors import CORS
 from flask_talisman import Talisman
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from werkzeug.utils import safe_join
 from werkzeug.exceptions import HTTPException, NotFound
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -58,6 +59,14 @@ class CustomJSONEncoder(json.JSONEncoder):
 def create_app(config_name=os.getenv("FLASK_CONFIG", "development")):
     app = Flask(__name__)
 
+    # CORRECTION: Désactiver les slashes stricts pour éviter les redirections 308
+    app.url_map.strict_slashes = False
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+
+    if os.getenv("FLASK_ENV", "production") != "production":
+        app.config["PREFERRED_URL_SCHEME"] = "http"
+        app.config["SESSION_COOKIE_SECURE"] = False
+
     # Flask < 2.3 : encoder custom, sinon ignoré proprement
     try:
         app.json_encoder = CustomJSONEncoder
@@ -97,7 +106,7 @@ def create_app(config_name=os.getenv("FLASK_CONFIG", "development")):
         sio_logger = False
         sio_engineio_logger = False
 
-    # En dev Android, on peut vouloir désactiver l’upgrade WebSocket (polling-only)
+    # En dev Android, on peut vouloir désactiver l'upgrade WebSocket (polling-only)
     # Active si SIO_DISABLE_UPGRADES=true (par défaut) et seulement en dev.
     allow_ws_upgrades = True
     if config_name == "development":
@@ -206,7 +215,7 @@ def create_app(config_name=os.getenv("FLASK_CONFIG", "development")):
         getattr(logging, os.getenv("WERKZEUG_LOG_LEVEL", "ERROR").upper(), logging.ERROR)
     )
 
-    # 8) Injecter l’app dans la queue unified_dispatch pour les threads
+    # 8) Injecter l'app dans la queue unified_dispatch pour les threads
     from services.unified_dispatch import queue as ud_queue
     ud_queue.init_app(app)
 
@@ -223,27 +232,49 @@ def create_app(config_name=os.getenv("FLASK_CONFIG", "development")):
         LEGACY_PREFIXES = (
             "auth", "clients", "admin", "companies", "driver",
             "bookings", "payments", "utils", "messages",
-            "company_dispatch", "geocode", "medical", "ai",
+            "company_dispatch", "geocode", "medical", "ai", "routes", "dispatch",
+            "tasks", "users",
         )
 
         @app.before_request
         def legacy_api_shim():
             path = request.path or "/"
-            # Laisser passer les routes non-API utiles
+
+            # 1) Laisser passer les routes déjà sous /api
+            if path == "/api" or path.startswith("/api/"):
+                return None
+
+            # 2) Laisser passer les pages/ressources publiques non-API
             if (
-                path.startswith("/api/")
-                or path.startswith("/uploads/")
-                or path.startswith("/socket.io")  # ⚠️ ne jamais toucher au transport SIO
-                or path in {"/", "/health", "/config"}
+                path in {"/", "/health", "/config", "/docs", "/favicon.ico", "/robots.txt"}
+                or path.startswith("/swaggerui/")   # assets Swagger UI
+                or path.startswith("/static/")      # assets Flask/Frontend
+                or path.startswith("/uploads/")     # fichiers uploadés
+                or path.startswith("/socket.io")    # websockets
             ):
                 return None
-            # Si le chemin commence par un prefix legacy connu → shim
+
+            # 3) Log pour debug
+            current_app.logger.debug("Legacy shim: %s %s", request.method, path)
+
+            # 4) Si ça ressemble à une vieille route API sans /api -> traiter
             if any(path == f"/{p}" or path.startswith(f"/{p}/") for p in LEGACY_PREFIXES):
-                # Preflight CORS: renvoyer 204 "OK"
+
+                # Preflight CORS : OK
                 if request.method == "OPTIONS":
                     return make_response("", 204)
-                # Autres méthodes: redirection 307 (préserve méthode + body)
-                return redirect(f"/api{path}", code=307)
+
+                # ✅ Réécriture **interne**: on change PATH_INFO vers /api + path,
+                # sans redirection HTTP → pas de boucle proxy, pas de 400.
+                new_path = "/api" + path
+                environ = request.environ
+                environ["ORIGINAL_PATH_INFO"] = path
+                environ["PATH_INFO"] = new_path
+                current_app.logger.info("Legacy shim internal reroute %s %s -> %s",
+                                        request.method, path, new_path)
+                return None
+
+            # 5) Sinon, ne rien faire
             return None
 
         from sockets.chat import init_chat_socket
@@ -268,7 +299,7 @@ def create_app(config_name=os.getenv("FLASK_CONFIG", "development")):
             ), 200
 
 
-        # Réduction du bruit de logs pour certains endpoints “polling”
+        # Réduction du bruit de logs pour certains endpoints "polling"
         NOISY_PATHS = {
             "/companies/me/dispatch/status",
             "/company_dispatch/status",
