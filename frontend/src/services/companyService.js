@@ -3,14 +3,27 @@ import apiClient from "../utils/apiClient";
 
 /* -------------------------- RÉSERVATIONS ENTREPRISE -------------------------- */
 
-export const fetchCompanyReservations = async () => {
+export const fetchCompanyReservations = async (date) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 secondes timeout
+
   try {
-    const payload = await apiClient.get("/companies/me/reservations?flat=true");
+    const payload = await apiClient.get(`/companies/me/reservations?flat=true${date ? `&date=${date}` : ''}`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
     const reservations = Array.isArray(payload.data)
       ? payload.data
       : (Array.isArray(payload.data?.reservations) ? payload.data.reservations : []);
     return reservations;               // ✅ manquait
   } catch (e) {
+     clearTimeout(timeoutId);
+     // Gérer spécifiquement les erreurs d'annulation/timeout
+     if (e.name === 'AbortError' || e.code === 'ECONNABORTED') {
+       const timeoutError = new Error('La requête a pris trop de temps. Veuillez réessayer.');
+       timeoutError.code = 'TIMEOUT';
+       throw timeoutError;
+     }
     console.error("fetchCompanyReservations failed:", e?.response?.data || e);
     return [];                         // ✅ safe fallback
   }
@@ -493,7 +506,7 @@ export const fetchAssignedReservations = async (forDate) => {
     let assignments = [];
     
     try {
-      const reservationsRes = await apiClient.get("/companies/me/reservations", {
+      const reservationsRes = await apiClient.get("/companies/me/reservations?flat=true", {
         params: forDate ? { date: forDate, flat: true } : { flat: true },
       });
       

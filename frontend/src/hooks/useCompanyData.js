@@ -34,7 +34,12 @@ const useCompanyData = () => {
       const data = await fetchCompanyReservations();
       // Le service renvoie déjà un ARRAY normalisé
       setReservations(Array.isArray(data) ? data : (data?.reservations ?? []));
+      setError(null); // Réinitialiser l'erreur en cas de succès
     } catch (err) {
+      // Gérer spécifiquement les erreurs de timeout
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        setError("La récupération des réservations a pris trop de temps. Veuillez réessayer.");
+      } else {
       console.error("❌ Erreur lors du chargement des réservations :", err);
       setError("Erreur lors du chargement des réservations.");
     } finally {
@@ -48,7 +53,12 @@ const useCompanyData = () => {
       const data = await fetchCompanyDriver();
       // Le service renvoie déjà un ARRAY normalisé
       setDriver(Array.isArray(data) ? data : (data?.driver ?? []));
+      setError(null); // Réinitialiser l'erreur en cas de succès
     } catch (err) {
+      // Gérer spécifiquement les erreurs de timeout
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        setError("La récupération des chauffeurs a pris trop de temps. Veuillez réessayer.");
+      } else {
       console.error("❌ Erreur lors du chargement des chauffeurs :", err);
       setError("Erreur lors du chargement des chauffeurs.");
     } finally {

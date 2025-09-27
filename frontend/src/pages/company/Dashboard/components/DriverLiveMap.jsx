@@ -168,7 +168,7 @@ export default function DriverLiveMap() {
     };
 
     socket.on("driver_location", onLoc);
-    socket.on("driver_location_update", onLoc);
+
     
     // Explicitly request driver locations when component mounts
     try {
@@ -179,7 +179,7 @@ export default function DriverLiveMap() {
 
     return () => {
       socket.off("driver_location", onLoc);
-      socket.off("driver_location_update", onLoc);
+
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company?.id]);

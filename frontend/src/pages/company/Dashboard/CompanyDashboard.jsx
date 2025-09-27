@@ -169,6 +169,10 @@ const CompanyDashboard = () => {
     const onDispatchError = (err) => {
       console.error("dispatch_error:", err);
       // Optionnel: notifier l’utilisateur
+        refetchAll();
+      };
+      const onDispatchRunCompleted = (data) => {
+        console.log("Dispatch run completed:", data);
       // window.alert(err?.message || "Une erreur est survenue pendant l'optimisation.");
       refetchAll();
     };
@@ -177,12 +181,14 @@ const CompanyDashboard = () => {
     socket.on("assignment_deleted", onAssignDeleted);
     socket.on("dispatch_progress", onDispatchProgress);
     socket.on("dispatch_error", onDispatchError);
+    socket.on("dispatch_run_completed", onDispatchRunCompleted);
     return () => {
       socket.off("assignment_created", onAssignCreated);
       socket.off("assignment_updated", onAssignUpdated);
       socket.off("assignment_deleted", onAssignDeleted);
       socket.off("dispatch_progress", onDispatchProgress);
       socket.off("dispatch_error", onDispatchError);
+      socket.off("dispatch_run_completed", onDispatchRunCompleted);
     };
   }, [socket, refetchAssigned, reloadReservations, refetchDelays]);
 

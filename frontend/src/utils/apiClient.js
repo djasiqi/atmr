@@ -10,7 +10,7 @@ const apiClient = axios.create({
   baseURL: apiBase,
   headers: { 'Content-Type': 'application/json' },
   withCredentials: false,          // ❌ pas de cookies, on est en JWT header
-  timeout: 15000,
+  timeout: 30000,
 });
 
 export const logoutUser = () => {

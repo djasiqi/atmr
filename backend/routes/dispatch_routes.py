@@ -240,7 +240,7 @@ delay_model = dispatch_ns.model(
 def _get_current_company() -> Company:
     """Récupère l'entreprise courante depuis le token JWT."""
     user_id = get_jwt_identity()
-    user = User.query.get(user_id)
+    user = User.query.filter_by(public_id=user_id).first()
     if not user or not user.company_id:
         dispatch_ns.abort(403, "Accès refusé: utilisateur sans entreprise")
     return Company.query.get(user.company_id)

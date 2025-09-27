@@ -272,33 +272,51 @@ class CompanyMe(Resource):
             sentry_sdk.capture_exception(e)
             return {"error": "Erreur interne"}, 500
 
-# ======================================================
-# 1. Liste des réservations de l'entreprise
-# ======================================================
-@companies_ns.route('/me/reservations')
 class CompanyReservations(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        company, error_response, status_code = get_company_from_token()
-        if error_response:
-            return error_response, status_code
+        from datetime import datetime, timedelta
+        # Utiliser la même approche que les autres routes pour récupérer l'entreprise
+        user_id = get_jwt_identity()
+        user = User.query.filter_by(public_id=user_id).first()
+        if not user or not user.company_id:
+            return {"error": "Entreprise non trouvée ou accès refusé"}, 404
+        
+        company = Company.query.get(user.company_id)
+        if not company:
+            return {"error": "Entreprise non trouvée"}, 404
         
         flat = (request.args.get('flat', 'false').lower() == 'true')
         day_str = (request.args.get('date') or '').strip()
+        max_days_range = 31  # Maximum 31 jours
         # Fenêtre locale Europe/Zurich → objets naïfs pour coller au modèle Booking.scheduled_time (naïf)
         from shared.time_utils import day_local_bounds
         if day_str:
-            start_local, end_local = day_local_bounds(day_str)  # renvoie naïfs locaux
+            try:
+                start_local, end_local = day_local_bounds(day_str)
+                # Vérifier que la plage de dates n'est pas trop large
+                days_diff = (end_local - start_local).days
+                if days_diff > max_days_range:
+                    return {"error": f"Plage de dates trop large. Maximum {max_days_range} jours autorisés"}, 400
+                # renvoie naïfs locaux
+            except ValueError:
+                return {"error": "Format de date invalide. Utilisez YYYY-MM-DD"}, 400
         else:
             # défaut = aujourd'hui (local)
             from datetime import datetime
             start_local, end_local = day_local_bounds(datetime.now().strftime("%Y-%m-%d"))
+        
+        # Ajouter des paramètres de pagination
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 100))  # Par défaut 100 résultats max
+        per_page = min(per_page, 500)  # Limiter à 500 résultats maximum par page
+
         status_filter = request.args.get('status')
-        from sqlalchemy import and_, or_
         query = Booking.query.filter(
             Booking.company_id == company.id,
-            and_(Booking.scheduled_time >= start_local, Booking.scheduled_time < end_local)
+            Booking.scheduled_time >= start_local,
+            Booking.scheduled_time < end_local
         )
         if status_filter:
             try:
@@ -307,16 +325,32 @@ class CompanyReservations(Resource):
             except KeyError:
                 return {"error": "Invalid status filter"}, 400
 
+        # Ajouter des options de chargement pour éviter les requêtes N+1
         reservations = query.options(
             joinedload(Booking.client)
             .joinedload(Client.user),
             joinedload(Booking.driver)
-        ).all()
+        ).order_by(Booking.scheduled_time.asc())
+        
+        # Appliquer la pagination
+        total = reservations.count()
+        reservations = reservations.offset((page - 1) * per_page).limit(per_page).all()
+        
+        # Retourner les données dans le format attendu par le frontend
         if flat:
-            return [booking.serialize for booking in reservations], 200
+            return {
+                "reservations": [booking.serialize for booking in reservations],
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": (total + per_page - 1) // per_page
+            }, 200
         else:
             return {"reservations": [booking.serialize for booking in reservations],
-                    "total": len(reservations)}, 200
+                    "total": total,
+                    "page": page,
+                    "per_page": per_page,
+                    "total_pages": (total + per_page - 1) // per_page}, 200
 
 # ======================================================
 # 2. Accepter une réservation
@@ -326,6 +360,7 @@ class AcceptReservation(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self, reservation_id):
+        # Utiliser la fonction helper pour récupérer l'entreprise depuis le token
         company, error_response, status_code = get_company_from_token()
         if error_response:
             return error_response, status_code
@@ -1674,22 +1709,4 @@ class CompanyLogo(Resource):
         company.logo_url = None
         db.session.commit()
         return {"message": "Logo supprimé."}, 200
-
-@companies_ns.route("/me/reservations")
-class CompanyReservations(Resource):
-    @jwt_required()
-    @role_required(UserRole.company)
-    def get(self):
-        company = Company.query.filter_by(user_id=get_jwt_identity()).first()
-        if not company:
-            return {"error": "Entreprise non trouvée"}, 404
-
-        day = request.args.get("date") or datetime.now().strftime("%Y-%m-%d")
-        d0, d1 = day_local_bounds(day)
-        bookings = Booking.query.filter(
-            Booking.company_id == company.id,
-            Booking.scheduled_time >= d0,
-            Booking.scheduled_time < d1
-        ).all()
-        return [b.serialize for b in bookings], 200
 

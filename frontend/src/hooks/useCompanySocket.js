@@ -29,7 +29,7 @@ export default function useCompanySocket() {
       SOCKET_SINGLETON = io(SOCKET_ORIGIN, {
         path: "/socket.io",
         transports: ["websocket", "polling"],   // tente WS, retombe sur polling si besoin
-        timeout: 20000,                         // 20s, plus tolérant
+        timeout: 30000,                      
         reconnection: true,
         reconnectionAttempts: Infinity,
         reconnectionDelay: 500,
