@@ -90,3 +90,8 @@ Thumbs.db
 
 # ===== Spécifique projet =====
 atmr-project/
+
+# ===== Bases de données =====
+backend/instance/*.db
+*.sqlite
+*.sqlite3

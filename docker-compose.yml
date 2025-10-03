@@ -15,32 +15,25 @@ services:
       --no-sendfile
     ports:
       - "5000:5000"
+    env_file:
+      - backend/.env
     environment:
-      - FLASK_ENV=production
-      - FLASK_CONFIG=production
-      - SOCKETIO_ASYNC_MODE=eventlet
-      - REDIS_URL=redis://redis:6379/0
-      - APP_ENCRYPTION_KEY_B64=uIwgXNsfLhyJ02GHJivmpoh4f9jdmhQkovKfWX8k_zQ
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - CELERY_TIMEZONE=Europe/Zurich
-      - DISPATCH_AUTORUN_INTERVAL_SEC=300
-      - DISPATCH_AUTORUN_ENABLED=true
-      - UD_OSRM_URL=http://osrm:5000
-      - SOCKETIO_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-      - DATABASE_URL=sqlite:////app/production.db
-      - SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
-      - JWT_SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
-      - MAIL_SERVER=smtpout.secureserver.net
-      - MAIL_PORT=465
-      - MAIL_USE_TLS=false
-      - MAIL_USE_SSL=true
-      - MAIL_USERNAME=info@helvetiamarketing.ch
-      - MAIL_PASSWORD=Palidhje@37_46!!
-      - MAIL_DEFAULT_SENDER=info@helvetiamarketing.ch
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/instance/development.db}
+      - DATABASE_URI=${DATABASE_URI:-${DATABASE_URL:-sqlite:////app/instance/development.db}}
+      - SOCKETIO_ASYNC_MODE=${SOCKETIO_ASYNC_MODE:-eventlet}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      - CELERY_TIMEZONE=${CELERY_TIMEZONE:-Europe/Zurich}
+      - DISPATCH_AUTORUN_INTERVAL_SEC=${DISPATCH_AUTORUN_INTERVAL_SEC:-300}
+      - DISPATCH_AUTORUN_ENABLED=${DISPATCH_AUTORUN_ENABLED:-true}
+      - UD_OSRM_URL=${UD_OSRM_URL:-http://osrm:5000}
+      - SOCKETIO_CORS_ORIGINS=${SOCKETIO_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      - FLASK_CONFIG=${FLASK_CONFIG:-development}
+      - FLASK_ENV=${FLASK_ENV:-development}
     volumes:
       - ./backend:/app
-      - db-data:/app/data
+      - ./backend/instance:/app/instance
     depends_on:
       - redis
       - osrm
@@ -50,30 +43,28 @@ services:
   celery-worker:
     build:
       context: ./backend
-      dockerfile: Dockerfile
     command: >
       celery -A celery_app.celery worker
       --loglevel=info
       --concurrency=4
       --max-tasks-per-child=100
+    env_file:
+      - backend/.env
     environment:
-      - FLASK_ENV=production
-      - FLASK_CONFIG=production
-      - SOCKETIO_ASYNC_MODE=eventlet
-      - APP_ENCRYPTION_KEY_B64=uIwgXNsfLhyJ02GHJivmpoh4f9jdmhQkovKfWX8k_zQ
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - CELERY_TIMEZONE=Europe/Zurich
-      - DISPATCH_AUTORUN_INTERVAL_SEC=300
-      - DISPATCH_AUTORUN_ENABLED=true
-      - UD_OSRM_URL=http://osrm:5000
-      - DATABASE_URL=sqlite:////app/production.db
-      - SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
-      - JWT_SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/instance/development.db}
+      - DATABASE_URI=${DATABASE_URI:-${DATABASE_URL:-sqlite:////app/instance/development.db}}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      - CELERY_TIMEZONE=${CELERY_TIMEZONE:-Europe/Zurich}
+      - DISPATCH_AUTORUN_INTERVAL_SEC=${DISPATCH_AUTORUN_INTERVAL_SEC:-300}
+      - DISPATCH_AUTORUN_ENABLED=${DISPATCH_AUTORUN_ENABLED:-true}
+      - UD_OSRM_URL=${UD_OSRM_URL:-http://osrm:5000}
+      - FLASK_CONFIG=${FLASK_CONFIG:-development}
+      - FLASK_ENV=${FLASK_ENV:-development}
     volumes:
       - ./backend:/app
-      - db-data:/app/data
+      - ./backend/instance:/app/instance
     depends_on:
       - redis
       - osrm
@@ -84,28 +75,27 @@ services:
   celery-beat:
     build:
       context: ./backend
-      dockerfile: Dockerfile
     command: >
       celery -A celery_app.celery beat
       --loglevel=info
       --scheduler=celery.beat.PersistentScheduler
       --schedule=/app/celerybeat-schedule
+    env_file:
+      - backend/.env
     environment:
-      - FLASK_ENV=production
-      - FLASK_CONFIG=production
-      - APP_ENCRYPTION_KEY_B64=uIwgXNsfLhyJ02GHJivmpoh4f9jdmhQkovKfWX8k_zQ
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - CELERY_TIMEZONE=Europe/Zurich
-      - DISPATCH_AUTORUN_INTERVAL_SEC=300
-      - DISPATCH_AUTORUN_ENABLED=true
-      - DATABASE_URL=sqlite:////app/production.db
-      - SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
-      - JWT_SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/instance/development.db}
+      - DATABASE_URI=${DATABASE_URI:-${DATABASE_URL:-sqlite:////app/instance/development.db}}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      - CELERY_TIMEZONE=${CELERY_TIMEZONE:-Europe/Zurich}
+      - DISPATCH_AUTORUN_INTERVAL_SEC=${DISPATCH_AUTORUN_INTERVAL_SEC:-300}
+      - DISPATCH_AUTORUN_ENABLED=${DISPATCH_AUTORUN_ENABLED:-true}
+      - FLASK_CONFIG=${FLASK_CONFIG:-development}
+      - FLASK_ENV=${FLASK_ENV:-development}
     volumes:
       - ./backend:/app
-      - db-data:/app/data
+      - ./backend/instance:/app/instance
     depends_on:
       - redis
       - api
@@ -115,27 +105,21 @@ services:
   flower:
     build:
       context: ./backend
-      dockerfile: Dockerfile
     command: >
       celery -A celery_app.celery flower
       --port=5555
       --broker=redis://redis:6379/0
     ports:
       - "5555:5555"
+    env_file:
+      - backend/.env
     environment:
-      - FLASK_APP=app.py
-      - FLASK_ENV=production
-      - FLASK_CONFIG=production
-      - APP_ENCRYPTION_KEY_B64=uIwgXNsfLhyJ02GHJivmpoh4f9jdmhQkovKfWX8k_zQ
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - DATABASE_URL=sqlite:////app/production.db
-      - SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
-      - JWT_SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/instance/development.db}
+      - DATABASE_URI=${DATABASE_URI:-${DATABASE_URL:-sqlite:////app/instance/development.db}}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     volumes:
       - ./backend:/app
-      - db-data:/app/data
+      - ./backend/instance:/app/instance
     depends_on:
       - redis
       - celery-worker
@@ -148,8 +132,8 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
-    restart: unless-stopped
     command: redis-server --appendonly yes
+    restart: unless-stopped
 
   # OSRM - Routing Engine
   osrm:
@@ -161,4 +145,3 @@ services:
 
 volumes:
   redis-data:
-  db-data:
