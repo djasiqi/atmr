@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from "react";
 import {
   fetchCompanyReservations,
@@ -22,9 +21,9 @@ const useCompanyData = () => {
 
       const data = await fetchCompanyInfo();
       setCompany(data);
-      console.log("\u2705 Company charg\u00e9e :", data);
+      console.log("✅ Company chargée :", data);
     } catch (err) {
-      console.error("\u274c Erreur lors du chargement de l'entreprise :", err);
+      console.error("❌ Erreur lors du chargement de l'entreprise :", err);
       setError("Erreur lors du chargement de l'entreprise.");
     }
   }, []);
@@ -33,16 +32,16 @@ const useCompanyData = () => {
     try {
       setLoadingReservations(true);
       const data = await fetchCompanyReservations();
-      // Le service renvoie d\u00e9j\u00e0 un ARRAY normalis\u00e9
+      // Le service renvoie déjà un ARRAY normalisé
       setReservations(Array.isArray(data) ? data : (data?.reservations ?? []));
-      setError(null); // R\u00e9initialiser l'erreur en cas de succ\u00e8s
+      setError(null); // Réinitialiser l'erreur en cas de succès
     } catch (err) {
-      // G\u00e9rer sp\u00e9cifiquement les erreurs de timeout
+      // Gérer spécifiquement les erreurs de timeout
       if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-        setError("La r\u00e9cup\u00e9ration des r\u00e9servations a pris trop de temps. Veuillez r\u00e9essayer.");
+        setError("La récupération des réservations a pris trop de temps. Veuillez réessayer.");
       } else {
-        console.error("\u274c Erreur lors du chargement des r\u00e9servations :", err);
-        setError("Erreur lors du chargement des r\u00e9servations.");
+        console.error("❌ Erreur lors du chargement des réservations :", err);
+        setError("Erreur lors du chargement des réservations.");
       }
     } finally {
       setLoadingReservations(false);
@@ -53,15 +52,15 @@ const useCompanyData = () => {
     try {
       setLoadingDriver(true);
       const data = await fetchCompanyDriver();
-      // Le service renvoie d\u00e9j\u00e0 un ARRAY normalis\u00e9
+      // Le service renvoie déjà un ARRAY normalisé
       setDriver(Array.isArray(data) ? data : (data?.driver ?? []));
-      setError(null); // R\u00e9initialiser l'erreur en cas de succ\u00e8s
+      setError(null); // Réinitialiser l'erreur en cas de succès
     } catch (err) {
-      // G\u00e9rer sp\u00e9cifiquement les erreurs de timeout
+      // Gérer spécifiquement les erreurs de timeout
       if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-        setError("La r\u00e9cup\u00e9ration des chauffeurs a pris trop de temps. Veuillez r\u00e9essayer.");
+        setError("La récupération des chauffeurs a pris trop de temps. Veuillez réessayer.");
       } else {
-        console.error("\u274c Erreur lors du chargement des chauffeurs :", err);
+        console.error("❌ Erreur lors du chargement des chauffeurs :", err);
         setError("Erreur lors du chargement des chauffeurs.");
       }
     } finally {
@@ -69,7 +68,7 @@ const useCompanyData = () => {
     }
   }, []);
 
-  // Chargement initial de toutes les donn\u00e9es
+  // Chargement initial de toutes les données
   useEffect(() => {
     loadCompany();
     loadReservations();

@@ -4,6 +4,7 @@ from flask_jwt_extended import JWTManager, get_jwt_identity
 from flask_mail import Mail
 from flask_bcrypt import Bcrypt
 from flask_migrate import Migrate
+from typing import Literal, cast
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_socketio import SocketIO
@@ -30,11 +31,19 @@ except Exception:
     redis_client = None
     limiter_storage = "memory://"
 
-# Socket.IO
 # ⚠️ Ne fixe PAS CORS/path ici pour éviter les conflits — tout est défini dans app.py (socketio.init_app)
 # Active la file Redis si disponible (scaling multi-workers).
+# Typage strict de async_mode pour contenter Pylance/pyright.
+AsyncMode = Literal["threading", "eventlet", "gevent", "gevent_uwsgi"]
+_env_async = (os.getenv("SOCKETIO_ASYNC_MODE") or "eventlet").strip().lower()
+_allowed_modes = {"threading", "eventlet", "gevent", "gevent_uwsgi"}
+if _env_async not in _allowed_modes:
+    # fallback sûr si une valeur inconnue est fournie
+    _env_async = "eventlet"
+ASYNC_MODE: AsyncMode = cast(AsyncMode, _env_async)
+
 socketio = SocketIO(
-    async_mode=os.getenv("SOCKETIO_ASYNC_MODE", "eventlet"),
+    async_mode=ASYNC_MODE,
     message_queue=REDIS_URL if redis_client else None,
 )
 

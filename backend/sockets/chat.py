@@ -1,19 +1,24 @@
 # backend/sockets/chat.py
 import logging
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, cast, Mapping
 
 from flask import session, request
 from flask_socketio import SocketIO, emit, join_room
 from flask_jwt_extended import decode_token
 
 from models import User, UserRole, Driver, Message, Company
-from ext import db
+from ext import db, redis_client
 
 logger = logging.getLogger("socketio")
 
 # Petit index en mémoire pour le debug/nettoyage : sid -> infos
 _SID_INDEX: Dict[str, Dict[str, Any]] = {}
+
+
+def _get_sid() -> str:
+    sid = getattr(request, "sid", None) or request.environ.get("socketio.sid")
+    return str(sid) if sid is not None else ""
 
 
 def _extract_token(auth) -> Optional[str]:
@@ -81,7 +86,7 @@ def init_chat_socket(socketio: SocketIO):
                 emit("connected", {"message": "✅ Chauffeur connecté"})
                 logger.info(f"🔌 Driver {driver.id} -> rooms: {company_room}, {driver_room}")
 
-                _SID_INDEX[request.sid] = {
+                _SID_INDEX[_get_sid()] = {
                     "user_public_id": public_id,
                     "driver_id": driver.id,
                     "company_id": driver.company_id,
@@ -100,7 +105,7 @@ def init_chat_socket(socketio: SocketIO):
                 emit("connected", {"message": f"✅ Entreprise connectée à {room}"})
                 logger.info(f"🏢 Company {company.id} -> room: {room}")
 
-                _SID_INDEX[request.sid] = {
+                _SID_INDEX[_get_sid()] = {
                     "user_public_id": public_id,
                     "company_id": company.id,
                     "ip": client_ip,
@@ -161,7 +166,8 @@ def init_chat_socket(socketio: SocketIO):
                 emit("error", {"error": "Rôle non autorisé pour le chat."})
                 return
 
-            message = Message(
+            MessageCtor = cast(Any, Message)
+            message = MessageCtor(
                 sender_id=sender_id,
                 receiver_id=receiver_id,
                 company_id=company_id,
@@ -188,7 +194,8 @@ def init_chat_socket(socketio: SocketIO):
             }
 
             room = f"company_{company_id}"
-            emit("team_chat_message", payload, room=room)
+            # Pylance ne déclare pas kwarg 'room' sur emit -> cast en Any
+            cast(Any, emit)("team_chat_message", payload, room=room)
             logger.info(f"📨 Message émis dans {room} par {sender_role} : {content}")
 
         except Exception as e:
@@ -245,7 +252,7 @@ def init_chat_socket(socketio: SocketIO):
                 return
 
             company_room = f"company_{driver.company_id}"
-            emit(
+            cast(Any, emit)(
                 "driver_location_update",
                 {
                     "driver_id": driver.id,
@@ -310,7 +317,7 @@ def init_chat_socket(socketio: SocketIO):
                    return
 
                # Get company ID from session
-               company_info = _SID_INDEX.get(request.sid, {})
+               company_info = _SID_INDEX.get(_get_sid(), {})
                company_id = company_info.get("company_id")
 
                if not company_id:
@@ -325,24 +332,33 @@ def init_chat_socket(socketio: SocketIO):
                    try:
                        # Try Redis first
                        key = f"driver:{driver.id}:loc"
-                       h = redis_client.hgetall(key)
+                       h_raw = redis_client.hgetall(key)
+                       # Calme Pylance: redis-py retourne un dict[bytes, bytes]
+                       h: Mapping[bytes, Any] = cast(Mapping[bytes, Any], h_raw)
 
                        if h:
                            # Redis returns bytes -> decode
                            def _dec(v):
-                               try: return v.decode()
-                               except: return v
+                               try:
+                                   return v.decode()
+                               except Exception:
+                                   return v
 
-                           loc_data = {k.decode(): _dec(v) for k, v in h.items()}
+                           loc_data = {
+                               (k.decode() if isinstance(k, (bytes, bytearray)) else str(k)): _dec(v)
+                               for k, v in h.items()
+                           }
 
                            # Cast numeric fields
                            for kf in ("lat","lon","speed","heading","accuracy"):
                                if kf in loc_data:
-                                   try: loc_data[kf] = float(loc_data[kf])
-                                   except: pass
+                                   try:
+                                       loc_data[kf] = float(loc_data[kf])
+                                   except Exception:
+                                       pass
 
                            # Emit location to the company room
-                           emit("driver_location_update", {
+                           cast(Any, emit)("driver_location_update", {
                                "driver_id": driver.id,
                                "first_name": driver.user.first_name,
                                "latitude": loc_data.get("lat"),
@@ -351,7 +367,7 @@ def init_chat_socket(socketio: SocketIO):
                            })
                        elif driver.latitude and driver.longitude:
                            # Fallback to DB if Redis doesnt have data
-                           emit("driver_location_update", {
+                           cast(Any, emit)("driver_location_update", {
                                "driver_id": driver.id,
                                "first_name": driver.user.first_name,
                                "latitude": driver.latitude,
@@ -369,5 +385,6 @@ def init_chat_socket(socketio: SocketIO):
 
     @socketio.on("disconnect")
     def handle_disconnect():
-        info = _SID_INDEX.pop(request.sid, None)
-        logger.info(f"👋 SIO disconnect sid={request.sid} info={info}")
+        sid = _get_sid()
+        info = _SID_INDEX.pop(sid, None)
+        logger.info(f"👋 SIO disconnect sid={sid} info={info}")

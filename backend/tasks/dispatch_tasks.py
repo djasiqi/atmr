@@ -3,17 +3,15 @@ from __future__ import annotations
 
 import logging
 import json
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, cast
 from datetime import datetime, timezone
 import time
 
 from celery import shared_task
 from celery.exceptions import MaxRetriesExceededError
-from sqlalchemy import func
 
 from models import Company, DispatchRun
 from services.unified_dispatch import engine
-from services.unified_dispatch import settings as ud_settings
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +68,7 @@ def run_dispatch_task(
     
     try:
         # Prepare parameters for engine.run
-        run_kwargs = {
+        run_kwargs: Dict[str, Any] = {
             "company_id": company_id,
             "for_date": for_date,
             "mode": mode,
@@ -82,28 +80,40 @@ def run_dispatch_task(
             run_kwargs["overrides"] = overrides
             
         # Execute the dispatch engine
-        result = engine.run(**run_kwargs)
+        raw_result: Any = engine.run(**run_kwargs)
+        result: Dict[str, Any] = {}
         
-        # Ensure result is a dictionary with expected structure
-        if not result:
+        # Normalize to a dict
+        if isinstance(raw_result, dict):
+            result = cast(Dict[str, Any], raw_result)
+        elif raw_result is None:
             result = {}
-        if not isinstance(result, dict):
-            result = {"meta": {"raw": result}}
+        else:
+            result = {"meta": {"raw": raw_result}}
             
-        # Add fallbacks for a consistent structure
-        result.setdefault("assignments", [])
-        result.setdefault("bookings", [])
-        result.setdefault("drivers", [])
-        result.setdefault("meta", {})
-        result.setdefault("dispatch_run_id", None)
+        # Ensure consistent structure (avoid setdefault typing issues)
+        assignments = result.get("assignments")
+        if not isinstance(assignments, list):
+            result["assignments"] = []
+        bookings = result.get("bookings")
+        if not isinstance(bookings, list):
+            result["bookings"] = []
+        drivers = result.get("drivers")
+        if not isinstance(drivers, list):
+            result["drivers"] = []
+        if not isinstance(result.get("meta"), dict):
+            result["meta"] = {}
+        if "dispatch_run_id" not in result:
+            result["dispatch_run_id"] = None
         
         # Add task metadata
-        result["meta"]["task_id"] = task_id
-        result["meta"]["execution_time"] = time.time() - start_time
+        meta = cast(Dict[str, Any], result["meta"])
+        meta["task_id"] = task_id
+        meta["execution_time"] = float(time.time() - start_time)
         
         # Log success
-        assigned = len(result.get("assignments", []))
-        unassigned = len(result.get("unassigned", []))
+        assigned = len(cast(list, result.get("assignments") or []))
+        unassigned = len(cast(list, result.get("unassigned") or []))
         dispatch_run_id = result.get("dispatch_run_id") or result.get("meta", {}).get("dispatch_run_id")
         
         logger.info(
@@ -186,11 +196,11 @@ def autorun_tick() -> Dict[str, Any]:
     """
     start_time = time.time()
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    results = {"triggered": 0, "skipped": 0, "errors": 0, "companies": []}
+    results: Dict[str, Any] = {"triggered": 0, "skipped": 0, "errors": 0, "companies": []}
     
     try:
-        # Get companies with dispatch enabled
-        companies = Company.query.filter_by(active=True).all()
+        # Get companies with dispatch enabled (Company.active n'existe pas)
+        companies = Company.query.filter_by(dispatch_enabled=True).all()
         
         for company in companies:
             company_id = company.id
@@ -214,14 +224,16 @@ def autorun_tick() -> Dict[str, Any]:
                 
                 # Trigger dispatch task for today
                 logger.info(f"[Celery] Autorun triggering dispatch for company_id={company_id} date={today}")
-                task = run_dispatch_task.delay(
-                    company_id=company_id,
-                    for_date=today,
-                    mode="auto"
+                task = cast(Any, run_dispatch_task).delay(
+                    company_id=int(company_id),
+                    for_date=str(today),
+                    mode="auto",
+                    regular_first=True,
+                    allow_emergency=None,   
                 )
                 
                 results["triggered"] += 1
-                results["companies"].append({
+                cast(list, results["companies"]).append({
                     "company_id": company_id,
                     "task_id": task.id,
                     "for_date": today
@@ -230,7 +242,7 @@ def autorun_tick() -> Dict[str, Any]:
             except Exception as e:
                 logger.exception(f"[Celery] Autorun error for company_id={company_id}: {e}")
                 results["errors"] += 1
-                results["companies"].append({
+                cast(list, results["companies"]).append({
                     "company_id": company_id,
                     "error": str(e)
                 })
@@ -239,7 +251,7 @@ def autorun_tick() -> Dict[str, Any]:
         logger.exception(f"[Celery] Autorun tick failed: {e}")
         results["error"] = str(e)
     
-    results["duration"] = time.time() - start_time
+    results["duration"] = float(time.time() - start_time)
     logger.info(
         f"[Celery] Autorun tick completed: triggered={results['triggered']} "
         f"skipped={results['skipped']} errors={results['errors']} "

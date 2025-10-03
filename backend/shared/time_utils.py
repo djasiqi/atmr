@@ -48,14 +48,26 @@ def minutes_from_now_local(dt: Union[str, datetime, None]) -> int:
     """Minutes (>=0) entre maintenant (local naïf) et dt (naïf)."""
     if not dt:
         return 10**9
-    target = parse_local_naive(dt)
-    return max(0, int((target - now_local()).total_seconds() // 60))
+    try:
+        target = parse_local_naive(dt)
+    except Exception:
+        return 10**9
+    if target is None:
+        return 10**9
+    delta = target - now_local()
+    return max(0, int(delta.total_seconds() // 60))
 
 def minutes_between_local(a: Union[str, datetime, None], b: Union[str, datetime, None]) -> int:
     """Minutes (>=0) entre a et b (tous naïfs)."""
     if not a or not b:
         return 0
-    aa, bb = parse_local_naive(a), parse_local_naive(b)
+    try:
+        aa = parse_local_naive(a)
+        bb = parse_local_naive(b)
+    except Exception:
+        return 0
+    if aa is None or bb is None:
+        return 0
     return max(0, int((aa - bb).total_seconds() // 60))
 
 def sort_key_local(dt: Union[str, datetime, None]) -> datetime:
@@ -63,9 +75,12 @@ def sort_key_local(dt: Union[str, datetime, None]) -> datetime:
     if not dt:
         return now_local() + timedelta(days=365 * 50)
     try:
-        return parse_local_naive(dt)
+        parsed = parse_local_naive(dt)
     except Exception:
         return now_local() + timedelta(days=365 * 50)
+    if parsed is None:
+        return now_local() + timedelta(days=365 * 50)
+    return parsed
 
 def split_date_time_local(dt: Union[str, datetime, None]) -> Tuple[Optional[str], Optional[str]]:
     """

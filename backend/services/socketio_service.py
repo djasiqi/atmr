@@ -1,7 +1,7 @@
 # backend/services/socketio_service.py
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Optional, cast
 import json
 
 from ext import socketio, app_logger
@@ -71,19 +71,25 @@ def _safe_emit(
         return
 
     try:
-        # Flask-SocketIO >= 5
-        socketio.emit(event, payload, to=room, namespace=namespace)
+        # Flask-SocketIO >= 5 utilise 'to=' ; on passe par **kwargs pour éviter
+        # l'analyse statique de Pylance sur des kwargs non déclarés dans les stubs.
+        kwargs: dict[str, Any] = {"namespace": namespace}
+        if room is not None:
+            kwargs["to"] = room
+        cast(Any, socketio).emit(event, payload, **kwargs)
     except TypeError:
-        # Compat < 5.x (param 'room')
+        # Compat < 5.x : fallback avec 'room='
         try:
-            socketio.emit(event, payload, room=room, namespace=namespace)
+            kwargs = {"namespace": namespace}
+            if room is not None:
+                kwargs["room"] = room
+            cast(Any, socketio).emit(event, payload, **kwargs)
         except Exception as e:
             app_logger.error(
                 "[socketio] emit failed (compat) event=%s room=%s err=%s", event, room, e
             )
     except Exception as e:
         app_logger.error("[socketio] emit failed event=%s room=%s err=%s", event, room, e)
-
 
 # ---------------------------------------------------------------------------
 # Helpers "métier" d'émission
@@ -312,7 +318,7 @@ def emit_delay_detected(
 def join_company_room(sid: str, company_id: int, namespace: str = DEFAULT_NAMESPACE) -> None:
     """Ajoute un client (sid) à la room d’entreprise — utilisable hors contexte handler."""
     try:
-        socketio.enter_room(sid, get_company_room(company_id), namespace=namespace)
+        cast(Any, socketio).enter_room(sid, get_company_room(company_id), namespace=namespace)
     except Exception as e:
         app_logger.error(
             "[socketio] enter_room failed sid=%s company=%s err=%s", sid, company_id, e
@@ -322,7 +328,7 @@ def join_company_room(sid: str, company_id: int, namespace: str = DEFAULT_NAMESP
 def leave_company_room(sid: str, company_id: int, namespace: str = DEFAULT_NAMESPACE) -> None:
     """Retire un client (sid) de la room d’entreprise — utilisable hors contexte handler."""
     try:
-        socketio.leave_room(sid, get_company_room(company_id), namespace=namespace)
+        cast(Any, socketio).leave_room(sid, get_company_room(company_id), namespace=namespace)
     except Exception as e:
         app_logger.error(
             "[socketio] leave_room failed sid=%s company=%s err=%s", sid, company_id, e
@@ -332,7 +338,7 @@ def leave_company_room(sid: str, company_id: int, namespace: str = DEFAULT_NAMES
 def join_date_room(sid: str, date_str: str, namespace: str = DEFAULT_NAMESPACE) -> None:
     """Ajoute un client (sid) à la room de date (YYYY-MM-DD)."""
     try:
-        socketio.enter_room(sid, get_date_room(date_str), namespace=namespace)
+        cast(Any, socketio).enter_room(sid, get_date_room(date_str), namespace=namespace)
     except Exception as e:
         app_logger.error(
             "[socketio] enter_room(date) failed sid=%s date=%s err=%s", sid, date_str, e
@@ -342,7 +348,7 @@ def join_date_room(sid: str, date_str: str, namespace: str = DEFAULT_NAMESPACE) 
 def leave_date_room(sid: str, date_str: str, namespace: str = DEFAULT_NAMESPACE) -> None:
     """Retire un client (sid) de la room de date (YYYY-MM-DD)."""
     try:
-        socketio.leave_room(sid, get_date_room(date_str), namespace=namespace)
+        cast(Any, socketio).leave_room(sid, get_date_room(date_str), namespace=namespace)
     except Exception as e:
         app_logger.error(
             "[socketio] leave_room(date) failed sid=%s date=%s err=%s", sid, date_str, e

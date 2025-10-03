@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict
-from typing import Dict, Any, List, Optional, Iterable
+from typing import Dict, Any, List, Optional, Iterable, cast
 import threading
 from datetime import datetime, date, timezone 
 from sqlalchemy.exc import IntegrityError
@@ -121,17 +121,18 @@ def run(
         }
 
         if dispatch_run is None:
-            dispatch_run = DispatchRun(
-                company_id=company_id,
-                day=day_date,
-                status="running",
-                started_at=utcnow(),
-                created_at=utcnow(),
-                config=cfg,
-            )
-            db.session.add(dispatch_run)
+            # Éviter les erreurs Pylance (Colonnes SQLA) : on assigne via une variable Any
+            dr_any: Any = DispatchRun()  # type: ignore[call-arg]
+            dr_any.company_id = int(company_id)
+            dr_any.day = day_date
+            dr_any.status = "running"
+            dr_any.started_at = utcnow()
+            dr_any.created_at = utcnow()
+            dr_any.config = cfg
+            db.session.add(dr_any)
             try:
-                db.session.commit()
+                # Recast propre pour l'usage typé en dessous
+                dispatch_run = cast(DispatchRun, dr_any)
                 logger.info("[Engine] Created DispatchRun id=%s for company=%s day=%s",
                             dispatch_run.id, company_id, day_str)
             except IntegrityError:
@@ -142,19 +143,21 @@ def run(
                                 .first())
                 if dispatch_run is None:
                     raise
-                dispatch_run.status = "running"
-                dispatch_run.started_at = utcnow()
-                dispatch_run.completed_at = None
-                dispatch_run.config = cfg
-                db.session.add(dispatch_run)
+                dr2_any: Any = dispatch_run
+                dr2_any.status = "running"
+                dr2_any.started_at = utcnow()
+                dr2_any.completed_at = None
+                dr2_any.config = cfg
+                db.session.add(dr2_any)
                 db.session.commit()
         else:
-            # reuse
-            dispatch_run.status = "running"
-            dispatch_run.started_at = utcnow()
-            dispatch_run.completed_at = None
-            dispatch_run.config = cfg
-            db.session.add(dispatch_run)
+            # reuse (mêmes assignations via Any pour éviter les warnings)
+            dr3_any: Any = dispatch_run
+            dr3_any.status = "running"
+            dr3_any.started_at = utcnow()
+            dr3_any.completed_at = None
+            dr3_any.config = cfg
+            db.session.add(dr3_any)
             db.session.commit()
 
         # 3) Reset des anciennes assignations de CE run (si on relance le même jour)
@@ -180,8 +183,14 @@ def run(
             
             # Propager le dispatch_run_id dans le problem pour qu'il arrive jusqu'au solver
             if dispatch_run:
-                problem["dispatch_run_id"] = dispatch_run.id
-                logger.info("[Engine] Added dispatch_run_id=%s to problem", dispatch_run.id)
+                drid = None
+                try:
+                    drid = int(cast(Any, dispatch_run.id)) if getattr(dispatch_run, "id", None) is not None else None
+                except Exception:
+                    drid = None
+                if drid is not None:
+                    problem["dispatch_run_id"] = drid
+                    logger.info("[Engine] Added dispatch_run_id=%s to problem", drid)
         except Exception:
             logger.exception("[Engine] build_problem_data failed (company=%s)", company_id)
             if dispatch_run:
@@ -227,7 +236,11 @@ def run(
 
         def _extend_unique(assigns: Iterable[Any]) -> None:
             for a in assigns:
-                bid = getattr(a, "booking_id", None)
+                bid_raw = getattr(a, "booking_id", None)
+                try:
+                    bid = int(cast(Any, bid_raw)) if bid_raw is not None else None
+                except Exception:
+                    bid = None
                 if bid is None or bid in assigned_set:
                     continue
                 final_assignments.append(a)
@@ -246,7 +259,15 @@ def run(
                 logger.exception("[Engine] assign_urgent failed")
 
         def remaining_ids_from(p: Dict[str, Any]) -> List[int]:
-            return [b.id for b in p.get("bookings", []) if b.id not in assigned_set]
+            res: List[int] = []
+            for b in p.get("bookings", []):
+                try:
+                    bid = int(cast(Any, getattr(b, "id", None)))
+                except Exception:
+                    bid = None
+                if bid is not None and bid not in assigned_set:
+                    res.append(bid)
+            return res
 
         # 6.b Pass 1 — réguliers
         h_res = None
@@ -268,7 +289,7 @@ def run(
                     logger.info("[Engine] Heuristic P1: %d assignés, %d restants",
                                 len(h_res.assignments), len(h_res.unassigned_booking_ids))
                     if mode == "heuristic_only":
-                        _apply_and_emit(company, final_assignments, dispatch_run_id=dispatch_run.id if dispatch_run else None)
+                        _apply_and_emit(company, final_assignments, dispatch_run_id=(int(cast(Any, dispatch_run.id)) if dispatch_run and getattr(dispatch_run, "id", None) is not None else None))
                         dispatch_run.mark_completed({
                             "mode": "heuristic_only",
                             "assignments": len(final_assignments),
@@ -293,7 +314,7 @@ def run(
                     logger.info("[Engine] Solver P1: %d assignés, %d non assignés",
                                 len(s_res.assignments), len(s_res.unassigned_booking_ids))
                     if mode == "solver_only":
-                        _apply_and_emit(company, final_assignments, dispatch_run_id=dispatch_run.id if dispatch_run else None)
+                        _apply_and_emit(company, final_assignments, dispatch_run_id=(int(cast(Any, dispatch_run.id)) if dispatch_run and getattr(dispatch_run, "id", None) is not None else None))
                         dispatch_run.mark_completed({
                             "mode": "solver_only",
                             "assignments": len(final_assignments),
@@ -383,7 +404,11 @@ def run(
                 _extend_unique(fb.assignments)
 
         # 7) Application en DB
-        _apply_and_emit(company, final_assignments, dispatch_run_id=dispatch_run.id)
+        _apply_and_emit(
+            company,
+            final_assignments,
+            dispatch_run_id=(int(cast(Any, dispatch_run.id)) if dispatch_run and getattr(dispatch_run, "id", None) is not None else None),
+        )
 
         # 8) Résumé & debug + 9) Finir le run
         rem = remaining_ids_from(problem)
@@ -481,7 +506,7 @@ def _filter_problem(
     dispatch_run_id = problem.get("dispatch_run_id")
   
 
-    company = Company.query.get(company_id)
+    company = cast(Company, Company.query.get(company_id))
     result = data.build_vrptw_problem(
         company, new_bookings, drivers, settings=s,
         base_time=problem.get("base_time"), for_date=problem.get("for_date")
@@ -495,7 +520,7 @@ def _filter_problem(
     
     return result
 
-def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: int) -> None:
+def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: Optional[int]) -> None:
     """
     Applique les assignations en base et émet événements/notifications.
     """
@@ -507,8 +532,9 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
         logger.info(f"[Engine] Applying assignments with dispatch_run_id={dispatch_run_id}")
         
         # Pass the dispatch_run_id to apply_assignments
+        company_id_int = int(cast(Any, getattr(company, "id", 0)) or 0)
         result = apply_assignments(
-            company.id,
+            company_id_int,
             assignments,
             dispatch_run_id=dispatch_run_id,
             return_pairs=True,
@@ -547,7 +573,7 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
                 logger.warning(f"[Engine] Failed to get date_str from dispatch_run: {e}")
             
             # Pass the date_str to the notification function
-            notify_dispatch_run_completed(company.id, dispatch_run_id, applied_count, date_str)
+            notify_dispatch_run_completed(int(cast(Any, company.id)), int(dispatch_run_id), applied_count, date_str)
             logger.info(f"[Engine] Notified dispatch completion: company_id={company.id}, dispatch_run_id={dispatch_run_id}, assignments={applied_count}, date={date_str}")
     except Exception as e:
         logger.error("[Engine] Notification/socket error: %s", e)

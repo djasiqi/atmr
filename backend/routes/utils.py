@@ -1,14 +1,11 @@
 from flask import jsonify, request
 from flask_restx import Namespace, Resource
 import qrcode
+from qrcode.constants import ERROR_CORRECT_L  # ✅ évite "constants is not a known attribute"
 import io
 import base64
 import re
 from datetime import datetime
-
-# NOTE:
-# - Ne PAS réimporter to_utc ici. Si tu en as besoin côté routes, importe depuis shared:
-#   from shared.time_utils import to_utc
 
 utils_ns = Namespace('utils', description="Endpoints utilitaires")
 
@@ -18,7 +15,7 @@ utils_ns = Namespace('utils', description="Endpoints utilitaires")
 def _qr_png_bytes(data: str) -> bytes:
     qr = qrcode.QRCode(
         version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        error_correction=ERROR_CORRECT_L,  # ✅ constante importée
         box_size=10,
         border=4,
     )
@@ -26,7 +23,8 @@ def _qr_png_bytes(data: str) -> bytes:
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
     with io.BytesIO() as buf:
-        img.save(buf, format="PNG")
+        # ✅ Arg positionnel au lieu de format="PNG" pour calmer Pylance
+        img.save(buf, "PNG")
         return buf.getvalue()
 
 def generate_qr_code(data: str) -> str:
@@ -67,6 +65,7 @@ class GenerateQR(Resource):
 
         try:
             b64_png = generate_qr_code(data)
+            # (optionnel) tu peux ajouter le préfixe "data:image/png;base64," côté client
             return {"qr_code": b64_png}, 200
         except Exception as e:
             return handle_error(e)

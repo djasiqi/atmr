@@ -60,6 +60,12 @@ export default function useCompanySocket() {
       });
       SOCKET_SINGLETON.on("connect_error", (err) => {
         console.error("❌ Erreur WebSocket :", err?.message || err);
+            // Gérer spécifiquement les erreurs d'authentification JWT
+            if (err?.message?.includes("unauthorized") || err?.data?.includes("unauthorized") || err?.message?.includes("Subject must be a string")) {
+              console.warn("🚨 Erreur d'authentification WebSocket - Token JWT invalide ou expiré");
+              // Optionnel: déclencher un refresh token ou une reconnexion
+              // window.dispatchEvent(new CustomEvent('websocket-auth-error'));
+            }
       });
       SOCKET_SINGLETON.on("error", (err) => {
         console.error("🚨 Erreur Socket.IO :", err);

@@ -1,6 +1,12 @@
 from __future__ import annotations
-import time, math, logging, json, hashlib, threading, itertools
-from typing import List, Tuple, Iterable, Optional, Dict, Any
+import time
+import math
+import logging
+import json
+import hashlib
+import threading
+import itertools
+from typing import List, Tuple, Iterable, Optional, Dict, Any, Callable, cast
 import requests
 
 logger = logging.getLogger(__name__)
@@ -9,14 +15,11 @@ logger = logging.getLogger(__name__)
 # Optional Redis import (safe) + alias d'exception
 # ============================================================
 try:
-    import redis as _redis  # type: ignore
-    _RedisConnError = _redis.exceptions.ConnectionError  # alias pour les except
-except Exception as e:
-    _redis = None  # redis n'est pas dispo, on garde le code compatible
-    class _RedisConnError(Exception):  # fallback local pour les except
+    # Import runtime; on évite l’attribut '.exceptions' que Pylance ne connaît pas toujours
+    from redis.exceptions import ConnectionError as _RedisConnError  # type: ignore
+except Exception:  # redis absent ou API inattendue
+    class _RedisConnError(Exception):
         pass
-
-
 
 # ------------------------------------------------------------
 # In-flight de-dup (singleflight) process-local
@@ -24,7 +27,7 @@ except Exception as e:
 _inflight_lock = threading.Lock()
 _inflight: Dict[str, Dict[str, Any]] = {}
 
-def _singleflight_do(key: str, fn):
+def _singleflight_do(key: str, fn: Callable[[], Any]) -> Any:
     """
     Regroupe les appels concurrents sur la même clé.
     Le premier exécute fn(); les autres attendent le résultat.
@@ -127,7 +130,7 @@ def _table(
     sources: Optional[List[int]],
     destinations: Optional[List[int]],
     timeout: int,
-) -> dict:
+) -> Dict[str, Any]:
     # 6 décimales pour OSRM; la clé de cache utilisera son propre arrondi.
     coord_str = ";".join(f"{lon:.6f},{lat:.6f}" for (lat, lon) in coords)
     url = f"{base_url}/table/v1/{profile}/{coord_str}"
@@ -138,7 +141,8 @@ def _table(
         params["destinations"] = ";".join(map(str, destinations))
     r = requests.get(url, params=params, timeout=timeout)
     r.raise_for_status()
-    return r.json()
+    data: Any = r.json()
+    return cast(Dict[str, Any], data)
 
 def _route(
     base_url: str,
@@ -152,7 +156,7 @@ def _route(
     steps: bool = False,
     annotations: bool = False,
     timeout: int = 5,
-) -> dict:
+) -> Dict[str, Any]:
     pts: List[Tuple[float, float]] = [origin]
     if waypoints:
         pts.extend(waypoints)
@@ -168,7 +172,8 @@ def _route(
     }
     r = requests.get(url, params=params, timeout=timeout)
     r.raise_for_status()
-    return r.json()
+    data: Any = r.json()
+    return cast(Dict[str, Any], data)
 
 # ============================================================
 # Cache keys (stable, coord_precision ~ 1m)
@@ -241,13 +246,15 @@ def build_distance_matrix_osrm(
             try:
                 raw = redis_client.get(f"osrm:table:{cache_key}")
                 if raw:
+                    if isinstance(raw, (bytes, bytearray)):
+                        raw = raw.decode("utf-8", errors="ignore")
                     cached = json.loads(raw)
                     logger.info("[OSRM] cache_hit block=%d len=%d", min(src_block), len(src_block))
             except _RedisConnError:
                 # Redis HS -> on continue sans cache
                 redis_available = False
                 logger.warning("[OSRM] Redis connection failed - continuing without cache")
-            except Exception as e:
+            except Exception:
                 logger.warning("[OSRM] Redis get failed", exc_info=True)
         if cached and "durations" in cached:
             durs = cached["durations"]
@@ -287,7 +294,11 @@ def build_distance_matrix_osrm(
         # Déduplication in-flight sur la même clé
         start = time.time()
         try:
-            data = _singleflight_do(cache_key, _do_request)
+            data_any: Any = _singleflight_do(cache_key, _do_request)
+            if not isinstance(data_any, dict):
+                logger.warning("[OSRM] table_fetch returned non-dict -> fallback")
+                return _fallback_matrix(coords)
+            data: Dict[str, Any] = cast(Dict[str, Any], data_any)
         except Exception as e:
             # 🚨 Fallback si toutes les tentatives ont échoué
             logger.warning("[OSRM] All attempts failed, using haversine fallback: %s", e)
@@ -304,10 +315,13 @@ def build_distance_matrix_osrm(
             # Redis HS -> log mais on continue
             redis_available = False
             logger.warning("[OSRM] Redis connection failed when writing to cache - continuing without cache")
-        except Exception as e:
+        except Exception:
             logger.warning("[OSRM] Redis setex failed", exc_info=True)
 
-        durs = data["durations"]
+        durs = data.get("durations")
+        if not isinstance(durs, list):
+            logger.warning("[OSRM] durations missing/invalid -> fallback matrix")
+            return _fallback_matrix(coords)
         for local_i, src_idx in enumerate(src_block):
             row = durs[local_i]
             for j in range(n):
@@ -351,12 +365,14 @@ def route_info(
         try:
             raw = redis_client.get(cache_key)
             if raw:
+                if isinstance(raw, (bytes, bytearray)):
+                    raw = raw.decode("utf-8", errors="ignore")
                 cached = json.loads(raw)
                 if "duration" in cached and "distance" in cached:
                     return cached
         except _RedisConnError:
             logger.warning("[OSRM] Redis connection failed - continuing without cache")
-        except Exception as e:
+        except Exception:
             logger.warning("[OSRM] Redis get failed (route)", exc_info=True)
 
     def _do():
@@ -383,7 +399,10 @@ def route_info(
         }
 
     try:
-        res = _singleflight_do(cache_key, _do)
+        res_any: Any = _singleflight_do(cache_key, _do)
+        if not isinstance(res_any, dict):
+            raise RuntimeError("OSRM /route returned non-dict")
+        res: Dict[str, Any] = cast(Dict[str, Any], res_any)
     except Exception as e:
         # Fallback ETA/distance
         logger.warning("[OSRM] route failed -> fallback haversine: %s", e)
@@ -405,7 +424,7 @@ def route_info(
             redis_client.setex(cache_key, cache_ttl_s, json.dumps(res))
     except _RedisConnError:
         logger.warning("[OSRM] Redis connection failed when writing to cache - continuing without cache")
-    except Exception as e:
+    except Exception:
         logger.warning("[OSRM] Redis setex failed (route)", exc_info=True)
 
     return res
@@ -444,5 +463,5 @@ def eta_seconds(
     dur = info.get("duration", 0.0)
     try:
         return int(max(1, round(float(dur))))
-    except Exception as e:
+    except Exception:
         return _fallback_eta_seconds(origin, destination, avg_kmh=avg_speed_kmh_fallback)

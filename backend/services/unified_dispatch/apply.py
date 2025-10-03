@@ -4,8 +4,8 @@ from __future__ import annotations
 import os
 import logging
 from collections import defaultdict
-from typing import Any, Dict, List, Tuple, Optional
-import uuid
+from typing import Any, Dict, List, Tuple, Optional, cast
+
 
 from sqlalchemy.orm import joinedload
 
@@ -16,7 +16,6 @@ from shared.time_utils import now_utc  # UTC centralisé
 logger = logging.getLogger(__name__)
 
 _Assignment = Any
-
 
 def apply_assignments(
     company_id: int,
@@ -124,7 +123,10 @@ def apply_assignments(
         if d is None:
             skipped[b_id] = "driver_not_found_or_wrong_company"
             continue
-        if enforce_driver_checks and (not d.is_active or not d.is_available):
+        d_any = cast(Any, d)
+        is_active = bool(getattr(d_any, "is_active", False))
+        is_available = bool(getattr(d_any, "is_available", False))
+        if enforce_driver_checks and (not is_active or not is_available):
             skipped[b_id] = "driver_not_available"
             continue
 
@@ -138,12 +140,15 @@ def apply_assignments(
             "dispatch_run_id": dispatch_run_id or _aget(a, "dispatch_run_id"),  # Priorité au dispatch_run_id passé en param
         }
 
-        if respect_existing and b.status == BookingStatus.ASSIGNED and b.driver_id == d_id:
+        b_any = cast(Any, b)
+        cur_driver_id_raw = getattr(b_any, "driver_id", None)
+        cur_driver_id: Optional[int] = int(cur_driver_id_raw) if cur_driver_id_raw is not None else None
+        if respect_existing and b.status == BookingStatus.ASSIGNED and cur_driver_id == d_id:
             # On ne modifie pas le Booking, mais on mettra à jour l'Assignment (ETA)
             skipped[b_id] = "already_assigned_same_driver"
             continue
 
-        if b.status == BookingStatus.ASSIGNED and b.driver_id and b.driver_id != d_id and not allow_reassign:
+        if b.status == BookingStatus.ASSIGNED and (cur_driver_id is not None) and (cur_driver_id != d_id) and (not allow_reassign):
             conflicts.append(b_id)
             skipped[b_id] = "reassign_blocked"
             continue
@@ -168,7 +173,7 @@ def apply_assignments(
     try:
         with db.session.begin_nested():
             if updates:
-                db.session.bulk_update_mappings(Booking, updates)
+                db.session.bulk_update_mappings(cast(Any, Booking), updates)  # type: ignore[arg-type]
 
             # Upsert côté Assignment (y compris ETA si fournies)
             if desired_assignments:
@@ -190,33 +195,40 @@ def apply_assignments(
                     cur = by_booking.get(b_id)
                     if cur is None:
                         # création
-                        new = Assignment(
-                            booking_id=int(payload["booking_id"]),
-                            driver_id=payload["driver_id"],
-                            status=payload.get("status", "assigned"),
-                            # map to model column names:
-                            eta_pickup_at=payload.get("estimated_pickup_arrival", None) or payload.get("eta_pickup_at", None),
-                            eta_dropoff_at=payload.get("estimated_dropoff_arrival", None) or payload.get("eta_dropoff_at", None),
-                            dispatch_run_id=dispatch_run_id or payload.get("dispatch_run_id"),
-                        )
-                        # timestamps si champs présents dans le modèle
+                        new = Assignment()  # construire vide pour éviter les kwargs non typés
+                        a_any = cast(Any, new)
+                        a_any.booking_id = int(payload["booking_id"])
+                        a_any.driver_id = payload["driver_id"]
+                        a_any.status = payload.get("status", "assigned")
+                        eta_pu = payload.get("estimated_pickup_arrival") or payload.get("eta_pickup_at")
+                        eta_do = payload.get("estimated_dropoff_arrival") or payload.get("eta_dropoff_at")
+                        if eta_pu is not None:
+                            a_any.eta_pickup_at = eta_pu
+                        if eta_do is not None:
+                            a_any.eta_dropoff_at = eta_do
+                        drid = payload.get("dispatch_run_id") or dispatch_run_id
+                        if drid is not None:
+                            a_any.dispatch_run_id = drid
                         if hasattr(new, "created_at"):
-                            setattr(new, "created_at", now)
+                            a_any.created_at = now
                         if hasattr(new, "updated_at"):
-                            setattr(new, "updated_at", now)
+                            a_any.updated_at = now
                         db.session.add(new)
                     else:
                         # mise à jour
-                        cur.driver_id = payload["driver_id"]
-                        cur.status = payload.get("status", "assigned")
-                        if payload.get("estimated_pickup_arrival") is not None or payload.get("eta_pickup_at") is not None:
-                            cur.eta_pickup_at = payload.get("estimated_pickup_arrival", None) or payload.get("eta_pickup_at", None)
-                        if payload.get("estimated_dropoff_arrival") is not None or payload.get("eta_dropoff_at", None) is not None:
-                            cur.eta_dropoff_at = payload.get("estimated_dropoff_arrival") or payload.get("eta_dropoff_at")
+                        c_any = cast(Any, cur)
+                        c_any.driver_id = payload["driver_id"]
+                        c_any.status = payload.get("status", "assigned")
+                        eta_pu = payload.get("estimated_pickup_arrival") or payload.get("eta_pickup_at")
+                        eta_do = payload.get("estimated_dropoff_arrival") or payload.get("eta_dropoff_at")
+                        if eta_pu is not None:
+                            c_any.eta_pickup_at = eta_pu
+                        if eta_do is not None:
+                            c_any.eta_dropoff_at = eta_do
                         if payload.get("dispatch_run_id") is not None:
-                            cur.dispatch_run_id = payload["dispatch_run_id"]
+                            c_any.dispatch_run_id = payload["dispatch_run_id"]
                         if hasattr(cur, "updated_at"):
-                            cur.updated_at = now
+                            c_any.updated_at = now
             else:
                 logger.info("[Apply] No desired assignments to upsert (company_id=%s)", company_id)
         db.session.commit()

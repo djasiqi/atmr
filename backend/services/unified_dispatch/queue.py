@@ -6,7 +6,7 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, List, Any, cast
 
 from celery.result import AsyncResult
 from flask import current_app
@@ -26,7 +26,7 @@ MAX_BACKLOG = int(os.getenv("UD_RTC_MAX_QUEUE_BACKLOG", "100"))
 # app Flask global
 # ============================================================
 
-_APP = None
+_APP: Optional[Any] = None
 
 def init_app(app):
     """À appeler depuis create_app(app)."""
@@ -198,7 +198,12 @@ def trigger(company_id: int, reason: str = "generic", mode: str = "auto", params
 
     try:
         # si on est dans un contexte requête, mémorise l'app pour le worker
-        st.app_ref = current_app._get_current_object()
+        # (LocalProxy → objet réel)
+        get_obj = getattr(current_app, "_get_current_object", None)
+        if callable(get_obj):
+            st.app_ref = get_obj()  # type: ignore[misc]
+        else:
+            st.app_ref = current_app  # fallback typé Any
     except Exception:
         # pas de contexte ; le worker utilisera _APP injectée par init_app
         st.app_ref = st.app_ref  # no-op, garde l'existante si présente
@@ -240,9 +245,10 @@ def _schedule_run(st: CompanyDispatchState, mode: str) -> None:
 
     # Utiliser threading.Timer pour le debounce/coalesce
     timer_cls = __import__('threading').Timer
-    st.timer = timer_cls(delay_sec, _try_run, kwargs={"st": st, "mode": mode})
-    st.timer.daemon = True
-    st.timer.start()
+    t = timer_cls(delay_sec, _try_run, kwargs={"st": st, "mode": mode})
+    t.daemon = True
+    t.start()
+    st.timer = t
 
 
 def _try_run(st: CompanyDispatchState, mode: str) -> None:
@@ -331,7 +337,8 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             from tasks.dispatch_tasks import run_dispatch_task
             
             # Enqueue Celery task
-            task = run_dispatch_task.delay(**run_kwargs)
+            TaskCallable = cast(Any, run_dispatch_task)  # .delay non typé dans stubs
+            task = TaskCallable.delay(**run_kwargs)
             st.last_task_id = task.id
             _CELERY_STATE[company_id] = task.state
             

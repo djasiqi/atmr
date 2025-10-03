@@ -1,47 +1,31 @@
 # backend/scripts/seed_medical.py
 import os
 import sys
+from typing import Any, Dict, List, Optional, cast
+from models import db, MedicalEstablishment, MedicalService  
+from flask import Flask
 
 # Ajuste le path pour "import app, models" quand lancé directement
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-from models import db, MedicalEstablishment, MedicalService  # noqa: E402
-
-def get_app():
+def get_app() -> Flask:
     """Récupère l'app Flask (factory ou app globale)."""
+    # Essayez d'abord la factory create_app()
     try:
-        from app import create_app
-        return create_app()
+        from app import create_app  # type: ignore[attr-defined]
+        return cast(Flask, create_app())
     except Exception:
-        from app import app
-        return app
+        # Fallback: un objet `app` global dans app.py
+        try:
+            from app import app as flask_app  # type: ignore[attr-defined]
+            return cast(Flask, flask_app)
+        except Exception as e:
+            raise RuntimeError("Impossible de charger l'application Flask") from e
 
-def upsert_estab(name, display_name, address, lat, lon, type="hospital", aliases=""):
-    """Crée ou met à jour un établissement."""
-    e = MedicalEstablishment.query.filter_by(name=name).first()
-    if not e:
-        e = MedicalEstablishment(
-            name=name,
-            display_name=display_name,
-            address=address,
-            lat=lat, lon=lon,
-            type=type,
-            aliases=aliases
-        )
-        db.session.add(e)
-    else:
-        e.display_name = display_name
-        e.address = address
-        e.lat = lat
-        e.lon = lon
-        e.type = type
-        e.aliases = aliases
-    db.session.commit()
-    return e
 
-def _assign_if_present(obj, **fields):
+def _assign_if_present(obj: Any, **fields: Any) -> None:
     """
     Assigne dynamiquement des champs seulement s'ils existent sur le modèle.
     Évite les erreurs si la migration n'a pas encore ajouté une colonne.
@@ -50,7 +34,50 @@ def _assign_if_present(obj, **fields):
         if hasattr(obj, k):
             setattr(obj, k, v)
 
-def add_services(estab, items):
+
+def upsert_estab(
+    name: str,
+    display_name: str,
+    address: str,
+    lat: float,
+    lon: float,
+    est_type: str = "hospital",
+    aliases: str = "",
+) -> MedicalEstablishment:
+    """
+    Crée ou met à jour un établissement.
+    (On évite d'appeler le constructeur SQLAlchemy avec des kwargs non typés
+    pour ne pas déclencher Pylance `No parameter named "..."`.)
+    """
+    e: Optional[MedicalEstablishment] = MedicalEstablishment.query.filter_by(name=name).first()
+    if not e:
+        e = MedicalEstablishment()  # type: ignore[call-arg]
+        _assign_if_present(
+            e,
+            name=name,
+            display_name=display_name,
+            address=address,
+            lat=lat,
+            lon=lon,
+            type=est_type,
+            aliases=aliases,
+        )
+        db.session.add(e)
+    else:
+        _assign_if_present(
+            e,
+            display_name=display_name,
+            address=address,
+            lat=lat,
+            lon=lon,
+            type=est_type,
+            aliases=aliases,
+        )
+    db.session.commit()
+    return e
+
+
+def add_services(estab: MedicalEstablishment, items: List[Any]) -> None:
     """
     Ajoute (ou met à jour) des services pour un établissement.
 
@@ -70,7 +97,7 @@ def add_services(estab, items):
     for it in items:
         if isinstance(it, (list, tuple)) and len(it) >= 2:
             category, name = it[0], it[1]
-            extra = {}
+            extra: Dict[str, Any] = {}
         elif isinstance(it, dict):
             category = it.get("category") or "Service"
             name = it.get("name")
@@ -80,21 +107,36 @@ def add_services(estab, items):
         else:
             continue
 
-        svc = MedicalService.query.filter_by(establishment_id=estab.id, name=name).first()
+        svc: Optional[MedicalService] = MedicalService.query.filter_by(
+            establishment_id=estab.id, name=name
+        ).first()
+
         if not svc:
-            svc = MedicalService(establishment_id=estab.id, category=category, name=name)
-            _assign_if_present(svc, **extra)
+            # Création sans kwargs pour éviter les warnings Pylance
+            svc = MedicalService()  # type: ignore[call-arg]
+            _assign_if_present(
+                svc,
+                establishment_id=int(estab.id),
+                category=category,
+                name=name,
+                **extra,
+            )
             db.session.add(svc)
             created += 1
         else:
-            svc.category = category or svc.category
-            _assign_if_present(svc, **extra)
+            # Mise à jour
+            _assign_if_present(
+                svc,
+                category=category or getattr(svc, "category", None),
+                **extra,
+            )
             updated += 1
 
     db.session.commit()
     print(f"   → services: +{created} créés, ~{updated} mis à jour pour {estab.display_name}.")
 
-def main():
+
+def main() -> None:
     app = get_app()
     with app.app_context():
         # === HUG ===
@@ -102,9 +144,10 @@ def main():
             name="HUG",
             display_name="HUG - Hôpitaux Universitaires de Genève",
             address="Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
-            lat=46.19226, lon=6.14262,
-            type="hospital",
-            aliases="hug;hôpital cantonal;hopital geneve;hopital cantonal geneve"
+            lat=46.19226,
+            lon=6.14262,
+            est_type="hospital",
+            aliases="hug;hôpital cantonal;hopital geneve;hopital cantonal geneve",
         )
 
         # --- Liste “riche” : tu peux mettre ici tous les services détaillés que tu m’as fournis. ---
@@ -1550,7 +1593,7 @@ def main():
             display_name="Clinique La Colline",
             address="Av. de Beau-Séjour 6, 1206 Genève",
             lat=46.19878, lon=6.15838,
-            type="clinic",
+            est_type="clinic",
             aliases="la colline;clinique colline"
         )
         add_services(colline, [
@@ -1565,7 +1608,7 @@ def main():
             display_name="Clinique des Grangettes",
             address="Ch. des Grangettes 7, 1224 Chêne-Bougeries",
             lat=46.20986, lon=6.18118,
-            type="clinic",
+            est_type="clinic",
             aliases="grangettes;clinique grangettes"
         )
         add_services(grangettes, [
@@ -1579,7 +1622,7 @@ def main():
             display_name="Hôpital de La Tour",
             address="Av. J.-D. Maillard 3, 1217 Meyrin",
             lat=46.22996, lon=6.07363,
-            type="hospital",
+            est_type="hospital",
             aliases="la tour;hopital la tour;hôpital la tour"
         )
         add_services(latour, [

@@ -1,26 +1,24 @@
-
 services:
   api:
     build:
       context: ./backend
       dockerfile: Dockerfile
     command: >
-      gunicorn --bind 0.0.0.0:5000
-      --worker-class sync
+      gunicorn wsgi:app
+      --bind 0.0.0.0:5000
+      --worker-class eventlet
       --workers 1
-      --threads 1
       --timeout 120
       --access-logfile -
       --error-logfile -
       --log-level debug
       --no-sendfile
-      wsgi:app
     ports:
       - "5000:5000"
     environment:
-      - FLASK_APP=app.py
       - FLASK_ENV=production
       - FLASK_CONFIG=production
+      - SOCKETIO_ASYNC_MODE=eventlet
       - REDIS_URL=redis://redis:6379/0
       - APP_ENCRYPTION_KEY_B64=uIwgXNsfLhyJ02GHJivmpoh4f9jdmhQkovKfWX8k_zQ
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -37,7 +35,6 @@ services:
       - osrm
     restart: unless-stopped
 
-
   # Celery Worker
   celery-worker:
     build:
@@ -49,9 +46,9 @@ services:
       --concurrency=4
       --max-tasks-per-child=100
     environment:
-      - FLASK_APP=app.py
       - FLASK_ENV=production
       - FLASK_CONFIG=production
+      - SOCKETIO_ASYNC_MODE=eventlet
       - APP_ENCRYPTION_KEY_B64=uIwgXNsfLhyJ02GHJivmpoh4f9jdmhQkovKfWX8k_zQ
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -78,7 +75,6 @@ services:
       --scheduler=celery.beat.PersistentScheduler
       --schedule=/app/celerybeat-schedule
     environment:
-      - FLASK_APP=app.py
       - FLASK_ENV=production
       - FLASK_CONFIG=production
       - APP_ENCRYPTION_KEY_B64=uIwgXNsfLhyJ02GHJivmpoh4f9jdmhQkovKfWX8k_zQ

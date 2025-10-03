@@ -15,7 +15,7 @@ CELERY_TIMEZONE = os.getenv("CELERY_TIMEZONE", "Europe/Zurich")
 DISPATCH_AUTORUN_INTERVAL_SEC = int(os.getenv("DISPATCH_AUTORUN_INTERVAL_SEC", "300"))
 
 # Create Celery instance
-celery = Celery(
+celery: Celery = Celery(
     "atmr",
     broker=CELERY_BROKER_URL,
     backend=CELERY_RESULT_BACKEND,
@@ -47,7 +47,7 @@ celery.conf.beat_schedule = {
 }
 
 
-def init_app(app: Flask) -> None:
+def init_app(app: Flask) -> Celery:
     """
     Initialize Celery with Flask app context.
     Call this from create_app().

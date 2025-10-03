@@ -1,12 +1,15 @@
 # holidays_service.py
-import holidays
 from datetime import date
 from functools import lru_cache
+from typing import Set
+from holidays import country_holidays
 
 @lru_cache(maxsize=None)
-def get_geneva_holidays(year: int):
-    geneva_hols = holidays.Switzerland(years=[year], subdiv='Geneva')
-    return {day for day in geneva_hols}
+def get_geneva_holidays(year: int) -> Set[date]:
+    # Suisse = CH ; subdivision Genève = GE
+    hols = country_holidays("CH", subdiv="GE", years=year)
+    # country_holidays est itérable sur les dates fériées
+    return {d for d in hols}
 
 def is_holiday_in_geneva(check_date: date) -> bool:
     """
@@ -14,5 +17,4 @@ def is_holiday_in_geneva(check_date: date) -> bool:
     False sinon.
     """
     # On récupère les jours fériés pour l'année de la date check_date
-    year_holidays = get_geneva_holidays(check_date.year)
-    return check_date in year_holidays
+    return check_date in get_geneva_holidays(check_date.year)

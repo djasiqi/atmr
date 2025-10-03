@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-import os, sys, time, subprocess, pathlib
+import os
+import sys
+import time
+import subprocess
+import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent
 BACKEND = ROOT  # ce script est dans backend

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone, timedelta
 
 from flask import request
 from flask_restx import Namespace, Resource, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from typing import Any, cast
 
 from ext import db, role_required
 from models import Booking, BookingStatus, Client, User, UserRole
@@ -33,6 +33,25 @@ booking_create_model = bookings_ns.model(
         "is_round_trip": fields.Boolean(description="Créer également un retour", default=False),
     },
 )
+
+# -----------------------------------------------------
+# Helper: déclenche le moteur de dispatch de manière sûre
+def _queue_trigger(company_id: int | None, action: str) -> None:
+    if not company_id:
+        return
+    try:
+        # API moderne
+        t1 = getattr(queue, "trigger_on_booking_change", None)
+        if callable(t1):
+            t1(company_id, action=action)
+            return
+        # API alternative
+        t2 = getattr(queue, "trigger", None)
+        if callable(t2):
+            t2(company_id, reason=f"booking_{action}", mode="auto")
+            return
+    except Exception as e:
+        app_logger.warning(f"⚠️ _queue_trigger failed: {e}")
 
 
 # =====================================================
@@ -77,7 +96,7 @@ class CreateBooking(Resource):
                 return {"error": f"Erreur lors du calcul durée/distance: {e}"}, 400
 
             # Crée l’aller (PENDING)
-            new_booking = Booking(
+            new_booking = cast(Any, Booking)(
                 customer_name=data["customer_name"],
                 pickup_location=data["pickup_location"],
                 dropoff_location=data["dropoff_location"],
@@ -98,20 +117,19 @@ class CreateBooking(Resource):
 
             # Géocodage (best effort, pas bloquant)
             try:
-                if new_booking.pickup_lat is None or new_booking.pickup_lon is None:
-                    c = geocode_address(new_booking.pickup_location)
-                    if c:
-                        new_booking.pickup_lat, new_booking.pickup_lon = c
-                if new_booking.dropoff_lat is None or new_booking.dropoff_lon is None:
-                    c = geocode_address(new_booking.dropoff_location)
-                    if c:
-                        new_booking.dropoff_lat, new_booking.dropoff_lon = c
+                # on passe les valeurs str de la requête (évite Column[str] -> str)
+                c = geocode_address(data["pickup_location"])
+                if c:
+                    cast(Any, new_booking).pickup_lat, cast(Any, new_booking).pickup_lon = c
+                c2 = geocode_address(data["dropoff_location"])
+                if c2:
+                    cast(Any, new_booking).dropoff_lat, cast(Any, new_booking).dropoff_lon = c2
             except Exception as e:
                 app_logger.warning(f"Géocodage best-effort échoué: {e}")
 
             # Retour « placeholder » si demandé (toujours PENDING, éventuellement sans horaire)
             if bool(data.get("is_round_trip", False)):
-                return_booking = Booking(
+                return_booking = cast(Any, Booking)(
                     customer_name=new_booking.customer_name,
                     pickup_location=new_booking.dropoff_location,
                     dropoff_location=new_booking.pickup_location,
@@ -125,17 +143,24 @@ class CreateBooking(Resource):
                     company_id=client.company_id,
                     duration_seconds=duration_seconds,
                     distance_meters=distance_meters,
-                    pickup_lat=new_booking.dropoff_lat,
-                    pickup_lon=new_booking.dropoff_lon,
-                    dropoff_lat=new_booking.pickup_lat,
-                    dropoff_lon=new_booking.pickup_lon,
                 )
+                # calque les coords inversées si déjà connues
+                try:
+                    cast(Any, return_booking).pickup_lat = cast(Any, new_booking).dropoff_lat
+                    cast(Any, return_booking).pickup_lon = cast(Any, new_booking).dropoff_lon
+                    cast(Any, return_booking).dropoff_lat = cast(Any, new_booking).pickup_lat
+                    cast(Any, return_booking).dropoff_lon = cast(Any, new_booking).pickup_lon
+                except Exception:
+                    pass
                 db.session.add(return_booking)
 
             db.session.commit()
 
             # ⚠️ Pas de dispatch ici (PENDING seulement). L’entreprise acceptera -> ACCEPTED.
-            return {"message": "Réservation créée avec succès", "booking_id": new_booking.id}, 201
+            return {
+                "message": "Réservation créée avec succès",
+                "booking_id": getattr(cast(Any, new_booking), "id", None)
+            }, 201
 
         except Exception as e:
             db.session.rollback()
@@ -161,16 +186,16 @@ class BookingResource(Resource):
                 return {"error": "Réservation introuvable"}, 404
 
             if user.role == UserRole.admin:
-                return booking.serialize, 200
+                return cast(Any, booking).serialize, 200
 
-            # Client propriétaire ?
-            client = getattr(user, "clients", None)
+            # Client propriétaire (par user_id)
+            client = Client.query.filter_by(user_id=user.id).one_or_none()
             if client and client.id == booking.client_id:
-                return booking.serialize, 200
+                return cast(Any, booking).serialize, 200
 
             # Chauffeur assigné ?
             if booking.driver and booking.driver.user.public_id == public_id:
-                return booking.serialize, 200
+                return cast(Any, booking).serialize, 200
 
             return {"error": "Accès non autorisé à cette réservation"}, 403
 
@@ -191,8 +216,8 @@ class BookingResource(Resource):
             if not booking:
                 return {"error": "Réservation introuvable"}, 404
 
-            # Admin ou client propriétaire
-            client = getattr(user, "clients", None)
+            # Admin ou client propriétaire (par user_id)
+            client = Client.query.filter_by(user_id=user.id).one_or_none()
             if not (user.role == UserRole.admin or (client and client.id == booking.client_id)):
                 return {"error": "Accès non autorisé à la modification"}, 403
 
@@ -231,7 +256,7 @@ class BookingResource(Resource):
             if not booking:
                 return {"error": "Réservation introuvable"}, 404
 
-            client = getattr(user, "clients", None)
+            client = Client.query.filter_by(user_id=user.id).one_or_none()
             if not (user.role == UserRole.admin or (client and client.id == booking.client_id)):
                 return {"error": "Accès non autorisé à l'annulation"}, 403
 
@@ -244,7 +269,11 @@ class BookingResource(Resource):
 
             # Déclenche la queue seulement si la course impacte le dispatch
             if company_id and booking.status == BookingStatus.CANCELED:
-                queue.trigger_on_booking_change(company_id, "cancel")
+                try:
+                    cid = int(company_id)  # sécurise Column[int] -> int
+                except Exception:
+                    cid = None
+                _queue_trigger(cid, "cancel")
 
             return {"message": "Réservation annulée avec succès"}, 200
 
@@ -276,7 +305,7 @@ class ListBookings(Resource):
             else:
                 return {"error": "Unauthorized: You don't have permission"}, 403
 
-            result = [b.serialize for b in bookings]
+            result = [cast(Any, b).serialize for b in bookings]
             return {"bookings": result, "total": len(result)}, 200
 
         except Exception as e:

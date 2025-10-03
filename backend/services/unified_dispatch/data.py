@@ -6,23 +6,28 @@ import math
 import logging
 from datetime import timedelta, datetime
 import pytz
-from typing import List, Dict, Tuple, Any, Optional, Callable
-import os, time, functools, json, threading
+from typing import List, Dict, Tuple, Any, Optional, cast
+import os
+import time
+import functools
+import json
+import threading
 
 from sqlalchemy import and_, or_, func  # (optionnel) peut \u00eatre nettoy\u00e9 si non utilis\u00e9s
 from sqlalchemy.orm import joinedload
 
-from ext import db
 from models import Booking, BookingStatus, Driver, Company, DriverType
 from services.maps import geocode_address
 from services.osrm_client import build_distance_matrix_osrm
 from services.dispatch_utils import count_assigned_bookings_for_day
 from functools import lru_cache
 from services.unified_dispatch.settings import Settings, driver_work_window_from_config
-DEFAULT_SETTINGS = Settings()
+
 from services.unified_dispatch.heuristics import haversine_minutes
 from shared.time_utils import parse_local_naive, now_local, day_local_bounds
+
 logger = logging.getLogger(__name__)
+DEFAULT_SETTINGS = Settings()
 
 # Autoriser (ou non) le g\u00e9ocodage serveur pour compl\u00e9ter des coordonn\u00e9es manquantes.
 # Par d\u00e9faut: d\u00e9sactiv\u00e9 (respect du "sans g\u00e9ocodage serveur").
@@ -128,17 +133,21 @@ def get_bookings_for_dispatch(company_id: int, horizon_minutes: int) -> List[Boo
     now_ts = now_local()
     horizon_local = now_ts + timedelta(minutes=horizon_minutes)
 
-    # \u2699\ufe0f Filtrage c\u00f4t\u00e9 DB (plus efficace que post-filtrer en Python)
     bookings = (
         Booking.query
-        .options(joinedload(Booking.driver))
+        # évite les soucis de typage Pylance sur RelationshipProperty
+        .options(joinedload("driver"))  # type: ignore[arg-type]
         .filter(
             Booking.company_id == company_id,
-            Booking.status.in_([BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]),
-            Booking.scheduled_time.isnot(None),
-            Booking.scheduled_time <= horizon_local,
+            # caster la colonne pour éviter les bool Python
+            or_(
+                cast(Any, Booking.status) == BookingStatus.ACCEPTED,
+                cast(Any, Booking.status) == BookingStatus.ASSIGNED,
+            ),
+            Booking.scheduled_time.isnot(None),  # type: ignore[attr-defined]
+            Booking.scheduled_time <= horizon_local,  # type: ignore[attr-defined]
         )
-        .order_by(Booking.scheduled_time.asc())
+        .order_by(Booking.scheduled_time.asc())  # type: ignore[attr-defined]
         .all()
     )
 
@@ -150,11 +159,16 @@ def _normalize_booking_time_fields(bookings: List[Booking]) -> List[Booking]:
     Normalise les champs de date/heure des r\u00e9servations pour garantir qu'ils sont
     tous dans le m\u00eame format (UTC avec timezone).
     """
+    tz = pytz.timezone('Europe/Zurich')
     for b in bookings:
-        if b.scheduled_time and b.scheduled_time.tzinfo is None:
-            b.scheduled_time = pytz.timezone('Europe/Zurich').localize(b.scheduled_time)
-        if hasattr(b, 'dropoff_time') and b.dropoff_time and b.dropoff_time.tzinfo is None:
-            b.dropoff_time = pytz.timezone('Europe/Zurich').localize(b.dropoff_time)
+        b_any: Any = b
+        st = getattr(b_any, "scheduled_time", None)
+        if st is not None and getattr(st, "tzinfo", None) is None:
+            b_any.scheduled_time = tz.localize(cast(datetime, st))
+        if hasattr(b_any, "dropoff_time"):
+            dt2 = getattr(b_any, "dropoff_time", None)
+            if dt2 is not None and getattr(dt2, "tzinfo", None) is None:
+                b_any.dropoff_time = tz.localize(cast(datetime, dt2))
     return bookings
 
 def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
@@ -173,7 +187,6 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
     import logging
     from datetime import datetime
     import pytz
-    from sqlalchemy import func, or_, and_
     
     logger = logging.getLogger(__name__)
     
@@ -219,10 +232,7 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
         valid_statuses.append(BookingStatus.ACCEPTED)
     if hasattr(BookingStatus, 'ASSIGNED'):
         valid_statuses.append(BookingStatus.ASSIGNED)
-    
-    # Add string values for case-insensitive matching
-    valid_status_strings = ['accepted', 'assigned']
-    
+       
     # Create a time expression that checks multiple time fields
     def booking_time_expr():
         """
@@ -245,18 +255,20 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
             Booking.query
             .filter(
                 Booking.company_id == company_id,
-                # Use SQL function lower() for case-insensitive matching
+                # caster la colonne pour éviter "Any | bool" dans or_
                 or_(
-                    Booking.status.in_(valid_statuses),
-                    func.lower(Booking.status).in_([s.lower() for s in valid_status_strings])
+                    cast(Any, Booking.status) == BookingStatus.ACCEPTED,
+                    cast(Any, Booking.status) == BookingStatus.ASSIGNED,
+                    func.lower(cast(Any, Booking.status)) == 'accepted',
+                    func.lower(cast(Any, Booking.status)) == 'assigned',
                 ),
-                time_expr.isnot(None),
+                time_expr.isnot(None), 
                 # Use OR condition to match both timezone-aware and naive datetimes
                 or_(
                     # For timezone-aware datetimes (UTC)
                     and_(
-                        time_expr >= start_utc,
-                        time_expr <= end_utc
+                        time_expr >= start_utc,  # type: ignore[operator]
+                        time_expr <= end_utc     # type: ignore[operator]
                     ),
                     # For naive datetimes (local)
                     and_(
@@ -295,10 +307,10 @@ def get_available_drivers(company_id: int) -> List[Driver]:
         Driver.query
         .filter(
             Driver.company_id == company_id,
-            Driver.is_active.is_(True),
-            Driver.is_available.is_(True),
+            cast(Any, Driver.is_active).is_(True),
+            cast(Any, Driver.is_available).is_(True),
         )
-        .options(joinedload(Driver.working_config))
+        .options(joinedload("working_config"))  # type: ignore[arg-type]
         .all()
     )
 
@@ -309,13 +321,16 @@ def get_available_drivers(company_id: int) -> List[Driver]:
         # Optionnel: robustesse si des coords arrivent en str
         try:
             if d.latitude is not None:
-                d.latitude = float(d.latitude)
+                d_any: Any = d
+                d_any.latitude = float(cast(Any, d.latitude))
             if d.longitude is not None:
-                d.longitude = float(d.longitude)
+                d_any = cast(Any, d)
+                d_any.longitude = float(cast(Any, d.longitude))
         except Exception:
             # on laisse l'enrichissement faire le fallback plus tard
-            d.latitude = None
-            d.longitude = None
+            d_any = cast(Any, d)
+            d_any.latitude = None
+            d_any.longitude = None
 
     return drivers
 
@@ -347,15 +362,24 @@ def get_available_drivers_split(company_id: int) -> tuple[List[Driver], List[Dri
 # ============================================================
 
 def _company_latlon(company: Company) -> tuple[float, float]:
-    """Retourne les coords de l'entreprise si dispo, sinon Gen\u00e8ve."""
-    if company and company.latitude is not None and company.longitude is not None:
-        try:
-            return float(company.latitude), float(company.longitude)
-        except Exception:
-            pass
+    """Retourne les coords de l'entreprise si dispo, sinon Genève."""
+    if company:
+        c_any = cast(Any, company)
+        lat = getattr(c_any, "latitude", None)
+        lon = getattr(c_any, "longitude", None)
+        if lat is not None and lon is not None:
+            try:
+                return float(cast(Any, lat)), float(cast(Any, lon))
+            except Exception:
+                pass
     # Fallback Gen\u00e8ve (centre-ville)
     return 46.2044, 6.1432
 
+def _to_float_opt(x: Any) -> Optional[float]:
+    try:
+        return None if x is None else float(x)
+    except Exception:
+        return None
 
 @lru_cache(maxsize=256)
 def _geocode_safe_cached(address: str) -> Optional[tuple[float, float]]:
@@ -363,11 +387,20 @@ def _geocode_safe_cached(address: str) -> Optional[tuple[float, float]]:
         return None
     try:
         res = geocode_address(address)
-        # attendu: dict {"lat": float, "lon": float} ou tuple
+        # attendu: dict {"lat": ..., "lon": ...} OU (lat, lon)
         if isinstance(res, dict) and "lat" in res and "lon" in res:
-            return float(res["lat"]), float(res["lon"])
+            res_d = cast(Dict[str, Any], res)
+            lat = _to_float_opt(res_d.get("lat"))
+            lon = _to_float_opt(res_d.get("lon"))
+            if lat is not None and lon is not None:
+                return lat, lon
+            return None
         if isinstance(res, (tuple, list)) and len(res) >= 2:
-            return float(res[0]), float(res[1])
+            lat = _to_float_opt(res[0])
+            lon = _to_float_opt(res[1])
+            if lat is not None and lon is not None:
+                return lat, lon
+            return None
     except Exception:
         logger.warning("[Dispatch] geocode_address failed for '%s'", address, exc_info=True)
     return None
@@ -396,10 +429,12 @@ def enrich_booking_coords(bookings: List[Booking], company: Company) -> None:
             else:
                 plat, plon = fallback_lat, fallback_lon
         try:
-            b.pickup_lat = float(plat)
-            b.pickup_lon = float(plon)
+            b_any: Any = b
+            b_any.pickup_lat = float(cast(Any, plat))
+            b_any.pickup_lon = float(cast(Any, plon))
         except Exception:
-            b.pickup_lat, b.pickup_lon = fallback_lat, fallback_lon
+            b_any = cast(Any, b)
+            b_any.pickup_lat, b_any.pickup_lon = fallback_lat, fallback_lon
 
         # --- DROPOFF ---
         dlat = getattr(b, "dropoff_lat", None)
@@ -413,10 +448,12 @@ def enrich_booking_coords(bookings: List[Booking], company: Company) -> None:
                 # si pas d'adresse ou \u00e9chec g\u00e9ocode, fallback = pickup (plus r\u00e9aliste que centre-ville)
                 dlat, dlon = b.pickup_lat, b.pickup_lon
         try:
-            b.dropoff_lat = float(dlat)
-            b.dropoff_lon = float(dlon)
+            b_any = cast(Any, b)
+            b_any.dropoff_lat = float(cast(Any, dlat))
+            b_any.dropoff_lon = float(cast(Any, dlon))
         except Exception:
-            b.dropoff_lat, b.dropoff_lon = b.pickup_lat, b.pickup_lon
+            b_any = cast(Any, b)
+            b_any.dropoff_lat, b_any.dropoff_lon = b_any.pickup_lat, b_any.pickup_lon
 
 def enrich_driver_coords(drivers: List[Driver], company: Company) -> None:
     """
@@ -436,8 +473,8 @@ def enrich_driver_coords(drivers: List[Driver], company: Company) -> None:
         ts = getattr(d, "last_position_update", None)
         if ts is not None:
             try:
-                ts_local = parse_local_naive(ts)
-                fresh = (now - ts_local) <= _POS_TTL
+                ts_local = parse_local_naive(cast(Any, ts))
+                fresh = bool(ts_local) and (now - cast(datetime, ts_local)) <= _POS_TTL
             except Exception:
                 fresh = False
 
@@ -447,8 +484,8 @@ def enrich_driver_coords(drivers: List[Driver], company: Company) -> None:
 
         # cast safe
         try:
-            setattr(d, "current_lat", float(lat))
-            setattr(d, "current_lon", float(lon))
+            setattr(d, "current_lat", float(cast(Any, lat)))
+            setattr(d, "current_lon", float(cast(Any, lon)))
         except Exception:
             setattr(d, "current_lat", float(default_latlon[0]))
             setattr(d, "current_lon", float(default_latlon[1]))
@@ -482,7 +519,7 @@ def build_time_matrix(
         lon = getattr(d, "current_lon", getattr(d, "longitude", None))
         if lat is None or lon is None:
             lat, lon = 46.2044, 6.1432
-        coords.append(_safe_tuple(lat, lon))
+        coords.append(_safe_tuple(cast(Any, lat), cast(Any, lon)))
 
     # Pickups & dropoffs
     for b in bookings:
@@ -494,8 +531,8 @@ def build_time_matrix(
             plat, plon = 46.2044, 6.1432
         if dlat is None or dlon is None:
             dlat, dlon = plat, plon
-        coords.append(_safe_tuple(plat, plon))
-        coords.append(_safe_tuple(dlat, dlon))
+        coords.append(_safe_tuple(cast(Any, plat), cast(Any, plon)))
+        coords.append(_safe_tuple(cast(Any, dlat), cast(Any, dlon)))
 
     n = len(coords)
     if n == 0:
@@ -566,6 +603,30 @@ def build_time_matrix(
 
     return time_matrix_min, coords
 
+def _to_minutes_window(win: Any, t0: datetime, horizon: int) -> tuple[int, int]:
+    """
+    Convertit ce que renvoie driver_work_window_from_config en (start_min, end_min) relatifs à t0.
+    Accepte :
+      - (start_min:int, end_min:int, *_)
+      - (start_dt:datetime, end_dt:datetime)
+      - sinon fallback (0, horizon)
+    """
+    try:
+        # 3-tuple ou 2-tuple d'ints
+        s = win[0]             
+        e = win[1]
+        if isinstance(s, (int, float)) and isinstance(e, (int, float)):
+            return int(s), int(e)
+    except Exception:
+        pass
+    if isinstance(win, tuple) and len(win) == 2 and all(isinstance(x, datetime) for x in win):
+        sdt, edt = win  # type: ignore[assignment]
+        s = max(0, int(((sdt - t0).total_seconds()) // 60))
+        e = max(s + 1, int(((edt - t0).total_seconds()) // 60))
+        return min(s, horizon), min(e, horizon)
+    return 0, horizon
+
+
 def _build_distance_matrix_haversine(coords: List[Tuple[float,float]], avg_speed_kmh: float = 25.0) -> List[List[float]]:
     """
     Fallback Haversine (distances en SECONDES estim\u00e9es, vitesse moyenne ~25 km/h par d\u00e9faut).
@@ -633,7 +694,8 @@ def build_vrptw_problem(
 
     # 0) \u00c9quit\u00e9
     fairness_counts = count_assigned_bookings_for_day(
-        company.id, [d.id for d in drivers]
+        int(cast(Any, company.id)),
+        [int(cast(Any, d.id)) for d in drivers],
     )
 
     # 1) Matrice temps (en minutes) + coordonn\u00e9es ordonn\u00e9es
@@ -656,8 +718,10 @@ def build_vrptw_problem(
     service_times: list[int] = []
     pair_min_gaps: list[int] = []
 
-    horizon = int(settings.time.horizon_minutes)
-    t0 = parse_local_naive(base_time) if base_time is not None else now_local()
+    # mapping des noms de champs TimeSettings
+    horizon = int(getattr(settings.time, "horizon_min", 480))
+    # parse_local_naive(...) peut renvoyer None -> fallback immédiat
+    t0 = parse_local_naive(base_time) or now_local()
 
     for i, b in enumerate(bookings):
         
@@ -667,37 +731,43 @@ def build_vrptw_problem(
         
         # R\u00e9cup\u00e9rer la dur\u00e9e du trajet (pickup -> dropoff) depuis la matrice
         # Fallback \u00e0 30 min si la matrice a un probl\u00e8me inattendu.
-        trip_duration_min = time_matrix[p_node_idx][d_node_idx] if p_node_idx < len(time_matrix) and d_node_idx < len(time_matrix[p_node_idx]) else 30
-        
+        trip_duration_min = (
+            time_matrix[p_node_idx][d_node_idx]
+            if p_node_idx < len(time_matrix) and d_node_idx < len(time_matrix[p_node_idx])
+            else 30
+        )
+
         # - Le service au pickup reste "court" (embarquement)
         # - La contrainte de dur\u00e9e (trajet + buffer post-trip) est impos\u00e9e explicitement
         #   dans le solveur via pair_min_gaps.
-        pickup_service_time = max(settings.time.service_time_pickup_min, 0)
+        pickup_service_time = max(int(getattr(settings.time, "pickup_service_min", 3)), 0)
 
         # Enregistrer les temps de service (pickup puis dropoff)
         service_times.append(int(pickup_service_time))
-        service_times.append(int(settings.time.service_time_dropoff_min))
+        service_times.append(int(getattr(settings.time, "dropoff_service_min", 3)))
 
         # min_gap : trajet + buffer (et on ajoute la marge de service pickup + 1 min pour \u00e9viter l'\u00e9galit\u00e9 stricte)
-        min_gap = int(trip_duration_min) + int(settings.time.post_trip_buffer_min)
-        min_gap = max(min_gap, int(settings.time.service_time_pickup_min) + 1)
+        post_buf = int(getattr(settings.time, "post_trip_buffer_min", 15))
+        min_gap = int(trip_duration_min) + post_buf
+        min_gap = max(min_gap, int(getattr(settings.time, "pickup_service_min", 3)) + 1)
         pair_min_gaps.append(max(2, min_gap))
 
         # \ud83d\udd0d Debug utile: tracer le gap impos\u00e9 (trajet+buffer) par booking
         try:
             logger.debug("[VRPTW] pair_min_gap booking_id=%s trip=%s buffer=%s -> min_gap=%s",
                          getattr(b, "id", None), int(trip_duration_min),
-                         int(settings.time.post_trip_buffer_min), int(min_gap))
+                         post_buf, int(min_gap))
         except Exception:
             pass        
 
         # Calcul des fen\u00eatres horaires (Time Windows)
-        scheduled_local = parse_local_naive(b.scheduled_time) or t0
+        scheduled_local = parse_local_naive(cast(Any, getattr(b, "scheduled_time", None))) or t0
         start_min_raw = int((scheduled_local - t0).total_seconds() // 60)
 
         # Fen\u00eatre du Pickup
-        p_start = max(0, start_min_raw - settings.time.buffer_min)
-        p_end = start_min_raw + settings.time.buffer_min
+        buf = int(getattr(settings.time, "pickup_buffer_min", 5))
+        p_start = max(0, start_min_raw - buf)
+        p_end = start_min_raw + buf
         time_windows.append(_clamp_range(p_start, p_end, horizon))
         
         # Fen\u00eatre du Dropoff (large, car le temps de trajet est d\u00e9j\u00e0 dans le service_time)
@@ -708,11 +778,10 @@ def build_vrptw_problem(
     # 3) Fen\u00eatres de travail chauffeurs (minutes)
     driver_windows: list[tuple[int, int]] = []
     for d in drivers:
-        s_min, e_min, _limit_m = driver_work_window_from_config(
-            getattr(d, "working_config", None)
-        )
-        s_min, e_min = _clamp_range(int(s_min), int(e_min), horizon)
-        driver_windows.append((s_min, e_min))
+        win_any = driver_work_window_from_config(getattr(d, "working_config", None))
+        s_raw, e_raw = _to_minutes_window(win_any, t0, horizon)
+        s_min, e_min = _clamp_range(int(s_raw), int(e_raw), horizon)
+        driver_windows.append((int(s_min), int(e_min)))
 
     # (Optionnel) petits garde-fous
     assert len(time_windows) == 2 * len(bookings), "TW != 2 par booking"
@@ -729,12 +798,12 @@ def build_vrptw_problem(
         "starts": starts,
         "ends": ends,
         "num_vehicles": num_vehicles,
-        "coords": coords,                    # ordre = [drivers..., tasks...]
+        "coords": coords,                    
         "fairness_counts": fairness_counts,
         "driver_windows": driver_windows,
         "horizon": horizon,
         "base_time": t0,
-        "for_date": for_date,                # conserv\u00e9 (n'est plus utilis\u00e9 par Google)
+        "for_date": for_date,                
         # ----- facultatif, pratique pour debug/observabilit\u00e9 -----
         "matrix_provider": (settings.matrix.provider or "haversine").lower(),
         "matrix_units": "minutes",
@@ -768,10 +837,12 @@ def build_problem_data(
     # 1) S\u00e9lection des bookings + base_time (rep\u00e8re temporel du probl\u00e8me)
     if for_date:
         bookings = get_bookings_for_day(company_id, for_date)
-        # base_time = minuit local du jour demand\u00e9 (na\u00eff)
+        # base_time = minuit local du jour demandé (naïf)
         base_time, _ = day_local_bounds(for_date)
     else:
-        bookings = get_bookings_for_dispatch(company_id, settings.time.horizon_minutes)
+        horizon_min = int(getattr(getattr(settings, "time", None), "horizon_minutes",
+                           getattr(getattr(settings, "time", None), "horizon_min", 480)))
+        bookings = get_bookings_for_dispatch(company_id, horizon_min)
         base_time = now_local()
 
     # Log the number of bookings found
@@ -788,7 +859,7 @@ def build_problem_data(
         if allow_emergency:
             logger.info(f"[Dispatch] Also using {len(emgs)} emergency drivers for company {company_id}")
         else:
-            logger.info(f"[Dispatch] Not using emergency drivers (allow_emergency=False)")
+            logger.info("[Dispatch] Not using emergency drivers (allow_emergency=False)")
     else:
         drivers = get_available_drivers(company_id)
         logger.info(f"[Dispatch] Using all {len(drivers)} drivers without priority (regular_first=False)")
@@ -826,7 +897,8 @@ def build_problem_data(
     )
     # Renseigner quelques m\u00e9ta-infos utiles pour /preview /logs
     try:
-        problem["horizon_minutes"] = int(getattr(getattr(settings, "time", None), "horizon_minutes", 480))
+        problem["horizon_minutes"] = int(getattr(getattr(settings, "time", None), "horizon_minutes",
+                                          getattr(getattr(settings, "time", None), "horizon_min", 480)))
     except Exception:
         problem["horizon_minutes"] = 480
     problem["regular_first"] = bool(regular_first)
@@ -860,7 +932,7 @@ def pick_urgent_returns(problem: Dict[str, Any], settings=DEFAULT_SETTINGS) -> l
         if not getattr(b, "is_return", False):
             continue
         st = getattr(b, "scheduled_time", None)
-        st_local = parse_local_naive(st) if st else None
+        st_local = parse_local_naive(cast(Any, st)) if st else None
         if not st_local:
             continue
 
@@ -980,7 +1052,7 @@ def detect_delay(
             buffer_minutes = 5
 
     now = now_local()
-    scheduled_local = parse_local_naive(scheduled_time)
+    scheduled_local = parse_local_naive(cast(Any, scheduled_time))
     if not scheduled_local:
         return False, 0
 

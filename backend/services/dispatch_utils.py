@@ -1,6 +1,6 @@
 # services/dispatch_utils.py
 from typing import Dict, Iterable, List
-from sqlalchemy import func
+from sqlalchemy import func, select
 from datetime import datetime, timedelta, timezone
 from models import Booking, BookingStatus
 from ext import db
@@ -42,19 +42,29 @@ def count_assigned_bookings_for_day(
     day_start_utc = _to_utc(local_day_start)
     next_day_start_utc = _to_utc(next_day_start)
 
-    rows = (
-        db.session.query(Booking.driver_id, func.count(Booking.id))
-        .filter(
-            Booking.company_id == company_id,
-            Booking.driver_id.in_(driver_ids),
-            Booking.status.in_(tuple(statuses)),
-            Booking.scheduled_time.isnot(None),
-            Booking.scheduled_time >= day_start_utc,
-            Booking.scheduled_time < next_day_start_utc,
+    # Pylance voit parfois les attributs ORM comme des types natifs -> on passe par getattr
+    B = Booking
+    driver_id_col = getattr(B, "driver_id")
+    company_id_col = getattr(B, "company_id")
+    status_col = getattr(B, "status")
+    scheduled_col = getattr(B, "scheduled_time")
+    id_col = getattr(B, "id")
+
+    stmt = (
+        select(driver_id_col, func.count(id_col))
+        .where(
+            company_id_col == company_id,
+            driver_id_col.in_(driver_ids),
+            status_col.in_(tuple(statuses)),
+            scheduled_col.isnot(None),
+            scheduled_col >= day_start_utc,
+            scheduled_col < next_day_start_utc,
         )
-        .group_by(Booking.driver_id)
-        .all()
+        .group_by(driver_id_col)
     )
+
+    # SQLAlchemy 2.0 style
+    rows = db.session.execute(stmt).all()
 
     # Toujours renvoyer tous les drivers avec 0 par défaut
     result = {int(did): 0 for did in driver_ids}

@@ -1,6 +1,8 @@
 from urllib.parse import urlencode
 from flask_restx import Namespace, Resource, fields
-from flask import request, jsonify, make_response
+from flask import request
+from typing import Any, cast
+
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import Client, User, Booking, BookingStatus, db, UserRole, GenderEnum
 from datetime import datetime, timezone
@@ -8,7 +10,8 @@ from sqlalchemy.orm import joinedload
 from ext import mail, role_required
 from flask_mail import Message
 from app import sentry_sdk
-import logging, re
+import logging
+import re
 
 app_logger = logging.getLogger('app')
 
@@ -49,7 +52,7 @@ class ManageClientProfile(Resource):
             client = Client.query.options(joinedload(Client.user)).join(User).filter(User.public_id == public_id).one_or_none()
             if not client:
                 return {"error": "Client profile not found"}, 404
-            return client.serialize, 200
+            return cast(Any, client).serialize, 200
         except Exception as e:
             app_logger.error(f"❌ ERREUR manage_client_profile GET: {type(e).__name__} - {str(e)}", exc_info=True)
             return {"error": "Une erreur interne est survenue."}, 500
@@ -124,7 +127,7 @@ class RecentBookings(Resource):
                                    .order_by(Booking.scheduled_time.desc())
                                    .limit(4)
                                    .all())
-            return [booking.serialize for booking in bookings], 200
+            return [cast(Any, booking).serialize for booking in bookings], 200
         except Exception as e:
             app_logger.error(f"❌ ERREUR recent_bookings: {type(e).__name__} - {str(e)}", exc_info=True)
             return {"error": "Une erreur interne est survenue."}, 500
@@ -144,7 +147,7 @@ class ClientBookings(Resource):
             bookings = (Booking.query.filter_by(client_id=client.id)
                                     .order_by(Booking.scheduled_time.desc())
                                     .all())
-            return [booking.serialize for booking in bookings], 200
+            return [cast(Any, booking).serialize for booking in bookings], 200
         except Exception as e:
             app_logger.error(f"❌ ERREUR list_client_bookings: {type(e).__name__} - {str(e)}", exc_info=True)
             return {"error": "Une erreur interne est survenue."}, 500
@@ -168,15 +171,19 @@ class ClientBookings(Resource):
             if not data or any(field not in data for field in required_fields):
                 return {"error": "Missing required fields"}, 400
             
+            # Parse ISO 8601 en préservant un éventuel fuseau, sinon UTC
             try:
-                scheduled_time = datetime.fromisoformat(data['scheduled_time']).replace(tzinfo=timezone.utc)
+                dt = datetime.fromisoformat(data['scheduled_time'])
+                scheduled_time = dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+                if dt.tzinfo:
+                    scheduled_time = dt.astimezone(timezone.utc)
             except ValueError:
                 return {"error": "Invalid scheduled_time format"}, 400
 
             if scheduled_time <= datetime.now(timezone.utc):
                 return {"error": "Scheduled time must be in the future"}, 400
 
-            new_booking = Booking(
+            new_booking = cast(Any, Booking)(
                 customer_name=f"{client.user.first_name} {client.user.last_name}",
                 pickup_location=data.get("pickup_location"),
                 dropoff_location=data['dropoff_location'],
@@ -188,7 +195,7 @@ class ClientBookings(Resource):
             )
             db.session.add(new_booking)
             db.session.commit()
-            return {"message": "Booking created successfully", "booking": new_booking.serialize}, 201
+            return {"message": "Booking created successfully", "booking": cast(Any, new_booking).serialize}, 201
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
@@ -205,14 +212,33 @@ class GenerateQRBill(Resource):
     def post(self):
         try:
             current_user_id = get_jwt_identity()
-            user = User.query.options(joinedload(User.client)).filter_by(public_id=current_user_id).one_or_none()
-            client = user.client if user else None
+            from typing import Any, cast
+            user = (
+                User.query
+                .options(joinedload(cast(Any, User).client))  # 👈 évite l’alerte "unknown attribute"
+                .filter_by(public_id=current_user_id)
+                .one_or_none()
+            )
+            if not user:
+                return {"error": "User not found"}, 404
+            from typing import Any, cast
+            # Supporte user.client (1–1) et user.clients (1–N)
+            client = getattr(cast(Any, user), "client", None)
+            if client is None:
+                clients_rel = getattr(cast(Any, user), "clients", None)
+                if clients_rel and len(clients_rel) > 0:
+                    client = clients_rel[0]
             if not client:
                 return {"error": "Client profile not found"}, 403
-            total_amount = sum(payment.amount for payment in client.payments if payment.status == "pending")
+            payments = getattr(cast(Any, client), "payments", []) or []
+            total_amount = sum(
+                (getattr(p, "amount", 0) or 0) for p in payments
+                if getattr(p, "status", None) == "pending"
+            )
             if total_amount <= 0:
                 return {"error": "No pending payments to generate a QR bill"}, 400
-            params = urlencode({"amount": total_amount, "client": user.public_id})
+            upid = getattr(cast(Any, user), "public_id", None) or ""
+            params = urlencode({"amount": total_amount, "client": upid})
             qr_code_url = f"https://example.com/qr-payment?{params}"
             return {"qr_code_url": qr_code_url}, 200
         except Exception as e:
@@ -230,10 +256,23 @@ class DeleteAccount(Resource):
     def delete(self):
         try:
             current_user_id = get_jwt_identity()
-            user = User.query.options(joinedload(User.client)).filter_by(public_id=current_user_id).one_or_none()
-            if not user or not user.clients or len(user.clients) == 0:
+            from typing import Any, cast
+            user = (
+                User.query
+                .options(joinedload(cast(Any, User).client))  # 👈 évite l’alerte "unknown attribute"
+                .filter_by(public_id=current_user_id)
+                .one_or_none()
+            )
+            if not user:
                 return {"error": "Client profile not found"}, 403
-            client = user.clients[0]
+            # Supporte les 2 relations possibles: user.client (1–1) ou user.clients (1–N)
+            client = getattr(user, "client", None)
+            if client is None:
+                clients_rel = getattr(user, "clients", None)
+                if clients_rel and len(clients_rel) > 0:
+                    client = clients_rel[0]
+            if client is None:
+                return {"error": "Client profile not found"}, 403
 
             if not client.is_active:
                 return {"error": "Account is already deactivated"}, 400
@@ -261,7 +300,7 @@ class ListPayments(Resource):
             payments = client.payments
             if not payments:
                 return {"message": "No payments found"}, 404
-            return [payment.serialize for payment in payments], 200
+            return [cast(Any, payment).serialize for payment in payments], 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             app_logger.error(f"❌ ERREUR list_payments: {type(e).__name__} - {str(e)}", exc_info=True)
@@ -276,8 +315,12 @@ class CancelBooking(Resource):
     @role_required(UserRole.client)
     def delete(self, booking_id):
         try:
-            current_user_id = get_jwt_identity()
-            client = Client.query.options(joinedload(Client.bookings)).filter_by(user_id=current_user_id).one_or_none()
+            # 🔒 get user (public_id) → user.id, puis récupérer le client
+            current_user_pub_id = get_jwt_identity()
+            user = User.query.filter_by(public_id=current_user_pub_id).one_or_none()
+            if not user:
+                return {"error": "User not found"}, 404
+            client = Client.query.options(joinedload(Client.bookings)).filter_by(user_id=user.id).one_or_none()
             if not client:
                 return {"error": "Client profile not found"}, 403
             booking = Booking.query.filter_by(id=booking_id, client_id=client.id).one_or_none()
@@ -381,7 +424,7 @@ class ClientsList(Resource):
             )
 
             # Sérialisation
-            return [c.serialize for c in clients], 200
+            return [cast(Any, c).serialize for c in clients], 200
 
         except Exception as e:
             app_logger.error(
@@ -411,7 +454,7 @@ class ClientsList(Resource):
                     return {"error": f"{field} manquant"}, 400
 
             # Création utilisateur + client
-            new_user = User(
+            new_user = cast(Any, User)(
                 first_name=data["first_name"],
                 last_name=data["last_name"],
                 email=data["email"],
@@ -420,7 +463,7 @@ class ClientsList(Resource):
             db.session.add(new_user)
             db.session.flush()  # récupère new_user.id
 
-            new_client = Client(
+            new_client = cast(Any, Client)(
                 user_id=new_user.id,
                 phone=data.get("phone"),
                 address=data.get("address")
@@ -428,7 +471,7 @@ class ClientsList(Resource):
             db.session.add(new_client)
             db.session.commit()
 
-            return new_client.serialize, 201
+            return cast(Any, new_client).serialize, 201
 
         except Exception as e:
             app_logger.error(

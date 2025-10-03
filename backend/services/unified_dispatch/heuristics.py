@@ -4,14 +4,15 @@ from __future__ import annotations
 import math
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Tuple, Optional
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Tuple, Optional, cast
 
 from models import Booking, Driver, BookingStatus
 from services.unified_dispatch.settings import Settings
-DEFAULT_SETTINGS = Settings()
+
 from shared.time_utils import minutes_from_now, sort_key_utc, now_local
 
+DEFAULT_SETTINGS = Settings()
 
 logger = logging.getLogger(__name__)
 
@@ -144,18 +145,24 @@ def haversine_minutes(
 
 def _driver_current_coord(d: Driver) -> Tuple[float, float]:
     # On assume que data.py a mis à jour current_lat/current_lon
-    if d.current_lat is not None and d.current_lon is not None:
-        return (float(d.current_lat), float(d.current_lon))
+    cur_lat = getattr(d, "current_lat", None)
+    cur_lon = getattr(d, "current_lon", None)
+    if cur_lat is not None and cur_lon is not None:
+        return (float(cast(Any, cur_lat)), float(cast(Any, cur_lon)))
     # fallback sur base chauffeur
-    if d.latitude is not None and d.longitude is not None:
-        return (float(d.latitude), float(d.longitude))
+    lat = getattr(d, "latitude", None)
+    lon = getattr(d, "longitude", None)
+    if lat is not None and lon is not None:
+        return (float(cast(Any, lat)), float(cast(Any, lon)))
     # fallback Genève
     return (46.2044, 6.1432)
 
 
 def _booking_coords(b: Booking) -> Tuple[Tuple[float, float], Tuple[float, float]]:
-    return ( (float(b.pickup_lat), float(b.pickup_lon)),
-             (float(b.dropoff_lat), float(b.dropoff_lon)) )
+    return (
+        (float(cast(Any, getattr(b, "pickup_lat"))), float(cast(Any, getattr(b, "pickup_lon")))),
+        (float(cast(Any, getattr(b, "dropoff_lat"))), float(cast(Any, getattr(b, "dropoff_lon")))),
+    )
 
 
 def _priority_weight(b: Booking, weights: Dict[str, float]) -> float:
@@ -194,7 +201,10 @@ def _is_return_urgent(b: Booking, settings: Settings) -> bool:
     if not getattr(b, "is_return", False):
         return False
     mins = minutes_from_now(getattr(b, "scheduled_time", None))
-    return mins <= settings.emergency.return_urgent_threshold_min
+    # compat: certains settings utilisent emergency_threshold_min
+    thr = cast(Any, getattr(settings.emergency, "return_urgent_threshold_min",
+                            getattr(settings.emergency, "emergency_threshold_min", 30)))
+    return mins <= int(thr)
 
 
 def _driver_fairness_penalty(driver_id: int, fairness_counts: Dict[int, int]) -> float:
@@ -215,7 +225,14 @@ def _regular_driver_bonus(b: Booking, d: Driver) -> float:
     sur les dernières courses du client). Ici placeholder: si already assigned
     au même chauffeur, neutre (on évite de casser la relation).
     """
-    if b.driver_id and b.driver_id == d.id:
+    try:
+        bid_raw = cast(Any, getattr(b, "driver_id", None))
+        did_raw = cast(Any, getattr(d, "id", None))
+        bid = int(bid_raw) if bid_raw is not None else None
+        did = int(did_raw) if did_raw is not None else None
+    except Exception:
+        return 0.0
+    if bid is not None and did is not None and bid == did:
         return 0.15
     return 0.0
 
@@ -244,12 +261,15 @@ def _score_driver_for_booking(
     """
     # 1) Proximité / coûts temps (paramétrable via settings)
     avg_kmh = getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25.0)
-    buffer_min = int(settings.time.buffer_min)
-    pickup_service = int(settings.time.service_time_pickup_min)
-    drop_service = int(settings.time.service_time_dropoff_min)
+    # mapping des noms vers TimeSettings actuels
+    buffer_min = int(getattr(settings.time, "pickup_buffer_min", 5))
+    pickup_service = int(getattr(settings.time, "pickup_service_min", 3))
+    drop_service = int(getattr(settings.time, "dropoff_service_min", 3))
 
-    dp = _driver_current_coord(d)                 # (lat, lon) chauffeur (courant/fallback)
-    p_coord, d_coord = _booking_coords(b)         # (pickup), (dropoff)
+    # (lat, lon) chauffeur (courant/fallback)
+    dp = _driver_current_coord(d)
+    # (pickup), (dropoff)
+    p_coord, d_coord = _booking_coords(b)
 
     # Estimations robustes (plancher/plafond pour éviter les valeurs extrêmes en heuristique)
     to_pickup_min = haversine_minutes(
@@ -346,22 +366,23 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
     driver_windows: List[Tuple[int, int]] = problem.get("driver_windows", [])
     fairness_counts: Dict[int, int] = problem.get("fairness_counts", {})
 
-    # État local : nombre d'assignations *proposées* dans cette passe
-    proposed_load: Dict[int, int] = {d.id: 0 for d in drivers}
-    driver_index: Dict[int, int] = {d.id: i for i, d in enumerate(drivers)}
+    # État local : nombre d'assignations *proposées* dans cette passe (ids castés en int)
+    proposed_load: Dict[int, int] = {int(cast(Any, d.id)): 0 for d in drivers}
+    driver_index: Dict[int, int] = {int(cast(Any, d.id)): i for i, d in enumerate(drivers)}
 
     max_cap = settings.solver.max_bookings_per_driver
 
     urgent: List[Booking] = [b for b in bookings if _is_return_urgent(b, settings)]
-    regular: List[Booking] = [b for b in bookings if b not in urgent]
+    urgent_ids = {int(cast(Any, b.id)) for b in urgent}
+    regular: List[Booking] = [b for b in bookings if int(cast(Any, b.id)) not in urgent_ids]
 
     # Trier
-    urgent.sort(key=lambda b: sort_key_utc(getattr(b, "scheduled_time", None)))       # plus proches dans le temps d'abord
-    regular.sort(key=lambda b: sort_key_utc(getattr(b, "scheduled_time", None)))        # FIFO temporel, puis scoring à l'intérieur
+    urgent.sort(key=lambda b: sort_key_utc(cast(Any, getattr(b, "scheduled_time", None))))    # plus proches
+    regular.sort(key=lambda b: sort_key_utc(cast(Any, getattr(b, "scheduled_time", None))))   # FIFO temporel
 
     assignments: List[HeuristicAssignment] = []
     # Timeline par chauffeur (en minutes depuis maintenant)
-    busy_until: Dict[int, int] = {d.id: 0 for d in drivers}
+    busy_until: Dict[int, int] = {int(cast(Any, d.id)): 0 for d in drivers}
     unassigned: List[int] = []
 
     # --- 1) Retours urgents (hard priority) ---
@@ -370,15 +391,16 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
 
         for d in drivers:
             # Cap par chauffeur
-            if proposed_load[d.id] + fairness_counts.get(d.id, 0) >= max_cap:
+            did = int(cast(Any, d.id))
+            if proposed_load[did] + fairness_counts.get(did, 0) >= max_cap:
                 continue
 
-            di = driver_index[d.id]
+            di = driver_index[did]
             dw = driver_windows[di] if di < len(driver_windows) else (0, 24 * 60)
 
             sc, breakdown, (est_s, est_f) = _score_driver_for_booking(b, d, dw, settings, fairness_counts)
             # 🚫 Conflit temporel: chauffeur encore occupé à ce moment
-            if est_s < busy_until[d.id]:
+            if est_s < busy_until[did]:
                 continue
             if sc <= 0:
                 continue
@@ -396,8 +418,8 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
                 sc += 0.1  # petit bonus
 
             cand = HeuristicAssignment(
-                booking_id=b.id,
-                driver_id=d.id,
+                booking_id=int(cast(Any, b.id)),
+                driver_id=did,
                 score=sc,
                 reason="return_urgent",
                 estimated_start_min=est_s,
@@ -409,11 +431,12 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
         if best:
             chosen = best[1]
             assignments.append(chosen)
-            proposed_load[chosen.driver_id] += 1
+            proposed_load[int(chosen.driver_id)] += 1
             # ⏱️ le chauffeur est occupé jusqu'à la fin estimée
-            busy_until[chosen.driver_id] = max(busy_until[chosen.driver_id], chosen.estimated_finish_min)
+            did2 = int(chosen.driver_id)
+            busy_until[did2] = max(busy_until[did2], chosen.estimated_finish_min)
         else:
-            unassigned.append(b.id)
+            unassigned.append(int(cast(Any, b.id)))
 
     # --- 2) Assignations régulières ---
     # Pré‑scorage rapide pour limiter la combinatoire
@@ -422,17 +445,18 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
     for b in regular:
         best_for_b: Optional[Tuple[float, HeuristicAssignment]] = None
         for d in drivers:
-            if proposed_load[d.id] + fairness_counts.get(d.id, 0) >= max_cap:
+            did = int(cast(Any, d.id))
+            if proposed_load[did] + fairness_counts.get(did, 0) >= max_cap:
                 continue
 
             # Si la course est déjà ASSIGNED à ce driver, gardons une préférence (éviter churn)
-            prefer_assigned = (b.status == BookingStatus.ASSIGNED and b.driver_id == d.id)
+            prefer_assigned = (b.status == BookingStatus.ASSIGNED and int(cast(Any, b.driver_id or 0)) == did)
 
-            di = driver_index[d.id]
+            di = driver_index[did]
             dw = driver_windows[di] if di < len(driver_windows) else (0, 24 * 60)
 
             sc, breakdown, (est_s, est_f) = _score_driver_for_booking(b, d, dw, settings, fairness_counts)
-            if est_s < busy_until[d.id]:
+            if est_s < busy_until[did]:
                 continue
             if sc <= 0:
                 continue
@@ -440,8 +464,8 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
                 sc += 0.2  # stabilité de planning
 
             cand = HeuristicAssignment(
-                booking_id=b.id,
-                driver_id=d.id,
+                booking_id=int(cast(Any, b.id)),
+                driver_id=did,
                 score=sc,
                 reason="regular_scoring",
                 estimated_start_min=est_s,
@@ -453,21 +477,22 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
         if best_for_b:
             scored_pool.append((best_for_b[0], best_for_b[1], b))
         else:
-            unassigned.append(b.id)
+            unassigned.append(int(cast(Any, b.id)))
 
     # Ordonner par score décroissant (meilleures paires d'abord)
-    scored_pool.sort(key=lambda x: (-x[0], sort_key_utc(x[2].scheduled_time)))
+    scored_pool.sort(key=lambda x: (-x[0], sort_key_utc(cast(Any, getattr(x[2], "scheduled_time", None)))))
 
     for sc, cand, b in scored_pool:
         # Double check cap
-        if proposed_load[cand.driver_id] + fairness_counts.get(cand.driver_id, 0) >= max_cap:
+        did = int(cand.driver_id)
+        if proposed_load[did] + fairness_counts.get(did, 0) >= max_cap:
             continue
         # Si déjà pris (par un meilleur match urgent par ex.)
-        if any(a.booking_id == b.id for a in assignments):
+        if any(a.booking_id == int(cast(Any, b.id)) for a in assignments):
             continue
         assignments.append(cand)
-        proposed_load[cand.driver_id] += 1
-        busy_until[cand.driver_id] = max(busy_until[cand.driver_id], cand.estimated_finish_min)
+        proposed_load[did] += 1
+        busy_until[did] = max(busy_until[did], cand.estimated_finish_min)
 
     debug = {
         "proposed_load": proposed_load,
@@ -495,10 +520,10 @@ def assign_urgent(
     fairness_counts: Dict[int, int] = problem.get("fairness_counts", {})
     max_cap = settings.solver.max_bookings_per_driver
 
-    by_id: Dict[int, Booking] = {int(b.id): b for b in bookings}
-    driver_index: Dict[int, int] = {d.id: i for i, d in enumerate(drivers)}
-    proposed_load: Dict[int, int] = {d.id: 0 for d in drivers}
-    busy_until: Dict[int, int] = {d.id: 0 for d in drivers}
+    by_id: Dict[int, Booking] = {int(cast(Any, b.id)): b for b in bookings}
+    driver_index: Dict[int, int] = {int(cast(Any, d.id)): i for i, d in enumerate(drivers)}
+    proposed_load: Dict[int, int] = {int(cast(Any, d.id)): 0 for d in drivers}
+    busy_until: Dict[int, int] = {int(cast(Any, d.id)): 0 for d in drivers}
 
     def _choose_best(b: Booking, regular_only: bool) -> Optional[HeuristicAssignment]:
         best: Optional[Tuple[float, HeuristicAssignment]] = None
@@ -507,24 +532,25 @@ def assign_urgent(
             if regular_only and getattr(d, "is_emergency", False):
                 continue
             # Cap fairness
-            if proposed_load[d.id] + fairness_counts.get(d.id, 0) >= max_cap:
+            did = int(cast(Any, d.id))
+            if proposed_load[did] + fairness_counts.get(did, 0) >= max_cap:
                 continue
-            di = driver_index[d.id]
+            di = driver_index[did]
             dw = driver_windows[di] if di < len(driver_windows) else (0, 24 * 60)
             sc, _br, (est_s, est_f) = _score_driver_for_booking(b, d, dw, settings, fairness_counts)
-            if est_s < busy_until[d.id]:
+            if est_s < busy_until[did]:
                 continue
             if sc <= 0:
                 continue
             # Bonus stabilité si déjà ASSIGNED à ce driver
-            if b.status == BookingStatus.ASSIGNED and b.driver_id == d.id:
+            if b.status == BookingStatus.ASSIGNED and int(cast(Any, b.driver_id or 0)) == did:
                 sc += 0.3
             # Léger malus sur "emergency" pour ne l'utiliser qu'en dernier recours
             if getattr(d, "is_emergency", False):
                 sc -= 0.05
             cand = HeuristicAssignment(
-                booking_id=b.id,
-                driver_id=d.id,
+                booking_id=int(cast(Any, b.id)),
+                driver_id=did,
                 score=sc,
                 reason="return_urgent",
                 estimated_start_min=est_s,
@@ -537,10 +563,10 @@ def assign_urgent(
     # Ordonner les urgents par horaire (si dispo)
     ordered: List[Booking] = []
     for bid in urgent_booking_ids:
-        b = by_id.get(int(bid))
+        b = by_id.get(int(cast(Any, bid)))
         if b:
             ordered.append(b)
-    ordered.sort(key=lambda x: sort_key_utc(getattr(x, "scheduled_time", None)))
+    ordered.sort(key=lambda x: sort_key_utc(cast(Any, getattr(x, "scheduled_time", None))))
 
     assignments: List[HeuristicAssignment] = []
     unassigned: List[int] = []
@@ -553,14 +579,15 @@ def assign_urgent(
             chosen = _choose_best(b, regular_only=False)
         if chosen:
             assignments.append(chosen)
-            proposed_load[chosen.driver_id] += 1
-            busy_until[chosen.driver_id] = max(busy_until[chosen.driver_id], chosen.estimated_finish_min)
+            did = int(chosen.driver_id)
+            proposed_load[did] += 1
+            busy_until[did] = max(busy_until[did], chosen.estimated_finish_min)
         else:
-            unassigned.append(b.id)
+            unassigned.append(int(cast(Any, b.id)))
 
     debug = {
         "urgent_input": urgent_booking_ids,
-        "picked": [a.booking_id for a in assignments],
+        "picked": [int(a.booking_id) for a in assignments],
         "unassigned": unassigned,
         "proposed_load": proposed_load,
     }
@@ -585,35 +612,37 @@ def closest_feasible(
     fairness_counts: Dict[int, int] = problem.get("fairness_counts", {})
     max_cap = settings.solver.max_bookings_per_driver
 
-    by_id: Dict[int, Booking] = {int(b.id): b for b in bookings}
-    driver_index: Dict[int, int] = {d.id: i for i, d in enumerate(drivers)}
-    proposed_load: Dict[int, int] = {d.id: 0 for d in drivers}
-    busy_until: Dict[int, int] = {d.id: 0 for d in drivers}
+    by_id: Dict[int, Booking] = {int(cast(Any, b.id)): b for b in bookings}
+    driver_index: Dict[int, int] = {int(cast(Any, d.id)): i for i, d in enumerate(drivers)}
+    proposed_load: Dict[int, int] = {int(cast(Any, d.id)): 0 for d in drivers}
+    busy_until: Dict[int, int] = {int(cast(Any, d.id)): 0 for d in drivers}
 
     assignments: List[HeuristicAssignment] = []
     unassigned: List[int] = []
 
     for bid in booking_ids:
-        b = by_id.get(int(bid))
+        b = by_id.get(int(cast(Any, bid)))
         if not b:
             continue
         best: Optional[Tuple[float, HeuristicAssignment]] = None
         for d in drivers:
-            if proposed_load[d.id] + fairness_counts.get(d.id, 0) >= max_cap:
+            did = int(cast(Any, d.id))
+            did = int(cast(Any, d.id))
+            if proposed_load[did] + fairness_counts.get(did, 0) >= max_cap:
                 continue
-            di = driver_index[d.id]
+            di = driver_index[did]
             dw = driver_windows[di] if di < len(driver_windows) else (0, 24 * 60)
             sc, _br, (est_s, est_f) = _score_driver_for_booking(b, d, dw, settings, fairness_counts)
-            if est_s < busy_until[d.id]:
+            if est_s < busy_until[did]:
                 continue
             if sc <= 0:
                 continue
             # Bonus stabilité si déjà ASSIGNED à ce driver
-            if b.status == BookingStatus.ASSIGNED and b.driver_id == d.id:
+            if b.status == BookingStatus.ASSIGNED and int(cast(Any, b.driver_id or 0)) == did:
                 sc += 0.2
             cand = HeuristicAssignment(
-                booking_id=b.id,
-                driver_id=d.id,
+                booking_id=int(cast(Any, b.id)),
+                driver_id=did,
                 score=sc,
                 reason="fallback_closest",
                 estimated_start_min=est_s,
@@ -624,14 +653,15 @@ def closest_feasible(
         if best:
             chosen = best[1]
             assignments.append(chosen)
-            proposed_load[chosen.driver_id] += 1
-            busy_until[chosen.driver_id] = max(busy_until[chosen.driver_id], chosen.estimated_finish_min)
+            did2 = int(chosen.driver_id)
+            proposed_load[did2] += 1
+            busy_until[did2] = max(busy_until[did2], chosen.estimated_finish_min)
         else:
-            unassigned.append(b.id)
+            unassigned.append(int(cast(Any, b.id)))
 
     debug = {
         "input_unassigned": booking_ids,
-        "picked": [a.booking_id for a in assignments],
+        "picked": [int(a.booking_id) for a in assignments],
         "still_unassigned": unassigned,
         "proposed_load": proposed_load,
     }
@@ -657,29 +687,38 @@ def estimate_wait_or_require_extra(
 
     bookings: List[Booking] = problem.get("bookings", [])
     drivers: List[Driver] = problem.get("drivers", [])
-    by_id: Dict[int, Booking] = {int(b.id): b for b in bookings}
+    by_id: Dict[int, Booking] = {int(cast(Any, b.id)): b for b in bookings}
 
     # Coords chauffeurs (courantes si dispo, sinon latitude/longitude)
     driver_coords: List[Tuple[float, float]] = []
     for d in drivers:
-        if getattr(d, "current_lat", None) is not None and getattr(d, "current_lon", None) is not None:
-            driver_coords.append((float(d.current_lat), float(d.current_lon)))
-        elif getattr(d, "latitude", None) is not None and getattr(d, "longitude", None) is not None:
-            driver_coords.append((float(d.latitude), float(d.longitude)))
+        cur_lat = getattr(d, "current_lat", None)
+        cur_lon = getattr(d, "current_lon", None)
+        if cur_lat is not None and cur_lon is not None:
+            driver_coords.append((float(cast(Any, cur_lat)), float(cast(Any, cur_lon))))
+            continue
+        lat = getattr(d, "latitude", None)
+        lon = getattr(d, "longitude", None)
+        if lat is not None and lon is not None:
+            driver_coords.append((float(cast(Any, lat)), float(cast(Any, lon))))
         else:
             driver_coords.append((46.2044, 6.1432))  # Genève
 
     now = now_local()
     items: List[Dict[str, Any]] = []
     avg_kmh = float(getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25.0))
-    buf_min = int(getattr(getattr(settings, "time", None), "buffer_min", 5))
+    # mapping vers la clé réellement présente dans TimeSettings
+    buf_min = int(getattr(getattr(settings, "time", None), "pickup_buffer_min", 5))
 
     for bid in remaining_booking_ids:
-        b = by_id.get(int(bid))
+        b = by_id.get(int(cast(Any, bid)))
         if not b:
             continue
         try:
-            pick = (float(b.pickup_lat), float(b.pickup_lon))
+            pick = (
+                float(cast(Any, getattr(b, "pickup_lat"))),
+                float(cast(Any, getattr(b, "pickup_lon"))),
+            )
         except Exception:
             # si coordonnées manquent, on saute (devrait être enrichi par data.py)
             continue
@@ -691,7 +730,7 @@ def estimate_wait_or_require_extra(
         ] or [999]
         eta_min = min(etas)
 
-        st = getattr(b, "scheduled_time", None)
+        st = cast(Any, getattr(b, "scheduled_time", None))
         try:
             dt = st if isinstance(st, datetime) else now  # minutes_from_now gère déjà, mais gardons simple
             mins_to_pickup = minutes_from_now(dt)
@@ -700,7 +739,7 @@ def estimate_wait_or_require_extra(
         lateness = int(max(0, (eta_min - mins_to_pickup)))
         items.append(
             {
-                "booking_id": int(b.id),
+                "booking_id": int(cast(Any, b.id)),
                 "eta_min": int(eta_min),
                 "lateness_min": int(lateness - buf_min) if lateness > buf_min else 0,
             }

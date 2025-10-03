@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 from flask_restx import Namespace, Resource, fields
-from flask import request, jsonify
+from flask import request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import Payment, Booking, Client, User, db, UserRole, PaymentStatus
-from datetime import datetime
 from ext import role_required
 from app import sentry_sdk
-import logging, random, string
+from datetime import datetime
+from typing import Any, cast
+import logging
 
 app_logger = logging.getLogger('app')
 
@@ -39,7 +42,7 @@ class ClientPayments(Resource):
             if not payments:
                 return {"message": "No payments found"}, 404
 
-            result = [payment.serialize for payment in payments]
+            result = [p.serialize for p in payments]
             return result, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
@@ -53,29 +56,34 @@ class ClientPayments(Resource):
 @payments_ns.route('/<int:payment_id>')
 class PaymentResource(Resource):
     @jwt_required()
-    def get(self, payment_id):
+    def get(self, payment_id: int):
         try:
             current_user_id = get_jwt_identity()
             payment = Payment.query.get(payment_id)
             if not payment:
                 return {"error": "Payment not found"}, 404
 
-            current_user = User.query.filter_by(public_id=current_user_id).one_or_none()
+            # Charger l'utilisateur par ID direct
+            current_user = User.query.get(current_user_id)
             if not current_user:
                 return {"error": "User not found"}, 401
 
-            # Vérifier que le paiement appartient au client ou que l'utilisateur est admin
-            # Ici, on suppose que current_user_id correspond directement à l'ID client dans Payment.client_id, sinon adapter.
-            if payment.client_id != current_user_id and current_user.role != "admin":
+            # Trouver le client lié à l'utilisateur (si existant)
+            client = Client.query.filter_by(user_id=current_user.id).one_or_none()
+
+            is_admin = getattr(current_user, "role", None) in (UserRole.admin, "admin")
+            owns_payment = client is not None and payment.client_id == client.id
+
+            if not (is_admin or owns_payment):
                 return {"error": "Unauthorized access to this payment"}, 403
 
             return {
                 "id": payment.id,
                 "amount": payment.amount,
-                "date": payment.date.isoformat(),
+                "date": payment.date.isoformat() if getattr(payment, "date", None) else None,
                 "method": payment.method,
-                "status": payment.status,
-                "booking_id": payment.booking_id
+                "status": payment.status.name if hasattr(payment.status, "name") else payment.status,
+                "booking_id": payment.booking_id,
             }, 200
 
         except Exception as e:
@@ -86,20 +94,26 @@ class PaymentResource(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
     @payments_ns.expect(payment_status_model)
-    def put(self, payment_id):
+    def put(self, payment_id: int):
         try:
             payment = Payment.query.get(payment_id)
             if not payment:
                 return {"error": "Payment not found"}, 404
 
-            data = request.get_json()
-            new_status = data.get('status')
-            if new_status not in ["pending", "completed", "failed"]:
+            data = request.get_json(silent=True) or {}
+            new_status_raw = str(data.get('status', '')).strip().lower()
+
+            status_map = {
+                "pending": PaymentStatus.PENDING,
+                "completed": PaymentStatus.COMPLETED,
+                "failed": PaymentStatus.FAILED,
+            }
+            if new_status_raw not in status_map:
                 return {"error": "Invalid status"}, 400
 
-            payment.status = new_status
+            payment.status = status_map[new_status_raw]
             db.session.commit()
-            return {"message": f"Payment status updated to {new_status}"}, 200
+            return {"message": f"Payment status updated to {new_status_raw}"}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             app_logger.error(f"❌ ERREUR update_payment_status: {type(e).__name__} - {str(e)}", exc_info=True)
@@ -113,7 +127,7 @@ class PaymentResource(Resource):
 class CreatePayment(Resource):
     @jwt_required()
     @payments_ns.expect(payment_create_model)
-    def post(self, booking_id):
+    def post(self, booking_id: int):
         try:
             current_user_id = get_jwt_identity()
             client = Client.query.filter_by(user_id=current_user_id).one_or_none()
@@ -124,15 +138,24 @@ class CreatePayment(Resource):
             if not booking:
                 return {"error": "Booking not found"}, 404
 
-            data = request.get_json()
-            payment = Payment(
-                amount=data['amount'],
-                date=datetime.now(),
-                method=data['method'],
-                status=PaymentStatus.PENDING,
-                client_id=client.id,
-                booking_id=booking_id
-            )
+            data = request.get_json(silent=True) or {}
+            try:
+                amount = float(data['amount'])
+                method = str(data['method'])
+            except (KeyError, ValueError, TypeError):
+                return {"error": "Invalid payload (amount, method required)."}, 400
+
+            payload: dict[str, Any] = {
+                "amount": amount,
+                "date": datetime.utcnow(),  # stocke en UTC
+                "method": method,
+                "status": PaymentStatus.PENDING,
+                "client_id": client.id,
+                "booking_id": booking_id,
+            }
+            # Cast pour taire Pylance sur les kwargs du modèle SQLAlchemy
+            payment = cast(Any, Payment)(**payload)
+
             db.session.add(payment)
             db.session.commit()
             return {"message": "Payment created successfully", "payment_id": payment.id}, 201

@@ -4,30 +4,22 @@ import apiClient from "../utils/apiClient";
 /* -------------------------- RÉSERVATIONS ENTREPRISE -------------------------- */
 
 export const fetchCompanyReservations = async (date) => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 secondes timeout
-
   try {
-    const payload = await apiClient.get(`/companies/me/reservations?flat=true${date ? `&date=${date}` : ''}`, {
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
+    const payload = await apiClient.get(`/companies/me/reservations?flat=true${date ? `&date=${date}` : ''}`);
     const reservations = Array.isArray(payload.data)
       ? payload.data
       : (Array.isArray(payload.data?.reservations) ? payload.data.reservations : []);
     return reservations;               // ✅ manquait
   } catch (e) {
-     clearTimeout(timeoutId);
-     // Gérer spécifiquement les erreurs d'annulation/timeout
-     if (e.name === 'AbortError' || e.code === 'ECONNABORTED') {
-       const timeoutError = new Error('La requête a pris trop de temps. Veuillez réessayer.');
-       timeoutError.code = 'TIMEOUT';
-       throw timeoutError;
+     // Gérer spécifiquement les erreurs d'authentification JWT
+     if (e.response?.status === 401 || e.response?.status === 422) {
+       console.error("Erreur d'authentification JWT:", e.response.data);
+       // Optionnel: déclencher une reconnexion ou un refresh token
      }
-    console.error("fetchCompanyReservations failed:", e?.response?.data || e);
-    return [];                         // ✅ safe fallback
+     console.error("fetchCompanyReservations failed:", e?.response?.data || e);
+     return [];                         // ✅ safe fallback
   }
-};
+}
 
 export const acceptReservation = async (reservationId) => {
   const { data } = await apiClient.post(

@@ -1,12 +1,15 @@
 from flask_restx import Namespace, Resource, fields
-from flask import request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import request
+from flask_jwt_extended import jwt_required
 from models import User, Booking, Invoice, UserRole, Client, BookingStatus
 from ext import db, role_required
 from datetime import datetime
 from sqlalchemy.orm import joinedload
-import logging, random, string
+import logging
+import random
+import string
 from app import sentry_sdk
+from typing import Any, cast
 
 app_logger = logging.getLogger('app')
 
@@ -40,8 +43,9 @@ class AdminStats(Resource):
 
             total_revenue = (
                 db.session.query(db.func.sum(Booking.amount))
-                .filter(Booking.status == BookingStatus.COMPLETED)
-                .filter(Booking.scheduled_time >= start_of_month, Booking.scheduled_time < end_of_month)
+                .filter(cast(Any, Booking.status == BookingStatus.COMPLETED))
+                .filter(cast(Any, Booking.scheduled_time >= start_of_month))
+                .filter(cast(Any, Booking.scheduled_time < end_of_month))
                 .scalar() or 0
             )
 
@@ -74,7 +78,7 @@ class RecentBookings(Resource):
                 .all()
             )
             app_logger.info(f"✅ {len(recent_bookings)} réservations récentes trouvées.")
-            return [b.serialize for b in recent_bookings], 200
+            return [cast(Any, b).serialize for b in recent_bookings], 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
@@ -91,7 +95,7 @@ class AllUsers(Resource):
         try:
             app_logger.info("📢 Appel de l'endpoint AllUsers")
             users = User.query.all()
-            return {"users": [u.serialize for u in users]}, 200
+            return {"users": [cast(Any, u).serialize for u in users]}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             app_logger.error(f"❌ ERREUR get_all_users: {str(e)}", exc_info=True)
@@ -106,7 +110,7 @@ class RecentUsers(Resource):
         """Récupère les 5 utilisateurs récents"""
         try:
             recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
-            return [u.serialize for u in recent_users], 200
+            return [cast(Any, u).serialize for u in recent_users], 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             app_logger.error(f"❌ ERREUR get_recent_users: {str(e)}", exc_info=True)
@@ -126,7 +130,7 @@ class ManageUser(Resource):
             ).filter_by(id=user_id).one_or_none()
             if not user:
                 admin_ns.abort(404, "User not found")
-            return user.serialize, 200
+            return cast(Any, user).serialize, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
@@ -171,19 +175,26 @@ class UpdateUserRole(Resource):
             if not user:
                 admin_ns.abort(404, "User not found")
 
-            data = request.get_json()
-            new_role = data.get("role")
-            if not new_role or new_role.lower() not in [r.value for r in UserRole]:
+            data = request.get_json() or {}
+            new_role_raw = str(data.get("role", "")).strip()
+            if not new_role_raw:
+                admin_ns.abort(400, "Invalid role")
+            # Pylance : stabilise le type (non-None)
+            user = cast(User, user)
+            # conversion robuste par valeur (ex: "driver","company","client","admin")
+            try:
+                new_role_enum = UserRole(new_role_raw.lower())
+            except ValueError:
                 admin_ns.abort(400, "Invalid role")
 
             # --- 1. Conserver l'ancien rôle avant la mise à jour
             old_role_value = user.role.value
 
             # --- 2. Mettre à jour le nouveau rôle dans la table 'user'
-            user.role = UserRole[new_role.lower()]
+            user.role = new_role_enum
 
             # ============ CAS 1 : L'utilisateur devient DRIVER ============
-            if new_role.lower() == "driver":
+            if new_role_enum.value == "driver":
                 from models import Driver, Company
 
                 # Vérifier que "company_id" est présent dans la requête
@@ -197,9 +208,9 @@ class UpdateUserRole(Resource):
                     admin_ns.abort(400, f"Company {company_id} does not exist.")
 
                 # Récupérer (ou créer) l'enregistrement driver
-                driver = user.driver if user.driver else None
+                driver = user.driver if getattr(user, "driver", None) else None
                 if not driver:
-                    driver = Driver(
+                    driver = cast(Any, Driver)(
                         user_id=user.id,
                         company_id=company_id,
                         is_active=True
@@ -218,15 +229,15 @@ class UpdateUserRole(Resource):
 
 
             # ============ CAS 2 : L'utilisateur devient COMPANY ============
-            elif new_role.lower() == "company":
+            elif new_role_enum.value == "company":
                 from models import Company, Driver
 
                 # Vérifier s'il existe déjà une entreprise associée à l'utilisateur
-                company_record = user.company if user.company else None
+                company_record = user.company if getattr(user, "company", None) else None
                 if not company_record:
                     # Créer un enregistrement company minimal
                     name = data.get("company_name") or user.username
-                    company_record = Company(
+                    company_record = cast(Any, Company)(
                         user_id=user.id,
                         name=name
                     )
@@ -238,17 +249,17 @@ class UpdateUserRole(Resource):
 
                 # Si l'ancien rôle était 'driver', on peut supprimer ou désactiver la ligne driver
                 if old_role_value == "driver":
-                    driver = user.driver if user.driver else None
+                    driver = user.driver if getattr(user, "driver", None) else None
                     if driver:
                         # Ex : db.session.delete(driver) ou driver.is_active = False
                         pass
 
             # ============ CAS 3 : L'utilisateur redevient CLIENT ============
-            elif new_role.lower() == "client":
+            elif new_role_enum.value == "client":
                 from models import Driver, Company
                 # Si l'utilisateur était driver, on désactive ou supprime driver
                 if old_role_value == "driver":
-                    driver = user.driver if user.driver else None
+                    driver = user.driver if getattr(user, "driver", None) else None
                     if driver:
                         db.session.delete(driver)  # ou driver.is_active = False
                 # Si l'utilisateur était company, on supprime l'enregistrement company
@@ -260,11 +271,11 @@ class UpdateUserRole(Resource):
 
 
             # ============ CAS 4 : L'utilisateur devient ADMIN ============
-            elif new_role.lower() == "admin":
+            elif new_role_enum.value == "admin":
                 from models import Driver, Company
                 # Si l'utilisateur était driver, on le supprime / désactive
                 if old_role_value == "driver":
-                    driver = user.driver if user.driver else None
+                    driver = user.driver if getattr(user, "driver", None) else None
                     if driver:
                         pass  # db.session.delete(driver)
                 # Si l'utilisateur était company, on le supprime / désactive
@@ -276,8 +287,8 @@ class UpdateUserRole(Resource):
             db.session.commit()
 
             return {
-                "message": f"✅ Rôle de {user.username} mis à jour en {new_role.lower()}",
-                "user": user.serialize
+                "message": f"✅ Rôle de {user.username} mis à jour en {new_role_enum.value}",
+                "user": cast(Any, user).serialize
             }, 200
 
         except Exception as e:
@@ -293,11 +304,13 @@ class ResetUserPassword(Resource):
         """Réinitialise le mot de passe d'un utilisateur"""
         try:
             user = User.query.filter_by(id=user_id).one_or_none()
-            if not user:
+            if user is None:
                 admin_ns.abort(404, "User not found")
+                return  # abort() lève, mais ce return rassure l’analyste statique
+            u = cast(Any, user)
             new_password = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-            user.set_password(new_password)
-            user.force_password_change = True
+            u.set_password(new_password)
+            u.force_password_change = True
             db.session.commit()
             return {
                 "message": "Mot de passe réinitialisé",

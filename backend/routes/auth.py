@@ -6,9 +6,10 @@ from flask_jwt_extended import (
     get_jwt_identity
 )
 from marshmallow import Schema, fields as ma_fields, ValidationError
-from datetime import datetime, timedelta
+from datetime import timedelta
+from typing import Any, Dict, cast
 import logging
-import os
+
 import sentry_sdk # CORRECTION : Importer directement
 
 from flask_mail import Message
@@ -68,7 +69,7 @@ class Login(Resource):
     def post(self):
         """Authentifie un utilisateur et renvoie un token d'accès"""
         try:
-            data = request.get_json()
+            data = request.get_json() or {}
             email = data.get('email')
             password = data.get('password')
 
@@ -86,7 +87,7 @@ class Login(Resource):
                 "driver_id": getattr(user, "driver_id", None),
             }
             access_token = create_access_token(
-                identity=user.id,  # ⚠️ ID numérique attendu par dispatch_routes
+                identity=str(user.public_id), # ⚠️ ID numérique attendu par dispatch_routes
                 additional_claims=claims,
                 expires_delta=timedelta(hours=1)
             )
@@ -123,7 +124,7 @@ class RefreshToken(Resource):
         """
         try:
             current_user_id = get_jwt_identity()
-            user = User.query.get(current_user_id)
+            user = User.query.filter_by(public_id=current_user_id).first()
             if not user:
                 return {"error": "User not found"}, 404
 
@@ -133,7 +134,7 @@ class RefreshToken(Resource):
                 "driver_id": getattr(user, "driver_id", None),
             }
             new_token = create_access_token(
-                identity=user.id,
+                identity=str(user.public_id),
                 additional_claims=claims,
                 expires_delta=timedelta(hours=1)
             )
@@ -200,36 +201,39 @@ class Register(Resource):
             app_logger.info(f"Données reçues dans /auth/register : {data}")
 
             schema = UserSchema()
-            validated_data = schema.load(data)
+            _loaded = schema.load(data)
+            # 🔒 typage explicite pour Pylance
+            validated_data: Dict[str, Any] = cast(Dict[str, Any], _loaded)
             app_logger.info(f"Données validées : {validated_data}")
 
-            if User.query.filter_by(email=validated_data['email']).first():
-                app_logger.warning(f"Utilisateur déjà existant pour l'email : {validated_data['email']}")
+            email: str = cast(str, validated_data.get('email'))
+            if User.query.filter_by(email=email).first():
+                app_logger.warning(f"Utilisateur déjà existant pour l'email : {email}")
                 return {"error": "User already exists"}, 409
 
             # Création de l'utilisateur
-            user = User(
-                username=validated_data['username'],
-                email=validated_data['email'],
+            username: str = cast(str, validated_data.get('username'))
+            password: str = cast(str, validated_data.get('password'))
+            # NB: birth_date vient déjà en objet date (schéma marshmallow)
+            user = cast(Any, User)(
+                username=username,
+                email=email,
                 role=UserRole.client,
                 first_name=validated_data.get('first_name'),
                 last_name=validated_data.get('last_name'),
                 phone=validated_data.get('phone'),
                 address=validated_data.get('address'),
-                birth_date=datetime.strptime(validated_data.get('birth_date'), "%Y-%m-%d") if validated_data.get('birth_date') else None,
+                birth_date=validated_data.get('birth_date'),
                 gender=validated_data.get('gender'),
-                profile_image=validated_data.get('profile_image')
+                profile_image=validated_data.get('profile_image'),
             )
 
-            user.set_password(validated_data['password'], force_change=False)
+            user.set_password(password, force_change=False)
             db.session.add(user)
             db.session.flush()
 
             # Création du profil client associé
-            client = Client(
-                user_id=user.id,
-                is_active=True
-            )
+            client = cast(Any, Client)(user_id=user.id, is_active=True)
             app_logger.info(f"Client créé : {client}")
             db.session.add(client)
             db.session.commit()
@@ -261,7 +265,7 @@ class ForgotPassword(Resource):
         Envoie un email de réinitialisation de mot de passe
         """
         try:
-            data = request.get_json()
+            data = request.get_json() or {}
             email = data.get('email')
             if not email:
                 return {"error": "Email is required"}, 400
@@ -302,7 +306,7 @@ class ResetPassword(Resource):
         Réinitialise le mot de passe via un lien contenant le public_id
         """
         try:
-            data = request.get_json()
+            data = request.get_json() or {}
             new_password = data.get("new_password")
             if not new_password:
                 return {"error": "Un nouveau mot de passe est requis."}, 400

@@ -1,11 +1,13 @@
-import os, glob
+import os 
+import glob
 from flask_restx import Namespace, Resource, fields, reqparse
 from flask import request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import Company, Booking, Driver, User, BookingStatus, Invoice, UserRole, Client, ClientType, InvoiceStatus, DriverType, Vehicle, Assignment, AssignmentStatus, DispatchRun
 
 from datetime import datetime, timedelta, date
-from shared.time_utils import to_utc, now_utc, parse_local_naive, now_local
+from shared.time_utils import to_utc, now_utc, parse_local_naive
+from typing import Any, Optional, cast
 from sqlalchemy.orm import joinedload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
@@ -14,7 +16,7 @@ import sentry_sdk
 from services.vacation_service import create_vacation
 from services.maps import get_distance_duration
 from services.unified_dispatch import queue
-from datetime import date
+from shared.time_utils import to_geneva_local
 import logging
 from routes.driver import (
     notify_driver_new_booking,
@@ -164,63 +166,139 @@ manual_booking_model = companies_ns.model('ManualBooking', {
     'billed_to_contact': fields.String(description="Email/nom facturation"),
 })
 
-# Fonction utilitaire pour récupérer l'entreprise associée à l'utilisateur connecté
-def get_company_from_token():
+
+def get_company_from_token() -> tuple[Company | None, dict | None, int | None]:
+    """Récupère (ou crée au besoin) l'entreprise associée à l'utilisateur courant."""
     user_public_id = get_jwt_identity()
     app_logger.debug(f"🔍 JWT Identity récupérée: {user_public_id}")
 
-    user = User.query.options(joinedload(User.company)).filter_by(public_id=user_public_id).one_or_none()
-
-    if not user:
+    user_opt: Optional[User] = (
+        User.query.options(joinedload(User.company))
+        .filter_by(public_id=user_public_id)
+        .one_or_none()
+    )
+    if user_opt is None:
         app_logger.error(f"❌ User not found for public_id: {user_public_id}")
         return None, {"error": "User not found"}, 404
 
-    if user.role == UserRole.company:
-        if not user.company:
-            app_logger.warning(f"⚠️ Aucun objet Company associé à l'utilisateur {user.username} — tentative de création")
-            try:
-                new_company = Company(
-                    name=user.username,
-                    user_id=user.id,
-                    address="",
-                    latitude=None,
-                    longitude=None,
-                    contact_email=user.email,
-                    contact_phone="",
-                    service_area="",
-                    max_daily_bookings=50,
-                    is_approved=False
-                )
-                db.session.add(new_company)
-                db.session.commit()
+    user = cast(User, user_opt)
 
-                # Recharge user avec la relation actualisée
-                user = User.query.options(joinedload(User.company)).filter_by(public_id=user_public_id).one_or_none()
-            except Exception as e:
-                app_logger.error(f"❌ Erreur lors de la création automatique de Company : {str(e)}", exc_info=True)
-                return None, {"error": "Failed to create default company"}, 500
+    # Si l'utilisateur est de rôle company mais n'a pas encore d'objet Company, on le crée.
+    if user.role == UserRole.company and not getattr(user, "company", None):
+        app_logger.warning(
+            f"⚠️ Aucun objet Company associé à l'utilisateur {getattr(user, 'username', user.public_id)} — tentative de création"
+        )
+        try:
+            company_kwargs: dict[str, Any] = {
+                "name": getattr(user, "username", "Company"),
+                "user_id": user.id,
+                "address": "",
+                "latitude": None,
+                "longitude": None,
+                "contact_email": getattr(user, "email", None),
+                "contact_phone": "",
+                "service_area": "",
+                "max_daily_bookings": 50,
+                "is_approved": False,
+            }
+            # Construction tolérante pour l'analyseur de types
+            new_company: Company = cast(Any, Company)(**company_kwargs)
+            db.session.add(new_company)
+            db.session.commit()
 
-    # Vérification finale sécurisée
-    if not user.company:
-        app_logger.error(f"❌ Company is None for user {user.public_id} ({user.username})")
+            # Recharger l'utilisateur avec la relation mise à jour
+            user_refetched: Optional[User] = (
+                User.query.options(joinedload(User.company))
+                .filter_by(public_id=user_public_id)
+                .one_or_none()
+            )
+            if user_refetched is None:
+                app_logger.error("❌ User disappeared after company creation")
+                return None, {"error": "Failed to load user after company creation"}, 500
+            user = cast(User, user_refetched)
+
+        except Exception as e:
+            app_logger.error(
+                f"❌ Erreur lors de la création automatique de Company : {str(e)}",
+                exc_info=True,
+            )
+            return None, {"error": "Failed to create default company"}, 500
+
+    company_obj = getattr(user, "company", None)
+    if company_obj is None:
+        app_logger.error(f"❌ Company is None for user {user.public_id}")
         return None, {"error": "No company associated with this user."}, 404
 
-    company = user.company
-    app_logger.debug(f"✅ Company found: {company.name} (ID: {company.id}) for user {user.username}")
+    company = cast(Company, company_obj)
+    app_logger.debug(
+        f"✅ Company found: {getattr(company, 'name', '?')} (ID: {getattr(company, 'id', '?')}) for user {getattr(user, 'username', user.public_id)}"
+    )
     return company, None, None
 
-def _maybe_trigger_dispatch(company_id: int, action: str = "update"):
+
+def _maybe_trigger_dispatch(company_id: int, action: str = "update") -> None:
+    """Déclenche le dispatch si activé pour la société (compatible avec plusieurs APIs queue)."""
     company = Company.query.get(company_id)
-    if company and getattr(company, "dispatch_enabled", False):
-        from services.unified_dispatch import queue
-        queue.trigger_on_booking_change(company_id, action=action)
+    if not company or not bool(getattr(company, "dispatch_enabled", False)):
+        return
+
+    try:
+        from services.unified_dispatch import queue as _queue
+    except Exception as e:
+        app_logger.warning("⚠️ Impossible d'importer services.unified_dispatch.queue: %s", e)
+        return
+
+    # 1) API moderne: trigger_on_booking_change(company_id, action=...)
+    trigger1: Any = getattr(_queue, "trigger_on_booking_change", None)
+    if callable(trigger1):
+        trigger1(company_id, action=action)
+        return
+
+    # 2) API alternative: trigger(company_id, reason=..., mode=...)
+    trigger2: Any = getattr(_queue, "trigger", None)
+    if callable(trigger2):
+        # reason informatif pour compatibilité
+        trigger2(company_id, reason=f"booking_{action}", mode="auto")
+        return
+
+    app_logger.warning("⚠️ Aucun trigger compatible trouvé dans services.unified_dispatch.queue")
 
 
-def _driver_trigger(company, action: str):
-    # Le comportement par défaut DOIT être False pour éviter les déclenchements non sollicités.
-    if getattr(company, "dispatch_enabled", False):
-        from services.unified_dispatch import queue
-        queue.trigger_on_driver_status(company.id, action=action)
+def _driver_trigger(company: Company, action: str) -> None:
+    """Déclenche un événement de dispatch lié à un chauffeur si le dispatch est activé."""
+    if not company or not bool(getattr(company, "dispatch_enabled", False)):
+        return
+
+    try:
+        from services.unified_dispatch import queue as _queue
+    except Exception as e:
+        app_logger.warning("⚠️ Impossible d'importer services.unified_dispatch.queue: %s", e)
+        return
+
+    # Récupère l'id sans typer statiquement (évite Column[int] -> int pour Pylance)
+    company_id_obj = getattr(company, "id", None)
+    try:
+        company_id = int(company_id_obj) if company_id_obj is not None else None
+    except Exception:
+        app_logger.warning("⚠️ company.id non convertible en int: %r", company_id_obj)
+        return
+    if company_id is None:
+        app_logger.warning("⚠️ company.id est None")
+        return
+
+    # API 1 : trigger_on_driver_status(company_id, action=...)
+    trigger1 = getattr(_queue, "trigger_on_driver_status", None)
+    if callable(trigger1):
+        trigger1(company_id, action=action)
+        return
+
+    # API 2 : trigger(company_id, reason=..., mode=...)
+    trigger2 = getattr(_queue, "trigger", None)
+    if callable(trigger2):
+        trigger2(company_id, reason=f"driver_{action}", mode="auto")
+        return
+
+    app_logger.warning("⚠️ Aucun trigger compatible trouvé dans services.unified_dispatch.queue")
 
 def send_welcome_email(to_address: str, temp_password: str):
     # TODO: implémenter l'envoi réel, e.g. via flask-mail ou un service externe
@@ -233,8 +311,7 @@ class CompanyMe(Resource):
         company, error_response, status_code = get_company_from_token()
         if error_response:
             return error_response, status_code
-        # expose tout le profil + véhicules via serialize
-        return company.serialize, 200
+        return cast(Any, company).serialize, 200
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -263,7 +340,7 @@ class CompanyMe(Resource):
                 if k in allowed:
                     setattr(company, k, v)
             db.session.commit()
-            return company.serialize, 200
+            return cast(Any, company).serialize, 200
         except (ValueError, IntegrityError) as e:
             db.session.rollback()
             return {"error": str(e)}, 400
@@ -276,16 +353,19 @@ class CompanyReservations(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        from datetime import datetime, timedelta
-        # Utiliser la même approche que les autres routes pour récupérer l'entreprise
-        user_id = get_jwt_identity()
-        user = User.query.filter_by(public_id=user_id).first()
-        if not user or not user.company_id:
-            return {"error": "Entreprise non trouvée ou accès refusé"}, 404
-        
-        company = Company.query.get(user.company_id)
-        if not company:
-            return {"error": "Entreprise non trouvée"}, 404
+
+        company, error_response, status_code = get_company_from_token()
+        if error_response:
+            return error_response, status_code
+
+        # ⚙️ Sécurise l'ID entreprise pour les expressions SQLAlchemy (évite Column[int] → int)
+        company_id_obj = getattr(company, "id", None)
+        try:
+            company_id = int(company_id_obj) if company_id_obj is not None else None
+        except Exception:
+            company_id = None
+        if company_id is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
         
         flat = (request.args.get('flat', 'false').lower() == 'true')
         day_str = (request.args.get('date') or '').strip()
@@ -314,39 +394,38 @@ class CompanyReservations(Resource):
 
         status_filter = request.args.get('status')
         query = Booking.query.filter(
-            Booking.company_id == company.id,
+            Booking.company_id == company_id,
             Booking.scheduled_time >= start_local,
             Booking.scheduled_time < end_local
         )
         if status_filter:
             try:
                 status_enum = BookingStatus[status_filter.upper()]
-                query = query.filter(Booking.status == status_enum)
+                query = query.filter_by(status=status_enum)
             except KeyError:
                 return {"error": "Invalid status filter"}, 400
 
         # Ajouter des options de chargement pour éviter les requêtes N+1
-        reservations = query.options(
-            joinedload(Booking.client)
-            .joinedload(Client.user),
+        reservations_q = query.options(
+            joinedload(Booking.client).joinedload(Client.user),
             joinedload(Booking.driver)
         ).order_by(Booking.scheduled_time.asc())
         
         # Appliquer la pagination
-        total = reservations.count()
-        reservations = reservations.offset((page - 1) * per_page).limit(per_page).all()
+        total = reservations_q.count()
+        reservations = reservations_q.offset((page - 1) * per_page).limit(per_page).all()
         
         # Retourner les données dans le format attendu par le frontend
         if flat:
             return {
-                "reservations": [booking.serialize for booking in reservations],
+                "reservations": [cast(Any, b).serialize for b in reservations],
                 "total": total,
                 "page": page,
                 "per_page": per_page,
                 "total_pages": (total + per_page - 1) // per_page
             }, 200
         else:
-            return {"reservations": [booking.serialize for booking in reservations],
+            return {"reservations": [cast(Any, b).serialize for b in reservations],
                     "total": total,
                     "page": page,
                     "per_page": per_page,
@@ -369,13 +448,22 @@ class AcceptReservation(Resource):
         if not booking or booking.status != BookingStatus.PENDING:
             return {"error": "Reservation not found or cannot be accepted"}, 400
 
-        booking.company_id = company.id
+        # 🔒 Sécurise l'ID (évite Column[int] -> bool dans les expressions / casts Pylance)
+        company_id_obj = getattr(company, "id", None)
+        try:
+            company_id = int(company_id_obj) if company_id_obj is not None else None
+        except Exception:
+            company_id = None
+        if company_id is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        booking.company_id = company_id
         booking.status = BookingStatus.ACCEPTED
 
         try:
             db.session.commit()
-            _maybe_trigger_dispatch(company.id, "update")
-            return {"message": "...", "reservation": booking.serialize}, 200
+            _maybe_trigger_dispatch(company_id, "update")
+            return {"message": "...", "reservation": cast(Any, booking).serialize}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
@@ -398,12 +486,26 @@ class RejectReservation(Resource):
         if not booking or booking.status != BookingStatus.PENDING:
             return {"error": "Reservation not found or cannot be rejected"}, 400
 
-        if company.id not in booking.rejected_by:
-            booking.rejected_by.append(company.id)
+        # 🔒 Company ID → int sûr (élimine Column[int] / Optional)
+        company_id_obj = getattr(company, "id", None)
+        try:
+            company_id = int(company_id_obj) if company_id_obj is not None else None
+        except Exception:
+            company_id = None
+        if company_id is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        # 🛡️ rejected_by peut être None / JSON / ARRAY → on normalise en list
+        rb = getattr(booking, "rejected_by", None)
+        if rb is None:
+            rb = []
+            setattr(booking, "rejected_by", rb)
+        if company_id not in rb:
+            rb.append(company_id)
 
         try:
             db.session.commit()
-            return {"message": "Reservation rejected successfully", "reservation": booking.serialize}, 200
+            return {"message": "Reservation rejected successfully", "reservation": cast(Any, booking).serialize}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
@@ -422,10 +524,19 @@ class AssignDriver(Resource):
         if error_response:
             return error_response, status_code
 
-        booking = Booking.query.filter_by(id=reservation_id, company_id=company.id).one_or_none()
+        # 🔒 company.id → int sûr pour éviter Column[int] / Any
+        company_id_obj = getattr(company, "id", None)
+        try:
+            company_id = int(company_id_obj) if company_id_obj is not None else None
+        except Exception:
+            company_id = None
+        if company_id is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        booking = Booking.query.filter_by(id=reservation_id, company_id=company_id).one_or_none()
 
         if not booking:
-            app_logger.warning(f"❌ Booking ID {reservation_id} introuvable ou non lié à la société ID {company.id}")
+            app_logger.warning(f"❌ Booking ID {reservation_id} introuvable ou non lié à la société ID {company_id}")
             return {"error": "Reservation not found"}, 400
 
         app_logger.info(f"🔍 Booking trouvé : id={booking.id}, statut={booking.status}")
@@ -435,12 +546,16 @@ class AssignDriver(Resource):
             app_logger.warning(f"❌ Statut invalide pour assignation : {booking.status}. Doit être ACCEPTED ou ASSIGNED.")
             return {"error": "Reservation cannot be assigned in current state"}, 400
 
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         driver_id = data.get('driver_id')
         if not driver_id:
             return {"error": "Missing driver_id"}, 400
+        try:
+            driver_id = int(driver_id)
+        except (TypeError, ValueError):
+            return {"error": "driver_id doit être un entier."}, 400
 
-        driver = Driver.query.filter_by(id=driver_id, company_id=company.id).one_or_none()
+        driver = Driver.query.filter_by(id=driver_id, company_id=company_id).one_or_none()
         if not driver:
             return {"error": "Driver not found for this company"}, 404
 
@@ -452,12 +567,22 @@ class AssignDriver(Resource):
             booking.status = BookingStatus.ASSIGNED
         
             # Get or create a DispatchRun for today
-            from shared.time_utils import to_geneva_local
-            day_local = (to_geneva_local(booking.scheduled_time).date()
-                        if booking.scheduled_time else date.today())
-            dispatch_run = DispatchRun.query.filter_by(company_id=company.id, day=day_local).first()
+            # ⚙️ Pylance : protège .date() quand scheduled_time ou le retour de to_geneva_local peuvent être None
+            st = getattr(booking, "scheduled_time", None)
+            if st is None:
+                day_local = date.today()
+            else:
+                # Certains stubs typent to_geneva_local -> Optional[datetime]
+                dt_local_any = to_geneva_local(cast(Any, st))
+                if dt_local_any is None:
+                    # Fallback : on prend la date naïve du scheduled_time
+                    day_local = cast(Any, st).date()
+                else:
+                    day_local = cast(Any, dt_local_any).date()
+            dispatch_run = DispatchRun.query.filter_by(company_id=company_id, day=day_local).first()
             if not dispatch_run:
-                dispatch_run = DispatchRun(company_id=company.id, day=day_local, status="completed")
+                # 🛠️ Constructeur SQLAlchemy dynamique → cast(Any, ...) pour Pylance
+                dispatch_run = cast(Any, DispatchRun)(company_id=company_id, day=day_local, status="completed")
                 db.session.add(dispatch_run)
                 db.session.flush()  # Get the ID
             
@@ -465,11 +590,11 @@ class AssignDriver(Resource):
             assignment = Assignment.query.filter_by(booking_id=booking.id).first()
             if not assignment:
                 # Create new Assignment
-                assignment = Assignment(
+                assignment = cast(Any, Assignment)(
                     booking_id=booking.id,
                     driver_id=driver.id,
                     dispatch_run_id=dispatch_run.id,
-                    status=AssignmentStatus.SCHEDULED
+                    status=AssignmentStatus.SCHEDULED,
                 )
                 db.session.add(assignment)
             else:
@@ -480,8 +605,8 @@ class AssignDriver(Resource):
 
         db.session.commit()
         notify_driver_new_booking(driver.id, booking)
-        _maybe_trigger_dispatch(company.id, "update")
-        return {"message": "Driver assigned successfully", "reservation": booking.serialize}, 200
+        _maybe_trigger_dispatch(company_id, "update")
+        return {"message": "Driver assigned successfully", "reservation": cast(Any, booking).serialize}, 200
 
 # ======================================================
 # 5. Marquer une réservation comme complétée
@@ -495,7 +620,16 @@ class CompleteReservation(Resource):
         if error_response:
             return error_response, status_code
 
-        booking = Booking.query.filter_by(id=reservation_id, company_id=company.id).one_or_none()
+        # 🔒 sécurise company.id → int (évite Column[int]/Optional)
+        company_id_obj = getattr(company, "id", None)
+        try:
+            company_id = int(company_id_obj) if company_id_obj is not None else None
+        except Exception:
+            company_id = None
+        if company_id is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        booking = Booking.query.filter_by(id=reservation_id, company_id=company_id).one_or_none()
         if not booking or booking.status != BookingStatus.IN_PROGRESS:
             return {"error": "Réservation introuvable ou pas en cours"}, 400
 
@@ -513,7 +647,7 @@ class CompleteReservation(Resource):
 
             return {
                 "message": "Réservation complétée avec succès",
-                "reservation": booking.serialize
+                "reservation": (__import__("typing").cast(__import__("typing").Any, booking)).serialize
             }, 200
         except Exception as e:
             # sentry_sdk.capture_exception(e)  # Si tu as Sentry
@@ -530,9 +664,23 @@ class CompanyDriversList(Resource):
     @role_required(UserRole.company)
     def get(self):
         company, err, code = get_company_from_token()
-        if err: return err, code
-        drivers = Driver.query.options(joinedload(Driver.user)).filter_by(company_id=company.id).all()
-        return {"drivers": [d.serialize for d in drivers], "total": len(drivers)}, 200
+        if err: 
+            return err, code
+        # 🔒 company.id → int sûr (évite Column[int]/Optional)
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+        drivers = (
+            Driver.query
+            .options(joinedload(Driver.user))
+            .filter_by(company_id=cid)
+            .all()
+        )
+        return {"drivers": [cast(Any, d).serialize for d in drivers], "total": len(drivers)}, 200
 
 
 @companies_ns.route('/me/driver')
@@ -541,27 +689,64 @@ class CompanyDrivers(Resource):
     @role_required(UserRole.company)
     def get(self):
         company, err, code = get_company_from_token()
-        if err: return err, code
-        drivers = Driver.query.options(joinedload(Driver.user)).filter_by(company_id=company.id).all()
-        return {"driver": [d.serialize for d in drivers], "total": len(drivers)}, 200
+        if err: 
+            return err, code
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+        drivers = (
+            Driver.query
+            .options(joinedload(Driver.user))
+            .filter_by(company_id=cid)
+            .all()
+        )
+        return {"driver": [cast(Any, d).serialize for d in drivers], "total": len(drivers)}, 200
 
     @jwt_required()
     @role_required(UserRole.company)
     def post(self):
         company, error_response, status_code = get_company_from_token()
-        if error_response: return error_response, status_code
+        if error_response: 
+            return error_response, status_code
         data = request.get_json() or {}
         user_id = data.get("user_id")
-        if not user_id: return {"error": "Driver user_id is required"}, 400
+        if user_id is None:
+            return {"error": "Driver user_id is required"}, 400
+        try:
+            user_id = int(user_id)
+        except (TypeError, ValueError):
+            return {"error": "user_id doit être un entier."}, 400
+
         user = User.query.filter_by(id=user_id).one_or_none()
-        if not user: return {"error": "User not found"}, 404
-        if user.role != UserRole.driver: return {"error": "User is not a driver"}, 400
-        if Driver.query.filter_by(user_id=user.id, company_id=company.id).first():
+        if not user: 
+            return {"error": "User not found"}, 404
+        if user.role != UserRole.driver: 
+            return {"error": "User is not a driver"}, 400
+
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        if Driver.query.filter_by(user_id=user.id, company_id=cid).first():
             return {"error": "Driver already associated with this company"}, 400
-        new_driver = Driver(user_id=user.id, company_id=company.id, is_active=True)
-        db.session.add(new_driver); db.session.commit()
-        _driver_trigger(company, "activation|availability")
-        return {"message": "Driver added successfully", "driver": new_driver.serialize}, 201
+
+        # 🏗️ Constructeur SQLAlchemy (kwargs dynamiques) → cast(Any, Driver)(...)
+        new_driver = cast(Any, Driver)(user_id=user.id, company_id=cid, is_active=True)
+        db.session.add(new_driver)
+        db.session.commit()
+
+        # ✅ Pylance : company est non-None à ce stade ; on cast pour la signature stricte
+        _driver_trigger(cast(Any, company), "activation|availability")
+        return {"message": "Driver added successfully", "driver": cast(Any, new_driver).serialize}, 201
 
 # ======================================================
 # 7. Détails, mise à jour, suppression d'un chauffeur
@@ -575,7 +760,16 @@ class DriverItem(Resource):
         if error_response:
             return error_response, status_code
 
-        driver = Driver.query.filter_by(id=driver_id, company_id=company.id).one_or_none()
+        # 🔒 company.id → int sûr pour SQLAlchemy & Pylance
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        driver = Driver.query.filter_by(id=driver_id, company_id=cid).one_or_none()
         if not driver:
             return {"error": "Driver not found for this company"}, 404
 
@@ -592,8 +786,8 @@ class DriverItem(Resource):
 
         try:
             db.session.commit()
-            _driver_trigger(company, "availability")
-            return {"message": "Driver updated successfully", "driver": driver.serialize}, 200
+            _driver_trigger(cast(Any, company), "availability")
+            return {"message": "Driver updated successfully", "driver": cast(Any, driver).serialize}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
@@ -606,14 +800,22 @@ class DriverItem(Resource):
         if error_response:
             return error_response, status_code
 
-        driver = Driver.query.filter_by(id=driver_id, company_id=company.id).one_or_none()
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        driver = Driver.query.filter_by(id=driver_id, company_id=cid).one_or_none()
         if not driver:
             return {"error": "Driver not found for this company"}, 404
 
         try:
             db.session.delete(driver)
             db.session.commit()
-            _driver_trigger(company, "availability")
+            _driver_trigger(cast(Any, company), "availability")
             return {"message": "Driver removed successfully"}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
@@ -649,9 +851,27 @@ class ListInvoices(Resource):
         company, error_response, status_code = get_company_from_token()
         if error_response:
             return error_response, status_code
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
-        invoices = Invoice.query.options(joinedload(Invoice.booking)).join(Booking).filter(Booking.company_id == company.id).all()
-        return {"invoices": [invoice.serialize for invoice in invoices], "total": len(invoices)}, 200
+        invoices = (
+            Invoice.query
+            .options(joinedload(Invoice.booking))
+            .join(Booking)
+            .filter(Booking.company_id == cid)
+            .all()
+        )
+        from typing import Any, cast
+        return {
+            "invoices": [cast(Any, invoice).serialize for invoice in invoices],
+            "total": len(invoices)
+        }, 200
 
 # ======================================================
 # 10. Activer/Désactiver le dispatch automatique
@@ -663,7 +883,8 @@ class DispatchStatus(Resource):
     @role_required(UserRole.company)
     def get(self):
         company, err, code = get_company_from_token()
-        if err: return err, code
+        if err: 
+            return err, code
         return {"dispatch_enabled": bool(getattr(company, "dispatch_enabled", False))}, 200
 
 # ======================================================
@@ -675,7 +896,8 @@ class CompanyDispatchActivate(Resource):
     @role_required(UserRole.company)
     def post(self):
         company, err, code = get_company_from_token()
-        if err: return err, code
+        if err:
+            return err, code
 
         body = request.get_json(silent=True) or {}
         enabled = bool(body.get("enabled", True))
@@ -683,13 +905,20 @@ class CompanyDispatchActivate(Resource):
         if not hasattr(company, "dispatch_enabled"):
             return {"error": "Le champ 'dispatch_enabled' n'existe pas sur Company"}, 400
 
-        company.dispatch_enabled = enabled
+        setattr(company, "dispatch_enabled", enabled)
         db.session.commit()
 
         if enabled:
-            queue.trigger(company.id, reason="activate_dispatch", mode="auto")
+            # 🔒 Sécurise l'ID pour éviter Column[int] → int
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except Exception:
+                cid = None
+            if cid is not None:
+                queue.trigger(cid, reason="activate_dispatch", mode="auto")
 
-        return {"dispatch_enabled": company.dispatch_enabled}, 200
+        return {"dispatch_enabled": bool(getattr(company, "dispatch_enabled", False))}, 200
 
 # ======================================================
 # 12. Désactiver le dispatch automatique
@@ -703,10 +932,22 @@ class DeactivateDispatch(Resource):
         if error_response:
             return error_response, status_code
 
-        company.dispatch_enabled = False   # ❌ on désactive
+        # 🔒 Sécurise l'ID pour logs / appels éventuels
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+
+        # ⚙️ Pylance + SQLAlchemy : éviter l'assign direct sur une Column -> utiliser setattr
+        setattr(company, "dispatch_enabled", False)
         db.session.commit()
 
-        app_logger.info(f"⛔ Dispatch désactivé pour la company {company.id}")
+        if cid is not None:
+            app_logger.info("⛔ Dispatch désactivé pour la company %s", cid)
+        else:
+            app_logger.info("⛔ Dispatch désactivé pour company (ID inconnu)")
+
         return {"message": "Dispatch automatique désactivé."}, 200
 
 # ======================================================
@@ -725,18 +966,29 @@ class AssignedReservations(Resource):
             return error_response, status_code
 
         try:
+            # 🔒 company.id → int sûr pour éviter Column[int]/Optional
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except Exception:
+                cid = None
+            if cid is None:
+                return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+            # 🧭 Pylance : typer explicitement la colonne status pour autoriser .in_(...)
+            status_col = cast(Any, Booking).status
+
             assigned_reservations = (
                 Booking.query
                 .options(joinedload(Booking.driver).joinedload(Driver.user))
-                .filter(Booking.company_id == company.id)
-                .filter(Booking.status.in_([
+                .filter(Booking.company_id == cid)
+                .filter(status_col.in_([
                     BookingStatus.ASSIGNED,
                     BookingStatus.IN_PROGRESS,
-                    
                 ]))
                 .all()
             )
-            reservations_list = [booking.serialize for booking in assigned_reservations]
+            reservations_list = [cast(Any, booking).serialize for booking in assigned_reservations]
             return {"reservations": reservations_list}, 200
         except Exception as e:
             app_logger.error(f"❌ Erreur lors de la récupération des réservations dispatchées : {e}")
@@ -757,15 +1009,17 @@ class DriverVacationsResource(Resource):
         # Vérifier que l'utilisateur a bien le rôle "company"
         # ex. @role_required(UserRole.company)
 
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         start_str = data.get('start_date')  # format "YYYY-MM-DD"
         end_str   = data.get('end_date')
         vac_type  = data.get('vacation_type', 'VACANCES')
 
         # Convertir en date
         try:
-            start_date = date.fromisoformat(start_str)
-            end_date   = date.fromisoformat(end_str)
+            if not start_str or not end_str:
+                raise ValueError("start_date et end_date sont requis (YYYY-MM-DD)")
+            start_date = date.fromisoformat(str(start_str))
+            end_date   = date.fromisoformat(str(end_str))
         except Exception as e:
             return {"error": f"Format de date invalide: {str(e)}"}, 400
 
@@ -779,7 +1033,11 @@ class DriverVacationsResource(Resource):
         if not success:
             return {"error": "Quota vacances dépassé ou autre contrainte."}, 400
         db.session.commit()
-        queue.trigger_on_driver_status(driver.company_id, action="availability")
+        # 🔔 Notifie via le helper qui gère plusieurs APIs de queue
+        company_obj = Company.query.get(getattr(driver, "company_id", None))
+        if company_obj is not None:
+            from typing import Any, cast
+            _driver_trigger(cast(Any, company_obj), "availability")
         return {"message": "Congés créés avec succès."}, 201
     
     @jwt_required()
@@ -813,22 +1071,40 @@ class CreateManualReservation(Resource):
         company, err, code = get_company_from_token()
         if err:
             return err, code
+        # 🔒 company.id → int sûr pour éviter Column[int]/Optional
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
         data = request.get_json() or {}
         client_id = data.get('client_id')
         if not client_id:
             return {"error": "client_id est un champ obligatoire."}, 400
+        try:
+            client_id = int(client_id)
+        except (TypeError, ValueError):
+            return {"error": "client_id doit être un entier."}, 400
 
-        client = Client.query.filter_by(id=client_id, company_id=company.id).first()
+        client = Client.query.filter_by(id=client_id, company_id=cid).first()
         if not client:
             return {"error": "Client non trouvé."}, 404
         user = client.user
 
-        # ---------- 0) Résolution du payeur (defaults Client + override payload) ----------
-        def _norm_str(x, default=""):
-            return (x or default).strip() if isinstance(x, str) else (x if x is not None else default)
+# ---------- 0) Résolution du payeur (defaults Client + override payload) ----------
+        def _norm_str(x: Any, default: Optional[str] = None) -> Optional[str]:
+            if isinstance(x, str):
+                return x.strip()
+            return default
 
-        billed_to_type = _norm_str(data.get('billed_to_type') or getattr(client, 'default_billed_to_type', 'patient'), 'patient').lower()
+        _bt_raw = _norm_str(
+            data.get('billed_to_type') or getattr(client, 'default_billed_to_type', 'patient'),
+            'patient'
+        )
+        billed_to_type = (_bt_raw or 'patient').lower()
         billed_to_company_id = data.get('billed_to_company_id') or getattr(client, 'default_billed_to_company_id', None)
         billed_to_contact = _norm_str(data.get('billed_to_contact') or getattr(client, 'default_billed_to_contact', None), None)
 
@@ -866,16 +1142,17 @@ class CreateManualReservation(Resource):
             try:
                 return_dt = parse_local_naive(return_time_str)  # Naive Europe/Zurich
             except Exception as e:
-                return {"error": f"return_time invalide: {e}"}, 400        # ---------- 2) Estimation distance/durée (best-effort) ----------
+                return {"error": f"return_time invalide: {e}"}, 400        
+# ---------- 2) Estimation distance/durée (best-effort) ----------
         try:
             dur_s, dist_m = get_distance_duration(data['pickup_location'], data['dropoff_location'])
         except Exception:
             dur_s, dist_m = None, None
 
-        # ---------- 3) Création de l'aller ----------
+# ---------- 3) Création de l'aller ----------
         try:
             full_name = f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
-            outbound = Booking(
+            outbound = cast(Any, Booking)(
                 customer_name=full_name or (getattr(user, 'username', '') or "Client"),
                 client_id=client.id,
                 scheduled_time=scheduled,
@@ -884,9 +1161,9 @@ class CreateManualReservation(Resource):
                 dropoff_location=data['dropoff_location'],
                 amount=float(data.get('amount') or 0),
                 status=BookingStatus.ACCEPTED,   # directement dispatchable
-                company_id=company.id,
+                company_id=cid,
                 booking_type='manual',
-                user_id=company.user_id,
+                user_id=getattr(company, "user_id", None),
                 is_return=False,
                 duration_seconds=dur_s,
                 distance_meters=dist_m,
@@ -904,7 +1181,7 @@ class CreateManualReservation(Resource):
             if is_rt:
                 # Si heure retour fournie: ACCEPTED ; sinon PENDING (non prêt au dispatch)
                 status_return = BookingStatus.ACCEPTED if return_dt else BookingStatus.PENDING
-                return_booking = Booking(
+                return_booking = cast(Any, Booking)(
                     parent_booking_id=outbound.id,
                     customer_name=outbound.customer_name,
                     client_id=client.id,
@@ -914,9 +1191,9 @@ class CreateManualReservation(Resource):
                     pickup_location=outbound.dropoff_location,
                     dropoff_location=outbound.pickup_location,
                     amount=float(data.get('amount') or 0),
-                    company_id=company.id,
+                    company_id=cid,
                     booking_type='manual',
-                    user_id=company.user_id,
+                    user_id=getattr(company, "user_id", None),
                     is_round_trip=False,
                     duration_seconds=dur_s,
                     distance_meters=dist_m,
@@ -937,15 +1214,15 @@ class CreateManualReservation(Resource):
             return {"error": "Une erreur interne est survenue."}, 500
 
         # ---------- 6) Déclencher la queue si dispatch actif ----------
-        _maybe_trigger_dispatch(company.id, "create")
+        _maybe_trigger_dispatch(cid, "create")
 
         # ---------- 7) Réponse ----------
         resp = {
             "message": "Réservation créée.",
-            "reservation": outbound.serialize,
+            "reservation": cast(Any, outbound).serialize,
         }
         if return_booking:
-            resp["return_booking"] = return_booking.serialize
+            resp["return_booking"] = cast(Any, return_booking).serialize
         return resp, 201
 
 # ======================================================
@@ -960,7 +1237,21 @@ class ClientReservations(Resource):
         if error_response:
             return error_response, status_code
 
-        client = Client.query.options(joinedload(Client.user)).filter_by(id=client_id, company_id=company.id).first()
+        # 🔒 company.id → int sûr (évite Column[int]/Optional)
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        client = (
+            Client.query
+            .options(joinedload(Client.user))
+            .filter_by(id=client_id, company_id=cid)
+            .first()
+        )
         if not client:
             return {"error": "Client introuvable."}, 404
 
@@ -975,35 +1266,40 @@ class ClientReservations(Resource):
             "created_at": client.created_at.isoformat() if client.created_at else None,
         }
 
-        # --- DÉBUT DE LA CORRECTION ---
-        bookings = Booking.query.filter_by(
-            client_id=client.id,
-            company_id=company.id
-        ).order_by(Booking.scheduled_time.desc()).all()
+        bookings = (
+            Booking.query
+            .filter_by(client_id=client.id, company_id=cid)
+            .order_by(Booking.scheduled_time.desc())
+            .all()
+        )
         
-        # --- FIN DE LA CORRECTION ---
 
-        # Le reste du code est inchangé et fonctionne maintenant correctement
         total_pending_amount = 0
         enriched_bookings = []
+        from typing import Any, cast
         for booking in bookings:
-            invoice = booking.invoice
-            booking_data = booking.serialize
+            invoice = getattr(booking, "invoice", None)
+            booking_data = cast(Any, booking).serialize
             if invoice:
-                booking_data["invoice"] = invoice.serialize
-                if invoice.status != InvoiceStatus.PAID:
-                    total_pending_amount += booking.amount or 0
+                booking_data["invoice"] = cast(Any, invoice).serialize
+                if getattr(invoice, "status", None) != InvoiceStatus.PAID:
+                    total_pending_amount += (getattr(booking, "amount", 0) or 0)
             else:
                 total_pending_amount += booking.amount or 0
             enriched_bookings.append(booking_data)
 
-        invoices = (
-            Invoice.query
-            .filter_by(user_id=user.id, company_id=company.id)
-            .order_by(Invoice.created_at.desc())
-            .all()
-        )
-        invoice_list = [inv.serialize for inv in invoices]
+        # 🧾 Invoices: user peut être None → on protège user_id
+        user_id_safe = getattr(user, "id", None)
+        if user_id_safe is not None:
+            invoices = (
+                Invoice.query
+                .filter_by(user_id=user_id_safe, company_id=cid)
+                .order_by(Invoice.created_at.desc())
+                .all()
+            )
+        else:
+            invoices = []
+        invoice_list = [cast(Any, inv).serialize for inv in invoices]
 
         return {
             "client": client_info,
@@ -1023,6 +1319,14 @@ class TriggerReturnBooking(Resource):
         company, err, code = get_company_from_token()
         if err:
             return err, code
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
         data = request.get_json() or {}
         rt = data.get("return_time")
@@ -1030,22 +1334,24 @@ class TriggerReturnBooking(Resource):
         minutes_offset = int(data.get("minutes_offset", 15))
 
         # 1) Calcul de l’heure de retour (UTC) — par défaut +15 min
-        from shared.time_utils import now_utc, to_utc
         now = now_utc()
 
+        return_time: Optional[datetime]
         if urgent or not rt:
             return_time = now + timedelta(minutes=minutes_offset)
         else:
             try:
-                return_time = to_utc(rt)  # central helper
+                dt_utc = to_utc(rt)  # central helper
             except Exception as e:
                 return {"error": f"Format de date invalide : {e}"}, 400
+            # Pylance peut typer to_utc -> Optional[datetime]
+            return_time = cast(Any, dt_utc)
 
-        if return_time <= now:
+        if return_time is None or return_time <= now:
             return {"error": "L'heure de retour doit être dans le futur."}, 400
 
         # 2) Récupérer la réservation "aller" (ou un retour existant)
-        booking = Booking.query.filter_by(id=booking_id, company_id=company.id).first()
+        booking = Booking.query.filter_by(id=booking_id, company_id=cid).first()
         if not booking:
             return {"error": "Réservation introuvable."}, 404
 
@@ -1059,7 +1365,7 @@ class TriggerReturnBooking(Resource):
         else:
             booking.is_round_trip = True
             existing = Booking.query.filter_by(
-                parent_booking_id=booking.id, is_return=True, company_id=company.id
+                parent_booking_id=booking.id, is_return=True, company_id=cid
             ).first()
 
             if existing:
@@ -1068,7 +1374,7 @@ class TriggerReturnBooking(Resource):
                 return_booking = existing
                 action = "modifié"
             else:
-                return_booking = Booking(
+                return_booking = cast(Any, Booking)(
                     customer_name=booking.customer_name,
                     pickup_location=booking.dropoff_location,
                     dropoff_location=booking.pickup_location,
@@ -1080,7 +1386,7 @@ class TriggerReturnBooking(Resource):
                     parent_booking_id=booking.id,
                     user_id=booking.user_id,
                     client_id=booking.client_id,
-                    company_id=company.id,
+                    company_id=cid,
                 )
                 db.session.add(return_booking)
                 action = "créé"
@@ -1088,11 +1394,11 @@ class TriggerReturnBooking(Resource):
         # 4) Un seul commit + déclenchement de la queue
         db.session.add(booking)
         db.session.commit()
-        _maybe_trigger_dispatch(company.id, "return_request")
+        _maybe_trigger_dispatch(cid, "return_request")
 
         return {
             "message": f"Réservation retour {action} avec succès.",
-            "return_booking": return_booking.serialize,
+            "return_booking": cast(Any, return_booking).serialize,
         }, 200
 
 
@@ -1106,7 +1412,7 @@ parser.add_argument("first_name")
 parser.add_argument("last_name")
 parser.add_argument("address")
 parser.add_argument("phone")
-parser.add_argument("birth_date",               # ← Nouveau
+parser.add_argument("birth_date",
                     type=str,
                     required=False,
                     help="Date de naissance au format YYYY-MM-DD")
@@ -1128,6 +1434,14 @@ class CompanyClients(Resource):
         company, err, code = get_company_from_token()
         if err:
             return err, code
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
         q = request.args.get('search', '').strip()
         # On ne prend que les clients rattachés à cette entreprise,
@@ -1135,7 +1449,7 @@ class CompanyClients(Resource):
         query = Client.query \
             .options(joinedload(Client.user)) \
             .filter(
-                Client.company_id == company.id,
+                Client.company_id == cid,
                 Client.client_type != ClientType.SELF_SERVICE
             )
 
@@ -1151,7 +1465,7 @@ class CompanyClients(Resource):
 
         clients = query.all()
         # Chaque c.serialize retournera aussi c.user.serialize
-        return [c.serialize for c in clients], 200
+        return [cast(Any, c).serialize for c in clients], 200
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -1164,26 +1478,43 @@ class CompanyClients(Resource):
         company, err, code = get_company_from_token()
         if err:
             return err, code
-
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+ 
         args = parser.parse_args()
-        ctype = ClientType[args.client_type]
+        # 🧰 helper pour accéder aux champs (dict ou namespace)
+        def arg(name: str):
+            return args.get(name) if hasattr(args, "get") else getattr(args, name, None)
+        # 🔤 client_type sûr (str) pour l'index Enum
+        ct_str = str(arg("client_type") or "").upper()
+        if ct_str not in ClientType.__members__:
+            return {"error": "client_type invalide. Valeurs possibles: SELF_SERVICE, PRIVATE, CORPORATE"}, 400
+        ctype = ClientType[ct_str]
 
         # Normalisation
-        email = args.email.strip() if args.email and args.email.strip() else None
+        raw_email = arg("email")
+        email = raw_email.strip() if isinstance(raw_email, str) and raw_email.strip() else None
 
         # Validation selon type
         if ctype == ClientType.SELF_SERVICE and not email:
             return {"error": "email requis pour self-service"}, 400
         elif ctype != ClientType.SELF_SERVICE:
-            missing = [f for f in ("first_name", "last_name", "address") if not args.get(f)]
+            missing = [f for f in ("first_name", "last_name", "address") if not (arg(f) or "")]
             if missing:
                 return {"error": f"Champs manquants pour facturation : {', '.join(missing)}"}, 400
 
         # Parser la date de naissance
         birth_date = None
-        if args.birth_date:
+        raw_bd = arg("birth_date")
+        if raw_bd:
             try:
-                birth_date = datetime.strptime(args.birth_date, "%Y-%m-%d").date()
+                birth_date = datetime.strptime(str(raw_bd), "%Y-%m-%d").date()
             except ValueError:
                 return {"error": "Format de date de naissance invalide. Utiliser YYYY-MM-DD."}, 400
 
@@ -1191,21 +1522,19 @@ class CompanyClients(Resource):
         if email:
             username = email.split("@")[0]
         else:
-            username = (
-                args.first_name.strip().lower() + "." +
-                args.last_name.strip().lower() + "-" +
-                uuid4().hex[:6]
-            )
+            fn = (arg("first_name") or "").strip().lower()
+            ln = (arg("last_name") or "").strip().lower()
+            username = f"{fn}.{ln}-{uuid4().hex[:6]}"
 
         # Création du User
-        user = User(
+        user = cast(Any, User)(
             public_id=str(uuid4()),
             username=username,
-            first_name=args.first_name or "",
-            last_name=args.last_name or "",
+            first_name=(arg("first_name") or ""),
+            last_name=(arg("last_name") or ""),
             email=email,
-            phone=args.phone,
-            address=args.address,
+            phone=arg("phone"),
+            address=arg("address"),
             birth_date=birth_date,
             role=UserRole.client,
         )
@@ -1221,11 +1550,11 @@ class CompanyClients(Resource):
         db.session.flush()  # pour récupérer user.id
 
         # Création du profil Client
-        client = Client(
+        client = cast(Any, Client)(
             user_id=user.id,
-            company_id=company.id,
+            company_id=cid,
             client_type=ctype,
-            billing_address=args.address,
+            billing_address=arg("address"),
             contact_email=email,
         )
         db.session.add(client)
@@ -1239,7 +1568,7 @@ class CompanyClients(Resource):
         if ctype == ClientType.SELF_SERVICE:
             send_welcome_email(user.email, pwd)
 
-        return client.serialize, 201
+        return cast(Any, client).serialize, 201
 
 # ======================================================
 # 19. Liste des trajets complétés par un chauffeur
@@ -1253,18 +1582,36 @@ class DriverCompletedTrips(Resource):
         if error_response:
             return error_response, status_code
 
-        driver = Driver.query.filter_by(id=driver_id, company_id=company.id).one_or_none()
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        driver = Driver.query.filter_by(id=driver_id, company_id=cid).one_or_none()
         if not driver:
             return {"error": "Driver not found for this company"}, 404
 
+        # 🔒 driver.id → int sûr (évite Column[int] → bool)
+        did_obj = getattr(driver, "id", None)
+        try:
+            did = int(did_obj) if did_obj is not None else None
+        except Exception:
+            did = None
+        if did is None:
+            return {"error": "Driver introuvable (ID invalide)."}, 500
+
+        status_col = cast(Any, Booking).status  # aide Pylance pour .in_()
         trips = (
             Booking.query
+            .filter_by(driver_id=did, company_id=cid)
             .filter(
-                Booking.driver_id == driver.id,
-                Booking.company_id == company.id,
-                Booking.status.in_([
+                status_col.in_([
                     BookingStatus.COMPLETED,
-                    BookingStatus.RETURN_COMPLETED
+                    BookingStatus.RETURN_COMPLETED,
                 ])
             )
             .all()
@@ -1302,7 +1649,16 @@ class ToggleDriverType(Resource):
         if error_response:
             return error_response, status_code
 
-        driver = Driver.query.filter_by(id=driver_id, company_id=company.id).one_or_none()
+        # 🔒 company.id → int sûr (évite Column[int]/Optional)
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        driver = Driver.query.filter_by(id=driver_id, company_id=cid).one_or_none()
         if not driver:
             return {"error": "Chauffeur non trouvé"}, 404
 
@@ -1314,8 +1670,8 @@ class ToggleDriverType(Resource):
         try:
             db.session.commit()
             app_logger.info(f"✅ Type du chauffeur {driver.id} changé en {driver.driver_type.value}")
-            _driver_trigger(company, "availability")
-            return driver.serialize, 200
+            _driver_trigger(cast(Any, company), "availability")
+            return cast(Any, driver).serialize, 200
         except Exception as e:
             db.session.rollback()
             app_logger.error(f"❌ Erreur lors du changement de type du chauffeur {driver.id}: {e}")
@@ -1335,50 +1691,58 @@ class CreateDriver(Resource):
         if error_response:
             return error_response, status_code
 
-        data = request.get_json()
+        # 🔒 company.id → int sûr (évite Column[int]/Optional)
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        data = request.get_json(silent=True) or {}
 
         # Vérifier si l'email ou le username existe déjà
-        if User.query.filter_by(email=data['email']).first():
+        if User.query.filter_by(email=data.get('email')).first():
             return {"error": "Cette adresse email est déjà utilisée."}, 409
-        if User.query.filter_by(username=data['username']).first():
+        if User.query.filter_by(username=data.get('username')).first():
             return {"error": "Ce nom d'utilisateur est déjà utilisé."}, 409
 
         try:
             # 1. Créer l'objet User
-            new_user = User(
-                username=data['username'],
-                first_name=data['first_name'],
-                last_name=data['last_name'],
-                email=data['email'],
+            new_user = cast(Any, User)(
+                username=data.get('username'),
+                first_name=data.get('first_name'),
+                last_name=data.get('last_name'),
+                email=data.get('email'),
                 role=UserRole.driver,
-                public_id=str(uuid4())
+                public_id=str(uuid4()),
             )
-            new_user.set_password(data['password'])
+            new_user.set_password(data.get('password'))
             db.session.add(new_user)
             db.session.flush()  # Pour obtenir l'ID du nouvel utilisateur
 
             # 2. Créer l'objet Driver
-            new_driver = Driver(
+            new_driver = cast(Any, Driver)(
                 user_id=new_user.id,
-                company_id=company.id,
-                vehicle_assigned=data['vehicle_assigned'],
-                brand=data['brand'],
-                license_plate=data['license_plate'],
+                company_id=cid,
+                vehicle_assigned=data.get('vehicle_assigned'),
+                brand=data.get('brand'),
+                license_plate=data.get('license_plate'),
                 is_active=True,
-                is_available=True
+                is_available=True,
             )
             db.session.add(new_driver)
             db.session.commit()
 
-            app_logger.info(f"✅ Nouveau chauffeur {new_driver.id} créé pour l'entreprise {company.id}")
-            return new_driver.serialize, 201
+            app_logger.info("✅ Nouveau chauffeur %s créé pour l'entreprise %s", getattr(new_driver, "id", "?"), cid)
+            return cast(Any, new_driver).serialize, 201
 
         except Exception as e:
             db.session.rollback()
             app_logger.error(f"❌ ERREUR create_driver: {str(e)}", exc_info=True)
             return {"error": "Une erreur interne est survenue lors de la création du chauffeur."}, 500
-        
-        # Dans routes/companies.py
+
 
 # ======================================================
 # 22. Gestion des réservations (création, suppression, planification, dispatch urgent)
@@ -1393,7 +1757,16 @@ class SingleReservation(Resource):
         if error_response:
             return error_response, status_code
 
-        booking = Booking.query.filter_by(id=reservation_id, company_id=company.id).one_or_none()
+        # 🔒 company.id → int sûr (évite Column[int]/Optional)
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        booking = Booking.query.filter_by(id=reservation_id, company_id=cid).one_or_none()
 
         if not booking:
             return {"error": "Réservation non trouvée."}, 404
@@ -1406,14 +1779,12 @@ class SingleReservation(Resource):
         try:
             db.session.delete(booking)
             db.session.commit()
-            _maybe_trigger_dispatch(company.id, "cancel")
+            _maybe_trigger_dispatch(cid, "cancel")
             return {"message": "La réservation a été supprimée avec succès."}, 200
         except Exception as e:
             db.session.rollback()
             app_logger.error(f"❌ ERREUR delete_reservation: {str(e)}", exc_info=True)
             return {"error": "Une erreur interne est survenue."}, 500
-        
-        # --- Planifier une réservation : fixe scheduled_time ---
 
 # ======================================================
 # 23. Planifier une réservation (fixe scheduled_time)
@@ -1424,20 +1795,24 @@ class ScheduleReservation(Resource):
     @role_required(UserRole.company)
     def put(self, booking_id):
         company, err, code = get_company_from_token()
-        if err: return err, code
+        if err: 
+            return err, code
+
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
         data = request.get_json() or {}
         iso = data.get("scheduled_time")
         if not iso:
             return {"error": "scheduled_time (ISO 8601) est requis"}, 400
 
-        from shared.time_utils import to_utc, now_utc
-        try:
-            sched_utc = to_utc(iso)
-        except Exception as e:
-            return {"error": f"Format de date invalide: {e}"}, 400
-
-        booking = Booking.query.filter_by(id=booking_id, company_id=company.id).first()
+        booking = Booking.query.filter_by(id=booking_id, company_id=cid).first()
         if not booking:
             return {"error": "Réservation introuvable."}, 404
 
@@ -1459,11 +1834,10 @@ class ScheduleReservation(Resource):
         db.session.commit()
 
         # Déclenche la réoptimisation si activé
-        if getattr(company, "dispatch_enabled", True):
-            from services.unified_dispatch import queue
-            queue.trigger_on_booking_change(company.id, action="update")
+        if bool(getattr(company, "dispatch_enabled", True)):
+            _maybe_trigger_dispatch(cid, "update")
 
-        return {"message": "Heure planifiée mise à jour.", "reservation": booking.serialize}, 200
+        return {"message": "Heure planifiée mise à jour.", "reservation": cast(Any, booking).serialize}, 200
 
 # ======================================================
 # 24. Dispatch urgent d'une réservation (fixe scheduled_time si besoin, status -> ACCEPTED)
@@ -1474,7 +1848,17 @@ class DispatchNowReservation(Resource):
     @role_required(UserRole.company)
     def post(self, booking_id):
         company, err, code = get_company_from_token()
-        if err: return err, code
+        if err:
+            return err, code
+
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
         data = request.get_json(silent=True) or {}
         minutes_offset = int(data.get("minutes_offset", 15))
@@ -1483,7 +1867,7 @@ class DispatchNowReservation(Resource):
         from shared.time_utils import now_utc
         now = now_utc()
 
-        booking = Booking.query.filter_by(id=booking_id, company_id=company.id).first()
+        booking = Booking.query.filter_by(id=booking_id, company_id=cid).first()
         if not booking:
             return {"error": "Réservation introuvable."}, 404
 
@@ -1498,11 +1882,10 @@ class DispatchNowReservation(Resource):
         db.session.commit()
 
         # Déclencher immédiatement la queue
-        if getattr(company, "dispatch_enabled", True):
-            from services.unified_dispatch import queue
-            queue.trigger_on_booking_change(company.id, action="update")
+        if bool(getattr(company, "dispatch_enabled", True)):
+            _maybe_trigger_dispatch(cid, "update")
 
-        return {"message": "Dispatch urgent déclenché.", "reservation": booking.serialize}, 200
+        return {"message": "Dispatch urgent déclenché.", "reservation": cast(Any, booking).serialize}, 200
 
 # ======================================================
 # 25. Gestion des véhicules de l'entreprise (CRUD)
@@ -1513,25 +1896,44 @@ class MyVehicles(Resource):
     @role_required(UserRole.company)
     def get(self):
         company, err, code = get_company_from_token()
-        if err: return err, code
-        vehicles = Vehicle.query.filter_by(company_id=company.id).all()
-        return [v.serialize for v in vehicles], 200
+        if err: 
+            return err, code
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+        vehicles = Vehicle.query.filter_by(company_id=cid).all()
+        return [cast(Any, v).serialize for v in vehicles], 200
 
     @jwt_required()
     @role_required(UserRole.company)
     @companies_ns.expect(vehicle_create_model, validate=True)
     def post(self):
         company, err, code = get_company_from_token()
-        if err: return err, code
+        if err: 
+            return err, code
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
         data = request.get_json() or {}
         try:
             def parse_dt(s):
-                if not s: return None
+                if not s: 
+                    return None
                 return datetime.fromisoformat(s.replace('Z','+00:00'))
 
-            v = Vehicle(
-                company_id=company.id,
+            v = cast(Any, Vehicle)(
+                company_id=cid,
                 model=data['model'],
                 license_plate=data['license_plate'],
                 year=data.get('year'),
@@ -1543,7 +1945,7 @@ class MyVehicles(Resource):
             )
             db.session.add(v)
             db.session.commit()
-            return v.serialize, 201
+            return cast(Any, v).serialize, 201
         except (ValueError, IntegrityError) as e:
             db.session.rollback()
             return {"error": str(e)}, 400
@@ -1561,34 +1963,61 @@ class MyVehicle(Resource):
     @role_required(UserRole.company)
     def get(self, vehicle_id):
         company, err, code = get_company_from_token()
-        if err: return err, code
-        v = Vehicle.query.filter_by(id=vehicle_id, company_id=company.id).first()
-        if not v: return {"error": "Véhicule introuvable."}, 404
-        return v.serialize, 200
+        if err: 
+            return err, code
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+        v = Vehicle.query.filter_by(id=vehicle_id, company_id=cid).first()
+        if not v:
+            return {"error": "Véhicule introuvable."}, 404
+        from typing import Any, cast
+        return cast(Any, v).serialize, 200
 
     @jwt_required()
     @role_required(UserRole.company)
     @companies_ns.expect(vehicle_update_model, validate=False)
     def put(self, vehicle_id):
         company, err, code = get_company_from_token()
-        if err: return err, code
-        v = Vehicle.query.filter_by(id=vehicle_id, company_id=company.id).first()
-        if not v: return {"error": "Véhicule introuvable."}, 404
+        if err:
+            return err, code
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+        v = Vehicle.query.filter_by(id=vehicle_id, company_id=cid).first()
+        if not v:
+            return {"error": "Véhicule introuvable."}, 404
 
         data = request.get_json(silent=True) or {}
         try:
             def parse_dt(s):
-                if not s: return None
+                if not s:
+                    return None
                 return datetime.fromisoformat(s.replace('Z','+00:00'))
 
             for k in ('model','license_plate','year','vin','seats','wheelchair_accessible'):
-                if k in data: setattr(v, k, data[k])
-            if 'insurance_expires_at' in data: v.insurance_expires_at = parse_dt(data['insurance_expires_at'])
-            if 'inspection_expires_at' in data: v.inspection_expires_at = parse_dt(data['inspection_expires_at'])
-            if 'is_active' in data: v.is_active = bool(data['is_active'])
+                if k in data:
+                    setattr(v, k, data[k])
+            if 'insurance_expires_at' in data:
+                v.insurance_expires_at = parse_dt(data['insurance_expires_at'])
+            if 'inspection_expires_at' in data:
+                v.inspection_expires_at = parse_dt(data['inspection_expires_at'])
+            if 'is_active' in data:
+                v.is_active = bool(data['is_active'])
 
             db.session.commit()
-            return v.serialize, 200
+            return cast(Any, v).serialize, 200
+        
         except (ValueError, IntegrityError) as e:
             db.session.rollback()
             return {"error": str(e)}, 400
@@ -1605,9 +2034,19 @@ class MyVehicle(Resource):
         Hard delete si query param ?hard=true
         """
         company, err, code = get_company_from_token()
-        if err: return err, code
-        v = Vehicle.query.filter_by(id=vehicle_id, company_id=company.id).first()
-        if not v: return {"error": "Véhicule introuvable."}, 404
+        if err:
+            return err, code
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+        v = Vehicle.query.filter_by(id=vehicle_id, company_id=cid).first()
+        if not v:
+            return {"error": "Véhicule introuvable."}, 404
 
         hard = request.args.get('hard', 'false').lower() == 'true'
         try:
@@ -1634,7 +2073,7 @@ class CompanyLogo(Resource):
         company, err, code = get_company_from_token()
         if err:
             return err, code
-        return {"logo_url": getattr(company, "logo_url", None)}, 200
+        return {"logo_url": getattr(cast(Any, company), "logo_url", None)}, 200
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -1643,15 +2082,22 @@ class CompanyLogo(Resource):
         company, err, code = get_company_from_token()
         if err:
             return err, code
-
-        if "file" not in request.files:
-            return {"error": "Aucun fichier reçu (champ 'file')."}, 400
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
         file = request.files["file"]
-        if not file or file.filename == "":
+        if not file or not file.filename:
             return {"error": "Fichier vide."}, 400
 
-        if not _allowed_logo(file.filename):
+        # filename peut être Optional[str] → on passe une str sûre à _allowed_logo
+        fname_in = file.filename or ""
+        if not _allowed_logo(fname_in):
             return {"error": f"Extension non autorisée. Autorisées: {', '.join(sorted(ALLOWED_LOGO_EXT))}."}, 400
 
         # Vérif taille
@@ -1667,21 +2113,22 @@ class CompanyLogo(Resource):
         os.makedirs(logos_dir, exist_ok=True)
 
         # On supprime les anciens logos pour éviter des reliquats quand l’extension change
-        _remove_existing_logos(company.id, logos_dir)
+        _remove_existing_logos(cid, logos_dir)
 
         # Nom stable: company_<id>.<ext>
-        ext = file.filename.rsplit(".", 1)[1].lower()
-        fname = secure_filename(f"company_{company.id}.{ext}")
+        # à ce stade, _allowed_logo True ⇒ il y a bien un point et une extension
+        ext = (file.filename or "").rsplit(".", 1)[1].lower()
+        fname = secure_filename(f"company_{cid}.{ext}")
         fpath = os.path.join(logos_dir, fname)
         file.save(fpath)
 
         # URL publique (via /uploads/…)
         public_base = current_app.config.get("UPLOADS_PUBLIC_BASE", "/uploads")
-        company.logo_url = f"{public_base}/company_logos/{fname}"
+        setattr(cast(Any, company), "logo_url", f"{public_base}/company_logos/{fname}")
         db.session.commit()
 
         return {
-            "logo_url": company.logo_url,
+            "logo_url": getattr(cast(Any, company), "logo_url", None),
             "size_bytes": size_bytes,
         }, 200
 
@@ -1693,7 +2140,7 @@ class CompanyLogo(Resource):
         if err:
             return err, code
 
-        logo_url = getattr(company, "logo_url", None)
+        logo_url = getattr(cast(Any, company), "logo_url", None)
         if logo_url:
             # On mappe l’URL publique vers le chemin disque
             upload_root = current_app.config.get("UPLOADS_DIR", os.path.join(current_app.root_path, "uploads"))
@@ -1706,7 +2153,7 @@ class CompanyLogo(Resource):
                 except OSError:
                     pass
 
-        company.logo_url = None
+        setattr(cast(Any, company), "logo_url", None)
         db.session.commit()
         return {"message": "Logo supprimé."}, 200
 

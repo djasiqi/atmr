@@ -1,27 +1,62 @@
+# --- models.py (en-tête : imports standard) ---
 import os
 import uuid
 import re
-from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import Column, Integer, String, Float, UniqueConstraint, Enum as SQLEnum, ForeignKey, DateTime, Boolean, inspect, func, Text, event, Index
-from sqlalchemy.orm import relationship, validates
-from sqlalchemy_utils import StringEncryptedType 
-from sqlalchemy import CheckConstraint
-from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
-from datetime import datetime, date, timezone
-from enum import Enum
-from enum import Enum as PyEnum # Importer la classe Enum
-import pytz
-from ext import db
 import json
-from sqlalchemy.types import TypeDecorator, TEXT
-from sqlalchemy.orm import validates
-import enum
-from sqlalchemy import Enum as SQLAlchemyEnum
-from shared.time_utils import to_utc, now_utc, to_geneva_local, format_geneva, iso_utc_z, to_utc_from_db, parse_local_naive, now_local, split_date_time_local
-# --- models.py (en-tête : imports standard) ---
-import os
 import base64
 import binascii
+from datetime import datetime, date, timezone
+from enum import Enum
+from typing import Any, Optional, cast
+
+from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import (
+    Column, Integer, String, Float, UniqueConstraint, Enum as SQLEnum, ForeignKey,
+    DateTime, Boolean, func, Text, Index, CheckConstraint
+)
+from sqlalchemy.orm import relationship, validates
+from sqlalchemy_utils import StringEncryptedType
+from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
+from sqlalchemy import event
+import enum
+from enum import Enum as PyEnum
+from sqlalchemy import Enum as SQLAlchemyEnum
+
+from ext import db
+from sqlalchemy.types import TypeDecorator, TEXT
+
+# garde uniquement les utilitaires temps que tu utilises vraiment
+from shared.time_utils import (
+    to_geneva_local, iso_utc_z, to_utc_from_db, parse_local_naive, now_local, split_date_time_local
+)
+
+# --- Helpers de typage/normalisation (pour calmer Pylance) ---
+def _as_dt(v: Any) -> Optional[datetime]:
+    return v if isinstance(v, datetime) else None
+
+def _as_str(v: Any) -> Optional[str]:
+    return v if isinstance(v, str) else None
+
+def _as_float(v: Any, default: float = 0.0) -> float:
+    try:
+        return float(v)
+    except Exception:
+        return default
+
+def _as_int(v: Any, default: int = 0) -> int:
+    try:
+        return int(v)
+    except Exception:
+        return default
+
+def _as_bool(v: Any) -> bool:
+    # ⚠️ n’essaie pas de faire "if Column[bool]" → force un bool Python
+    return bool(v) if isinstance(v, (bool, int)) else False
+
+def _iso(v: Any) -> Optional[str]:
+    dt = _as_dt(v)
+    return dt.isoformat() if dt else None
+
 
 def _load_encryption_key() -> bytes:
     """
@@ -71,7 +106,7 @@ class UserRole(str, PyEnum):
     driver = "driver"
     company = "company"
 
-class BookingStatus(str, Enum):
+class BookingStatus(str, PyEnum):
     PENDING = "pending"
     ACCEPTED = "accepted"
     ASSIGNED = "assigned"
@@ -289,7 +324,7 @@ class User(db.Model):
             "role": self.role.value,
             "zip_code": self.zip_code or "Non spécifié",
             "city": self.city or "Non spécifié",
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": _iso(self.created_at),
             "force_password_change": self.force_password_change
         }
 
@@ -371,16 +406,14 @@ class Company(db.Model):
 
     @property
     def serialize(self):
+        created_dt = _as_dt(self.created_at)
+        accepted_dt = _as_dt(self.accepted_at)
         return {
             "id": self.id,
             "name": self.name,
-
-            # opérationnel
             "address": self.address,
             "latitude": self.latitude,
             "longitude": self.longitude,
-
-            # domiciliation
             "domicile": {
                 "line1": self.domicile_address_line1,
                 "line2": self.domicile_address_line2,
@@ -388,29 +421,21 @@ class Company(db.Model):
                 "city": self.domicile_city,
                 "country": self.domicile_country,
             },
-
-            # contact
             "contact_email": self.contact_email,
             "contact_phone": self.contact_phone,
-
-            # facturation & légal
             "iban": self.iban,
             "uid_ide": self.uid_ide,
             "billing_email": self.billing_email,
             "billing_notes": self.billing_notes,
-
-            "is_approved": self.is_approved,
-            "is_partner": self.is_partner,
+            "is_approved": _as_bool(self.is_approved),
+            "is_partner": _as_bool(self.is_partner),
             "user_id": self.user_id,
             "service_area": self.service_area,
             "max_daily_bookings": self.max_daily_bookings,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "dispatch_enabled": self.dispatch_enabled,
-            "accepted_at": self.accepted_at.isoformat() if self.accepted_at else None,
-            
-            # logo
+            "created_at": created_dt.isoformat() if created_dt else None,
+            "dispatch_enabled": _as_bool(self.dispatch_enabled),
+            "accepted_at": accepted_dt.isoformat() if accepted_dt else None,
             "logo_url": self.logo_url,
-            # véhicules (liste)
             "vehicles": [v.serialize for v in self.vehicles],
         }
 
@@ -485,17 +510,19 @@ class Company(db.Model):
             raise ValueError("ID utilisateur invalide.")
         return user_id
 
-    def toggle_approval(self):
-        self.is_approved = not self.is_approved
-        return self.is_approved
+    # Company
+    def toggle_approval(self) -> bool:
+        self.is_approved = not _as_bool(self.is_approved)
+        return _as_bool(self.is_approved)
+
+    def can_dispatch(self) -> bool:
+        return _as_bool(self.is_approved) and _as_bool(self.dispatch_enabled)
+
 
     def approve(self):
         from datetime import datetime, timezone
         self.is_approved = True
         self.accepted_at = datetime.now(timezone.utc)
-
-    def can_dispatch(self):
-        return self.is_approved and self.dispatch_enabled
 
     def __repr__(self):
         return f"<Company {self.name} | ID: {self.id} | Approved: {self.is_approved}>"
@@ -539,6 +566,9 @@ class Vehicle(db.Model):
 
     @property
     def serialize(self):
+        ins_dt = _as_dt(self.insurance_expires_at)
+        insp_dt = _as_dt(self.inspection_expires_at)
+        created_dt = _as_dt(self.created_at)
         return {
             "id": self.id,
             "company_id": self.company_id,
@@ -547,12 +577,13 @@ class Vehicle(db.Model):
             "year": self.year,
             "vin": self.vin,
             "seats": self.seats,
-            "wheelchair_accessible": self.wheelchair_accessible,
-            "insurance_expires_at": self.insurance_expires_at.isoformat() if self.insurance_expires_at else None,
-            "inspection_expires_at": self.inspection_expires_at.isoformat() if self.inspection_expires_at else None,
-            "is_active": self.is_active,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "wheelchair_accessible": _as_bool(self.wheelchair_accessible),
+            "insurance_expires_at": ins_dt.isoformat() if ins_dt else None,
+            "inspection_expires_at": insp_dt.isoformat() if insp_dt else None,
+            "is_active": _as_bool(self.is_active),
+            "created_at": created_dt.isoformat() if created_dt else None,
         }
+
 
 class Driver(db.Model):
     __tablename__ = 'driver'
@@ -595,9 +626,6 @@ class Driver(db.Model):
 
     @property
     def serialize(self):
-        """
-        Sérialisation des données du chauffeur pour le frontend.
-        """
         return {
             "id": self.id,
             "user_id": self.user_id,
@@ -605,19 +633,19 @@ class Driver(db.Model):
             "first_name": getattr(self.user, "first_name", "Non spécifié"),
             "last_name": getattr(self.user, "last_name", "Non spécifié"),
             "phone": getattr(self.user, "phone", "Non spécifié"),
-            "photo": self.driver_photo or (getattr(self.user, "profile_image", "/images/default-driver.png")),
+            "photo": self.driver_photo or getattr(self.user, "profile_image", "/images/default-driver.png"),
             "company_id": self.company_id,
             "company_name": self.company.name if self.company else "Non spécifié",
-            "is_active": self.is_active,
-            "is_available": self.is_available,  # ✅ Ajout pour savoir si le chauffeur est libre
+            "is_active": _as_bool(self.is_active),
+            "is_available": _as_bool(self.is_available),
             "driver_type": self.driver_type.value if self.driver_type else None,
             "vehicle_assigned": self.vehicle_assigned or "Non spécifié",
             "brand": self.brand or "Non spécifié",
             "license_plate": self.license_plate or "Non spécifié",
             "latitude": self.latitude,
             "longitude": self.longitude
-            
         }
+
 
     @validates('user_id')
     def validate_user_id(self, key, user_id):
@@ -664,12 +692,16 @@ class Driver(db.Model):
         }
 
 
-    def toggle_availability(self):
+    def toggle_availability(self) -> bool:
         """
         Active ou désactive la disponibilité du chauffeur.
+        Note: on force la conversion en bool Python pour éviter le cas
+        où l'attribut est vu comme un Column[bool] par l'analyseur statique.
         """
-        self.is_available = not self.is_available
-        return self.is_available
+        current = _as_bool(getattr(self, "is_available", False))
+        new_val = not current
+        self.is_available = new_val
+        return new_val
 
 
     def update_location(self, latitude, longitude):
@@ -766,12 +798,19 @@ class DriverWorkingConfig(db.Model):
             raise ValueError(f"'{key}' doit être entre 0 et 1440 (minutes de la journée)")
         return value
     
+    # DriverWorkingConfig (comparaisons numériques)
     def validate_config(self):
-        if self.earliest_start >= self.latest_start:
+        earliest = _as_int(self.earliest_start)
+        latest = _as_int(self.latest_start)
+        if earliest >= latest:
             raise ValueError("earliest_start doit être avant latest_start")
-        if self.break_earliest >= self.break_latest:
+
+        be = _as_int(self.break_earliest)
+        bl = _as_int(self.break_latest)
+        if be >= bl:
             raise ValueError("break_earliest doit être avant break_latest")
-        if self.break_duration > self.total_working_minutes:
+
+        if _as_int(self.break_duration) > _as_int(self.total_working_minutes):
             raise ValueError("La pause ne peut pas excéder le temps de travail total")
 
     def readable_hours(self):
@@ -899,9 +938,10 @@ class Client(db.Model):
 
     # ---------------- Validators ---------------- #
 
+    # Client.validate_contact_email (comparaison d’enum)
     @validates('contact_email')
     def validate_contact_email(self, key, email):
-        if self.client_type == ClientType.SELF_SERVICE and not email:
+        if cast(ClientType, self.client_type) == ClientType.SELF_SERVICE and not email:
             raise ValueError("L'email est requis pour les clients self-service.")
         if email:
             email = email.strip()
@@ -909,9 +949,14 @@ class Client(db.Model):
                 raise ValueError("Email invalide.")
         return email
 
+
     @validates('billing_address')
     def validate_billing_address(self, key, value):
-        if self.company_id and (not value or not value.strip()):
+        # Evite l’ambiguïté Column[int] | int aux yeux de Pylance
+        company_id_val = getattr(self, "company_id", None)
+        # force un entier Python; _as_int(None) -> 0
+        cid = _as_int(company_id_val, 0)
+        if cid > 0 and (not value or not str(value).strip()):
             raise ValueError("L'adresse de facturation est obligatoire pour les clients liés à une entreprise.")
         return value
 
@@ -984,14 +1029,20 @@ class Client(db.Model):
             },
 
             "is_active": self.is_active,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": _iso(self.created_at)
         }
 
     # ---------------- Utils ---------------- #
 
     def toggle_active(self):
-        self.is_active = not self.is_active
-        return self.is_active
+        """
+        Active/désactive le client en forçant une valeur bool Python
+        (évite Column[bool] | bool côté analyse statique).
+        """
+        current = _as_bool(getattr(self, "is_active", False))
+        new_val = not current
+        self.is_active = new_val
+        return new_val
 
     def is_self_service(self):
         return self.client_type == ClientType.SELF_SERVICE
@@ -1065,30 +1116,24 @@ class Booking(db.Model):
 
     # Version CORRIGÉE (plus robuste)
     @property
-    def customer_full_name(self):
-        # Priorité n°1 : Toujours utiliser le nom qui a été explicitement sauvegardé dans la course.
-        if self.customer_name:
-            return self.customer_name
-        
-        # Priorité n°2 (fallback) : Si le premier est vide, essayer de le construire depuis la relation.
+    def customer_full_name(self) -> str:
+        cust = _as_str(self.customer_name)
+        if cust:
+            return cust
         if self.client and self.client.user:
-            if self.client.user.first_name or self.client.user.last_name:
-                return f"{self.client.user.first_name or ''} {self.client.user.last_name or ''}".strip()
-            return self.client.user.username
-            
-        # Fallback final si tout le reste échoue.
+            u = self.client.user
+            if (u.first_name or u.last_name):
+                return f"{u.first_name or ''} {u.last_name or ''}".strip()
+            return u.username
         return "Non spécifié"
+
     
-    def get_effective_payer(self):
-        """
-        Retourne un dict normalisé pour l'adresse/identité du payeur.
-        Priorité: billed_to_company si billed_to_type != 'patient',
-        sinon le Client lié à la booking.
-        """
-        if (self.billed_to_type or 'patient') != 'patient' and getattr(self, "billed_to_company", None):
+    def get_effective_payer(self) -> dict:
+        btype = (_as_str(self.billed_to_type) or "patient").lower()
+        if btype != "patient" and getattr(self, "billed_to_company", None):
             comp = self.billed_to_company
             return {
-                "type": self.billed_to_type,
+                "type": btype,
                 "name": comp.name,
                 "address": getattr(comp, "address", None),
                 "email": getattr(comp, "contact_email", None),
@@ -1096,7 +1141,6 @@ class Booking(db.Model):
                 "company_id": comp.id
             }
 
-        # Fallback: client relié à la réservation
         cli = getattr(self, "client", None)
         if cli and getattr(cli, "user", None):
             u = cli.user
@@ -1111,89 +1155,75 @@ class Booking(db.Model):
             }
 
         return {"type": "patient", "name": self.customer_full_name}
+
     
     # 🔹 Propriété pour la sérialisation
     @property
-    # Sécuriser les relations
     def serialize(self):
-            # -- Normalisations temps (depuis DB) --
-            # Pas besoin de conversion, on utilise directement le datetime naïf
-            scheduled_time = self.scheduled_time
-            date_local, time_local = split_date_time_local(scheduled_time)  # ('YYYY-MM-DD','HH:MM')
+        scheduled_dt = _as_dt(self.scheduled_time)
+        created_dt = _as_dt(self.created_at)
+        updated_dt = _as_dt(self.updated_at)
+        boarded_dt = _as_dt(self.boarded_at)
+        completed_dt = _as_dt(self.completed_at)
 
-            created_loc = to_geneva_local(self.created_at) if self.created_at else None
-            updated_loc = to_geneva_local(self.updated_at) if self.updated_at else None
-            boarded_iso = iso_utc_z(self.boarded_at)
-            completed_iso = iso_utc_z(self.completed_at)        
-            cli = self.client
-            cli_user = getattr(cli, "user", None)
+        date_local, time_local = split_date_time_local(scheduled_dt) if scheduled_dt else (None, None)
+        created_loc = to_geneva_local(created_dt) if created_dt else None
+        updated_loc = to_geneva_local(updated_dt) if updated_dt else None
 
-            data = {
-                "id": self.id,
-                "customer_name": self.customer_name or self.customer_full_name,
-                "client_name": self.customer_name or self.customer_full_name,
+        amt = _as_float(self.amount, 0.0)
+        status_val = cast(BookingStatus, self.status)
 
-                "pickup_location": self.pickup_location,
-                "dropoff_location": self.dropoff_location,
+        cli = self.client
+        cli_user = getattr(cli, "user", None)
 
-                # ⬇️ ISO UTC machine (avec 'Z')
-                "amount": round(self.amount or 0, 2),
-                "scheduled_time": scheduled_time.isoformat() if scheduled_time else None,
+        return {
+            "id": self.id,
+            "customer_name": self.customer_full_name,
+            "client_name": self.customer_full_name,
+            "pickup_location": self.pickup_location,
+            "dropoff_location": self.dropoff_location,
+            "amount": round(amt, 2),
+            "scheduled_time": scheduled_dt.isoformat() if scheduled_dt else None,
+            "date_formatted": date_local or "Non spécifié",
+            "time_formatted": time_local or "Non spécifié",
+            "status": getattr(status_val, "value", "unknown").lower(),
+            "client": {
+                "id": getattr(cli, "id", None),
+                "first_name": getattr(cli_user, "first_name", "") if cli_user else "",
+                "last_name": getattr(cli_user, "last_name", "") if cli_user else "",
+                "email": getattr(cli_user, "email", "") if cli_user else "",
+                "full_name": self.customer_full_name,
+            },
+            "company": self.company.name if self.company else "Non assignée",
+            "driver": self.driver.user.username if (self.driver and self.driver.user) else "Non assigné",
+            "driver_id": self.driver_id,
+            "duration_seconds": self.duration_seconds,
+            "distance_meters": self.distance_meters,
+            "medical_facility": self.medical_facility or "Non spécifié",
+            "doctor_name": self.doctor_name or "Non spécifié",
+            "hospital_service": self.hospital_service or "Non spécifié",
+            "notes_medical": self.notes_medical or "Aucune note",
+            "created_at": created_loc.strftime("%d/%m/%Y %H:%M") if created_loc else "Non spécifié",
+            "updated_at": updated_loc.strftime("%d/%m/%Y %H:%M") if updated_loc else "Non spécifié",
+            "rejected_by": self.rejected_by,
+            "is_round_trip": _as_bool(self.is_round_trip),
+            "is_return": _as_bool(self.is_return),
+            "has_return": self.return_trip is not None,
+            "boarded_at": iso_utc_z(to_utc_from_db(boarded_dt)) if boarded_dt else None,
+            "completed_at": iso_utc_z(to_utc_from_db(completed_dt)) if completed_dt else None,
+            "duree_minutes": (
+                int((completed_dt - boarded_dt).total_seconds() // 60)
+                if (completed_dt and boarded_dt) else None
+            ),
+            "duration_in_minutes": self.duration_in_minutes,
+            "billing": {
+                "billed_to_type": (_as_str(self.billed_to_type) or "patient"),
+                "billed_to_company": self.billed_to_company.serialize if self.billed_to_company else None,
+                "billed_to_contact": self.billed_to_contact
+            },
+            "patient_name": _as_str(self.customer_name),
+        }
 
-                # ⬇️ Affichage local Europe/Zurich pour le front
-                "date_formatted": date_local or "Non spécifié",
-                "time_formatted": time_local or "Non spécifié",            
-                "status": getattr(self.status, "value", "unknown").lower(),
-
-                "client": {
-                    "id": getattr(cli, "id", None),
-                    "first_name": getattr(cli_user, "first_name", "") if cli_user else "",
-                    "last_name": getattr(cli_user, "last_name", "") if cli_user else "",
-                    "email": getattr(cli_user, "email", "") if cli_user else "",
-                    "full_name": self.customer_full_name,
-                },
-
-                "company": self.company.name if self.company else "Non assignée",
-                "driver": self.driver.user.username if (self.driver and self.driver.user) else "Non assigné",
-                "driver_id": self.driver_id,
-
-                "duration_seconds": self.duration_seconds,
-                "distance_meters": self.distance_meters,
-
-                "medical_facility": self.medical_facility or "Non spécifié",
-                "doctor_name": self.doctor_name or "Non spécifié",
-                "hospital_service": self.hospital_service or "Non spécifié",
-                "notes_medical": self.notes_medical or "Aucune note",
-
-                # Dates système rendues en local pour l’affichage
-                "created_at": created_loc.strftime("%d/%m/%Y %H:%M") if created_loc else "Non spécifié",
-                "updated_at": updated_loc.strftime("%d/%m/%Y %H:%M") if updated_loc else "Non spécifié",
-
-                "rejected_by": self.rejected_by,
-
-                "is_round_trip": bool(self.is_round_trip),
-                "is_return": bool(self.is_return),
-                "has_return": self.return_trip is not None,
-
-                # Événements de course (ISO UTC)
-                "boarded_at": iso_utc_z(to_utc_from_db(self.boarded_at)) if self.boarded_at else None,
-                "completed_at": iso_utc_z(to_utc_from_db(self.completed_at)) if self.completed_at else None,
-
-                # garde si tu as bien ce champ côté modèle/service
-                "duree_minutes": (
-                    int((self.completed_at - self.boarded_at).total_seconds() // 60)
-                    if (self.completed_at and self.boarded_at) else None
-                ),
-                "duration_in_minutes": getattr(self, "duration_in_minutes", None),
-
-                "billing": {
-                    "billed_to_type": self.billed_to_type or "patient",
-                    "billed_to_company": self.billed_to_company.serialize if self.billed_to_company else None,
-                    "billed_to_contact": self.billed_to_contact
-                },
-                "patient_name": self.customer_name,  # pour clarté front
-            }
-            return data
 
     
     @staticmethod
@@ -1209,11 +1239,9 @@ class Booking(db.Model):
 
 
     
+    # Booking.validate_user_id (retire inspect/deleted qui fait jaser Pylance)
     @validates('user_id')
     def validate_user_id(self, key, user_id):
-        state = inspect(self)
-        if user_id is None and state.deleted:
-            return user_id
         if not isinstance(user_id, int) or user_id <= 0:
             raise ValueError("L'ID utilisateur doit être un entier positif.")
         return user_id
@@ -1231,10 +1259,11 @@ class Booking(db.Model):
 
     @validates('scheduled_time')
     def validate_scheduled_time(self, key, scheduled_time):
-        st = parse_local_naive(scheduled_time)  # ← normalisation en naive Europe/Zurich
+        st = parse_local_naive(scheduled_time)
         if st and st < now_local():
             raise ValueError("Heure prévue dans le passé.")
         return st
+
 
     @validates('customer_name')
     def validate_customer_name(self, key, customer_name):
@@ -1272,7 +1301,8 @@ class Booking(db.Model):
     
     
     def is_future(self) -> bool:
-        return self.scheduled_time > now_local()
+        st = _as_dt(self.scheduled_time)
+        return bool(st and st > now_local())
 
     def update_status(self, new_status):
         """Met à jour le statut de la réservation."""
@@ -1281,23 +1311,22 @@ class Booking(db.Model):
         self.status = new_status
 
     @property
-    def duration_in_minutes(self):
-        if self.boarded_at and self.completed_at:
-            delta = self.completed_at - self.boarded_at
-            return int(delta.total_seconds() // 60)
+    def duration_in_minutes(self) -> Optional[int]:
+        b = _as_dt(self.boarded_at)
+        c = _as_dt(self.completed_at)
+        if b and c:
+            return int((c - b).total_seconds() // 60)
         return None
 
     def to_dict(self):
         return self.serialize
     
-    # Dans models.py, dans la classe Booking
-    def is_assignable(self):
-        # On importe la fonction to_utc au début de votre fichier models.py
-        # from services.dispatch import to_utc
-        return (
-            self.status in [BookingStatus.PENDING, BookingStatus.ACCEPTED]
-            and self.scheduled_time > now_local()
-        )
+    # Booking.is_assignable (pas de truthiness de Column)
+    def is_assignable(self) -> bool:
+        st = _as_dt(self.scheduled_time)
+        status_val = cast(BookingStatus, self.status)
+        return (status_val in (BookingStatus.PENDING, BookingStatus.ACCEPTED)) and bool(st and st > now_local())
+
 
     def assign_driver(self, driver_id: int):
         """
@@ -1306,10 +1335,14 @@ class Booking(db.Model):
         """
         if not self.is_assignable():
             raise ValueError("La réservation ne peut pas être attribuée actuellement.")
-        
-        if self.driver_id == driver_id:
+
+        # ⚠️ Pour Pylance, self.driver_id peut être un Column[int].
+        # On force donc une valeur Python avant de comparer.
+        current_driver_id = _as_int(getattr(self, "driver_id", None), 0)
+        target_driver_id = _as_int(driver_id, 0)
+        if current_driver_id == target_driver_id:
             return  # Ne rien faire si déjà assigné au même chauffeur
-        
+
         self.driver_id = driver_id
         self.status = BookingStatus.ASSIGNED
         self.updated_at = datetime.now(timezone.utc)
@@ -1331,21 +1364,36 @@ class Booking(db.Model):
     def _v_billed_to_company_id(self, key, value):
         if value is not None and (not isinstance(value, int) or value <= 0):
             raise ValueError("billed_to_company_id doit être un entier positif ou NULL")
+        # ⚠️ Evite ColumnElement[str] : récupère une chaîne Python et normalise
+        current_type = _as_str(getattr(self, "billed_to_type", None)) or "patient"
+        current_type = current_type.strip().lower()
         # Si le type courant est 'patient', on *renvoie* None (pas d'assignation !)
-        if (self.billed_to_type or 'patient') == 'patient':
+        if current_type == "patient":
             return None
         return value
 
-    # --- verrou de cohérence avant INSERT/UPDATE (pas de récursion ici) ---
-    def _enforce_billing_exclusive(mapper, connection, target: "Booking"):
-        btype = (target.billed_to_type or 'patient').lower()
-        if btype == 'patient':
+    # --- Verrou de cohérence avant INSERT/UPDATE (pas de récursion ici) ---
+    @staticmethod
+    def _enforce_billing_exclusive(_mapper, _connection, target: "Booking") -> None:
+        """
+        Si billed_to_type == 'patient' => billed_to_company_id forcé à NULL,
+        sinon billed_to_company_id doit être un entier positif.
+        """
+        # Normalise des valeurs Python (évite ColumnElement[...] dans les conditions)
+        btype = (_as_str(getattr(target, "billed_to_type", None)) or "patient").strip().lower()
+        if btype == "patient":
             # patient paie → pas de société
             target.billed_to_company_id = None
-        else:
-            # clinic/insurance → société obligatoire
-            if not target.billed_to_company_id:
-                raise ValueError("billed_to_company_id est obligatoire si billed_to_type n'est pas 'patient'")
+            return
+        # clinic / insurance → société obligatoire et valide (>0)
+        company_id = _as_int(getattr(target, "billed_to_company_id", None), 0)
+        if company_id <= 0:
+            raise ValueError("billed_to_company_id est obligatoire si billed_to_type n'est pas 'patient'")
+
+# Enregistrement des hooks d'événements SQLAlchemy
+
+event.listen(Booking, "before_insert", Booking._enforce_billing_exclusive)
+event.listen(Booking, "before_update", Booking._enforce_billing_exclusive)
 
 class Payment(db.Model):
     __tablename__ = 'payment'
@@ -1372,35 +1420,41 @@ class Payment(db.Model):
 
     @property
     def serialize(self):
-        """Sérialise les infos de Payment + un extrait de la réservation."""
+        amt = _as_float(self.amount, 0.0)
+        bk = self.booking  # évite les accès répétés et clarifie le typage
         return {
             "id": self.id,
-            "amount": self.amount,
+            "amount": amt,
             "method": self.method,
             "status": self.status.value,
-            "date": self.date.isoformat() if self.date else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "date": _iso(self.date),
+            "updated_at": _iso(self.updated_at),
             "client_id": self.client_id,
             "booking_id": self.booking_id,
             "booking_info": {
-                "pickup_location": self.booking.pickup_location if self.booking else None,
-                "dropoff_location": self.booking.dropoff_location if self.booking else None,
-                # Choisir UNE convention (ex: naïf local comme Booking)
-                "scheduled_time": (
-                    self.booking.scheduled_time.isoformat()
-                    if (self.booking and self.booking.scheduled_time) else None
-                )
+                "pickup_location": bk.pickup_location if bk else None,
+                "dropoff_location": bk.dropoff_location if bk else None,
+                # _iso gère None en interne → plus de warning "isoformat on None"
+                "scheduled_time": _iso(bk.scheduled_time) if bk else None,
             }
         }
+
     @validates('user_id')
     def validate_user_id(self, key, user_id):
-        state = inspect(self)
-        # Si l'objet est en cours de suppression et user_id est None, on autorise cette valeur
-        if user_id is None and state.deleted:
+        # Utilise une inspection défensive pour éviter l’avertissement Pylance
+        try:
+            from sqlalchemy import inspect as sa_inspect
+            state = sa_inspect(self)
+            is_deleted = bool(getattr(state, "deleted", False))
+        except Exception:
+            is_deleted = False
+
+        # Si l'objet est en cours de suppression et user_id est None, autoriser
+        if user_id is None and is_deleted:
             return user_id
-        if not user_id or user_id <= 0:
+        if not isinstance(user_id, int) or user_id <= 0:
             raise ValueError("L'ID utilisateur pour Payment doit être un entier positif.")
-        return user_id
+        return int(user_id)
 
     @validates('amount')
     def validate_amount(self, key, amount):
@@ -1475,6 +1529,11 @@ class Invoice(db.Model):
     # ========== Sérialisation enrichie ==========
     @property
     def serialize(self):
+        # Calcule une valeur "humaine" sûre pour le statut
+        st = self.status  # peut être Enum ou str selon le chargement
+        status_str = getattr(st, "value", None)
+        if not status_str:
+            status_str = str(st) if st is not None else "unknown"
         return {
             "id": self.id,
             "reference": self.reference,
@@ -1487,12 +1546,12 @@ class Invoice(db.Model):
             "company": self.company.serialize if self.company else None,
             "details": self.details,
             "pdf_url": self.pdf_url,
-            "status": self.status.value if self.status else "unknown",
+            "status": status_str,
             "status_human": self.status_human,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "due_date": self.due_date.isoformat() if self.due_date else None,
-            "paid_at": self.paid_at.isoformat() if self.paid_at else None,
+            "created_at": _iso(self.created_at),
+            "updated_at": _iso(self.updated_at),
+            "due_date": _iso(self.due_date),
+            "paid_at": _iso(self.paid_at),
         }
 
     @property
@@ -1507,7 +1566,8 @@ class Invoice(db.Model):
     # ========== Génération référence unique ==========
     @staticmethod
     def generate_reference():
-        import random, string
+        import random
+        import string
         prefix = "FCT"
         suffix = ''.join(random.choices(string.digits, k=7))
         return f"{prefix}-{suffix}"
@@ -1740,8 +1800,8 @@ class FavoritePlace(db.Model):
             "lat": self.lat,
             "lon": self.lon,
             "tags": self.tags,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": _iso(self.created_at),
+            "updated_at": _iso(self.updated_at),
         }
 
     # Backward-compat pour ton code existant

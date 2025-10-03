@@ -1,15 +1,56 @@
 {
-  // pointe VS Code sur votre venv
-  "python.defaultInterpreterPath": "${workspaceFolder}/venv/Scripts/python.exe",
+  // --- Python ---
+  "python.envFile": "${workspaceFolder}/backend/.env",
+  "python.defaultInterpreterPath": "C:/Users/jasiq/atmr/backend/venv/Scripts/python.exe",
+  "python.testing.unittestEnabled": true,
+  "python.testing.unittestArgs": ["-v", "-s", "./backend", "-p", "*test.py"],
+  "python.testing.pytestEnabled": false,
+  "python.testing.cwd": "${workspaceFolder}/backend",
+  "python.analysis.extraPaths": ["${workspaceFolder}/backend"],
+  "python.analysis.useLibraryCodeForTypes": true,
+  "python.analysis.typeCheckingMode": "basic",
 
-  // active la découverte automatique des sites-packages
-  "python.analysis.autoSearchPaths": true,
+  // --- Format/Lint globaux ---
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    // ⚠️ utiliser des chaînes ("explicit" ou "always"), pas true/false
+    "source.fixAll": "explicit",
+    "source.fixAll.eslint": "explicit",
+    "source.fixAll.ruff": "explicit",
+    "source.organizeImports.ruff": "explicit"
+  },
 
-  // ajoute explicitement le site-packages de votre venv
-  "python.analysis.extraPaths": [
-    "${workspaceFolder}/venv/Lib/site-packages"
+  // Python : formateur = Ruff (car installé)
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
+
+  // JS/TS : Prettier + ESLint
+  "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[javascriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+
+  "eslint.validate": ["javascript", "javascriptreact", "typescript", "typescriptreact", "json"],
+  "eslint.workingDirectories": [
+    { "directory": "frontend", "changeProcessCWD": true },
+    { "directory": "mobile/client-app", "changeProcessCWD": true },
+    { "directory": "mobile/driver-app", "changeProcessCWD": true }
   ],
 
-  // autorise Pylance à utiliser le code source des bibliothèques pour l’inférence de types
-  "python.analysis.useLibraryCodeForTypes": true
+  // --- Confort / perfs ---
+  "problems.decorations.enabled": true,
+  "files.exclude": { "**/node_modules": true, "**/__pycache__": true },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/__pycache__": true,
+    "**/.venv": true,
+    "**/build": true,
+    "**/dist": true
+  },
+
+  "workbench.view.alwaysShowHeaderActions": true,
+
+  // Ruff (extension native) — pas de ruff.lint.run (déprécié)
+  "ruff.enable": true
 }

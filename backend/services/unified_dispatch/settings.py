@@ -4,9 +4,9 @@ from __future__ import annotations
 import os
 import json
 from dataclasses import dataclass, field, asdict
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict
 from ast import literal_eval
-from datetime import timedelta
+from datetime import datetime
 
 
 # paramètres centralisés (capacité, buffers, pénalités…)
@@ -212,8 +212,11 @@ def for_company(company) -> Settings:
     return s
 
 def driver_work_window_from_config(driver_config):
-    """Extract driver work window from configuration."""
-    from datetime import datetime
-    from shared.time_utils import day_local_bounds
-    today = datetime.now().date()
-    return day_local_bounds(today)
+    """
+    Extract driver work window from configuration.
+    Retourne (start, end) en naïf local pour la journée courante.
+    """
+    from shared.time_utils import day_local_bounds, coerce_local_day
+    today_date = datetime.now().date()
+    day_str = coerce_local_day(today_date)  # 'YYYY-MM-DD'
+    return day_local_bounds(day_str)
