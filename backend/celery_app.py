@@ -46,18 +46,40 @@ celery.conf.beat_schedule = {
     },
 }
 
+# Initialize Flask app for Celery workers
+flask_app = None
+
+def get_flask_app():
+    """Get or create Flask app instance for Celery workers."""
+    global flask_app
+    if flask_app is None:
+        from app import create_app
+        config_name = os.getenv("FLASK_CONFIG", "production")
+        flask_app = create_app(config_name)
+        logger.info(f"Flask app created for Celery with config: {config_name}")
+    return flask_app
+
+
+class ContextTask(celery.Task):
+    """Custom Celery task that runs within Flask application context."""
+    def __call__(self, *args, **kwargs):
+        app = get_flask_app()
+        with app.app_context():
+            return self.run(*args, **kwargs)
+
+
+# Set the custom task class as default
+celery.Task = ContextTask
+
 
 def init_app(app: Flask) -> Celery:
     """
     Initialize Celery with Flask app context.
     Call this from create_app().
     """
-    class FlaskTask(celery.Task):
-        def __call__(self, *args, **kwargs):
-            with app.app_context():
-                return self.run(*args, **kwargs)
-
-    celery.Task = FlaskTask
+    global flask_app
+    flask_app = app
+    
     logger.info(
         f"Celery initialized with broker={CELERY_BROKER_URL}, "
         f"backend={CELERY_RESULT_BACKEND}, timezone={CELERY_TIMEZONE}"
