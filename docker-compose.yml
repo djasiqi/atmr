@@ -28,7 +28,7 @@ services:
       - DISPATCH_AUTORUN_ENABLED=true
       - UD_OSRM_URL=http://osrm:5000
       - SOCKETIO_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-      - DATABASE_URL=sqlite:////app/development.db
+      - DATABASE_URL=sqlite:////app/production.db
       - SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
       - JWT_SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
       - MAIL_SERVER=smtpout.secureserver.net
@@ -68,7 +68,7 @@ services:
       - DISPATCH_AUTORUN_INTERVAL_SEC=300
       - DISPATCH_AUTORUN_ENABLED=true
       - UD_OSRM_URL=http://osrm:5000
-      - DATABASE_URL=sqlite:////app/development.db
+      - DATABASE_URL=sqlite:////app/production.db
       - SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
       - JWT_SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
     volumes:
@@ -100,7 +100,7 @@ services:
       - CELERY_TIMEZONE=Europe/Zurich
       - DISPATCH_AUTORUN_INTERVAL_SEC=300
       - DISPATCH_AUTORUN_ENABLED=true
-      - DATABASE_URL=sqlite:////app/development.db
+      - DATABASE_URL=sqlite:////app/production.db
       - SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
       - JWT_SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
     volumes:
@@ -130,7 +130,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - DATABASE_URL=sqlite:////app/development.db
+      - DATABASE_URL=sqlite:////app/production.db
       - SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
       - JWT_SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
     volumes:
