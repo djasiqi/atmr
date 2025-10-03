@@ -28,8 +28,19 @@ services:
       - DISPATCH_AUTORUN_ENABLED=true
       - UD_OSRM_URL=http://osrm:5000
       - SOCKETIO_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - DATABASE_URL=sqlite:////app/development.db
+      - SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
+      - JWT_SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
+      - MAIL_SERVER=smtpout.secureserver.net
+      - MAIL_PORT=465
+      - MAIL_USE_TLS=false
+      - MAIL_USE_SSL=true
+      - MAIL_USERNAME=info@helvetiamarketing.ch
+      - MAIL_PASSWORD=Palidhje@37_46!!
+      - MAIL_DEFAULT_SENDER=info@helvetiamarketing.ch
     volumes:
       - ./backend:/app
+      - db-data:/app/data
     depends_on:
       - redis
       - osrm
@@ -57,11 +68,16 @@ services:
       - DISPATCH_AUTORUN_INTERVAL_SEC=300
       - DISPATCH_AUTORUN_ENABLED=true
       - UD_OSRM_URL=http://osrm:5000
+      - DATABASE_URL=sqlite:////app/development.db
+      - SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
+      - JWT_SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
     volumes:
       - ./backend:/app
+      - db-data:/app/data
     depends_on:
       - redis
       - osrm
+      - api
     restart: unless-stopped
 
   # Celery Beat
@@ -84,10 +100,15 @@ services:
       - CELERY_TIMEZONE=Europe/Zurich
       - DISPATCH_AUTORUN_INTERVAL_SEC=300
       - DISPATCH_AUTORUN_ENABLED=true
+      - DATABASE_URL=sqlite:////app/development.db
+      - SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
+      - JWT_SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
     volumes:
       - ./backend:/app
+      - db-data:/app/data
     depends_on:
       - redis
+      - api
     restart: unless-stopped
 
   # Flower - Celery Monitoring
@@ -109,8 +130,12 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DATABASE_URL=sqlite:////app/development.db
+      - SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
+      - JWT_SECRET_KEY=MqN-AkGsL6PIuieHQbPmSI1y7TAgW3uTIzLA7vKd4QfAZ-Yj8dHIV4LUClNZt0R1pXll-DTQ59ugRsZaOln-bQ
     volumes:
       - ./backend:/app
+      - db-data:/app/data
     depends_on:
       - redis
       - celery-worker
@@ -136,3 +161,4 @@ services:
 
 volumes:
   redis-data:
+  db-data:
