@@ -630,13 +630,20 @@ class SavePushToken(Resource):
             raw_id: Any = payload.get('driverId') or payload.get('driver_id')
             if raw_id is not None:
                 try:
-                    driver_id = int(raw_id)
-                except Exception:
-                    pass
+                    # Convertir en float d'abord pour gérer les nombres décimaux, puis en int
+                    driver_id = int(float(raw_id))
+                    app_logger.info(f"[push-token] driver_id extrait du payload: {driver_id}")
+                except (ValueError, TypeError) as e:
+                    app_logger.warning(f"[push-token] Impossible de convertir driver_id={raw_id}: {e}")
+                    return {"error": f"Format de driverId invalide: {raw_id}"}, 400
 
             # 2) sinon on déduit depuis le JWT (user -> driver)
             if driver_id is None:
+                app_logger.info("[push-token] driver_id absent du payload, déduction depuis JWT")
                 user_pid = get_jwt_identity()
+                if not user_pid:
+                    return {"error": "Token JWT invalide ou expiré."}, 401                
+ 
                 user = User.query.filter_by(public_id=user_pid).one_or_none()
                 if not user:
                     return {"error": "Utilisateur non trouvé pour le JWT."}, 404
@@ -644,18 +651,23 @@ class SavePushToken(Resource):
                 if not drv:
                     return {"error": "Chauffeur introuvable pour cet utilisateur."}, 404
                 driver_id = int(drv.id)
-
+                app_logger.info(f"[push-token] driver_id déduit du JWT: {driver_id}")
+            # 3) Validation finale et enregistrement
             driver = Driver.query.get(driver_id)
             if not driver:
-                return {"error": "ID du chauffeur invalide ou manquant."}, 400
+               app_logger.error(f"[push-token] Driver introuvable pour driver_id={driver_id}")
+               return {"error": f"Chauffeur introuvable pour l'ID {driver_id}."}, 404
 
+            # Enregistrement du token
             driver.push_token = token
             db.session.commit()
 
-            return {"message": "✅ Push token enregistré avec succès."}, 200
+            app_logger.info(f"[push-token] ✅ Token enregistré avec succès pour driver_id={driver_id}")
+            return {"message": "✅ Push token enregistré avec succès.", "driver_id": driver_id}, 200
 
         except Exception as e:
             db.session.rollback()
+            app_logger.error(f"[push-token] ❌ Erreur serveur: {str(e)}", exc_info=True)
             traceback.print_exc()
             return {"error": f"Erreur serveur : {str(e)}"}, 500
 

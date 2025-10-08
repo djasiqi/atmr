@@ -75,7 +75,7 @@ def init_chat_socket(socketio: SocketIO):
             # Stash session minimale
             session["user_id"] = user.id
             session["first_name"] = user.first_name
-            session["role"] = user.role.value
+            session["role"] = user.role.value.lower()
 
             if user.role == UserRole.driver:
                 driver = Driver.query.filter_by(user_id=user.id).first()
@@ -240,7 +240,7 @@ def init_chat_socket(socketio: SocketIO):
     def handle_driver_location(data):
         """
         Handler pour la réception de la localisation du chauffeur.
-        Accepte le driver_id dans le payload pour plus de robustesse.
+        ✅ FIX: Accepte driver_id dans payload + fallback robuste par user_id
         """
         try:
             # 1. Récupération du SID pour le debug

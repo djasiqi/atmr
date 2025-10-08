@@ -45,6 +45,13 @@ export const useNotifications = () => {
           );
           return;
         }
+        // ✅ FIX: Sauvegarder driver_id dans AsyncStorage pour Socket.IO
+        try {
+          await AsyncStorage.setItem("driver_id", String(driverId));
+          console.log(`💾 driver_id sauvegardé dans AsyncStorage: ${driverId}`);
+        } catch (e) {
+          console.warn("⚠️ Impossible de sauvegarder driver_id:", e);
+        }
 
         // ✅ **OPTIMISATION : Ne contacter le serveur que si le token est nouveau**
         const storageKey = `push_token_driver_${driverId}`;
@@ -61,10 +68,16 @@ export const useNotifications = () => {
           );
 
           try {
-            await api.post("/driver/save-push-token", { driverId, token });
+            // ✅ FIX: S'assurer que driverId est bien un nombre
+            await api.post("/driver/save-push-token", {
+              driverId: Number(driverId),
+              token,
+            });
+            console.log("✅ Token push enregistré avec succès sur le serveur");
           } catch (e: any) {
             // Log détaillé côté client pour diagnostiquer un 400 éventuel
-            console.warn("❌ Envoi push token échoué:", {
+            console.error("❌ Envoi push token échoué:", {
+              driverId,
               status: e?.response?.status,
               data: e?.response?.data,
               message: e?.message,

@@ -106,16 +106,27 @@ export function disconnectSocket() {
 // Helpers côté driver
 export async function joinDriverRoom() {
   const s = socket ?? (connectPromise ? await connectPromise : null);
+  if (!s) {
+    console.warn("⚠️ Socket non connecté, impossible de rejoindre la room");
+    return;
+  }
+
   try {
     const idStr = await AsyncStorage.getItem("driver_id");
     const driver_id = idStr ? Number(idStr) : undefined;
-    if (driver_id && Number.isFinite(driver_id)) {
+    // ✅ FIX: Validation stricte du driver_id
+    if (driver_id && Number.isFinite(driver_id) && driver_id > 0) {
       s?.emit("join_driver_room", { driver_id });
+      console.log(`📍 join_driver_room émis avec driver_id=${driver_id}`);
     } else {
       s?.emit("join_driver_room");
+      console.log("📍 join_driver_room émis sans driver_id (fallback JWT)");
     }
   } catch {
     s?.emit("join_driver_room");
+    console.log(
+      "📍 join_driver_room émis sans driver_id (erreur AsyncStorage)"
+    );
   }
 }
 
@@ -128,15 +139,31 @@ export async function sendDriverLocation(payload: {
   timestamp?: number | string;
 }) {
   const s = socket ?? (connectPromise ? await connectPromise : null);
+  if (!s) {
+    console.warn(
+      "⚠️ Socket non connecté, impossible d'envoyer la localisation"
+    );
+    return;
+  }
+
   try {
     const idStr = await AsyncStorage.getItem("driver_id");
     const driver_id = idStr ? Number(idStr) : undefined;
     const body =
-      driver_id && Number.isFinite(driver_id)
+      driver_id && Number.isFinite(driver_id) && driver_id > 0
         ? { ...payload, driver_id }
         : payload;
     s?.emit("driver_location", body);
+    const has_driver_id =
+      "driver_id" in (body as Record<string, unknown>) &&
+      typeof (body as any).driver_id === "number";
+    console.log(`📍 driver_location émis:`, {
+      has_driver_id,
+      lat: payload.latitude,
+      lon: payload.longitude,
+    });
   } catch {
     s?.emit("driver_location", payload);
+    console.log("📍 driver_location émis sans driver_id (erreur)");
   }
 }
