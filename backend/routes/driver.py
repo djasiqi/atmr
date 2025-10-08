@@ -614,14 +614,36 @@ class SavePushToken(Resource):
     @jwt_required()
     def post(self):
         try:
-            data = request.get_json(force=True)
-            driver_id = data.get('driverId')
-            token = data.get('token')
+            # Log & typage strict
+            payload_raw = request.get_json(force=True) or {}
+            app_logger.info(f"[push-token] payload={payload_raw}")
+            payload: dict[str, Any] = tcast(dict[str, Any], payload_raw)
 
-            if not isinstance(driver_id, int):
-                return {"error": "ID du chauffeur invalide ou manquant."}, 400
-            if not isinstance(token, str) or len(token) < 10:
-                return {"error": "Token FCM invalide ou manquant."}, 400
+            # token (expo/fcm) requis
+            token_any: Any = payload.get('token') or payload.get('expo_token') or payload.get('push_token')
+            if not isinstance(token_any, str) or len(token_any) < 10:
+                return {"error": "Token FCM/Expo invalide ou manquant."}, 400
+            token: str = token_any
+
+            # 1) si driverId fourni -> on essaye de le caster
+            driver_id: int | None = None
+            raw_id: Any = payload.get('driverId', payload.get('driver_id', None))
+            if raw_id is not None:
+                try:
+                    driver_id = int(raw_id)
+                except Exception:
+                    driver_id = None
+
+            # 2) sinon on déduit depuis le JWT (user -> driver)
+            if driver_id is None:
+                user_pid = get_jwt_identity()
+                user = User.query.filter_by(public_id=user_pid).one_or_none()
+                if not user:
+                    return {"error": "Utilisateur non trouvé pour le JWT."}, 404
+                drv = Driver.query.filter_by(user_id=user.id).one_or_none()
+                if not drv:
+                    return {"error": "Chauffeur introuvable pour cet utilisateur."}, 404
+                driver_id = int(drv.id)
 
             driver = Driver.query.get(driver_id)
             if not driver:

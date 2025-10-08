@@ -1,6 +1,10 @@
 // services/socket.ts
 import { io, type Socket } from "socket.io-client";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { baseURL } from "./api"; // ← réutilise l’URL déjà déduite (Expo dev/prod)
+
+// Flask-SocketIO vit à la racine (/socket.io). On enlève le suffixe /api.
+const SOCKET_ORIGIN = baseURL.replace(/\/api$/, "");
 
 // (Optionnel) logs verbeux en dev pour socket.io
 let enableSocketIODebug = () => {};
@@ -42,12 +46,15 @@ export async function connectSocket(token: string): Promise<Socket | null> {
 
   connectPromise = new Promise<Socket>((resolve, reject) => {
     try {
-      socket = io(baseURL, buildOptions(token));
+      // ⚠️ Utiliser l’origine sans /api sinon 404 sur /api/socket.io
+      socket = io(SOCKET_ORIGIN, buildOptions(token));
 
       socket.on("connect", () => {
         console.log("✅ Socket connecté, sid:", socket?.id);
-        // rejoindre la room chauffeur à la connexion
-        socket?.emit("join_driver_room");
+        +(
+          // rejoindre la room chauffeur à la connexion (avec driver_id si dispo)
+          (+joinDriverRoom().catch(() => {}))
+        );
         resolve(socket as Socket);
       });
 
@@ -99,7 +106,17 @@ export function disconnectSocket() {
 // Helpers côté driver
 export async function joinDriverRoom() {
   const s = socket ?? (connectPromise ? await connectPromise : null);
-  s?.emit("join_driver_room");
+  try {
+    const idStr = await AsyncStorage.getItem("driver_id");
+    const driver_id = idStr ? Number(idStr) : undefined;
+    if (driver_id && Number.isFinite(driver_id)) {
+      s?.emit("join_driver_room", { driver_id });
+    } else {
+      s?.emit("join_driver_room");
+    }
+  } catch {
+    s?.emit("join_driver_room");
+  }
 }
 
 export async function sendDriverLocation(payload: {
@@ -111,5 +128,15 @@ export async function sendDriverLocation(payload: {
   timestamp?: number | string;
 }) {
   const s = socket ?? (connectPromise ? await connectPromise : null);
-  s?.emit("driver_location", payload);
+  try {
+    const idStr = await AsyncStorage.getItem("driver_id");
+    const driver_id = idStr ? Number(idStr) : undefined;
+    const body =
+      driver_id && Number.isFinite(driver_id)
+        ? { ...payload, driver_id }
+        : payload;
+    s?.emit("driver_location", body);
+  } catch {
+    s?.emit("driver_location", payload);
+  }
 }

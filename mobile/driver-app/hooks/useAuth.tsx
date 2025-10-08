@@ -14,9 +14,9 @@ import {
   Driver,
 } from "@/services/api";
 
-
 // --- Clef de stockage unique pour le token (alignée backend/front) ---
 const TOKEN_KEY = "token";
+const DRIVER_ID_KEY = "driver_id";
 
 interface AuthContextType {
   driver: Driver | null;
@@ -82,24 +82,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     loadDriver();
   }, [loadDriver]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    setLoading(true);
-    try {
-      const response: AuthResponse = await loginDriver(email, password);
-      await setTokenSafe(response.token);
-      const driverProfile = await fetchDriverProfile();
-      setDriver(driverProfile);
-    } catch (error) {
-      console.error("Erreur lors du login :", error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  }, [setTokenSafe]);
+  const login = useCallback(
+    async (email: string, password: string) => {
+      setLoading(true);
+      try {
+        const response: AuthResponse = await loginDriver(email, password);
+        await setTokenSafe(response.token);
+        const driverProfile = await fetchDriverProfile();
+        setDriver(driverProfile);
+        await AsyncStorage.setItem(DRIVER_ID_KEY, String(driverProfile.id));
+      } catch (error) {
+        console.error("Erreur lors du login :", error);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [setTokenSafe]
+  );
 
   const logout = useCallback(async () => {
     await setTokenSafe(null);
     setDriver(null);
+    await AsyncStorage.removeItem(DRIVER_ID_KEY);
   }, [setTokenSafe]);
 
   const refreshProfile = useCallback(async () => {
@@ -108,6 +113,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     try {
       const driverProfile = await fetchDriverProfile();
       setDriver(driverProfile);
+      await AsyncStorage.setItem(DRIVER_ID_KEY, String(driverProfile.id));
     } catch (error) {
       console.error("Erreur lors du rafraîchissement du profil :", error);
     } finally {

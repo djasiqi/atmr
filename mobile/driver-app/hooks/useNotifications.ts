@@ -1,7 +1,8 @@
 // C:\Users\jasiq\atmr\mobile\driver-app\hooks\useNotifications.ts
 import { useEffect } from "react";
 import * as Notifications from "expo-notifications";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { NotificationBehavior } from "expo-notifications";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device";
 import { Platform } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,15 +10,16 @@ import api from "@/services/api";
 import { getErrorMessage, logError } from "@/utils/errorHandler";
 
 // 🔔 Configuration du comportement des notifications en mode foreground
+const foregroundBehavior: NotificationBehavior = {
+  shouldShowAlert: true,
+  shouldPlaySound: true,
+  shouldSetBadge: true,
+  // requis par les types Expo récents
+  shouldShowBanner: true,
+  shouldShowList: true,
+};
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    // Add these two lines
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async () => foregroundBehavior,
 });
 
 export const useNotifications = () => {
@@ -25,7 +27,8 @@ export const useNotifications = () => {
 
   useEffect(() => {
     // Ne rien faire tant que l'utilisateur n'est pas chargé et identifié
-    if (loading || !driver) {
+    // Et ne rien faire sur web (expo-notifications non supporté)
+    if (Platform.OS === "web" || loading || !driver) {
       return;
     }
 
@@ -34,27 +37,45 @@ export const useNotifications = () => {
         // Étape 1 : Obtenir le token de l'appareil
         const token = await registerForPushNotificationsAsync(); // (Cette fonction doit exister ailleurs dans votre code)
 
-        if (!token || !driver.id || typeof driver.id !== 'number') {
-          console.warn("⛔ Token ou ID de chauffeur invalide, enregistrement annulé.");
+        // Cast fort en entier pour correspondre au backend (évite "ID du chauffeur invalide ou manquant.")
+        const driverId = Number((driver as any)?.id);
+        if (!token || !Number.isInteger(driverId)) {
+          console.warn(
+            "⛔ Token ou ID de chauffeur invalide, enregistrement annulé."
+          );
           return;
         }
 
         // ✅ **OPTIMISATION : Ne contacter le serveur que si le token est nouveau**
-        const storageKey = `push_token_driver_${driver.id}`;
+        const storageKey = `push_token_driver_${driverId}`;
         const lastSentToken = await AsyncStorage.getItem(storageKey);
 
         if (lastSentToken === token) {
-          console.log("✅ Token de notification inchangé, pas de nouvel enregistrement.");
+          console.log(
+            "✅ Token de notification inchangé, pas de nouvel enregistrement."
+          );
         } else {
-          console.log("🔔 Nouveau token détecté, enregistrement sur le serveur pour le chauffeur:", driver.id);
-          
-          await api.post("/driver/save-push-token", {
-            driverId: driver.id,
-            token,
-          });
+          console.log(
+            "🔔 Nouveau token détecté, enregistrement sur le serveur pour le chauffeur:",
+            driverId
+          );
+
+          try {
+            await api.post("/driver/save-push-token", { driverId, token });
+          } catch (e: any) {
+            // Log détaillé côté client pour diagnostiquer un 400 éventuel
+            console.warn("❌ Envoi push token échoué:", {
+              status: e?.response?.status,
+              data: e?.response?.data,
+              message: e?.message,
+            });
+            throw e;
+          }
 
           await AsyncStorage.setItem(storageKey, token);
-          console.log("✅ Token enregistré sur le serveur et sauvegardé localement.");
+          console.log(
+            "✅ Token enregistré sur le serveur et sauvegardé localement."
+          );
         }
       } catch (error: unknown) {
         logError("Erreur durant la configuration des notifications", error);
@@ -64,14 +85,23 @@ export const useNotifications = () => {
     setupAndRegister();
 
     // Étape 2 : Mettre en place les écouteurs d'événements
-    const notificationListener = Notifications.addNotificationReceivedListener(notification => {
-      console.log("📩 Notification reçue pendant que l'app est ouverte:", notification);
-    });
+    const notificationListener = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        console.log(
+          "📩 Notification reçue pendant que l'app est ouverte:",
+          notification
+        );
+      }
+    );
 
-    const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log("📲 L'utilisateur a interagi avec une notification:", response);
-      // TODO: Ajouter la logique de navigation ici (ex: rediriger vers un écran)
-    });
+    const responseListener =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        console.log(
+          "📲 L'utilisateur a interagi avec une notification:",
+          response
+        );
+        // TODO: Ajouter la logique de navigation ici (ex: rediriger vers un écran)
+      });
 
     // Étape 3 : Nettoyer les écouteurs quand le composant est démonté
     return () => {
@@ -86,8 +116,12 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
     if (!Device.isDevice) {
       console.warn("⚠️ Emulator detected - notifications may be limited");
     }
-
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    if (Platform.OS === "web") {
+      // Pas de notifications push sur web via expo-notifications
+      return null;
+    }
+    const { status: existingStatus } =
+      await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
     if (existingStatus !== "granted") {
@@ -111,20 +145,20 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
       });
     }
 
-    // ✅ **IMPROVEMENT 3: Removed hardcoded projectId**
+    // ✅ Pas de projectId en dur (Expo SDK récent : OK)
     const token = await Notifications.getExpoPushTokenAsync();
-    
+
     console.log("📱 Expo push token:", token.data.substring(0, 50) + "...");
 
     return token.data;
   } catch (error: unknown) {
     logError("Error registering for notifications", error);
-    
+
     const errorMessage = getErrorMessage(error);
-    if (errorMessage.includes('FIS_AUTH_ERROR')) {
+    if (errorMessage.includes("FIS_AUTH_ERROR")) {
       console.warn("⚠️ Firebase Error - Expo token should still work");
     }
-    
+
     return null;
   }
 }
