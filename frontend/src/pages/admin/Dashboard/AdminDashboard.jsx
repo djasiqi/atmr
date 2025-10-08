@@ -21,7 +21,8 @@ import HeaderDashboard from "../../../components/layout/Header/HeaderDashboard";
 import Sidebar from "../../../components/layout/Sidebar/AdminSidebar/AdminSidebar";
 
 const AdminDashboard = () => {
-  const { adminId } = useParams(); // ✅ Récupération de l'adminId
+  // La route est /dashboard/admin/:public_id → on récupère public_id
+  const { public_id: adminId } = useParams();
 
   const [stats, setStats] = useState({});
   const [recentBookings, setRecentBookings] = useState([]);
@@ -33,7 +34,7 @@ const AdminDashboard = () => {
     loadStats();
     loadRecentBookings();
     loadRecentUsers();
-  }, []);
+  }, [adminId]);
 
   const loadStats = async () => {
     try {
@@ -70,7 +71,8 @@ const AdminDashboard = () => {
     <div className={styles.adminContainer}>
       <HeaderDashboard />
       <div className={styles.dashboard}>
-        <Sidebar adminId={adminId} /> {/* ✅ Passer adminId à la Sidebar */}
+        <Sidebar adminId={adminId} />{" "}
+        {/* ✅ Passer public_id (adminId) à la Sidebar */}
         <main className={styles.content}>
           <h1>📊 Tableau de bord administrateur</h1>
 

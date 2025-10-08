@@ -1,23 +1,30 @@
-import { useEffect,useRef ,useState } from 'react';
-import { connectSocket, getSocket } from '@/services/socket';
-import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
-import api from '@/services/api';
-import type { Socket } from 'socket.io-client';
+import { useEffect, useRef, useState } from "react";
+import { connectSocket, getSocket } from "@/services/socket";
+import * as Notifications from "expo-notifications";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import api from "@/services/api";
+import type { Socket } from "socket.io-client";
 
 const refreshAccessToken = async (): Promise<string | null> => {
   const refreshToken = await AsyncStorage.getItem("refresh_token");
   if (!refreshToken) return null;
 
   try {
-    const response = await axios.post(`${api.defaults.baseURL}/auth/refresh-token`, null, {
+    const url = `${api.defaults.baseURL}/auth/refresh-token`; // baseURL DOIT contenir /api
+    const response = await axios.post(url, null, {
       headers: { Authorization: `Bearer ${refreshToken}` },
     });
 
-    const newToken = response.data.access_token;
-    await AsyncStorage.setItem("token", newToken);
-    return newToken;
+    const newToken =
+      (response.data && (response.data.access_token || response.data.token)) ||
+      null;
+
+    if (newToken) {
+      await AsyncStorage.setItem("token", newToken);
+      return newToken;
+    }
+    return null;
   } catch (err) {
     console.warn("❌ Erreur lors du refresh token :", err);
     return null;
@@ -150,7 +157,6 @@ export const useSocket = (
         }
       }, delay);
     };
-    
 
     const initializeSocket = async () => {
       let token = await AsyncStorage.getItem("token");

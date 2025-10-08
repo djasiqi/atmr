@@ -5,8 +5,11 @@ import AsyncCreatableSelect from "react-select/async-creatable";
 import Modal from "../../../../components/common/Modal";
 import NewClientForm from "./NewClientForm";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createManualBooking, searchClients, createClient } from "../../../../services/companyService";
-import { Button } from "./ui/Button";
+import {
+  createManualBooking,
+  searchClients,
+  createClient,
+} from "../../../../services/companyService";
 import { Input } from "./ui/Input";
 import { Label } from "./ui/Label";
 import AddressAutocomplete from "../../../../components/common/AddressAutocomplete";
@@ -52,16 +55,19 @@ export default function ManualBookingForm({ onSuccess }) {
   const minLocalDatetime = (() => {
     const d = new Date(Date.now() + 5 * 60 * 1000);
     const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-      d.getHours()
-    )}:${pad(d.getMinutes())}`;
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
+      d.getDate()
+    )}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   })();
 
   // === Handlers établissement / service ===
   const handleEstablishmentTextChange = (newText) => {
     setEstablishmentText(newText);
     // Si l'utilisateur modifie le texte, on efface l'objet sélectionné
-    if (establishment && newText !== (establishment.label || establishment.display_name || "")) {
+    if (
+      establishment &&
+      newText !== (establishment.label || establishment.display_name || "")
+    ) {
       setEstablishment(null);
       setServiceObj(null);
       setHospitalService("");
@@ -77,44 +83,55 @@ export default function ManualBookingForm({ onSuccess }) {
     setServiceObj(null);
     setHospitalService("");
 
-    console.log("🏥 Establishment set, ID:", estab?.id, "Type:", typeof estab?.id);
+    console.log(
+      "🏥 Establishment set, ID:",
+      estab?.id,
+      "Type:",
+      typeof estab?.id
+    );
   };
 
-  const onChangeService = useCallback((srv) => {
-    console.log("🏥 ManualBookingForm.onChangeService:", srv);
-    setServiceObj(srv || null);
-    setHospitalService(srv?.name || "");
+  const onChangeService = useCallback(
+    (srv) => {
+      console.log("🏥 ManualBookingForm.onChangeService:", srv);
+      setServiceObj(srv || null);
+      setHospitalService(srv?.name || "");
 
-    // --- Logique pour la destination ---
-    if (srv && establishment) {
-      setDropoffLocation(establishment.address || "");
-      setDropoffCoords({ lat: establishment.lat ?? null, lon: establishment.lon ?? null });
-    }
-
-    // --- NOUVEAU : Ajoute les détails du service dans les notes ---
-    if (srv) {
-      const details = [
-        srv.building,
-        srv.site_note,
-        srv.floor,
-        srv.phone
-      ].filter(Boolean); // Garde uniquement les valeurs qui existent
-
-      if (details.length > 0) {
-        const detailsText = details.join(" - ");
-        // Ajoute les détails aux notes existantes (s'il y en a)
-        setNotesMedical(prevNotes => 
-          prevNotes ? `${prevNotes}\n${detailsText}` : detailsText
-        );
+      // --- Logique pour la destination ---
+      if (srv && establishment) {
+        setDropoffLocation(establishment.address || "");
+        setDropoffCoords({
+          lat: establishment.lat ?? null,
+          lon: establishment.lon ?? null,
+        });
       }
-    }
 
-  }, [establishment]);
+      // --- NOUVEAU : Ajoute les détails du service dans les notes ---
+      if (srv) {
+        const details = [
+          srv.building,
+          srv.site_note,
+          srv.floor,
+          srv.phone,
+        ].filter(Boolean); // Garde uniquement les valeurs qui existent
+
+        if (details.length > 0) {
+          const detailsText = details.join(" - ");
+          // Ajoute les détails aux notes existantes (s'il y en a)
+          setNotesMedical((prevNotes) =>
+            prevNotes ? `${prevNotes}\n${detailsText}` : detailsText
+          );
+        }
+      }
+    },
+    [establishment]
+  );
 
   // === Clients ===
   const handleSelectClient = (clientObj) => {
     setSelectedClient(clientObj);
-    const homeAddress = clientObj?.raw?.address || clientObj?.raw?.user?.address || "";
+    const homeAddress =
+      clientObj?.raw?.address || clientObj?.raw?.user?.address || "";
     if (homeAddress) {
       setPickupLocation(homeAddress);
       setPickupCoords({ lat: null, lon: null }); // pas de coords connues ici
@@ -127,7 +144,9 @@ export default function ManualBookingForm({ onSuccess }) {
       const clients = await searchClients(q);
       return clients.map((c) => ({
         value: c.id,
-        label: `${c.user?.first_name ?? c.first_name ?? ""} ${c.user?.last_name ?? c.last_name ?? ""}`.trim(),
+        label: `${c.user?.first_name ?? c.first_name ?? ""} ${
+          c.user?.last_name ?? c.last_name ?? ""
+        }`.trim(),
         raw: c,
       }));
     } catch (e) {
@@ -143,7 +162,8 @@ export default function ManualBookingForm({ onSuccess }) {
 
     const extracted = extractMedicalServiceInfo(value);
 
-    if (extracted.medical_facility) setMedicalFacility(extracted.medical_facility);
+    if (extracted.medical_facility)
+      setMedicalFacility(extracted.medical_facility);
     if (extracted.hospital_service) {
       setHospitalService(extracted.hospital_service);
       setServiceObj(null); // pas d'ID → on laisse vide ; l’utilisateur choisira dans la liste
@@ -163,7 +183,9 @@ export default function ManualBookingForm({ onSuccess }) {
       queryClient.invalidateQueries(["clients"]);
       setSelectedClient({
         value: client.id,
-        label: `${client.user?.first_name ?? client.first_name ?? ""} ${client.user?.last_name ?? client.last_name ?? ""}`.trim(),
+        label: `${client.user?.first_name ?? client.first_name ?? ""} ${
+          client.user?.last_name ?? client.last_name ?? ""
+        }`.trim(),
         raw: client,
       });
       setShowClientModal(false);
@@ -181,12 +203,20 @@ export default function ManualBookingForm({ onSuccess }) {
       toast.success("Réservation créée !");
       onSuccess?.(data);
     },
-    onError: (err) => toast.error(`Erreur création réservation : ${err.message}`),
+    onError: (err) => {
+      console.error("createManualBooking error:", err?.response?.data || err);
+      toast.error(
+        err?.response?.data?.error ||
+          err?.response?.data?.message ||
+          `Erreur création réservation : ${err.message}`
+      );
+    },
   });
 
   // === Soumission ===
   const handleSubmit = (e) => {
     e.preventDefault();
+    console.log("[ManualBookingForm] submit click");
 
     if (!selectedClient) {
       toast.error("Veuillez sélectionner un client");
@@ -194,12 +224,18 @@ export default function ManualBookingForm({ onSuccess }) {
     }
 
     // 🔒 Sécurité : si un texte d’établissement est présent mais aucun établissement choisi (pas d’id)
+    // On tolère le texte libre : on prévient juste
     if (establishmentText && !establishment?.id) {
-      toast.error("Veuillez sélectionner un établissement dans la liste (pas seulement du texte).");
-      return;
+      console.warn(
+        "[ManualBookingForm] établissement en texte libre :",
+        establishmentText
+      );
     }
 
-    const localDT = e.target.scheduled_time.value;  // Récupère 'YYYY-MM-DDTHH:mm'
+    // ⚠️ Toujours lire via FormData pour être indépendant des composants UI
+    const formEl = e.currentTarget; // c'est <form>, garanti
+    const fd = new FormData(formEl);
+    const localDT = fd.get("scheduled_time"); // 'YYYY-MM-DDTHH:mm'
     if (!localDT) {
       toast.error("Veuillez sélectionner Date & heure");
       return;
@@ -213,12 +249,17 @@ export default function ManualBookingForm({ onSuccess }) {
       pickup_lon: pickupCoords.lon ?? undefined,
       dropoff_lat: dropoffCoords.lat ?? undefined,
       dropoff_lon: dropoffCoords.lon ?? undefined,
-      scheduled_time: localDT,
+      scheduled_time: String(localDT),
       is_round_trip: !!isRoundTrip,
-      amount: e.target.amount.value ? parseFloat(e.target.amount.value) : 0,
+      amount: fd.get("amount") ? parseFloat(fd.get("amount")) : 0,
 
       // Champs médicaux (compat descendante)
-      medical_facility: medicalFacility || establishment?.display_name || establishment?.label || undefined,
+      medical_facility:
+        medicalFacility ||
+        establishment?.display_name ||
+        establishment?.label ||
+        establishmentText || // ✅ fallback texte libre
+        undefined,
       hospital_service: hospitalService || serviceObj?.name || undefined,
       doctor_name: doctorName || undefined,
       notes_medical: notesMedical || undefined,
@@ -229,6 +270,7 @@ export default function ManualBookingForm({ onSuccess }) {
       ...(isRoundTrip && returnTime ? { return_time: returnTime } : {}),
     };
 
+    console.log("[ManualBookingForm] payload:", payload);
     bookingMutation.mutate(payload);
   };
 
@@ -250,7 +292,9 @@ export default function ManualBookingForm({ onSuccess }) {
           placeholder="Rechercher un client…"
           formatCreateLabel={(i) => `Créer “${i}”`}
           /* ✅ Menu cliquable dans un Modal (comme ServiceSelect) */
-          menuPortalTarget={typeof window !== "undefined" ? document.body : null}
+          menuPortalTarget={
+            typeof window !== "undefined" ? document.body : null
+          }
           menuPosition="fixed"
           styles={{
             menuPortal: (base) => ({ ...base, zIndex: 9999 }),
@@ -288,7 +332,9 @@ export default function ManualBookingForm({ onSuccess }) {
           onSelect={(item) => {
             const mainText =
               item.label ||
-              [item.address, item.postcode, item.city, item.country].filter(Boolean).join(" ") ||
+              [item.address, item.postcode, item.city, item.country]
+                .filter(Boolean)
+                .join(" ") ||
               "";
             setDropoffLocation(mainText);
             setDropoffCoords({ lat: item.lat ?? null, lon: item.lon ?? null });
@@ -306,7 +352,9 @@ export default function ManualBookingForm({ onSuccess }) {
               setDoctorName(extracted.doctor_name || item.label || "");
               setMedicalFacility(extracted.medical_facility || "");
             } else {
-              setMedicalFacility(extracted.medical_facility || item.label || "");
+              setMedicalFacility(
+                extracted.medical_facility || item.label || ""
+              );
               if (extracted.doctor_name) setDoctorName(extracted.doctor_name);
             }
 
@@ -314,7 +362,8 @@ export default function ManualBookingForm({ onSuccess }) {
             setServiceObj(null); // pas d'ID connu depuis ce champ libre
 
             let notes = notesMedical || "";
-            if (extracted.building) notes += (notes ? "\n" : "") + extracted.building;
+            if (extracted.building)
+              notes += (notes ? "\n" : "") + extracted.building;
             if (extracted.floor) notes += (notes ? "\n" : "") + extracted.floor;
             setNotesMedical(notes);
           }}
@@ -363,7 +412,12 @@ export default function ManualBookingForm({ onSuccess }) {
 
         {/* Date/heure & Aller-retour */}
         <Label>Date &amp; heure</Label>
-        <Input type="datetime-local" name="scheduled_time" required min={minLocalDatetime} />
+        <Input
+          type="datetime-local"
+          name="scheduled_time"
+          required
+          min={minLocalDatetime}
+        />
 
         <div className="flex items-center gap-2">
           <input
@@ -378,22 +432,29 @@ export default function ManualBookingForm({ onSuccess }) {
         {isRoundTrip && (
           <>
             <Label>Heure de retour (optionnel)</Label>
-              <Input
+            <Input
               type="datetime-local"
               name="return_time"
               value={returnTime}
               onChange={(e) => setReturnTime(e.target.value)}
               min={minLocalDatetime}
-             />
+            />
           </>
         )}
 
         <Label>Montant (optionnel)</Label>
         <Input type="number" name="amount" step="0.01" />
 
-        <Button type="submit" disabled={bookingMutation.isLoading}>
-          {bookingMutation.isLoading ? "Création…" : "Créer réservation"}
-        </Button>
+        <button
+          type="submit"
+          className="px-4 py-2 rounded bg-black text-white disabled:opacity-60"
+          disabled={bookingMutation.isLoading}
+          onClick={() =>
+            console.log("[ManualBookingForm] submit button clicked")
+          }
+        >
+          {bookingMutation.isLoading ? "Création…" : "Créer réservation"}{" "}
+        </button>
       </form>
 
       {showClientModal && (

@@ -21,6 +21,7 @@ const AdminUsers = () => {
   const [companyOptions, setCompanyOptions] = useState([]);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [pendingDriverUserId, setPendingDriverUserId] = useState(null);
+  const norm = (v) => String(v ?? "").toLowerCase();
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -46,7 +47,10 @@ const AdminUsers = () => {
       try {
         const companies = await fetchCompanies();
         console.log("✅ Entreprises chargées :", companies);
-        setCompanyOptions(companies);
+        // on ajoute un flag selected utilisable par le modal
+        setCompanyOptions(
+          (companies || []).map((c) => ({ ...c, selected: false }))
+        );
       } catch (error) {
         console.error("⚠️ Erreur chargement entreprises :", error);
       }
@@ -155,7 +159,9 @@ const AdminUsers = () => {
       const matchesSearch =
         user.username.toLowerCase().includes(search.toLowerCase()) ||
         user.email.toLowerCase().includes(search.toLowerCase());
-      const matchesRole = roleFilter ? user.role === roleFilter : true;
+      const matchesRole = roleFilter
+        ? norm(user.role) === norm(roleFilter)
+        : true;
       return matchesSearch && matchesRole;
     })
     .sort((a, b) => {
@@ -164,7 +170,7 @@ const AdminUsers = () => {
       } else if (sortBy === "username") {
         return a.username.localeCompare(b.username);
       } else if (sortBy === "role") {
-        return a.role.localeCompare(b.role);
+        return norm(a.role).localeCompare(norm(b.role));
       }
       return 0;
     });
@@ -237,13 +243,14 @@ const AdminUsers = () => {
                 ) : filteredUsers.length > 0 ? (
                   filteredUsers.map((user) => {
                     console.log("👤 Affichage de l'utilisateur :", user);
+                    const userRole = norm(user.role); // <-- normalisation pour le select
                     return (
                       <tr key={user.id}>
                         <td>{user.username}</td>
                         <td>{user.email}</td>
                         <td>
                           <select
-                            value={user.role}
+                            value={userRole}
                             onChange={(e) =>
                               updateUserRoleHandler(user.id, e.target.value)
                             }
@@ -255,7 +262,11 @@ const AdminUsers = () => {
                           </select>
                         </td>
 
-                        <td>{user.created_at || "📅 Inconnu"}</td>
+                        <td>
+                          {user.created_at
+                            ? new Date(user.created_at).toLocaleString("fr-CH")
+                            : "📅 Inconnu"}{" "}
+                        </td>
                         <td>
                           <button onClick={() => handleResetPassword(user.id)}>
                             🔑 Réinitialiser

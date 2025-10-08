@@ -2,88 +2,96 @@ import Constants from "expo-constants";
 import axios, { isAxiosError } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// 1. Récupère la config extra
+// --- config / baseURL -------------------------------------------------
 const expoExtra = Constants.expoConfig?.extra || {};
 const PROD_API_URL = expoExtra.productionApiUrl;
 
-// 2.// Détection dynamique de l'IP locale pour les builds en développement
 const getDevHost = (): string => {
-  const legacyHost = (Constants as any)?.manifest?.debuggerHost?.split(":")[0]; // Expo SDK < 49
-  const newHost = (Constants as any)?.expoConfig?.hostUri?.split(":")[0];       // Expo SDK 49+
+  const legacyHost = (Constants as any)?.manifest?.debuggerHost?.split(":")[0];
+  const newHost = (Constants as any)?.expoConfig?.hostUri?.split(":")[0];
   const detectedHost = newHost || legacyHost;
-
-  // Si Expo renvoie localhost ou rien, on force ton IP locale
-  if (!detectedHost || detectedHost === "localhost" || detectedHost === "127.0.0.1") {
-    return "192.168.1.216"; // ← IP locale détectée avec `ipconfig`
+  if (
+    !detectedHost ||
+    detectedHost === "localhost" ||
+    detectedHost === "127.0.0.1"
+  ) {
+    return "192.168.1.216";
   }
-
   return detectedHost;
 };
 
 const PORT = expoExtra.backendPort || "5000";
 
 export const baseURL = __DEV__
-  ? `http://${getDevHost()}:${PORT}`
-  : PROD_API_URL;
+  ? `http://${getDevHost()}:${PORT}/api`
+  : `${(PROD_API_URL || "").replace(/\/$/, "")}/api`;
 
-// --- clés de stockage pour les tokens ---
 const TOKEN_KEY = "token";
 const REFRESH_KEY = "refresh_token";
 
-// 3. Création de l’instance Axios
+// --- axios instance ---------------------------------------------------
 const api = axios.create({
   baseURL,
   timeout: 10000,
   headers: { "Content-Type": "application/json" },
 });
 
-// 4. Intercepteur pour le token JWT
-api.interceptors.request.use(
-  async (config) => {
-    const token = await AsyncStorage.getItem(TOKEN_KEY);
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+// Attach access token
+api.interceptors.request.use(async (config) => {
+  const token = await AsyncStorage.getItem(TOKEN_KEY);
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
-// --- Déduplication du refresh (une seule requête à la fois) ---
+// --- Refresh (deduped) ------------------------------------------------
 let refreshingPromise: Promise<string | null> | null = null;
+
+const refreshPaths = ["/auth/refresh-token", "/auth/refresh", "/refresh"];
+
 const doRefresh = async (): Promise<string | null> => {
   if (refreshingPromise) return refreshingPromise;
   refreshingPromise = (async () => {
     const refreshToken = await AsyncStorage.getItem(REFRESH_KEY);
     if (!refreshToken) return null;
-    try {
-      const res = await axios.post(`${baseURL}/auth/refresh-token`, null, {
-        headers: { Authorization: `Bearer ${refreshToken}` },
-      });
-      const newAccessToken: string | undefined =
-        (res.data as any)?.access_token || (res.data as any)?.token;
-      if (newAccessToken) {
-        await AsyncStorage.setItem(TOKEN_KEY, newAccessToken);
-        return newAccessToken;
+
+    for (const path of refreshPaths) {
+      try {
+        const res = await axios.post(`${baseURL}${path}`, null, {
+          headers: { Authorization: `Bearer ${refreshToken}` },
+        });
+        const newAccessToken =
+          (res.data as any)?.access_token || (res.data as any)?.token;
+        if (newAccessToken) {
+          await AsyncStorage.setItem(TOKEN_KEY, newAccessToken);
+          return newAccessToken;
+        }
+      } catch (e: any) {
+        // try next path on 404/405 or other failures
+        continue;
       }
-      return null;
-    } catch {
-      return null;
-    } finally {
-      refreshingPromise = null;
     }
+    return null;
   })();
-  return refreshingPromise;
+  return refreshingPromise.finally(() => {
+    refreshingPromise = null;
+  });
 };
 
-// 4bis. Intercepteur pour gérer les erreurs de token expiré (401) avec refresh dédupliqué
+// Skip refresh for auth endpoints to avoid loops/noise
+const isAuthEndpoint = (url?: string) =>
+  !!url && (url.includes("/auth/login") || url.includes("/auth/refresh"));
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config || {};
+    const status = error?.response?.status;
 
-    // 401 → tenter un refresh (sauf si déjà tenté)
-    if (error?.response?.status === 401 && !originalRequest?._retry) {
+    if (
+      status === 401 &&
+      !originalRequest._retry &&
+      !isAuthEndpoint(originalRequest.url)
+    ) {
       originalRequest._retry = true;
       const newToken = await doRefresh();
       if (newToken) {
@@ -91,12 +99,10 @@ api.interceptors.response.use(
         (originalRequest.headers as any).Authorization = `Bearer ${newToken}`;
         return api(originalRequest);
       } else {
-        console.warn("Échec du rafraîchissement du token — purge locale.");
         await AsyncStorage.removeItem(TOKEN_KEY);
         await AsyncStorage.removeItem(REFRESH_KEY);
       }
     }
-
     return Promise.reject(error);
   }
 );
@@ -110,7 +116,6 @@ export type User = {
   phone?: string;
   // ajoute d’autres si nécessaire
 };
-
 
 // 5. Typescript types pour données structurées
 export type Driver = {
@@ -133,7 +138,6 @@ export type Driver = {
   latitude: number | null;
   longitude: number | null;
 
-
   // Ces champs manquaient :
   user: {
     id: number;
@@ -148,12 +152,14 @@ export type Driver = {
   };
 };
 
-export const registerPushToken = async (payload: { token: string; driverId: number }) => {
+export const registerPushToken = async (payload: {
+  token: string;
+  driverId: number;
+}) => {
   // Use the correct backend URL and send the required payload
   const res = await api.post("/driver/save-push-token", payload);
   return res.data;
 };
-
 
 export type AuthResponse = {
   message: string;
@@ -190,8 +196,8 @@ export type Booking = {
   scheduled_time: string;
   status: string;
   client_name: string;
-  estimated_duration?: string;        // <- Safe
-  customer_name?: string;     // <- Optionnel
+  estimated_duration?: string; // <- Safe
+  customer_name?: string; // <- Optionnel
   client?: {
     id: number;
     first_name: string;
@@ -212,17 +218,21 @@ export type BookingStatus =
   | "completed"
   | "return_completed";
 
-
 // 9. Authentification & profil
-export const loginDriver = async (
-  email: string,
-  password: string
-): Promise<AuthResponse> => {
-  const response = await api.post<AuthResponse>("/auth/login", { email, password });
-  const data = response.data;
-  // Stockage tokens : access obligatoire, refresh optionnel
+export const loginDriver = async (email: string, password: string) => {
+  const response = await api.post("/auth/login", {
+    email,
+    username: email, // fallback if backend expects "username"
+    password,
+  });
+  const data = response.data as {
+    token: string;
+    refresh_token?: string;
+    user: any;
+  };
   if (data?.token) await AsyncStorage.setItem(TOKEN_KEY, data.token);
-  if (data?.refresh_token) await AsyncStorage.setItem(REFRESH_KEY, data.refresh_token);
+  if (data?.refresh_token)
+    await AsyncStorage.setItem(REFRESH_KEY, data.refresh_token);
   return data;
 };
 
@@ -255,10 +265,9 @@ export const updateDriverProfile = async (
 export const updateDriverPhoto = async (
   photo: string
 ): Promise<UpdatePhotoResponse> => {
-  const response = await api.put<UpdatePhotoResponse>(
-    "/driver/me/photo",
-    { photo }
-  );
+  const response = await api.put<UpdatePhotoResponse>("/driver/me/photo", {
+    photo,
+  });
   return response.data;
 };
 
@@ -344,7 +353,7 @@ export const updateDriverLocation = async (
       const msg =
         typeof error.response?.data === "string"
           ? error.response.data
-          : (error.response?.data as any)?.message ?? error.message;
+          : ((error.response?.data as any)?.message ?? error.message);
       throw new Error(msg);
     }
 
@@ -358,7 +367,6 @@ export const updateDriverLocation = async (
   }
 };
 
-
 /** (Optionnel) compat avec l’ancienne signature à 2 args */
 export const updateDriverLocationLegacy = async (
   latitude: number,
@@ -370,8 +378,6 @@ export const getAssignedTrips = async (): Promise<Booking[]> => {
   const response = await api.get<Booking[]>("/driver/me/bookings");
   return response.data;
 };
-
-
 
 // 12. alias pour planning, même endpoint que assigned bookings
 export const getDriverSchedule = getAssignedTrips;
@@ -385,9 +391,7 @@ export const getCompletedTrips = async (
   return response.data;
 };
 
-export const getTripDetails = async (
-  bookingId: number
-): Promise<Booking> => {
+export const getTripDetails = async (bookingId: number): Promise<Booking> => {
   const response = await api.get<Booking>(`/bookings/${bookingId}`);
   return response.data;
 };
@@ -397,13 +401,8 @@ export const updateTripStatus = async (
   bookingId: number,
   status: BookingStatus
 ): Promise<void> => {
-  console.log(
-    `[updateTripStatus] → bookingId=${bookingId}, status=${status}`
-  );
-  await api.put(
-    `/driver/me/bookings/${bookingId}/status`,
-    { status }
-  );
+  console.log(`[updateTripStatus] → bookingId=${bookingId}, status=${status}`);
+  await api.put(`/driver/me/bookings/${bookingId}/status`, { status });
 };
 
 // 2) TRACE + décision du statut
@@ -411,16 +410,11 @@ export const completeTrip = async (
   bookingId: number,
   isReturn: boolean = false
 ): Promise<void> => {
-  console.log(
-    `[completeTrip] → bookingId=${bookingId}, isReturn=${isReturn}`
-  );
-  const status: BookingStatus = isReturn
-    ? "return_completed"
-    : "completed";
+  console.log(`[completeTrip] → bookingId=${bookingId}, isReturn=${isReturn}`);
+  const status: BookingStatus = isReturn ? "return_completed" : "completed";
   console.log(`[completeTrip] → envoi status=${status}`);
   await updateTripStatus(bookingId, status);
 };
-
 
 // 14 Routes IA
 export type OptimizedRoute = {
@@ -431,17 +425,19 @@ export const getOptimizedRoute = async (
   pickup: string,
   dropoff: string
 ): Promise<OptimizedRoute> => {
-  const response = await api.post<OptimizedRoute>(
-    "/ai/optimized-route",
-    { pickup, dropoff }
-  );
+  const response = await api.post<OptimizedRoute>("/ai/optimized-route", {
+    pickup,
+    dropoff,
+  });
   return response.data;
 };
 
 export const toggleDriverAvailability = updateDriverAvailability;
 
 // 15. Chargement historique des messages (chat)
-export const getCompanyMessages = async (companyId: number): Promise<Message[]> => {
+export const getCompanyMessages = async (
+  companyId: number
+): Promise<Message[]> => {
   const response = await api.get<Message[]>(`/messages/${companyId}`);
   return response.data;
 };
@@ -455,4 +451,3 @@ export type Message = {
 };
 
 export default api;
-

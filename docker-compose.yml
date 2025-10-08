@@ -1,4 +1,21 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: atmr
+      POSTGRES_USER: atmr
+      POSTGRES_PASSWORD: atmr
+      TZ: Europe/Zurich
+    ports: ["5432:5432"] # pratique en dev
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atmr -d atmr"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   api:
     build:
       context: ./backend
@@ -18,8 +35,8 @@ services:
     env_file:
       - backend/.env
     environment:
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/instance/development.db}
-      - DATABASE_URI=${DATABASE_URI:-${DATABASE_URL:-sqlite:////app/instance/development.db}}
+      - PYTHONPATH=/app
+      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
       - SOCKETIO_ASYNC_MODE=${SOCKETIO_ASYNC_MODE:-eventlet}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
@@ -31,28 +48,36 @@ services:
       - SOCKETIO_CORS_ORIGINS=${SOCKETIO_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       - FLASK_CONFIG=${FLASK_CONFIG:-development}
       - FLASK_ENV=${FLASK_ENV:-development}
+      - TZ=Europe/Zurich
     volumes:
       - ./backend:/app
-      - ./backend/instance:/app/instance
     depends_on:
+      - postgres
       - redis
       - osrm
     restart: unless-stopped
 
-  # Celery Worker
   celery-worker:
     build:
       context: ./backend
-    command: >
-      celery -A celery_app.celery worker
-      --loglevel=info
-      --concurrency=4
-      --max-tasks-per-child=100
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app:celery",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "4",
+        "--max-tasks-per-child",
+        "100",
+      ]
     env_file:
       - backend/.env
     environment:
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/instance/development.db}
-      - DATABASE_URI=${DATABASE_URI:-${DATABASE_URL:-sqlite:////app/instance/development.db}}
+      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
+      - PYTHONPATH=/app
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
@@ -62,29 +87,37 @@ services:
       - UD_OSRM_URL=${UD_OSRM_URL:-http://osrm:5000}
       - FLASK_CONFIG=${FLASK_CONFIG:-development}
       - FLASK_ENV=${FLASK_ENV:-development}
+      - TZ=Europe/Zurich
     volumes:
       - ./backend:/app
-      - ./backend/instance:/app/instance
     depends_on:
+      - postgres
       - redis
       - osrm
       - api
     restart: unless-stopped
 
-  # Celery Beat
   celery-beat:
     build:
       context: ./backend
-    command: >
-      celery -A celery_app.celery beat
-      --loglevel=info
-      --scheduler=celery.beat.PersistentScheduler
-      --schedule=/app/celerybeat-schedule
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app:celery",
+        "beat",
+        "-l",
+        "info",
+        "-S",
+        "celery.beat.PersistentScheduler",
+        "-s",
+        "/app/celerybeat-schedule",
+      ]
     env_file:
       - backend/.env
     environment:
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/instance/development.db}
-      - DATABASE_URI=${DATABASE_URI:-${DATABASE_URL:-sqlite:////app/instance/development.db}}
+      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
+      - PYTHONPATH=/app
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
@@ -95,37 +128,41 @@ services:
       - FLASK_ENV=${FLASK_ENV:-development}
     volumes:
       - ./backend:/app
-      - ./backend/instance:/app/instance
     depends_on:
+      - postgres
       - redis
       - api
     restart: unless-stopped
 
-  # Flower - Celery Monitoring
   flower:
     build:
       context: ./backend
-    command: >
-      celery -A celery_app.celery flower
-      --port=5555
-      --broker=redis://redis:6379/0
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app:celery",
+        "flower",
+        "--broker=redis://redis:6379/0",
+        "--port=5555",
+      ]
+
     ports:
       - "5555:5555"
     env_file:
       - backend/.env
     environment:
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/instance/development.db}
-      - DATABASE_URI=${DATABASE_URI:-${DATABASE_URL:-sqlite:////app/instance/development.db}}
+      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
+      - PYTHONPATH=/app
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     volumes:
       - ./backend:/app
-      - ./backend/instance:/app/instance
     depends_on:
+      - postgres
       - redis
       - celery-worker
     restart: unless-stopped
 
-  # Redis - Broker and Result Backend
   redis:
     image: redis:7-alpine
     ports:
@@ -135,7 +172,6 @@ services:
     command: redis-server --appendonly yes
     restart: unless-stopped
 
-  # OSRM - Routing Engine
   osrm:
     image: osrm/osrm-backend:latest
     volumes:
@@ -144,4 +180,5 @@ services:
     restart: unless-stopped
 
 volumes:
+  pg_data:
   redis-data:

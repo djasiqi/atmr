@@ -18,8 +18,6 @@ from dotenv import load_dotenv
 from flask import Flask, request, jsonify, make_response, send_from_directory, current_app
 from flask_cors import CORS
 from flask_talisman import Talisman
-from sqlalchemy import event
-from sqlalchemy.engine import Engine
 from werkzeug.exceptions import HTTPException, NotFound
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -42,18 +40,6 @@ if not (os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY")):
     raise RuntimeError(
         "JWT_SECRET_KEY ou SECRET_KEY manquant(e). Ajoute-les dans backend/.env puis redémarre."
     )
-
-# ---------- SQLite PRAGMA (clé étrangères ON) ----------
-@event.listens_for(Engine, "connect")
-def set_sqlite_pragma(dbapi_connection, _):
-    try:
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
-    except Exception:
-        # Ne pas crasher si ce n'est pas SQLite
-        pass
-
 
 # ---------- JSON encoder/provider ----------
 class CustomJSONEncoder(json.JSONEncoder):
@@ -158,6 +144,12 @@ def create_app(config_name: str | None = None):
         if p.startswith("/socket.io"):
             app.logger.debug("📡 SIO %s %s from %s", request.method, request.full_path, request.remote_addr)
         return None
+    
+    # à l’initialisation Flask
+    @app.teardown_appcontext
+    def shutdown_session(exception=None):
+        db.session.remove()
+
 
     # Gestion d'erreurs réseau (Bad file descriptor, etc.)
     @app.errorhandler(OSError)

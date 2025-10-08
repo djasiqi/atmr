@@ -57,6 +57,7 @@ yarn-error.log*
 pnpm-debug.log*
 
 # ===== Env / secrets =====
+backend/.env
 .env
 *.env
 *.env.*

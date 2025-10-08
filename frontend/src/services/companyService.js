@@ -1,25 +1,62 @@
 // src/services/companyService.js
 import apiClient from "../utils/apiClient";
 
+// --------------------------------------
+// Helpers date/temps
+// --------------------------------------
+/**
+ * Sélectionne le meilleur champ date présent sur un objet "booking/reservation"
+ * et renvoie une ISO string (ou null si rien d'exploitable).
+ */
+const pickBestDateField = (r) => {
+  if (!r || typeof r !== "object") return null;
+  // ordre de priorité des champs possibles vus côté backend/front
+  const candidates = [
+    r.scheduled_time,
+    r.pickup_time,
+    r.date_time,
+    r.datetime,
+    r.start_time,
+    r.time,
+    r.pickup_at,
+    r.created_at,
+  ];
+  for (const v of candidates) {
+    if (!v) continue;
+    // accepte Date ou string
+    if (v instanceof Date) {
+      const iso = v.toISOString();
+      if (!Number.isNaN(new Date(iso).getTime())) return iso;
+    } else if (typeof v === "string") {
+      const d = new Date(v);
+      if (!Number.isNaN(d.getTime())) return d.toISOString();
+    }
+  }
+  return null;
+};
+
 /* -------------------------- RÉSERVATIONS ENTREPRISE -------------------------- */
 
 export const fetchCompanyReservations = async (date) => {
   try {
-    const payload = await apiClient.get(`/companies/me/reservations?flat=true${date ? `&date=${date}` : ''}`);
-    const reservations = Array.isArray(payload.data)
-      ? payload.data
-      : (Array.isArray(payload.data?.reservations) ? payload.data.reservations : []);
-    return reservations;               // ✅ manquait
+    const { data } = await apiClient.get("/companies/me/reservations", {
+      params: { flat: true, ...(date ? { date } : {}) },
+    });
+    return Array.isArray(data)
+      ? data
+      : Array.isArray(data?.reservations)
+      ? data.reservations
+      : [];
   } catch (e) {
-     // Gérer spécifiquement les erreurs d'authentification JWT
-     if (e.response?.status === 401 || e.response?.status === 422) {
-       console.error("Erreur d'authentification JWT:", e.response.data);
-       // Optionnel: déclencher une reconnexion ou un refresh token
-     }
-     console.error("fetchCompanyReservations failed:", e?.response?.data || e);
-     return [];                         // ✅ safe fallback
+    // Gérer spécifiquement les erreurs d'authentification JWT
+    if (e.response?.status === 401 || e.response?.status === 422) {
+      console.error("Erreur d'authentification JWT:", e.response.data);
+      // Optionnel: déclencher une reconnexion ou un refresh token
+    }
+    console.error("fetchCompanyReservations failed:", e?.response?.data || e);
+    return []; // ✅ safe fallback
   }
-}
+};
 
 export const acceptReservation = async (reservationId) => {
   const { data } = await apiClient.post(
@@ -78,7 +115,10 @@ export const scheduleReservation = async (reservationId, isoDatetime) => {
 /**
  * Dispatch maintenant une réservation (+ minutes_offset).
  */
-export const dispatchNowForReservation = async (reservationId, minutesOffset = 15) => {
+export const dispatchNowForReservation = async (
+  reservationId,
+  minutesOffset = 15
+) => {
   const { data } = await apiClient.post(
     `/companies/me/reservations/${reservationId}/dispatch-now`,
     { minutes_offset: minutesOffset }
@@ -119,7 +159,10 @@ export const fetchCompanyDriver = async () => {
  */
 export const createDriver = async (driverData) => {
   try {
-    const { data } = await apiClient.post("/companies/me/drivers/create", driverData);
+    const { data } = await apiClient.post(
+      "/companies/me/drivers/create",
+      driverData
+    );
     return data;
   } catch (error) {
     throw error.response?.data || error;
@@ -130,7 +173,9 @@ export const createDriver = async (driverData) => {
  * Associe un chauffeur existant par user_id
  */
 export const addDriver = async (userId) => {
-  const { data } = await apiClient.post("/companies/me/driver", { user_id: userId });
+  const { data } = await apiClient.post("/companies/me/drivers", {
+    user_id: userId,
+  });
   return data;
 };
 
@@ -139,16 +184,23 @@ export const addDriver = async (userId) => {
  * ou bien updateDriverStatus(id, { is_available: true }) → payload tel quel
  */
 export const updateDriverStatus = async (driverId, payloadOrIsActive) => {
-  const body = (typeof payloadOrIsActive === "object")
-    ? payloadOrIsActive
-    : { is_active: !!payloadOrIsActive };
-  const { data } = await apiClient.put(`/companies/me/driver/${driverId}`, body);
+  const body =
+    typeof payloadOrIsActive === "object"
+      ? payloadOrIsActive
+      : { is_active: !!payloadOrIsActive };
+  const { data } = await apiClient.put(
+    `/companies/me/drivers/${driverId}`,
+    body
+  );
   return data;
 };
 
 export const updateDriverDetails = async (driverId, driverData) => {
   try {
-    const { data } = await apiClient.put(`/companies/me/driver/${driverId}`, driverData);
+    const { data } = await apiClient.put(
+      `/companies/me/drivers/${driverId}`,
+      driverData
+    );
     return data;
   } catch (error) {
     throw error.response?.data || error;
@@ -156,17 +208,21 @@ export const updateDriverDetails = async (driverId, driverData) => {
 };
 
 export const deleteDriver = async (driverId) => {
-  const { data } = await apiClient.delete(`/companies/me/driver/${driverId}`);
+  const { data } = await apiClient.delete(`/companies/me/drivers/${driverId}`);
   return data;
 };
 
 export const fetchDriverCompletedTrips = async (driverId) => {
-  const { data } = await apiClient.get(`/companies/me/driver/${driverId}/completed-trips`);
+  const { data } = await apiClient.get(
+    `/companies/me/drivers/${driverId}/completed-trips`
+  );
   return data;
 };
 
 export const toggleDriverType = async (driverId) => {
-  const { data } = await apiClient.put(`/companies/me/driver/${driverId}/toggle-type`);
+  const { data } = await apiClient.put(
+    `/companies/me/drivers/${driverId}/toggle-type`
+  );
   return data;
 };
 
@@ -178,7 +234,9 @@ export const fetchCompanyInvoices = async () => {
 };
 
 export const setDispatchEnabled = async (enabled) => {
-  const { data } = await apiClient.post("/companies/me/dispatch/activate", { enabled });
+  const { data } = await apiClient.post("/companies/me/dispatch/activate", {
+    enabled,
+  });
   return data;
 };
 
@@ -187,7 +245,10 @@ export const fetchCompanyInfo = async () => {
     const { data } = await apiClient.get("/companies/me");
     return data;
   } catch (error) {
-    console.error("Error fetching company info:", error?.response?.data || error);
+    console.error(
+      "Error fetching company info:",
+      error?.response?.data || error
+    );
     // Return a minimal valid company object to prevent UI from breaking
     return {
       id: null,
@@ -196,7 +257,7 @@ export const fetchCompanyInfo = async () => {
       phone: "",
       address: "",
       logo_url: null,
-      error: true
+      error: true,
     };
   }
 };
@@ -233,7 +294,9 @@ export const fetchCompanyClients = async () => {
  * (nécessaire pour ClientInvoices.jsx)
  */
 export const fetchClientReservations = async (clientId) => {
-  const { data } = await apiClient.get(`/companies/me/clients/${clientId}/reservations`);
+  const { data } = await apiClient.get(
+    `/companies/me/clients/${clientId}/reservations`
+  );
   return data;
 };
 
@@ -294,7 +357,9 @@ export const getDispatchStatus = async () => {
 // Helpers communs (mapping & payload)
 // --------------------------------------
 const normalizeMode = (m) => {
-  const s = String(m ?? "auto").trim().toLowerCase();
+  const s = String(m ?? "auto")
+    .trim()
+    .toLowerCase();
   if (s === "heuristic") return "heuristic_only";
   if (s === "solver") return "solver_only";
   if (["auto", "heuristic_only", "solver_only"].includes(s)) return s;
@@ -305,32 +370,38 @@ const toRunPayload = ({
   forDate,
   regularFirst = true,
   allowEmergency,
-  runAsync = false,
+  runAsync = true,
   mode = "auto",
   overrides,
 } = {}) => {
   const payload = {
     for_date: forDate,
     regular_first: !!regularFirst,
-    run_async: !!runAsync,
-    mode: normalizeMode(mode),
-    overrides: overrides || {},
+    ...(typeof allowEmergency === "boolean"
+      ? { allow_emergency: !!allowEmergency }
+      : {}),
+    async: !!runAsync,
   };
-  // Tri-state: si null → rester null, si défini → bool, si undefined → omettre
-  if (allowEmergency === null) {
-    payload.allow_emergency = null;
-  } else if (typeof allowEmergency !== "undefined") {
-    payload.allow_emergency = !!allowEmergency;
-  }
+  // si l’API accepte 'mode' au root :
+  // payload.mode = normalizeMode(mode);
+  // sinon, le passer en overrides (recommandé => rétrocompatible) :
+  payload.mode = normalizeMode(mode);
+  const ov = { ...(overrides || {}) };
+  ov.mode = normalizeMode(mode);
+  if (Object.keys(ov).length) payload.overrides = ov;
   return payload;
 };
 
- /**
+/**
  * Aperçu (compat existant)
  * GET /company_dispatch/preview?for_date=YYYY-MM-DD&regular_first=true&allow_emergency=true|false
  * NB: si allowEmergency est omis (undefined), on laisse le backend hériter des settings.
-  */
-export const previewDispatch = async ({ forDate, regularFirst = true, allowEmergency } = {}) => {
+ */
+export const previewDispatch = async ({
+  forDate,
+  regularFirst = true,
+  allowEmergency,
+} = {}) => {
   if (!forDate) throw new Error("forDate (YYYY-MM-DD) requis");
   const params = new URLSearchParams({
     for_date: forDate,
@@ -339,7 +410,9 @@ export const previewDispatch = async ({ forDate, regularFirst = true, allowEmerg
   if (typeof allowEmergency !== "undefined") {
     params.append("allow_emergency", String(!!allowEmergency));
   }
-  const { data } = await apiClient.get(`/company_dispatch/preview?${params.toString()}`);
+  const { data } = await apiClient.get(
+    `/company_dispatch/preview?${params.toString()}`
+  );
   return data;
 };
 
@@ -347,22 +420,25 @@ export const previewDispatch = async ({ forDate, regularFirst = true, allowEmerg
  * Déclenche un run async (compat existant)
  * POST /company_dispatch/trigger
  */
-export const triggerDispatch = async ({ forDate, regularFirst = true, allowEmergency = true, overrides } = {}) => {
+export const triggerDispatch = async ({
+  forDate,
+  regularFirst = true,
+  allowEmergency = true,
+  overrides,
+} = {}) => {
   if (!forDate) throw new Error("forDate (YYYY-MM-DD) requis");
   const payload = toRunPayload({
     forDate,
     regularFirst,
     allowEmergency,
-    runAsync: false,    // trigger est toujours async côté backend
+    runAsync: false, // trigger est toujours async côté backend
     overrides,
   });
-  // /trigger est l’API “queue” historique → on force run_async côté backend
-  const { data } = await apiClient.post("/company_dispatch/trigger", { ...payload, run_async: true });
+  // /trigger est l'API "queue" historique → toujours async
+  const { data } = await apiClient.post("/company_dispatch/trigger", payload);
   return data; // { status: "queued", job_id }
 };
-
-/**
- * Run (async par défaut) — compat existant /company_dispatch/run
+/** * Run (async par défaut) — compat existant /company_dispatch/run
  */
 export const runDispatchNow = async ({
   forDate,
@@ -373,27 +449,39 @@ export const runDispatchNow = async ({
   overrides,
 } = {}) => {
   if (!forDate) throw new Error("forDate (YYYY-MM-DD) requis");
-  const payload = toRunPayload({
-    forDate,
-    regularFirst,
-    allowEmergency,
-    runAsync,
-    mode,
-    overrides,
-  });
+  const payload = {
+    for_date: forDate,
+    regular_first: !!regularFirst,
+    ...(typeof allowEmergency === "boolean"
+      ? { allow_emergency: !!allowEmergency }
+      : {}), // NullableBoolean → n’envoie rien si indéfini
+    async: !!runAsync,
+    ...(overrides && Object.keys(overrides).length ? { overrides } : {}),
+  };
+
+  // si tu veux quand même passer “mode”
+  payload.overrides = {
+    ...(payload.overrides || {}),
+    mode: normalizeMode(mode),
+  };
+
   try {
     // ▶️ Chemin principal : /run (200 si sync, 202 si async selon runAsync)
     const { data } = await apiClient.post("/company_dispatch/run", payload);
     return {
       ...data,
-      dispatch_run_id: data.dispatch_run_id || data.meta?.dispatch_run_id || null,
+      dispatch_run_id:
+        data.dispatch_run_id || data.meta?.dispatch_run_id || null,
     };
   } catch (e) {
     // Si c'est une erreur de validation (ex: mismatch de clés) → fallback vers trigger (202 queued)
     const status = e?.response?.status;
     if (status === 400 || status === 422) {
       console.error("RUN 400/422 body:", e?.response?.data || e);
-      const { data } = await apiClient.post("/company_dispatch/trigger", { ...payload, run_async: true });
+      const { data } = await apiClient.post(
+        "/company_dispatch/trigger",
+        payload
+      );
       return data;
     }
     throw e;
@@ -407,23 +495,25 @@ export const runDispatchForDay = async ({
   forDate,
   regularFirst = true,
   allowEmergency,
-  mode = "auto",     // auto par défaut
-  runAsync = true,   // Changed default to true for reliability
+  mode = "auto", // auto par défaut
+  runAsync = true, // Changed default to true for reliability
   overrides,
 } = {}) => {
   if (!forDate) throw new Error("forDate (YYYY-MM-DD) requis");
 
-  console.log(`runDispatchForDay called with: forDate=${forDate}, regularFirst=${regularFirst}, allowEmergency=${allowEmergency}, mode=${mode}, runAsync=${runAsync}`);
+  console.log(
+    `runDispatchForDay called with: forDate=${forDate}, regularFirst=${regularFirst}, allowEmergency=${allowEmergency}, mode=${mode}, runAsync=${runAsync}`
+  );
 
   const payload = toRunPayload({
     forDate,
     regularFirst,
     allowEmergency,
-    runAsync, 
+    runAsync, // ✅ correct key for helper → produces { async: true/false }
     mode,
     overrides,
   });
-  
+
   try {
     // --- bloc principal : /run ---
     console.log("Sending dispatch request with payload:", payload);
@@ -436,9 +526,9 @@ export const runDispatchForDay = async ({
     return {
       ...data,
       status: data.status || (runAsync ? "queued" : "completed"),
-      dispatch_run_id: data.dispatch_run_id || data.meta?.dispatch_run_id || null,
+      dispatch_run_id:
+        data.dispatch_run_id || data.meta?.dispatch_run_id || null,
     };
-
   } catch (e) {
     // --- fallback : /trigger ---
     console.error("Dispatch request failed:", e);
@@ -446,99 +536,108 @@ export const runDispatchForDay = async ({
     console.log("Falling back to /trigger endpoint");
 
     try {
-      // /trigger = file d'attente → on force run_async côté backend
-      const { data } = await apiClient.post("/company_dispatch/trigger", { ...payload, run_async: true });
-      console.log("Trigger fallback response:", data);
+      // /trigger = file d'attente → toujours async
+      const { data } = await apiClient.post(
+        "/company_dispatch/trigger",
+        payload
+      );
       return {
         ...data,
         status: data.status || "queued",
-        dispatch_run_id: data.dispatch_run_id || data.meta?.dispatch_run_id || null,
+        dispatch_run_id:
+          data.dispatch_run_id || data.meta?.dispatch_run_id || null,
       };
     } catch (triggerError) {
       console.error("Trigger fallback also failed:", triggerError);
       throw triggerError; // on remonte l'erreur
     }
   }
-
+};
+const toYMD = (isoString) => {
+  if (!isoString) return null;
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-// --- utilitaires date robustes ---
-const pickBestDateField = (r) =>
-  r?.scheduled_time ??
-  r?.pickup_time ??
-  r?.date_time ??
-  r?.datetime ??
-  null;
-
-// Retourne YYYY-MM-DD sans dépendre du parsing Date (fiable même si pas de 'T' / pas de 'Z')
-const toYMD = (raw) => {
-  if (!raw) return null;
-  if (typeof raw === "string") {
-    const s = raw.trim();
-    // si ça commence par YYYY-MM-DD, on prend les 10 premiers chars
-    const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (m) return m[1];
-  }
-  // fallback: on tente un Date()
-  try {
-    const d = new Date(raw);
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  } catch {
-    return null;
-  }
-};
-
+/**
+ * Récupère les réservations assignées (avec détails du chauffeur et de l’assignation)
+ * pour une date donnée (YYYY-MM-DD).
+ * Si forDate est omis, récupère pour aujourd’hui.
+ */
 export const fetchAssignedReservations = async (forDate) => {
   console.log(`Fetching assigned reservations for date: ${forDate}`);
-  
+
   try {
     // Use separate try/catch blocks to handle each request independently
     let reservations = [];
     let assignments = [];
-    
+
     try {
-      const reservationsRes = await apiClient.get("/companies/me/reservations?flat=true", {
-        params: forDate ? { date: forDate, flat: true } : { flat: true },
-      });
-      
+      const reservationsRes = await apiClient.get(
+        "/companies/me/reservations/",
+        {
+          params: { flat: true, ...(forDate ? { date: forDate } : {}) },
+        }
+      );
+
       // Normalise la charge utile en tableau
       const payload = reservationsRes.data;
       reservations = Array.isArray(payload)
         ? payload
-        : (Array.isArray(payload?.reservations) ? payload.reservations : []);
+        : Array.isArray(payload?.reservations)
+        ? payload.reservations
+        : [];
       console.log(`Received ${reservations.length} reservations`);
     } catch (error) {
-      console.error("Error fetching reservations:", error?.response?.data || error);
+      console.error(
+        "Error fetching reservations:",
+        error?.response?.data || error
+      );
       // Continue with empty reservations array
     }
-    
+
     try {
-      const assignmentsRes = await apiClient.get("/company_dispatch/assignments", {
-        params: forDate ? { date: forDate } : undefined,
-      });
-      
+      const assignmentsRes = await apiClient.get(
+        "/company_dispatch/assignments",
+        {
+          params: forDate ? { date: forDate } : undefined,
+        }
+      );
+
       // /company_dispatch/assignments doit rester un tableau
-      assignments = Array.isArray(assignmentsRes.data) ? assignmentsRes.data : [];
+      assignments = Array.isArray(assignmentsRes.data)
+        ? assignmentsRes.data
+        : [];
       console.log(`Received ${assignments.length} assignments`);
     } catch (error) {
-      console.error("Error fetching assignments:", error?.response?.data || error);
+      console.error(
+        "Error fetching assignments:",
+        error?.response?.data || error
+      );
       // Continue with empty assignments array
     }
-    
+
     console.log(
       `Processing ${reservations.length} reservations and ${assignments.length} assignments`
     );
 
     const byBookingId = new Map(assignments.map((a) => [a.booking_id, a]));
-    console.log(`Created map with ${byBookingId.size} assignments by booking ID`);
+    console.log(
+      `Created map with ${byBookingId.size} assignments by booking ID`
+    );
 
     // Jour cible : YYYY-MM-DD (local)
-    const targetDay = forDate || (() => {
-      const d = new Date();
-      const pad = (n) => String(n).padStart(2, "0");
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    })();
+    const targetDay =
+      forDate ||
+      (() => {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
+          d.getDate()
+        )}`;
+      })();
 
     console.log(`Filtering bookings for target day: ${targetDay}`);
 
@@ -547,7 +646,7 @@ export const fetchAssignedReservations = async (forDate) => {
       try {
         const rawWhen = pickBestDateField(r);
         const ymd = toYMD(rawWhen);
-        return !targetDay || (ymd === targetDay);
+        return !targetDay || ymd === targetDay;
       } catch (e) {
         console.error("Error filtering booking:", e);
         return false;
@@ -557,69 +656,80 @@ export const fetchAssignedReservations = async (forDate) => {
     console.log(`Found ${bookingsOfDay.length} bookings for the target day`);
 
     // Construction des lignes
-    const rows = bookingsOfDay.map((b) => {
-      try {
-        const a = byBookingId.get(b.id) || null;
+    const rows = bookingsOfDay
+      .map((b) => {
+        try {
+          const a = byBookingId.get(b.id) || null;
 
-        const clientName =
-          b.customer_name ||
-          b.client?.full_name ||
-          b.client_name ||
-          b.client?.name ||
-          "Non spécifié";
+          const clientName =
+            b.customer_name ||
+            b.client?.full_name ||
+            b.client_name ||
+            b.client?.name ||
+            "Non spécifié";
 
-        // ✅ Source temporelle unifiée
-        const when = pickBestDateField(b);
-        const scheduled_time = when;
-        const dropoff_time = b.dropoff_time || b.drop_time || null;
+          // ✅ Source temporelle unifiée
+          const when = pickBestDateField(b);
+          const scheduled_time = when;
+          const dropoff_time = b.dropoff_time || b.drop_time || null;
 
-        // Create a synthetic assignment if booking has driver_id but no assignment
-        const syntheticAssignment = !a && b.driver_id ? {
-          id: null, // Synthetic assignment has no ID
-          booking_id: b.id,
-          driver_id: b.driver_id,
-          status: "assigned", // Default status
-          estimated_pickup_arrival: null,
-          estimated_dropoff_arrival: null,
-          is_synthetic: true, // Flag to identify synthetic assignments
-        } : null;
+          // Create a synthetic assignment if booking has driver_id but no assignment
+          const syntheticAssignment =
+            !a && b.driver_id
+              ? {
+                  id: null, // Synthetic assignment has no ID
+                  booking_id: b.id,
+                  driver_id: b.driver_id,
+                  status: "assigned", // Default status
+                  estimated_pickup_arrival: null,
+                  estimated_dropoff_arrival: null,
+                  is_synthetic: true, // Flag to identify synthetic assignments
+                }
+              : null;
 
-        return {
-          id: b.id,
-          customer_name: clientName,
-          client: b.client || { full_name: clientName },
-          scheduled_time,
-          pickup_time: scheduled_time, // compat
-          dropoff_time,
-          pickup_location: b.pickup_location || b.pickup_address || b.origin || "",
-          dropoff_location: b.dropoff_location || b.dropoff_address || b.destination || "",
-          is_return: !!b.is_return,
-          status: b.status || "scheduled",
-          driver_username: b.driver_username || b.driver?.username,
-          driver: b.driver || null,
-          // accepte ancienne/ nouvelle forme (eta_* vs estimated_*)
-          assignment: a ? {
-            id: a.id,
-            booking_id: a.booking_id,
-            driver_id: a.driver_id,
-            status: a.status,
-            estimated_pickup_arrival: a.estimated_pickup_arrival || a.eta_pickup_at || null,
-            estimated_dropoff_arrival: a.estimated_dropoff_arrival || a.eta_dropoff_at || null,
-          } : syntheticAssignment,
-        };
-      } catch (e) {
-        console.error("Error processing booking:", e);
-        // Return a minimal valid row to avoid breaking the UI
-        return {
-          id: b.id || Math.random().toString(36).substring(2, 15),
-          customer_name: "Error processing booking",
-          scheduled_time: new Date().toISOString(),
-          pickup_location: "",
-          dropoff_location: "",
-          status: "error",
-        };
-      }
-    }).filter(Boolean); // Remove any undefined entries
+          return {
+            id: b.id,
+            customer_name: clientName,
+            client: b.client || { full_name: clientName },
+            scheduled_time,
+            pickup_time: scheduled_time, // compat
+            dropoff_time,
+            pickup_location:
+              b.pickup_location || b.pickup_address || b.origin || "",
+            dropoff_location:
+              b.dropoff_location || b.dropoff_address || b.destination || "",
+            is_return: !!b.is_return,
+            status: b.status || "scheduled",
+            driver_username: b.driver_username || b.driver?.username,
+            driver: b.driver || null,
+            // accepte ancienne/ nouvelle forme (eta_* vs estimated_*)
+            assignment: a
+              ? {
+                  id: a.id,
+                  booking_id: a.booking_id,
+                  driver_id: a.driver_id,
+                  status: a.status,
+                  estimated_pickup_arrival:
+                    a.estimated_pickup_arrival || a.eta_pickup_at || null,
+                  estimated_dropoff_arrival:
+                    a.estimated_dropoff_arrival || a.eta_dropoff_at || null,
+                }
+              : syntheticAssignment,
+          };
+        } catch (e) {
+          console.error("Error processing booking:", e);
+          // Return a minimal valid row to avoid breaking the UI
+          return {
+            id: b.id || Math.random().toString(36).substring(2, 15),
+            customer_name: "Error processing booking",
+            scheduled_time: new Date().toISOString(),
+            pickup_location: "",
+            dropoff_location: "",
+            status: "error",
+          };
+        }
+      })
+      .filter(Boolean); // Remove any undefined entries
 
     console.log(`Returning ${rows.length} formatted rows for dispatch table`);
     return rows;
@@ -630,15 +740,37 @@ export const fetchAssignedReservations = async (forDate) => {
   }
 };
 
-
 /**
  * ⏱️ Retards courants (monté sous /company_dispatch/delays)
  */
-export const fetchDispatchDelays = async (forDate) => {
-  const { data } = await apiClient.get("/company_dispatch/delays", {
-    params: forDate ? { date: forDate } : undefined,
-  });
-  return Array.isArray(data) ? data : [];
+export const fetchDispatchDelays = async (date) => {
+  try {
+    const { data } = await apiClient.get("/company_dispatch/delays", {
+      params: { date },
+    });
+    // normalize: one item per late leg
+    return (Array.isArray(data) ? data : []).flatMap((d) => {
+      const rows = [];
+      if ((d.pickup_delay_minutes ?? 0) >= 5) {
+        rows.push({
+          booking_id: d.booking_id,
+          delay_minutes: d.pickup_delay_minutes,
+          is_pickup: true,
+        });
+      }
+      if ((d.dropoff_delay_minutes ?? 0) >= 5) {
+        rows.push({
+          booking_id: d.booking_id,
+          delay_minutes: d.dropoff_delay_minutes,
+          is_pickup: false,
+        });
+      }
+      return rows;
+    });
+  } catch (e) {
+    console.error("fetchDispatchDelays failed:", e?.response?.data || e);
+    return [];
+  }
 };
 
 /**
@@ -653,7 +785,9 @@ export const fetchDispatchRuns = async ({ limit = 50, offset = 0 } = {}) => {
 
 export const fetchDispatchRunById = async (runId) => {
   if (!runId) throw new Error("runId requis");
-  const { data } = await apiClient.get(`/company_dispatch/runs/${encodeURIComponent(runId)}`);
+  const { data } = await apiClient.get(
+    `/company_dispatch/runs/${encodeURIComponent(runId)}`
+  );
   return data;
 };
 
@@ -662,7 +796,10 @@ export const fetchDispatchRunById = async (runId) => {
  */
 export const patchAssignment = async (assignmentId, payload = {}) => {
   if (!assignmentId) throw new Error("assignmentId requis");
-  const { data } = await apiClient.patch(`/company_dispatch/assignments/${encodeURIComponent(assignmentId)}`, payload);
+  const { data } = await apiClient.patch(
+    `/company_dispatch/assignments/${encodeURIComponent(assignmentId)}`,
+    payload
+  );
   return data;
 };
 
@@ -670,17 +807,95 @@ export const reassignAssignment = async (assignmentId, newDriverId) => {
   if (!assignmentId) throw new Error("assignmentId requis");
   if (!newDriverId) throw new Error("newDriverId requis");
   const { data } = await apiClient.post(
-    `/company_dispatch/assignments/${encodeURIComponent(assignmentId)}/reassign`,
+    `/company_dispatch/assignments/${encodeURIComponent(
+      assignmentId
+    )}/reassign`,
     { new_driver_id: Number(newDriverId) }
   );
   return data;
+};
+
+/* ------------------------------ VÉHICULES ------------------------------------ */
+
+/**
+ * Récupère la liste des véhicules de l'entreprise
+ */
+export const fetchCompanyVehicles = async () => {
+  try {
+    const { data } = await apiClient.get("/companies/me/vehicles");
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error("Error fetching vehicles:", error?.response?.data || error);
+    return [];
+  }
+};
+
+/**
+ * Crée un nouveau véhicule
+ */
+export const createVehicle = async (vehicleData) => {
+  try {
+    const { data } = await apiClient.post(
+      "/companies/me/vehicles",
+      vehicleData
+    );
+    return data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+/**
+ * Récupère les détails d'un véhicule spécifique
+ */
+export const fetchVehicle = async (vehicleId) => {
+  try {
+    const { data } = await apiClient.get(`/companies/me/vehicles/${vehicleId}`);
+    return data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+/**
+ * Met à jour un véhicule
+ */
+export const updateVehicle = async (vehicleId, vehicleData) => {
+  try {
+    const { data } = await apiClient.put(
+      `/companies/me/vehicles/${vehicleId}`,
+      vehicleData
+    );
+    return data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+/**
+ * Supprime un véhicule (soft delete par défaut, hard delete si hardDelete=true)
+ */
+export const deleteVehicle = async (vehicleId, hardDelete = false) => {
+  try {
+    const params = hardDelete ? { hard: "true" } : {};
+    const { data } = await apiClient.delete(
+      `/companies/me/vehicles/${vehicleId}`,
+      { params }
+    );
+    return data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
 };
 
 /* ------------------------------- CRÉATION MANUELLE ---------------------------- */
 
 export const createManualBooking = async (bookingData) => {
   try {
-    const { data } = await apiClient.post("/companies/me/reservations/manual", bookingData);
+    const { data } = await apiClient.post(
+      "/companies/me/reservations/manual",
+      bookingData
+    );
     return data; // { message, reservation, return_booking? }
   } catch (error) {
     throw error.response?.data || error.message;

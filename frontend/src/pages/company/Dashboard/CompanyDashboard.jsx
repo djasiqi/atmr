@@ -40,7 +40,10 @@ function makeToday() {
 }
 
 const CompanyDashboard = () => {
-  // Données globales
+  // 1) State d’abord
+  const [dispatchDay, setDispatchDay] = useState(makeToday());
+
+  // 2) Hooks qui dépendent de dispatchDay
   const {
     company,
     reservations,
@@ -49,14 +52,10 @@ const CompanyDashboard = () => {
     loadingDriver,
     reloadReservations,
     reloadDriver,
-  } = useCompanyData();
-
+  } = useCompanyData({ day: dispatchDay });
   // WebSocket entreprise
   const socket = useCompanySocket();
   const { status } = useDispatchStatus(socket);
-
-  // Date de travail unifiée (table + carte)
-  const [dispatchDay, setDispatchDay] = useState(makeToday());
 
   // queryClient pour invalidation
   const queryClient = useQueryClient();
@@ -95,7 +94,8 @@ const CompanyDashboard = () => {
 
   // Ouvre la modale pour planifier le retour (ou choisir Urgent)
   const [openReturnModal, setOpenReturnModal] = useState(false);
-  const [selectedReturnReservation, setSelectedReturnReservation] = useState(null);
+  const [selectedReturnReservation, setSelectedReturnReservation] =
+    useState(null);
   const handleScheduleReservation = (reservation) => {
     const id = reservation?.id ?? reservation;
     if (!id) return;
@@ -129,6 +129,7 @@ const CompanyDashboard = () => {
     queryKey: ["assigned-reservations", dispatchDay],
     queryFn: () => fetchAssignedReservations(dispatchDay),
     staleTime: 30_000,
+    enabled: !!company?.id, // ✅ évite les 403 bruités
   });
 
   // Retards du jour (pour DriverLiveMap)
@@ -141,10 +142,14 @@ const CompanyDashboard = () => {
     queryFn: () => fetchDispatchDelays(dispatchDay),
     initialData: [],
     staleTime: 20_000,
+    enabled: !!company?.id, // ✅ idem
   });
 
   // WS: nouvelles réservations -> recharger la liste
-  const handleNewReservation = useCallback(() => reloadReservations(), [reloadReservations]);
+  const handleNewReservation = useCallback(
+    () => reloadReservations(),
+    [reloadReservations]
+  );
   useEffect(() => {
     if (!socket) return;
     socket.on("new_reservation", handleNewReservation);
@@ -169,10 +174,10 @@ const CompanyDashboard = () => {
     const onDispatchError = (err) => {
       console.error("dispatch_error:", err);
       // Optionnel: notifier l’utilisateur
-        refetchAll();
-      };
-      const onDispatchRunCompleted = (data) => {
-        console.log("Dispatch run completed:", data);
+      refetchAll();
+    };
+    const onDispatchRunCompleted = (data) => {
+      console.log("Dispatch run completed:", data);
       // window.alert(err?.message || "Une erreur est survenue pendant l'optimisation.");
       refetchAll();
     };
@@ -263,7 +268,9 @@ const CompanyDashboard = () => {
   };
 
   // Après ajout manuel
-  const handleManualBookingSuccess = () => {
+  const handleManualBookingSuccess = (resp) => {
+    const ymd = String(resp?.reservation?.scheduled_time || "").slice(0, 10);
+    if (ymd) setDispatchDay(ymd);
     reloadReservations();
     queryClient.invalidateQueries(["reservations"]);
   };
@@ -273,8 +280,8 @@ const CompanyDashboard = () => {
     (r) => r.status?.toLowerCase() === "pending"
   );
   // Fix: Filter for reservations that are accepted but don't have a driver assigned
-  const assignedReservations = (reservations || []).filter((r) => 
-    r.status?.toLowerCase() === "accepted" && !r.driver_id
+  const assignedReservations = (reservations || []).filter(
+    (r) => r.status?.toLowerCase() === "accepted" && !r.driver_id
   );
 
   // Callbacks chauffeurs (liste)
@@ -323,19 +330,17 @@ const CompanyDashboard = () => {
       !["completed", "cancelled", "no_show"].includes(
         (b.status || "").toLowerCase()
       );
-    return (reservations || [])
-      .filter(isActive)
-      .map((r) => ({
-        id: r.id,
-        client_name: r.customer_name || r.client?.full_name || "",
-        status: r.status,
-        pickup_time: r.scheduled_time || r.pickup_time, // Fallback
-        dropoff_time: r.dropoff_time,
-        pickup_location:
-          r.pickup_location_coords || r.pickup_location || r.pickup || null,
-        dropoff_location:
-          r.dropoff_location_coords || r.dropoff_location || r.dropoff || null,
-      }));
+    return (reservations || []).filter(isActive).map((r) => ({
+      id: r.id,
+      client_name: r.customer_name || r.client?.full_name || "",
+      status: r.status,
+      pickup_time: r.scheduled_time || r.pickup_time, // Fallback
+      dropoff_time: r.dropoff_time,
+      pickup_location:
+        r.pickup_location_coords || r.pickup_location || r.pickup || null,
+      dropoff_location:
+        r.dropoff_location_coords || r.dropoff_location || r.dropoff || null,
+    }));
   }, [reservations]);
 
   // Assignments pour la carte :
@@ -350,9 +355,13 @@ const CompanyDashboard = () => {
         // identifiant d'assignation si dispo, sinon fallback booking
         id: a.id ?? row.id,
         driver_id: a.driver_id ?? row.driver?.id ?? row.driver_id,
-        is_on_trip: ["assigned", "in_progress", "onboard", "en_route_pickup", "en_route_dropoff"].includes(
-          String(a.status ?? row.status ?? "").toLowerCase()
-        ),
+        is_on_trip: [
+          "assigned",
+          "in_progress",
+          "onboard",
+          "en_route_pickup",
+          "en_route_dropoff",
+        ].includes(String(a.status ?? row.status ?? "").toLowerCase()),
         route: row.route || a.route || [],
         booking: {
           id: row.id,
@@ -417,7 +426,10 @@ const CompanyDashboard = () => {
           </section>
 
           {/* ======= Planification & suivi ======= */}
-          <section className={styles.dispatchSection} data-dispatch-status={status}>
+          <section
+            className={styles.dispatchSection}
+            data-dispatch-status={status}
+          >
             <h2>Planifier & suivre une journée</h2>
             {loadingDispatches && <p>Chargement des dispatches…</p>}
             <DispatchTable
@@ -490,7 +502,10 @@ const CompanyDashboard = () => {
           {showEditModal && driverToEdit && (
             <Modal onClose={handleCloseModal}>
               <h3>Modifier le chauffeur {driverToEdit.username}</h3>
-              <EditDriverForm driver={driverToEdit} onClose={handleCloseModal} />
+              <EditDriverForm
+                driver={driverToEdit}
+                onClose={handleCloseModal}
+              />
             </Modal>
           )}
 

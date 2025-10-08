@@ -9,12 +9,10 @@ import re
 
 from flask import request
 from flask_restx import Namespace, Resource, fields
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from sqlalchemy import func
+from flask_jwt_extended import jwt_required
 
 from ext import role_required, db
 from models import (
-    User,
     UserRole,
     Company,
     Booking,
@@ -27,6 +25,8 @@ from services.unified_dispatch import data
 from services.unified_dispatch.queue import trigger_job, get_status
 from werkzeug.exceptions import UnprocessableEntity
 from shared.time_utils import day_local_bounds
+from routes.companies import get_company_from_token
+
 
 dispatch_ns = Namespace("company_dispatch", description="Dispatch par journée (contrat unifié)")
 logger = logging.getLogger(__name__)
@@ -134,6 +134,7 @@ run_model = dispatch_ns.model(
         "allow_emergency": NullableBoolean(description="Autoriser les chauffeurs d'urgence"),
         "async": fields.Boolean(default=True, description="Mode asynchrone"),
         "overrides": NullableDict(description="Surcharges de paramètres"),
+        "mode": fields.String(description="Mode d'opération (auto|solver_only|heuristic_only)")
     },
 )
 
@@ -142,7 +143,7 @@ trigger_model = dispatch_ns.model(
     {
         "for_date": fields.String(required=True, description="Date YYYY-MM-DD"),
         "regular_first": fields.Boolean(default=True, description="Priorité aux chauffeurs réguliers"),
-        "allow_emergency": NullableBoolean(description="Autoriser les chauffeurs d'urgence"),
+        "allow_emergency": NullableBoolean(description="Autoriser les chauffeurs d'urgence")
     },
 )
 
@@ -150,7 +151,7 @@ autorun_model = dispatch_ns.model(
     "DispatchAutorunRequest",
     {
         "enabled": fields.Boolean(required=True, description="Activer/désactiver l'autorun"),
-        "interval_sec": fields.Integer(required=False, description="Intervalle en secondes (optionnel)"),
+        "interval_sec": fields.Integer(required=False, description="Intervalle en secondes (optionnel)")
     },
 )
 
@@ -167,7 +168,7 @@ assignment_model = dispatch_ns.model(
         "created_at": NullableDateTime,
         "updated_at": NullableDateTime,
         "booking": NullableDict,
-        "driver": NullableDict,
+        "driver": NullableDict
     },
 )
 
@@ -175,7 +176,7 @@ assignment_patch_model = dispatch_ns.model(
     "AssignmentPatch",
     {
         "driver_id": fields.Integer,
-        "status": fields.String(enum=[s.value for s in AssignmentStatus]),
+        "status": fields.String(enum=[s.value for s in AssignmentStatus])
     },
 )
 
@@ -196,7 +197,7 @@ dispatch_run_model = dispatch_ns.model(
         "started_at": NullableDateTime,
         "completed_at": NullableDateTime,
         "status": NullableString,
-        "meta": NullableDict,
+        "meta": NullableDict
     },
 )
 
@@ -211,7 +212,7 @@ dispatch_run_detail_model = dispatch_ns.model(
         "completed_at": NullableDateTime,
         "status": NullableString,
         "meta": NullableDict,
-        "assignments": fields.List(fields.Nested(assignment_model)),
+        "assignments": fields.List(fields.Nested(assignment_model))
     },
 )
 
@@ -229,7 +230,7 @@ delay_model = dispatch_ns.model(
         "pickup_delay_minutes": fields.Integer,
         "dropoff_delay_minutes": fields.Integer,
         "booking": NullableDict,
-        "driver": NullableDict,
+        "driver": NullableDict
     },
 )
 
@@ -243,28 +244,20 @@ def _coerce_bool_param(v: Optional[str], default: bool = False) -> bool:
     return v not in ("0", "false", "no", "off", "")
 
 def _get_current_company() -> Company:
-    """Récupère l'entreprise courante depuis le token JWT (garanti non-None)."""
-    user_id = get_jwt_identity()
-    user = User.query.filter_by(public_id=user_id).first()
-    if user is None or not getattr(user, "company_id", None):
-        dispatch_ns.abort(403, "Accès refusé: utilisateur sans entreprise")
-        assert False  # rassure l'analyseur statique
-    if user.role != UserRole.company:
-        dispatch_ns.abort(403, "Accès refusé: rôle utilisateur non autorisé")
+    """Récupère l'entreprise courante en s'alignant sur la logique de routes/companies.py."""
+    company, err, code = get_company_from_token()
+    if err or company is None:
+        # err est typiquement {"error": "..."}
+        msg = (err or {}).get("error") if isinstance(err, dict) else "Accès refusé"
+        dispatch_ns.abort(code or 403, msg)
         assert False
-    company = Company.query.get(user.company_id)
-    if company is None:
-        dispatch_ns.abort(403, "Entreprise introuvable")
-        assert False
-    return company  # type: ignore[return-value]
+    return cast(Company, company)
 
 def _current_company_id() -> int:
-    """Renvoie l'id de l'entreprise courante (évite d'appeler le helper au module-level)."""
-    company = _get_current_company()
-    cid = getattr(company, "id", None)
-    if isinstance(cid, int):
-        return cid
-    return int(cast(Any, cid))
+    c = _get_current_company()
+    cid = getattr(c, "id", None)
+    return cid if isinstance(cid, int) else int(cast(Any, cid))
+
 
 
 def _parse_date(date_str: Optional[str]) -> date:
@@ -278,9 +271,8 @@ def _parse_date(date_str: Optional[str]) -> date:
         assert False
 
 def _booking_time_expr() -> Any:
-    """Expression SQL: coalesce(pickup_time, scheduled_time)."""
     B = cast(Any, Booking)
-    return func.coalesce(B.pickup_time, B.scheduled_time)
+    return B.scheduled_time
 
 def _safe_settings_dict(raw: Any) -> Dict[str, Any]:
     """Décodage JSON tolérant pour company.dispatch_settings."""
@@ -313,7 +305,7 @@ def _day_bounds(d: date) -> tuple[datetime, datetime]:
 class CompanyDispatchRun(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    @dispatch_ns.expect(run_model, validate=True)
+    @dispatch_ns.expect(run_model, validate=False)
     def post(self):
         """
         Lance un dispatch pour une journée donnée.
@@ -336,7 +328,12 @@ class CompanyDispatchRun(Resource):
         company_id: int = _cid if isinstance(_cid, int) else int(cast(Any, _cid))
 
         # --- Mode async ou sync
-        is_async = body.get("async", True)
+        # Accept both 'async' and 'run_async' for compatibility
+        is_async = body.get("async")
+        if is_async is None:
+            is_async = body.get("run_async", True)
+        
+        mode = body.get("mode")
 
         # --- Paramètres
         allow_emergency_val = body.get("allow_emergency", None)
@@ -345,11 +342,18 @@ class CompanyDispatchRun(Resource):
         params = {
             "company_id": company_id,
             "for_date": for_date,
+            "mode": mode,
             "regular_first": bool(body.get("regular_first", True)),
-            "allow_emergency": allow_emergency,
+            "allow_emergency": allow_emergency
+            
         }
 
         # --- Surcharges de paramètres
+        # Extract mode from root or overrides
+        mode = body.get("mode")
+        if mode:
+            params["mode"] = mode
+      
         overrides = body.get("overrides")
         if overrides:
             params["overrides"] = overrides
@@ -461,7 +465,6 @@ class DispatchAutorunEnable(Resource):
     @role_required(UserRole.company)
     @dispatch_ns.expect(autorun_model, validate=True)
     def post(self):
-        """Active/désactive l'autorun pour l'entreprise courante."""
         company = _get_current_company()
         company_id: int = int(getattr(company, "id"))
 
@@ -500,6 +503,7 @@ class DispatchAutorunEnable(Resource):
             }, 200
 
         except Exception as e:
+            db.session.rollback()
             logger.exception("[Dispatch] autorun settings update failed company=%s", company_id)
             dispatch_ns.abort(500, f"Erreur mise à jour autorun: {e}")
 
@@ -530,7 +534,7 @@ class AssignmentsListResource(Resource):
                 Booking.query.filter(
                     Booking.company_id == company.id,
                        time_expr >= d0,     # Comparaison avec bornes locales naïves
-                       time_expr <= d1, 
+                       time_expr < d1, 
                 ).all()
             )
         ]
@@ -574,9 +578,8 @@ class AssignmentResource(Resource):
     @dispatch_ns.expect(assignment_patch_model)
     @dispatch_ns.marshal_with(assignment_model)
     def patch(self, assignment_id: int):
-        """MAJ d'une assignation (driver/status)."""
         company = _get_current_company()
-        a_opt: Optional[Assignment] = (
+        a_opt = (
             Assignment.query.join(Booking, Booking.id == Assignment.booking_id)
             .filter(Assignment.id == assignment_id, Booking.company_id == company.id)
             .first()
@@ -586,17 +589,23 @@ class AssignmentResource(Resource):
 
         a = cast(Assignment, a_opt)
 
-        data = request.get_json() or {}
-        if "driver_id" in data:
-            a.driver_id = data["driver_id"]
-        if "status" in data:
-            a.status = data["status"]
+        try:
+            data = request.get_json() or {}
+            if "driver_id" in data:
+                a.driver_id = data["driver_id"]
+            if "status" in data:
+                a.status = data["status"]
 
-        setattr(cast(Any, a), "updated_at", datetime.now(timezone.utc))
+            setattr(cast(Any, a), "updated_at", datetime.now(timezone.utc))
 
-        db.session.add(a)
-        db.session.commit()
-        return a
+            db.session.add(a)
+            db.session.commit()
+            return a
+        except Exception as e:
+            db.session.rollback()   # 👈 IMPORTANT
+            logger.exception("[Dispatch] patch assignment failed id=%s", assignment_id)
+            dispatch_ns.abort(500, f"Erreur MAJ assignation: {e}")
+
 
 
 @dispatch_ns.route("/assignments/<int:assignment_id>/reassign")
@@ -609,39 +618,41 @@ class ReassignResource(Resource):
     )
     @dispatch_ns.marshal_with(assignment_model)
     def post(self, assignment_id: int):
-        """Réassigne une course à un nouveau chauffeur (implémentation simple)."""
         data = request.get_json() or {}
         new_driver_id = int(data["new_driver_id"])
-
         company = _get_current_company()
 
-        a_opt: Optional[Assignment] = (
+        a_opt = (
             Assignment.query.join(Booking, Booking.id == Assignment.booking_id)
             .filter(Assignment.id == assignment_id, Booking.company_id == company.id)
             .first()
         )
         if a_opt is None:
             dispatch_ns.abort(404, "assignment not found")
-        a = cast(Assignment, a_opt)
 
-        # Vérifier que le driver existe et appartient à l'entreprise
-        driver_opt = Driver.query.filter_by(id=new_driver_id, company_id=company.id).first()
-        if driver_opt is None:
-            dispatch_ns.abort(404, "driver not found")
-        driver = cast(Driver, driver_opt)
+        try:
+            a = cast(Assignment, a_opt)
 
-        # Mettre à jour l'assignation
-        setattr(cast(Any, a), "driver_id", new_driver_id) 
-        setattr(cast(Any, a), "updated_at", datetime.now(timezone.utc))  # évite l'erreur Column[datetime]
+            driver_opt = Driver.query.filter_by(id=new_driver_id, company_id=company.id).first()
+            if driver_opt is None:
+                dispatch_ns.abort(404, "driver not found")
+            driver = cast(Driver, driver_opt)
 
-        db.session.add(a)
-        db.session.commit()
+            setattr(cast(Any, a), "driver_id", new_driver_id)
+            setattr(cast(Any, a), "updated_at", datetime.now(timezone.utc))
 
-        # Enrichir avec booking et driver (attributs transients pour le marshalling)
-        setattr(cast(Any, a), "booking", Booking.query.get(a.booking_id))
-        setattr(cast(Any, a), "driver", driver)
+            db.session.add(a)
+            db.session.commit()
 
-        return a
+            setattr(cast(Any, a), "booking", Booking.query.get(a.booking_id))
+            setattr(cast(Any, a), "driver", driver)
+
+            return a
+        except Exception as e:
+            db.session.rollback()   # 👈 IMPORTANT
+            logger.exception("[Dispatch] reassign failed assignment_id=%s", assignment_id)
+            dispatch_ns.abort(500, f"Erreur réassignation: {e}")
+
 
 
 
@@ -680,6 +691,11 @@ class RunResource(Resource):
     @role_required(UserRole.company)
     @dispatch_ns.marshal_with(dispatch_run_detail_model)
     def get(self, run_id: int):
+        # S’assure que la session n’est pas en état “aborted”
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         """Détail d'un run + ses assignations."""
         company = _get_current_company()
 
@@ -728,8 +744,7 @@ class DelaysResource(Resource):
             d = _parse_date(date_str)
         except ValueError as e:
             return {"error": f"Format de date invalide: {e}"}, 400
- 
-        from shared.time_utils import day_local_bounds
+
         d0, d1 = day_local_bounds(d.strftime("%Y-%m-%d"))
 
         company = _get_current_company()
@@ -739,7 +754,7 @@ class DelaysResource(Resource):
             .filter(
                 Booking.company_id == company.id,
                 time_expr >= d0,
-                time_expr <= d1,
+                time_expr < d1,
             )
             .all()
         )

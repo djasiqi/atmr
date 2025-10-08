@@ -1,7 +1,0 @@
-[project]
-name = "atmr-backend"
-version = "0.1.0"
-description = "Backend for the ATMR application."
-
-[tool.setuptools.packages.find]
-where = ["backend"]

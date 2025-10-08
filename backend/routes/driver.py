@@ -193,22 +193,24 @@ class DriverUpcomingBookings(Resource):
     @jwt_required()
     @role_required(UserRole.driver)
     def get(self):
-        """Récupère uniquement les prochaines courses actives assignées"""
         driver, error_response, status_code = get_driver_from_token()
         if error_response:
             return error_response, status_code
         driver = cast(Driver, driver)
 
         now = datetime.now(timezone.utc)
+
+        status_pred: ColumnElement[bool] = or_(
+            tcast(ColumnElement[bool], Booking.status == BookingStatus.ASSIGNED),
+            tcast(ColumnElement[bool], Booking.status == BookingStatus.EN_ROUTE),
+            tcast(ColumnElement[bool], Booking.status == BookingStatus.IN_PROGRESS),
+        )
+
         bookings = (
             Booking.query
-            .filter(Booking.driver_id == driver.id)
-            .filter(Booking.scheduled_time >= now)
-            .filter(cast(Any, Booking.status).in_([
-                BookingStatus.ASSIGNED,
-                BookingStatus.EN_ROUTE,
-                BookingStatus.IN_PROGRESS
-            ]))
+            .filter(tcast(ColumnElement[bool], Booking.driver_id == driver.id))
+            .filter(tcast(ColumnElement[bool], Booking.scheduled_time >= now))
+            .filter(status_pred)
             .order_by(Booking.scheduled_time.asc())
             .all()
         )
@@ -348,12 +350,11 @@ class BookingDetails(Resource):
     @jwt_required()
     @role_required(UserRole.driver)
     def get(self, booking_id: int):
-        """Récupère les détails d'une réservation assignée au chauffeur"""
         try:
-            current_user_id = get_jwt_identity()
-            driver = Driver.query.filter_by(user_id=current_user_id).one_or_none()
-            if not driver:
-                return {"error": "Unauthorized: Driver not found"}, 403
+            driver, error_response, status_code = get_driver_from_token()
+            if error_response:
+                return error_response, status_code
+            driver = cast(Driver, driver)
 
             booking = Booking.query.filter_by(id=booking_id, driver_id=driver.id).one_or_none()
             if not booking:
@@ -373,6 +374,7 @@ class BookingDetails(Resource):
             sentry_sdk.capture_exception(e)
             app_logger.error(f"❌ ERREUR get_booking_details: {type(e).__name__} - {str(e)}", exc_info=True)
             return {"error": "Une erreur interne est survenue."}, 500
+
 
 @driver_ns.route('/company/<int:company_id>/live-locations')
 class CompanyLiveLocations(Resource):
@@ -495,8 +497,10 @@ class UpdateBookingStatus(Resource):
                     return {"error": "Not a return trip"}, 400
 
             db.session.commit()
-            notify_booking_update(driver.id, booking)
+            driver_id: int = tcast(int, driver.id)
+            notify_booking_update(driver_id, booking)
             return {"message": f"Booking status updated to {new_status_str}"}, 200
+
 
         except Exception as e:
             sentry_sdk.capture_exception(e)

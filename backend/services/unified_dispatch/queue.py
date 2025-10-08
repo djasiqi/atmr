@@ -171,9 +171,9 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
     Enfile un job (coalescé) et renvoie un job_id.
     """
     job_id = str(uuid.uuid4())
-    # On passe par trigger() pour bénéficier du coalescing/debounce
-    trigger(company_id, reason="manual_trigger", mode="auto", params=params)
-    return {"id": job_id, "company_id": company_id}
+    mode = str((params or {}).get("mode", "auto")).strip().lower()
+    trigger(company_id, reason="manual_trigger", mode=mode, params=params)
+    return {"id": job_id, "company_id": company_id, "status": "queued", "dispatch_run_id": None}
 
 
 def trigger(company_id: int, reason: str = "generic", mode: str = "auto", params: Optional[Dict[str, Any]] = None) -> None:
@@ -193,7 +193,6 @@ def trigger(company_id: int, reason: str = "generic", mode: str = "auto", params
         st.backlog.append(f"{datetime.now(timezone.utc).isoformat()} {reason}")
     # Coalesce: on mémorise/merge les derniers params (on garde la dernière valeur pour chaque clé)
     if params:
-        # merge "dernier gagnant" (les clés fournies écrasent les anciennes)
         st.params = dict(params)
 
     try:

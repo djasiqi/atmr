@@ -52,7 +52,7 @@ const Login = () => {
     try {
       localStorage.removeItem("authToken");
       const response = await apiClient.post("/auth/login", formData);
-      const { token, user } = response.data;
+      const { token, user, refresh_token } = response.data;
 
       if (!user || !user.role || !user.public_id) {
         throw new Error("Aucune information utilisateur reçue.");
@@ -62,25 +62,31 @@ const Login = () => {
 
       // Stocker les infos utilisateur
       localStorage.setItem("authToken", token);
-      localStorage.setItem("user", JSON.stringify(user));
+      if (refresh_token) localStorage.setItem("refreshToken", refresh_token);
       localStorage.setItem("public_id", user.public_id);
 
       // Décoder le token pour vérifier les informations (notamment le rôle)
       const decodedToken = jwtDecode(token);
-      console.log("Token décodé :", decodedToken);
-      console.log("Rôle dans le token :", decodedToken.role);
+      const roleSegment = String(
+        decodedToken.role || user.role || ""
+      ).toLowerCase();
+      // Normaliser le rôle stocké (cohérent avec ProtectedRoute)
+      localStorage.setItem(
+        "user",
+        JSON.stringify({ ...user, role: roleSegment })
+      );
 
       // Vérification si l'utilisateur doit réinitialiser son mot de passe
       if (user.force_password_change) {
         console.log(
           "🔄 Redirection vers la réinitialisation du mot de passe..."
         );
-        navigate(`/reset-password/${user.public_id}`);
+        navigate(`/reset-password/${user.public_id}`, { replace: true });
       } else {
-        // Redirection normale vers le dashboard, en utilisant le rôle extrait du token
-        navigate(
-          `/dashboard/${decodedToken.role.toLowerCase()}/${user.public_id}`
-        );
+        // Redirection normale vers le dashboard
+        navigate(`/dashboard/${roleSegment}/${user.public_id}`, {
+          replace: true,
+        });
       }
     } catch (error) {
       console.error("❌ Erreur lors de la connexion :", error);
@@ -88,7 +94,9 @@ const Login = () => {
         error.response?.data?.error ??
         error.response?.data?.message ??
         error.response?.data?.detail ??
-        (typeof error.response?.data === "string" ? error.response.data : null) ??
+        (typeof error.response?.data === "string"
+          ? error.response.data
+          : null) ??
         error.message;
       setErrorMessage(msg);
     } finally {

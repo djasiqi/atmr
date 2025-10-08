@@ -1,19 +1,19 @@
-from flask_restx import Namespace, Resource, fields
+from typing import Any, Optional, cast
 from flask import request
+from flask_restx import Namespace, Resource, fields
 from flask_jwt_extended import jwt_required
 from models import User, Booking, Invoice, UserRole, Client, BookingStatus
-from ext import db, role_required
-from datetime import datetime
+from ext import db, role_required, app_logger
+from datetime import datetime, timezone
+from sqlalchemy import select, func, and_
+from sqlalchemy.sql.elements import BinaryExpression
 from sqlalchemy.orm import joinedload
-import logging
 import random
 import string
-from app import sentry_sdk
-from typing import Any, cast
+import sentry_sdk
 
-app_logger = logging.getLogger('app')
 
-admin_ns = Namespace('admin', description='Opérations administrateur')
+admin_ns = Namespace("admin", description="Admin operations")
 
 # Modèle de réponse pour les statistiques (facultatif)
 stats_model = admin_ns.model('Stats', {
@@ -36,18 +36,27 @@ class AdminStats(Resource):
             total_users = User.query.count()
             total_invoices = Invoice.query.count()
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            end_of_month = (now.replace(month=now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
-                            if now.month < 12 else now.replace(year=now.year + 1, month=1, day=1))
+            if now.month == 12:
+                end_of_month = now.replace(year=now.year + 1, month=1, day=1,
+                                        hour=0, minute=0, second=0, microsecond=0)
+            else:
+                end_of_month = now.replace(month=now.month + 1, day=1,
+                                        hour=0, minute=0, second=0, microsecond=0)
 
-            total_revenue = (
-                db.session.query(db.func.sum(Booking.amount))
-                .filter(cast(Any, Booking.status == BookingStatus.COMPLETED))
-                .filter(cast(Any, Booking.scheduled_time >= start_of_month))
-                .filter(cast(Any, Booking.scheduled_time < end_of_month))
-                .scalar() or 0
+            # Comparaisons typées pour Pylance
+            cond_status: BinaryExpression[bool] = cast(BinaryExpression[bool], Booking.status == BookingStatus.COMPLETED)
+            cond_ge:     BinaryExpression[bool] = cast(BinaryExpression[bool], Booking.scheduled_time >= start_of_month)
+            cond_lt:     BinaryExpression[bool] = cast(BinaryExpression[bool], Booking.scheduled_time <  end_of_month)
+
+            stmt = (
+                select(func.coalesce(func.sum(Booking.amount), 0))
+                .where(and_(cond_status, cond_ge, cond_lt))
             )
+
+            total_revenue = db.session.execute(stmt).scalar_one()
+
 
             app_logger.info(f"📊 Stats: {total_bookings} bookings, {total_users} users, {total_invoices} invoices, {total_revenue} revenue")
             return {
@@ -160,130 +169,134 @@ class ManageUser(Resource):
 
 
 
+
+
 @admin_ns.route('/users/<int:user_id>/role')
 class UpdateUserRole(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
-    def put(self, user_id):
+    def put(self, user_id: int):
         """
-        Mets à jour le rôle d'un utilisateur et, si besoin,
-        crée/assigne driver ou company, en gérant la transition
-        depuis l'ancien rôle.
+        Met à jour le rôle d'un utilisateur et, si besoin,
+        crée/assigne Driver ou Company en gérant la transition depuis l'ancien rôle.
         """
         try:
-            user = User.query.get(user_id)
-            if not user:
-                admin_ns.abort(404, "User not found")
+            # ---------- 1) Charger l'utilisateur + relations ----------
+            user_opt: Optional[User] = (
+                User.query.options(
+                    joinedload(User.driver),
+                    joinedload(User.company),
+                ).get(user_id)
+            )
+            if user_opt is None:
+                return {"error": "User not found"}, 404
+            user = cast(User, user_opt)
 
-            data = request.get_json() or {}
-            new_role_raw = str(data.get("role", "")).strip()
-            if not new_role_raw:
-                admin_ns.abort(400, "Invalid role")
-            # Pylance : stabilise le type (non-None)
-            user = cast(User, user)
-            # conversion robuste par valeur (ex: "driver","company","client","admin")
+            # ---------- 2) Lire & valider le payload ----------
+            data = request.get_json(silent=True) or {}
+            raw = str(data.get("role", "")).strip()
+            if not raw:
+                return {"error": "Invalid role"}, 400
+
+            # Normalisation ; on accepte "admin" / "ADMIN" / value / name
+            key = raw.upper()
             try:
-                new_role_enum = UserRole(new_role_raw.lower())
-            except ValueError:
-                admin_ns.abort(400, "Invalid role")
+                # par nom d’enum (ADMIN/DRIVER/COMPANY/CLIENT)
+                new_role_enum = UserRole[key]
+            except KeyError:
+                # sinon par valeur d'enum (si jamais)
+                new_role_enum = next(
+                    (r for r in UserRole if str(r.value).upper() == key),
+                    None
+                )
+                if new_role_enum is None:
+                    return {"error": "Invalid role"}, 400
 
-            # --- 1. Conserver l'ancien rôle avant la mise à jour
-            old_role_value = user.role.value
+            # Rôle précédent (toujours string upper pour comparaison)
+            old_role_value = (
+                user.role.value if isinstance(user.role, UserRole) else str(user.role)
+            )
+            old_role_value = str(old_role_value or "").upper()
 
-            # --- 2. Mettre à jour le nouveau rôle dans la table 'user'
-            user.role = new_role_enum
+            # ---------- 3) Affecter le nouveau rôle ----------
+            # ⚠️ Ton modèle est typé façon Pylance "Column[str]". Pour éviter les warnings,
+            # on assigne la valeur texte (PG enum accepte la string correspondante).
+            cast(Any, user).role = new_role_enum.value
 
-            # ============ CAS 1 : L'utilisateur devient DRIVER ============
-            if new_role_enum.value == "driver":
-                from models import Driver, Company
+            # ---------- 4) Transitions selon le nouveau rôle ----------
+            role_upper = str(new_role_enum.value).upper()
 
-                # Vérifier que "company_id" est présent dans la requête
-                if "company_id" not in data:
-                    admin_ns.abort(400, "company_id is required for a driver.")
+            if role_upper == "DRIVER":
+                # company_id requis
+                company_id = data.get("company_id")
+                if not company_id:
+                    db.session.rollback()
+                    return {"error": "company_id is required for a driver."}, 400
 
-                # Vérifier que la company existe réellement
-                company_id = data["company_id"]
-                company = Company.query.get(company_id)
-                if not company:
-                    admin_ns.abort(400, f"Company {company_id} does not exist.")
-
-                # Récupérer (ou créer) l'enregistrement driver
-                driver = user.driver if getattr(user, "driver", None) else None
-                if not driver:
-                    driver = cast(Any, Driver)(
-                        user_id=user.id,
-                        company_id=company_id,
-                        is_active=True
-                    )
-                    db.session.add(driver)
-                else:
-                    # Mettre à jour la nouvelle entreprise
-                    driver.company_id = company_id
-                    driver.is_active = True
-
-                # Si l'ancien rôle était 'company', traiter l'ancien enregistrement
-                if old_role_value == "company":
-                    if user.company:
-                        # Par exemple, désactiver ou supprimer l'enregistrement company
-                        pass
-
-
-            # ============ CAS 2 : L'utilisateur devient COMPANY ============
-            elif new_role_enum.value == "company":
                 from models import Company, Driver
 
-                # Vérifier s'il existe déjà une entreprise associée à l'utilisateur
-                company_record = user.company if getattr(user, "company", None) else None
-                if not company_record:
-                    # Créer un enregistrement company minimal
-                    name = data.get("company_name") or user.username
-                    company_record = cast(Any, Company)(
-                        user_id=user.id,
-                        name=name
-                    )
-                    db.session.add(company_record)
-                else:
-                    # Mettre à jour le nom si besoin
-                    if "company_name" in data:
-                        company_record.name = data["company_name"]
+                company = Company.query.get(company_id)
+                if company is None:
+                    db.session.rollback()
+                    return {"error": f"Company {company_id} does not exist."}, 400
 
-                # Si l'ancien rôle était 'driver', on peut supprimer ou désactiver la ligne driver
-                if old_role_value == "driver":
-                    driver = user.driver if getattr(user, "driver", None) else None
-                    if driver:
-                        # Ex : db.session.delete(driver) ou driver.is_active = False
+                drv = getattr(user, "driver", None)
+                if drv is None:
+                    # Contourner le __init__ typé des modèles (Pylance "No parameter named ...")
+                    DriverCtor = cast(Any, Driver)
+                    drv = DriverCtor(user_id=user.id, company_id=company_id, is_active=True)
+                    db.session.add(drv)
+                else:
+                    drv.company_id = company_id
+
+                # ancien rôle = company ? on peut décider d’un traitement (désactivation, etc.)
+                # ici on laisse tel quel par défaut.
+
+            elif role_upper == "COMPANY":
+                from models import Company, Driver
+
+                comp = getattr(user, "company", None)
+                if comp is None:
+                    name = data.get("company_name") or user.username
+                    CompanyCtor = cast(Any, Company)
+                    comp = CompanyCtor(user_id=user.id, name=name)
+                    db.session.add(comp)
+                else:
+                    new_name = data.get("company_name")
+                    if new_name:
+                        comp.name = new_name
+
+                # si l'ancien rôle était DRIVER, on supprime le driver (ou on le désactive)
+                if old_role_value == "DRIVER":
+                    drv = getattr(user, "driver", None)
+                    if drv:
+                        db.session.delete(drv)
+
+            elif role_upper == "CLIENT":
+                # redevenir client : supprimer driver et company éventuels
+                drv = getattr(user, "driver", None)
+                if drv:
+                    db.session.delete(drv)
+                comp = getattr(user, "company", None)
+                if comp:
+                    db.session.delete(comp)
+                    # éviter toute référence pendante
+                    try:
+                        cast(Any, user).company = None
+                    except Exception:
                         pass
 
-            # ============ CAS 3 : L'utilisateur redevient CLIENT ============
-            elif new_role_enum.value == "client":
-                from models import Driver, Company
-                # Si l'utilisateur était driver, on désactive ou supprime driver
-                if old_role_value == "driver":
-                    driver = user.driver if getattr(user, "driver", None) else None
-                    if driver:
-                        db.session.delete(driver)  # ou driver.is_active = False
-                # Si l'utilisateur était company, on supprime l'enregistrement company
-                if old_role_value == "company":
-                    if user.company:
-                        db.session.delete(user.company)
-                        # Optionnel : détacher l'objet de la relation
-                        user.company = None
+            elif role_upper == "ADMIN":
+                # on nettoie à minima le driver ; on conserve la company par défaut
+                drv = getattr(user, "driver", None)
+                if drv:
+                    db.session.delete(drv)
+                # comp = getattr(user, "company", None)
+                # si tu veux aussi supprimer la company de l'admin, décommente :
+                # if comp:
+                #     db.session.delete(comp)
 
-
-            # ============ CAS 4 : L'utilisateur devient ADMIN ============
-            elif new_role_enum.value == "admin":
-                from models import Driver, Company
-                # Si l'utilisateur était driver, on le supprime / désactive
-                if old_role_value == "driver":
-                    driver = user.driver if getattr(user, "driver", None) else None
-                    if driver:
-                        pass  # db.session.delete(driver)
-                # Si l'utilisateur était company, on le supprime / désactive
-                if old_role_value == "company":
-                    if user.company:
-                        pass  # db.session.delete(user.company)
-
-            # --- 5. Commit final pour tout valider
+            # ---------- 5) Commit ----------
             db.session.commit()
 
             return {
@@ -294,7 +307,8 @@ class UpdateUserRole(Resource):
         except Exception as e:
             db.session.rollback()
             app_logger.error(f"❌ ERREUR update_user_role: {e}", exc_info=True)
-            admin_ns.abort(500, "Une erreur interne est survenue.")
+            return {"message": "Une erreur interne est survenue."}, 500
+
 
 @admin_ns.route('/users/<int:user_id>/reset-password')
 class ResetUserPassword(Resource):

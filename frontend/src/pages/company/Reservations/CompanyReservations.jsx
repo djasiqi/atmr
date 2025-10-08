@@ -9,15 +9,25 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import CompanyHeader from "../../../components/layout/Header/CompanyHeader";
 import CompanySidebar from "../../../components/layout/Sidebar/CompanySidebar/CompanySidebar";
-import { fetchCompanyReservations, deleteReservation } from "../../../services/companyService";
+import {
+  fetchCompanyReservations,
+  deleteReservation,
+} from "../../../services/companyService";
 import ReservationTable from "../Dashboard/components/ReservationTable";
 import ReservationDetailsModal from "../Dashboard/components/ReservationDetailsModal";
 import ConfirmationModal from "../../../components/common/ConfirmationModal";
 import styles from "./CompanyReservations.module.css";
 
+function makeToday() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 const CompanyReservations = () => {
   const [reservations, setReservations] = useState([]);
   const [filteredReservations, setFilteredReservations] = useState([]);
+  const [selectedDay, setSelectedDay] = useState(makeToday());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -37,9 +47,9 @@ const CompanyReservations = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await fetchCompanyReservations();
+      const data = await fetchCompanyReservations(selectedDay);
       // Ensure we're handling both array and {reservations: [...]} formats
-      setReservations(Array.isArray(data) ? data : (data.reservations || []));
+      setReservations(Array.isArray(data) ? data : data.reservations || []);
       if (!didShowToast.current) {
         toast.success("Réservations chargées !");
         didShowToast.current = true;
@@ -51,7 +61,7 @@ const CompanyReservations = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedDay]);
 
   useEffect(() => {
     loadReservations();
@@ -64,7 +74,7 @@ const CompanyReservations = () => {
     setShowConfirmModal(true);
   };
 
-    const handleCloseConfirmModal = () => {
+  const handleCloseConfirmModal = () => {
     setShowConfirmModal(false);
     setReservationToDelete(null);
   };
@@ -74,7 +84,9 @@ const CompanyReservations = () => {
     try {
       const response = await deleteReservation(reservationToDelete.id);
       toast.success(response.message || "Réservation supprimée !");
-      setReservations(prev => prev.filter(r => r.id !== reservationToDelete.id));
+      setReservations((prev) =>
+        prev.filter((r) => r.id !== reservationToDelete.id)
+      );
     } catch (err) {
       console.error("Erreur lors de la suppression:", err);
       toast.error(err.error || "Une erreur est survenue.");
@@ -83,19 +95,23 @@ const CompanyReservations = () => {
     }
   };
 
-
-
   // Filtrer et trier les réservations
   useEffect(() => {
     let filtered = [...reservations];
     if (searchTerm) {
-      filtered = filtered.filter((r) =>
-        r.customer_name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const q = searchTerm.toLowerCase();
+      filtered = filtered.filter((r) => {
+        const name = (
+          r.customer_name ||
+          r.client?.full_name ||
+          ""
+        ).toLowerCase();
+        return name.includes(q);
+      });
     }
     if (statusFilter !== "all") {
       filtered = filtered.filter(
-        (r) => r.status.toLowerCase() === statusFilter
+        (r) => (r.status || "").toLowerCase() === statusFilter
       );
     }
     filtered.sort((a, b) => {
@@ -127,6 +143,12 @@ const CompanyReservations = () => {
           {error && <div className={styles.error}>{error}</div>}
           <div className={styles.filters}>
             <input
+              type="date"
+              value={selectedDay}
+              onChange={(e) => setSelectedDay(e.target.value)}
+              className={styles.dateInput}
+            />
+            <input
               type="text"
               placeholder="Rechercher par client..."
               value={searchTerm}
@@ -140,6 +162,7 @@ const CompanyReservations = () => {
             >
               <option value="all">Tous</option>
               <option value="pending">En attente</option>
+              <option value="accepted">Acceptée</option>
               <option value="assigned">Assignée</option>
               <option value="completed">Terminée</option>
               <option value="canceled">Annulée</option>
@@ -162,7 +185,9 @@ const CompanyReservations = () => {
             <>
               <ReservationTable
                 reservations={currentReservations}
-                onRowClick={(reservation) => setSelectedReservation(reservation)}
+                onRowClick={(reservation) =>
+                  setSelectedReservation(reservation)
+                }
                 onDelete={handleDeleteRequest} // On passe la fonction qui OUVRE le modal
               />
               <div className={styles.pagination}>
@@ -200,13 +225,19 @@ const CompanyReservations = () => {
             confirmText="Oui, supprimer"
           >
             <p>
-                Êtes-vous sûr de vouloir supprimer la réservation pour <strong>{reservationToDelete?.customer_name}</strong> ?
+              Êtes-vous sûr de vouloir supprimer la réservation pour{" "}
+              <strong>{reservationToDelete?.customer_name}</strong> ?
             </p>
-            <p style={{color: '#ef4444', fontStyle: 'italic', marginTop: '16px'}}>
-                Cette action est irréversible.
+            <p
+              style={{
+                color: "#ef4444",
+                fontStyle: "italic",
+                marginTop: "16px",
+              }}
+            >
+              Cette action est irréversible.
             </p>
           </ConfirmationModal>
-
         </main>
       </div>
       <ToastContainer position="top-right" autoClose={3000} />

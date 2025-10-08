@@ -1,9 +1,5 @@
 // src/services/adminService.js
 import apiClient from "../utils/apiClient";
-import axios from "axios";
-
-const API_BASE_URL = "http://localhost:5000/admin";
-
 /**
  * Récupère le token JWT stocké en local.
  */
@@ -111,11 +107,22 @@ export const fetchUsers = async () => {
 export const fetchCompanies = async () => {
   try {
     const token = getAuthToken();
-    const response = await apiClient.get("/companies/", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    console.log("📌 Données reçues de /companies/ :", response.data);
-    return response.data.companies;
+    // 1er essai : /companies/
+    try {
+      const r1 = await apiClient.get("/companies/", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      console.log("📌 Données reçues de /companies/ :", r1.data);
+      return r1.data?.companies ?? r1.data ?? [];
+    } catch (e) {
+      if (e?.response?.status !== 404) throw e;
+      // 2e essai : /admin/companies
+      const r2 = await apiClient.get("/admin/companies", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      console.log("📌 Données reçues de /admin/companies :", r2.data);
+      return r2.data?.companies ?? r2.data ?? [];
+    }
   } catch (error) {
     console.error(
       "❌ Erreur lors de la récupération des entreprises :",
@@ -147,10 +154,16 @@ export const updateUserRole = async (userId, updatedData) => {
       throw new Error("Un company_id est requis pour le rôle 'driver'.");
     }
 
+    const payload = {
+      ...updatedData,
+      role: String(updatedData.role).toLowerCase(), // <-- normalisation
+    };
     const response = await apiClient.put(
       `/admin/users/${userId}/role`,
-      updatedData,
-      { headers: { Authorization: `Bearer ${token}` } }
+      payload,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
     );
     return response.data;
   } catch (error) {
@@ -171,9 +184,8 @@ export const deleteUser = async (userId) => {
     const token = getAuthToken();
     if (!token) return;
     console.log(`📌 Tentative de suppression de l'utilisateur ID: ${userId}`);
-    const response = await axios.delete(`${API_BASE_URL}/users/${userId}`, {
+    const response = await apiClient.delete(`/admin/users/${userId}`, {
       headers: { Authorization: `Bearer ${token}` },
-      withCredentials: true,
     });
     console.log("✅ Utilisateur supprimé avec succès :", response.data);
     return response.data;

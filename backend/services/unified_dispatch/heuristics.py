@@ -141,7 +141,14 @@ def haversine_minutes(
 
     return minutes
 
-
+def _py_int(v: Any) -> Optional[int]:
+    try:
+        return int(cast(Any, v)) if v is not None else None
+    except Exception:
+        return None
+    
+def _current_driver_id(b: Booking) -> Optional[int]:
+    return _py_int(getattr(b, "driver_id", None))
 
 def _driver_current_coord(d: Driver) -> Tuple[float, float]:
     # On assume que data.py a mis à jour current_lat/current_lon
@@ -164,6 +171,13 @@ def _booking_coords(b: Booking) -> Tuple[Tuple[float, float], Tuple[float, float
         (float(cast(Any, getattr(b, "dropoff_lat"))), float(cast(Any, getattr(b, "dropoff_lon")))),
     )
 
+def _is_booking_assigned(b: Booking) -> bool:
+    try:
+        s = cast(Any, getattr(b, "status", None))
+        # compare à l’enum (ou à sa value) pour éviter ColumnElement
+        return (s == BookingStatus.ASSIGNED) or (getattr(s, "value", None) == BookingStatus.ASSIGNED.value)
+    except Exception:
+        return False
 
 def _priority_weight(b: Booking, weights: Dict[str, float]) -> float:
     """
@@ -297,7 +311,9 @@ def _score_driver_for_booking(
         lateness_penalty = 0.0
 
     # 2) Équité (driver_load_balance)
-    fairness_pen = _driver_fairness_penalty(d.id, fairness_counts)
+    did_safe = int(cast(Any, getattr(d, "id", 0)) or 0)
+    fairness_pen = _driver_fairness_penalty(did_safe, fairness_counts)
+
 
     # 3) Priorité booking
     pr = _priority_weight(
@@ -450,7 +466,10 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
                 continue
 
             # Si la course est déjà ASSIGNED à ce driver, gardons une préférence (éviter churn)
-            prefer_assigned = (b.status == BookingStatus.ASSIGNED and int(cast(Any, b.driver_id or 0)) == did)
+            is_assigned = _is_booking_assigned(b)
+            cur_driver_id = _current_driver_id(b)
+            prefer_assigned = bool(is_assigned and (cur_driver_id == did))
+
 
             di = driver_index[did]
             dw = driver_windows[di] if di < len(driver_windows) else (0, 24 * 60)
@@ -543,8 +562,9 @@ def assign_urgent(
             if sc <= 0:
                 continue
             # Bonus stabilité si déjà ASSIGNED à ce driver
-            if b.status == BookingStatus.ASSIGNED and int(cast(Any, b.driver_id or 0)) == did:
+            if _is_booking_assigned(b) and (_current_driver_id(b) == did):
                 sc += 0.3
+
             # Léger malus sur "emergency" pour ne l'utiliser qu'en dernier recours
             if getattr(d, "is_emergency", False):
                 sc -= 0.05
@@ -638,8 +658,9 @@ def closest_feasible(
             if sc <= 0:
                 continue
             # Bonus stabilité si déjà ASSIGNED à ce driver
-            if b.status == BookingStatus.ASSIGNED and int(cast(Any, b.driver_id or 0)) == did:
+            if _is_booking_assigned(b) and (_current_driver_id(b) == did):
                 sc += 0.2
+
             cand = HeuristicAssignment(
                 booking_id=int(cast(Any, b.id)),
                 driver_id=did,

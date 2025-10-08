@@ -2,11 +2,11 @@ import { useState, useCallback, useEffect } from "react";
 import {
   fetchCompanyReservations,
   fetchCompanyDriver,
-  fetchCompanyInfo
+  fetchCompanyInfo,
 } from "../services/companyService";
 import { getAccessToken } from "./useAuthToken";
 
-const useCompanyData = () => {
+const useCompanyData = ({ day } = {}) => {
   const [reservations, setReservations] = useState([]);
   const [driver, setDriver] = useState([]);
   const [loadingReservations, setLoadingReservations] = useState(true);
@@ -31,14 +31,16 @@ const useCompanyData = () => {
   const loadReservations = useCallback(async () => {
     try {
       setLoadingReservations(true);
-      const data = await fetchCompanyReservations();
+      const data = await fetchCompanyReservations(day);
       // Le service renvoie déjà un ARRAY normalisé
-      setReservations(Array.isArray(data) ? data : (data?.reservations ?? []));
+      setReservations(Array.isArray(data) ? data : data?.reservations ?? []);
       setError(null); // Réinitialiser l'erreur en cas de succès
     } catch (err) {
       // Gérer spécifiquement les erreurs de timeout
-      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-        setError("La récupération des réservations a pris trop de temps. Veuillez réessayer.");
+      if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
+        setError(
+          "La récupération des réservations a pris trop de temps. Veuillez réessayer."
+        );
       } else {
         console.error("❌ Erreur lors du chargement des réservations :", err);
         setError("Erreur lors du chargement des réservations.");
@@ -46,19 +48,21 @@ const useCompanyData = () => {
     } finally {
       setLoadingReservations(false);
     }
-  }, []);
+  }, [day]);
 
   const loadDriver = useCallback(async () => {
     try {
       setLoadingDriver(true);
       const data = await fetchCompanyDriver();
       // Le service renvoie déjà un ARRAY normalisé
-      setDriver(Array.isArray(data) ? data : (data?.driver ?? []));
+      setDriver(Array.isArray(data) ? data : data?.driver ?? []);
       setError(null); // Réinitialiser l'erreur en cas de succès
     } catch (err) {
       // Gérer spécifiquement les erreurs de timeout
-      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-        setError("La récupération des chauffeurs a pris trop de temps. Veuillez réessayer.");
+      if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
+        setError(
+          "La récupération des chauffeurs a pris trop de temps. Veuillez réessayer."
+        );
       } else {
         console.error("❌ Erreur lors du chargement des chauffeurs :", err);
         setError("Erreur lors du chargement des chauffeurs.");

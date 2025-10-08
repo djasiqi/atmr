@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import apiClient from "../../utils/apiClient";
 import styles from "./Signup.module.css";
 
 const Signup = () => {
@@ -56,24 +56,38 @@ const Signup = () => {
     console.log("Données soumises :", formData); // Debugging : Vérifiez les données envoyées
 
     try {
-      const response = await axios.post(
-        "http://localhost:5000/auth/register",
-        formData,
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          withCredentials: true,
-        }
-      );
+      // ✅ Appeler le bon endpoint via apiClient (baseURL = /api)
+      const response = await apiClient.post("/auth/register", formData);
 
       console.log("Réponse du backend :", response.data); // Loguez la réponse pour confirmation
       setSuccessMessage(response.data.message);
       setErrorMessage("");
 
       // Redirection vers le tableau de bord
-      const userId = response.data.user_id;
-      navigate(`/dashboard/client/${userId}`);
+      // 🔐 Option 1 (UX ++) : auto-login après inscription
+      try {
+        const { email, password } = formData;
+        const loginRes = await apiClient.post("/auth/login", {
+          email,
+          password,
+        });
+        const { token, user, refresh_token } = loginRes.data || {};
+        if (token && user) {
+          localStorage.setItem("authToken", token);
+          if (refresh_token)
+            localStorage.setItem("refreshToken", refresh_token);
+          const role = String((user.role || "").toLowerCase());
+          localStorage.setItem("user", JSON.stringify({ ...user, role }));
+          localStorage.setItem("public_id", user.public_id);
+          navigate(`/dashboard/${role}/${user.public_id}`, { replace: true });
+        } else {
+          // fallback : si pas de token, on envoie sur la page login
+          navigate("/login", { replace: true });
+        }
+      } catch {
+        // fallback : si l’auto-login échoue
+        navigate("/login", { replace: true });
+      }
     } catch (error) {
       // Détectez les erreurs de type CORS
       if (error.message === "Network Error") {

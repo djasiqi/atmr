@@ -3,21 +3,75 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict
-from typing import Dict, Any, List, Optional, Iterable, cast
+from typing import Dict, Any, List, Optional, Iterable, Callable, cast
 import threading
 from datetime import datetime, date, timezone 
 from sqlalchemy.exc import IntegrityError
 from ext import db
-from models import Company, Booking, Driver, DriverType, DispatchRun, Assignment
+from models import Company, Booking, Driver, DriverType, DispatchRun, Assignment, DispatchStatus
 from services.unified_dispatch import data, heuristics, solver, settings
 from services.unified_dispatch import settings as ud_settings
 from services.unified_dispatch.apply import apply_assignments
 from services.notification_service import notify_booking_assigned, notify_dispatch_run_completed
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
 def utcnow():
     return datetime.now(timezone.utc)
+
+# ---------- Helpers typage/runtime ----------
+def _to_date_ymd(s: str) -> date:
+    # accepte 'YYYY-MM-DD' et ISO full (on ne garde que la date)
+    try:
+        if len(s) == 10 and s[4] == "-" and s[7] == "-":
+            return date.fromisoformat(s)
+        return datetime.fromisoformat(s).date()
+    except Exception:
+        raise ValueError(f"for_date invalide: {s!r} (attendu 'YYYY-MM-DD')")
+    
+def _safe_int(v: Any) -> Optional[int]:
+    """
+    Convertit n'importe quelle valeur (y compris un InstrumentedAttribute/Column)
+    en int Python ou retourne None. Typé pour apaiser Pylance.
+    """
+    try:
+        # ignore[arg-type] pour éviter l'avertissement sur Column[int]
+        return int(v)  # type: ignore[arg-type]
+    except Exception:
+        return None
+
+def _in_tx() -> bool:
+    """
+    Détecte proprement une transaction active sur la session SQLAlchemy,
+    sans dépendre d'un stub précis (Pylance-friendly).
+    """
+    try:
+        meth: Optional[Callable[[], Any]] = getattr(db.session, "in_transaction", None)
+        if callable(meth):
+            return bool(meth())
+        get_tx: Optional[Callable[[], Any]] = getattr(db.session, "get_transaction", None)
+        if callable(get_tx):
+            return get_tx() is not None
+    except Exception:
+        pass
+    # Fallback raisonnable
+    return bool(getattr(db.session, "is_active", False))
+
+@contextmanager
+def _begin_tx():
+    """
+    Ouvre une transaction en s'adaptant à l'état courant de la Session.
+    - Si une transaction est déjà ouverte (implicitement ou non), on utilise un savepoint (begin_nested).
+    - Sinon, on ouvre une transaction normale (begin).
+    """
+    if _in_tx():
+        cm = db.session.begin_nested()
+    else:
+        cm = db.session.begin()
+    with cm:
+        yield
+
 
 # ------------------------------------------------------------------
 # Simple verrou "un run par jour et par entreprise"
@@ -55,6 +109,11 @@ def run(
     Run the dispatch optimization for a company on a specific date.
     Creates a DispatchRun record and links assignments to it.
     """
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+
     company: Optional[Company] = Company.query.get(company_id)
     if not company:
         logger.warning("[Engine] Company %s introuvable", company_id)
@@ -92,26 +151,19 @@ def run(
             "debug": {"reason": "locked", "for_date": for_date, "day": day_str},
         }
 
-    dispatch_run = None
+    dispatch_run: Optional[DispatchRun] = None
     try:
-        # 2) Create or reuse le DispatchRun (unique: company_id+day)
-        # Fix: Properly handle date conversion for SQLite
+        # 2) Créer / réutiliser le DispatchRun (unique: company_id+day)
+
         try:
-            # First try to parse with strptime for consistent format
-            day_date = datetime.strptime(day_str, "%Y-%m-%d").date()
-        except (ValueError, TypeError):
-            # If that fails, try other methods or default to today
-            try:
-                day_date = datetime.fromisoformat(day_str).date()
-            except (ValueError, TypeError):
-                logger.warning(f"[Engine] Invalid day_str format: {day_str}, using today's date")
-                day_date = date.today()
+            day_date = _to_date_ymd(day_str)
+        except Exception:
+            logger.warning("[Engine] Invalid day_str=%r, fallback to today", day_str)
+            day_date = date.today()
 
         logger.info(f"[Engine] Using day_date: {day_date} for dispatch run")
 
-        dispatch_run = (DispatchRun.query
-                        .filter_by(company_id=company_id, day=day_date)
-                        .first())
+        dispatch_run = DispatchRun.query.filter_by(company_id=company_id, day=day_date).first()
 
         cfg = {
             "mode": mode,
@@ -121,51 +173,52 @@ def run(
         }
 
         if dispatch_run is None:
-            # Éviter les erreurs Pylance (Colonnes SQLA) : on assigne via une variable Any
-            dr_any: Any = DispatchRun()  # type: ignore[call-arg]
-            dr_any.company_id = int(company_id)
-            dr_any.day = day_date
-            dr_any.status = "running"
-            dr_any.started_at = utcnow()
-            dr_any.created_at = utcnow()
-            dr_any.config = cfg
-            db.session.add(dr_any)
+            # TX courte de création ; en cas de race → IntegrityError
             try:
-                # Recast propre pour l'usage typé en dessous
-                dispatch_run = cast(DispatchRun, dr_any)
+                with _begin_tx():
+                    dr_any: Any = DispatchRun()  # type: ignore[call-arg]
+                    dr_any.company_id = int(company_id)
+                    dr_any.day = day_date
+                    dr_any.status = DispatchStatus.RUNNING
+                    dr_any.started_at = utcnow()
+                    dr_any.created_at = utcnow()
+                    dr_any.config = cfg
+                    db.session.add(dr_any)
+                    db.session.flush()
+                    dispatch_run = cast(DispatchRun, dr_any)
                 logger.info("[Engine] Created DispatchRun id=%s for company=%s day=%s",
                             dispatch_run.id, company_id, day_str)
             except IntegrityError:
-                # Un autre thread l'a créé entre-temps → on récupère l'existant
+                # Un autre thread l'a créé entre-temps → récupère l'existant puis MAJ sous TX courte
                 db.session.rollback()
-                dispatch_run = (DispatchRun.query
-                                .filter_by(company_id=company_id, day=day_date)
-                                .first())
+                dispatch_run = DispatchRun.query.filter_by(company_id=company_id, day=day_date).first()
                 if dispatch_run is None:
                     raise
-                dr2_any: Any = dispatch_run
-                dr2_any.status = "running"
-                dr2_any.started_at = utcnow()
-                dr2_any.completed_at = None
-                dr2_any.config = cfg
-                db.session.add(dr2_any)
-                db.session.commit()
+                with _begin_tx():
+                    dr2_any: Any = dispatch_run
+                    dr2_any.status = DispatchStatus.RUNNING
+                    dr2_any.started_at = utcnow()
+                    dr2_any.completed_at = None
+                    dr2_any.config = cfg
+                    db.session.add(dr2_any)
         else:
-            # reuse (mêmes assignations via Any pour éviter les warnings)
-            dr3_any: Any = dispatch_run
-            dr3_any.status = "running"
-            dr3_any.started_at = utcnow()
-            dr3_any.completed_at = None
-            dr3_any.config = cfg
-            db.session.add(dr3_any)
-            db.session.commit()
+            # Reuse : MAJ sous TX courte
+            with _begin_tx():
+                dr3_any: Any = dispatch_run
+                dr3_any.status = DispatchStatus.RUNNING
+                dr3_any.started_at = utcnow()
+                dr3_any.completed_at = None
+                dr3_any.config = cfg
+                db.session.add(dr3_any)
 
-        # 3) Reset des anciennes assignations de CE run (si on relance le même jour)
+        # 3) Reset anciennes assignations de CE run (si relance le même jour) — TX courte
         try:
-            Assignment.query.filter_by(dispatch_run_id=dispatch_run.id).delete(synchronize_session=False)
-            db.session.commit()
+            with _begin_tx():
+                Assignment.query.filter_by(dispatch_run_id=dispatch_run.id).delete(synchronize_session=False)
         except Exception:
-            db.session.rollback()
+            logger.exception("[Engine] Failed to reset previous assignments for run_id=%s", getattr(dispatch_run, "id", None))
+            # on continue quand même ; le pipeline peut recréer des assignments
+
 
         # 4) Construire les données "problème"
         try:
@@ -183,19 +236,19 @@ def run(
             
             # Propager le dispatch_run_id dans le problem pour qu'il arrive jusqu'au solver
             if dispatch_run:
-                drid = None
-                try:
-                    drid = int(cast(Any, dispatch_run.id)) if getattr(dispatch_run, "id", None) is not None else None
-                except Exception:
-                    drid = None
+                drid = _safe_int(getattr(dispatch_run, "id", None))
                 if drid is not None:
                     problem["dispatch_run_id"] = drid
                     logger.info("[Engine] Added dispatch_run_id=%s to problem", drid)
         except Exception:
             logger.exception("[Engine] build_problem_data failed (company=%s)", company_id)
             if dispatch_run:
-                dispatch_run.status = "failed"
-                db.session.commit()
+                # ✅ TX courte pour marquer le run en échec, même si la session a été salie
+                try:
+                    with _begin_tx():
+                        dispatch_run.status = DispatchStatus.FAILED
+                except Exception:
+                    logger.exception("[Engine] Failed to mark DispatchRun FAILED after build_problem_data error")
             return {
                 "assignments": [], "unassigned": [], "bookings": [], "drivers": [],
                 "meta": {"reason": "problem_build_failed", "for_date": for_date or day_str},
@@ -205,8 +258,12 @@ def run(
         if not problem or not problem.get("bookings") or not problem.get("drivers"):
             logger.info("[Engine] Pas de données à dispatcher (company=%s)", company_id)
             if dispatch_run:
-                dispatch_run.mark_completed({"reason": "no_data"})
-                db.session.commit()
+                # ✅ TX courte pour compléter proprement le run "no_data"
+                try:
+                    with _begin_tx():
+                        dispatch_run.mark_completed({"reason": "no_data"})
+                except Exception:
+                    logger.exception("[Engine] Failed to complete DispatchRun (no_data)")    
             return {
                 "assignments": [], "unassigned": [], "bookings": [], "drivers": [],
                 "meta": {"reason": "no_data", "for_date": for_date or day_str},
@@ -407,9 +464,8 @@ def run(
         _apply_and_emit(
             company,
             final_assignments,
-            dispatch_run_id=(int(cast(Any, dispatch_run.id)) if dispatch_run and getattr(dispatch_run, "id", None) is not None else None),
+            dispatch_run_id=_safe_int(getattr(dispatch_run, "id", None)),
         )
-
         # 8) Résumé & debug + 9) Finir le run
         rem = remaining_ids_from(problem)
         metrics = {
@@ -451,25 +507,50 @@ def run(
         except Exception:
             pass
 
-        dispatch_run.mark_completed(metrics)
-        db.session.commit()
+        drid = _safe_int(getattr(dispatch_run, "id", None))
+        if drid is not None:
+            debug_info["dispatch_run_id"] = drid
+
+        # 9) Finaliser le run — TX courte
+        try:
+            with _begin_tx():
+                dispatch_run.mark_completed(metrics)
+        except Exception:
+            logger.exception("[Engine] Failed to complete DispatchRun id=%s", getattr(dispatch_run, "id", None))
+
 
         return {
             "assignments": [_serialize_assignment(a) for a in final_assignments],
+            
             "unassigned": rem,
             "unassigned_reasons": unassigned_reasons,
             "bookings": ser_bookings,
             "drivers": ser_drivers,
             "meta": debug_info,
             "debug": debug_info,
+            "dispatch_run_id": drid,
         }
 
-    except Exception:
-        logger.exception("[Engine] Unhandled error during run company=%s day=%s", company_id, day_str)
+    except Exception as e:
+        # ✅ logging SQLA enrichi pour capter la 1re requête fautive
+        extra_sql = {}
         try:
+            from sqlalchemy.exc import SQLAlchemyError
+            if isinstance(e, SQLAlchemyError):
+                extra_sql = {
+                    "sql_statement": getattr(e, "statement", None),
+                    "sql_params": getattr(e, "params", None),
+                    "dbapi_orig": str(getattr(e, "orig", "")),
+                }
+        except Exception:
+            pass
+        logger.error("[Engine] Unhandled error during run company=%s day=%s extra=%s",
+                     company_id, day_str, extra_sql, exc_info=True)
+        try:
+            db.session.rollback()  # ✅ défensif
             if dispatch_run:
-                dispatch_run.status = "failed"
-                db.session.commit()
+                with _begin_tx():
+                    dispatch_run.status = DispatchStatus.FAILED
         except Exception:
             db.session.rollback()
         return {
@@ -496,7 +577,9 @@ def _filter_problem(
     new_bookings = [bookings_map[bid] for bid in booking_ids if bid in bookings_map]
     drivers = problem.get("drivers", [])
     company_id = problem.get("company_id") or getattr(problem.get("company"), "id", None)
-    if not company_id:
+    company_id = _safe_int(company_id)
+    if company_id is None:
+        company_id = _safe_int(getattr(problem, "company_id", None))
         # repli : utiliser l'objet company reçu en param de run() si nécessaire
         # (on évite un N+1 en DB, mais on reste safe)
         company_id = getattr(Company.query.get(getattr(problem, "company_id", None)), "id", None)
@@ -527,12 +610,16 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: O
     if not assignments:
         return
 
+    # Session propre avant les writes
     try:
-        # Log the dispatch_run_id to confirm it's being passed correctly
+        db.session.rollback()
+    except Exception:
+        pass
+
+    # 1) Apply en DB
+    try:
         logger.info(f"[Engine] Applying assignments with dispatch_run_id={dispatch_run_id}")
-        
-        # Pass the dispatch_run_id to apply_assignments
-        company_id_int = int(cast(Any, getattr(company, "id", 0)) or 0)
+        company_id_int = _safe_int(getattr(company, "id", None)) or 0
         result = apply_assignments(
             company_id_int,
             assignments,
@@ -540,18 +627,29 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: O
             return_pairs=True,
         )
         db.session.commit()
-        
-        # Log the result to confirm assignments were created with the dispatch_run_id
-        logger.info(f"[Engine] Applied {len(result.get('applied', []))} assignments with dispatch_run_id={dispatch_run_id}")
+        logger.info(
+            "[Engine] Applied %d assignments with dispatch_run_id=%s",
+            len(result.get("applied", [])),
+            dispatch_run_id,
+        )
     except Exception:
         logger.exception("[Engine] DB apply failed")
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         raise
 
-    # Notifications par booking
+    # 2) Notifications par booking (ne touche pas à la session sauf pour le .get)
     applied_count = 0
     for a in assignments:
-        b = Booking.query.get(getattr(a, "booking_id", None))
+        bid = getattr(a, "booking_id", None)
+        if bid is None:
+            continue
+        try:
+            b = Booking.query.get(bid)
+        except Exception:
+            b = None
         if not b:
             continue
         try:
@@ -560,21 +658,42 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: O
         except Exception as e:
             logger.error("[Engine] Notification/socket error: %s", e)
 
-    # Notification globale de fin de run
+    # 3) Notification globale de fin de run
     try:
         if dispatch_run_id:
-            # Get the date string from the dispatch run
-            date_str = None
+            # Assainir la session avant un SELECT (évite InFailedSqlTransaction)
             try:
-                dispatch_run = DispatchRun.query.get(dispatch_run_id)
-                if dispatch_run and dispatch_run.day:
-                    date_str = dispatch_run.day.isoformat()
+                db.session.rollback()
+            except Exception:
+                pass
+
+            # Charger le DispatchRun proprement
+            dr = None
+            try:
+                dr = db.session.get(DispatchRun, int(dispatch_run_id))
             except Exception as e:
-                logger.warning(f"[Engine] Failed to get date_str from dispatch_run: {e}")
-            
-            # Pass the date_str to the notification function
-            notify_dispatch_run_completed(int(cast(Any, company.id)), int(dispatch_run_id), applied_count, date_str)
-            logger.info(f"[Engine] Notified dispatch completion: company_id={company.id}, dispatch_run_id={dispatch_run_id}, assignments={applied_count}, date={date_str}")
+                logger.warning("[Engine] Failed to load DispatchRun %s: %s", dispatch_run_id, e)
+
+            date_str: Optional[str] = None
+            if dr is not None:
+                dr_day = getattr(dr, "day", None)
+                # ✅ évite le test booléen sur une Column; vérifie le type valeur
+                if isinstance(dr_day, date):
+                    date_str = dr_day.isoformat()
+
+            notify_dispatch_run_completed(
+                _safe_int(getattr(company, "id", None)) or 0,
+                int(dispatch_run_id),
+                applied_count,
+                date_str,
+            )
+            logger.info(
+                "[Engine] Notified dispatch completion: company_id=%s, dispatch_run_id=%s, assignments=%s, date=%s",
+                getattr(company, "id", None),
+                dispatch_run_id,
+                applied_count,
+                date_str,
+            )
     except Exception as e:
         logger.error("[Engine] Notification/socket error: %s", e)
 

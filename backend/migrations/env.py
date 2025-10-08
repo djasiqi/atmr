@@ -11,7 +11,8 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
-fileConfig(config.config_file_name)
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
 logger = logging.getLogger('alembic.env')
 
 
@@ -91,13 +92,6 @@ def run_migrations_online():
                 logger.info('No changes in schema detected.')
 
     conf_args = current_app.extensions['migrate'].configure_args
-    # 🔧 Assure un mode compatible SQLite (ALTER TABLE via batch)
-    conf_args.setdefault("render_as_batch", True)
-
-    # 🔎 Détecte les changements de type et de defaults côté schéma
-    conf_args.setdefault("compare_type", True)
-    conf_args.setdefault("compare_server_default", True)
-
     if conf_args.get("process_revision_directives") is None:
         conf_args["process_revision_directives"] = process_revision_directives
 

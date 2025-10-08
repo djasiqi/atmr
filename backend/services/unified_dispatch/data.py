@@ -16,7 +16,7 @@ import threading
 from sqlalchemy import and_, or_, func  # (optionnel) peut \u00eatre nettoy\u00e9 si non utilis\u00e9s
 from sqlalchemy.orm import joinedload
 
-from models import Booking, BookingStatus, Driver, Company, DriverType
+from models import Booking, BookingStatus, Driver, Company
 from services.maps import geocode_address
 from services.osrm_client import build_distance_matrix_osrm
 from services.dispatch_utils import count_assigned_bookings_for_day
@@ -336,26 +336,48 @@ def get_available_drivers(company_id: int) -> List[Driver]:
 
 def get_available_drivers_split(company_id: int) -> tuple[List[Driver], List[Driver]]:
     """
-    Retourne (r\u00e9guliers, urgences) \u00e0 partir du pool actif & dispo.
-    Ajoute des logs d\u00e9taill\u00e9s pour le d\u00e9bogage.
+    Retourne (réguliers, urgences) à partir du pool actif & dispo.
+    Tolérant si driver_type est un Enum OU une chaîne ("regular"/"REGULAR"/...).
     """
     import logging
     logger = logging.getLogger(__name__)
-    
+
     drivers = get_available_drivers(company_id)
-    regs = [d for d in drivers if getattr(d, "driver_type", None) == DriverType.REGULAR]
-    emgs = [d for d in drivers if getattr(d, "driver_type", None) == DriverType.EMERGENCY]
-    
-    # Log detailed information about the drivers
-    logger.info(f"[Dispatch] Found {len(regs)} regular drivers and {len(emgs)} emergency drivers for company {company_id}")
-    if regs:
-        reg_ids = [d.id for d in regs]
-        logger.info(f"[Dispatch] Regular driver IDs: {reg_ids}")
-    if emgs:
-        emg_ids = [d.id for d in emgs]
-        logger.info(f"[Dispatch] Emergency driver IDs: {emg_ids}")
-    
+
+    def norm_type(dt):
+        # supporte Enum, str, None
+        s = str(dt or "").strip().upper()
+        # Si c’est un Enum SQLA, str(dt) peut donner "DriverType.REGULAR" → on garde la dernière partie
+        if "." in s:
+            s = s.split(".")[-1]
+        return s
+
+    regs, emgs, unknown = [], [], []
+    for d in drivers:
+        t = norm_type(getattr(d, "driver_type", None))
+        if t == "REGULAR":
+            regs.append(d)
+        elif t == "EMERGENCY":
+            emgs.append(d)
+        else:
+            # On peut choisir de classer par défaut en REGULAR, ou juste tracer
+            unknown.append(d)
+
+    logger.info(
+        "[Dispatch] Drivers available: total=%d regular=%d emergency=%d unknown=%d ids(reg)=%s ids(emg)=%s",
+        len(drivers), len(regs), len(emgs), len(unknown),
+        [getattr(d, 'id', None) for d in regs],
+        [getattr(d, 'id', None) for d in emgs],
+    )
+
+    # Optionnel: si tout est "unknown", prends-les comme réguliers pour ne pas bloquer
+    if not regs and not emgs and unknown:
+        logger.warning("[Dispatch] All drivers have unknown driver_type → falling back to REGULAR for all.")
+        regs = unknown
+        unknown = []
+
     return regs, emgs
+
 
 # ============================================================
 # 2\ufe0f\u20e3 Enrichissement coordonn\u00e9es (sans Google / sans g\u00e9ocodage)
@@ -681,16 +703,17 @@ def build_vrptw_problem(
     """
 
     def _clamp_range(s: int | None, e: int | None, horizon: int) -> tuple[int, int]:
-        # bornes par d\u00e9faut
         s = 0 if s is None else int(s)
         e = horizon if e is None else int(e)
-        # clamp dans [0, horizon]
-        s = max(0, s)
-        e = min(horizon, e)
-        # garantir s < e
+        # 👇 clamp BOTH start and end
+        s = max(0, min(s, horizon - 1))
+        e = max(0, min(e, horizon))
         if e <= s:
+            # assure une fenêtre minimale de 1 minute dans la borne
+            s = max(0, min(s, horizon - 1))
             e = min(horizon, s + 1)
         return s, e
+
 
     # 0) \u00c9quit\u00e9
     fairness_counts = count_assigned_bookings_for_day(
@@ -719,7 +742,7 @@ def build_vrptw_problem(
     pair_min_gaps: list[int] = []
 
     # mapping des noms de champs TimeSettings
-    horizon = int(getattr(settings.time, "horizon_min", 480))
+    horizon = 1440 if for_date else int(getattr(settings.time, "horizon_min", 480))
     # parse_local_naive(...) peut renvoyer None -> fallback immédiat
     t0 = parse_local_naive(base_time) or now_local()
 

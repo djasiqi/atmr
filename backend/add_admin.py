@@ -4,7 +4,14 @@ import os
 from typing import Any, cast
 
 from dotenv import load_dotenv
-from app import create_app
+try:
+    from wsgi import create_app
+except ImportError:
+    try:
+        from app import create_app  # si jamais tu as déplacé la factory ici plus tard
+    except ImportError:
+        from backend.app import create_app  # dernier fallback si ta factory est sous backend/
+
 from ext import db  # instance SQLAlchemy
 from models import User, UserRole
 
@@ -48,4 +55,6 @@ def add_or_update_admin() -> None:
 if __name__ == "__main__":
     # 2. On utilise le contexte de l'application que nous venons de créer
     with app.app_context():
+        # S'assure que les tables existent si Alembic n'est pas configuré
+        db.create_all()
         add_or_update_admin()

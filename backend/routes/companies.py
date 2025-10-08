@@ -184,7 +184,11 @@ def get_company_from_token() -> tuple[Company | None, dict | None, int | None]:
     user = cast(User, user_opt)
 
     # Si l'utilisateur est de rôle company mais n'a pas encore d'objet Company, on le crée.
-    if user.role == UserRole.company and not getattr(user, "company", None):
+    # ⚠️ ne jamais faire "if user.company" (truthiness interdit sur relationships)
+    company_rel: Optional[Company] = cast(Optional[Company], getattr(user, "company", None))
+    # Pylance peut inférer ColumnElement[bool] sur l'égalité -> on cast côté type checker
+    is_company: bool = cast(bool, (getattr(user, "role", None) == UserRole.company))
+    if is_company and company_rel is None:
         app_logger.warning(
             f"⚠️ Aucun objet Company associé à l'utilisateur {getattr(user, 'username', user.public_id)} — tentative de création"
         )
@@ -224,7 +228,7 @@ def get_company_from_token() -> tuple[Company | None, dict | None, int | None]:
             )
             return None, {"error": "Failed to create default company"}, 500
 
-    company_obj = getattr(user, "company", None)
+    company_obj: Optional[Company] = cast(Optional[Company], getattr(user, "company", None))
     if company_obj is None:
         app_logger.error(f"❌ Company is None for user {user.public_id}")
         return None, {"error": "No company associated with this user."}, 404
@@ -349,6 +353,7 @@ class CompanyMe(Resource):
             sentry_sdk.capture_exception(e)
             return {"error": "Erreur interne"}, 500
 
+@companies_ns.route("/me/reservations", strict_slashes=False)
 class CompanyReservations(Resource):
     @jwt_required()
     @role_required(UserRole.company)
@@ -683,75 +688,12 @@ class CompanyDriversList(Resource):
         return {"drivers": [cast(Any, d).serialize for d in drivers], "total": len(drivers)}, 200
 
 
-@companies_ns.route('/me/driver')
-class CompanyDrivers(Resource):
-    @jwt_required()
-    @role_required(UserRole.company)
-    def get(self):
-        company, err, code = get_company_from_token()
-        if err: 
-            return err, code
-        cid_obj = getattr(company, "id", None)
-        try:
-            cid = int(cid_obj) if cid_obj is not None else None
-        except Exception:
-            cid = None
-        if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
-        drivers = (
-            Driver.query
-            .options(joinedload(Driver.user))
-            .filter_by(company_id=cid)
-            .all()
-        )
-        return {"driver": [cast(Any, d).serialize for d in drivers], "total": len(drivers)}, 200
-
-    @jwt_required()
-    @role_required(UserRole.company)
-    def post(self):
-        company, error_response, status_code = get_company_from_token()
-        if error_response: 
-            return error_response, status_code
-        data = request.get_json() or {}
-        user_id = data.get("user_id")
-        if user_id is None:
-            return {"error": "Driver user_id is required"}, 400
-        try:
-            user_id = int(user_id)
-        except (TypeError, ValueError):
-            return {"error": "user_id doit être un entier."}, 400
-
-        user = User.query.filter_by(id=user_id).one_or_none()
-        if not user: 
-            return {"error": "User not found"}, 404
-        if user.role != UserRole.driver: 
-            return {"error": "User is not a driver"}, 400
-
-        # 🔒 company.id → int sûr
-        cid_obj = getattr(company, "id", None)
-        try:
-            cid = int(cid_obj) if cid_obj is not None else None
-        except Exception:
-            cid = None
-        if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
-
-        if Driver.query.filter_by(user_id=user.id, company_id=cid).first():
-            return {"error": "Driver already associated with this company"}, 400
-
-        # 🏗️ Constructeur SQLAlchemy (kwargs dynamiques) → cast(Any, Driver)(...)
-        new_driver = cast(Any, Driver)(user_id=user.id, company_id=cid, is_active=True)
-        db.session.add(new_driver)
-        db.session.commit()
-
-        # ✅ Pylance : company est non-None à ce stade ; on cast pour la signature stricte
-        _driver_trigger(cast(Any, company), "activation|availability")
-        return {"message": "Driver added successfully", "driver": cast(Any, new_driver).serialize}, 201
+# Route dupliquée supprimée - utiliser /me/drivers à la place
 
 # ======================================================
 # 7. Détails, mise à jour, suppression d'un chauffeur
 # ======================================================
-@companies_ns.route('/me/driver/<int:driver_id>')
+@companies_ns.route('/me/drivers/<int:driver_id>')
 class DriverItem(Resource):
     @jwt_required()
     @role_required(UserRole.company)
@@ -831,10 +773,9 @@ class ListCompanies(Resource):
     @role_required(UserRole.admin)
     def get(self):
         try:
-            companies = Company.query.all()
-            if not companies:
-                return {"message": "No companies found"}, 404
-            return {"companies": [{"id": company.id, "name": company.name} for company in companies]}, 200
+            companies = Company.query.order_by(Company.name.asc()).all()
+            # Renvoie une liste (même si vide) pour ne pas casser le front
+            return [c.to_dict() for c in companies], 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             app_logger.error(f"❌ ERREUR list_companies: {str(e)}", exc_info=True)
@@ -997,7 +938,7 @@ class AssignedReservations(Resource):
 # ======================================================
 # 14. Gestion des congés/vacances des chauffeurs
 # ======================================================
-@companies_ns.route('/me/driver/<int:driver_id>/vacations')
+@companies_ns.route('/me/drivers/<int:driver_id>/vacations')
 class DriverVacationsResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
@@ -1417,6 +1358,7 @@ parser.add_argument("birth_date",
                     required=False,
                     help="Date de naissance au format YYYY-MM-DD")
 
+
 # ======================================================
 # 18. Liste des clients de l'entreprise + création d'un client
 # ======================================================
@@ -1573,7 +1515,7 @@ class CompanyClients(Resource):
 # ======================================================
 # 19. Liste des trajets complétés par un chauffeur
 # ======================================================
-@companies_ns.route('/me/driver/<int:driver_id>/completed-trips')
+@companies_ns.route('/me/drivers/<int:driver_id>/completed-trips')
 class DriverCompletedTrips(Resource):
     @jwt_required()
     @role_required(UserRole.company)
@@ -1639,7 +1581,7 @@ class DriverCompletedTrips(Resource):
 # ======================================================
 # 20. Bascule du type d'un chauffeur (REGULAR <-> EMERGENCY)
 # ======================================================
-@companies_ns.route('/me/driver/<int:driver_id>/toggle-type')
+@companies_ns.route('/me/drivers/<int:driver_id>/toggle-type')
 class ToggleDriverType(Resource):
     @jwt_required()
     @role_required(UserRole.company)

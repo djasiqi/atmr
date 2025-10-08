@@ -179,7 +179,10 @@ const AccountUser = () => {
               value={updatedProfile.address || ""}
               placeholder="Saisissez votre adresse…"
               onChange={(e) =>
-                setUpdatedProfile({ ...updatedProfile, address: e.target.value })
+                setUpdatedProfile({
+                  ...updatedProfile,
+                  address: e.target.value,
+                })
               }
             />
 
@@ -227,7 +230,9 @@ const AccountUser = () => {
             <option value="invoice">Paiement par Facture</option>
           </select>
           {paymentMethod !== "none" && (
-            <button className="add-payment">Ajouter ce moyen de paiement</button>
+            <button className="add-payment">
+              Ajouter ce moyen de paiement
+            </button>
           )}
         </section>
       </main>
