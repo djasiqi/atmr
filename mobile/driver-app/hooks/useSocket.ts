@@ -26,6 +26,7 @@ export const useSocket = (
       s.off("connect_error");
       s.off("reconnect");
       s.off("new_booking");
+      s.off("booking_updated"); // ✅ FIX: Ajouter le nettoyage pour booking_updated
       s.off("team_chat_message");
       s.off("error");
       s.off("unauthorized");
@@ -60,6 +61,24 @@ export const useSocket = (
           await Notifications.scheduleNotificationAsync({
             content: {
               title: "🚗 Nouvelle mission",
+              body: `${data.pickup_location} → ${data.dropoff_location}`,
+              sound: "default",
+            },
+            trigger: null,
+          });
+        } catch (err) {
+          console.warn("⚠️ Erreur notification :", err);
+        }
+        onNewBooking?.(data);
+      });
+
+      // ✅ FIX: Écouter aussi "booking_updated" pour compatibilité (même handler)
+      s.on("booking_updated", async (data: any) => {
+        console.log("🔄 Mission mise à jour :", data);
+        try {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: "🔄 Mission mise à jour",
               body: `${data.pickup_location} → ${data.dropoff_location}`,
               sound: "default",
             },

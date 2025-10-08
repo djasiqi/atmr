@@ -1811,10 +1811,11 @@ class Message(db.Model):
 
     @validates('sender_role')
     def _v_sender_role(self, _k, v):
-        # accepte string et convertit vers l'enum
+        # accepte string et convertit vers l'enum (case-insensitive)
         if isinstance(v, str):
             try:
-                v = SenderRole(v.lower())
+                # ✅ FIX: Utiliser .upper() au lieu de .lower() pour matcher l'Enum
+                v = SenderRole(v.upper())
             except ValueError:
                 raise ValueError("Le rôle de l'expéditeur doit être 'DRIVER' ou 'COMPANY'")
         if not isinstance(v, SenderRole):

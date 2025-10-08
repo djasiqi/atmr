@@ -284,6 +284,18 @@ export const getAssignedTrips = async (): Promise<Booking[]> => {
   return response.data;
 };
 
+// ✅ FIX: Ajouter la fonction manquante getCompletedTrips
+export const getCompletedTrips = async (
+  driverId: number
+): Promise<Booking[]> => {
+  const response = await api.get<Booking[]>("/driver/me/bookings/all");
+  // Filtrer uniquement les courses complétées
+  return response.data.filter(
+    (booking) =>
+      booking.status === "completed" || booking.status === "return_completed"
+  );
+};
+
 // Détail d’une course : route conforme à backend driver.py
 export const getTripDetails = async (bookingId: number): Promise<Booking> => {
   const response = await api.get<Booking>(`/driver/me/bookings/${bookingId}`);

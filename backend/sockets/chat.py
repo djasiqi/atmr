@@ -156,17 +156,21 @@ def init_chat_socket(socketio: SocketIO):
                     emit("error", {"error": "Chauffeur introuvable."})
                     return
                 company_id = driver.company_id
-                sender_role = "driver"
+                # ✅ FIX: Utiliser "DRIVER" en majuscules pour matcher l'Enum SenderRole
+                sender_role = "DRIVER"
                 sender_id = user.id
                 company_obj = None
+                logger.info(f"📨 Chat driver: user_id={user.id}, driver_id={driver.id}, company_id={company_id}")
             elif user.role == UserRole.company:
                 company_obj = Company.query.filter_by(user_id=user.id).first()
                 if not company_obj:
                     emit("error", {"error": "Entreprise introuvable."})
                     return
                 company_id = company_obj.id
-                sender_role = "company"
+                # ✅ FIX: Utiliser "COMPANY" en majuscules pour matcher l'Enum SenderRole
+                sender_role = "COMPANY"
                 sender_id = None
+                logger.info(f"📨 Chat company: user_id={user.id}, company_id={company_id}")
             else:
                 emit("error", {"error": "Rôle non autorisé pour le chat."})
                 return
