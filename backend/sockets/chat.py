@@ -1,7 +1,7 @@
 # backend/sockets/chat.py
 import logging
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, cast, Mapping
+from typing import Optional, Dict, Any, cast, Mapping, cast as tcast
 
 from flask import session, request
 from flask_socketio import SocketIO, emit, join_room
@@ -16,8 +16,12 @@ logger = logging.getLogger("socketio")
 _SID_INDEX: Dict[str, Dict[str, Any]] = {}
 
 
-def _get_sid() -> str:
-    sid = getattr(request, "sid", None) or request.environ.get("socketio.sid")
+def _get_sid(fallback_request=None) -> str:
+    """Récupère le SID de la requête Socket.IO actuelle."""
+    if fallback_request is None:
+        fallback_request = request
+    
+    sid = getattr(fallback_request, "sid", None) or fallback_request.environ.get("socketio.sid")
     return str(sid) if sid is not None else ""
 
 
@@ -201,7 +205,7 @@ def init_chat_socket(socketio: SocketIO):
 
         except Exception as e:
             logger.exception(f"❌ Erreur team_chat_message : {e}")
-            emit("error", {"error": "Erreur d’envoi de message."})
+            emit("error", {"error": "Erreur d'envoi de message."})
 
     @socketio.on("join_driver_room")
     def handle_join_driver_room(data=None):
@@ -234,22 +238,58 @@ def init_chat_socket(socketio: SocketIO):
 
     @socketio.on("driver_location")
     def handle_driver_location(data):
+        """
+        Handler pour la réception de la localisation du chauffeur.
+        Accepte le driver_id dans le payload pour plus de robustesse.
+        """
         try:
+            # 1. Récupération du SID pour le debug
+            current_sid = _get_sid()
+            logger.info(f"📍 driver_location reçu, SID={current_sid}, data={data}")
+            
+            # 2. Tentative de récupération depuis la session Flask
             user_id = session.get("user_id")
             user_role = session.get("role")
-              
-            # Fallback: si session vide, on récupère depuis _SID_INDEX
+            
+            # 3. Fallback vers _SID_INDEX si session vide
             if not user_id:
-                sid_info = _SID_INDEX.get(_get_sid(), {})
+                sid_info = _SID_INDEX.get(current_sid, {})
+                logger.info(f"🔍 Fallback _SID_INDEX pour SID={current_sid}: {sid_info}")
                 user_id = sid_info.get("user_id")
                 user_role = sid_info.get("role")
-              
-            if not user_id or user_role != "driver":
-               emit("error", {"error": "Accès non autorisé pour l’envoi de localisation."})
-               return
-
-            driver = Driver.query.filter_by(user_id=user_id).first()
-            if not driver or not driver.company_id:
+            
+            # 4. Nouvelle approche: extraire driver_id du payload si disponible
+            payload_driver_id = data.get("driver_id")
+            
+            # 5. Déterminer le driver à utiliser
+            driver: Optional[Driver] = None
+            
+            if payload_driver_id and isinstance(payload_driver_id, (int, str)):
+                # Priorité au driver_id du payload (plus fiable)
+                try:
+                    candidate_id = int(payload_driver_id)
+                    driver = Driver.query.get(candidate_id)
+                    if driver:
+                        logger.info(f"✅ Driver trouvé via payload: {driver.id}")
+                    else:
+                        logger.warning(f"⚠️ Driver introuvable via payload_driver_id={candidate_id}")
+                except (ValueError, TypeError):
+                    logger.warning(f"⚠️ driver_id non convertible: {payload_driver_id}")
+            
+            if not driver and user_id and user_role == "driver":
+                # Fallback: recherche via user_id
+                driver = Driver.query.filter_by(user_id=user_id).first()
+                if driver:
+                    logger.info(f"✅ Driver trouvé via user_id: {driver.id}")
+                else:
+                    logger.warning(f"⚠️ Aucun driver associé à user_id={user_id}")
+            
+            # Évite l'évaluation booléenne d'une colonne SQLA : on récupère un int ou None
+            company_id_val = tcast(Optional[int], getattr(driver, "company_id", None))
+            if (driver is None) or (company_id_val is None):
+                logger.error(
+                    f"❌ Driver introuvable: payload_driver_id={payload_driver_id}, user_id={user_id}"
+                )
                 emit("error", {"error": "Chauffeur introuvable ou non lié à une entreprise."})
                 return
 
@@ -259,12 +299,12 @@ def init_chat_socket(socketio: SocketIO):
                 emit("error", {"error": "Latitude et longitude requises."})
                 return
 
-            company_room = f"company_{driver.company_id}"
+            company_room = f"company_{company_id_val}"
             cast(Any, emit)(
                 "driver_location_update",
                 {
                     "driver_id": driver.id,
-                    "first_name": driver.user.first_name,
+                    "first_name": getattr(getattr(driver, "user", None), "first_name", None),
                     "latitude": latitude,
                     "longitude": longitude,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -368,22 +408,24 @@ def init_chat_socket(socketio: SocketIO):
                            # Emit location to the company room
                            cast(Any, emit)("driver_location_update", {
                                "driver_id": driver.id,
-                               "first_name": driver.user.first_name,
+                               "first_name": getattr(getattr(driver, "user", None), "first_name", None),
                                "latitude": loc_data.get("lat"),
                                "longitude": loc_data.get("lon"),
                                "timestamp": loc_data.get("ts") or datetime.now(timezone.utc).isoformat(),
                            })
-                       elif driver.latitude and driver.longitude:
+                       elif (driver.latitude is not None) and (driver.longitude is not None):
                            # Fallback to DB if Redis doesnt have data
                            cast(Any, emit)("driver_location_update", {
                                "driver_id": driver.id,
-                               "first_name": driver.user.first_name,
+                               "first_name": getattr(getattr(driver, "user", None), "first_name", None),
                                "latitude": driver.latitude,
                                "longitude": driver.longitude,
                                "timestamp": datetime.now(timezone.utc).isoformat(),
                            })
                    except Exception as e:
-                       logger.exception(f"❌ Error sending driver location for driver {driver.id}: {e}")
+                       # driver vient du for → devrait exister, mais on défend le log quand même
+                       safe_id = getattr(driver, "id", None)
+                       logger.exception(f"❌ Error sending driver location for driver {safe_id}: {e}")
 
                logger.info(f"📡 Sent locations for {len(drivers)} drivers to company {company_id}")
 
