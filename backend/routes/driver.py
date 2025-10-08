@@ -627,12 +627,12 @@ class SavePushToken(Resource):
 
             # 1) si driverId fourni -> on essaye de le caster
             driver_id: int | None = None
-            raw_id: Any = payload.get('driverId', payload.get('driver_id', None))
+            raw_id: Any = payload.get('driverId') or payload.get('driver_id')
             if raw_id is not None:
                 try:
                     driver_id = int(raw_id)
                 except Exception:
-                    driver_id = None
+                    pass
 
             # 2) sinon on déduit depuis le JWT (user -> driver)
             if driver_id is None:
@@ -647,7 +647,7 @@ class SavePushToken(Resource):
 
             driver = Driver.query.get(driver_id)
             if not driver:
-                return {"error": "Chauffeur introuvable."}, 404
+                return {"error": "ID du chauffeur invalide ou manquant."}, 400
 
             driver.push_token = token
             db.session.commit()

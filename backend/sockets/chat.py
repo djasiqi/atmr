@@ -88,6 +88,7 @@ def init_chat_socket(socketio: SocketIO):
 
                 _SID_INDEX[_get_sid()] = {
                     "user_public_id": public_id,
+                    "user_id": user.id,
                     "driver_id": driver.id,
                     "company_id": driver.company_id,
                     "ip": client_ip,
@@ -203,7 +204,7 @@ def init_chat_socket(socketio: SocketIO):
             emit("error", {"error": "Erreur d’envoi de message."})
 
     @socketio.on("join_driver_room")
-    def handle_join_driver_room():
+    def handle_join_driver_room(data=None):
         try:
             user_id = session.get("user_id")
             if not user_id:
@@ -236,9 +237,16 @@ def init_chat_socket(socketio: SocketIO):
         try:
             user_id = session.get("user_id")
             user_role = session.get("role")
+              
+            # Fallback: si session vide, on récupère depuis _SID_INDEX
+            if not user_id:
+                sid_info = _SID_INDEX.get(_get_sid(), {})
+                user_id = sid_info.get("user_id")
+                user_role = sid_info.get("role")
+              
             if not user_id or user_role != "driver":
-                emit("error", {"error": "Accès non autorisé pour l’envoi de localisation."})
-                return
+               emit("error", {"error": "Accès non autorisé pour l’envoi de localisation."})
+               return
 
             driver = Driver.query.filter_by(user_id=user_id).first()
             if not driver or not driver.company_id:
