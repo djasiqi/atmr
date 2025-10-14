@@ -12,7 +12,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/hooks/useSocket";
 import { Ionicons } from "@expo/vector-icons";
-import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import api, { Message } from "@/services/api"; // ✅ import du type
 
 export default function ChatScreen() {
@@ -20,7 +20,8 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const flatListRef = useRef<FlatList>(null);
-  const tabBarHeight = useBottomTabBarHeight();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 65; // Hauteur fixe de la tab bar
 
   const socket = useSocket(undefined, (msg: Message) => {
     setMessages((prev) => [...prev, msg]);
@@ -39,19 +40,22 @@ export default function ChatScreen() {
     setInput("");
   };
 
-  const renderItem = ({ item }: { item: Message }) => (
-    <View
-      style={[
-        styles.messageContainer,
-        item.sender_role === "driver"
-          ? styles.driverMessage
-          : styles.companyMessage,
-      ]}
-    >
-      <Text style={styles.sender}>{item.sender} ({item.sender_role})</Text>
-      <Text>{item.content}</Text>
-    </View>
-  );
+  const renderItem = ({ item }: { item: Message }) => {
+    const roleUpper = (item.sender_role || "").toString().toUpperCase();
+    const isDriver = roleUpper === "DRIVER";
+    const displayName = item.sender_name || (isDriver ? "Driver" : "Company");
+    return (
+      <View
+        style={[
+          styles.messageContainer,
+          isDriver ? styles.driverMessage : styles.companyMessage,
+        ]}
+      >
+        <Text style={styles.sender}>{displayName}</Text>
+        <Text>{item.content}</Text>
+      </View>
+    );
+  };
 
   useEffect(() => {
     const loadHistory = async () => {
@@ -60,12 +64,17 @@ export default function ChatScreen() {
       }
 
       try {
-        console.log("📨 Récupération des messages pour company_id :", driver.company_id);
+        console.log(
+          "📨 Récupération des messages pour company_id :",
+          driver.company_id
+        );
         const response = await api.get(`/messages/${driver.company_id}`);
-        setMessages(response.data);
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
-      } catch (error) {
-      }
+        setMessages(response.data as unknown as Message[]);
+        setTimeout(
+          () => flatListRef.current?.scrollToEnd({ animated: false }),
+          100
+        );
+      } catch (error) {}
     };
 
     loadHistory();

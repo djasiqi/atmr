@@ -1,6 +1,8 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
+    "jsx": "react-native",
+    "esModuleInterop": true,
     "baseUrl": ".",                     // Point de départ des imports
     "paths": {
       "@/*": ["./*"],                  // "@/services/api" = "./services/api.ts"

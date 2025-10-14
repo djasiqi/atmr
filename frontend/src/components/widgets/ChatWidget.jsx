@@ -26,11 +26,11 @@ export default function ChatWidget({ companyId }) {
   });
 
   // Helper pour formater la date
-  const formatDate = iso => {
+  const formatDate = (iso) => {
     const d = new Date(iso);
-    const day   = String(d.getDate()).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
     const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year  = d.getFullYear();
+    const year = d.getFullYear();
     return `${day}.${month}.${year}`;
   };
 
@@ -39,23 +39,25 @@ export default function ChatWidget({ companyId }) {
     if (!open || !companyId) return;
     apiClient
       .get(`/messages/${companyId}`, { params: { limit: 20 } })
-      .then(res => {
-        const raw = Array.isArray(res.data.messages) ? res.data.messages : res.data;
-        const formatted = raw.map(m => ({
-          id            : m.id,
-          company_id    : companyId,
-          content       : m.content,
-          timestamp     : m.timestamp,
-          sender_name   : m.sender_name || m.sender,
-          receiver_name : m.receiver_name || m.receiver,
-          sender_role   : m.sender_role,
-          _localId      : null, // pas d'écho côté GET
+      .then((res) => {
+        const raw = Array.isArray(res.data.messages)
+          ? res.data.messages
+          : res.data;
+        const formatted = raw.map((m) => ({
+          id: m.id,
+          company_id: companyId,
+          content: m.content,
+          timestamp: m.timestamp,
+          sender_name: m.sender_name || m.sender,
+          receiver_name: m.receiver_name || m.receiver,
+          sender_role: m.sender_role,
+          _localId: null, // pas d'écho côté GET
         }));
         setMessages(formatted);
         if (formatted.length < 20) setHasMore(false);
         if (formatted.length > 0) setOldestTs(formatted[0].timestamp);
       })
-      .catch(err => console.error("❌ Erreur loading messages:", err));
+      .catch((err) => console.error("❌ Erreur loading messages:", err));
   }, [open, companyId]);
 
   // 2️⃣ Scroll en bas après le premier chargement
@@ -75,21 +77,23 @@ export default function ChatWidget({ companyId }) {
         const prevHeight = el.scrollHeight;
         apiClient
           .get(`/messages/${companyId}`, {
-            params: { limit: 20, before: oldestTs }
+            params: { limit: 20, before: oldestTs },
           })
-          .then(res => {
-            const raw = Array.isArray(res.data.messages) ? res.data.messages : res.data;
-            const formatted = raw.map(m => ({
-              id            : m.id,
-              company_id    : companyId,
-              content       : m.content,
-              timestamp     : m.timestamp,
-              sender_name   : m.sender_name || m.sender,
-              receiver_name : m.receiver_name || m.receiver,
-              sender_role   : m.sender_role,
-              _localId      : null,
+          .then((res) => {
+            const raw = Array.isArray(res.data.messages)
+              ? res.data.messages
+              : res.data;
+            const formatted = raw.map((m) => ({
+              id: m.id,
+              company_id: companyId,
+              content: m.content,
+              timestamp: m.timestamp,
+              sender_name: m.sender_name || m.sender,
+              receiver_name: m.receiver_name || m.receiver,
+              sender_role: m.sender_role,
+              _localId: null,
             }));
-            setMessages(prev => [...formatted, ...prev]);
+            setMessages((prev) => [...formatted, ...prev]);
             if (formatted.length < 20) setHasMore(false);
             if (formatted.length > 0) setOldestTs(formatted[0].timestamp);
             setTimeout(() => {
@@ -107,13 +111,13 @@ export default function ChatWidget({ companyId }) {
   // 4️⃣ Réception temps réel via WebSocket
   useEffect(() => {
     if (!socket || !companyId) return;
-    const handleMessage = msg => {
+    const handleMessage = (msg) => {
       if (msg._localId && localIdsRef.current.has(msg._localId)) {
         localIdsRef.current.delete(msg._localId);
         return;
       }
       if (msg.company_id !== companyId) return;
-      setMessages(prev => [...prev, msg]);
+      setMessages((prev) => [...prev, msg]);
     };
     socket.on("team_chat_message", handleMessage);
     return () => socket.off("team_chat_message", handleMessage);
@@ -126,16 +130,16 @@ export default function ChatWidget({ companyId }) {
 
     const localId = uuidv4();
     const newMsg = {
-      id            : localId,
-      company_id    : companyId,
-      content       : text,
-      timestamp     : new Date().toISOString(),
-      sender_name   : myName,
-      sender_role   : "company",
-      _localId      : localId
+      id: localId,
+      company_id: companyId,
+      content: text,
+      timestamp: new Date().toISOString(),
+      sender_name: myName,
+      sender_role: "company",
+      _localId: localId,
     };
 
-    setMessages(prev => [...prev, newMsg]);
+    setMessages((prev) => [...prev, newMsg]);
     localIdsRef.current.add(localId);
     setInput("");
     socket.emit("team_chat_message", newMsg);
@@ -144,11 +148,13 @@ export default function ChatWidget({ companyId }) {
   // Construction de la liste avec séparateurs de date
   const renderMessages = () => {
     let lastDate = null;
-    return messages.map(msg => {
+    return messages.map((msg) => {
       const msgDate = formatDate(msg.timestamp);
       const showDateSeparator = msgDate !== lastDate;
       lastDate = msgDate;
-      const isSent = msg.sender_role === "company";
+      // ✅ Normaliser: backend envoie "COMPANY"/"DRIVER"
+      const isSent =
+        (msg.sender_role || "").toString().toUpperCase() === "COMPANY";
 
       return (
         <React.Fragment key={msg.id + (showDateSeparator ? "-sep" : "")}>
@@ -176,7 +182,7 @@ export default function ChatWidget({ companyId }) {
     <>
       <button
         className="chat-widget-button"
-        onClick={() => setOpen(v => !v)}
+        onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Fermer le chat" : "Ouvrir le chat"}
       >
         {open ? <FiX size={24} /> : <FiMessageSquare size={24} />}
@@ -191,9 +197,9 @@ export default function ChatWidget({ companyId }) {
             <input
               type="text"
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={(e) => setInput(e.target.value)}
               placeholder="Écrire un message..."
-              onKeyDown={e => e.key === "Enter" && sendMessage()}
+              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
               aria-label="Champ de saisie du message"
             />
             <button onClick={sendMessage} disabled={!input.trim()}>

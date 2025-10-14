@@ -14,7 +14,7 @@
   --text-light: #64748b;
   --header-bg: #f8fafc;
   --hover: #f1f5f9;
-  --brand: #0b7a6b;
+  --brand: #0f766e;
   --success-bg: #dcfce7;
   --success: #16a34a;
   --warn-bg: #fef9c3;
@@ -158,6 +158,28 @@
   flex-wrap: wrap;
 }
 
+/* Chips d'état de timing (retard / à l'heure / impossible) */
+.statusChipOnTime {
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  background: #dcfce7;
+}
+.statusChipSlightDelay {
+  border: 1px solid #fde68a;
+  color: #b45309;
+  background: #fef3c7;
+}
+.statusChipDelay {
+  border: 1px solid #fecaca;
+  color: #7f1d1d;
+  background: #fee2e2;
+}
+.statusChipImpossible {
+  border: 1px solid #e5e7eb;
+  color: #374151;
+  background: #f3f4f6;
+}
+
 /* Bouton icône pour la réassignation */
 .iconBtn {
   background: var(--bg);
@@ -273,7 +295,7 @@
 
   /* Teinte marque en dark */
   .iconBtn:focus-visible {
-    outline-color: color-mix(in oklab, #0b7a6b, white 20%);
+    outline-color: color-mix(in oklab, #0f766e, white 20%);
   }
 }
 

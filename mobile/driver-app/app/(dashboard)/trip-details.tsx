@@ -182,7 +182,7 @@ export default function TripDetailsScreen() {
         {trip.status === 'ASSIGNED' && (
           <View style={styles.actionButton}>
             <Button onPress={() => handleUpdateStatus('IN_PROGRESS' as BookingStatus)}>
-              <Text style={styles.actionButtonText}>Commencer</Text>
+              Commencer
             </Button>
           </View>
         )}
@@ -195,15 +195,16 @@ export default function TripDetailsScreen() {
                 )
               }
             >
-              <Text style={styles.actionButtonText}>
-                {trip.is_return ? 'Terminer retour' : 'Terminer'}
-              </Text>
+              {trip.is_return ? 'Terminer retour' : 'Terminer'}
             </Button>
           </View>
         )}
         <View style={styles.actionButton}>
-          <Button variant="secondary" onPress={() => router.back()}>
-            <Text style={styles.actionButtonText}>Retour</Text>
+          <Button variant="secondary" onPress={() => {
+            console.log("[TripDetails] Bouton Retour pressé");
+            router.back();
+          }}>
+            Retour
           </Button>
         </View>
       </View>

@@ -16,8 +16,8 @@ const useDriver = () => {
     try {
       setLoading(true);
       const data = await fetchCompanyDriver();
-      // L'API renvoie { driver: [...] }, on s'assure de prendre le tableau
-      setDrivers(data.driver || []);
+      // fetchCompanyDriver() renvoie déjà un tableau normalisé
+      setDrivers(Array.isArray(data) ? data : []);
       setError(null);
     } catch (err) {
       console.error(err);
@@ -28,31 +28,29 @@ const useDriver = () => {
   }, []);
 
   // CORRECTION : On renomme la fonction pour plus de clarté
-  const toggleDriverStatus = useCallback(
-    async (driverId, newStatus) => {
-      try {
-        await updateDriverStatus(driverId, newStatus);
-        // Met à jour l'état local pour un retour visuel immédiat
-        setDrivers(prev => prev.map(d => d.id === driverId ? { ...d, is_active: newStatus } : d));
-      } catch (err) {
-        console.error("Erreur lors de la mise à jour du statut :", err);
-      }
-    },
-    []
-  );
+  const toggleDriverStatus = useCallback(async (driverId, newStatus) => {
+    try {
+      await updateDriverStatus(driverId, newStatus);
+      // Met à jour l'état local pour un retour visuel immédiat
+      setDrivers((prev) =>
+        prev.map((d) =>
+          d.id === driverId ? { ...d, is_active: newStatus } : d
+        )
+      );
+    } catch (err) {
+      console.error("Erreur lors de la mise à jour du statut :", err);
+    }
+  }, []);
 
-  const deleteDriverById = useCallback(
-    async (driverId) => {
-      try {
-        await deleteDriver(driverId);
-        // Met à jour l'état local
-        setDrivers(prev => prev.filter(d => d.id !== driverId));
-      } catch (err) {
-        console.error("Erreur lors de la suppression :", err);
-      }
-    },
-    []
-  );
+  const deleteDriverById = useCallback(async (driverId) => {
+    try {
+      await deleteDriver(driverId);
+      // Met à jour l'état local
+      setDrivers((prev) => prev.filter((d) => d.id !== driverId));
+    } catch (err) {
+      console.error("Erreur lors de la suppression :", err);
+    }
+  }, []);
 
   useEffect(() => {
     getDrivers();
@@ -63,7 +61,7 @@ const useDriver = () => {
     loading,
     error,
     refreshDrivers: getDrivers, // <-- alias pour rafraîchir
-    toggleDriverStatus,       // <-- nom de fonction clair
+    toggleDriverStatus, // <-- nom de fonction clair
     deleteDriverById,
   };
 };

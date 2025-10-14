@@ -152,7 +152,36 @@ def get_bookings_for_dispatch(company_id: int, horizon_minutes: int) -> List[Boo
     )
 
     # Ici, **aucune** conversion : on laisse les datetimes NA\u00cfFS tels quels
-    return [b for b in bookings if getattr(b, "scheduled_time", None) is not None]
+    # 🚫 Exclure les retours avec heure à confirmer (00:00)
+    # Les retours avec scheduled_time = NULL sont déjà exclus par le filtre SQL ci-dessus
+    # 🚫 Exclure les retours avec heure à confirmer (time_confirmed = False)
+    filtered_bookings = []
+    excluded_count = 0
+    
+    logger.warning(f"[DATA] 🔍 Filtrage de {len(bookings)} courses...")
+    
+    for b in bookings:
+        scheduled = getattr(b, "scheduled_time", None)
+        if scheduled is None:
+            logger.warning(f"⏸️ Course #{b.id} EXCLUE : scheduled_time est NULL")
+            continue
+        
+        # Si c'est un retour avec time_confirmed = False → exclure du dispatch
+        is_return = bool(getattr(b, "is_return", False))
+        time_confirmed = bool(getattr(b, "time_confirmed", True))
+        
+        logger.info(f"[DATA] Course #{b.id}: is_return={is_return}, time_confirmed={time_confirmed}")
+        
+        if is_return and not time_confirmed:
+            excluded_count += 1
+            logger.error(f"⏸️ Course #{b.id} ({getattr(b, 'customer_name', 'N/A')}) EXCLUE du dispatch : retour avec heure à confirmer")
+            continue
+        
+        logger.info(f"[DATA] ✅ Course #{b.id} INCLUSE dans le dispatch")
+        filtered_bookings.append(b)
+    
+    logger.error(f"[DATA] ✅ {len(filtered_bookings)} courses après filtrage ({excluded_count} retours exclus)")
+    return filtered_bookings
 
 def _normalize_booking_time_fields(bookings: List[Booking]) -> List[Booking]:
     """
@@ -251,17 +280,19 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
     
     # Query with a more tolerant time window filter
     try:
+        # ✅ Inclure PENDING si utilisé, et enlever lower() sur Enum (Postgres enum)
+        status_filters = [
+            cast(Any, Booking.status) == BookingStatus.ACCEPTED,
+            cast(Any, Booking.status) == BookingStatus.ASSIGNED,
+        ]
+        if hasattr(BookingStatus, 'PENDING'):
+            status_filters.append(cast(Any, Booking.status) == getattr(BookingStatus, 'PENDING'))
+
         bookings = (
             Booking.query
             .filter(
                 Booking.company_id == company_id,
-                # caster la colonne pour éviter "Any | bool" dans or_
-                or_(
-                    cast(Any, Booking.status) == BookingStatus.ACCEPTED,
-                    cast(Any, Booking.status) == BookingStatus.ASSIGNED,
-                    func.lower(cast(Any, Booking.status)) == 'accepted',
-                    func.lower(cast(Any, Booking.status)) == 'assigned',
-                ),
+                or_(*status_filters),
                 time_expr.isnot(None), 
                 # Use OR condition to match both timezone-aware and naive datetimes
                 or_(
@@ -293,7 +324,26 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
             logger.info(f"[Dispatch] Booking IDs: {booking_ids[:3]}...")
             logger.info(f"[Dispatch] Booking times: {booking_times[:3]}...")
         
-        return result
+        # 🚫 FILTRE PYTHON : Exclure les retours avec heure à confirmer (time_confirmed = False)
+        filtered_result = []
+        excluded_count = 0
+        
+        logger.error(f"[DATA] 🔍 FILTRAGE de {len(result)} courses pour retours non confirmés...")
+        
+        for b in result:
+            # Si c'est un retour avec time_confirmed = False → exclure du dispatch
+            is_return = bool(getattr(b, "is_return", False))
+            time_confirmed = bool(getattr(b, "time_confirmed", True))
+            
+            if is_return and not time_confirmed:
+                excluded_count += 1
+                logger.error(f"⏸️ Course #{b.id} ({getattr(b, 'customer_name', 'N/A')}) EXCLUE : retour avec time_confirmed=False")
+                continue
+            
+            filtered_result.append(b)
+        
+        logger.error(f"[DATA] ✅ {len(filtered_result)} courses après filtrage ({excluded_count} retours exclus avec heure à confirmer)")
+        return filtered_result
     except Exception as e:
         logger.error(f"[Dispatch] Error querying bookings for day: {e}")
         return []
@@ -310,7 +360,6 @@ def get_available_drivers(company_id: int) -> List[Driver]:
             cast(Any, Driver.is_active).is_(True),
             cast(Any, Driver.is_available).is_(True),
         )
-        .options(joinedload("working_config"))  # type: ignore[arg-type]
         .all()
     )
 
@@ -580,7 +629,7 @@ def build_time_matrix(
         try:
             matrix_sec = build_distance_matrix_osrm(
                 coords_canon,  # coords arrondies pour stabilit\u00e9 du cache OSRM
-                base_url=getattr(settings.matrix, "osrm_base_url", "http://localhost:5001"),
+                base_url=getattr(settings.matrix, "osrm_url", "http://osrm:5000"),
                 profile=getattr(settings.matrix, "osrm_profile", "driving"),
                 timeout=int(getattr(settings.matrix, "osrm_timeout_sec", 5)),
                 max_sources_per_call=int(getattr(settings.matrix, "osrm_max_sources_per_call", 60)),
@@ -891,6 +940,18 @@ def build_problem_data(
     logger.info(f"[Dispatch] Total: {len(drivers)} available drivers for company {company_id}")
 
     # 3) Garde-fous : si rien \u00e0 traiter, on renvoie un dict vide
+    #    Filtrer les bookings termin\u00e9s/annul\u00e9s avant enrichissement
+    try:
+        from models import BookingStatus as BS  # type: ignore
+        completed_vals = set()
+        for name in ("COMPLETED", "RETURN_COMPLETED", "CANCELLED", "CANCELED", "REJECTED"):
+            if hasattr(BS, name):
+                completed_vals.add(getattr(BS, name))
+        if completed_vals:
+            bookings = [b for b in bookings if getattr(b, "status", None) not in completed_vals]
+    except Exception:
+        pass
+
     if not bookings or not drivers:
         reason = "no_bookings" if not bookings else "no_drivers"
         logger.warning(f"[Dispatch] No dispatch possible for company {company_id}: {reason}")
@@ -1032,7 +1093,7 @@ def calculate_eta(
             coords = [driver_position, destination]
             matrix = build_distance_matrix_osrm(
                 coords,
-                base_url=getattr(settings.matrix, "osrm_base_url", "http://localhost:5001"),
+                base_url=getattr(settings.matrix, "osrm_url", "http://osrm:5000"),
                 profile=getattr(settings.matrix, "osrm_profile", "driving"),
                 timeout=int(getattr(settings.matrix, "osrm_timeout_sec", 5)),
                 max_sources_per_call=int(getattr(settings.matrix, "osrm_max_sources_per_call", 60)),

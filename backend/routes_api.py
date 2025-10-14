@@ -18,9 +18,13 @@ from routes.messages import messages_ns
 from routes.utils import utils_ns
 from routes.geocode import geocode_ns
 from routes.medical import medical_ns
+from routes.invoices import invoices_ns
+from routes.planning import planning_ns
+from routes.osrm import osrm_ns
 
 # --- IMPORTANT: mount both dispatch namespaces with different paths
 from routes.dispatch_routes import dispatch_ns as company_dispatch_ns  # /company_dispatch
+from routes.analytics import analytics_ns  # /analytics
 
 authorizations = {
     "BearerAuth": {"type": "apiKey", "in": "header", "name": "Authorization"}
@@ -65,9 +69,19 @@ api.add_namespace(utils_ns, path="/utils")
 api.add_namespace(messages_ns, path="/messages")
 api.add_namespace(geocode_ns, path="/geocode")
 api.add_namespace(medical_ns, path="/medical")
+api.add_namespace(invoices_ns, path="/invoices")
+api.add_namespace(planning_ns, path="/")
+api.add_namespace(osrm_ns, path="/osrm")
 
 # --- Dispatch namespaces
 api.add_namespace(company_dispatch_ns, path="/company_dispatch")  # legacy endpoints
+
+# --- Analytics namespace
+api.add_namespace(analytics_ns, path="/analytics")
+
+# --- Company Settings namespace
+from routes.company_settings import settings_ns
+api.add_namespace(settings_ns, path="/company-settings")
 
 # AI routes
 

@@ -1,0 +1,91 @@
+/* Style élégant identique au Dashboard - KPIs Compacts */
+
+.statsContainer {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.statCard {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  padding: 14px 18px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: all 0.3s ease;
+  border: 1px solid #e2e8f0;
+}
+
+.statCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 121, 107, 0.12);
+  border-color: #00796b;
+}
+
+.statIcon {
+  font-size: 2rem;
+  line-height: 1;
+  opacity: 0.9;
+  flex-shrink: 0;
+}
+
+.statContent {
+  flex: 1;
+  text-align: left;
+}
+
+.statContent .statLabel {
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin: 0 0 4px 0;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.statContent .statValue {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0;
+  color: #00796b;
+  line-height: 1;
+}
+
+/* Responsive : passage en 2 colonnes puis 1 colonne sur petits écrans */
+@media (max-width: 1200px) {
+  .statsContainer {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .statsContainer {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .statCard {
+    padding: 12px 16px;
+    gap: 12px;
+  }
+  
+  .statIcon {
+    font-size: 1.5rem;
+  }
+  
+  .statContent .statValue {
+    font-size: 1.3rem;
+  }
+  
+  .statContent .statLabel {
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .statsContainer {
+    grid-template-columns: 1fr;
+  }
+}

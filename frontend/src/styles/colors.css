@@ -1,0 +1,65 @@
+/* ============================================================
+   🎨 IDENTITÉ VISUELLE - COULEURS GLOBALES
+   ============================================================ */
+
+:root {
+  /* ============ COULEUR PRINCIPALE (BRAND) ============ */
+  --brand: #00796b;              /* Vert principal (teal-600) */
+  --brand-dark: #00695c;         /* Vert foncé pour hover/focus */
+  --brand-light: #26a69a;        /* Vert clair pour highlights */
+  --brand-lighter: #4db6ac;      /* Vert très clair pour backgrounds */
+  --brand-lightest: #e0f2f1;     /* Vert pastel pour badges/alertes */
+  
+  /* ============ DIMENSIONS LAYOUT ============ */
+  --hdr-h: 64px;                 /* Hauteur du header */
+  --sidebar-w: 72px;             /* Largeur de la sidebar (dynamique) */
+  
+  /* ============ COULEURS STRUCTURELLES ============ */
+  --bg: #f4f7fc;                 /* Fond de page */
+  --panel: #ffffff;              /* Fond des panneaux/cartes */
+  --border: #e5e7eb;             /* Bordures */
+  --shadow: 0 4px 10px rgba(0, 0, 0, 0.1); /* Ombre standard */
+  
+  /* ============ TEXTES ============ */
+  --text: #0f172a;               /* Texte principal */
+  --text-light: #374151;         /* Texte secondaire */
+  --text-dim: #6b7280;           /* Texte atténué */
+  
+  /* ============ ÉTATS ET FEEDBACK ============ */
+  --success: #16a34a;            /* Vert succès */
+  --success-bg: #dcfce7;         /* Fond succès */
+  
+  --warning: #f59e0b;            /* Orange warning */
+  --warning-bg: #fef3c7;         /* Fond warning */
+  
+  --error: #ef4444;              /* Rouge erreur */
+  --error-bg: #fee2e2;           /* Fond erreur */
+  
+  --info: #3b82f6;               /* Bleu info */
+  --info-bg: #dbeafe;            /* Fond info */
+  
+  /* ============ DISPATCH & MONITORING ============ */
+  --critical: #dc3545;           /* Retard critique */
+  --high: #fd7e14;               /* Priorité haute */
+  --medium: #ffc107;             /* Priorité moyenne */
+  --low: #00796b;                /* Priorité basse */
+  
+  --late: #dc3545;               /* En retard */
+  --on-time: #00796b;            /* À l'heure */
+  --early: #17a2b8;              /* En avance */
+  
+  /* ============ ÉTATS HOVER ============ */
+  --bg-hover: #f3f4f6;           /* Fond hover */
+  --bg-active: #ecfdf5;          /* Fond actif (légèrement vert) */
+}
+
+/* ============================================================
+   📱 RESPONSIVE - Adaptation Mobile
+   ============================================================ */
+
+@media (max-width: 768px) {
+  :root {
+    --hdr-h: 56px;               /* Header plus petit sur mobile */
+  }
+}
+

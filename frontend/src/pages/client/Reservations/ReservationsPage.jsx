@@ -10,11 +10,13 @@ import {
 } from "react-icons/fa";
 
 import apiClient from "../../../utils/apiClient";
-import { mergeInvoiceAndQRBill } from "../../../utils/mergePDFs"; // ✅ Correction de l'import
+import { mergeInvoiceAndQRBill } from "../../../utils/mergePDFs";
 import HeaderDashboard from "../../../components/layout/Header/HeaderDashboard";
 import Footer from "../../../components/layout/Footer/Footer";
+import useCompanyData from "../../../hooks/useCompanyData";
 
 const ReservationsPage = () => {
+  const { company } = useCompanyData(); // Récupérer les données de l'entreprise
   const [bookings, setBookings] = useState([]);
   const [clientData, setClientData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -113,14 +115,15 @@ const ReservationsPage = () => {
 
       await mergeInvoiceAndQRBill({
         totalPrice: monthBookings.reduce((acc, curr) => acc + curr.amount, 0),
+        company: company || {}, // Passer les données de l'entreprise
         client: {
           firstName:
             clientData?.firstName || clientData?.username || "Non spécifié",
           lastName:
             clientData?.lastName || clientData?.username || "Non spécifié",
-          address: clientData?.address,
-          zipCode: clientData?.zipCode,
-          city: clientData?.city,
+          address: clientData?.address || clientData?.domicile?.address || "",
+          zipCode: clientData?.zipCode || clientData?.domicile?.zip || "",
+          city: clientData?.city || clientData?.domicile?.city || "",
         },
         bookings: monthBookings,
       });

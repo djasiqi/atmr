@@ -3,10 +3,10 @@
   --pad-x: 16px;
 
   /* Palette */
-  --brand: #0b7a6b;          /* vert principal */
-  --brand-dark: #095f56;     /* vert foncé hover/focus */
+  --brand: #0f766e;          /* vert principal */
+  --brand-dark: #0d5e56;     /* vert foncé hover/focus */
   --hdr-bg: #ffffff;         /* fond du header */
-  --hdr-border: rgba(11, 122, 107, 0.18); /* liseré bas teinté brand */
+  --hdr-border: rgba(15, 118, 110, 0.18); /* liseré bas teinté brand */
   --text-strong: #111827;    /* texte foncé */
   --text-dim: #6b7280;       /* texte atténué */
   --brand-gap: 0px;          /* pas d’espace si pas de nom */
@@ -16,7 +16,7 @@
 .header {
   position: sticky;
   top: 0;
-  z-index: 50;
+  z-index: 100;
   height: var(--hdr-h);
   background: var(--hdr-bg);
   /* liseré bas légèrement teinté brand + ombre douce */
@@ -102,7 +102,7 @@
   letter-spacing: 0.2px;
   cursor: pointer;
 
-  box-shadow: 0 6px 16px rgba(11, 122, 107, 0.28);
+  box-shadow: 0 6px 16px rgba(15, 118, 110, 0.28);
   transition:
     background-color .18s ease,
     box-shadow .18s ease,
@@ -111,7 +111,7 @@
 
 .logoutBtn:hover {
   background: var(--brand-dark);
-  box-shadow: 0 8px 20px rgba(11, 122, 107, 0.35);
+  box-shadow: 0 8px 20px rgba(15, 118, 110, 0.35);
 }
 
 .logoutBtn:active {
@@ -122,8 +122,8 @@
   outline: none;
   box-shadow:
     0 0 0 2px #ffffff,
-    0 0 0 4px rgba(11,122,107,.55),
-    0 8px 20px rgba(11,122,107,.35);
+    0 0 0 4px rgba(15,118,110,.55),
+    0 8px 20px rgba(15,118,110,.35);
 }
 
 @media (max-width: 640px) {
@@ -132,4 +132,73 @@
     height: 40px;
   }
   .logoImg { max-width: 200px; }
+}
+
+/* ============================================================
+   🆕 BADGE DE NOTIFICATION RETARDS
+   ============================================================ */
+.delayBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #ffc107;
+  color: #000;
+  text-decoration: none;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.delayBadge:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.5);
+  background: #ffb300;
+}
+
+/* Badge critique (rouge) */
+.delayBadge.critical {
+  background: #dc3545;
+  color: white;
+  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+}
+
+.delayBadge.critical:hover {
+  background: #c82333;
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.5);
+}
+
+.badgeIcon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.badgeCount {
+  min-width: 20px;
+  text-align: center;
+  font-weight: 700;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .delayBadge {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+  }
+  
+  .badgeIcon {
+    font-size: 1rem;
+  }
 }

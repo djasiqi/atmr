@@ -16,22 +16,31 @@ import {
   Alert,
 } from "@mui/material";
 import { FiRefreshCw } from "react-icons/fi";
-import { MdSwapHoriz } from "react-icons/md";
+// import { MdSwapHoriz } from "react-icons/md"; // removed unused icon
 import styles from "./DispatchTable.module.css";
 import { renderBookingDateTime } from "../../../utils/formatDate";
 
 import useCompanySocket from "../../../hooks/useCompanySocket";
 import useDispatchStatus from "../../../hooks/useDispatchStatus";
-import { runDispatchForDay, fetchDispatchRunById } from "../../../services/companyService";
+import {
+  runDispatchForDay,
+  fetchDispatchRunById,
+  fetchDispatchDelays,
+} from "../../../services/companyService";
 // Utilitaires locaux simples
 const pad2 = (n) => String(n).padStart(2, "0");
 const toYMD = (d) =>
   `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
 const isActiveStatus = (s) =>
-  ["scheduled", "en_route_pickup", "arrived_pickup", "onboard", "en_route_dropoff", "arrived_dropoff"].includes(
-    (s || "").toLowerCase()
-  );
+  [
+    "scheduled",
+    "en_route_pickup",
+    "arrived_pickup",
+    "onboard",
+    "en_route_dropoff",
+    "arrived_dropoff",
+  ].includes((s || "").toLowerCase());
 
 /**
  * Tableau des courses dispatchées avec suivi du moteur.
@@ -51,14 +60,14 @@ const DispatchTable = ({
 }) => {
   // --- État moteur via WebSocket et polling ---
   const socket = useCompanySocket();
-  const { 
-    label, 
-    progress, 
-    isRunning, 
+  const {
+    label,
+    progress,
+    isRunning,
     setUpdatedAt: setStatusUpdatedAt,
-    handleDispatchJobResponse 
+    handleDispatchJobResponse,
   } = useDispatchStatus(socket);
-  
+
   const isDispatching = isRunning;
   const statusLabel = isDispatching ? label : "Planification à jour";
 
@@ -70,94 +79,96 @@ const DispatchTable = ({
   const [allowEmergency, setAllowEmergency] = useState(initialAllowEmergency);
 
   const handleOptimizeDay = async () => {
-  if (!dispatchDay) return;
-  
-  try {
-    console.log(`Triggering dispatch for date: ${dispatchDay}, regularFirst: ${regularFirst}, allowEmergency: ${allowEmergency}`);
-    
-    // Call the dispatch service and handle the response
-    const response = await runDispatchForDay({
-      forDate: dispatchDay,
-      regularFirst,
-      allowEmergency,
-      // Force runAsync to true to ensure the job is queued
-      runAsync: true,
-    });
-    
-    console.log('Dispatch response:', response);
-    
-    // Handle the response with our enhanced hook
-    handleDispatchJobResponse(response);
+    if (!dispatchDay) return;
 
-    // --- Fallback polling si on a un run_id mais pas d'event socket
-    if (response?.dispatch_run_id) {
-      let attempts = 0;
-      const maxAttempts = 90; // ~3 minutes
-      const poll = async () => {
-        try {
-          const run = await fetchDispatchRunById(response.dispatch_run_id);
-          // status attendu: queued|running|completed|failed (selon ton modèle)
-          if (run?.status === "completed" || run?.status === "failed") {
-            // Use the date from the response if available
-            const reloadDate = response.for_date || dispatchDay;
-            reload?.(reloadDate);
-            setUpdatedAt(Date.now());
-            setStatusUpdatedAt(Date.now());
-            return; // stop
+    try {
+      console.log(
+        `Triggering dispatch for date: ${dispatchDay}, regularFirst: ${regularFirst}, allowEmergency: ${allowEmergency}`
+      );
+
+      // Call the dispatch service and handle the response
+      const response = await runDispatchForDay({
+        forDate: dispatchDay,
+        regularFirst,
+        allowEmergency,
+        // Force runAsync to true to ensure the job is queued
+        runAsync: true,
+      });
+
+      console.log("Dispatch response:", response);
+
+      // Handle the response with our enhanced hook
+      handleDispatchJobResponse(response);
+
+      // --- Fallback polling si on a un run_id mais pas d'event socket
+      if (response?.dispatch_run_id) {
+        let attempts = 0;
+        const maxAttempts = 90; // ~3 minutes
+        const poll = async () => {
+          try {
+            const run = await fetchDispatchRunById(response.dispatch_run_id);
+            // status attendu: queued|running|completed|failed (selon ton modèle)
+            if (run?.status === "completed" || run?.status === "failed") {
+              // Use the date from the response if available
+              const reloadDate = response.for_date || dispatchDay;
+              reload?.(reloadDate);
+              setUpdatedAt(Date.now());
+              setStatusUpdatedAt(Date.now());
+              return; // stop
+            }
+          } catch (e) {
+            // on ignore l'erreur ponctuelle et on réessaie
           }
-        } catch (e) {
-          // on ignore l'erreur ponctuelle et on réessaie
-        }
-        attempts += 1;
-        if (attempts < maxAttempts) {
-          setTimeout(poll, 2000);
-        }
-      };
-      setTimeout(poll, 2000);
+          attempts += 1;
+          if (attempts < maxAttempts) {
+            setTimeout(poll, 2000);
+          }
+        };
+        setTimeout(poll, 2000);
+      }
+
+      // Reload data after a short delay to ensure backend has processed the request
+      setTimeout(() => {
+        reload?.();
+        setUpdatedAt(Date.now());
+      }, 2000);
+    } catch (err) {
+      console.error("Dispatch failed:", err);
+
+      // Provide more detailed error information
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Erreur lors de la planification.";
+
+      alert(`Erreur de dispatch: ${errorMessage}`);
     }
-    
-    // Reload data after a short delay to ensure backend has processed the request
-    setTimeout(() => {
-      reload?.();
-      setUpdatedAt(Date.now());
-    }, 2000);
-    
-  } catch (err) {
-    console.error("Dispatch failed:", err);
-    
-    // Provide more detailed error information
-    const errorMessage = err?.response?.data?.message || 
-                        err?.response?.data?.error || 
-                        err?.message ||
-                        "Erreur lors de la planification.";
-                        
-    alert(`Erreur de dispatch: ${errorMessage}`);
-  }
-};
+  };
 
   // Écouter l'événement de fin de dispatch
   useEffect(() => {
     if (!socket) return;
-    
+
     const handleDispatchCompleted = (data) => {
       console.log("Dispatch run completed event received:", data);
-      
+
       // Ensure we have the necessary data
       if (!data) {
         console.error("Invalid dispatch_run_completed event data");
         return;
       }
-      
+
       // Log the data for debugging
       console.log("Dispatch run completed with data:", {
         dispatch_run_id: data.dispatch_run_id,
         assignments_count: data.assignments_count,
-        date: data.date
+        date: data.date,
       });
-      
+
       // If we have a date, use it for reloading
       const reloadDate = data.date || dispatchDay;
-      
+
       // Reload assignments for the specific date
       if (reloadDate) {
         console.log(`Reloading assignments for date: ${reloadDate}`);
@@ -167,7 +178,7 @@ const DispatchTable = ({
         console.log("Reloading assignments (no specific date)");
         reload?.();
       }
-      
+
       // Update timestamps
       setUpdatedAt(Date.now());
     };
@@ -179,7 +190,10 @@ const DispatchTable = ({
       if (data && (data.dispatch_run_id || data.date)) {
         handleDispatchCompleted(data);
       } else {
-        console.error("Structure d'événement dispatch_run_completed invalide:", data);
+        console.error(
+          "Structure d'événement dispatch_run_completed invalide:",
+          data
+        );
       }
     };
 
@@ -223,6 +237,46 @@ const DispatchTable = ({
   useEffect(() => {
     setRows(normalizeAndSort(dispatches));
   }, [dispatches]);
+
+  // Charger les retards calculés par le backend pour la journée sélectionnée
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const data = await fetchDispatchDelays(dispatchDay);
+        if (cancelled) return;
+        const map = {};
+        for (const d of data || []) {
+          const bid = d.booking_id;
+          if (!bid) continue;
+          const prev = map[bid]?.delay_minutes ?? 0;
+          const cur = Number(
+            d.delay_minutes ??
+              d.pickup_delay_minutes ??
+              d.dropoff_delay_minutes ??
+              0
+          );
+          if (!map[bid] || cur > prev) {
+            map[bid] = {
+              booking_id: bid,
+              delay_minutes: cur,
+              is_dropoff: d.is_dropoff || false,
+              estimated_arrival:
+                d.estimated_arrival || d.pickup_eta || d.dropoff_eta || null,
+              scheduled_time: d.scheduled_time || null,
+            };
+          }
+        }
+        setDelays(map);
+      } catch {}
+    };
+    load();
+    const id = setInterval(load, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [dispatchDay]);
 
   // --- Abonnement Socket pour la date sélectionnée + évènements temps réel ---
   useEffect(() => {
@@ -304,8 +358,37 @@ const DispatchTable = ({
     };
 
     // NB : on écoute aussi si tu souhaites ajuster visuellement les ETAs
+    let locTimer;
     const onDriverLocationUpdated = (_data) => {
-      // placeholder (les ETAs doivent en pratique venir du serveur)
+      if (locTimer) clearTimeout(locTimer);
+      locTimer = setTimeout(async () => {
+        try {
+          const data = await fetchDispatchDelays(dispatchDay);
+          const map = {};
+          for (const d of data || []) {
+            const bid = d.booking_id;
+            if (!bid) continue;
+            const prev = map[bid]?.delay_minutes ?? 0;
+            const cur = Number(
+              d.delay_minutes ??
+                d.pickup_delay_minutes ??
+                d.dropoff_delay_minutes ??
+                0
+            );
+            if (!map[bid] || cur > prev) {
+              map[bid] = {
+                booking_id: bid,
+                delay_minutes: cur,
+                is_dropoff: d.is_dropoff || false,
+                estimated_arrival:
+                  d.estimated_arrival || d.pickup_eta || d.dropoff_eta || null,
+                scheduled_time: d.scheduled_time || null,
+              };
+            }
+          }
+          setDelays(map);
+        } catch {}
+      }, 800);
     };
 
     socket.on("dispatch:assignment:created", onAssignmentCreated);
@@ -313,7 +396,7 @@ const DispatchTable = ({
     socket.on("dispatch:assignment:cancelled", onAssignmentCancelled);
     socket.on("dispatch:delay:detected", onDelayDetected);
     socket.on("booking:status:changed", onBookingStatusChanged);
-    socket.on("driver:location:updated", onDriverLocationUpdated);
+    socket.on("driver_location_update", onDriverLocationUpdated);
 
     return () => {
       socket.off("dispatch:assignment:created", onAssignmentCreated);
@@ -321,7 +404,8 @@ const DispatchTable = ({
       socket.off("dispatch:assignment:cancelled", onAssignmentCancelled);
       socket.off("dispatch:delay:detected", onDelayDetected);
       socket.off("booking:status:changed", onBookingStatusChanged);
-      socket.off("driver:location:updated", onDriverLocationUpdated);
+      socket.off("driver_location_update", onDriverLocationUpdated);
+      if (locTimer) clearTimeout(locTimer);
       try {
         socket.emit("unsubscribe:date", dispatchDay);
       } catch (_) {}
@@ -330,14 +414,10 @@ const DispatchTable = ({
 
   // --- Réassignation ---
   const [reModalOpen, setReModalOpen] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [selectedBooking /*, setSelectedBooking*/] = useState(null);
   const [selectedDriver, setSelectedDriver] = useState("");
 
-  const openReassign = (booking) => {
-    setSelectedBooking(booking);
-    setSelectedDriver("");
-    setReModalOpen(true);
-  };
+  // openReassign removed (no reassign button in current UI)
 
   const confirmReassign = async () => {
     if (selectedBooking?.assignment?.id && selectedDriver) {
@@ -357,10 +437,9 @@ const DispatchTable = ({
       .filter(
         (d) =>
           d.id !== currentId &&
-          (
-            (typeof d.status === "string" && d.status.toLowerCase() === "available") ||
-            d.is_available === true
-          )
+          ((typeof d.status === "string" &&
+            d.status.toLowerCase() === "available") ||
+            d.is_available === true)
       )
       .sort((a, b) => {
         const an = a.name || a.username || "";
@@ -376,10 +455,71 @@ const DispatchTable = ({
 
   // --- Stats pied de tableau ---
   const total = rows.length;
-  const completed = rows.filter((b) => (b.status || "").toLowerCase() === "completed").length;
-  const cancelled = rows.filter((b) => (b.status || "").toLowerCase() === "cancelled").length;
+  const completed = rows.filter(
+    (b) => (b.status || "").toLowerCase() === "completed"
+  ).length;
+  const cancelled = rows.filter(
+    (b) => (b.status || "").toLowerCase() === "cancelled"
+  ).length;
   const inProgress = rows.filter((b) => isActiveStatus(b.status)).length;
   const delayedCount = Object.keys(delays).length;
+
+  // --- Helpers retard/ETA ---
+  const toDate = (v) => {
+    try {
+      return v ? new Date(v) : null;
+    } catch (_) {
+      return null;
+    }
+  };
+  const minutesBetween = (a, b) => {
+    if (!a || !b) return null;
+    return Math.round((a.getTime() - b.getTime()) / 60000);
+  };
+  const timingStatus = (b) => {
+    // 1) signalements temps réel (prend le pas)
+    const d = delays[b.id];
+    if (d && typeof d.delay_minutes === "number") {
+      const mins = d.delay_minutes;
+      return {
+        kind: mins <= 0 ? "on_time" : "delayed",
+        minutes: Math.max(0, mins),
+        label: mins <= 0 ? "À l'heure" : `${mins} min de retard`,
+      };
+    }
+    // 2) estimation de l'assignation (ETA prévue vs horaire)
+    const sch = toDate(b.scheduled_time);
+    const eta = toDate(b.assignment?.estimated_pickup_arrival);
+    if (sch && eta) {
+      const diff = minutesBetween(eta, sch); // eta - scheduled
+      if (diff !== null) {
+        if (diff <= 0)
+          return { kind: "on_time", minutes: 0, label: "À l'heure" };
+        if (diff > 0 && diff < 10)
+          return {
+            kind: "slightly_delayed",
+            minutes: diff,
+            label: `${diff} min de retard`,
+          };
+        return {
+          kind: "delayed",
+          minutes: diff,
+          label: `${diff} min de retard`,
+        };
+      }
+    }
+    // 3) impossibilité: pas d'assignation et statut actif/à venir
+    const st = (b.status || "").toLowerCase();
+    const isDone = st === "completed" || st === "cancelled";
+    if (!b.assignment && !isDone) {
+      return {
+        kind: "impossible",
+        minutes: null,
+        label: "Impossible (aucun chauffeur)",
+      };
+    }
+    return { kind: "unknown", minutes: null, label: "—" };
+  };
 
   return (
     <div className={styles.dispatchTableContainer}>
@@ -485,17 +625,35 @@ const DispatchTable = ({
         <tbody>
           {rows.length > 0 ? (
             rows.map((b) => {
-              const delay = delays[b.id];
+              // const delay = delays[b.id]; // removed unused variable
               const hasAssignment = !!b.assignment;
               const assignedDriver = hasAssignment
-                ? (drivers.find((d) => d.id === b.assignment.driver_id) || {})
+                ? drivers.find((d) => d.id === b.assignment.driver_id) || {}
                 : {};
-              const driverName =
-                b?.driver_username ||
-                b?.driver?.username ||
-                assignedDriver.username ||
-                assignedDriver.name ||
-                "Non assigné";
+              // ✅ Résolution robuste du nom chauffeur (string, objet, fallback id)
+              let driverName = "Non assigné";
+              if (typeof b?.driver === "string" && b.driver.trim()) {
+                driverName = b.driver.trim();
+              } else if (b?.driver_username) {
+                driverName = b.driver_username;
+              } else if (b?.driver?.username) {
+                driverName = b.driver.username;
+              } else if (b?.driver_name) {
+                driverName = b.driver_name;
+              } else if (assignedDriver.username || assignedDriver.name) {
+                driverName = assignedDriver.username || assignedDriver.name;
+              } else if (b?.driver_id) {
+                const byId = drivers.find((d) => d.id === b.driver_id);
+                if (byId)
+                  driverName = byId.username || byId.name || `#${byId.id}`;
+              }
+              // Si la course est terminée mais aucun nom détecté, afficher "Inconnu" plutôt que "Non assigné"
+              if (
+                (b.status || "").toLowerCase() === "completed" &&
+                driverName === "Non assigné"
+              ) {
+                driverName = "Inconnu";
+              }
 
               return (
                 <tr key={b.id}>
@@ -520,32 +678,60 @@ const DispatchTable = ({
                     />
                   </td>
                   <td>
-                    <div className={styles.actionsCell}>
-                      {delay && (
-                        <Tooltip
-                          title={`${
-                            delay.is_dropoff ? "Dropoff" : "Pickup"
-                          } en retard de ${delay.delay_minutes} min`}
-                        >
+                    {(() => {
+                      const t = timingStatus(b);
+                      if (t.kind === "on_time") {
+                        return (
                           <Chip
                             size="small"
-                            color={delay.delay_minutes < 10 ? "warning" : "error"}
-                            label={`${delay.delay_minutes} min de retard`}
+                            label={t.label}
+                            className={styles.statusChipOnTime}
                           />
-                        </Tooltip>
-                      )}
-                      {onReassign && hasAssignment && isActiveStatus(b.status) && (
-                        <Tooltip title="Réassigner">
-                          <button
-                            className={styles.iconBtn}
-                            onClick={() => openReassign(b)}
-                            aria-label="Réassigner"
-                          >
-                            <MdSwapHoriz />
-                          </button>
-                        </Tooltip>
-                      )}
-                    </div>
+                        );
+                      }
+                      if (t.kind === "slightly_delayed") {
+                        return (
+                          <Tooltip title="Retard faible, OK si < 10 min">
+                            <Chip
+                              size="small"
+                              label={t.label}
+                              className={styles.statusChipSlightDelay}
+                            />
+                          </Tooltip>
+                        );
+                      }
+                      if (t.kind === "delayed") {
+                        return (
+                          <Tooltip title="Retard important">
+                            <Chip
+                              size="small"
+                              label={t.label}
+                              className={styles.statusChipDelay}
+                            />
+                          </Tooltip>
+                        );
+                      }
+                      if (t.kind === "impossible") {
+                        return (
+                          <div className={styles.actionsCell}>
+                            <Chip
+                              size="small"
+                              label={t.label}
+                              className={styles.statusChipImpossible}
+                            />
+                            <button
+                              className={styles.iconBtn}
+                              onClick={() => alert("Action: appeler le client")}
+                              aria-label="Appeler le client"
+                              title="Appeler le client"
+                            >
+                              📞
+                            </button>
+                          </div>
+                        );
+                      }
+                      return <span>—</span>;
+                    })()}
                   </td>
                 </tr>
               );
@@ -578,14 +764,23 @@ const DispatchTable = ({
       </table>
 
       {/* --- Modal réassignation --- */}
-      <Dialog open={!!onReassign && reModalOpen} onClose={() => setReModalOpen(false)} fullWidth>
+      <Dialog
+        open={!!onReassign && reModalOpen}
+        onClose={() => setReModalOpen(false)}
+        fullWidth
+      >
         <DialogTitle>Réassigner la course</DialogTitle>
         <DialogContent dividers>
           {selectedBooking && (
             <>
               <div className={styles.modalBlock}>
                 <strong>Course #{selectedBooking.id}</strong>
-                <div>Client : {selectedBooking.customer_name || selectedBooking.client?.full_name || "—"}</div>
+                <div>
+                  Client :{" "}
+                  {selectedBooking.customer_name ||
+                    selectedBooking.client?.full_name ||
+                    "—"}
+                </div>
                 <div>Pickup : {selectedBooking.pickup_location || "—"}</div>
                 <div>Dropoff : {selectedBooking.dropoff_location || "—"}</div>
                 <div>Date/Heure : {renderBookingDateTime(selectedBooking)}</div>
@@ -596,13 +791,16 @@ const DispatchTable = ({
                       variant="outlined"
                       sx={{ borderStyle: "dashed" }}
                     >
-                      Retard estimé : {delays[selectedBooking.id].delay_minutes} min
+                      Retard estimé : {delays[selectedBooking.id].delay_minutes}{" "}
+                      min
                     </Alert>
                   </div>
                 )}
               </div>
               <FormControl fullWidth sx={{ mt: 2 }}>
-                <InputLabel id="driver-select-label">Nouveau chauffeur</InputLabel>
+                <InputLabel id="driver-select-label">
+                  Nouveau chauffeur
+                </InputLabel>
                 <Select
                   labelId="driver-select-label"
                   label="Nouveau chauffeur"
@@ -631,7 +829,8 @@ const DispatchTable = ({
                         delays[selectedBooking.id].alternative_driver_id
                     )?.name
                   }{" "}
-                  (arrivée ~ {delays[selectedBooking.id].alternative_delay_minutes} min de
+                  (arrivée ~{" "}
+                  {delays[selectedBooking.id].alternative_delay_minutes} min de
                   retard)
                 </Alert>
               )}
@@ -708,8 +907,8 @@ DispatchTable.propTypes = {
       id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
       name: PropTypes.string,
       username: PropTypes.string,
-      status: PropTypes.string,      // "available" / ...
-      is_available: PropTypes.bool,  // bool backend
+      status: PropTypes.string, // "available" / ...
+      is_available: PropTypes.bool, // bool backend
       is_emergency_driver: PropTypes.bool,
     })
   ),

@@ -10,19 +10,31 @@
 function formatLocalNaive(dateInput) {
   if (!dateInput) return "Non spécifié";
   try {
-    let s = typeof dateInput === "string" ? dateInput.trim() : "";
-    if (!s && dateInput instanceof Date) {
-      // ATTENTION: éviter toute conversion; on reconstruit depuis composants locaux
-      const pad = (n) => String(n).padStart(2, "0");
-      const d = dateInput; // supposé déjà local
-      s = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    let dateObj;
+
+    if (dateInput instanceof Date) {
+      dateObj = dateInput;
+    } else if (typeof dateInput === "string") {
+      // Parser la chaîne ISO ou autre format
+      const s = dateInput.trim().replace(" ", "T");
+      dateObj = new Date(s);
+    } else {
+      return "Non spécifié";
     }
-    // Normaliser séparateur
-    s = s.replace(" ", "T");
-    const [datePart, timePartFull = ""] = s.split("T");
-    const [hh = "00", mm = "00"] = timePartFull.split(":");
-    const timePart = `${hh.padStart(2, "0")}:${mm.padStart(2, "0")}`;
-    return `${datePart} • ${timePart}`;
+
+    if (isNaN(dateObj.getTime())) {
+      return "Date invalide";
+    }
+
+    // Format suisse : dd.MM.yyyy • HH:mm
+    const pad = (n) => String(n).padStart(2, "0");
+    const day = pad(dateObj.getDate());
+    const month = pad(dateObj.getMonth() + 1);
+    const year = dateObj.getFullYear();
+    const hours = pad(dateObj.getHours());
+    const minutes = pad(dateObj.getMinutes());
+
+    return `${day}.${month}.${year} • ${hours}:${minutes}`;
   } catch (e) {
     console.error("Error formatting local naive date:", e);
     return "Date invalide";
@@ -30,16 +42,39 @@ function formatLocalNaive(dateInput) {
 }
 
 /**
-  * Formate la date d'une réservation, en utilisant les champs pré-formatés
-  * du backend si disponibles, sinon en forçant le fuseau horaire de Zurich.
-  * @param {object} booking - L'objet réservation du backend.
-  * @returns {string}
-  */
- export function renderBookingDateTime(booking) {
+ * Formate la date d'une réservation, en utilisant les champs pré-formatés
+ * du backend si disponibles, sinon en forçant le fuseau horaire de Zurich.
+ * @param {object} booking - L'objet réservation du backend.
+ * @returns {string}
+ */
+export function renderBookingDateTime(booking) {
   if (!booking) return "Non spécifié";
-  // Priorité aux champs déjà formatés par le backend (qu’on suppose **locaux naïfs**)
+
+  // 🔄 Cas spécial : retour avec heure à confirmer
+  const isReturn = booking.is_return;
+  const scheduledTime = booking.scheduled_time;
+  const timeConfirmed = booking.time_confirmed;
+
+  // Si c'est un retour avec heure non confirmée (time_confirmed = false)
+  if (isReturn && scheduledTime && timeConfirmed === false) {
+    const date = new Date(scheduledTime);
+    const pad = (n) => String(n).padStart(2, "0");
+    const day = pad(date.getDate());
+    const month = pad(date.getMonth() + 1);
+    const year = date.getFullYear();
+    return `${day}.${month}.${year} • Heure à confirmer`;
+  }
+  
+  // Si c'est un retour sans scheduled_time du tout (ne devrait pas arriver)
+  if (isReturn && !scheduledTime) {
+    return "Heure à confirmer";
+  }
+
+  // Priorité aux champs déjà formatés par le backend (qu'on suppose **locaux naïfs**)
   if (booking.date_formatted) {
-    const timeFormatted = booking.time_formatted ? ` • ${booking.time_formatted}` : "";
+    const timeFormatted = booking.time_formatted
+      ? ` • ${booking.time_formatted}`
+      : "";
     return `${booking.date_formatted}${timeFormatted}`;
   }
   // Sinon, on affiche la chaîne naïve telle quelle

@@ -22,24 +22,20 @@ const whenOf = (r) =>
   r?.scheduled_time ?? r?.pickup_time ?? r?.date_time ?? r?.datetime ?? null;
 
 const norm = (s) => String(s || "").toLowerCase();
-const isCompleted = (s) => ["completed", "return_completed", "done", "finished"].includes(norm(s));
+const isCompleted = (s) =>
+  ["completed", "return_completed", "done", "finished"].includes(norm(s));
 
 const amountOf = (r) =>
   Number(
-    r?.amount ??
-    r?.total_amount ??
-    r?.total ??
-    r?.price ??
-    r?.fare ??
-    0
+    r?.amount ?? r?.total_amount ?? r?.total ?? r?.price ?? r?.fare ?? 0
   ) || 0;
 
 const OverviewCards = ({
   reservations,
-  pendingReservations,        // déjà filtrées dans CompanyDashboard
-  assignedReservations,       // accepted && !driver_id
+  pendingReservations, // déjà filtrées dans CompanyDashboard
+  assignedReservations, // accepted && !driver_id
   driver,
-  day,                        // optionnel 'YYYY-MM-DD'
+  day, // optionnel 'YYYY-MM-DD'
 }) => {
   // Filtre jour (si fourni) — calcule 'all' *dans* le useMemo pour satisfaire eslint react-hooks/exhaustive-deps
   const dayList = useMemo(() => {
@@ -50,7 +46,10 @@ const OverviewCards = ({
 
   // Attente = pending + accepted sans driver (si on nous les passe), sinon heuristique
   const waitingCount = useMemo(() => {
-    if (Array.isArray(pendingReservations) || Array.isArray(assignedReservations)) {
+    if (
+      Array.isArray(pendingReservations) ||
+      Array.isArray(assignedReservations)
+    ) {
       const p = Array.isArray(pendingReservations) ? pendingReservations : [];
       const a = Array.isArray(assignedReservations) ? assignedReservations : [];
       // Si day est donné, restreindre
@@ -72,12 +71,18 @@ const OverviewCards = ({
 
   const revenue = useMemo(
     () =>
-      dayList.reduce((acc, r) => (isCompleted(r.status) ? acc + amountOf(r) : acc), 0),
+      dayList.reduce(
+        (acc, r) => (isCompleted(r.status) ? acc + amountOf(r) : acc),
+        0
+      ),
     [dayList]
   );
 
   const availableDriver = useMemo(
-    () => (Array.isArray(driver) ? driver : []).filter((d) => d?.is_active && d?.is_available).length,
+    () =>
+      (Array.isArray(driver) ? driver : []).filter(
+        (d) => d?.is_active && d?.is_available
+      ).length,
     [driver]
   );
 
@@ -97,20 +102,32 @@ const OverviewCards = ({
   return (
     <div className={styles.overviewCards}>
       <div className={styles.card}>
-        <h3>Réservations en attente</h3>
-        <p>{waitingCount}</p>
+        <div className={styles.cardIcon}>📅</div>
+        <div className={styles.cardContent}>
+          <h3>En attente</h3>
+          <p>{waitingCount}</p>
+        </div>
       </div>
       <div className={styles.card}>
-        <h3>Courses réalisées</h3>
-        <p>{completedCount}</p>
+        <div className={styles.cardIcon}>✅</div>
+        <div className={styles.cardContent}>
+          <h3>Réalisées</h3>
+          <p>{completedCount}</p>
+        </div>
       </div>
       <div className={styles.card}>
-        <h3>Revenu généré</h3>
-        <p>{revenue} CHF</p>
+        <div className={styles.cardIcon}>💰</div>
+        <div className={styles.cardContent}>
+          <h3>Revenu</h3>
+          <p>{revenue.toFixed(2)} CHF</p>
+        </div>
       </div>
       <div className={styles.card}>
-        <h3>Chauffeurs disponibles</h3>
-        <p>{availableDriver}</p>
+        <div className={styles.cardIcon}>👤</div>
+        <div className={styles.cardContent}>
+          <h3>Disponibles</h3>
+          <p>{availableDriver}</p>
+        </div>
       </div>
     </div>
   );

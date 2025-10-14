@@ -10,27 +10,35 @@ export async function generateQRBillPDF(invoiceData) {
   try {
     console.log("📄 Début de la génération du QR-Bill en SVG...");
 
-    // ✅ Définition des données du QR-Bill
+    // ✅ Définition des données du QR-Bill avec les vraies données de l'entreprise
+    const company = invoiceData.company || {};
+    const companyName = company.name || "Emmenez-moi Sàrl";
+    const companyIban = company.iban || "CH65 0900 0000 1526 3128 9";
+    const companyAddress = company.address || "Route de Chevrens 145";
+    const companyZip = company.address?.match(/(\d{4})/)?.[1] || "1247";
+    const companyCity =
+      company.address?.split(", ")[1]?.split(" ")[1] || "Anières";
+
     const qrBillData = {
       amount: parseFloat(invoiceData.totalPrice),
       currency: "CHF",
       creditor: {
-        account: "CH65 0900 0000 1526 3128 9", // ✅ IBAN standard (PAS QR-IBAN)
-        name: "Emmenez-moi Sàrl",
-        address: "Route de Chevrens 145",
-        zip: 1247,
-        city: "Anières",
+        account: companyIban,
+        name: companyName,
+        address: companyAddress.split(",")[0] || companyAddress,
+        zip: parseInt(companyZip) || 1247,
+        city: companyCity,
         country: "CH",
       },
       debtor: {
         name: `${invoiceData.client.firstName} ${invoiceData.client.lastName}`,
         address: invoiceData.client.address || "Adresse inconnue",
-        zip: invoiceData.client.zipCode || "0000",
+        zip: parseInt(invoiceData.client.zipCode) || 0,
         city: invoiceData.client.city || "Ville inconnue",
         country: "CH",
       },
-      unstructuredMessage: `Facture ${invoiceData.invoiceNumber} - Paiement des services de transport`, // ✅ Message libre
-      language: "fr", // ✅ QR-Bill en français
+      unstructuredMessage: `Facture ${invoiceData.invoiceNumber} - Paiement des services de transport`,
+      language: "fr",
     };
 
     // ✅ Générer le QR-Bill en SVG

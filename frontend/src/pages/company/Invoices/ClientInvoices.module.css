@@ -32,6 +32,36 @@
   color: #1e293b;
 }
 
+/* ===== Onglets ===== */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 24px;
+}
+
+.tab {
+  padding: 12px 24px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.tab:hover {
+  color: #374151;
+  background: #f9fafb;
+}
+
+.tab.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+  background: #f8fafc;
+}
+
 /* ===== Messages ===== */
 .error {
   background: #fee2e2;
@@ -59,15 +89,30 @@
   box-shadow: 0 0 0 3px rgba(59,130,246,.2);
 }
 
-/* ===== Bouton Export PDF ===== */
-.exportBtn {
+.yearSelect {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+  transition: border .2s, box-shadow .2s;
+}
+
+.yearSelect:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.2);
+}
+
+/* ===== Bouton Génération Facture ===== */
+.generateBtn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
   border: none;
   border-radius: 8px;
-  background: #0ea5e9;           /* sky-500 */
+  background: #00796b;           /* green */
   color: #fff;
   font-size: 14px;
   font-weight: 600;
@@ -76,11 +121,51 @@
   transition: background .15s ease-in-out, transform .02s;
 }
 
-.exportBtn:hover { background: #0284c7; }
-.exportBtn:disabled {
+.generateBtn:hover:not(:disabled) { 
+  background: #218838; 
+}
+
+.generateBtn:disabled {
   background: #93c5fd;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+/* ===== Informations facture générée ===== */
+.invoiceInfo {
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 20px 0;
+}
+
+.invoiceInfo h3 {
+  margin: 0 0 12px 0;
+  color: #155724;
+  font-size: 18px;
+}
+
+.invoiceInfo p {
+  margin: 8px 0;
+  color: #155724;
+  font-size: 14px;
+}
+
+.viewPdfBtn {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: background-color 0.2s;
+}
+
+.viewPdfBtn:hover {
+  background-color: #0056b3;
 }
 
 /* ===== Tableau des réservations ===== */

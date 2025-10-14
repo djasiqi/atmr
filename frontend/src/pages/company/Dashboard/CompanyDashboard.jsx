@@ -24,8 +24,8 @@ import {
   fetchDispatchDelays,
 } from "../../../services/companyService";
 import useCompanyData from "../../../hooks/useCompanyData";
+import useDispatchDelays from "../../../hooks/useDispatchDelays";
 import styles from "./CompanyDashboard.module.css";
-import DispatchTable from "../components/DispatchTable";
 import ManualBookingForm from "./components/ManualBookingForm";
 import ChatWidget from "../../../components/widgets/ChatWidget";
 import ReturnTimeModal from "./components/ReturnTimeModal";
@@ -55,12 +55,22 @@ const CompanyDashboard = () => {
   } = useCompanyData({ day: dispatchDay });
   // WebSocket entreprise
   const socket = useCompanySocket();
-  const { status } = useDispatchStatus(socket);
+  useDispatchStatus(socket); // Monitor dispatch status via WebSocket
+
+  // 🆕 Hook pour les retards dispatch (refresh toutes les 2 minutes)
+  const { delayCount, hasCriticalDelays, hasDelays } = useDispatchDelays(
+    dispatchDay,
+    120000
+  );
 
   // queryClient pour invalidation
   const queryClient = useQueryClient();
   const [showEditModal, setShowEditModal] = useState(false);
   const [driverToEdit, setDriverToEdit] = useState(null);
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showDriversSection, setShowDriversSection] = useState(false);
+  const [showChartSection, setShowChartSection] = useState(false);
+  const [reservationTab, setReservationTab] = useState("pending"); // "pending" | "assigned"
 
   const handleEditDriver = (d) => {
     setDriverToEdit(d);
@@ -121,16 +131,13 @@ const CompanyDashboard = () => {
   const [selectedReservation, setSelectedReservation] = useState(null);
 
   // Liste des dispatches (assignations/affectations) pour la carte et la table
-  const {
-    data: dispatchedReservations = [],
-    refetch: refetchAssigned,
-    isLoading: loadingDispatches,
-  } = useQuery({
-    queryKey: ["assigned-reservations", dispatchDay],
-    queryFn: () => fetchAssignedReservations(dispatchDay),
-    staleTime: 30_000,
-    enabled: !!company?.id, // ✅ évite les 403 bruités
-  });
+  const { data: dispatchedReservations = [], refetch: refetchAssigned } =
+    useQuery({
+      queryKey: ["assigned-reservations", dispatchDay],
+      queryFn: () => fetchAssignedReservations(dispatchDay),
+      staleTime: 30_000,
+      enabled: !!company?.id, // ✅ évite les 403 bruités
+    });
 
   // Retards du jour (pour DriverLiveMap)
   const {
@@ -320,10 +327,7 @@ const CompanyDashboard = () => {
 
   // ---------- Données pour DriverLiveMap ----------
 
-  // Drivers
-  const driversList = useMemo(() => driver || [], [driver]);
-
-  // Bookings “actifs” du jour (en dehors de completed/cancelled/no_show)
+  // Bookings "actifs" du jour (en dehors de completed/cancelled/no_show)
   const activeBookings = useMemo(() => {
     const isActive = (b) =>
       b &&
@@ -394,61 +398,37 @@ const CompanyDashboard = () => {
   return (
     <div className={styles.companyContainer}>
       <CompanyHeader />
+
+      {/* 🆕 Badge d'alerte pour les retards détectés */}
+      {hasDelays && (
+        <div className={styles.delayAlert}>
+          <div className={styles.delayAlertContent}>
+            <span className={styles.delayAlertIcon}>
+              {hasCriticalDelays ? "🚨" : "⚠️"}
+            </span>
+            <span className={styles.delayAlertText}>
+              {hasCriticalDelays ? (
+                <strong>
+                  {delayCount} retard(s) critique(s) détecté(s) aujourd'hui !
+                </strong>
+              ) : (
+                <>{delayCount} retard(s) détecté(s) aujourd'hui</>
+              )}
+            </span>
+            <a
+              href={`/dashboard/company/${company?.public_id}/dispatch`}
+              className={styles.delayAlertLink}
+            >
+              Voir les détails et suggestions →
+            </a>
+          </div>
+        </div>
+      )}
+
       <div className={styles.dashboard}>
         <CompanySidebar />
         <main className={styles.content}>
-          {/* ======= Carte ======= */}
-          <section className={styles.mapSection}>
-            <div className={styles.sectionHeader}>
-              <h2>Localisation des chauffeurs</h2>
-              <div className={styles.inlineControls}>
-                <label>
-                  Jour:&nbsp;
-                  <input
-                    type="date"
-                    value={dispatchDay}
-                    onChange={(e) => setDispatchDay(e.target.value)}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <DriverLiveMap
-              date={dispatchDay}
-              drivers={driversList}
-              bookings={activeBookings}
-              assignments={assignmentsForMap}
-              delays={delaysByBooking}
-            />
-            {fetchingDelays && (
-              <small className={styles.hint}>Mise à jour des retards…</small>
-            )}
-          </section>
-
-          {/* ======= Planification & suivi ======= */}
-          <section
-            className={styles.dispatchSection}
-            data-dispatch-status={status}
-          >
-            <h2>Planifier & suivre une journée</h2>
-            {loadingDispatches && <p>Chargement des dispatches…</p>}
-            <DispatchTable
-              showPlanner
-              initialDispatchDay={dispatchDay}
-              initialRegularFirst={true}
-              initialAllowEmergency={true}
-              dispatches={
-                Array.isArray(dispatchedReservations)
-                  ? dispatchedReservations
-                  : Object.values(dispatchedReservations || {})
-              }
-              reload={() => {
-                refetchAssigned();
-                refetchDelays();
-              }}
-            />
-          </section>
-
+          {/* ======= KPIs compacts en haut ======= */}
           <OverviewCards
             reservations={reservations}
             pendingReservations={pendingReservations}
@@ -456,73 +436,192 @@ const CompanyDashboard = () => {
             driver={driver}
             day={dispatchDay}
           />
-          <ReservationChart reservations={reservations} />
 
-          <section className={styles.reservationsSection}>
-            <h2>Réservations en attente</h2>
-            <ReservationTable
-              reservations={pendingReservations}
-              loading={loadingReservations}
-              onAccept={handleAccept}
-              onReject={handleReject}
-              onAssign={openAssignModal}
-              onTriggerReturn={handleTriggerReturn}
-              onDelete={handleDeleteReservation}
-              onSchedule={handleScheduleReservation}
-              onDispatchNow={handleDispatchNow}
-            />
-          </section>
+          {/* ======= Layout 2 colonnes ======= */}
+          <div className={styles.twoColumnLayout}>
+            {/* Colonne gauche : Carte + Actions */}
+            <div className={styles.leftColumn}>
+              {/* Carte */}
+              <section className={styles.mapSection}>
+                <DriverLiveMap
+                  date={dispatchDay}
+                  drivers={driver || []}
+                  bookings={activeBookings}
+                  assignments={assignmentsForMap}
+                  delays={delaysByBooking}
+                />
+                {fetchingDelays && (
+                  <small className={styles.hint}>
+                    Mise à jour des retards…
+                  </small>
+                )}
+              </section>
 
-          <section className={styles.reservationsSection}>
-            <h2>Réservations en attente d'assignation chauffeur</h2>
-            <ReservationTable
-              reservations={assignedReservations}
-              loading={loadingReservations}
-              onAssign={openAssignModal}
-              onTriggerReturn={handleTriggerReturn}
-              onDelete={handleDeleteReservation}
-              onSchedule={handleScheduleReservation}
-              onDispatchNow={handleDispatchNow}
-            />
-          </section>
+              {/* Actions rapides */}
+              <div className={styles.quickActions}>
+                {/* Dispatch & Planification */}
+                <a
+                  href={`/dashboard/company/${company?.public_id}/dispatch`}
+                  className={styles.actionButton}
+                >
+                  <span className={styles.actionIcon}>🚀</span>
+                  <span className={styles.actionText}>
+                    <strong>Dispatch & Planification</strong>
+                    <small>Optimiser les courses</small>
+                  </span>
+                </a>
 
-          <section className={styles.driverSection}>
-            <h2>Chauffeurs de l'entreprise</h2>
-            <DriverTable
-              driver={driver}
-              loading={loadingDriver}
-              onToggle={handleToggleDriver}
-              onDelete={handleDeleteDriver}
-              onEdit={handleEditDriver}
-              onToggleAvailability={handleToggleAvailability}
-              onToggleType={handleToggleType}
-            />
-          </section>
+                {/* Créer une réservation */}
+                <button
+                  onClick={() => setShowBookingModal(true)}
+                  className={styles.actionButton}
+                >
+                  <span className={styles.actionIcon}>➕</span>
+                  <span className={styles.actionText}>
+                    <strong>Nouvelle réservation</strong>
+                    <small>Créer manuellement</small>
+                  </span>
+                </button>
+              </div>
 
-          {showEditModal && driverToEdit && (
-            <Modal onClose={handleCloseModal}>
-              <h3>Modifier le chauffeur {driverToEdit.username}</h3>
-              <EditDriverForm
-                driver={driverToEdit}
-                onClose={handleCloseModal}
-              />
-            </Modal>
-          )}
+              {/* Graphique (collapsible) */}
+              <section className={styles.compactSection}>
+                <div
+                  className={styles.collapsibleHeader}
+                  onClick={() => setShowChartSection(!showChartSection)}
+                >
+                  <h2>📊 Statistiques</h2>
+                  <span className={styles.collapseIcon}>
+                    {showChartSection ? "▼" : "▶"}
+                  </span>
+                </div>
+                {showChartSection && (
+                  <div style={{ padding: "16px" }}>
+                    <ReservationChart reservations={reservations} />
+                  </div>
+                )}
+              </section>
 
-          {selectedReservation && (
-            <AssignmentModal
-              reservation={selectedReservation}
-              driver={(driver || []).filter((d) => d.is_active)}
-              onAssign={handleAssignDriver}
-              onClose={() => setSelectedReservation(null)}
-            />
-          )}
+              {/* Section chauffeurs (collapsible) */}
+              <section className={styles.compactSection}>
+                <div
+                  className={styles.collapsibleHeader}
+                  onClick={() => setShowDriversSection(!showDriversSection)}
+                >
+                  <h2>👥 Chauffeurs ({(driver || []).length})</h2>
+                  <span className={styles.collapseIcon}>
+                    {showDriversSection ? "▼" : "▶"}
+                  </span>
+                </div>
+                {showDriversSection && (
+                  <DriverTable
+                    driver={driver}
+                    loading={loadingDriver}
+                    onToggle={handleToggleDriver}
+                    onDelete={handleDeleteDriver}
+                    onEdit={handleEditDriver}
+                    onToggleAvailability={handleToggleAvailability}
+                    onToggleType={handleToggleType}
+                  />
+                )}
+              </section>
+            </div>
 
-          <section className={styles.manualBookingSection}>
-            <h2>Créer une réservation manuelle</h2>
-            <ManualBookingForm onSuccess={handleManualBookingSuccess} />
-          </section>
+            {/* Colonne droite : Réservations avec onglets */}
+            <div className={styles.rightColumn}>
+              <section className={styles.reservationsSection}>
+                {/* Onglets */}
+                <div
+                  className={styles.tabsHeader}
+                  data-active-tab={reservationTab}
+                >
+                  <button
+                    className={`${styles.tab} ${
+                      reservationTab === "pending" ? styles.tabActive : ""
+                    }`}
+                    onClick={() => setReservationTab("pending")}
+                  >
+                    📋 En attente{" "}
+                    <span className={styles.tabBadge}>
+                      {pendingReservations.length}
+                    </span>
+                  </button>
+                  <button
+                    className={`${styles.tab} ${
+                      reservationTab === "assigned" ? styles.tabActive : ""
+                    }`}
+                    onClick={() => setReservationTab("assigned")}
+                  >
+                    ⏳ Assignation chauffeur{" "}
+                    <span className={styles.tabBadge}>
+                      {assignedReservations.length}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Contenu des onglets */}
+                <div className={styles.tabContent}>
+                  {reservationTab === "pending" && (
+                    <ReservationTable
+                      reservations={pendingReservations}
+                      loading={loadingReservations}
+                      onAccept={handleAccept}
+                      onReject={handleReject}
+                      onAssign={openAssignModal}
+                      onTriggerReturn={handleTriggerReturn}
+                      onDelete={handleDeleteReservation}
+                      onSchedule={handleScheduleReservation}
+                      onDispatchNow={handleDispatchNow}
+                    />
+                  )}
+
+                  {reservationTab === "assigned" && (
+                    <ReservationTable
+                      reservations={assignedReservations}
+                      loading={loadingReservations}
+                      onAssign={openAssignModal}
+                      onTriggerReturn={handleTriggerReturn}
+                      onDelete={handleDeleteReservation}
+                      onSchedule={handleScheduleReservation}
+                      onDispatchNow={handleDispatchNow}
+                    />
+                  )}
+                </div>
+              </section>
+            </div>
+          </div>
         </main>
+
+        {/* Modal réservation manuelle */}
+        {showBookingModal && (
+          <Modal onClose={() => setShowBookingModal(false)}>
+            <h3>Créer une réservation manuelle</h3>
+            <ManualBookingForm
+              onSuccess={(booking) => {
+                handleManualBookingSuccess(booking);
+                setShowBookingModal(false);
+              }}
+            />
+          </Modal>
+        )}
+
+        {/* Modal édition chauffeur */}
+        {showEditModal && driverToEdit && (
+          <Modal onClose={handleCloseModal}>
+            <h3>Modifier le chauffeur {driverToEdit.username}</h3>
+            <EditDriverForm driver={driverToEdit} onClose={handleCloseModal} />
+          </Modal>
+        )}
+
+        {/* Modal assignation */}
+        {selectedReservation && (
+          <AssignmentModal
+            reservation={selectedReservation}
+            driver={(driver || []).filter((d) => d.is_active)}
+            onAssign={handleAssignDriver}
+            onClose={() => setSelectedReservation(null)}
+          />
+        )}
       </div>
 
       {company?.id && <ChatWidget companyId={company.id} />}

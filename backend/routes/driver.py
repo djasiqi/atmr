@@ -34,6 +34,16 @@ driver_profile_model = driver_ns.model('DriverProfileUpdate', {
     'last_name': fields.String(description="Nom"),
     'phone': fields.String(description="Téléphone"),
     'status': fields.String(description="disponible | hors service"),
+    # HR fields
+    'contract_type': fields.String(description="CDI | CDD | HOURLY"),
+    'weekly_hours': fields.Integer(description="Heures contrat / semaine"),
+    'hourly_rate_cents': fields.Integer(description="Taux horaire (centimes)"),
+    'employment_start_date': fields.String(description="YYYY-MM-DD"),
+    'employment_end_date': fields.String(description="YYYY-MM-DD"),
+    'license_categories': fields.List(fields.String, description="Ex: ['B','C1']"),
+    'license_valid_until': fields.String(description="YYYY-MM-DD"),
+    'trainings': fields.List(fields.Raw, description="[{name, valid_until}]"),
+    'medical_valid_until': fields.String(description="YYYY-MM-DD"),
 })
 
 photo_model = driver_ns.model('DriverPhoto', {
@@ -152,6 +162,39 @@ class DriverProfile(Resource):
                 driver.is_active = False
 
         try:
+            # HR optional updates
+            ct = data.get('contract_type')
+            if isinstance(ct, str) and ct:
+                driver.contract_type = ct.upper()
+            if 'weekly_hours' in data:
+                try:
+                    driver.weekly_hours = int(data.get('weekly_hours')) if data.get('weekly_hours') is not None else None
+                except Exception:
+                    pass
+            if 'hourly_rate_cents' in data:
+                try:
+                    driver.hourly_rate_cents = int(data.get('hourly_rate_cents')) if data.get('hourly_rate_cents') is not None else None
+                except Exception:
+                    pass
+            from datetime import date as _date
+            def _parse_d(s):
+                try:
+                    return _date.fromisoformat(s) if isinstance(s, str) and s else None
+                except Exception:
+                    return None
+            if 'employment_start_date' in data:
+                driver.employment_start_date = _parse_d(data.get('employment_start_date'))
+            if 'employment_end_date' in data:
+                driver.employment_end_date = _parse_d(data.get('employment_end_date'))
+            if 'license_categories' in data and isinstance(data.get('license_categories'), list):
+                driver.license_categories = list(map(str, data.get('license_categories')))
+            if 'license_valid_until' in data:
+                driver.license_valid_until = _parse_d(data.get('license_valid_until'))
+            if 'trainings' in data and isinstance(data.get('trainings'), list):
+                driver.trainings = data.get('trainings')
+            if 'medical_valid_until' in data:
+                driver.medical_valid_until = _parse_d(data.get('medical_valid_until'))
+
             db.session.commit()
             app_logger.info(f"Profil du driver {driver.id} mis à jour avec succès")
             return {"profile": driver.serialize, "message": "Profil mis à jour avec succès"}, 200
@@ -203,7 +246,15 @@ class DriverUpcomingBookings(Resource):
             return error_response, status_code
         driver = cast(Driver, driver)
 
-        now = datetime.now(timezone.utc)
+        # 🔍 LOG : Vérifier quel chauffeur charge ses missions
+        driver_name = f"{driver.user.first_name} {driver.user.last_name}" if driver.user else f"#{driver.id}"
+        app_logger.info(f"📱 [Driver Bookings] Driver {driver_name} (ID: {driver.id}) loading bookings")
+
+        from datetime import date
+        from shared.time_utils import day_local_bounds
+        
+        # ✅ Récupérer les courses d'AUJOURD'HUI (passées et futures) tant qu'elles ne sont pas terminées
+        today_start, today_end = day_local_bounds(date.today().strftime("%Y-%m-%d"))
 
         status_pred: ColumnElement[bool] = or_(
             tcast(ColumnElement[bool], Booking.status == BookingStatus.ASSIGNED),
@@ -214,12 +265,112 @@ class DriverUpcomingBookings(Resource):
         bookings = (
             Booking.query
             .filter(tcast(ColumnElement[bool], Booking.driver_id == driver.id))
-            .filter(tcast(ColumnElement[bool], Booking.scheduled_time >= now))
+            .filter(tcast(ColumnElement[bool], Booking.scheduled_time >= today_start))
+            .filter(tcast(ColumnElement[bool], Booking.scheduled_time < today_end))
             .filter(status_pred)
             .order_by(Booking.scheduled_time.asc())
             .all()
         )
+        
+        # 🔍 LOG : Afficher les courses trouvées
+        app_logger.info(f"📱 [Driver Bookings] Found {len(bookings)} bookings for driver {driver_name} (ID: {driver.id})")
+        for b in bookings:
+            app_logger.info(f"   - Booking #{b.id}: driver_id={b.driver_id}, client={b.customer_name}, time={b.scheduled_time}")
+        
         return [b.serialize for b in bookings], 200
+
+@driver_ns.route('/me/bookings/eta')
+class DriverBookingsETA(Resource):
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def get(self):
+        """Calcule l'ETA dynamique pour toutes les missions du chauffeur basé sur sa position GPS actuelle"""
+        driver, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code
+        driver = cast(Driver, driver)
+
+        from datetime import date, timedelta
+        from shared.time_utils import day_local_bounds, now_local
+        from services.unified_dispatch.data import calculate_eta as calc_eta
+        
+        # Récupérer les courses d'aujourd'hui (non terminées)
+        today_start, today_end = day_local_bounds(date.today().strftime("%Y-%m-%d"))
+
+        status_pred: ColumnElement[bool] = or_(
+            tcast(ColumnElement[bool], Booking.status == BookingStatus.ASSIGNED),
+            tcast(ColumnElement[bool], Booking.status == BookingStatus.EN_ROUTE),
+            tcast(ColumnElement[bool], Booking.status == BookingStatus.IN_PROGRESS),
+        )
+
+        bookings = (
+            Booking.query
+            .filter(tcast(ColumnElement[bool], Booking.driver_id == driver.id))
+            .filter(tcast(ColumnElement[bool], Booking.scheduled_time >= today_start))
+            .filter(tcast(ColumnElement[bool], Booking.scheduled_time < today_end))
+            .filter(status_pred)
+            .order_by(Booking.scheduled_time.asc())
+            .all()
+        )
+
+        # Position actuelle du chauffeur
+        driver_lat = getattr(driver, 'latitude', None)
+        driver_lon = getattr(driver, 'longitude', None)
+        
+        if not driver_lat or not driver_lon:
+            # Pas de position GPS, retourner les durées statiques
+            return {
+                'has_gps': False,
+                'bookings': [
+                    {
+                        'id': b.id,
+                        'duration_seconds': b.duration_seconds,
+                        'distance_meters': b.distance_meters
+                    } for b in bookings
+                ]
+            }, 200
+
+        driver_pos = (float(driver_lat), float(driver_lon))
+        current_time = now_local()
+        
+        results = []
+        for booking in bookings:
+            pickup_lat = getattr(booking, 'pickup_lat', None)
+            pickup_lon = getattr(booking, 'pickup_lon', None)
+            dropoff_lat = getattr(booking, 'dropoff_lat', None)
+            dropoff_lon = getattr(booking, 'dropoff_lon', None)
+            
+            eta_to_pickup = None
+            total_duration = booking.duration_seconds
+            
+            # Si on a les coordonnées, calculer l'ETA dynamique
+            if pickup_lat and pickup_lon:
+                try:
+                    pickup_pos = (float(pickup_lat), float(pickup_lon))
+                    eta_seconds = calc_eta(driver_pos, pickup_pos)
+                    eta_to_pickup = eta_seconds
+                    
+                    # Si on a aussi les coordonnées de destination, recalculer la durée totale
+                    if dropoff_lat and dropoff_lon and booking.status != BookingStatus.IN_PROGRESS:
+                        dropoff_pos = (float(dropoff_lat), float(dropoff_lon))
+                        pickup_to_dropoff = calc_eta(pickup_pos, dropoff_pos)
+                        total_duration = pickup_to_dropoff
+                except Exception as e:
+                    app_logger.warning(f"ETA calculation failed for booking {booking.id}: {e}")
+            
+            results.append({
+                'id': booking.id,
+                'eta_to_pickup_seconds': eta_to_pickup,
+                'duration_seconds': total_duration,
+                'distance_meters': booking.distance_meters,
+                'estimated_arrival': (current_time + timedelta(seconds=eta_to_pickup)).isoformat() if eta_to_pickup else None
+            })
+
+        return {
+            'has_gps': True,
+            'driver_position': {'lat': driver_lat, 'lon': driver_lon},
+            'bookings': results
+        }, 200
 
 @driver_ns.route('/me/location')
 class DriverLocation(Resource):
@@ -374,6 +525,13 @@ class BookingDetails(Resource):
                 "scheduled_time": booking.scheduled_time.isoformat() if booking.scheduled_time else None,
                 "amount": booking.amount,
                 "status": booking.status.value if hasattr(booking.status, "value") else str(booking.status),
+                # 🏥 Informations médicales
+                "medical_facility": booking.medical_facility,
+                "doctor_name": booking.doctor_name,
+                "hospital_service": booking.hospital_service,
+                "notes_medical": booking.notes_medical,
+                "wheelchair_client_has": booking.wheelchair_client_has,
+                "wheelchair_need": booking.wheelchair_need,
             }, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
@@ -582,8 +740,7 @@ class DriverAllBookings(Resource):
         driver = cast(Driver, driver)
 
         bookings = Booking.query.filter_by(driver_id=driver.id).all()
-        if not bookings:
-            return {"message": "No bookings assigned"}, 404
+        # ✅ Retourner une liste vide au lieu d'une erreur 404
         return [b.serialize for b in bookings], 200
 
 @driver_ns.route('/me/bookings/<int:booking_id>/report')

@@ -27,7 +27,7 @@ export const fetchBookings = async (publicId) => {
   }
 };
 
-export const exportBookingsPDF = async (month, bookings, client) => {
+export const exportBookingsPDF = async (month, bookings, client, company) => {
   try {
     console.log("📂 Génération PDF en cours sur le frontend...");
 
@@ -37,15 +37,19 @@ export const exportBookingsPDF = async (month, bookings, client) => {
       return;
     }
 
-    // ✅ Générer et fusionner le PDF (facture + QR Bill)
+    // ✅ Générer et fusionner le PDF (facture + QR Bill) avec les vraies données
     await mergeInvoiceAndQRBill({
       totalPrice: bookings.reduce((sum, b) => sum + b.amount, 0),
+      company: company || {}, // Passer les données de l'entreprise
       client: {
         firstName: client.first_name,
         lastName: client.last_name,
-        address: client.address || "Adresse inconnue",
-        zipCode: client.zip_code || "0000",
-        city: client.city || "Ville inconnue",
+        address:
+          client.address ||
+          client.domicile?.address ||
+          "Adresse non renseignée",
+        zipCode: client.zip_code || client.domicile?.zip || "",
+        city: client.city || client.domicile?.city || "",
       },
       bookings,
     });

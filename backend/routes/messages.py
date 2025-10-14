@@ -79,26 +79,33 @@ class MessagesList(Resource):
         company = Company.query.get(company_id)
         company_name = company.name if company and getattr(company, "name", None) else "Entreprise"
 
-        # 🔧 Sérialisation
+        # 🔧 Sérialisation (s'aligne sur Message.serialize pour cohérence API)
         results: list[dict[str, Any]] = []
         for m in messages:
-            sender_name = company_name if m.sender_role == "company" else (
-                m.sender.first_name if getattr(m, "sender", None) and getattr(m.sender, "first_name", None) else "Inconnu"
-            )
-            receiver_name = (
-                m.receiver.first_name
-                if getattr(m, "receiver", None) and getattr(m.receiver, "first_name", None)
-                else None
-            )
-            results.append({
-                "id": m.id,
-                "company_id": m.company_id,
-                "sender_role": m.sender_role,
-                "sender_name": sender_name,
-                "receiver_name": receiver_name,
-                "content": m.content,
-                "timestamp": m.timestamp.isoformat() if getattr(m, "timestamp", None) else None,
-            })
+            try:
+                base = m.serialize if hasattr(m, "serialize") else {}
+            except Exception:
+                base = {}
+            if not base:
+                # Fallback minimal si serialize indisponible
+                base = {
+                    "id": m.id,
+                    "company_id": m.company_id,
+                    "sender_id": getattr(m, "sender_id", None),
+                    "receiver_id": getattr(m, "receiver_id", None),
+                    "sender_role": getattr(m, "sender_role", None),
+                    "content": getattr(m, "content", None),
+                    "timestamp": m.timestamp.isoformat() if getattr(m, "timestamp", None) else None,
+                }
+                # enrichir noms
+                base["sender_name"] = (
+                    company_name if getattr(m, "sender_role", None) in ("COMPANY", "company") else (
+                        getattr(getattr(m, "sender", None), "first_name", None)
+                    )
+                )
+                base["receiver_name"] = getattr(getattr(m, "receiver", None), "first_name", None)
+
+            results.append(base)
 
         app_logger.info(f"📨 {len(results)} messages (limit={limit}, before={before}) pour company_id={company_id}")
         return results, 200

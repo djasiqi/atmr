@@ -4,6 +4,7 @@ import os
 import json
 import logging
 from enum import Enum
+import re
 from pathlib import Path
 from typing import Literal, cast
 
@@ -252,6 +253,45 @@ def create_app(config_name: str | None = None):
 
         init_namespaces(app)
 
+        # Réponse générique aux préflights CORS (toutes routes)
+        @app.before_request
+        def _cors_preflights_any():
+            if request.method == "OPTIONS":
+                return make_response("", 204)
+
+        # Shim: réécrit /v<number>/* -> /api/* (supprime la version explicite)
+        @app.before_request
+        def _strip_top_version_prefix():
+            # Exemple: /v1/companies/me -> /api/companies/me
+            p = request.path or ""
+            if re.match(r"^/v\d+(?:/.*)?$", p):
+                environ = request.environ
+                new_path = re.sub(r"^/v\d+", "/api", p)
+                environ["ORIGINAL_PATH_INFO_VERSION"] = p
+                environ["PATH_INFO"] = new_path
+                current_app.logger.info(
+                    "Version shim internal reroute %s %s -> %s", request.method, p, new_path
+                )
+                return None
+            return None
+
+        # Shim générique pour /api[/vX]/auth/login si RESTX rate
+        @app.before_request
+        def _auth_login_shim_any_version():
+            p = request.path or ""
+            if request.method in ("POST", "OPTIONS"):
+                # Correspond à /api/auth/login ou /api/v<number>/auth/login
+                if re.fullmatch(r"/api(?:/v\d+)?/auth/login", p):
+                    if request.method == "OPTIONS":
+                        return make_response("", 204)
+                    try:
+                        from routes.auth import Login
+                        return Login().post()
+                    except Exception:
+                        # Laisse la suite normale (404 si absent)
+                        return None
+            return None
+
         # Compat: routes legacy sans /api
         LEGACY_PREFIXES = (
             "auth",
@@ -309,6 +349,81 @@ def create_app(config_name: str | None = None):
         @app.route("/")
         def index():
             return jsonify({"message": "Welcome to the Transport API"}), 200
+
+        # Compat: accès direct à l'autocomplete (certains environnements/proxy peuvent rater la déclaration RESTX)
+        @app.route("/api/geocode/autocomplete", methods=["GET", "OPTIONS"])
+        def _compat_geocode_autocomplete():  # pyright: ignore[reportUnusedFunction]
+            if request.method == "OPTIONS":
+                return make_response("", 204)
+            try:
+                from routes.geocode import GeocodeAutocomplete
+                res = GeocodeAutocomplete()
+                return res.get()
+            except Exception:
+                # Laisse la 404 standard si la ressource n'est pas dispo
+                raise NotFound()
+
+        # Compat: accès direct au login (certains environnements/proxy peuvent rater la déclaration RESTX)
+        @app.route("/api/auth/login", methods=["POST", "OPTIONS"])
+        def _compat_auth_login():  # pyright: ignore[reportUnusedFunction]
+            if request.method == "OPTIONS":
+                return make_response("", 204)
+            # Laisse passer les réponses normales (200/4xx)
+            from routes.auth import Login
+            return Login().post()
+
+        @app.route("/auth/login", methods=["POST", "OPTIONS"])
+        def _compat_auth_login_root():  # pyright: ignore[reportUnusedFunction]
+            if request.method == "OPTIONS":
+                return make_response("", 204)
+            from routes.auth import Login
+            return Login().post()
+
+        @app.route("/api/v<int:version>/auth/login", methods=["POST", "OPTIONS"])
+        def _compat_auth_login_v(version: int):  # pyright: ignore[reportUnusedFunction]
+            if request.method == "OPTIONS":
+                return make_response("", 204)
+            from routes.auth import Login
+            return Login().post()
+
+        # --- Compat: endpoints companies les plus utilisés (évite 404 si RESTX rate) ---
+        @app.route("/api/companies/me", methods=["GET", "PUT", "OPTIONS"])
+        def _compat_companies_me():  # pyright: ignore[reportUnusedFunction]
+            if request.method == "OPTIONS":
+                return make_response("", 204)
+            from routes.companies import CompanyMe
+            res = CompanyMe()
+            if request.method == "GET":
+                return res.get()
+            if request.method == "PUT":
+                return res.put()
+            raise NotFound()
+
+        @app.route("/api/v<int:version>/companies/me", methods=["GET", "PUT", "OPTIONS"])
+        def _compat_companies_me_v(version: int):  # pyright: ignore[reportUnusedFunction]
+            if request.method == "OPTIONS":
+                return make_response("", 204)
+            from routes.companies import CompanyMe
+            res = CompanyMe()
+            if request.method == "GET":
+                return res.get()
+            if request.method == "PUT":
+                return res.put()
+            raise NotFound()
+
+        @app.route("/api/companies/me/drivers", methods=["GET", "OPTIONS"])
+        def _compat_companies_me_drivers():  # pyright: ignore[reportUnusedFunction]
+            if request.method == "OPTIONS":
+                return make_response("", 204)
+            from routes.companies import CompanyDriversList
+            return CompanyDriversList().get()
+
+        @app.route("/api/v<int:version>/companies/me/drivers", methods=["GET", "OPTIONS"])
+        def _compat_companies_me_drivers_v(version: int):  # pyright: ignore[reportUnusedFunction]
+            if request.method == "OPTIONS":
+                return make_response("", 204)
+            from routes.companies import CompanyDriversList
+            return CompanyDriversList().get()
 
         @app.route("/health")
         def health():

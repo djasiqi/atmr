@@ -15,8 +15,8 @@ from typing import Any, Optional, cast, Type, TypeVar, Dict, List
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import (
     Column, Integer, String, Float, UniqueConstraint, Enum as SAEnum, ForeignKey,
-    DateTime, Date, Boolean, func, Text, Index, CheckConstraint, event,
-    text
+    DateTime, Date, Time, Boolean, func, Text, Index, CheckConstraint, event,
+    text, Numeric, JSON
 )
 
 from sqlalchemy.ext.mutable import MutableDict
@@ -56,7 +56,7 @@ def _as_int(v: Any, default: int = 0) -> int:
         return default
 
 def _as_bool(v: Any) -> bool:
-    # ⚠️ n’essaie pas de faire "if Column[bool]" → force un bool Python
+    # ⚠️ n'essaie pas de faire "if Column[bool]" → force un bool Python
     return bool(v) if isinstance(v, (bool, int)) else False
 
 def _iso(v: Any) -> Optional[str]:
@@ -165,9 +165,28 @@ class ClientType(str, PyEnum):
     CORPORATE    = "CORPORATE"
 
 class InvoiceStatus(str, PyEnum):
-    UNPAID   = "UNPAID"
-    PAID     = "PAID"
-    CANCELED = "CANCELED"
+    DRAFT = "draft"
+    SENT = "sent"
+    PARTIALLY_PAID = "partially_paid"
+    PAID = "paid"
+    OVERDUE = "overdue"
+    CANCELLED = "cancelled"
+    @classmethod
+    def choices(cls): return [e.value for e in cls]
+
+class InvoiceLineType(str, PyEnum):
+    RIDE = "ride"
+    LATE_FEE = "late_fee"
+    REMINDER_FEE = "reminder_fee"
+    CUSTOM = "custom"
+    @classmethod
+    def choices(cls): return [e.value for e in cls]
+
+class PaymentMethod(str, PyEnum):
+    BANK_TRANSFER = "bank_transfer"
+    CASH = "cash"
+    CARD = "card"
+    ADJUSTMENT = "adjustment"
     @classmethod
     def choices(cls): return [e.value for e in cls]
 
@@ -268,7 +287,6 @@ class User(db.Model):
     clients = relationship('Client', back_populates='user', cascade="all, delete-orphan")
     driver = relationship('Driver', back_populates='user', uselist=False, cascade="all, delete-orphan", passive_deletes=True)
     company = relationship('Company', back_populates='user', uselist=False, cascade="all, delete-orphan", passive_deletes=True)
-    invoices = relationship("Invoice", back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
 
     # 🔒 Gestion des mots de passe
     def set_password(self, password, force_change=False):
@@ -289,9 +307,15 @@ class User(db.Model):
     # Validation du téléphone
     @validates('phone')
     def validate_phone(self, key, phone):
-        if phone is None or phone.strip() == "":
+        # Accepter None ou chaîne vide
+        if phone is None:
+            return None
+        if not isinstance(phone, str):
             return None
         phone = phone.strip()
+        if phone == "":
+            return None
+        # Validation du format si non vide
         if not re.match(r"^\+?\d{7,15}$", phone):
             raise ValueError("Numéro de téléphone invalide. Doit contenir 7 à 15 chiffres avec option '+'.")
         return phone
@@ -339,7 +363,7 @@ class User(db.Model):
     
     @validates('role')
     def validate_role(self, key, role_value):
-        """Coerce str → UserRole, évite d’évaluer un Column en bool."""
+        """Coerce str → UserRole, évite d'évaluer un Column en bool."""
         coerced = _coerce_enum(role_value, UserRole)
         if coerced is None:
             raise ValueError("Invalid role value. Allowed values: admin, client, driver, company.")
@@ -438,6 +462,8 @@ class Company(db.Model):
     billed_clients = relationship("Client", back_populates="default_billed_to_company", foreign_keys="Client.default_billed_to_company_id", primaryjoin="Company.id == Client.default_billed_to_company_id",)
     drivers = relationship("Driver", back_populates="company", passive_deletes=True)
     dispatch_runs: Mapped[List["DispatchRun"]] = relationship( "DispatchRun", back_populates="company", cascade="all, delete-orphan", passive_deletes=True,)
+    dispatch_metrics: Mapped[List["DispatchMetrics"]] = relationship("DispatchMetrics", back_populates="company", cascade="all, delete-orphan", passive_deletes=True)
+    daily_stats: Mapped[List["DailyStats"]] = relationship("DailyStats", back_populates="company", cascade="all, delete-orphan", passive_deletes=True)
 
     bookings = relationship(
         "Booking",
@@ -477,6 +503,7 @@ class Company(db.Model):
             "uid_ide": self.uid_ide,
             "billing_email": self.billing_email,
             "billing_notes": self.billing_notes,
+            "logo_url": self.logo_url,
             "is_approved": _as_bool(self.is_approved),
             "is_partner": _as_bool(self.is_partner),
             "user_id": self.user_id,
@@ -485,7 +512,6 @@ class Company(db.Model):
             "created_at": created_dt.isoformat() if created_dt else None,
             "dispatch_enabled": _as_bool(self.dispatch_enabled),
             "accepted_at": accepted_dt.isoformat() if accepted_dt else None,
-            "logo_url": self.logo_url,
             "vehicles": [v.serialize for v in self.vehicles],
         }
 
@@ -703,121 +729,269 @@ class Driver(db.Model):
     driver_photo = Column(Text, nullable=True)
     push_token = Column(String(255), nullable=True, index=True)
 
-    # Relations
+    # --- HR / Contrats & Qualifications ---
+    contract_type = Column(String(20), nullable=False, server_default="CDI")  # CDI | CDD | HOURLY
+    weekly_hours = Column(Integer, nullable=True)
+    hourly_rate_cents = Column(Integer, nullable=True)
+    employment_start_date = Column(Date, nullable=True)
+    employment_end_date = Column(Date, nullable=True)
+    license_categories = Column(JSON, nullable=False, server_default=text("'[]'"))  # ex: ["B", "C1", "D1"]
+    license_valid_until = Column(Date, nullable=True)
+    trainings = Column(JSON, nullable=False, server_default=text("'[]'"))  # ex: [{name, valid_until}]
+    medical_valid_until = Column(Date, nullable=True)
+
+    # Relations back_populates attendues par User.company/User.driver et Company.drivers
     user = relationship("User", back_populates="driver", passive_deletes=True)
     company = relationship("Company", back_populates="drivers", passive_deletes=True)
+    vacations = relationship("DriverVacation", back_populates="driver", cascade="all, delete-orphan", passive_deletes=True)
     bookings = relationship("Booking", back_populates="driver", passive_deletes=True)
-    working_config = relationship("DriverWorkingConfig", backref="driver", uselist=False)
-    vacations = relationship("DriverVacation", back_populates="driver", cascade="all, delete-orphan", passive_deletes=True,)
 
-
-    # ------------ Validations ------------
-    @validates("user_id")
-    def _v_user_id(self, _key: str, user_id: int) -> int:
-        if user_id is None or int(user_id) <= 0:
-            raise ValueError("L'ID utilisateur est invalide.")
-
-        user = db.session.get(User, int(user_id))
-        if not user:
-            raise ValueError("Utilisateur non trouvé.")
-
-        # ⚠️ Ne JAMAIS faire "if user.role == ..." directement.
-        role_value = _coerce_enum(getattr(user, "role", None), UserRole)
-        if role_value is None or role_value is not UserRole.DRIVER:
-            raise ValueError("L'utilisateur associé n'a pas le rôle 'driver'.")
-
-        return int(user_id)
-
-    @validates("company_id")
-    def _v_company_id(self, _key: str, company_id: int) -> int:
-        if company_id is None or int(company_id) <= 0:
-            raise ValueError("L'ID de l'entreprise est invalide.")
-        company = db.session.get(Company, int(company_id))
-        if not company:
-            raise ValueError("Entreprise non trouvée.")
-        return int(company_id)
-
-    @validates("vehicle_assigned", "brand", "license_plate")
-    def _v_vehicle_info(self, key: str, value: str | None) -> str | None:
-        if value is not None and not str(value).strip():
-            raise ValueError(f"Le champ {key} ne peut pas être vide.")
-        return value
-
-    @validates("latitude", "longitude")
-    def _v_gps(self, key: str, value: float | None) -> float | None:
-        if value is None:
-            return None
-        v = float(value)
-        if key == "latitude" and not (-90 <= v <= 90):
-            raise ValueError("Latitude hors limites [-90; 90].")
-        if key == "longitude" and not (-180 <= v <= 180):
-            raise ValueError("Longitude hors limites [-180; 180].")
-        return v
-
-    # ------------ Utilitaires ------------
+    # -------- Sérialisation --------
     @property
-    def serialize(self) -> dict:
-        dt = getattr(self, "driver_type", None)
+    def serialize(self):
+        user = getattr(self, "user", None)
+        # Normalise les champs utilisateur si disponible
+        user_payload = None
+        username = None
+        first_name = None
+        last_name = None
+        email = None
+        full_name = None
+        if user is not None:
+            try:
+                user_payload = user.serialize
+            except Exception:
+                user_payload = {
+                    "id": getattr(user, "id", None),
+                    "public_id": getattr(user, "public_id", None),
+                    "username": getattr(user, "username", None),
+                    "email": getattr(user, "email", None),
+                    "first_name": getattr(user, "first_name", None),
+                    "last_name": getattr(user, "last_name", None),
+                }
+            username = getattr(user, "username", None)
+            first_name = getattr(user, "first_name", None)
+            last_name = getattr(user, "last_name", None)
+            email = getattr(user, "email", None)
+            fn = (first_name or "").strip()
+            ln = (last_name or "").strip()
+            full_name = (f"{fn} {ln}".strip()) or username
+
         return {
             "id": self.id,
             "user_id": self.user_id,
-            # évite d'évaluer self.user en bool; utilise getattr
-            "username": getattr(self.user, "username", "Non spécifié"),
-            "first_name": getattr(self.user, "first_name", "Non spécifié"),
-            "last_name": getattr(self.user, "last_name", "Non spécifié"),
-            "phone": getattr(self.user, "phone", "Non spécifié"),
-            "photo": self.driver_photo or getattr(self.user, "profile_image", "/images/default-driver.png"),
             "company_id": self.company_id,
-            "company_name": getattr(self.company, "name", "Non spécifié"),
-            "is_active": _as_bool(self.is_active),
-            "is_available": _as_bool(self.is_available),
-            # ⬇️ pas de truthiness sur un champ mappé
-            "driver_type": (dt.value if isinstance(dt, DriverType) else (str(dt) if dt is not None else None)),
-            "vehicle_assigned": self.vehicle_assigned or "Non spécifié",
-            "brand": self.brand or "Non spécifié",
-            "license_plate": self.license_plate or "Non spécifié",
-            "latitude": self.latitude,
-            "longitude": self.longitude,
+            "user": user_payload,
+            # Alias plats attendus par le front
+            "username": username,
+            "first_name": first_name,
+            "last_name": last_name,
+            "full_name": full_name,
+            "email": email,
+            "is_active": _as_bool(getattr(self, "is_active", False)),
+            "is_available": _as_bool(getattr(self, "is_available", False)),
+            "driver_type": getattr(getattr(self, "driver_type", None), "value", getattr(self, "driver_type", None)),
+            "vehicle_assigned": getattr(self, "vehicle_assigned", None),
+            "brand": getattr(self, "brand", None),
+            # Informations optionnelles de localisation
+            "latitude": getattr(self, "latitude", None),
+            "longitude": getattr(self, "longitude", None),
+            "last_position_update": (
+                getattr(self, "last_position_update", None).isoformat()
+                if getattr(self, "last_position_update", None) else None
+            ),
+            # Média / notifications
+            "driver_photo": getattr(self, "driver_photo", None),
+            # alias utilisé côté front
+            "photo": getattr(self, "driver_photo", None),
+            "push_token": getattr(self, "push_token", None),
+            # HR
+            "contract_type": getattr(self, "contract_type", None),
+            "weekly_hours": getattr(self, "weekly_hours", None),
+            "hourly_rate_cents": getattr(self, "hourly_rate_cents", None),
+            "employment_start_date": getattr(self, "employment_start_date", None).isoformat() if getattr(self, "employment_start_date", None) else None,
+            "employment_end_date": getattr(self, "employment_end_date", None).isoformat() if getattr(self, "employment_end_date", None) else None,
+            "license_categories": getattr(self, "license_categories", []),
+            "license_valid_until": getattr(self, "license_valid_until", None).isoformat() if getattr(self, "license_valid_until", None) else None,
+            "trainings": getattr(self, "trainings", []),
+            "medical_valid_until": getattr(self, "medical_valid_until", None).isoformat() if getattr(self, "medical_valid_until", None) else None,
         }
-
-    @property
-    def serialize_position(self):
-        return {
-            "id": self.id,
-            "latitude": self.latitude,
-            "longitude": self.longitude,
-            "is_available": _as_bool(self.is_available),
-        }
-
-    def toggle_availability(self) -> bool:
-        current = _as_bool(getattr(self, "is_available", False))
-        self.is_available = not current
-        return not current
-
-    def update_location(self, latitude: float, longitude: float):
-        if latitude is None or longitude is None:
-            raise ValueError("Les coordonnées GPS ne peuvent pas être nulles.")
-        self.latitude = self._v_gps("latitude", latitude)
-        self.longitude = self._v_gps("longitude", longitude)
-        self.last_position_update = datetime.now(timezone.utc)
-
-    def deactivate(self):
-        self.is_active = False
-        self.is_available = False
-        db.session.commit()
-
-    def activate(self):
-        self.is_active = True
-        self.is_available = True
-        db.session.commit()
-
-    def __repr__(self):
-        uname = self.user.username if self.user else "N/A"
-        cname = self.company.name if self.company else "N/A"
-        return f"<Driver id={self.id} user={uname} company={cname}>"
 
     def to_dict(self):
         return self.serialize
+
+
+# ------------------------------------------------------------
+# Planning - Modèles (squelette)
+# ------------------------------------------------------------
+
+class ShiftType(str, PyEnum):
+    REGULAR = "regular"
+    STANDBY = "standby"
+    REPLACEMENT = "replacement"
+    TRAINING = "training"
+    MAINTENANCE = "maintenance"
+
+
+class ShiftStatus(str, PyEnum):
+    PLANNED = "planned"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class UnavailabilityReason(str, PyEnum):
+    VACATION = "vacation"
+    SICK = "sick"
+    BREAK = "break"
+    PERSONAL = "personal"
+    OTHER = "other"
+
+
+class BreakType(str, PyEnum):
+    MANDATORY = "mandatory"
+    OPTIONAL = "optional"
+
+
+class DriverShift(db.Model):
+    __tablename__ = "driver_shift"
+    __table_args__ = (
+        Index("ix_shift_company_driver_start", "company_id", "driver_id", "start_local"),
+        CheckConstraint("end_local > start_local", name="ck_shift_time_order"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
+    driver_id = Column(Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Horaires stockés en naïf local (Europe/Zurich)
+    start_local = Column(DateTime(timezone=False), nullable=False, index=True)
+    end_local = Column(DateTime(timezone=False), nullable=False, index=True)
+
+    timezone = Column(String(64), nullable=False, server_default="Europe/Zurich")
+    type = Column(
+        SAEnum(ShiftType, name="shift_type", values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        server_default=ShiftType.REGULAR.value,
+    )
+    status = Column(
+        SAEnum(ShiftStatus, name="shift_status", values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        server_default=ShiftStatus.PLANNED.value,
+    )
+
+    # Localisation/affectation
+    site = Column(String(120), nullable=True)
+    zone = Column(String(120), nullable=True)
+    client_ref = Column(String(120), nullable=True)
+
+    pay_code = Column(String(50), nullable=True)
+    vehicle_id = Column(Integer, ForeignKey("vehicle.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    notes_internal = Column(Text, nullable=True)
+    notes_employee = Column(Text, nullable=True)
+
+    # Audit et versioning basique
+    created_by_user_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    updated_by_user_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    version = Column(Integer, nullable=False, server_default="1")
+
+    # Conformité et extensions
+    compliance_flags = Column(JSON, nullable=False, server_default=text("'[]'"))
+
+    # Relations
+    company = relationship("Company")
+    driver = relationship("Driver")
+    vehicle = relationship("Vehicle", foreign_keys=[vehicle_id])
+
+
+class DriverUnavailability(db.Model):
+    __tablename__ = "driver_unavailability"
+    __table_args__ = (
+        Index("ix_unav_company_driver_start", "company_id", "driver_id", "start_local"),
+        CheckConstraint("end_local > start_local", name="ck_unav_time_order"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
+    driver_id = Column(Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    start_local = Column(DateTime(timezone=False), nullable=False, index=True)
+    end_local = Column(DateTime(timezone=False), nullable=False, index=True)
+
+    reason = Column(SAEnum(UnavailabilityReason, name="unavailability_reason", values_callable=lambda x: [e.value for e in x]), nullable=False, server_default=UnavailabilityReason.OTHER.value)
+    note = Column(Text, nullable=True)
+
+    company = relationship("Company")
+    driver = relationship("Driver")
+
+
+class DriverWeeklyTemplate(db.Model):
+    __tablename__ = "driver_weekly_template"
+    __table_args__ = (
+        Index("ix_tpl_company_driver_weekday", "company_id", "driver_id", "weekday"),
+        CheckConstraint("weekday >= 0 AND weekday <= 6", name="ck_tpl_weekday_range"),
+        CheckConstraint("end_time > start_time", name="ck_tpl_time_order"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
+    driver_id = Column(Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    weekday = Column(Integer, nullable=False)
+    start_time = Column(Time, nullable=False)
+    end_time = Column(Time, nullable=False)
+
+    effective_from = Column(Date, nullable=False)
+    effective_to = Column(Date, nullable=True)
+
+    company = relationship("Company")
+    driver = relationship("Driver")
+
+
+class DriverBreak(db.Model):
+    __tablename__ = "driver_break"
+    __table_args__ = (
+        CheckConstraint("end_local > start_local", name="ck_break_time_order"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    shift_id = Column(Integer, ForeignKey("driver_shift.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    start_local = Column(DateTime(timezone=False), nullable=False, index=True)
+    end_local = Column(DateTime(timezone=False), nullable=False, index=True)
+    type = Column(SAEnum(BreakType, name="break_type", values_callable=lambda x: [e.value for e in x]), nullable=False, server_default=BreakType.MANDATORY.value)
+
+    shift = relationship("DriverShift", backref="breaks")
+
+
+class DriverPreference(db.Model):
+    __tablename__ = "driver_preference"
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
+    driver_id = Column(Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    mornings_pref = Column(Boolean, nullable=False, server_default="false")
+    evenings_pref = Column(Boolean, nullable=False, server_default="false")
+    forbidden_windows = Column(JSON, nullable=False, server_default=text("'[]'"))
+    weekend_rotation_weight = Column(Integer, nullable=False, server_default="0")
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    company = relationship("Company")
+    driver = relationship("Driver")
+
+
+class CompanyPlanningSettings(db.Model):
+    __tablename__ = "company_planning_settings"
+    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), primary_key=True)
+    settings = Column(JSON, nullable=False, server_default=text("'{}'"))
+
+    company = relationship("Company")
+
 
 class DriverWorkingConfig(db.Model):
     """
@@ -912,7 +1086,7 @@ class DriverWorkingConfig(db.Model):
         if _as_int(self.break_duration) > _as_int(self.total_working_minutes):
             raise ValueError("La pause ne peut pas excéder le temps de travail total")
 
-    # Hook ORM pour garantir la cohérence même sans passer par l’API
+    # Hook ORM pour garantir la cohérence même sans passer par l'API
     @staticmethod
     def _enforce_config(_mapper, _connection, target: "DriverWorkingConfig") -> None:
         target.validate_config()
@@ -1028,6 +1202,8 @@ class Client(db.Model):
 
     # Coordonnées de facturation/contacts "côté entreprise"
     billing_address = Column(String(255), nullable=True)
+    billing_lat = Column(Numeric(10, 7), nullable=True)  # Latitude de facturation
+    billing_lon = Column(Numeric(10, 7), nullable=True)  # Longitude de facturation
     contact_email = Column(String(100), nullable=True)
     contact_phone = Column(String(50), nullable=True)
 
@@ -1035,6 +1211,8 @@ class Client(db.Model):
     domicile_address = Column(String(255), nullable=True)
     domicile_zip = Column(String(10), nullable=True)
     domicile_city = Column(String(100), nullable=True)
+    domicile_lat = Column(Numeric(10, 7), nullable=True)  # Latitude du domicile
+    domicile_lon = Column(Numeric(10, 7), nullable=True)  # Longitude du domicile
 
     # --- NOUVEAU: Accès logement
     door_code = Column(String(50), nullable=True)     # ex: B1234#
@@ -1049,6 +1227,13 @@ class Client(db.Model):
     default_billed_to_type = Column(String(50), nullable=False, server_default="patient")  # "patient"|"clinic"|"insurance"
     default_billed_to_company_id = Column(Integer, ForeignKey("company.id", ondelete="SET NULL"), nullable=True)
     default_billed_to_contact = Column(String(120), nullable=True)
+
+    # --- NOUVEAU: Support pour les institutions (cliniques, hôpitaux)
+    is_institution = Column(Boolean, nullable=False, server_default="false")  # Indique si c'est une clinique/institution
+    institution_name = Column(String(200), nullable=True)  # Nom de l'institution si is_institution=True
+
+    # --- NOUVEAU: Tarif préférentiel
+    preferential_rate = Column(Numeric(10, 2), nullable=True)  # Tarif préférentiel en CHF (ex: 45, 50, 55, 60, 70, 80, 110)
 
     is_active = Column(Boolean, nullable=False, server_default="true")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -1121,12 +1306,16 @@ class Client(db.Model):
             "client_type": self.client_type.value,
             "company_id": self.company_id,
             "billing_address": self.billing_address,
+            "billing_lat": float(self.billing_lat) if self.billing_lat else None,
+            "billing_lon": float(self.billing_lon) if self.billing_lon else None,
             "contact_email": self.contact_email,
             "phone": self.contact_phone or phone_user,
             "domicile": {
                 "address": self.domicile_address,
                 "zip": self.domicile_zip,
                 "city": self.domicile_city,
+                "lat": float(self.domicile_lat) if self.domicile_lat else None,
+                "lon": float(self.domicile_lon) if self.domicile_lon else None,
             },
             "access": {
                 "door_code": self.door_code,
@@ -1143,6 +1332,9 @@ class Client(db.Model):
                                       if self.default_billed_to_company else None),
                 "billed_to_contact": self.default_billed_to_contact,
             },
+            "is_institution": _as_bool(self.is_institution),
+            "institution_name": self.institution_name,
+            "preferential_rate": float(self.preferential_rate) if self.preferential_rate else None,
             "is_active": _as_bool(self.is_active),
             "created_at": _iso(self.created_at),
         }
@@ -1195,7 +1387,7 @@ class Booking(db.Model):
 
     user_id = Column(Integer, ForeignKey('user.id', ondelete="CASCADE"), nullable=False)
 
-    # JSONB: default Python (callable) + default DB pour les insert “brut”
+    # JSONB: default Python (callable) + default DB pour les insert "brut"
     rejected_by = Column(JSONB, nullable=False, default=list,
                          server_default=text("'[]'::jsonb"))
 
@@ -1219,6 +1411,11 @@ class Booking(db.Model):
     hospital_service = Column(String(100))
     notes_medical    = Column(Text)
     is_urgent        = Column(Boolean, nullable=False, server_default=text('false'))
+    time_confirmed   = Column(Boolean, nullable=False, server_default=text('true'))  # Pour les retours : true si heure confirmée, false si à confirmer
+    
+    # Champs pour les chaises roulantes
+    wheelchair_client_has = Column(Boolean, nullable=False, server_default=text('false'))
+    wheelchair_need       = Column(Boolean, nullable=False, server_default=text('false'))
 
     pickup_lat  = Column(Float)
     pickup_lon  = Column(Float)
@@ -1233,14 +1430,25 @@ class Booking(db.Model):
     billed_to_company_id = Column(Integer, ForeignKey('company.id', ondelete="SET NULL"), nullable=True)
     billed_to_contact    = Column(String(120))
 
+    # --- NOUVEAU: Lien vers la ligne de facture (pour éviter double facturation)
+    invoice_line_id = Column(Integer, ForeignKey('invoice_lines.id', ondelete='SET NULL'), nullable=True, index=True)
+
     # --- Relations
     client  = relationship('Client',  back_populates='bookings', passive_deletes=True)
     company = relationship('Company', back_populates='bookings', foreign_keys=[company_id], passive_deletes=True)
     driver  = relationship('Driver',  back_populates='bookings', passive_deletes=True)
-    invoice = relationship("Invoice", back_populates="booking", cascade="all, delete-orphan", passive_deletes=True, uselist=False)
     payments = relationship('Payment', back_populates='booking', passive_deletes=True, lazy=True)
 
     billed_to_company = relationship('Company', foreign_keys=[billed_to_company_id])
+    # NOUVEAU: Relation vers la ligne de facture (pour éviter double facturation)
+    # On spécifie primaryjoin pour éviter l'ambiguïté avec reservation_id
+    invoice_line = relationship(
+        'InvoiceLine',
+        foreign_keys=[invoice_line_id],
+        primaryjoin="Booking.invoice_line_id == InvoiceLine.id",
+        uselist=False,
+        backref='billed_booking'
+    )
 
     # Aller-retour auto-référent
     return_trip = relationship(
@@ -1336,11 +1544,14 @@ class Booking(db.Model):
             "doctor_name": self.doctor_name or "Non spécifié",
             "hospital_service": self.hospital_service or "Non spécifié",
             "notes_medical": self.notes_medical or "Aucune note",
+            "wheelchair_client_has": _as_bool(self.wheelchair_client_has),
+            "wheelchair_need": _as_bool(self.wheelchair_need),
             "created_at": created_loc.strftime("%d/%m/%Y %H:%M") if created_loc else "Non spécifié",
             "updated_at": updated_loc.strftime("%d/%m/%Y %H:%M") if updated_loc else "Non spécifié",
             "rejected_by": self.rejected_by,
             "is_round_trip": _as_bool(self.is_round_trip),
             "is_return": _as_bool(self.is_return),
+            "time_confirmed": _as_bool(self.time_confirmed),
             "has_return": self.return_trip is not None,
             "boarded_at": iso_utc_z(to_utc_from_db(boarded_dt)) if boarded_dt else None,
             "completed_at": iso_utc_z(to_utc_from_db(completed_dt)) if completed_dt else None,
@@ -1371,6 +1582,10 @@ class Booking(db.Model):
 
     @validates('amount')
     def validate_amount(self, _key, amount):
+        # Montant optionnel : None est accepté
+        if amount is None:
+            return None
+        # Si fourni, doit être > 0
         if amount <= 0:
             raise ValueError("Le montant doit être supérieur à 0")
         return round(amount, 2)
@@ -1557,6 +1772,10 @@ class Payment(db.Model):
 
     @validates('amount')
     def validate_amount(self, _key, amount):
+        # Montant optionnel : None est accepté
+        if amount is None:
+            return None
+        # Si fourni, doit être > 0
         if amount <= 0:
             raise ValueError("Le montant doit être supérieur à 0")
         return round(amount, 2)
@@ -1604,153 +1823,165 @@ class Payment(db.Model):
 
 
 class Invoice(db.Model):
-    __tablename__ = "invoice"
-    __table_args__ = (
-        CheckConstraint('amount > 0', name='chk_invoice_amount_positive'),
-        # 👉 Active ceci si **une seule** facture par booking :
-        UniqueConstraint('booking_id', name='uq_invoice_booking_one'),
-        Index('ix_invoice_company_status_due', 'company_id', 'status', 'due_date'),
-        Index('ix_invoice_user_created', 'user_id', 'created_at'),
-    )
-
+    """Modèle principal pour les factures"""
+    __tablename__ = "invoices"
+    
     id = Column(Integer, primary_key=True)
-    reference = Column(String(32), unique=True, nullable=False, index=True,
-                       default=lambda: Invoice.generate_reference())
-    amount = Column(Float, nullable=False)
-
-    user_id = Column(Integer, ForeignKey('user.id', ondelete="CASCADE",  name="fk_invoice_user"),
-                     nullable=False, index=True)
-    booking_id = Column(Integer, ForeignKey('booking.id', ondelete="SET NULL", name="fk_invoice_booking"),
-                        nullable=True, index=True)
-    company_id = Column(Integer, ForeignKey('company.id', ondelete="CASCADE", name="fk_invoice_company"),
-                        nullable=False, index=True)
-
-    details = Column(Text)
-    pdf_url = Column(String(255))
-    due_date = Column(DateTime(timezone=True))
-    paid_at = Column(DateTime(timezone=True))
+    company_id = Column(Integer, ForeignKey("company.id"), nullable=False, index=True)
+    client_id = Column(Integer, ForeignKey("client.id"), nullable=False, index=True)
+    
+    # --- NOUVEAU: Facturation tierce (Third-Party Billing)
+    # bill_to_client_id: L'institution qui paie (clinique). Si NULL, c'est client_id qui paie.
+    bill_to_client_id = Column(Integer, ForeignKey("client.id"), nullable=True, index=True)
+    
+    # Période de facturation
+    period_month = Column(Integer, nullable=False)  # 1-12
+    period_year = Column(Integer, nullable=False)
+    
+    # Numéro de facture unique par entreprise
+    invoice_number = Column(String(50), nullable=False)
+    currency = Column(String(3), default="CHF", nullable=False)
+    
+    # Montants
+    subtotal_amount = Column(Numeric(10, 2), nullable=False, default=0)
+    late_fee_amount = Column(Numeric(10, 2), nullable=False, default=0)
+    reminder_fee_amount = Column(Numeric(10, 2), nullable=False, default=0)
+    total_amount = Column(Numeric(10, 2), nullable=False, default=0)
+    amount_paid = Column(Numeric(10, 2), nullable=False, default=0)
+    balance_due = Column(Numeric(10, 2), nullable=False, default=0)
+    
+    # Dates clés
+    issued_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    due_date = Column(DateTime(timezone=True), nullable=False)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    paid_at = Column(DateTime(timezone=True), nullable=True)
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-
-    status = Column(
-        SAEnum(InvoiceStatus, name="invoice_status"),
-        nullable=False,
-        default=InvoiceStatus.UNPAID,
-        server_default=InvoiceStatus.UNPAID.value,
-    )
-
-
-    # Relations
-    user = relationship("User", back_populates="invoices", passive_deletes=True)
-    # ⚠️ si tu veux du 1↔1 : ajoute uselist=False côté Booking (voir note plus bas)
-    booking = relationship("Booking", back_populates="invoice", passive_deletes=True)
-    # Option: passer aussi en back_populates côté Company pour uniformiser
-    company = relationship("Company", backref="invoices", passive_deletes=True)
-
-    # ---------- Sérialisation ----------
-    @property
-    def serialize(self):
-        st = self.status
-        status_str = getattr(st, "value", None) or (str(st) if st is not None else "unknown")
-        return {
-            "id": self.id,
-            "reference": self.reference,
-            "amount": self.amount,
-            "user_id": self.user_id,
-            "user": self.user.serialize if self.user else None,
-            "booking_id": self.booking_id,
-            "booking": self.booking.serialize if self.booking else None,
-            "company_id": self.company_id,
-            "company": self.company.serialize if self.company else None,
-            "details": self.details,
-            "pdf_url": self.pdf_url,
-            "status": status_str,
-            "status_human": self.status_human,
-            "created_at": _iso(self.created_at),
-            "updated_at": _iso(self.updated_at),
-            "due_date": _iso(self.due_date),
-            "paid_at": _iso(self.paid_at),
-        }
-
-    @property
-    def status_human(self) -> str:
-        status_map = {"unpaid": "Non payée", "paid": "Payée", "canceled": "Annulée"}
-        raw = getattr(self.status, "value", self.status)
-        key = cast(str, raw if isinstance(raw, str) else str(raw))
-        return status_map.get(key, "Inconnu")
-
-    # ---------- Référence ----------
-    @staticmethod
-    def generate_reference():
-        import random
-        import string
-        prefix = "FCT"
-        suffix = ''.join(random.choices(string.digits, k=7))
-        return f"{prefix}-{suffix}"
-
-    # ---------- Validations ----------
-    @validates('user_id')
-    def validate_user_id(self, _key, user_id):
-        if user_id is None or not isinstance(user_id, int) or user_id <= 0:
-            raise ValueError("ID utilisateur invalide")
-        return user_id
-
-    @validates('amount')
-    def validate_amount(self, _key, amount):
-        if amount is None or amount <= 0:
-            raise ValueError("Le montant doit être supérieur à 0")
-        return round(amount, 2)
-
-    @validates('booking_id')
-    def validate_booking_id(self, _key, booking_id):
-        if booking_id is not None and booking_id <= 0:
-            raise ValueError("ID de réservation invalide")
-        return booking_id
-
-    @validates('company_id')
-    def validate_company_id(self, _key, company_id):
-        if not isinstance(company_id, int) or company_id <= 0:
-            raise ValueError("ID de l'entreprise invalide")
-        return company_id
-
-    @validates('reference')
-    def validate_reference(self, _key, ref):
-        if not ref or len(ref) > 32:
-            raise ValueError("Référence de facture invalide")
-        return ref
     
-    @validates('status')
-    def validate_status(self, _key, status):
-        if isinstance(status, str):
-            key = status.upper().strip()
-            if key not in InvoiceStatus.__members__:
-                raise ValueError(f"Statut de facture invalide : {status}. Attendu: {list(InvoiceStatus.__members__.keys())}")
-            status = InvoiceStatus[key]
-        if not isinstance(status, InvoiceStatus):
-            raise ValueError("Statut de facture invalide.")
-        return status
-
-
-    # ---------- Actions ----------
+    # Statut
+    status = Column(SAEnum(InvoiceStatus, name="invoice_status"), nullable=False, default=InvoiceStatus.DRAFT)
+    
+    # Rappels
+    reminder_level = Column(Integer, nullable=False, default=0)  # 0 = aucun, 1, 2, 3
+    last_reminder_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Artifacts
+    pdf_url = Column(String(500), nullable=True)
+    qr_reference = Column(String(50), nullable=True)
+    meta = Column(JSONB, nullable=True)
+    
+    # Relations
+    company = relationship("Company", backref="invoices")
+    # Bénéficiaire du service (patient)
+    client = relationship("Client", foreign_keys=[client_id], backref="service_invoices")
+    # Payeur (institution/clinique) - peut être NULL
+    bill_to_client = relationship("Client", foreign_keys=[bill_to_client_id], backref="billing_invoices")
+    lines = relationship("InvoiceLine", back_populates="invoice", cascade="all, delete-orphan")
+    payments = relationship("InvoicePayment", back_populates="invoice", cascade="all, delete-orphan")
+    reminders = relationship("InvoiceReminder", back_populates="invoice", cascade="all, delete-orphan")
+    
+    # Index et contraintes
+    __table_args__ = (
+        UniqueConstraint("company_id", "invoice_number", name="uq_company_invoice_number"),
+        Index("ix_invoice_company_period", "company_id", "period_year", "period_month"),
+        Index("ix_invoice_status", "company_id", "status"),
+        Index("ix_invoice_due_date", "due_date"),
+        CheckConstraint('total_amount >= 0', name='chk_invoice_amount_positive'),
+    )
+    
+    def __repr__(self):
+        return f"<Invoice {self.invoice_number} - {self.status.value}>"
+    
+    @property
+    def is_overdue(self):
+        """Vérifie si la facture est en retard"""
+        return self.balance_due > 0 and datetime.now(timezone.utc) > self.due_date
+    
+    def update_balance(self):
+        """Met à jour le solde et le statut basé sur les paiements"""
+        self.amount_paid = sum(payment.amount for payment in self.payments)
+        self.balance_due = self.total_amount - self.amount_paid
+        
+        # Mise à jour du statut
+        if self.balance_due <= 0:
+            self.status = InvoiceStatus.PAID
+            self.paid_at = datetime.now(timezone.utc)
+        elif self.amount_paid > 0:
+            self.status = InvoiceStatus.PARTIALLY_PAID
+        elif self.is_overdue:
+            self.status = InvoiceStatus.OVERDUE
+    
     def mark_as_paid(self):
+        """Marque la facture comme payée"""
         self.status = InvoiceStatus.PAID
         self.paid_at = datetime.now(timezone.utc)
         self.updated_at = datetime.now(timezone.utc)
-
-    def mark_as_unpaid(self):
-        self.status = InvoiceStatus.UNPAID
-        self.paid_at = None
+    
+    def mark_as_sent(self):
+        """Marque la facture comme envoyée"""
+        self.status = InvoiceStatus.SENT
+        self.sent_at = datetime.now(timezone.utc)
         self.updated_at = datetime.now(timezone.utc)
-
+    
     def cancel(self):
-        self.status = InvoiceStatus.CANCELED
+        """Annule la facture"""
+        self.status = InvoiceStatus.CANCELLED
+        self.cancelled_at = datetime.now(timezone.utc)
         self.updated_at = datetime.now(timezone.utc)
-
-    def is_overdue(self):
-        return self.due_date and datetime.now(timezone.utc) > self.due_date and self.status != InvoiceStatus.PAID
-
-    def __repr__(self):
-        return f"<Invoice {self.reference} | {self.amount:.2f} CHF | {getattr(self.status, 'value', self.status)}>"
+    
+    def to_dict(self):
+        """Sérialise la facture en dictionnaire"""
+        return {
+            'id': self.id,
+            'company_id': self.company_id,
+            'client_id': self.client_id,
+            'bill_to_client_id': self.bill_to_client_id,
+            'period_month': self.period_month,
+            'period_year': self.period_year,
+            'invoice_number': self.invoice_number,
+            'currency': self.currency,
+            'subtotal_amount': float(self.subtotal_amount),
+            'late_fee_amount': float(self.late_fee_amount),
+            'reminder_fee_amount': float(self.reminder_fee_amount),
+            'total_amount': float(self.total_amount),
+            'amount_paid': float(self.amount_paid),
+            'balance_due': float(self.balance_due),
+            'issued_at': _iso(self.issued_at),
+            'due_date': _iso(self.due_date),
+            'sent_at': _iso(self.sent_at),
+            'paid_at': _iso(self.paid_at),
+            'cancelled_at': _iso(self.cancelled_at),
+            'created_at': _iso(self.created_at),
+            'updated_at': _iso(self.updated_at),
+            'status': self.status.value,
+            'reminder_level': self.reminder_level,
+            'last_reminder_at': _iso(self.last_reminder_at),
+            'pdf_url': self.pdf_url,
+            'qr_reference': self.qr_reference,
+            'meta': self.meta,
+            'client': {
+                'id': self.client.id,
+                'first_name': getattr(self.client.user, 'first_name', '') if hasattr(self.client, 'user') and self.client.user else '',
+                'last_name': getattr(self.client.user, 'last_name', '') if hasattr(self.client, 'user') and self.client.user else '',
+                'username': getattr(self.client.user, 'username', '') if hasattr(self.client, 'user') and self.client.user else '',
+                'is_institution': _as_bool(self.client.is_institution) if self.client else False,
+                'institution_name': self.client.institution_name if self.client else None,
+            } if self.client else None,
+            'bill_to_client': {
+                'id': self.bill_to_client.id,
+                'first_name': getattr(self.bill_to_client.user, 'first_name', '') if hasattr(self.bill_to_client, 'user') and self.bill_to_client.user else '',
+                'last_name': getattr(self.bill_to_client.user, 'last_name', '') if hasattr(self.bill_to_client, 'user') and self.bill_to_client.user else '',
+                'username': getattr(self.bill_to_client.user, 'username', '') if hasattr(self.bill_to_client, 'user') and self.bill_to_client.user else '',
+                'is_institution': _as_bool(self.bill_to_client.is_institution),
+                'institution_name': self.bill_to_client.institution_name,
+                'billing_address': self.bill_to_client.billing_address,
+                'contact_email': self.bill_to_client.contact_email,
+            } if self.bill_to_client else None,
+            'lines': [line.to_dict() for line in self.lines] if hasattr(self, 'lines') else [],
+            'payments': [payment.to_dict() for payment in self.payments] if hasattr(self, 'payments') else [],
+            'reminders': [reminder.to_dict() for reminder in self.reminders] if hasattr(self, 'reminders') else [],
+        }
 
 class Message(db.Model):
     __tablename__ = "message"
@@ -1791,12 +2022,25 @@ class Message(db.Model):
 
     @property
     def serialize(self):
+        # ✅ Étend la sérialisation pour inclure les noms utiles côté UI
+        sender_role_val = getattr(self.sender_role, "value", self.sender_role)
+        sender_user = getattr(self, "sender", None)
+        receiver_user = getattr(self, "receiver", None)
+        company_obj = getattr(self, "company", None)
+        sender_name = (
+            getattr(sender_user, "first_name", None)
+            if sender_role_val == "DRIVER"
+            else getattr(company_obj, "name", None)
+        )
+        receiver_name = getattr(receiver_user, "first_name", None) if receiver_user else None
         return {
             "id": self.id,
             "company_id": self.company_id,
             "sender_id": self.sender_id,
             "receiver_id": self.receiver_id,
-            "sender_role": getattr(self.sender_role, "value", self.sender_role),
+            "sender_role": sender_role_val,
+            "sender_name": sender_name,
+            "receiver_name": receiver_name,
             "content": self.content,
             "timestamp": _iso(self.timestamp),
             "is_read": _as_bool(self.is_read),
@@ -1814,7 +2058,7 @@ class Message(db.Model):
         # accepte string et convertit vers l'enum (case-insensitive)
         if isinstance(v, str):
             try:
-                # ✅ FIX: Utiliser .upper() au lieu de .lower() pour matcher l'Enum
+                # ✅ FIX: normalise en MAJ pour matcher l'Enum
                 v = SenderRole(v.upper())
             except ValueError:
                 raise ValueError("Le rôle de l'expéditeur doit être 'DRIVER' ou 'COMPANY'")
@@ -1831,7 +2075,7 @@ class Message(db.Model):
 class FavoritePlace(db.Model):
     __tablename__ = "favorite_place"
     __table_args__ = (
-        # Évite les doublons d’adresse au sein d’une même entreprise
+        # Évite les doublons d'adresse au sein d'une même entreprise
         UniqueConstraint("company_id", "address", name="uq_fav_company_address"),
         # Accélère la recherche par libellé pour une entreprise
         Index("ix_fav_company_label", "company_id", "label"),
@@ -1840,7 +2084,7 @@ class FavoritePlace(db.Model):
         # Verrouille les bornes géographiques
         CheckConstraint("lat BETWEEN -90 AND 90", name="chk_fav_lat"),
         CheckConstraint("lon BETWEEN -180 AND 180", name="chk_fav_lon"),
-        # OPTIONNEL (PG) : unicité “case-insensitive” si vous normalisez label en lower()
+        # OPTIONNEL (PG) : unicité "case-insensitive" si vous normalisez label en lower()
         # Index("uq_fav_company_label_lower", text("company_id"), text("lower(label)"), unique=True),
     )
 
@@ -2073,7 +2317,7 @@ class MedicalService(db.Model):
         UniqueConstraint("establishment_id", "name", name="uq_med_service_per_estab"),
         CheckConstraint("lat IS NULL OR (lat BETWEEN -90 AND 90)", name="chk_med_service_lat"),
         CheckConstraint("lon IS NULL OR (lon BETWEEN -180 AND 180)", name="chk_med_service_lon"),
-        # Optionnel : accélère les recherches par nom au sein d’un établissement
+        # Optionnel : accélère les recherches par nom au sein d'un établissement
         # Index("ix_med_service_estab_name", "establishment_id", "name"),
     )
 
@@ -2257,6 +2501,13 @@ class DispatchRun(db.Model):
         back_populates='dispatch_run',
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+    metrics_record: Mapped[Optional["DispatchMetrics"]] = relationship(
+        "DispatchMetrics",
+        back_populates="dispatch_run",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True
     )
 
     # ---------- Méthodes métier ----------
@@ -2710,3 +2961,361 @@ class RealtimeEvent(db.Model):
         if not isinstance(v, RealtimeEntityType):
             raise ValueError("entity_type invalide (Enum attendu).")
         return v
+
+
+# ============================================================================
+# MODELS D'ANALYTICS & MÉTRIQUES
+# ============================================================================
+
+
+class DispatchMetrics(db.Model):
+    """Métriques de dispatch pour analyse historique et performance"""
+    __tablename__ = "dispatch_metrics"
+    __table_args__ = (
+        Index('ix_dispatch_metrics_company_date', 'company_id', 'date'),
+        Index('ix_dispatch_metrics_dispatch_run', 'dispatch_run_id'),
+    )
+    
+    # ---------- Colonnes de base ----------
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey('company.id', ondelete="CASCADE"), index=True)
+    dispatch_run_id: Mapped[int] = mapped_column(ForeignKey('dispatch_run.id', ondelete="CASCADE"))
+    
+    # Date et heure
+    date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False
+    )
+    
+    # ---------- Métriques de performance ----------
+    total_bookings: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    on_time_bookings: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    delayed_bookings: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cancelled_bookings: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    
+    # ---------- Métriques de retard ----------
+    average_delay_minutes: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    max_delay_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_delay_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    
+    # ---------- Métriques des chauffeurs ----------
+    total_drivers: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    active_drivers: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    avg_bookings_per_driver: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    
+    # ---------- Métriques d'optimisation ----------
+    total_distance_km: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    avg_distance_per_booking: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    suggestions_generated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    suggestions_applied: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    
+    # ---------- Score de qualité (0-100) ----------
+    quality_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    
+    # ---------- Métadonnées (JSON flexible) ----------
+    extra_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        MutableDict.as_mutable(JSONB()),
+        default=dict
+    )
+    
+    # ---------- Relations ----------
+    company: Mapped["Company"] = relationship(back_populates='dispatch_metrics')
+    dispatch_run: Mapped["DispatchRun"] = relationship(back_populates='metrics_record')
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Sérialise les métriques en dictionnaire"""
+        return {
+            'id': self.id,
+            'company_id': self.company_id,
+            'dispatch_run_id': self.dispatch_run_id,
+            'date': self.date.isoformat(),
+            'created_at': _iso(self.created_at),
+            'total_bookings': self.total_bookings,
+            'on_time_bookings': self.on_time_bookings,
+            'delayed_bookings': self.delayed_bookings,
+            'cancelled_bookings': self.cancelled_bookings,
+            'average_delay_minutes': round(self.average_delay_minutes, 2),
+            'max_delay_minutes': self.max_delay_minutes,
+            'total_delay_minutes': self.total_delay_minutes,
+            'total_drivers': self.total_drivers,
+            'active_drivers': self.active_drivers,
+            'avg_bookings_per_driver': round(self.avg_bookings_per_driver, 2),
+            'total_distance_km': round(self.total_distance_km, 2),
+            'avg_distance_per_booking': round(self.avg_distance_per_booking, 2),
+            'suggestions_generated': self.suggestions_generated,
+            'suggestions_applied': self.suggestions_applied,
+            'quality_score': round(self.quality_score, 2),
+            'extra_data': self.extra_data or {}
+        }
+
+
+class DailyStats(db.Model):
+    """Statistiques agrégées par jour (pré-calculées pour performance)"""
+    __tablename__ = "daily_stats"
+    __table_args__ = (
+        UniqueConstraint('company_id', 'date', name='uq_daily_stats_company_date'),
+        Index('ix_daily_stats_company_date', 'company_id', 'date'),
+    )
+    
+    # ---------- Colonnes de base ----------
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey('company.id', ondelete="CASCADE"), index=True)
+    date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    
+    # ---------- Métriques agrégées ----------
+    total_bookings: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    on_time_rate: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # %
+    avg_delay: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    quality_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    
+    # ---------- Tendances (vs jour précédent) ----------
+    bookings_trend: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # %
+    delay_trend: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)     # %
+    
+    # ---------- Timestamps ----------
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        onupdate=lambda: datetime.now(timezone.utc)
+    )
+    
+    # ---------- Relations ----------
+    company: Mapped["Company"] = relationship(back_populates='daily_stats')
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Sérialise les stats en dictionnaire"""
+        return {
+            'id': self.id,
+            'company_id': self.company_id,
+            'date': self.date.isoformat(),
+            'total_bookings': self.total_bookings,
+            'on_time_rate': round(self.on_time_rate, 2),
+            'avg_delay': round(self.avg_delay, 2),
+            'quality_score': round(self.quality_score, 2),
+            'bookings_trend': round(self.bookings_trend, 2),
+            'delay_trend': round(self.delay_trend, 2),
+            'created_at': _iso(self.created_at),
+            'updated_at': _iso(self.updated_at)
+        }
+
+
+# ============================================================================
+# MODELS DE FACTURATION
+# ============================================================================
+
+
+
+class InvoiceLine(db.Model):
+    """Lignes de facture"""
+    __tablename__ = "invoice_lines"
+    
+    id = Column(Integer, primary_key=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False)
+    
+    type = Column(SAEnum(InvoiceLineType, name="invoice_line_type"), nullable=False)
+    description = Column(String(500), nullable=False)
+    qty = Column(Numeric(10, 2), nullable=False, default=1)
+    unit_price = Column(Numeric(10, 2), nullable=False)
+    line_total = Column(Numeric(10, 2), nullable=False)
+    
+    # Optionnel : tracer la source (réservation)
+    reservation_id = Column(Integer, ForeignKey("booking.id"), nullable=True)
+    
+    # Relations
+    invoice = relationship("Invoice", back_populates="lines")
+    # Spécifier foreign_keys pour éviter l'ambiguïté avec Booking.invoice_line_id
+    reservation = relationship("Booking", foreign_keys=[reservation_id], backref="invoice_lines_for_reservation")
+    
+    def __repr__(self):
+        return f"<InvoiceLine {self.description} - {self.line_total} CHF>"
+    
+    def to_dict(self):
+        """Sérialise la ligne de facture en dictionnaire"""
+        return {
+            'id': self.id,
+            'invoice_id': self.invoice_id,
+            'type': self.type.value,
+            'description': self.description,
+            'qty': float(self.qty),
+            'unit_price': float(self.unit_price),
+            'line_total': float(self.line_total),
+            'reservation_id': self.reservation_id,
+        }
+
+
+class InvoicePayment(db.Model):
+    """Paiements des factures"""
+    __tablename__ = "invoice_payments"
+    
+    id = Column(Integer, primary_key=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False)
+    
+    amount = Column(Numeric(10, 2), nullable=False)
+    paid_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    method = Column(
+        SAEnum(
+            PaymentMethod,
+            name="payment_method",
+            values_callable=lambda enum_cls: [e.value for e in enum_cls]
+        ),
+        nullable=False
+    )
+    reference = Column(String(100), nullable=True)  # Référence bancaire, n° transaction
+    
+    # Relations
+    invoice = relationship("Invoice", back_populates="payments")
+    
+    def __repr__(self):
+        return f"<InvoicePayment {self.amount} CHF - {self.method.value}>"
+    
+    def to_dict(self):
+        """Sérialise le paiement en dictionnaire"""
+        return {
+            'id': self.id,
+            'invoice_id': self.invoice_id,
+            'amount': float(self.amount),
+            'paid_at': _iso(self.paid_at),
+            'method': self.method.value,
+            'reference': self.reference,
+        }
+
+
+class InvoiceReminder(db.Model):
+    """Rappels de facture"""
+    __tablename__ = "invoice_reminders"
+    
+    id = Column(Integer, primary_key=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False)
+    
+    level = Column(Integer, nullable=False)  # 1, 2, 3
+    added_fee = Column(Numeric(10, 2), nullable=False, default=0)
+    generated_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    pdf_url = Column(String(500), nullable=True)
+    note = Column(Text, nullable=True)
+    
+    # Relations
+    invoice = relationship("Invoice", back_populates="reminders")
+    
+    def __repr__(self):
+        return f"<InvoiceReminder Level {self.level} - {self.added_fee} CHF>"
+    
+    def to_dict(self):
+        """Sérialise le rappel en dictionnaire"""
+        return {
+            'id': self.id,
+            'invoice_id': self.invoice_id,
+            'level': self.level,
+            'added_fee': float(self.added_fee),
+            'generated_at': _iso(self.generated_at),
+            'sent_at': _iso(self.sent_at),
+            'pdf_url': self.pdf_url,
+            'note': self.note,
+        }
+
+
+class CompanyBillingSettings(db.Model):
+    """Paramètres de facturation par entreprise"""
+    __tablename__ = "company_billing_settings"
+    
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, ForeignKey("company.id"), nullable=False, unique=True)
+    
+    # Délais et frais
+    payment_terms_days = Column(Integer, nullable=True, default=10)
+    overdue_fee = Column(Numeric(10, 2), nullable=True, default=15)
+    reminder1_fee = Column(Numeric(10, 2), nullable=True, default=0)
+    reminder2_fee = Column(Numeric(10, 2), nullable=True, default=40)
+    reminder3_fee = Column(Numeric(10, 2), nullable=True, default=0)
+    
+    # Planning des rappels (en jours)
+    reminder_schedule_days = Column(JSON, nullable=False, default={
+        "1": 10,  # 1er rappel 10j après échéance
+        "2": 5,   # 2e rappel 5j après le 1er
+        "3": 5    # 3e rappel 5j après le 2e
+    })
+    
+    # Configuration
+    auto_reminders_enabled = Column(Boolean, nullable=False, default=True)
+    email_sender = Column(String(200), nullable=True)
+    
+    # Format de numérotation
+    invoice_number_format = Column(String(50), nullable=False, default="{PREFIX}-{YYYY}-{MM}-{SEQ4}")
+    invoice_prefix = Column(String(10), nullable=False, default="EM")
+    
+    # Informations bancaires
+    iban = Column(String(50), nullable=True)
+    qr_iban = Column(String(50), nullable=True)
+    esr_ref_base = Column(String(50), nullable=True)
+    
+    # Templates de messages
+    invoice_message_template = Column(Text, nullable=True)
+    reminder1_template = Column(Text, nullable=True)
+    reminder2_template = Column(Text, nullable=True)
+    reminder3_template = Column(Text, nullable=True)
+    
+    # Pied de page légal
+    legal_footer = Column(Text, nullable=True)
+    pdf_template_variant = Column(String(20), nullable=False, default="default")
+    
+    # Relations
+    company = relationship("Company", backref="billing_settings")
+    
+    def __repr__(self):
+        return f"<CompanyBillingSettings {self.company_id}>"
+    
+    def to_dict(self):
+        """Convertit l'objet en dictionnaire"""
+        return {
+            'id': self.id,
+            'company_id': self.company_id,
+            'payment_terms_days': self.payment_terms_days,
+            'overdue_fee': float(self.overdue_fee) if self.overdue_fee else None,
+            'reminder1_fee': float(self.reminder1_fee) if self.reminder1_fee else None,
+            'reminder2_fee': float(self.reminder2_fee) if self.reminder2_fee else None,
+            'reminder3_fee': float(self.reminder3_fee) if self.reminder3_fee else None,
+            'reminder_schedule_days': self.reminder_schedule_days,
+            'auto_reminders_enabled': self.auto_reminders_enabled,
+            'email_sender': self.email_sender,
+            'invoice_number_format': self.invoice_number_format,
+            'invoice_prefix': self.invoice_prefix,
+            'iban': self.iban,
+            'qr_iban': self.qr_iban,
+            'esr_ref_base': self.esr_ref_base,
+            'invoice_message_template': self.invoice_message_template,
+            'reminder1_template': self.reminder1_template,
+            'reminder2_template': self.reminder2_template,
+            'reminder3_template': self.reminder3_template,
+            'legal_footer': self.legal_footer,
+            'pdf_template_variant': self.pdf_template_variant,
+        }
+
+
+class InvoiceSequence(db.Model):
+    """Séquence de numérotation des factures par entreprise et mois"""
+    __tablename__ = "invoice_sequences"
+    
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, ForeignKey("company.id"), nullable=False)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
+    sequence = Column(Integer, nullable=False, default=0)
+    
+    # Relations
+    company = relationship("Company", backref="invoice_sequences")
+    
+    # Contrainte d'unicité
+    __table_args__ = (
+        UniqueConstraint("company_id", "year", "month", name="uq_company_year_month"),
+    )
+    
+    def __repr__(self):
+        return f"<InvoiceSequence {self.company_id}-{self.year}-{self.month}: {self.sequence}>"

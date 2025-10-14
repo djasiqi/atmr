@@ -23,13 +23,18 @@ const pickBestDateField = (r) => {
   ];
   for (const v of candidates) {
     if (!v) continue;
-    // accepte Date ou string
+    // Conserver les dates NAÏVES telles quelles pour éviter les décalages TZ
+    if (typeof v === "string") {
+      const s = v.trim();
+      if (s) return s; // ex: "2025-10-08T18:00:00" (sans Z)
+    }
     if (v instanceof Date) {
-      const iso = v.toISOString();
-      if (!Number.isNaN(new Date(iso).getTime())) return iso;
-    } else if (typeof v === "string") {
-      const d = new Date(v);
-      if (!Number.isNaN(d.getTime())) return d.toISOString();
+      // Formater en local naïf (YYYY-MM-DDTHH:mm:ss), sans Z ni offset
+      const d = v;
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
+        d.getDate()
+      )}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     }
   }
   return null;
@@ -273,7 +278,7 @@ export const uploadCompanyLogo = async (file) => {
   const { data } = await apiClient.post("/companies/me/logo", form, {
     headers: { "Content-Type": "multipart/form-data" },
   });
-  return data; // { logo_url }
+  return data; // { logo_url, size_bytes }
 };
 
 /* ------------------------------ MESSAGERIE / CHAT ----------------------------- */
@@ -316,6 +321,37 @@ export const searchClients = async (query) => {
 export const createClient = async (payload) => {
   const { data } = await apiClient.post("/companies/me/clients", payload);
   return data;
+};
+
+/**
+ * Met à jour un client (coordonnées, statut, etc.)
+ */
+export const updateClient = async (clientId, payload) => {
+  try {
+    const { data } = await apiClient.put(
+      `/companies/me/clients/${clientId}`,
+      payload
+    );
+    return data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+/**
+ * Supprime un client (soft delete par défaut, hard delete si hardDelete=true)
+ */
+export const deleteClient = async (clientId, hardDelete = false) => {
+  try {
+    const params = hardDelete ? { hard: "true" } : {};
+    const { data } = await apiClient.delete(
+      `/companies/me/clients/${clientId}`,
+      { params }
+    );
+    return data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
 };
 
 export const searchEstablishments = async (q, limit = 8, signal) => {
@@ -708,11 +744,18 @@ export const fetchAssignedReservations = async (forDate) => {
                   id: a.id,
                   booking_id: a.booking_id,
                   driver_id: a.driver_id,
+                  driver: a.driver || null, // ⭐ IMPORTANT : Copier le driver de l'assignment
                   status: a.status,
                   estimated_pickup_arrival:
-                    a.estimated_pickup_arrival || a.eta_pickup_at || null,
+                    a.estimated_pickup_arrival ||
+                    a.eta_pickup_at ||
+                    a.pickup_eta ||
+                    null,
                   estimated_dropoff_arrival:
-                    a.estimated_dropoff_arrival || a.eta_dropoff_at || null,
+                    a.estimated_dropoff_arrival ||
+                    a.eta_dropoff_at ||
+                    a.dropoff_eta ||
+                    null,
                 }
               : syntheticAssignment,
           };

@@ -169,7 +169,8 @@ def init_chat_socket(socketio: SocketIO):
                 company_id = company_obj.id
                 # ✅ FIX: Utiliser "COMPANY" en majuscules pour matcher l'Enum SenderRole
                 sender_role = "COMPANY"
-                sender_id = None
+                # ✅ FIX: Ne jamais mettre sender_id=None pour l'entreprise
+                sender_id = user.id
                 logger.info(f"📨 Chat company: user_id={user.id}, company_id={company_id}")
             else:
                 emit("error", {"error": "Rôle non autorisé pour le chat."})
@@ -198,7 +199,8 @@ def init_chat_socket(socketio: SocketIO):
                 "timestamp": timestamp.isoformat(),
                 "type": "chat",
                 "company_id": company_id,
-                "company_name": (company_obj.name if sender_role == "company" and company_obj else None),
+                # ✅ FIX: company_name disponible et test en MAJ
+                "company_name": (company_obj.name if (sender_role == "COMPANY" and company_obj) else None),
                 "_localId": local_id,
             }
 
@@ -206,6 +208,12 @@ def init_chat_socket(socketio: SocketIO):
             # Pylance ne déclare pas kwarg 'room' sur emit -> cast en Any
             cast(Any, emit)("team_chat_message", payload, room=room)
             logger.info(f"📨 Message émis dans {room} par {sender_role} : {content}")
+
+            # ✅ Si un receiver_id (driver) est fourni, notifier aussi sa room dédiée
+            if receiver_id:
+                driver_room = f"driver_{receiver_id}"
+                cast(Any, emit)("team_chat_message", payload, room=driver_room)
+                logger.info(f"📨 Message relayé vers {driver_room}")
 
         except Exception as e:
             logger.exception(f"❌ Erreur team_chat_message : {e}")

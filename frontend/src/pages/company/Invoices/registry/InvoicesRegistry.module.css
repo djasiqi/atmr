@@ -1,0 +1,473 @@
+.companyContainer {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: #f5f5f5;
+}
+
+.dashboard {
+  display: flex;
+  flex: 1;
+}
+
+.content {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  margin: 0;
+  color: #333;
+  font-size: 2rem;
+}
+
+.headerActions {
+  display: flex;
+  gap: 1rem;
+}
+
+.settingsBtn, .newInvoiceBtn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.settingsBtn {
+  background-color: #6c757d;
+  color: white;
+}
+
+.settingsBtn:hover {
+  background-color: #5a6268;
+}
+
+.newInvoiceBtn {
+  background-color: #007bff;
+  color: white;
+}
+
+.newInvoiceBtn:hover {
+  background-color: #0056b3;
+}
+
+/* Statistiques */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.statCard {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.statLabel {
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+}
+
+.statValue {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #333;
+}
+
+/* Filtres */
+.filters {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+}
+
+.filtersGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.filterLabel {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.filterInput, .filterSelect {
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.filterInput:focus, .filterSelect:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.filterCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filterCheckbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.filterActions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.filterBtn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filterBtnPrimary {
+  background-color: #007bff;
+  color: white;
+}
+
+.filterBtnPrimary:hover {
+  background-color: #0056b3;
+}
+
+.filterBtnSecondary {
+  background-color: #6c757d;
+  color: white;
+}
+
+.filterBtnSecondary:hover {
+  background-color: #5a6268;
+}
+
+/* Messages d'erreur */
+.error {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.error button {
+  background: none;
+  border: none;
+  color: #721c24;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+/* Tableau */
+.tableContainer {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  /* Toujours permettre le scroll horizontal sur petits écrans */
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.loading {
+  padding: 3rem;
+  text-align: center;
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  /* Largeur minimale pour éviter l'écrasement des colonnes sur petits écrans */
+  min-width: 1000px;
+}
+
+.table th {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #dee2e6;
+  /* Coller l'en-tête lors du scroll horizontal/vertical */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.table td {
+  padding: 1rem;
+  border-bottom: 1px solid #dee2e6;
+  vertical-align: middle;
+}
+
+/* Eviter les retours à la ligne sur les dates et montants */
+.table td:nth-child(4), /* Émise le */
+.table td:nth-child(5), /* Échéance */
+.table td:nth-child(6), /* Montant */
+.table td:nth-child(7), /* Payé */
+.table td:nth-child(8)  /* Solde */ {
+  white-space: nowrap;
+}
+
+/* Autoriser la coupure des mots pour Client et Période */
+.table td:nth-child(2), /* Client */
+.table td:nth-child(3)  /* Période */ {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+/* Badges de statut */
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.badgeDraft {
+  background-color: #e9ecef;
+  color: #495057;
+}
+
+.badgeSent {
+  background-color: #d1ecf1;
+  color: #0c5460;
+}
+
+.badgePartiallyPaid {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.badgePaid {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.badgeOverdue {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.badgeCancelled {
+  background-color: #e2e3e5;
+  color: #383d41;
+}
+
+.badgeDefault {
+  background-color: #e9ecef;
+  color: #495057;
+}
+
+/* Badges de rappel */
+.reminderBadge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.reminder1 {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.reminder2 {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.reminder3 {
+  background-color: #721c24;
+  color: white;
+}
+
+.reminderDefault {
+  background-color: #e9ecef;
+  color: #495057;
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.actionBtn {
+  padding: 0.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.actionBtnPrimary {
+  background-color: #007bff;
+  color: white;
+}
+
+.actionBtnPrimary:hover {
+  background-color: #0056b3;
+}
+
+.actionBtnSuccess {
+  background-color: #00796b;
+  color: white;
+}
+
+.actionBtnSuccess:hover {
+  background-color: #1e7e34;
+}
+
+.actionBtnWarning {
+  background-color: #ffc107;
+  color: #212529;
+}
+
+.actionBtnWarning:hover {
+  background-color: #e0a800;
+}
+
+.actionBtnDanger {
+  background-color: #dc3545;
+  color: white;
+}
+
+.actionBtnDanger:hover {
+  background-color: #c82333;
+}
+
+.actionBtnSecondary {
+  background-color: #6c757d;
+  color: white;
+}
+
+.actionBtnSecondary:hover {
+  background-color: #5a6268;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.pagination button {
+  padding: 0.75rem 1.5rem;
+  border: 1px solid #ddd;
+  background-color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pagination button:hover:not(:disabled) {
+  background-color: #f8f9fa;
+  border-color: #007bff;
+}
+
+.pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination span {
+  font-weight: 500;
+  color: #333;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .content {
+    padding: 1rem;
+  }
+  
+  .header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  
+  .headerActions {
+    justify-content: center;
+  }
+  
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .filtersGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .table {
+    min-width: 800px;
+  }
+  
+  .actions {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .header h1 {
+    font-size: 1.5rem;
+  }
+}

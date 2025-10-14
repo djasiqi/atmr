@@ -1,0 +1,971 @@
+/* ManualBookingForm.module.css - Style moderne et élégant */
+
+.formWrapper {
+  width: 100%;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border-radius: 0 0 16px 16px;
+  padding: 28px;
+  margin: 0;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.columnLeft,
+.columnRight {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #00796b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  letter-spacing: 0.3px;
+}
+
+.label span {
+  color: #ef4444;
+  margin-left: 2px;
+  font-weight: 700;
+}
+
+/* Uniformisation de TOUS les champs de saisie */
+.input,
+.textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  background: white;
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.input:hover,
+.textarea:hover {
+  border-color: #cbd5e1;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: #00796b;
+  box-shadow: 0 0 0 4px rgba(0, 121, 107, 0.1);
+  background: #f8fffe;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 90px;
+  font-family: inherit;
+  line-height: 1.6;
+}
+
+/* Uniformisation des champs globaux (AddressAutocomplete, EstablishmentSelect, etc.) */
+.formGroup :global(input:not([type="checkbox"])),
+.formGroup :global(textarea),
+.medicalFormGroup :global(input:not([type="checkbox"])),
+.medicalFormGroup :global(textarea) {
+  width: 100%;
+  padding: 12px 16px !important;
+  border: 2px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  font-size: 0.9rem !important;
+  transition: all 0.3s ease !important;
+  background: white !important;
+  box-sizing: border-box !important;
+  color: #1e293b !important;
+  font-weight: 500 !important;
+}
+
+.formGroup :global(input:not([type="checkbox"]):hover),
+.formGroup :global(textarea:hover),
+.medicalFormGroup :global(input:not([type="checkbox"]):hover),
+.medicalFormGroup :global(textarea:hover) {
+  border-color: #cbd5e1 !important;
+}
+
+.formGroup :global(input:not([type="checkbox"]):focus),
+.formGroup :global(textarea:focus),
+.medicalFormGroup :global(input:not([type="checkbox"]):focus),
+.medicalFormGroup :global(textarea:focus) {
+  outline: none !important;
+  border-color: #00796b !important;
+  box-shadow: 0 0 0 4px rgba(0, 121, 107, 0.1) !important;
+  background: #f8fffe !important;
+}
+
+/* Fix pour AddressAutocomplete et EstablishmentSelect */
+.formGroup :global(.border),
+.medicalFormGroup :global(.border) {
+  border-color: #e2e8f0 !important;
+}
+
+.formGroup :global(.rounded),
+.medicalFormGroup :global(.rounded) {
+  border-radius: 6px !important;
+}
+
+.formGroup :global(.w-full),
+.medicalFormGroup :global(.w-full) {
+  width: 100%;
+}
+
+/* Placeholder pour tous les champs */
+.formGroup :global(input::placeholder),
+.medicalFormGroup :global(input::placeholder) {
+  color: #94a3b8 !important;
+  font-size: 14px !important;
+  opacity: 1 !important;
+}
+
+/* Section médicale */
+.medicalSection {
+  margin-top: 0;
+  padding: 20px;
+  background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%);
+  border-radius: 12px;
+  border: 2px solid #d1fae5;
+  box-shadow: 0 2px 8px rgba(0, 121, 107, 0.05);
+}
+
+.medicalSectionTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 18px;
+  color: #00796b;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e0f2fe;
+}
+
+.medicalFormGroup {
+  margin-bottom: 16px;
+}
+
+.medicalFormGroup:last-child {
+  margin-bottom: 0;
+}
+
+/* Styles pour les checkboxes dans la section médicale */
+.medicalFormGroup .checkboxGroup {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.medicalFormGroup .checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #0f766e;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.medicalFormGroup .checkboxLabel {
+  font-size: 14px;
+  font-weight: 400;
+  margin: 0 !important;
+  cursor: pointer;
+  line-height: 1.5;
+  user-select: none;
+  color: #1e293b;
+}
+
+/* Styles pour les options de chaise roulante */
+.wheelchairOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.wheelchairOptions .checkboxGroup {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Date & heure */
+.dateTimeGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.checkboxGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.checkboxGroup:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.checkboxGroup:has(.checkbox:checked) {
+  background: #f0fdfa;
+  border-color: #00796b;
+}
+
+.checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #00796b;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.checkboxLabel {
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin: 0 !important;
+  cursor: pointer;
+  line-height: 1.5;
+  user-select: none;
+  color: #334155;
+}
+
+.returnTimeGroup {
+  margin-top: 12px;
+}
+
+/* ========================
+   Récurrence
+   ======================== */
+.recurrenceConfig {
+  margin-top: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
+  border: 2px solid #fed7aa;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.recurrenceGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recurrenceSelect {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  background: white;
+  color: #1e293b;
+  font-weight: 500;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 20px;
+  padding-right: 44px;
+}
+
+.recurrenceSelect:hover {
+  border-color: #cbd5e1;
+}
+
+.recurrenceSelect:focus {
+  outline: none;
+  border-color: #f97316;
+  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1);
+  background-color: #fffbf5;
+}
+
+/* Sélecteur de jours de la semaine */
+.daysSelector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dayButton {
+  width: 44px;
+  height: 44px;
+  border: 2px solid #e2e8f0;
+  border-radius: 50%;
+  background: white;
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dayButton:hover {
+  border-color: #f97316;
+  background: #fff7ed;
+  color: #f97316;
+  transform: scale(1.05);
+}
+
+.dayButton.daySelected {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  border-color: #f97316;
+  color: white;
+  box-shadow: 0 4px 8px rgba(249, 115, 22, 0.3);
+  transform: scale(1.1);
+}
+
+.dayButton.daySelected:hover {
+  background: linear-gradient(135deg, #ea580c 0%, #dc2626 100%);
+}
+
+/* Hint de récurrence */
+.recurrenceHint {
+  margin-top: 8px;
+  padding: 10px 14px;
+  background: #e0f2fe;
+  border-left: 3px solid #0284c7;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #0369a1;
+  line-height: 1.5;
+}
+
+.recurrenceHint span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recurrenceWarning {
+  margin-top: 8px;
+  padding: 10px 14px;
+  background: #fef2f2;
+  border-left: 3px solid #ef4444;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #dc2626;
+  line-height: 1.5;
+}
+
+/* Montant avec badge */
+.amountLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preferentialBadge {
+  font-size: 0.75rem;
+  color: #00796b;
+  font-weight: 700;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border-radius: 20px;
+  white-space: nowrap;
+  border: 1px solid #6ee7b7;
+  box-shadow: 0 2px 4px rgba(0, 121, 107, 0.1);
+}
+
+.estimatedDurationBadge {
+  font-size: 0.875rem;
+  color: #0369a1;
+  font-weight: 500;
+  padding: 12px 16px;
+  margin-top: 10px;
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  border-left: 4px solid #0284c7;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.estimatedDurationBadge strong {
+  font-weight: 700;
+  color: #0369a1;
+}
+
+/* Bouton de soumission */
+.submitButton {
+  grid-column: 1 / -1;
+  padding: 16px 32px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #00796b 0%, #00695c 100%);
+  color: white;
+  border: none;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 4px 12px rgba(0, 121, 107, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.submitButton::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.submitButton:hover::before {
+  left: 100%;
+}
+
+.submitButton:hover:not(:disabled) {
+  background: linear-gradient(135deg, #00695c 0%, #005c50 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 121, 107, 0.4);
+}
+
+.submitButton:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 121, 107, 0.3);
+}
+
+.submitButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #94a3b8;
+  box-shadow: none;
+}
+
+/* Uniformisation AsyncCreatableSelect (react-select) - Style moderne */
+.formGroup :global(.react-select__control) {
+  min-height: 48px !important;
+  height: 48px !important;
+  border: 2px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  font-size: 0.9rem !important;
+  background: white !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  transition: all 0.3s ease !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.formGroup :global(.react-select__control:hover) {
+  border-color: #cbd5e1 !important;
+}
+
+.formGroup :global(.react-select__control--is-focused) {
+  outline: none !important;
+  border-color: #00796b !important;
+  box-shadow: 0 0 0 4px rgba(0, 121, 107, 0.1) !important;
+  background: #f8fffe !important;
+}
+
+/* Container principal - EXACTEMENT même padding que les autres champs */
+.formGroup :global(.react-select__value-container) {
+  padding: 12px 16px !important;
+  gap: 0 !important;
+  background: transparent !important;
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+}
+
+/* S'assurer qu'aucun élément n'a de background blanc ou de bordure */
+.formGroup :global(.react-select__input) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.formGroup :global(.react-select__input-container) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Forcer la transparence complète dans tous les états */
+.formGroup :global(.react-select__input-container):hover,
+.formGroup :global(.react-select__input-container):active,
+.formGroup :global(.react-select__input-container):focus {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Masquer complètement l'input de recherche par défaut - géré plus bas */
+
+/* La valeur sélectionnée s'affiche normalement - EXACTEMENT comme les autres champs */
+.formGroup :global(.react-select__single-value) {
+  font-size: 14px !important;
+  color: #1e293b !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  position: static !important;
+  pointer-events: none !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  line-height: 1.5 !important;
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+}
+
+/* S'assurer que la valeur sélectionnée est toujours visible quand pas en focus */
+.formGroup :global(.react-select__control:not(.react-select__control--is-focused)) :global(.react-select__single-value) {
+  display: flex !important;
+}
+
+/* Placeholder visible quand pas de valeur - EXACTEMENT comme les autres champs */
+.formGroup :global(.react-select__placeholder) {
+  color: #94a3b8 !important;
+  font-size: 14px !important;
+  position: static !important;
+  pointer-events: none !important;
+  z-index: 2 !important;
+  line-height: 1.5 !important;
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+}
+
+
+/* Quand on focus, le placeholder disparait mais la valeur sélectionnée reste visible */
+.formGroup :global(.react-select__control--is-focused) :global(.react-select__placeholder) {
+  display: none !important;
+}
+
+/* La valeur sélectionnée reste TOUJOURS visible, même en focus */
+.formGroup :global(.react-select__control--is-focused) :global(.react-select__single-value) {
+  display: flex !important;
+  color: #1e293b !important;
+}
+
+/* L'input de recherche est visible mais transparent quand pas utilisé */
+.formGroup :global(.react-select__control--is-focused) :global(.react-select__Input) {
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  color: #1e293b !important;
+  flex: 1 !important;
+  position: static !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.formGroup :global(.react-select__control--is-focused) :global(.react-select__Input input) {
+  width: 100% !important;
+  height: auto !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: #1e293b !important;
+}
+
+/* Indicateurs (flèche dropdown) - parfaitement aligné */
+.formGroup :global(.react-select__indicators) {
+  padding: 0 12px !important;
+  align-items: center !important;
+  display: flex !important;
+  height: 100% !important;
+}
+
+.formGroup :global(.react-select__indicator-separator) {
+  display: none !important;
+}
+
+.formGroup :global(.react-select__dropdown-indicator) {
+  padding: 4px !important;
+  color: #64748b !important;
+  transition: color 0.2s !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.formGroup :global(.react-select__dropdown-indicator:hover) {
+  color: #0f766e !important;
+}
+
+/* ========================
+   MENU DÉROULANT - React-Select (Clients)
+   ======================== */
+
+/* Portal du menu */
+:global(.react-select__menu-portal) {
+  z-index: 99999 !important;
+}
+
+/* Menu principal */
+:global(.react-select__menu) {
+  z-index: 99999 !important;
+  background: white !important;
+  border: 2px solid #00796b !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 40px rgba(0, 121, 107, 0.2) !important;
+  margin-top: 8px !important;
+  overflow: visible !important;
+  position: absolute !important;
+}
+
+/* Liste des options */
+:global(.react-select__menu-list) {
+  padding: 8px !important;
+  max-height: 300px !important;
+  overflow-y: auto !important;
+}
+
+/* Chaque option de client */
+:global(.react-select__option) {
+  padding: 14px 16px !important;
+  border-radius: 8px !important;
+  margin-bottom: 4px !important;
+  cursor: pointer !important;
+  font-size: 0.95rem !important;
+  font-weight: 500 !important;
+  color: #1e293b !important;
+  background: white !important;
+  transition: all 0.2s ease !important;
+}
+
+/* Option au survol */
+:global(.react-select__option:hover),
+:global(.react-select__option--is-focused) {
+  background: #f0fdfa !important;
+  color: #00796b !important;
+}
+
+/* Option sélectionnée */
+:global(.react-select__option--is-selected) {
+  background: linear-gradient(135deg, #00796b 0%, #00695c 100%) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 4px rgba(0, 121, 107, 0.2) !important;
+}
+
+:global(.react-select__option--is-selected:hover) {
+  background: linear-gradient(135deg, #00695c 0%, #005c50 100%) !important;
+}
+
+/* Message "Aucun résultat" */
+:global(.react-select__menu-notice) {
+  padding: 16px !important;
+  color: #64748b !important;
+  font-size: 0.9rem !important;
+  text-align: center !important;
+}
+
+/* Message de chargement */
+:global(.react-select__loading-message) {
+  padding: 16px !important;
+  color: #00796b !important;
+  font-size: 0.9rem !important;
+  text-align: center !important;
+}
+
+/* Règle globale pour éliminer les bordures SEULEMENT dans le control (pas le menu) */
+.formGroup :global(.react-select__control) :global(.react-select__value-container) *,
+.formGroup :global(.react-select__control) :global(.react-select__input-container) * {
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Spécifiquement pour tous les inputs à l'intérieur */
+.formGroup :global(.react-select__control input) {
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
+}
+
+/* Cibler spécifiquement les éléments qui créent le rectangle blanc intérieur */
+.formGroup :global(.react-select__input-container),
+.formGroup :global(.react-select__input-container div),
+.formGroup :global(.react-select__input-container span),
+.formGroup :global(.react-select__input-container input) {
+  background: transparent !important;
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Forcer la transparence complète sur tous les éléments enfants */
+.formGroup :global(.react-select__control) :global(.react-select__input-container) * {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Correction spécifique pour éliminer le rectangle blanc intérieur */
+.formGroup :global(.react-select__input-container) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Forcer l'élimination du rectangle blanc intérieur */
+.formGroup :global(.react-select__control) :global(.react-select__value-container) :global(.react-select__input-container) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  position: relative !important;
+}
+
+/* Règle finale pour le value container */
+.formGroup :global(.react-select__control) :global(.react-select__value-container) {
+  position: relative !important;
+}
+
+.formGroup :global(.react-select__control) :global(.react-select__value-container) :global(.react-select__input-container) {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  z-index: 1 !important;
+}
+
+/* Masquer tous les éléments qui pourraient créer un rectangle blanc ou des bordures */
+.formGroup :global(.react-select__input-container::before),
+.formGroup :global(.react-select__input-container::after),
+.formGroup :global(.react-select__input::before),
+.formGroup :global(.react-select__input::after) {
+  display: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Éliminer toutes les bordures des pseudo-éléments */
+.formGroup :global(.react-select__input-container::before),
+.formGroup :global(.react-select__input-container::after),
+.formGroup :global(.react-select__input::before),
+.formGroup :global(.react-select__input::after) {
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* L'input est complètement transparent - aucune bordure visible */
+.formGroup :global(.react-select__input-container) {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  z-index: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  /* Ajuster l'alignement pour que le curseur soit au bon endroit */
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Masquer complètement le rectangle blanc intérieur */
+.formGroup :global(.react-select__input-container) > * {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.formGroup :global(.react-select__input) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 10px 12px !important;
+  font-size: 14px !important;
+  color: transparent !important;
+  caret-color: #1e293b !important;
+  line-height: 1.5 !important;
+  display: flex !important;
+  align-items: center !important;
+  /* Ajuster la position du curseur pour qu'il soit aligné avec le texte */
+  text-indent: 0 !important;
+  margin-left: 0 !important;
+  padding-left: 12px !important;
+}
+
+/* Quand on tape, le texte devient visible mais reste transparent */
+.formGroup :global(.react-select__control--is-focused) :global(.react-select__input) {
+  color: #1e293b !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  /* S'assurer que le curseur est bien positionné */
+  text-indent: 0 !important;
+  padding-left: 12px !important;
+}
+
+/* Ajuster la position du curseur pour qu'il soit aligné avec le placeholder */
+.formGroup :global(.react-select__input) input {
+  padding-left: 12px !important;
+  text-indent: 0 !important;
+  margin-left: 0 !important;
+}
+
+/* S'assurer qu'aucune bordure n'apparaît sur l'input - règles agressives */
+.formGroup :global(.react-select__input-container):focus,
+.formGroup :global(.react-select__input-container):focus-within,
+.formGroup :global(.react-select__input-container):focus-visible,
+.formGroup :global(.react-select__input):focus,
+.formGroup :global(.react-select__input):focus-visible,
+.formGroup :global(.react-select__input):focus-within {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+}
+
+/* Forcer l'élimination de TOUTES les bordures possibles */
+.formGroup :global(.react-select__input-container),
+.formGroup :global(.react-select__input-container *),
+.formGroup :global(.react-select__input),
+.formGroup :global(.react-select__input *) {
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .form {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .submitButton {
+    grid-column: 1;
+  }
+}
+
+/* AsyncCreatableSelect custom styles (if needed) */
+.selectContainer {
+  position: relative;
+}
+
+/* AddressAutocomplete wrapper */
+.addressInput {
+  width: 100%;
+}
+
+/* Styles pour les options de chaise roulante */
+.medicalFormGroup .checkboxGroup {
+  margin-top: 8px;
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.medicalFormGroup .checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #0f766e;
+  flex-shrink: 0;
+}
+
+.medicalFormGroup .checkboxLabel {
+  font-size: 14px;
+  font-weight: 400;
+  cursor: pointer;
+  color: #1e293b;
+  flex: 1;
+}
+

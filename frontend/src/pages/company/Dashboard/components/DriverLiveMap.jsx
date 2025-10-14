@@ -8,12 +8,54 @@ import useCompanyData from "../../../../hooks/useCompanyData";
 // Icône Leaflet par défaut (corrige le bug d'icône manquante)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconRetinaUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
 const defaultCenter = [46.8182, 8.2275]; // CH
+
+// ---- Icônes personnalisées pour les chauffeurs ----
+const createDriverIcon = (status = "available") => {
+  const colors = {
+    available: "#00796b", // Vert de marque
+    busy: "#ff9800", // Orange
+    offline: "#9e9e9e", // Gris
+    emergency: "#f44336", // Rouge
+  };
+
+  const emojis = {
+    available: "🚗",
+    busy: "🚕",
+    offline: "🚙",
+    emergency: "🚨",
+  };
+
+  return L.divIcon({
+    html: `
+      <div style="
+        background: ${colors[status]};
+        border: 3px solid white;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        font-size: 14px;
+        position: relative;
+      ">
+        ${emojis[status]}
+      </div>
+    `,
+    className: "custom-driver-icon",
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -16],
+  });
+};
 
 // ---- helpers coords -------------------------------------------------
 const toNumOrNull = (v) => {
@@ -33,12 +75,93 @@ const resolveDriverCoords = (d) =>
   (d.last_position && toLatLngSafe(d.last_position.lat, d.last_position.lon)) ||
   null;
 
-export default function DriverLiveMap() {
+// Déterminer le statut du chauffeur
+const getDriverStatus = (driver) => {
+  if (!driver.is_active) return "offline";
+  if (driver.current_booking_id || driver.status === "busy") return "busy";
+  if (driver.emergency_mode) return "emergency";
+  return "available";
+};
+
+// Créer un tooltip stylé
+const createStyledTooltip = (driver) => {
+  const status = getDriverStatus(driver);
+  const statusText = {
+    available: "Disponible",
+    busy: "En course",
+    offline: "Hors ligne",
+    emergency: "Urgence",
+  };
+
+  const statusColors = {
+    available: "#00796b",
+    busy: "#ff9800",
+    offline: "#9e9e9e",
+    emergency: "#f44336",
+  };
+
+  return `
+    <div style="
+      background: white;
+      border: 2px solid ${statusColors[status]};
+      border-radius: 6px;
+      padding: 4px 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-width: 100px;
+      text-align: center;
+    ">
+      <div style="
+        font-weight: 600;
+        color: #334155;
+        margin-bottom: 2px;
+        font-size: 12px;
+        line-height: 1.2;
+      ">
+        ${driver.first_name || driver.username || `Chauffeur ${driver.id}`}
+      </div>
+      <div style="
+        font-size: 10px;
+        color: ${statusColors[status]};
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        line-height: 1;
+      ">
+        <span>${
+          status === "available"
+            ? "🟢"
+            : status === "busy"
+            ? "🟡"
+            : status === "offline"
+            ? "⚫"
+            : "🔴"
+        }</span>
+        ${statusText[status]}
+      </div>
+    </div>
+  `;
+};
+
+export default function DriverLiveMap({ drivers: propDrivers }) {
   const mapRef = useRef(null);
   const mapElRef = useRef(null);
   const markersRef = useRef({}); // { [driverId]: L.Marker }
   const [driverLocations, setDriverLocations] = useState({});
+  const [searchQuery, setSearchQuery] = useState("");
   const { driver: staticDrivers, company } = useCompanyData();
+
+  // Utiliser les drivers passés en props si disponibles, sinon ceux de useCompanyData
+  const allDrivers = propDrivers || staticDrivers;
+
+  // Filtrer les drivers selon la recherche
+  const drivers = searchQuery
+    ? allDrivers.filter((d) =>
+        d.username?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : allDrivers;
 
   // petits helpers pour éviter d'appeler Leaflet sur une map détruite
   const getMap = () => {
@@ -47,20 +170,33 @@ export default function DriverLiveMap() {
     if (!m || !m._mapPane) return null;
     return m;
   };
-  const safeSetView = (center, zoom) => {
+  const safeSetView = (center, zoom, animate = true) => {
     const m = getMap();
     if (!m) return;
-    try { m.setView(center, zoom, { animate: false }); } catch {}
+    try {
+      m.setView(center, zoom, {
+        animate: animate,
+        duration: 0.8, // durée de l'animation en secondes
+        easeLinearity: 0.25, // rend l'animation plus smooth
+      });
+    } catch {}
   };
-  const fitBoundsToMarkers = (maxZoom = 14) => {
+  const fitBoundsToMarkers = (maxZoom = 14, animate = true) => {
     const m = getMap();
     if (!m) return;
     const entries = Object.values(markersRef.current);
     if (entries.length === 0) return;
     try {
       const group = L.featureGroup(entries);
-      m.fitBounds(group.getBounds().pad(0.2));
-      if (m.getZoom() > maxZoom) m.setZoom(maxZoom);
+      m.fitBounds(group.getBounds().pad(0.2), {
+        animate: animate,
+        duration: 0.8, // durée de l'animation en secondes
+      });
+      if (m.getZoom() > maxZoom) {
+        setTimeout(() => {
+          m.setZoom(maxZoom, { animate: animate, duration: 0.5 });
+        }, 100);
+      }
     } catch {}
   };
 
@@ -83,7 +219,9 @@ export default function DriverLiveMap() {
 
     return () => {
       // ⚠️ StrictMode va appeler le cleanup immédiatement en dev -> remets tout à zéro
-      try { map.remove(); } catch {}
+      try {
+        map.remove();
+      } catch {}
       mapRef.current = null;
       markersRef.current = {};
       setDriverLocations({});
@@ -93,34 +231,60 @@ export default function DriverLiveMap() {
   // Placer les positions statiques au chargement
   useEffect(() => {
     const map = getMap();
-    if (!map || !Array.isArray(staticDrivers)) return;
+    if (!map || !Array.isArray(drivers)) return;
 
     let placed = 0;
-    staticDrivers.forEach((d) => {
+    drivers.forEach((d) => {
       if (markersRef.current[d.id]) return; // déjà placé (live)
       const ll = resolveDriverCoords(d);
       if (!ll) return; // ignore si pas de coords valides
 
-      const label = d.first_name || d.username || d.name || `Driver ${d.id}`;
-      const m = L.marker(ll).addTo(map);
-      m.bindTooltip(label, {
+      const status = getDriverStatus(d);
+      const m = L.marker(ll, { icon: createDriverIcon(status) }).addTo(map);
+      m.bindTooltip(createStyledTooltip(d), {
         permanent: true,
         direction: "top",
-        offset: [0, -24],
-        className: "live-driver-label",
+        offset: [0, -25], // Rapproché du badge de position
+        className: "custom-driver-tooltip",
       }).openTooltip();
 
       markersRef.current[d.id] = m;
       placed++;
     });
 
-    if (placed > 0) fitBoundsToMarkers();
-    else if (Object.keys(markersRef.current).length === 0) {
-      // aucun marker : vue par défaut
+    // Supprimer les markers des chauffeurs qui ne sont plus dans la liste filtrée
+    const driverIds = new Set(drivers.map((d) => d.id));
+    Object.keys(markersRef.current).forEach((driverId) => {
+      if (!driverIds.has(Number(driverId))) {
+        const marker = markersRef.current[driverId];
+        if (marker && map) {
+          try {
+            map.removeLayer(marker);
+          } catch {}
+        }
+        delete markersRef.current[driverId];
+      }
+    });
+
+    // Zoom intelligent :
+    // - Si 1 seul chauffeur : zoom proche sur lui (zoom 15)
+    // - Si plusieurs chauffeurs : ajuster la vue pour tous les voir
+    // - Si aucun : vue par défaut
+    const visibleMarkers = Object.values(markersRef.current).filter((m) => m);
+    if (visibleMarkers.length === 1) {
+      // Un seul chauffeur : zoom proche
+      const marker = visibleMarkers[0];
+      const latlng = marker.getLatLng();
+      safeSetView([latlng.lat, latlng.lng], 15);
+    } else if (visibleMarkers.length > 1) {
+      // Plusieurs chauffeurs : ajuster la vue
+      fitBoundsToMarkers(14);
+    } else if (placed === 0 && visibleMarkers.length === 0) {
+      // Aucun marker : vue par défaut
       safeSetView(defaultCenter, 9);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [staticDrivers]);
+  }, [drivers]);
 
   // Socket: écouter les mises à jour live
   useEffect(() => {
@@ -128,7 +292,9 @@ export default function DriverLiveMap() {
     if (!socket) return;
 
     if (company?.id) {
-      try { socket.emit("join_company", { company_id: company.id }); } catch {}
+      try {
+        socket.emit("join_company", { company_id: company.id });
+      } catch {}
     }
 
     const onLoc = (data) => {
@@ -150,12 +316,19 @@ export default function DriverLiveMap() {
       }));
 
       if (!markersRef.current[id]) {
-        const m = L.marker(ll).addTo(map);
-        m.bindTooltip(firstName, {
+        // Trouver le driver complet pour le statut
+        const fullDriver = drivers.find((d) => d.id === id) || {
+          id,
+          first_name: firstName,
+          is_active: true,
+        };
+        const status = getDriverStatus(fullDriver);
+        const m = L.marker(ll, { icon: createDriverIcon(status) }).addTo(map);
+        m.bindTooltip(createStyledTooltip(fullDriver), {
           permanent: true,
           direction: "top",
-          offset: [0, -24],
-          className: "live-driver-label",
+          offset: [0, -25], // Rapproché du badge de position
+          className: "custom-driver-tooltip",
         }).openTooltip();
         markersRef.current[id] = m;
       } else {
@@ -169,7 +342,6 @@ export default function DriverLiveMap() {
 
     socket.on("driver_location", onLoc);
 
-    
     // Explicitly request driver locations when component mounts
     try {
       socket.emit("get_driver_locations");
@@ -179,28 +351,171 @@ export default function DriverLiveMap() {
 
     return () => {
       socket.off("driver_location", onLoc);
-
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company?.id]);
 
+  // Ajouter le compteur comme contrôle Leaflet
+  useEffect(() => {
+    const map = getMap();
+    if (!map) return;
+
+    // Créer le contrôle personnalisé
+    const DriverCounterControl = L.Control.extend({
+      onAdd: function (map) {
+        const container = L.DomUtil.create("div", "driver-counter-control");
+        container.style.cssText = `
+          background: rgba(255,255,255,0.9);
+          border: 1px solid #ddd;
+          border-radius: 8px;
+          padding: 6px 10px;
+          font-size: 12px;
+          pointer-events: none;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        `;
+
+        container.innerHTML = `
+          <span class="driver-count">${
+            Object.keys(markersRef.current).length
+          }</span> chauffeur(s) visible(s)
+        `;
+
+        return container;
+      },
+
+      onRemove: function (map) {
+        // Nettoyage si nécessaire
+      },
+    });
+
+    // Supprimer l'ancien contrôle s'il existe
+    if (map._driverCounterControl) {
+      map.removeControl(map._driverCounterControl);
+    }
+
+    // Ajouter le nouveau contrôle
+    map._driverCounterControl = new DriverCounterControl({
+      position: "bottomleft",
+    });
+    map.addControl(map._driverCounterControl);
+
+    // Mettre à jour le compteur
+    const updateCounter = () => {
+      const countElement = map._driverCounterControl
+        .getContainer()
+        ?.querySelector(".driver-count");
+      if (countElement) {
+        countElement.textContent = Object.keys(markersRef.current).length;
+      }
+    };
+
+    // Mettre à jour le compteur immédiatement et après chaque changement
+    updateCounter();
+    const interval = setInterval(updateCounter, 1000);
+
+    return () => {
+      clearInterval(interval);
+      if (map._driverCounterControl) {
+        map.removeControl(map._driverCounterControl);
+        delete map._driverCounterControl;
+      }
+    };
+  }, [drivers]);
+
+  // Ajouter le contrôle de recherche comme contrôle Leaflet (une seule fois)
+  useEffect(() => {
+    const map = getMap();
+    if (!map || map._searchControl) return; // Ne pas recréer si déjà existant
+
+    // Créer le contrôle de recherche personnalisé
+    const SearchControl = L.Control.extend({
+      onAdd: function (map) {
+        const container = L.DomUtil.create("div", "search-control");
+        container.style.cssText = `
+          background: rgba(255,255,255,0.95);
+          border: 1px solid #ddd;
+          border-radius: 8px;
+          padding: 8px 12px;
+          font-size: 12px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 200px;
+        `;
+
+        const input = L.DomUtil.create("input", "search-input");
+        input.type = "text";
+        input.placeholder = "Rechercher un chauffeur...";
+        input.value = searchQuery;
+        input.style.cssText = `
+          border: none;
+          outline: none;
+          background: transparent;
+          font-size: 12px;
+          flex: 1;
+          color: #334155;
+        `;
+
+        const clearBtn = L.DomUtil.create("button", "clear-search");
+        clearBtn.innerHTML = "✕";
+        clearBtn.style.cssText = `
+          border: none;
+          background: #e2e8f0;
+          color: #64748b;
+          border-radius: 50%;
+          width: 20px;
+          height: 20px;
+          cursor: pointer;
+          font-size: 12px;
+          display: ${searchQuery ? "flex" : "none"};
+          align-items: center;
+          justify-content: center;
+        `;
+
+        container.appendChild(input);
+        container.appendChild(clearBtn);
+
+        // Événements
+        input.addEventListener("input", (e) => {
+          setSearchQuery(e.target.value);
+          clearBtn.style.display = e.target.value ? "flex" : "none";
+        });
+
+        clearBtn.addEventListener("click", () => {
+          input.value = "";
+          setSearchQuery("");
+          clearBtn.style.display = "none";
+        });
+
+        // Empêcher la propagation des événements
+        L.DomEvent.disableClickPropagation(container);
+        L.DomEvent.disableScrollPropagation(container);
+
+        return container;
+      },
+
+      onRemove: function (map) {
+        // Nettoyage si nécessaire
+      },
+    });
+
+    // Ajouter le contrôle
+    map._searchControl = new SearchControl({ position: "topright" });
+    map.addControl(map._searchControl);
+
+    return () => {
+      if (map._searchControl) {
+        map.removeControl(map._searchControl);
+        delete map._searchControl;
+      }
+    };
+  }, []); // Dépendances vides = une seule fois
+
   return (
-    <div style={{ width: "100%", height: 400, position: "relative" }}>
+    <div style={{ width: "100%", height: "100%", position: "relative" }}>
       <div ref={mapElRef} style={{ width: "100%", height: "100%" }} />
-      <div
-        style={{
-          position: "absolute",
-          right: 12,
-          bottom: 12,
-          background: "rgba(255,255,255,0.9)",
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          padding: "6px 10px",
-          fontSize: 12,
-        }}
-      >
-        {Object.keys(driverLocations).length} chauffeur(s) en direct
-      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from typing import Any, Dict, Optional, cast
 import json
 import re
@@ -16,6 +16,7 @@ from models import (
     UserRole,
     Company,
     Booking,
+    BookingStatus,
     Assignment,
     Driver,
     DispatchRun,
@@ -23,8 +24,15 @@ from models import (
 )
 from services.unified_dispatch import data
 from services.unified_dispatch.queue import trigger_job, get_status
+from services.unified_dispatch.suggestions import generate_suggestions
+from services.unified_dispatch.realtime_optimizer import (
+    start_optimizer_for_company,
+    stop_optimizer_for_company,
+    get_optimizer_for_company,
+    check_opportunities_manual
+)
 from werkzeug.exceptions import UnprocessableEntity
-from shared.time_utils import day_local_bounds
+from shared.time_utils import day_local_bounds, now_local
 from routes.companies import get_company_from_token
 
 
@@ -155,6 +163,44 @@ autorun_model = dispatch_ns.model(
     },
 )
 
+# ✅ Corrige la sérialisation de booking/driver via Nested plutôt que dict(obj)
+booking_model = dispatch_ns.model(
+    "BookingBrief",
+    {
+        "id": fields.Integer,
+        "reference": NullableString,
+        "company_id": fields.Integer,
+        "customer_name": NullableString,
+        "pickup_address": NullableString,
+        "dropoff_address": NullableString,
+        "scheduled_time": NullableDateTime,
+        "status": NullableString,
+    },
+)
+
+driver_user_model = dispatch_ns.model(
+    "DriverUserBrief",
+    {
+        "id": fields.Integer,
+        "first_name": NullableString,
+        "last_name": NullableString,
+        "username": NullableString,
+    },
+)
+
+driver_model = dispatch_ns.model(
+    "DriverBrief",
+    {
+        "id": fields.Integer,
+        "company_id": fields.Integer,
+        "user": fields.Nested(driver_user_model, skip_none=True),
+        "username": NullableString,  # Champ flat pour faciliter l'accès
+        "first_name": NullableString,  # Nom du user
+        "last_name": NullableString,   # Prénom du user
+        "full_name": NullableString,   # Nom complet calculé
+    },
+)
+
 assignment_model = dispatch_ns.model(
     "Assignment",
     {
@@ -167,8 +213,8 @@ assignment_model = dispatch_ns.model(
         "dropoff_eta": NullableString,
         "created_at": NullableDateTime,
         "updated_at": NullableDateTime,
-        "booking": NullableDict,
-        "driver": NullableDict
+        "booking": fields.Nested(booking_model, skip_none=True),
+        "driver": fields.Nested(driver_model, skip_none=True),
     },
 )
 
@@ -527,28 +573,52 @@ class AssignmentsListResource(Resource):
         company = _get_current_company()
         time_expr = _booking_time_expr()
 
-        # Ids des bookings du jour (entreprise courante)
+        # Ids des bookings du jour (entreprise courante), en excluant les statuts terminés/annulés
         booking_ids = [
             b.id
             for b in (
                 Booking.query.filter(
                     Booking.company_id == company.id,
                        time_expr >= d0,     # Comparaison avec bornes locales naïves
-                       time_expr < d1, 
+                       time_expr < d1,
+                       # ✅ Exclure COMPLETED/RETURN_COMPLETED/CANCELLED/CANCELED
+                       cast(Any, Booking.status).notin_(
+                           [s for s in [
+                               getattr(BookingStatus, "COMPLETED", None),
+                               getattr(BookingStatus, "RETURN_COMPLETED", None),
+                               getattr(BookingStatus, "CANCELLED", None),
+                               getattr(BookingStatus, "CANCELED", None),
+                           ] if s is not None]
+                       ),
                 ).all()
             )
         ]
 
-        # Assignations pour ces bookings
+        # Assignations pour ces bookings avec eager loading des relations
+        from sqlalchemy.orm import joinedload
+        
         assignments = []
         if booking_ids:
-            assignments = Assignment.query.filter(Assignment.booking_id.in_(booking_ids)).all()
-
-        # Enrichir avec booking et driver
+            assignments = (
+                Assignment.query
+                .filter(Assignment.booking_id.in_(booking_ids))
+                .options(
+                    joinedload(Assignment.booking),  # Charger booking
+                    joinedload(Assignment.driver).joinedload(Driver.user)  # Charger driver + user
+                )
+                .all()
+            )
+        
+        # Enrichir manuellement les champs flat pour Flask-RESTX
         for a in assignments:
-            a.booking = Booking.query.get(a.booking_id)
-            if a.driver_id:
-                a.driver = Driver.query.get(a.driver_id)
+            if a.driver and a.driver.user:
+                user = a.driver.user
+                # Ajouter les champs flat au driver pour le marshalling
+                a.driver.username = user.username
+                a.driver.first_name = user.first_name
+                a.driver.last_name = user.last_name
+                full = f"{user.first_name or ''} {user.last_name or ''}".strip()
+                a.driver.full_name = full or user.username
 
         return assignments
 
@@ -759,9 +829,6 @@ class DelaysResource(Resource):
             .all()
         )
 
-        # Seuil de retard (minutes)
-        delay_threshold = 5
-
         # Calculer les retards
         delays = []
         for a in assigns:
@@ -773,9 +840,34 @@ class DelaysResource(Resource):
             pickup_time = getattr(b, "pickup_time", None) or getattr(b, "scheduled_time", None)
             dropoff_time = getattr(b, "dropoff_time", None)
 
-            # ETAs
-            pickup_eta = getattr(a, "pickup_eta", None)
-            dropoff_eta = getattr(a, "dropoff_eta", None)
+            # Coerce strings -> datetime when needed
+            def _to_dt(v):
+                if v is None:
+                    return None
+                if isinstance(v, datetime):
+                    return v
+                try:
+                    # naive ISO string
+                    return datetime.fromisoformat(str(v))
+                except Exception:
+                    return None
+            pickup_time = _to_dt(pickup_time)
+            dropoff_time = _to_dt(dropoff_time)
+
+            # ETAs (compat: plusieurs noms possibles)
+            pickup_eta = (
+                getattr(a, "pickup_eta", None)
+                or getattr(a, "eta_pickup_at", None)
+                or getattr(a, "estimated_pickup_arrival", None)
+            )
+            dropoff_eta = (
+                getattr(a, "dropoff_eta", None)
+                or getattr(a, "eta_dropoff_at", None)
+                or getattr(a, "estimated_dropoff_arrival", None)
+            )
+
+            pickup_eta = _to_dt(pickup_eta)
+            dropoff_eta = _to_dt(dropoff_eta)
 
             # Calcul des retards
             pickup_delay = 0
@@ -792,8 +884,23 @@ class DelaysResource(Resource):
                 except Exception:
                     dropoff_delay = 0
 
-            # Ajouter si retard significatif
-            if pickup_delay >= delay_threshold or dropoff_delay >= delay_threshold:
+            # Toujours renvoyer si on a un ETA; le front pourra afficher "À l'heure" (0)
+            if pickup_eta or dropoff_eta:
+                max_delay = max(v for v in [pickup_delay, dropoff_delay] if v is not None) if (pickup_delay is not None or dropoff_delay is not None) else 0
+                
+                # ✨ NOUVEAUTÉ: Générer des suggestions intelligentes
+                suggestions_list = []
+                try:
+                    if max_delay != 0:  # Générer suggestions si retard ou avance
+                        suggestions_list = generate_suggestions(
+                            a, 
+                            delay_minutes=max_delay if pickup_delay > 0 else -abs(max_delay),
+                            company_id=company.id
+                        )
+                        suggestions_list = [s.to_dict() for s in suggestions_list]
+                except Exception as e:
+                    logger.warning("[Delays] Failed to generate suggestions for assignment %s: %s", a.id, e)
+                
                 delay = {
                     "id": a.id,
                     "booking_id": a.booking_id,
@@ -805,9 +912,385 @@ class DelaysResource(Resource):
                     "dropoff_eta": dropoff_eta,
                     "pickup_delay_minutes": pickup_delay,
                     "dropoff_delay_minutes": dropoff_delay,
+                    "delay_minutes": max_delay,
+                    # infos utiles côté front pour affichage
+                    "scheduled_time": getattr(b, "scheduled_time", None),
+                    "estimated_arrival": pickup_eta or dropoff_eta,
                     "booking": b,
                     "driver": Driver.query.get(a.driver_id) if a.driver_id else None,
+                    # ✨ Suggestions intelligentes
+                    "suggestions": suggestions_list,
                 }
                 delays.append(delay)
 
         return delays
+
+
+@dispatch_ns.route("/delays/live")
+class LiveDelaysResource(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    @dispatch_ns.doc(params={"date": "YYYY-MM-DD"})
+    def get(self):
+        """
+        Retards en temps réel avec recalcul des ETAs et suggestions intelligentes.
+        Inclut les retards actuels ET prédits, avec suggestions de réassignation
+        et impact sur les courses suivantes.
+        """
+        
+        # Validation de la date
+        date_str = request.args.get("date")
+        if not date_str:
+            return {"error": "Paramètre 'date' manquant (format: YYYY-MM-DD)"}, 400
+        
+        try:
+            d = _parse_date(date_str)
+        except ValueError as e:
+            return {"error": f"Format de date invalide: {e}"}, 400
+
+        d0, d1 = day_local_bounds(d.strftime("%Y-%m-%d"))
+
+        company = _get_current_company()
+        time_expr = _booking_time_expr()
+        
+        # Récupérer toutes les assignations actives (EXCLURE les courses terminées)
+        assigns = (
+            Assignment.query.join(Booking, Booking.id == Assignment.booking_id)
+            .filter(
+                Booking.company_id == company.id,
+                time_expr >= d0,
+                time_expr < d1,
+                # ✅ EXCLURE les statuts terminés
+                cast(Any, Booking.status).notin_([
+                    BookingStatus.COMPLETED,
+                    BookingStatus.RETURN_COMPLETED,
+                    BookingStatus.CANCELED,
+                ]),
+            )
+            .all()
+        )
+
+        delays = []
+        for a in assigns:
+            b = Booking.query.get(a.booking_id)
+            if not b:
+                continue
+            
+            # ✅ Double vérification : skip les courses terminées
+            if b.status in [
+                BookingStatus.COMPLETED,
+                BookingStatus.RETURN_COMPLETED,
+                BookingStatus.CANCELED,
+            ]:
+                continue
+
+            # Récupérer le chauffeur pour position temps réel
+            driver = Driver.query.get(a.driver_id) if a.driver_id else None
+            
+            # Position actuelle du chauffeur
+            if driver:
+                driver_pos = (
+                    getattr(driver, "current_lat", getattr(driver, "latitude", 46.2044)),
+                    getattr(driver, "current_lon", getattr(driver, "longitude", 6.1432))
+                )
+            else:
+                driver_pos = None
+            
+            # Position pickup
+            pickup_lat = getattr(b, "pickup_lat", None)
+            pickup_lon = getattr(b, "pickup_lon", None)
+            pickup_pos = (pickup_lat, pickup_lon) if pickup_lat and pickup_lon else None
+            
+            # Temps prévus
+            pickup_time = getattr(b, "pickup_time", None) or getattr(b, "scheduled_time", None)
+            dropoff_time = getattr(b, "dropoff_time", None)
+
+            # Coerce strings -> datetime
+            def _to_dt(v):
+                if v is None:
+                    return None
+                if isinstance(v, datetime):
+                    return v
+                try:
+                    return datetime.fromisoformat(str(v))
+                except Exception:
+                    return None
+            
+            pickup_time = _to_dt(pickup_time)
+            dropoff_time = _to_dt(dropoff_time)
+
+            # Recalcul ETA en temps réel si position chauffeur ET pickup disponibles
+            current_eta = None
+            if driver_pos and pickup_pos and pickup_time:
+                try:
+                    # Utiliser calculate_eta pour estimation temps réel
+                    eta_seconds = data.calculate_eta(driver_pos, pickup_pos)
+                    current_eta = now_local() + timedelta(seconds=eta_seconds)
+                except Exception as e:
+                    logger.warning("[LiveDelays] Failed to calculate ETA for assignment %s: %s", a.id, e)
+            
+            # Utiliser ETA planifié en fallback
+            if not current_eta:
+                current_eta = (
+                    getattr(a, "pickup_eta", None)
+                    or getattr(a, "eta_pickup_at", None)
+                    or getattr(a, "estimated_pickup_arrival", None)
+                )
+                current_eta = _to_dt(current_eta)
+
+            # Calcul du retard
+            delay_minutes = 0
+            status = "unknown"
+            
+            if pickup_time and current_eta:
+                try:
+                    delay_seconds = (current_eta - pickup_time).total_seconds()
+                    delay_minutes = int(delay_seconds / 60)
+                    
+                    if delay_minutes > 5:
+                        status = "late"
+                    elif delay_minutes < -5:
+                        status = "early"
+                    else:
+                        status = "on_time"
+                except Exception:
+                    pass
+            elif pickup_time and not current_eta:
+                # ⭐ FALLBACK : Si pas d'ETA disponible, comparer heure actuelle vs heure prévue
+                # Utile pour détecter les retards même sans GPS
+                try:
+                    current_time = now_local()
+                    time_diff_seconds = (current_time - pickup_time).total_seconds()
+                    
+                    # Si l'heure actuelle est déjà passée et le chauffeur n'est pas arrivé
+                    if time_diff_seconds > 300:  # 5 minutes de buffer
+                        delay_minutes = int(time_diff_seconds / 60)
+                        status = "late"
+                    elif time_diff_seconds < -300:
+                        delay_minutes = int(time_diff_seconds / 60)
+                        status = "early"
+                    else:
+                        status = "on_time"
+                except Exception as e:
+                    logger.warning("[LiveDelays] Failed to calculate time-based delay: %s", e)
+
+            # Générer suggestions intelligentes
+            suggestions_list = []
+            if delay_minutes != 0:
+                try:
+                    suggestions = generate_suggestions(a, delay_minutes, company.id)
+                    suggestions_list = [s.to_dict() for s in suggestions]
+                    logger.info("[LiveDelays] Generated %d suggestions for assignment %s (delay: %d min)", 
+                               len(suggestions_list), a.id, delay_minutes)
+                except Exception as e:
+                    logger.exception("[LiveDelays] Failed to generate suggestions for assignment %s: %s", a.id, e)
+
+            # Vérifier l'impact cascade (courses suivantes du même chauffeur)
+            cascade_impact = []
+            if driver and delay_minutes > 5:
+                try:
+                    # Trouver les prochaines courses du chauffeur
+                    next_assignments = (
+                        Assignment.query
+                        .join(Booking, Booking.id == Assignment.booking_id)
+                        .filter(
+                            Assignment.driver_id == driver.id,
+                            Assignment.id != a.id,
+                            Booking.scheduled_time > pickup_time,
+                            Booking.scheduled_time < pickup_time + timedelta(hours=4)
+                        )
+                        .order_by(Booking.scheduled_time.asc())
+                        .limit(3)
+                        .all()
+                    )
+                    
+                    for next_a in next_assignments:
+                        next_b = Booking.query.get(next_a.booking_id)
+                        if next_b:
+                            cascade_impact.append({
+                                "booking_id": next_b.id,
+                                "scheduled_time": next_b.scheduled_time.isoformat() if next_b.scheduled_time else None,
+                                "customer_name": getattr(next_b, "customer_name", None),
+                                "potential_delay_minutes": delay_minutes  # Propagation simplifiée
+                            })
+                except Exception as e:
+                    logger.warning("[LiveDelays] Failed to check cascade impact: %s", e)
+
+            # Construire la réponse
+            if current_eta or delay_minutes != 0:
+                delay = {
+                    "id": a.id,
+                    "booking_id": a.booking_id,
+                    "driver_id": a.driver_id,
+                    "assignment_id": a.id,
+                    "delay_minutes": delay_minutes,
+                    "status": status,
+                    "current_eta": current_eta.isoformat() if current_eta else None,
+                    "scheduled_time": pickup_time.isoformat() if pickup_time else None,
+                    "pickup_time": pickup_time.isoformat() if pickup_time else None,
+                    "dropoff_time": dropoff_time.isoformat() if dropoff_time else None,
+                    
+                    # ✨ Suggestions intelligentes
+                    "suggestions": suggestions_list,
+                    
+                    # ✨ Impact cascade
+                    "impacts_next_bookings": cascade_impact,
+                    
+                    # Infos contextuelles
+                    "booking": {
+                        "id": b.id,
+                        "reference": getattr(b, "reference", None),
+                        "customer_name": getattr(b, "customer_name", None),
+                        "pickup_address": getattr(b, "pickup_address", None),
+                        "dropoff_address": getattr(b, "dropoff_address", None),
+                    },
+                    "driver": {
+                        "id": driver.id,
+                        "name": f"{driver.user.first_name} {driver.user.last_name}" if driver and driver.user else None,
+                        "current_position": {
+                            "lat": driver_pos[0] if driver_pos else None,
+                            "lon": driver_pos[1] if driver_pos else None,
+                        } if driver_pos else None,
+                    } if driver else None,
+                }
+                delays.append(delay)
+
+        # Statistiques globales
+        total = len(delays)
+        late = len([d for d in delays if d["status"] == "late"])
+        early = len([d for d in delays if d["status"] == "early"])
+        on_time = len([d for d in delays if d["status"] == "on_time"])
+        
+        avg_delay = 0
+        if delays:
+            delay_values = [d["delay_minutes"] for d in delays]
+            avg_delay = sum(delay_values) / len(delay_values) if delay_values else 0
+
+        return {
+            "delays": delays,
+            "summary": {
+                "total": total,
+                "late": late,
+                "early": early,
+                "on_time": on_time,
+                "average_delay": round(avg_delay, 2),
+            },
+            "timestamp": now_local().isoformat(),
+        }, 200
+
+
+@dispatch_ns.route("/optimizer/start")
+class OptimizerStartResource(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):
+        """
+        Démarre le monitoring en temps réel pour l'entreprise.
+        Surveille automatiquement les retards et propose des optimisations.
+        """
+        company = _get_current_company()
+        company_id = int(getattr(company, "id"))
+        
+        body = request.get_json(silent=True) or {}
+        check_interval = int(body.get("check_interval_seconds", 120))  # 2 min par défaut
+        
+        try:
+            optimizer = start_optimizer_for_company(company_id, check_interval)
+            status = optimizer.get_status()
+            
+            return {
+                "message": "Monitoring temps réel démarré",
+                "status": status
+            }, 200
+        
+        except Exception as e:
+            logger.exception("[Optimizer] Failed to start for company %s", company_id)
+            return {"error": f"Échec du démarrage: {e}"}, 500
+
+
+@dispatch_ns.route("/optimizer/stop")
+class OptimizerStopResource(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):
+        """Arrête le monitoring en temps réel pour l'entreprise."""
+        company = _get_current_company()
+        company_id = int(getattr(company, "id"))
+        
+        try:
+            stop_optimizer_for_company(company_id)
+            
+            return {
+                "message": "Monitoring temps réel arrêté",
+                "company_id": company_id
+            }, 200
+        
+        except Exception as e:
+            logger.exception("[Optimizer] Failed to stop for company %s", company_id)
+            return {"error": f"Échec de l'arrêt: {e}"}, 500
+
+
+@dispatch_ns.route("/optimizer/status")
+class OptimizerStatusResource(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Récupère le statut du monitoring temps réel."""
+        company = _get_current_company()
+        company_id = int(getattr(company, "id"))
+        
+        try:
+            optimizer = get_optimizer_for_company(company_id)
+            
+            if optimizer is None:
+                return {
+                    "running": False,
+                    "company_id": company_id,
+                    "message": "Monitoring non démarré"
+                }, 200
+            
+            status = optimizer.get_status()
+            return status, 200
+        
+        except Exception as e:
+            logger.exception("[Optimizer] Failed to get status for company %s", company_id)
+            return {"error": f"Échec récupération statut: {e}"}, 500
+
+
+@dispatch_ns.route("/optimizer/opportunities")
+class OptimizerOpportunitiesResource(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    @dispatch_ns.doc(params={"date": "YYYY-MM-DD (optionnel, défaut: aujourd'hui)"})
+    def get(self):
+        """
+        Récupère les opportunités d'optimisation détectées.
+        Mode manuel: lance une vérification à la demande.
+        """
+        company = _get_current_company()
+        company_id = int(getattr(company, "id"))
+        
+        date_str = request.args.get("date")
+        
+        try:
+            # Vérifier si un optimizer est actif
+            optimizer = get_optimizer_for_company(company_id)
+            
+            if optimizer and optimizer.get_status()["running"]:
+                # Utiliser le cache du monitoring actif
+                opportunities = optimizer.get_current_opportunities()
+            else:
+                # Vérification manuelle
+                opportunities = check_opportunities_manual(company_id, date_str)
+            
+            return {
+                "opportunities": [o.to_dict() for o in opportunities],
+                "count": len(opportunities),
+                "critical_count": len([o for o in opportunities if o.severity == "critical"]),
+                "high_count": len([o for o in opportunities if o.severity == "high"]),
+                "timestamp": now_local().isoformat(),
+            }, 200
+        
+        except Exception as e:
+            logger.exception("[Optimizer] Failed to get opportunities for company %s", company_id)
+            return {"error": f"Échec récupération opportunités: {e}"}, 500

@@ -2,7 +2,7 @@
 module.exports = () => ({
   name: "LUMO Driver",
   slug: "lumo-driver",
-  version: "1.0.0",
+  version: "1.0.1",
   // sdkVersion: "53.0.0", // Supprimé : n'est plus nécessaire avec les SDKs récents
   scheme: "lumo",
   orientation: "portrait",
@@ -13,7 +13,7 @@ module.exports = () => ({
     image: "./assets/images/splash-icon.png",
     imageWidth: 200,
     resizeMode: "contain",
-    backgroundColor: "#ffffff"
+    backgroundColor: "#ffffff",
   },
 
   ios: {
@@ -23,32 +23,32 @@ module.exports = () => ({
     // googleServicesFile: process.env.GOOGLE_SERVICES_PLIST ?? "./GoogleService-Info.plist",
   },
 
-android: {
-  package: "com.lumo.driver",
-  googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
-  versionCode: 1,
-  adaptiveIcon: {
-    foregroundImage: "./assets/images/adaptive-icon.png",
-    backgroundColor: "#ffffff"
+  android: {
+    package: "com.lumo.driver",
+    googleServicesFile:
+      process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
+    versionCode: 2,
+    adaptiveIcon: {
+      foregroundImage: "./assets/images/adaptive-icon.png",
+      backgroundColor: "#ffffff",
+    },
+    permissions: [
+      "android.permission.POST_NOTIFICATIONS",
+      "android.permission.ACCESS_BACKGROUND_LOCATION",
+      "android.permission.FOREGROUND_SERVICE",
+      "android.permission.FOREGROUND_SERVICE_LOCATION",
+    ],
+    config: {
+      googleMaps: {
+        apiKey: process.env.EXPO_PUBLIC_ANDROID_MAPS_API_KEY,
+      },
+    },
   },
-  permissions: [
-    "android.permission.POST_NOTIFICATIONS",
-    "android.permission.ACCESS_BACKGROUND_LOCATION",
-    "android.permission.FOREGROUND_SERVICE",
-    "android.permission.FOREGROUND_SERVICE_LOCATION"
-  ],
-  config: {
-    googleMaps: {
-      apiKey: process.env.EXPO_PUBLIC_ANDROID_MAPS_API_KEY
-    }
-  }
-},
-
 
   web: {
     bundler: "metro",
     output: "static",
-    favicon: "./assets/images/favicon.png"
+    favicon: "./assets/images/favicon.png",
   },
 
   plugins: [
@@ -61,9 +61,9 @@ android: {
       "expo-notifications",
       {
         icon: "./assets/icons/notification-icon.png",
-        color: "#ffffff"
+        color: "#ffffff",
         // sounds: [] // `sounds` est vide, peut être omis si vous utilisez le son par défaut
-      }
+      },
     ],
     [
       "expo-location",
@@ -71,19 +71,20 @@ android: {
         // ✅ AMÉLIORATION : Configuration moderne pour la géolocalisation en arrière-plan
         foregroundService: {
           notificationTitle: "LUMO Driver est actif",
-          notificationBody: "Suivi de la localisation en cours pour vos missions.",
-          notificationColor: "#ffffff"
-        }
-      }
+          notificationBody:
+            "Suivi de la localisation en cours pour vos missions.",
+          notificationColor: "#ffffff",
+        },
+      },
     ],
     [
       "expo-build-properties",
       {
         android: {
-          "classpath": "com.google.gms:google-services:4.4.2"
-        }
-      }
-    ]
+          classpath: "com.google.gms:google-services:4.4.2",
+        },
+      },
+    ],
   ],
 
   experiments: { typedRoutes: true },
@@ -95,8 +96,8 @@ android: {
     SOCKET_HOST: process.env.SOCKET_HOST || "192.168.1.216",
     SOCKET_PORT: process.env.SOCKET_PORT || "5000",
     router: {},
-    eas: { projectId: "91b7d51b-eb9c-4239-a7bc-d08d56edc2f3" }
-   },
+    eas: { projectId: "91b7d51b-eb9c-4239-a7bc-d08d56edc2f3" },
+  },
 
-  owner: "drinjasiqi"
+  owner: "drinjasiqi",
 });

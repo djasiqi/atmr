@@ -19,7 +19,10 @@ celery: Celery = Celery(
     "atmr",
     broker=CELERY_BROKER_URL,
     backend=CELERY_RESULT_BACKEND,
-    include=["tasks.dispatch_tasks"],
+    include=[
+        "tasks.dispatch_tasks",
+        "tasks.planning_tasks",
+    ],
 )
 
 # Configure Celery
@@ -43,6 +46,12 @@ celery.conf.beat_schedule = {
         "task": "tasks.dispatch_tasks.autorun_tick",
         "schedule": DISPATCH_AUTORUN_INTERVAL_SEC,
         "options": {"expires": DISPATCH_AUTORUN_INTERVAL_SEC * 2},
+    },
+    # Planning scans (daily at ~04:15, seconds granularity acceptable in dev)
+    "planning-compliance-scan": {
+        "task": "planning.compliance_scan",
+        "schedule": 24 * 3600,
+        "options": {"expires": 6 * 3600},
     },
 }
 

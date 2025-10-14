@@ -2,6 +2,7 @@ from flask import request, make_response, current_app
 from flask_restx import Namespace, Resource, fields
 from flask_jwt_extended import (
     create_access_token,
+    create_refresh_token,
     jwt_required,
     get_jwt_identity
 )
@@ -91,10 +92,17 @@ class Login(Resource):
                 additional_claims=claims,
                 expires_delta=timedelta(hours=1)
             )
+            
+            # Création du refresh token (valide 30 jours)
+            refresh_token = create_refresh_token(
+                identity=str(user.public_id),
+                expires_delta=timedelta(days=30)
+            )
 
             return {
                 "message": "Connexion réussie",
                 "token": access_token,
+                "refresh_token": refresh_token,
                 "user": {
                     "id": user.id,
                     "public_id": user.public_id,

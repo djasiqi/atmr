@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import os
 import json
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, is_dataclass
+import copy
 from typing import Any, Dict
 from ast import literal_eval
 from datetime import datetime
@@ -52,15 +53,15 @@ class SolverParams:
 @dataclass
 class TimeSettings:
     # Buffers et marges (minutes)
-    pickup_buffer_min: int = 5               # marge avant pickup
+    pickup_buffer_min: int = 5               # marge avant pickup (±5min → fenêtre 17h55-18h05 pour course à 18h00)
     dropoff_buffer_min: int = 5              # marge avant dropoff
     pickup_window_min: int = 10              # fenêtre de pickup
     dropoff_window_min: int = 10             # fenêtre de dropoff
     horizon_min: int = 240                   # horizon de planification (4h)
     horizon_max: int = 1440                  # horizon max (24h)
-    # Temps de service (minutes)
-    pickup_service_min: int = 3              # temps de prise en charge
-    dropoff_service_min: int = 3             # temps de dépose
+    # Temps de service (minutes) - RÈGLES MÉTIER
+    pickup_service_min: int = 10             # temps de prise en charge (installation client)
+    dropoff_service_min: int = 15            # temps de dépose (désinstallation client)
     # Seuils (minutes)
     late_threshold_min: int = 5              # seuil de retard
     early_threshold_min: int = 5             # seuil d'avance
@@ -173,10 +174,33 @@ def _merge_dicts(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, An
 
 
 def merge_overrides(base: Settings, overrides: Dict[str, Any]) -> Settings:
-    """Fusionne des paramètres de surcharge dans une configuration de base."""
-    base_dict = asdict(base)
-    result_dict = _merge_dicts(base_dict, overrides)
-    return Settings(**result_dict)
+    """Applique des overrides dict sur une instance Settings (avec sous-dataclasses).
+    - Ignore les clés inconnues (mode, run_async, ...)
+    - Conserve les types des sous-objets (pas de dict qui remplace une dataclass)
+    """
+    if not isinstance(overrides, dict):
+        return base
+
+    def _merge_into(obj: Any, ov: Dict[str, Any]) -> Any:
+        if not isinstance(ov, dict):
+            return obj
+        for k, v in ov.items():
+            if not hasattr(obj, k):
+                # clé inconnue → on ignore
+                continue
+            cur = getattr(obj, k)
+            if is_dataclass(cur) and isinstance(v, dict):
+                _merge_into(cur, v)
+            else:
+                try:
+                    setattr(obj, k, v)
+                except Exception:
+                    # si assignation impossible, on ignore
+                    continue
+        return obj
+
+    new_settings = copy.deepcopy(base)
+    return _merge_into(new_settings, overrides)
 
 
 def from_dict(d: Dict[str, Any]) -> Settings:

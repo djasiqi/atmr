@@ -1,14 +1,14 @@
 // C:\Users\jasiq\atmr\mobile\driver-app\app\(dashboard)\schedule.tsx
 
-import React, { useEffect, useState } from 'react';
-import { View, FlatList, RefreshControl, Alert } from 'react-native';
-import { useAuth } from '@/hooks/useAuth';
-import { getDriverSchedule, Booking } from '@/services/api';
-import { Loader } from '@/components/ui/Loader';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { Card } from '@/components/ui/Card';
-import { router } from 'expo-router';
+import React, { useEffect, useState } from "react";
+import { View, FlatList, RefreshControl, Alert } from "react-native";
+import { useAuth } from "@/hooks/useAuth";
+import { getAssignedTrips, Booking } from "@/services/api";
+import { Loader } from "@/components/ui/Loader";
+import { ThemedText } from "@/components/ThemedText";
+import { ThemedView } from "@/components/ThemedView";
+import { Card } from "@/components/ui/Card";
+import { router } from "expo-router";
 
 export default function ScheduleScreen() {
   const { driver } = useAuth();
@@ -19,10 +19,10 @@ export default function ScheduleScreen() {
   const loadSchedule = async () => {
     setLoading(true);
     try {
-      const data = await getDriverSchedule();  // <-- plus d'argument !
+      const data = await getAssignedTrips();
       setSchedule(data);
     } catch {
-      Alert.alert('Erreur', 'Impossible de charger votre planning.');
+      Alert.alert("Erreur", "Impossible de charger votre planning.");
     } finally {
       setLoading(false);
     }
@@ -51,7 +51,9 @@ export default function ScheduleScreen() {
       className="flex-1 bg-gray-50 dark:bg-black px-4 pt-6"
       data={schedule}
       keyExtractor={(item) => item.id.toString()}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
       ListHeaderComponent={() => (
         <ThemedText className="text-xl font-semibold mb-4">
           Mon Planning

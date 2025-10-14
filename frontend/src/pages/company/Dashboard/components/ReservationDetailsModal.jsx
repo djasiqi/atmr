@@ -1,6 +1,7 @@
 // src/pages/Dashboard/ReservationDetailsModal.jsx
 import React from "react";
-import styles from '../CompanyDashboard.module.css';
+import styles from "../CompanyDashboard.module.css";
+import { renderBookingDateTime } from "../../../../utils/formatDate";
 
 const ReservationDetailsModal = ({ reservation, onClose }) => {
   return (
@@ -11,8 +12,7 @@ const ReservationDetailsModal = ({ reservation, onClose }) => {
           <strong>Client :</strong> {reservation.customer_name}
         </p>
         <p>
-          <strong>Date / Heure :</strong>{" "}
-          {new Date(reservation.scheduled_time).toLocaleString("fr-FR")}
+          <strong>Date / Heure :</strong> {renderBookingDateTime(reservation)}
         </p>
         <p>
           <strong>Montant :</strong> {reservation.amount} CHF

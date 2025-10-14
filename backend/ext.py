@@ -88,7 +88,30 @@ def role_required(*roles):
                 app_logger.warning("Utilisateur non trouvé pour le public_id : %s", user_public_id)
                 abort(404, description="Utilisateur non trouvé")
 
-            if user.role not in roles:
+            # Convertir les rôles en objets UserRole pour la comparaison
+            from models import UserRole
+            allowed_roles = []
+            
+            # Gérer les deux formats : @role_required(['ADMIN', 'COMPANY']) et @role_required(UserRole.company)
+            if roles and len(roles) > 0:
+                first_arg = roles[0]
+                if isinstance(first_arg, list):
+                    # Format: @role_required(['ADMIN', 'COMPANY'])
+                    role_list = first_arg
+                elif hasattr(first_arg, 'value'):
+                    # Format: @role_required(UserRole.company)
+                    role_list = [first_arg.value]
+                else:
+                    # Format: @role_required('COMPANY')
+                    role_list = [first_arg]
+                
+                for role_str in role_list:
+                    try:
+                        allowed_roles.append(UserRole[role_str])
+                    except KeyError:
+                        app_logger.warning("Rôle invalide dans la configuration : %s", role_str)
+            
+            if user.role not in allowed_roles:
                 app_logger.warning("⛔ Accès refusé : %s (%s) a tenté d'accéder à une route restreinte.",
                                    user.username, user.role)
                 abort(403, description="Accès non autorisé")

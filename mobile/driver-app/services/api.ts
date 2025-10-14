@@ -30,7 +30,7 @@ export const baseURL = __DEV__
 const TOKEN_KEY = "token";
 
 // --- instance axios ---
-const api = axios.create({
+export const api = axios.create({
   baseURL,
   timeout: 10000,
   headers: { "Content-Type": "application/json" },
@@ -264,6 +264,8 @@ export type Booking = {
   status: string;
   client_name: string;
   estimated_duration?: string;
+  duration_seconds?: number; // Durée estimée du trajet en secondes
+  distance_meters?: number; // Distance en mètres
   customer_name?: string;
   client?: {
     id: number;
@@ -276,6 +278,14 @@ export type Booking = {
   wheelchair?: boolean;
   notes?: string;
   is_return: boolean;
+  // Nouveaux champs pour les informations médicales
+  medical_facility?: string;
+  doctor_name?: string;
+  hospital_service?: string;
+  notes_medical?: string;
+  // Nouveaux champs pour la chaise roulante
+  wheelchair_client_has?: boolean;
+  wheelchair_need?: boolean;
   [key: string]: any;
 };
 
@@ -339,12 +349,16 @@ export const toggleDriverAvailability = updateDriverAvailability;
 
 // Messages
 export type Message = {
-  id: number;
-  sender: string;
-  receiver?: string | null;
+  id: number | string;
+  company_id?: number;
+  sender_id?: number | null;
+  receiver_id?: number | null;
   content: string;
   timestamp: string;
-  sender_role: string;
+  sender_role: "DRIVER" | "COMPANY" | string;
+  sender_name?: string | null;
+  receiver_name?: string | null;
+  _localId?: string | null;
 };
 export const getCompanyMessages = async (
   companyId: number

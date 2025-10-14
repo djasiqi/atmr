@@ -6,6 +6,7 @@ import {
   completeBooking,
   reportBookingIssue,
 } from "../../services/driverService";
+import { renderBookingDateTime } from "../../utils/formatDate";
 
 const CourseDetailsModal = ({ course, onClose }) => {
   const handleStart = async () => {
@@ -51,7 +52,7 @@ const CourseDetailsModal = ({ course, onClose }) => {
         </p>
         <p>
           <strong>Heure :</strong>{" "}
-          {new Date(course.scheduled_time).toLocaleString("fr-FR")}
+          {renderBookingDateTime(course)}
         </p>
         <p>
           <strong>Départ :</strong> {course.pickup_location}
@@ -59,6 +60,42 @@ const CourseDetailsModal = ({ course, onClose }) => {
         <p>
           <strong>Destination :</strong> {course.dropoff_location}
         </p>
+        
+        {/* Informations chaise roulante */}
+        {(course.wheelchair_client_has || course.wheelchair_need) && (
+          <div className={styles.wheelchairInfo}>
+            {course.wheelchair_client_has && (
+              <p className={styles.wheelchairBadge}>
+                ♿ <strong>Client en chaise roulante</strong>
+              </p>
+            )}
+            {course.wheelchair_need && (
+              <p className={styles.wheelchairBadge}>
+                🏥 <strong>Prendre une chaise roulante</strong>
+              </p>
+            )}
+          </div>
+        )}
+        
+        {/* Informations médicales */}
+        {(course.medical_facility || course.doctor_name || course.hospital_service || course.notes_medical) && (
+          <div className={styles.medicalInfo}>
+            <p><strong>🏥 Informations médicales :</strong></p>
+            {course.medical_facility && (
+              <p className={styles.medicalDetail}>📍 {course.medical_facility}</p>
+            )}
+            {course.doctor_name && (
+              <p className={styles.medicalDetail}>👨‍⚕️ Dr {course.doctor_name}</p>
+            )}
+            {course.hospital_service && (
+              <p className={styles.medicalDetail}>🚪 {course.hospital_service}</p>
+            )}
+            {course.notes_medical && (
+              <p className={styles.medicalDetail}>📝 {course.notes_medical}</p>
+            )}
+          </div>
+        )}
+        
         {course.instructions && (
           <p>
             <strong>Instructions :</strong> {course.instructions}

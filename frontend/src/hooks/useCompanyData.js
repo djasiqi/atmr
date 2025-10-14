@@ -22,6 +22,7 @@ const useCompanyData = ({ day } = {}) => {
       const data = await fetchCompanyInfo();
       setCompany(data);
       console.log("✅ Company chargée :", data);
+      console.log("🖼️ Logo URL dans les données:", data?.logo_url);
     } catch (err) {
       console.error("❌ Erreur lors du chargement de l'entreprise :", err);
       setError("Erreur lors du chargement de l'entreprise.");

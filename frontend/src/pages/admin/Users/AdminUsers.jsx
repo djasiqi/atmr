@@ -268,7 +268,10 @@ const AdminUsers = () => {
                             : "📅 Inconnu"}{" "}
                         </td>
                         <td>
-                          <button onClick={() => handleResetPassword(user.id)}>
+                          <button
+                            onClick={() => handleResetPassword(user.id)}
+                            className={styles.resetButton}
+                          >
                             🔑 Réinitialiser
                           </button>
                           <button

@@ -121,7 +121,7 @@ h1 {
 }
 
 /* 🛠️ Boutons */
-button {
+.userTable button {
   cursor: pointer;
   padding: 8px 14px;
   font-size: 14px;
@@ -131,13 +131,13 @@ button {
 }
 
 /* 🔑 Bouton de réinitialisation */
-button:first-child {
-  background-color: #28a745;
+.resetButton {
+  background-color: #00796b;
   color: white;
 }
 
-button:first-child:hover {
-  background-color: #218838;
+.resetButton:hover {
+  background-color: #00695c;
 }
 
 /* ❌ Bouton de suppression */
@@ -226,7 +226,10 @@ td:nth-child(4) {
     padding: 10px;
   }
 
-  button {
+  .userTable button,
+  .resetButton,
+  .deleteButton,
+  .modalContent button {
     padding: 6px 10px;
     font-size: 13px;
   }

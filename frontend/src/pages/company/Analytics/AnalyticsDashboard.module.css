@@ -1,0 +1,481 @@
+/* frontend/src/pages/company/Analytics/AnalyticsDashboard.module.css */
+
+/* ==================== Layout Principal ==================== */
+
+.companyContainer {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: #f4f7fc;
+}
+
+.dashboardLayout {
+  display: flex;
+  flex-grow: 1;
+  height: 100%;
+  margin-left: var(--sidebar-w, 72px);
+}
+
+.mainContent {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 20px;
+  margin: 20px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  overflow-y: auto;
+}
+
+.analytics {
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+/* ==================== Header avec Gradient ==================== */
+
+.analyticsHeader {
+  background: linear-gradient(135deg, #0f766e 0%, #0d5e56 100%);
+  color: white;
+  padding: 24px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 16px rgba(15, 118, 110, 0.2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.headerLeft h1 {
+  margin: 0 0 8px 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: white;
+}
+
+.subtitle {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.95rem;
+}
+
+/* ==================== Sélecteur de Période (sur fond gradient) ==================== */
+
+.periodSelector {
+  display: flex;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.periodButton {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.periodButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.periodActive {
+  padding: 8px 16px;
+  border: none;
+  background: white;
+  color: #0f766e;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* ==================== KPI Cards - Identique au Dashboard ==================== */
+
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.kpiCard {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  padding: 14px 18px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: all 0.3s ease;
+  border: 1px solid #e2e8f0;
+}
+
+.kpiCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 121, 107, 0.12);
+  border-color: #0f766e;
+}
+
+.kpiIcon {
+  font-size: 2rem;
+  line-height: 1;
+  opacity: 0.9;
+  flex-shrink: 0;
+}
+
+.kpiContent {
+  flex: 1;
+  text-align: left;
+}
+
+.kpiLabel {
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin: 0 0 4px 0;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.kpiValue {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0;
+  color: #0f766e;
+  line-height: 1.2;
+}
+
+.kpiSubtext {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+/* ==================== Insights Section ==================== */
+
+.insightsSection {
+  margin-bottom: 32px;
+  background: linear-gradient(135deg, #fafbfc 0%, #f4f7fc 100%);
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.sectionTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #0f766e;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.insightsList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.insightCard {
+  background: #ffffff;
+  border-left: 4px solid;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.insightHigh {
+  border-left-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.insightCritical {
+  border-left-color: #ef4444;
+  background: #fef2f2;
+}
+
+.insightMedium {
+  border-left-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.insightLow {
+  border-left-color: #10b981;
+  background: #f0fdf4;
+}
+
+.insightHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.insightIcon {
+  font-size: 1.25rem;
+}
+
+.insightTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.insightMessage {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #374151;
+  line-height: 1.5;
+}
+
+/* ==================== Graphiques ==================== */
+
+.chartsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.chartCard {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+}
+
+.chartCard:hover {
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.1);
+  transform: translateY(-2px);
+}
+
+.chartTitle {
+  margin: 0 0 20px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #0f766e;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+/* ==================== Barre d'Actions ==================== */
+
+.actionsBar {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.exportButton {
+  padding: 10px 20px;
+  background: #ffffff;
+  border: 1px solid #0f766e;
+  color: #0f766e;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.exportButton:hover {
+  background: #0f766e;
+  color: white;
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.2);
+}
+
+/* ==================== États Spéciaux ==================== */
+
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e5e7eb;
+  border-top-color: #0f766e;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.errorContainer {
+  padding: 40px;
+  text-align: center;
+}
+
+.errorContainer h2 {
+  color: #ef4444;
+  margin-bottom: 16px;
+}
+
+.errorContainer p {
+  color: #6b7280;
+  margin-bottom: 24px;
+}
+
+.retryButton {
+  padding: 12px 24px;
+  background: #0f766e;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.retryButton:hover {
+  background: #0d5e56;
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.3);
+}
+
+.emptyState {
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.emptyState h2 {
+  font-size: 1.5rem;
+  color: #0f172a;
+  margin-bottom: 12px;
+}
+
+.emptyState p {
+  color: #6b7280;
+  font-size: 1rem;
+  margin-bottom: 8px;
+}
+
+.emptyHint {
+  color: #9ca3af;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+/* ==================== Responsive ==================== */
+
+@media (max-width: 1200px) {
+  .chartsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1024px) {
+  .kpiGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .analyticsHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .headerLeft h1 {
+    font-size: 1.5rem;
+  }
+  
+  .periodSelector {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .periodButton,
+  .periodActive {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+
+  .kpiGrid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .chartsGrid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .insightsList {
+    grid-template-columns: 1fr;
+  }
+
+  .actionsBar {
+    flex-direction: column;
+  }
+
+  .exportButton {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .mainContent {
+    padding: 16px;
+    margin: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .headerLeft h1 {
+    font-size: 1.25rem;
+  }
+  
+  .subtitle {
+    font-size: 0.85rem;
+  }
+  
+  .kpiIcon {
+    width: 48px;
+    height: 48px;
+    font-size: 1.5rem;
+  }
+  
+  .kpiValue {
+    font-size: 1.5rem;
+  }
+  
+  .kpiLabel {
+    font-size: 0.75rem;
+  }
+}
+

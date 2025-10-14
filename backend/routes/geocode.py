@@ -79,9 +79,25 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
             housenumber = props.get("housenumber")
             street = props.get("street")
             city = props.get("city") or props.get("locality")
+            postcode = props.get("postcode")
             country = props.get("country")
-            label = props.get("name") or "Adresse"
-            address_display = " ".join(x for x in [street, housenumber] if x) or street or label
+            
+            # Construire l'adresse complète avec numéro et rue
+            street_with_number = " ".join(x for x in [street, housenumber] if x) if street else None
+            
+            # Construire le label : nom OU adresse complète OU au moins la ville
+            if props.get("name"):
+                label = props.get("name")
+            elif street_with_number:
+                # Adresse complète : "Rue + Numéro, CP, Ville"
+                parts = [street_with_number, postcode, city]
+                label = ", ".join(x for x in parts if x)
+            elif city:
+                label = city
+            else:
+                label = "Adresse"
+            
+            address_display = street_with_number or street or label
 
             out.append({
                 "source": "photon",

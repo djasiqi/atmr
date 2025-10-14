@@ -1,0 +1,100 @@
+/* frontend/src/components/ui/TabNavigation.module.css */
+
+.tabsContainer {
+  display: flex;
+  gap: 8px;
+  background: #f9fafb;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 24px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.tabsContainer::-webkit-scrollbar {
+  height: 6px;
+}
+
+.tabsContainer::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.tab {
+  padding: 12px 20px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.95rem;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab:hover {
+  background: rgba(15, 118, 110, 0.1);
+  color: #0f766e;
+}
+
+.tabActive {
+  padding: 12px 20px;
+  background: #0f766e;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.3);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+}
+
+.tabIcon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.tabLabel {
+  line-height: 1;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .tab,
+  .tabActive {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+  }
+  
+  .tabIcon {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .tabLabel {
+    display: none;
+  }
+  
+  .tab,
+  .tabActive {
+    padding: 10px;
+    min-width: 44px;
+    justify-content: center;
+  }
+  
+  .tabIcon {
+    font-size: 1.2rem;
+  }
+}
+

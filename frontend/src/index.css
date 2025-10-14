@@ -2,8 +2,27 @@
    Base & Vendor Imports
    ========================= */
 
+/* Variables de couleurs globales - IDENTITÉ VISUELLE */
+@import "./styles/colors.css";
+
 /* Leaflet (nécessaire pour l'affichage des tuiles et des marqueurs) */
 @import "leaflet/dist/leaflet.css";
+
+/* Fix z-index Leaflet : s'assurer que la carte ne passe pas au-dessus du header */
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom,
+.leaflet-control {
+  z-index: 10 !important;
+}
+
+.leaflet-popup-pane {
+  z-index: 20 !important;
+}
+
+.leaflet-tooltip-pane {
+  z-index: 15 !important;
+}
 
 /* Si tu as d'autres CSS globales, garde leurs imports ici
    @import "./styles/globals.css";

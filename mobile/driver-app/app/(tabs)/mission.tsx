@@ -1,15 +1,22 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { ScrollView, Alert, Linking, View } from 'react-native';
-import { useAuth } from '@/hooks/useAuth';
-import { useSocket } from '@/hooks/useSocket';
-import { useLocation } from '@/hooks/useLocation';
-import { useNotifications } from '@/hooks/useNotifications';
-import MissionCard from '@/components/dashboard/MissionCard';
-import MissionHeader from '@/components/dashboard/MissionHeader';
-import MissionMap from '@/components/dashboard/MissionMap';
-import ConfirmCompletionModal from '@/components/dashboard/ConfirmCompletionModal';
-import { Loader } from '@/components/ui/Loader';
-import { getAssignedTrips, updateTripStatus, Booking, BookingStatus } from '@/services/api';
+import React, { useEffect, useState, useCallback } from "react";
+import { ScrollView, Alert, Linking, View, RefreshControl } from "react-native";
+import { useAuth } from "@/hooks/useAuth";
+import { useSocket } from "@/hooks/useSocket";
+import { useLocation } from "@/hooks/useLocation";
+import { useNotifications } from "@/hooks/useNotifications";
+import { useDynamicETA } from "@/hooks/useDynamicETA";
+import MissionCard from "@/components/dashboard/MissionCard";
+import MissionHeader from "@/components/dashboard/MissionHeader";
+import MissionMap from "@/components/dashboard/MissionMap";
+import ConfirmCompletionModal from "@/components/dashboard/ConfirmCompletionModal";
+import { Loader } from "@/components/ui/Loader";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  getAssignedTrips,
+  updateTripStatus,
+  Booking,
+  BookingStatus,
+} from "@/services/api";
 
 /**
  * Détecte si la mission est un retour, quel que soit le type de donnée reçu (bool, int, string, etc.)
@@ -29,44 +36,103 @@ function isMissionReturn(is_return: any): boolean {
   // Cas null/undefined ou autre
   if (!is_return) return false;
   // Log tout le reste pour analyse
-  console.log("[isMissionReturn] Valeur inattendue:", is_return, typeof is_return);
+  console.log(
+    "[isMissionReturn] Valeur inattendue:",
+    is_return,
+    typeof is_return
+  );
   return false;
 }
-
-
-
 
 export default function MissionScreen() {
   const { driver } = useAuth();
   const { location } = useLocation();
   const socket = useSocket();
   useNotifications();
+  
+  // Hook pour les ETAs dynamiques basés sur la position GPS
+  const { etas, hasGPS, getDuration } = useDynamicETA(!!driver);
 
   const [isLoading, setIsLoading] = useState(true);
   const [missions, setMissions] = useState<Booking[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const currentMission = missions[currentIndex] || null;
+  const MISSIONS_CACHE_KEY = "missions_cache_v1";
 
-const loadMissions = useCallback(async () => {
-  setIsLoading(true);
-  try {
-    const assigned = await getAssignedTrips();
-    console.log("🚦 Missions reçues (type is_return) :", assigned.map(m => [m.id, m.is_return, typeof m.is_return]));
-    const sorted = assigned.sort(
-      (a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
-    );
-    setMissions(sorted);
-    setCurrentIndex(0);
-  } catch {
-    Alert.alert('Erreur', 'Impossible de charger les missions.');
-  } finally {
-    setIsLoading(false);
-  }
-}, []);
+  // Charger missions actives depuis le cache au démarrage
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(MISSIONS_CACHE_KEY);
+        if (raw) {
+          const cached: Booking[] = JSON.parse(raw);
+          const active = cached.filter(
+            (m) =>
+              ![
+                "completed",
+                "return_completed",
+                "canceled",
+                "cancelled",
+              ].includes((m.status || "").toLowerCase())
+          );
+          if (active.length) {
+            const sorted = active.sort(
+              (a, b) =>
+                new Date(a.scheduled_time).getTime() -
+                new Date(b.scheduled_time).getTime()
+            );
+            setMissions(sorted);
+            setCurrentIndex(0);
+          }
+        }
+      } catch {}
+    })();
+  }, []);
 
+  const loadMissions = useCallback(async (isRefreshAction = false) => {
+    if (!isRefreshAction) {
+      setIsLoading(true);
+    }
+    try {
+      const assigned = await getAssignedTrips();
+
+      // 🔒 SÉCURITÉ : Utiliser UNIQUEMENT les données du backend
+      // Ne pas merger avec le cache pour éviter de voir les missions d'autres chauffeurs
+      const sorted = assigned.sort(
+        (a, b) =>
+          new Date(a.scheduled_time).getTime() -
+          new Date(b.scheduled_time).getTime()
+      );
+
+      // Mettre à jour le cache avec les nouvelles données uniquement
+      AsyncStorage.setItem(MISSIONS_CACHE_KEY, JSON.stringify(sorted)).catch(
+        () => {}
+      );
+
+      setMissions(sorted);
+      setCurrentIndex(0);
+    } catch {
+      Alert.alert("Erreur", "Impossible de charger les missions.");
+    } finally {
+      if (!isRefreshAction) {
+        setIsLoading(false);
+      }
+    }
+  }, []);
+
+  // Fonction de rafraîchissement pour pull-to-refresh
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await loadMissions(true);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [loadMissions]);
 
   useEffect(() => {
     if (driver) {
@@ -78,43 +144,78 @@ const loadMissions = useCallback(async () => {
     if (!socket) return;
 
     const onNew = (data: Booking) => {
-      setMissions(prev => {
-        const exists = prev.find(m => m.id === data.id);
+      setMissions((prev) => {
+        const exists = prev.find((m) => m.id === data.id);
         const updated = exists
-          ? prev.map(m => (m.id === data.id ? data : m))
+          ? prev.map((m) => (m.id === data.id ? data : m))
           : [...prev, data];
-        return updated.sort(
-          (a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
+        const sorted = updated.sort(
+          (a, b) =>
+            new Date(a.scheduled_time).getTime() -
+            new Date(b.scheduled_time).getTime()
         );
+        AsyncStorage.setItem(MISSIONS_CACHE_KEY, JSON.stringify(sorted)).catch(
+          () => {}
+        );
+        return sorted;
       });
+      // Réinitialiser l'index pour afficher la mission la plus proche (première dans la liste triée)
+      setCurrentIndex(0);
     };
 
     const onUpdate = (data: Booking) => {
-      setMissions(prev => {
-        const updated = prev.map(m => (m.id === data.id ? data : m))
-          .filter(m => !["completed", "return_completed", "canceled"].includes(m.status));
+      setMissions((prev) => {
+        const updated = prev
+          .map((m) => (m.id === data.id ? data : m))
+          .filter(
+            (m) =>
+              ![
+                "completed",
+                "return_completed",
+                "canceled",
+                "cancelled",
+              ].includes((m.status || "").toLowerCase())
+          )
+          .sort(
+            (a, b) =>
+              new Date(a.scheduled_time).getTime() -
+              new Date(b.scheduled_time).getTime()
+          );
         // recalcul de l'index pour éviter l'affichage d'une mission terminée
-        if (updated.length === 0) setCurrentIndex(0);
-        else setCurrentIndex(Math.min(currentIndex, updated.length - 1));
+        if (updated.length === 0) {
+          setCurrentIndex(0);
+        } else {
+          // Réinitialiser à 0 pour toujours afficher la mission la plus proche
+          setCurrentIndex(0);
+        }
+        AsyncStorage.setItem(MISSIONS_CACHE_KEY, JSON.stringify(updated)).catch(
+          () => {}
+        );
         return updated;
       });
     };
 
     const onCancel = ({ id }: { id: number }) => {
-      setMissions(prev => prev.filter(m => m.id !== id));
+      setMissions((prev) => {
+        const next = prev.filter((m) => m.id !== id);
+        AsyncStorage.setItem(MISSIONS_CACHE_KEY, JSON.stringify(next)).catch(
+          () => {}
+        );
+        return next;
+      });
       if (currentMission?.id === id) {
-        Alert.alert('❌ Mission annulée', 'La mission en cours a été annulée.');
+        Alert.alert("❌ Mission annulée", "La mission en cours a été annulée.");
         setCurrentIndex(0); // Tu peux l'améliorer plus tard si besoin
       }
     };
 
-    socket.on('new_booking', onNew);
-    socket.on('booking_updated', onUpdate);
-    socket.on('booking_cancelled', onCancel);
+    socket.on("new_booking", onNew);
+    socket.on("booking_updated", onUpdate);
+    socket.on("booking_cancelled", onCancel);
     return () => {
-      socket.off('new_booking', onNew);
-      socket.off('booking_updated', onUpdate);
-      socket.off('booking_cancelled', onCancel);
+      socket.off("new_booking", onNew);
+      socket.off("booking_updated", onUpdate);
+      socket.off("booking_cancelled", onCancel);
     };
   }, [socket, currentMission?.id]);
 
@@ -129,80 +230,82 @@ const loadMissions = useCallback(async () => {
 
   const confirmCompletion = useCallback(async () => {
     console.log("Confirmer la fin de mission");
-  if (!currentMission || isSubmitting) return;
+    if (!currentMission || isSubmitting) return;
 
-  // DEBUG : envoie à Pipedream ce que tu vas envoyer à l'API réelle
-  const isReturn = isMissionReturn(currentMission.is_return);
-  const statusToSend: BookingStatus = isReturn ? "return_completed" : "completed";
-  const payload = {
-    bookingId: currentMission.id,
-    status: statusToSend,
-    is_return: currentMission.is_return,
-    mission: currentMission, // Si tu veux TOUT voir
-  };
+    // Bloquer les doubles clics
+    setIsSubmitting(true);
 
-  // Envoi debug vers pipedream
-  try {
-    await fetch('https://eoxskun0j22ygoy.m.pipedream.net', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    console.log('DEBUG PIPEDREAM envoyé:', payload);
-  } catch (err) {
-    console.warn('Echec envoi pipedream', err);
-  }
+    try {
+      const isReturn = !!currentMission.is_return;
+      const statusToSend: BookingStatus = isReturn
+        ? "return_completed"
+        : "completed";
+      
+      console.log("[Mission] Mise à jour du statut:", statusToSend, "pour booking", currentMission.id);
 
-  setIsSubmitting(true);
-  setModalVisible(false);
+      await updateTripStatus(currentMission.id, statusToSend);
 
-  try {
-    console.log(
-      "[PATCH DEBUG]",
-      "currentMission.id:", currentMission?.id,
-      "is_return (brut):", currentMission?.is_return,
-      "typeof:", typeof currentMission?.is_return,
-      "isMissionReturn:", isMissionReturn(currentMission?.is_return)
-    );
-    const isReturn = !!currentMission.is_return; // 100% safe, force en booléen
-    const statusToSend: BookingStatus = isReturn ? "return_completed" : "completed";
-    console.log("[PATCH DEBUG] statusToSend:", statusToSend);
-
-    await updateTripStatus(currentMission.id, statusToSend);
-
-    setMissions(prev =>
-      prev
-        .map(m =>
-          m.id === currentMission.id ? { ...m, status: statusToSend } : m
-        )
-        .filter(m => !["completed", "return_completed", "canceled"].includes(m.status))
-    );
-    setCurrentIndex(0); // Repart à la prochaine mission disponible
-
-  } catch (error: any) {
-    const msg =
-      error.response?.data?.error ||
-      error.response?.data?.message ||
-      'Impossible de terminer la mission.';
-    Alert.alert('Erreur', msg);
-  } finally {
-    setIsSubmitting(false);
-  }
-}, [currentMission, isSubmitting, missions]);
-
+      // Mettre à jour la liste des missions (retirer la mission terminée)
+      setMissions((prev) =>
+        prev
+          .map((m) =>
+            m.id === currentMission.id ? { ...m, status: statusToSend } : m
+          )
+          .filter(
+            (m) =>
+              !["completed", "return_completed", "canceled", "cancelled"].includes(m.status?.toLowerCase() || "")
+          )
+      );
+      
+      // Passer à la prochaine mission
+      setCurrentIndex(0);
+      
+      // Fermer le modal après succès
+      setModalVisible(false);
+      
+      console.log("✅ Mission terminée avec succès");
+    } catch (error: any) {
+      const msg =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        "Impossible de terminer la mission.";
+      Alert.alert("Erreur", msg);
+      console.error("[Mission] Erreur lors de la confirmation:", error);
+    } finally {
+      // Toujours débloquer le bouton
+      setIsSubmitting(false);
+    }
+  }, [currentMission, isSubmitting]);
 
   if (!driver || isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#FFF",
+        }}
+      >
         <Loader />
       </View>
     );
   }
 
   return (
-    <ScrollView className="flex-1 bg-white">
+    <ScrollView 
+      className="flex-1 bg-white"
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={onRefresh}
+          colors={["#00796B"]} // Android
+          tintColor="#00796B" // iOS
+        />
+      }
+    >
       <MissionHeader
-        driverName={driver.first_name || 'Chauffeur'}
+        driverName={driver.first_name || "Chauffeur"}
         date={new Date().toLocaleDateString()}
       />
 
@@ -210,7 +313,7 @@ const loadMissions = useCallback(async () => {
         <MissionMap
           location={location}
           destination={
-            currentMission.status === 'in_progress'
+            currentMission.status === "in_progress"
               ? currentMission.dropoff_location!
               : currentMission.pickup_location!
           }
@@ -220,7 +323,11 @@ const loadMissions = useCallback(async () => {
       {currentMission ? (
         <View className="px-4 pt-4">
           <MissionCard
-            mission={currentMission}
+            mission={{
+              ...currentMission,
+              // Utiliser la durée dynamique si disponible, sinon la durée statique
+              duration_seconds: getDuration(currentMission.id) || currentMission.duration_seconds
+            }}
             onComplete={handleOpenModal}
             onCall={() =>
               currentMission.client_phone &&
@@ -228,7 +335,7 @@ const loadMissions = useCallback(async () => {
             }
             onNavigate={() => {
               const dest =
-                currentMission.status === 'in_progress'
+                currentMission.status === "in_progress"
                   ? currentMission.dropoff_location!
                   : currentMission.pickup_location!;
               openNavigation(dest);

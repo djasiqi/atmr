@@ -5,8 +5,8 @@
   --sidebar-w: 72px;        /* largeur dynamique (modifiée par JS) */
 
   /* Palette marque */
-  --brand: #0b7a6b;
-  --brand-dark: #095f56;    /* hover / état ouvert */
+  --brand: #0f766e;
+  --brand-dark: #0d5e56;    /* hover / état ouvert */
   --border: #e5e7eb;
   --ink: #374151;
   --ink-strong: #111827;
@@ -29,7 +29,7 @@
   flex-direction: column;
   gap: 8px;
 
-  z-index: 20;
+  z-index: 90;
   transition: width 0.2s ease;
 }
 
@@ -49,7 +49,7 @@
   justify-content: center;
   cursor: pointer;
 
-  box-shadow: 0 4px 12px rgba(11, 122, 107, 0.28);
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.28);
   transition:
     background-color .18s ease,
     box-shadow .18s ease,
@@ -60,7 +60,7 @@
 @media (hover: hover) {
   .toggler:hover {
     background: var(--brand-dark);
-    box-shadow: 0 6px 16px rgba(11, 122, 107, 0.35);
+    box-shadow: 0 6px 16px rgba(15, 118, 110, 0.35);
   }
 }
 
@@ -77,8 +77,8 @@
   outline: none;
   box-shadow:
     0 0 0 2px #ffffff,
-    0 0 0 4px rgba(11,122,107,.55),
-    0 6px 16px rgba(11,122,107,.35);
+    0 0 0 4px rgba(15,118,110,.55),
+    0 6px 16px rgba(15,118,110,.35);
 }
 
 /* Icône chevron dans le bouton */

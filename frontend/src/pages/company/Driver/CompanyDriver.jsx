@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import styles from "../Dashboard/CompanyDashboard.module.css";
 import CompanyHeader from "../../../components/layout/Header/CompanyHeader";
 import CompanySidebar from "../../../components/layout/Sidebar/CompanySidebar/CompanySidebar";
-import DriverMap from "../../driver/components/Dashboard/DriverMap";
+import DriverLiveMap from "../Dashboard/components/DriverLiveMap";
 import useDriver from "../../../hooks/useDriver";
 import CompanyDriverTable from "../components/CompanyDriverTable";
 import CompanyDriverFilters from "../components/CompanyDriverFilters";
@@ -12,11 +12,22 @@ import EditDriverForm from "../components/EditDriverForm";
 import Modal from "../../../components/common/Modal";
 import ConfirmationModal from "../../../components/common/ConfirmationModal";
 import { Link } from "react-router-dom";
-import { fetchDriverCompletedTrips, createDriver, updateDriverDetails } from "../../../services/companyService";
+import {
+  fetchDriverCompletedTrips,
+  createDriver,
+  updateDriverDetails,
+} from "../../../services/companyService";
 import DriverWorkingHoursTable from "./DriverWorkingHoursTable";
 
 const CompanyDriver = () => {
-  const { drivers, loading, error, toggleDriverStatus, deleteDriverById, refreshDrivers } = useDriver();
+  const {
+    drivers,
+    loading,
+    error,
+    toggleDriverStatus,
+    deleteDriverById,
+    refreshDrivers,
+  } = useDriver();
 
   const [showAddDriverModal, setShowAddDriverModal] = useState(false);
   const [showEditDriverModal, setShowEditDriverModal] = useState(false);
@@ -32,18 +43,18 @@ const CompanyDriver = () => {
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
     const matchesStatus =
-      statusFilter === 'all' ||
-      (statusFilter === 'active' && drv.is_active) ||
-      (statusFilter === 'inactive' && !drv.is_active);
+      statusFilter === "all" ||
+      (statusFilter === "active" && drv.is_active) ||
+      (statusFilter === "inactive" && !drv.is_active);
     return matchesSearch && matchesStatus;
   });
-
 
   // 3. Le useEffect utilise maintenant "drivers" pour calculer les stats
   useEffect(() => {
     async function loadStats() {
       const mappedData = [];
-      for (const drv of drivers) { // <-- Utilise "drivers"
+      for (const drv of drivers) {
+        // <-- Utilise "drivers"
         let trips = [];
         try {
           trips = await fetchDriverCompletedTrips(drv.id);
@@ -64,7 +75,8 @@ const CompanyDriver = () => {
       }
       setDriverHoursData(mappedData);
     }
-    if (drivers && drivers.length > 0) { // <-- Utilise "drivers"
+    if (drivers && drivers.length > 0) {
+      // <-- Utilise "drivers"
       loadStats();
     } else {
       setDriverHoursData([]);
@@ -121,15 +133,17 @@ const CompanyDriver = () => {
         <main className={styles.content}>
           {error && <div className={styles.error}>{error}</div>}
           <div className={styles.headerActions}>
-            <button className={styles.addButton} onClick={() => setShowAddDriverModal(true)}>
+            <button
+              className={styles.addButton}
+              onClick={() => setShowAddDriverModal(true)}
+            >
               Ajouter Chauffeur
             </button>
           </div>
 
           <section className={styles.mapSection}>
             <h2>Localisation des Chauffeurs</h2>
-            {/* CORRECTION : Passe la prop "drivers" (pluriel) */}
-            <DriverMap drivers={drivers} />
+            <DriverLiveMap />
           </section>
 
           <CompanyDriverFilters
@@ -166,17 +180,24 @@ const CompanyDriver = () => {
           {showAddDriverModal && (
             <Modal onClose={() => setShowAddDriverModal(false)}>
               <h3>Ajouter un nouveau chauffeur</h3>
-              <AddDriverForm onSubmit={handleAddSubmit} onClose={() => setShowAddDriverModal(false)} />
+              <AddDriverForm
+                onSubmit={handleAddSubmit}
+                onClose={() => setShowAddDriverModal(false)}
+              />
             </Modal>
           )}
 
           {showEditDriverModal && driverToEdit && (
             <Modal onClose={() => setShowEditDriverModal(false)}>
               <h3>Modifier le chauffeur {driverToEdit.username}</h3>
-              <EditDriverForm driver={driverToEdit} onSubmit={handleEditSubmit} onClose={() => setShowEditDriverModal(false)} />
+              <EditDriverForm
+                driver={driverToEdit}
+                onSubmit={handleEditSubmit}
+                onClose={() => setShowEditDriverModal(false)}
+              />
             </Modal>
           )}
-          
+
           <ConfirmationModal
             isOpen={showConfirmModal}
             onClose={() => setShowConfirmModal(false)}

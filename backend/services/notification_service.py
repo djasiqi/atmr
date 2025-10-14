@@ -136,3 +136,51 @@ def notify_dispatch_run_completed(
             emit_date_event(date_str, "dispatch_run_completed", payload)
     except Exception as e:
         app_logger.error("[notify_dispatch_run_completed] emit failed: %s", e)
+
+
+def notify_dispatcher_optimization_opportunity(opportunity_data: Dict[str, Any]) -> None:
+    """
+    Notifie le dispatcher d'une opportunité d'optimisation détectée.
+    
+    Args:
+        opportunity_data: Dict contenant les détails de l'opportunité
+            {
+                "company_id": int,
+                "assignment_id": int,
+                "booking_id": int,
+                "driver_id": int,
+                "current_delay": int,
+                "severity": str,
+                "suggestions": List[Dict],
+                "auto_apply": bool
+            }
+    """
+    try:
+        from services.socketio_service import emit_company_event
+        
+        company_id = opportunity_data.get("company_id")
+        if not company_id:
+            app_logger.warning("[notify_dispatcher_optimization_opportunity] No company_id in data")
+            return
+        
+        payload: Dict[str, Any] = {
+            "type": "optimization_opportunity",
+            "assignment_id": opportunity_data.get("assignment_id"),
+            "booking_id": opportunity_data.get("booking_id"),
+            "driver_id": opportunity_data.get("driver_id"),
+            "current_delay": opportunity_data.get("current_delay"),
+            "severity": opportunity_data.get("severity"),
+            "suggestions": opportunity_data.get("suggestions", []),
+            "auto_apply": opportunity_data.get("auto_apply", False),
+        }
+        
+        app_logger.info(
+            "[notify_dispatcher_optimization_opportunity] Emitting to company %s: severity=%s delay=%d",
+            company_id,
+            payload.get("severity"),
+            payload.get("current_delay")
+        )
+        
+        emit_company_event(company_id, "optimization_opportunity", payload)
+    except Exception as e:
+        app_logger.error("[notify_dispatcher_optimization_opportunity] emit failed: %s", e)

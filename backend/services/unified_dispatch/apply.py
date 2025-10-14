@@ -276,4 +276,20 @@ def apply_assignments(
     logger.info(
         "[Apply] company=%s applied=%d skipped=%d conflicts=%d (reasons=%s)",
         company_id, len(applied_ids), len(skipped), len(conflicts), dict(skipped)    )
+
+    # 🔔 Notifications Socket.IO vers les chauffeurs pour MAJ en temps réel (mobile)
+    try:
+        if applied_pairs:
+            # Charger les bookings et notifier chaque driver ciblé
+            for (b_id, d_id) in applied_pairs:
+                try:
+                    b = Booking.query.get(b_id)
+                    if b is None:
+                        continue
+                    from services.notification_service import notify_driver_new_booking
+                    notify_driver_new_booking(int(d_id), b)
+                except Exception:
+                    logger.exception("[Apply] notify_driver_new_booking failed booking_id=%s driver_id=%s", b_id, d_id)
+    except Exception:
+        logger.exception("[Apply] driver notifications failed (company_id=%s)", company_id)
     return result

@@ -27,3 +27,75 @@
     cursor: pointer;
   }
   
+  /* Styles pour les informations de chaise roulante */
+  .wheelchairInfo {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+    padding: 12px;
+    margin: 16px 0;
+    border-radius: 4px;
+  }
+  
+  .wheelchairBadge {
+    margin: 4px 0;
+    font-size: 14px;
+    color: #856404;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .wheelchairBadge strong {
+    font-weight: 600;
+  }
+  
+  /* Styles pour les informations médicales */
+  .medicalInfo {
+    background-color: #e7f3ff;
+    border-left: 4px solid #0f766e;
+    padding: 12px;
+    margin: 16px 0;
+    border-radius: 4px;
+  }
+  
+  .medicalInfo p {
+    margin: 4px 0;
+    font-size: 14px;
+    color: #004085;
+  }
+  
+  .medicalInfo p strong {
+    font-weight: 600;
+    font-size: 15px;
+  }
+  
+  .medicalDetail {
+    padding-left: 8px;
+    color: #004085 !important;
+  }
+  
+  /* Actions buttons */
+  .actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  
+  .actions button {
+    flex: 1;
+    min-width: 120px;
+    padding: 10px 16px;
+    background: #0f766e;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.2s;
+  }
+  
+  .actions button:hover {
+    background: #0d5c54;
+  }
+  

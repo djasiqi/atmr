@@ -1,0 +1,81 @@
+.topClientsContainer {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.topClientsHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.topClientsIcon {
+  font-size: 1.25rem;
+}
+
+.topClientsTitle {
+  font-size: 1rem;
+}
+
+.topClientsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clientItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.clientItem:hover {
+  background: #f1f5f9;
+  transform: translateX(4px);
+}
+
+.clientRank {
+  background: #00796b;
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.clientInfo {
+  flex: 1;
+}
+
+.clientName {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 0.875rem;
+  margin-bottom: 2px;
+}
+
+.clientStats {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.noData {
+  text-align: center;
+  padding: 20px;
+  color: #9ca3af;
+  font-style: italic;
+}

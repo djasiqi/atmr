@@ -1,5 +1,6 @@
 // frontend/src/components/common/AddressAutocomplete.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+// Using fetch with relative '/api' path to leverage CRA proxy in dev and avoid CORS
 
 export default function AddressAutocomplete({
   name,
@@ -9,7 +10,7 @@ export default function AddressAutocomplete({
   placeholder = "Saisir une adresse…",
   minChars = 2,
   debounceMs = 250,
-  bias,        // { lat, lon } optionnel – par défaut centre Genève
+  bias, // { lat, lon } optionnel – par défaut centre Genève
   maxResults = 8,
   ...restProps
 }) {
@@ -18,6 +19,8 @@ export default function AddressAutocomplete({
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
   const [loading, setLoading] = useState(false);
+  const [justSelected, setJustSelected] = useState(false); // Pour éviter la réouverture après sélection
+  const [userIsTyping, setUserIsTyping] = useState(false); // Tracker si l'utilisateur tape activement
 
   const abortRef = useRef(null);
   const wrapRef = useRef(null);
@@ -58,19 +61,52 @@ export default function AddressAutocomplete({
       const coords = f.geometry?.coordinates || []; // [lon, lat]
       const lon = Number(coords[0]);
       const lat = Number(coords[1]);
-      const label =
-        props.name ||
-        [props.housenumber, props.street, props.city || props.locality, props.country]
-          .filter(Boolean)
-          .join(" · ") ||
-        props.osm_value ||
-        "Adresse";
+
+      // Construire l'adresse complète avec numéro et rue
+      const street = props.street || "";
+      const housenumber = props.housenumber || "";
+      const fullStreetAddress =
+        street && housenumber ? `${street} ${housenumber}` : street || "";
+
+      const postcode = props.postcode || "";
+      const city = props.city || props.locality || "";
+
+      // Construire le label : TOUJOURS une adresse lisible
+      let label = "";
+
+      if (props.name) {
+        // Si c'est un lieu nommé (ex: "HUG", "Aéroport")
+        label = props.name;
+      } else if (fullStreetAddress && city) {
+        // Format complet : "Rue Numéro, CP, Ville"
+        label = postcode
+          ? `${fullStreetAddress}, ${postcode}, ${city}`
+          : `${fullStreetAddress}, ${city}`;
+      } else if (fullStreetAddress) {
+        // Au moins la rue avec numéro
+        label = fullStreetAddress;
+      } else if (street) {
+        // Juste la rue sans numéro
+        label =
+          postcode && city
+            ? `${street}, ${postcode}, ${city}`
+            : city
+            ? `${street}, ${city}`
+            : street;
+      } else if (city) {
+        // Au moins la ville
+        label = postcode ? `${postcode} ${city}` : city;
+      } else {
+        // Dernier recours
+        label = props.osm_value || "Adresse";
+      }
+
       return {
         source: "photon",
         label,
-        address: props.street || null,
-        postcode: props.postcode || null,
-        city: props.city || props.locality || null,
+        address: fullStreetAddress || street || null,
+        postcode: postcode || null,
+        city: city || null,
         country: props.country || null,
         lat,
         lon,
@@ -85,15 +121,15 @@ export default function AddressAutocomplete({
 
     // 1) Proxy backend — mélange alias/favoris + Photon si ton backend le fait
     try {
-      const res = await fetch(
-        `/api/geocode/autocomplete?q=${encodeURIComponent(q)}&lat=${BIAS.lat}&lon=${BIAS.lon}&limit=${maxResults}`,
-        { signal }
-      );
+      const url = `/api/geocode/autocomplete?q=${encodeURIComponent(
+        q
+      )}&lat=${encodeURIComponent(BIAS.lat)}&lon=${encodeURIComponent(
+        BIAS.lon
+      )}&limit=${encodeURIComponent(maxResults)}`;
+      const res = await fetch(url, { signal });
       if (res.ok) {
         const data = await res.json().catch(() => []);
-        if (Array.isArray(data) && data.length > 0) {
-          return data;
-        }
+        if (Array.isArray(data) && data.length > 0) return data;
       }
     } catch {
       // ignore -> fallback
@@ -120,6 +156,11 @@ export default function AddressAutocomplete({
 
   // Charger les suggestions (debounce + abort)
   useEffect(() => {
+    // Ne pas charger si on vient de sélectionner une adresse
+    if (justSelected) {
+      return;
+    }
+
     if (!query || query.trim().length < minChars) {
       setItems([]);
       setOpen(false);
@@ -140,8 +181,11 @@ export default function AddressAutocomplete({
         // Filet de sécu : si l’utilisateur tape "hug" et qu’aucun alias n’est présent,
         // on injecte l’adresse HUG en tête (évite de dépendre à 100% du backend).
         const qn = (query || "").trim().toLowerCase();
-        const hasAlias = enriched.some(it => it.source === "alias");
-        const looksHUG = /\bhug\b|h[ôo]pit(?:al|aux).+gen[eè]ve|\bh[ôo]pital\s+cantonal\b/.test(qn);
+        const hasAlias = enriched.some((it) => it.source === "alias");
+        const looksHUG =
+          /\bhug\b|h[ôo]pit(?:al|aux).+gen[eè]ve|\bh[ôo]pital\s+cantonal\b/.test(
+            qn
+          );
         if (looksHUG && !hasAlias) {
           enriched.unshift({
             source: "alias",
@@ -154,7 +198,10 @@ export default function AddressAutocomplete({
         }
 
         setItems(enriched);
-        setOpen(true);
+        // Ne rouvrir le menu que si l'utilisateur tape activement
+        if (userIsTyping && !justSelected) {
+          setOpen(true);
+        }
         setHighlight(enriched.length ? 0 : -1);
       } catch {
         setItems([]);
@@ -164,11 +211,22 @@ export default function AddressAutocomplete({
       }
     }, debounceMs);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, minChars, debounceMs, BIAS.lat, BIAS.lon, PHOTON_BASE, maxResults]);
+  }, [
+    query,
+    minChars,
+    debounceMs,
+    BIAS.lat,
+    BIAS.lon,
+    PHOTON_BASE,
+    maxResults,
+    justSelected,
+  ]);
 
   function handleInputChange(e) {
     const v = e.target.value;
     setQuery(v);
+    setJustSelected(false); // Réinitialiser le flag si l'utilisateur modifie
+    setUserIsTyping(true); // L'utilisateur est en train de taper
     onChange?.({ target: { name, value: v } });
   }
 
@@ -181,18 +239,34 @@ export default function AddressAutocomplete({
     () => items.filter((i) => i.source !== "favorite" && i.source !== "alias"),
     [items]
   );
-  const visibleItems = useMemo(() => [...favorites, ...others], [favorites, others]);
+  const visibleItems = useMemo(
+    () => [...favorites, ...others],
+    [favorites, others]
+  );
 
   function chooseItem(it) {
-    // Préfère l'adresse pour alias/favori (ex. HUG) afin d’écrire l’adresse canonique dans l’input
-    const preferred =
-      it?.source === "alias" || it?.source === "favorite"
-        ? (it.address || it.label || "")
-        : (it.label || it.address || "");
-    setQuery(preferred);
+    console.log("🏠 AddressAutocomplete - Item sélectionné:", it);
 
+    // Utiliser directement le label qui est déjà bien formaté
+    // Le label contient toujours l'adresse complète construite dans normalizePhoton
+    const fullAddress = it?.label || it?.address || "";
+
+    console.log("📍 Adresse complète enregistrée:", fullAddress);
+    setQuery(fullAddress);
+
+    // Fermer le menu et vider les suggestions
     setOpen(false);
-    onChange?.({ target: { name, value: preferred } });
+    setItems([]); // Vider la liste pour éviter la réouverture
+    setHighlight(-1);
+    setJustSelected(true); // Marquer qu'on vient de sélectionner
+    setUserIsTyping(false); // Arrêter le mode "typing"
+
+    // Réinitialiser le flag après un court délai
+    setTimeout(() => {
+      setJustSelected(false);
+    }, 300);
+
+    onChange?.({ target: { name, value: fullAddress } });
     onSelect?.(it); // {label,address,city,postcode,country,lat,lon,raw,source}
   }
 
@@ -215,7 +289,8 @@ export default function AddressAutocomplete({
   }
 
   const listboxId = `${name || "address"}-ac-listbox`;
-  const activeId = highlight >= 0 ? `${name || "address"}-ac-option-${highlight}` : undefined;
+  const activeId =
+    highlight >= 0 ? `${name || "address"}-ac-option-${highlight}` : undefined;
 
   return (
     <div ref={wrapRef} style={{ position: "relative", width: "100%" }}>
@@ -225,10 +300,17 @@ export default function AddressAutocomplete({
         value={query}
         onChange={handleInputChange}
         onKeyDown={onKeyDown}
-        onFocus={() => items.length > 0 && setOpen(true)}
+        onFocus={() => {
+          // Ne pas rouvrir automatiquement au focus
+          // Le menu s'ouvrira seulement si l'utilisateur commence à taper
+        }}
+        onBlur={() => {
+          // Réinitialiser le mode typing quand on quitte le champ
+          setUserIsTyping(false);
+        }}
         placeholder={placeholder}
         autoComplete="off"
-        role="combobox"                  // ✅ combobox, plus textbox implicite
+        role="combobox" // ✅ combobox, plus textbox implicite
         aria-autocomplete="list"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -264,18 +346,29 @@ export default function AddressAutocomplete({
           }}
         >
           {loading && (
-            <div style={{ padding: "10px 12px", color: "#6b7280" }}>Recherche…</div>
+            <div style={{ padding: "10px 12px", color: "#6b7280" }}>
+              Recherche…
+            </div>
           )}
 
           {!loading && visibleItems.length === 0 && (
-            <div style={{ padding: "10px 12px", color: "#6b7280" }}>Aucun résultat</div>
+            <div style={{ padding: "10px 12px", color: "#6b7280" }}>
+              Aucun résultat
+            </div>
           )}
 
           {!loading && visibleItems.length > 0 && (
             <>
               {favorites.length > 0 && (
                 <>
-                  <div style={{ padding: "6px 12px", fontSize: 11, textTransform: "uppercase", color: "#6b7280" }}>
+                  <div
+                    style={{
+                      padding: "6px 12px",
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      color: "#6b7280",
+                    }}
+                  >
                     Favoris & alias
                   </div>
                   {favorites.map((it, idx) => {
@@ -285,17 +378,21 @@ export default function AddressAutocomplete({
                       [it.address, it.postcode, it.city, it.country]
                         .filter(Boolean)
                         .join(" · ") || it.label;
+                    // Clé unique : coordonnées + index pour éviter les doublons
                     const key =
                       it.lat != null && it.lon != null
-                        ? `${it.lat},${it.lon}`
-                        : `${(it.label || it.address || "addr")}-fav-${idx}`;
+                        ? `${it.lat},${it.lon}-${idx}`
+                        : `${it.label || it.address || "addr"}-fav-${idx}`;
                     return (
                       <div
                         id={`${name || "address"}-ac-option-${globalIndex}`}
                         key={key}
                         role="option"
                         aria-selected={active}
-                        onMouseDown={(e) => { e.preventDefault(); chooseItem(it); }}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          chooseItem(it);
+                        }}
                         onMouseEnter={() => setHighlight(globalIndex)}
                         style={{
                           padding: "10px 12px",
@@ -307,7 +404,13 @@ export default function AddressAutocomplete({
                           {it.label || it.address}
                         </div>
                         {line && (
-                          <div style={{ color: "#666", fontSize: 12, marginTop: 2 }}>
+                          <div
+                            style={{
+                              color: "#666",
+                              fontSize: 12,
+                              marginTop: 2,
+                            }}
+                          >
                             {line}
                           </div>
                         )}
@@ -319,7 +422,14 @@ export default function AddressAutocomplete({
 
               {others.length > 0 && (
                 <>
-                  <div style={{ padding: "6px 12px", fontSize: 11, textTransform: "uppercase", color: "#6b7280" }}>
+                  <div
+                    style={{
+                      padding: "6px 12px",
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      color: "#6b7280",
+                    }}
+                  >
                     Résultats
                   </div>
                   {others.map((it, idx) => {
@@ -329,17 +439,21 @@ export default function AddressAutocomplete({
                       [it.address, it.postcode, it.city, it.country]
                         .filter(Boolean)
                         .join(" · ") || it.label;
+                    // Clé unique : coordonnées + index pour éviter les doublons
                     const key =
                       it.lat != null && it.lon != null
-                        ? `${it.lat},${it.lon}`
-                        : `${(it.label || it.address || "addr")}-oth-${idx}`;
+                        ? `${it.lat},${it.lon}-${idx}`
+                        : `${it.label || it.address || "addr"}-oth-${idx}`;
                     return (
                       <div
                         id={`${name || "address"}-ac-option-${globalIndex}`}
                         key={key}
                         role="option"
                         aria-selected={active}
-                        onMouseDown={(e) => { e.preventDefault(); chooseItem(it); }}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          chooseItem(it);
+                        }}
                         onMouseEnter={() => setHighlight(globalIndex)}
                         style={{
                           padding: "10px 12px",
@@ -351,7 +465,13 @@ export default function AddressAutocomplete({
                           {it.label || it.address}
                         </div>
                         {line && (
-                          <div style={{ color: "#666", fontSize: 12, marginTop: 2 }}>
+                          <div
+                            style={{
+                              color: "#666",
+                              fontSize: 12,
+                              marginTop: 2,
+                            }}
+                          >
                             {line}
                           </div>
                         )}

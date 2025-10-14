@@ -15,7 +15,6 @@ const DriverTable = ({ driver, loading, onToggle, onToggleType }) => {
           <th>Nom d'utilisateur</th>
           <th>Type</th>
           <th>Disponibilité</th>
-          <th>Statut Compte</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -25,7 +24,6 @@ const DriverTable = ({ driver, loading, onToggle, onToggleType }) => {
             <td>{drv.username}</td>
             <td>{drv.driver_type === 'EMERGENCY' ? 'Urgence' : 'Régulier'}</td>
             <td>{drv.is_available ? "Disponible" : "Indisponible"}</td>
-            <td>{drv.is_active ? "Actif" : "Inactif"}</td>
             <td>
               {/* Bouton pour changer le TYPE */}
               <button 
@@ -35,8 +33,6 @@ const DriverTable = ({ driver, loading, onToggle, onToggleType }) => {
               >
                 <FiRepeat />
               </button>
-
-              {/* Le bouton pour changer la disponibilité a été supprimé */}
 
               {/* Bouton pour changer le STATUT DU COMPTE */}
               <button 

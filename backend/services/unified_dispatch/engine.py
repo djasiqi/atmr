@@ -211,7 +211,16 @@ def run(
                 dr3_any.config = cfg
                 db.session.add(dr3_any)
 
-        # 3) Reset anciennes assignations de CE run (si relance le même jour) — TX courte
+        # 3) Commit du DispatchRun pour qu'il soit visible dans les prochaines transactions
+        try:
+            db.session.commit()
+            logger.info("[Engine] DispatchRun id=%s committed successfully", dispatch_run.id)
+        except Exception:
+            logger.exception("[Engine] Failed to commit DispatchRun")
+            db.session.rollback()
+            raise
+
+        # 4) Reset anciennes assignations de CE run (si relance le même jour) — TX courte
         try:
             with _begin_tx():
                 Assignment.query.filter_by(dispatch_run_id=dispatch_run.id).delete(synchronize_session=False)
@@ -220,7 +229,7 @@ def run(
             # on continue quand même ; le pipeline peut recréer des assignments
 
 
-        # 4) Construire les données "problème"
+        # 5) Construire les données "problème"
         try:
             problem = data.build_problem_data(
                 company_id=company_id,
@@ -329,6 +338,7 @@ def run(
         # 6.b Pass 1 — réguliers
         h_res = None
         s_res = None
+        fb = None  # Initialiser pour portée globale (sera mis à jour si le fallback est exécuté)
         if regular_first and regs:
             logger.info("[Engine] === Pass 1: Regular drivers only (%d drivers) ===", len(regs))
             prob_regs = data.build_vrptw_problem(
@@ -389,6 +399,13 @@ def run(
             remaining_ids = remaining_ids_from(prob_regs)
             if remaining_ids:
                 try:
+                    # 📅 Injecter les états de l'heuristique dans le problem pour que le fallback les utilise
+                    if h_res and h_res.debug:
+                        prob_regs["busy_until"] = h_res.debug.get("busy_until", {})
+                        prob_regs["driver_scheduled_times"] = h_res.debug.get("driver_scheduled_times", {})
+                        prob_regs["proposed_load"] = h_res.debug.get("proposed_load", {})
+                        logger.warning(f"[Engine] 📥 Injection état vers fallback: busy_until={prob_regs.get('busy_until')}, proposed_load={prob_regs.get('proposed_load')}")
+                    
                     fb = heuristics.closest_feasible(prob_regs, remaining_ids, settings=s)
                     used_fallback = True
                     _extend_unique(fb.assignments)
@@ -411,6 +428,17 @@ def run(
                     company, problem["bookings"], regs + emgs, settings=s,
                     base_time=problem.get("base_time"), for_date=problem.get("for_date")
                 )
+                
+                # 📅 Injecter les états du Pass 1 dans le Pass 2 pour éviter les conflits
+                # Utiliser fb (fallback) en priorité car il contient les états les plus à jour
+                # Sinon utiliser h_res (heuristique)
+                latest_result = fb if (fb and fb.debug) else h_res
+                if latest_result and latest_result.debug:
+                    prob_full["busy_until"] = latest_result.debug.get("busy_until", {})
+                    prob_full["driver_scheduled_times"] = latest_result.debug.get("driver_scheduled_times", {})
+                    prob_full["proposed_load"] = latest_result.debug.get("proposed_load", {})
+                    source_name = "Fallback P1" if (fb and fb.debug) else "Heuristic P1"
+                    logger.warning(f"[Engine] 📥 Injection état {source_name} → Pass2: busy_until={prob_full.get('busy_until')}, proposed_load={prob_full.get('proposed_load')}")
 
                 rem = remaining_ids_from(prob_full)
                 if rem and mode in ("auto", "heuristic_only") and getattr(s.features, "enable_heuristics", True):
@@ -432,6 +460,14 @@ def run(
 
                 rem = remaining_ids_from(prob_full)
                 if rem:
+                    # 📅 Injecter les états combinés (Pass1 + Pass2) dans le fallback P2
+                    if h2 and h2.debug:
+                        # Utiliser les états mis à jour du Pass 2
+                        prob_full["busy_until"] = h2.debug.get("busy_until", {})
+                        prob_full["driver_scheduled_times"] = h2.debug.get("driver_scheduled_times", {})
+                        prob_full["proposed_load"] = h2.debug.get("proposed_load", {})
+                        logger.warning(f"[Engine] 📥 Injection état P2 → Fallback P2: busy_until={prob_full.get('busy_until')}, proposed_load={prob_full.get('proposed_load')}")
+                    
                     fb2 = heuristics.closest_feasible(prob_full, rem, settings=s)
                     used_fallback = True
                     _extend_unique(fb2.assignments)
@@ -518,6 +554,17 @@ def run(
         except Exception:
             logger.exception("[Engine] Failed to complete DispatchRun id=%s", getattr(dispatch_run, "id", None))
 
+        # 10) Collecter les métriques analytics (asynchrone, ne bloque pas le dispatch)
+        try:
+            from services.analytics.metrics_collector import collect_dispatch_metrics
+            collect_dispatch_metrics(
+                dispatch_run_id=drid,
+                company_id=company_id,
+                day=for_date if isinstance(for_date, date) else _to_date_ymd(for_date or day_str)
+            )
+        except Exception as e:
+            logger.warning("[Engine] Failed to collect analytics metrics: %s", e)
+            # Ne pas bloquer le dispatch si la collecte échoue
 
         return {
             "assignments": [_serialize_assignment(a) for a in final_assignments],
@@ -600,6 +647,14 @@ def _filter_problem(
         result["for_date"] = for_date
     if dispatch_run_id:
         result["dispatch_run_id"] = dispatch_run_id
+    
+    # 📅 CRUCIAL: Propager les états de disponibilité des chauffeurs
+    if "busy_until" in problem:
+        result["busy_until"] = problem["busy_until"]
+    if "driver_scheduled_times" in problem:
+        result["driver_scheduled_times"] = problem["driver_scheduled_times"]
+    if "proposed_load" in problem:
+        result["proposed_load"] = problem["proposed_load"]
     
     return result
 
