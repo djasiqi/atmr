@@ -190,17 +190,17 @@
 - [x] backend_celery_config.patch ✓ (appliqué manuellement)
 - [x] backend_n+1_queries.patch ✓ (joinedload ajoutés)
 - [x] backend_pdf_config.patch ✓ (URLs dynamiques)
-- [ ] frontend_jwt_refresh.patch
-- [ ] infra_docker_compose_healthchecks.patch
+- [x] frontend_jwt_refresh.patch ✓ (interceptor axios + queue)
+- [x] infra_docker_compose_healthchecks.patch ✓ (api, redis, osrm)
 - [x] backend_migration_indexes.patch ✓ (via Alembic - f3a9c7b8d1e2)
 
 **Importants (6)**:
 
 - [x] backend_validation_fixes.patch ✓ (CHECK constraints + PaymentMethod)
-- [ ] backend_socketio_validation.patch
-- [ ] backend_pii_logging_fix.patch
+- [x] backend_socketio_validation.patch ✓ (lat/lon validation)
+- [x] backend_pii_logging_fix.patch ✓ (PIIFilter + masking)
 - [x] backend_tests_auth.patch ✓ (conftest + test_routes_auth + pytest.ini)
-- [ ] frontend_tests_setup.patch
+- [x] frontend_tests_setup.patch ✓ (setupTests + Login.test.jsx)
 - [ ] backend_linter_config.patch
 
 **Optionnels (7)**:
