@@ -181,20 +181,20 @@
 
 **Critiques (7)**:
 
-- [ ] backend_timezone_fix.patch
-- [ ] backend_celery_config.patch
-- [ ] backend_n+1_queries.patch
-- [ ] backend_pdf_config.patch
+- [x] backend_timezone_fix.patch ✓ (déjà appliqué)
+- [x] backend_celery_config.patch ✓ (appliqué manuellement)
+- [x] backend_n+1_queries.patch ✓ (joinedload ajoutés)
+- [x] backend_pdf_config.patch ✓ (URLs dynamiques)
 - [ ] frontend_jwt_refresh.patch
 - [ ] infra_docker_compose_healthchecks.patch
-- [ ] backend_migration_indexes.patch (via Alembic)
+- [x] backend_migration_indexes.patch ✓ (via Alembic - f3a9c7b8d1e2)
 
 **Importants (6)**:
 
-- [ ] backend_validation_fixes.patch
+- [x] backend_validation_fixes.patch ✓ (CHECK constraints + PaymentMethod)
 - [ ] backend_socketio_validation.patch
 - [ ] backend_pii_logging_fix.patch
-- [ ] backend_tests_auth.patch
+- [x] backend_tests_auth.patch ✓ (conftest + test_routes_auth + pytest.ini)
 - [ ] frontend_tests_setup.patch
 - [ ] backend_linter_config.patch
 
