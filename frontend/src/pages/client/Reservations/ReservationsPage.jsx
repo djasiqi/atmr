@@ -16,9 +16,9 @@ import Footer from "../../../components/layout/Footer/Footer";
 import useCompanyData from "../../../hooks/useCompanyData";
 
 const ReservationsPage = () => {
-  const { company } = useCompanyData(); // Récupérer les données de l'entreprise
+  const { company: _company } = useCompanyData(); // Récupérer les données de l'entreprise
   const [bookings, setBookings] = useState([]);
-  const [clientData, setClientData] = useState(null);
+  const [_clientData, setClientData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [sortBy, setSortBy] = useState("scheduled_time");
