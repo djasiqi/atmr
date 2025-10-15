@@ -139,8 +139,8 @@
   - [x] `backend_linter_config.patch` (ruff.toml, mypy.ini, .eslintrc.json, .prettierrc.json) ✅
   - [x] Lancer: `cd backend && ruff check --fix .` → ✅ **2190 fixes appliqués automatiquement**
   - [x] Corrections manuelles: app.py, companies.py, pdf_service.py, tests → ✅ **Tous corrigés**
-  - [ ] Lancer: `cd frontend && npm run lint -- --fix` → _Commande manuelle à exécuter_
-  - [x] Review: Warnings restants → ✅ **0 erreurs Ruff/Pyright backend**
+  - [x] Lancer: `cd frontend && npm run lint -- --fix` → ✅ **54 warnings (12496→54, -99.6%)**
+  - [x] Review: Warnings restants → ✅ **0 erreurs backend/frontend, warnings acceptables**
 
 #### Après-midi (3h)
 
