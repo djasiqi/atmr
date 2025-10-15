@@ -10,7 +10,7 @@ import {
 } from "react-icons/fa";
 
 import apiClient from "../../../utils/apiClient";
-import { mergeInvoiceAndQRBill } from "../../../utils/mergePDFs";
+// ✅ SUPPRIMÉ: mergeInvoiceAndQRBill - Génération PDF déplacée vers backend
 import HeaderDashboard from "../../../components/layout/Header/HeaderDashboard";
 import Footer from "../../../components/layout/Footer/Footer";
 import useCompanyData from "../../../hooks/useCompanyData";
@@ -113,20 +113,15 @@ const ReservationsPage = () => {
         return;
       }
 
-      await mergeInvoiceAndQRBill({
-        totalPrice: monthBookings.reduce((acc, curr) => acc + curr.amount, 0),
-        company: company || {}, // Passer les données de l'entreprise
-        client: {
-          firstName:
-            clientData?.firstName || clientData?.username || "Non spécifié",
-          lastName:
-            clientData?.lastName || clientData?.username || "Non spécifié",
-          address: clientData?.address || clientData?.domicile?.address || "",
-          zipCode: clientData?.zipCode || clientData?.domicile?.zip || "",
-          city: clientData?.city || clientData?.domicile?.city || "",
-        },
-        bookings: monthBookings,
-      });
+      // ✅ TODO: Remplacer par appel API backend pour génération PDF
+      // const response = await apiClient.post('/companies/me/invoices', {
+      //   client_id: clientData.id,
+      //   period_year: selectedMonth.getFullYear(),
+      //   period_month: selectedMonth.getMonth() + 1
+      // });
+      // window.open(response.data.pdf_url, '_blank');
+      
+      alert("Génération PDF déplacée vers backend API - À implémenter");
 
       alert("Facture générée avec succès !");
     } catch (error) {

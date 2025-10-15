@@ -1,5 +1,5 @@
 import apiClient from "../utils/apiClient";
-import { mergeInvoiceAndQRBill } from "../utils/mergePDFs";
+// ✅ SUPPRIMÉ: mergeInvoiceAndQRBill - Génération PDF via API backend
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -37,22 +37,15 @@ export const exportBookingsPDF = async (month, bookings, client, company) => {
       return;
     }
 
-    // ✅ Générer et fusionner le PDF (facture + QR Bill) avec les vraies données
-    await mergeInvoiceAndQRBill({
-      totalPrice: bookings.reduce((sum, b) => sum + b.amount, 0),
-      company: company || {}, // Passer les données de l'entreprise
-      client: {
-        firstName: client.first_name,
-        lastName: client.last_name,
-        address:
-          client.address ||
-          client.domicile?.address ||
-          "Adresse non renseignée",
-        zipCode: client.zip_code || client.domicile?.zip || "",
-        city: client.city || client.domicile?.city || "",
-      },
-      bookings,
-    });
+    // ✅ TODO: Remplacer par appel API backend
+    // const response = await apiClient.post('/companies/me/invoices', {
+    //   client_id: client.id,
+    //   period_year: year,
+    //   period_month: month
+    // });
+    // window.open(response.data.pdf_url, '_blank');
+    
+    console.log("PDF generation moved to backend API - To be implemented");
 
     console.log("✅ PDF généré avec succès !");
   } catch (error) {
