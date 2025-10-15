@@ -1839,7 +1839,7 @@ class CompanyClientDetail(Resource):
         (coordonnées, facturation, statut, etc.)
         """
         company, error_response, status_code = get_company_from_token()
-        if error_response:
+        if error_response or not company:
             return error_response, status_code
         
         # Vérifier que le client appartient à l'entreprise
@@ -1926,7 +1926,7 @@ class CompanyClientDetail(Resource):
         Query param: hard=true pour suppression définitive
         """
         company, error_response, status_code = get_company_from_token()
-        if error_response:
+        if error_response or not company:
             return error_response, status_code
         
         # Vérifier que le client appartient à l'entreprise
