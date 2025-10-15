@@ -114,16 +114,17 @@ patches/
 *.swp
 *~
 
-# ===== Tests =====
-frontend/cypress/
-cypress.config.js
-cypress.config.ts
+# ===== Tests - Artifacts uniquement (garder les fichiers de tests) =====
+# Cache pytest
+.pytest_cache/
+
+# Coverage reports
+.coverage
+htmlcov/
+coverage/
+
+# Cypress artifacts (vidéos/screenshots générés)
 **/cypress/videos/
 **/cypress/screenshots/
-backend/tests/
-tests/
-*.test.js
-*.test.jsx
-setupTests.js
-pytest.ini
-.pytest_cache/
+
+# Note: backend/tests/ et pytest.ini sont maintenant suivis dans Git

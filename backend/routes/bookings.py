@@ -4,7 +4,7 @@ import logging
 from typing import Any, cast
 
 import sentry_sdk
-from flask import request
+from flask import request, url_for
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from flask_restx import Namespace, Resource, fields
 from sqlalchemy.orm import joinedload
@@ -53,6 +53,34 @@ def _queue_trigger(company_id: int | None, action: str) -> None:
             return
     except Exception as e:
         app_logger.warning(f"⚠️ _queue_trigger failed: {e}")
+
+# -----------------------------------------------------
+# Helper: construit les liens de pagination RFC 5988
+def _build_pagination_links(page: int, per_page: int, total: int, endpoint: str, **kwargs):
+    """
+    Construit les liens de pagination conformes RFC 5988.
+
+    Returns:
+        dict avec 'Link' header + metadata pagination
+    """
+    total_pages = (total + per_page - 1) // per_page
+    links = []
+
+    if page > 1:
+        links.append(f'<{url_for(endpoint, page=page-1, per_page=per_page, **kwargs, _external=True)}>; rel="prev"')
+    if page < total_pages:
+        links.append(f'<{url_for(endpoint, page=page+1, per_page=per_page, **kwargs, _external=True)}>; rel="next"')
+
+    links.append(f'<{url_for(endpoint, page=1, per_page=per_page, **kwargs, _external=True)}>; rel="first"')
+    links.append(f'<{url_for(endpoint, page=total_pages, per_page=per_page, **kwargs, _external=True)}>; rel="last"')
+
+    return {
+        'Link': ', '.join(links),
+        'X-Total-Count': str(total),
+        'X-Page': str(page),
+        'X-Per-Page': str(per_page),
+        'X-Total-Pages': str(total_pages),
+    }
 
 
 # =====================================================
@@ -290,29 +318,60 @@ class BookingResource(Resource):
 class ListBookings(Resource):
     @jwt_required()
     def get(self):
+        """
+        Retourne les réservations (paginées).
+
+        Query params:
+            - page: numéro de page (défaut: 1)
+            - per_page: résultats par page (défaut: 100, max: 500)
+            - status: filtre par statut (optionnel)
+        """
         try:
             jwt_public_id = get_jwt_identity()
             user = User.query.filter_by(public_id=jwt_public_id).one_or_none()
             if not user:
                 return {"error": "User not found"}, 401
 
+            # Pagination
+            page = int(request.args.get('page', 1))
+            per_page = min(int(request.args.get('per_page', 100)), 500)
+            status_filter = request.args.get('status')
+
             if user.role == UserRole.admin:
-                bookings = Booking.query.all()
+                query = Booking.query
+                if status_filter:
+                    query = query.filter_by(status=status_filter)
+                pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+                total = pagination.total or 0
+                bookings = pagination.items
+
+                headers = _build_pagination_links(page, per_page, total, 'bookings.list_bookings')
+                result = [cast(Any, b).serialize for b in bookings]
+                return {"bookings": result, "total": total}, 200, headers
+
             elif user.role == UserRole.client:
                 client = Client.query.filter_by(user_id=user.id).one_or_none()
                 if not client:
                     return {"error": "Unauthorized: No client profile found"}, 403
                 # ✅ Eager load client + user pour éviter N+1
-                bookings = Booking.query.options(
+                query = Booking.query.options(
                     joinedload(Booking.client).joinedload(Client.user),
                     joinedload(Booking.driver).joinedload(Driver.user),
                     joinedload(Booking.company)
-                ).filter_by(client_id=client.id).order_by(Booking.scheduled_time.desc()).limit(100).all()
+                ).filter_by(client_id=client.id).order_by(Booking.scheduled_time.desc())
+
+                if status_filter:
+                    query = query.filter_by(status=status_filter)
+
+                pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+                total = pagination.total or 0
+                bookings = pagination.items
+
+                headers = _build_pagination_links(page, per_page, total, 'bookings.list_bookings')
+                result = [cast(Any, b).serialize for b in bookings]
+                return {"bookings": result, "total": total}, 200, headers
             else:
                 return {"error": "Unauthorized: You don't have permission"}, 403
-
-            result = [cast(Any, b).serialize for b in bookings]
-            return {"bookings": result, "total": len(result)}, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)

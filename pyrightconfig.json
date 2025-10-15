@@ -1,0 +1,26 @@
+{
+  "reportCallIssue": "none",
+  "reportAttributeAccessIssue": "warning",
+  "reportOptionalMemberAccess": "none",
+  "reportOptionalSubscript": "none",
+  "reportOptionalCall": "none",
+  "reportGeneralTypeIssues": "warning",
+  "reportUnknownParameterType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownMemberType": "none",
+  "pythonVersion": "3.11",
+  "pythonPlatform": "All",
+  "typeCheckingMode": "basic",
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/venv",
+    "**/migrations",
+    "**/.git"
+  ],
+  "ignore": [
+    "**/migrations/**"
+  ]
+}
+

@@ -25,6 +25,9 @@ ignore = [
     "N805",   # First argument should be self (validators ORM)
     "UP006",  # Use type instead of Type (compat Python <3.9)
     "UP007",  # Use X | Y for unions (compat Python <3.10)
+    "UP035",  # typing.Dict/List/Tuple deprecated (migration progressive)
+    "N806",   # Variables en majuscules (conventions mathématiques: R, M)
+    "B023",   # Function uses loop variable (closures intentionnelles)
 ]
 
 [lint.per-file-ignores]

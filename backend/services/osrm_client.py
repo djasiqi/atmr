@@ -5,6 +5,7 @@ import itertools
 import json
 import logging
 import math
+import os
 import threading
 import time
 from collections.abc import Callable, Iterable
@@ -13,6 +14,13 @@ from typing import Any, Dict, List, Tuple, cast
 import requests
 
 logger = logging.getLogger(__name__)
+
+# ============================================================
+# Configuration timeout et retry
+# ============================================================
+DEFAULT_TIMEOUT = int(os.getenv("UD_OSRM_TIMEOUT", "30"))
+DEFAULT_RETRY_COUNT = int(os.getenv("UD_OSRM_RETRY", "2"))
+CACHE_TTL_SECONDS = int(os.getenv("UD_OSRM_CACHE_TTL", "3600"))  # 1h par défaut
 
 # ============================================================
 # Optional Redis import (safe) + alias d'exception
@@ -132,8 +140,33 @@ def _table(
     coords: List[Tuple[float, float]],
     sources: List[int] | None,
     destinations: List[int] | None,
-    timeout: int,
+    timeout: int | None = None,
 ) -> Dict[str, Any]:
+    """
+    Appel OSRM table avec retry automatique sur timeout.
+
+    Args:
+        timeout: Timeout en secondes (défaut: env UD_OSRM_TIMEOUT ou 30s)
+    """
+    if timeout is None:
+        timeout = DEFAULT_TIMEOUT
+
+    retry_count = DEFAULT_RETRY_COUNT
+    last_error = None
+
+    for attempt in range(retry_count):
+        try:
+            return _table_single_request(base_url, profile, coords, sources, destinations, timeout)
+        except (requests.Timeout, requests.ConnectionError) as e:
+            last_error = e
+            logger.warning(f"OSRM timeout/connection error (attempt {attempt+1}/{retry_count}): {e}")
+            if attempt < retry_count - 1:
+                time.sleep(0.5 * (attempt + 1))  # Backoff: 0.5s, 1s
+
+    raise last_error or RuntimeError("OSRM request failed after retries")
+
+def _table_single_request(base_url, profile, coords, sources, destinations, timeout):
+    """Exécute une seule requête OSRM table (appelé par _table avec retry)."""
     # 6 décimales pour OSRM; la clé de cache utilisera son propre arrondi.
     coord_str = ";".join(f"{lon:.6f},{lat:.6f}" for (lat, lon) in coords)
     url = f"{base_url}/table/v1/{profile}/{coord_str}"
@@ -158,8 +191,11 @@ def _route(
     geometries: str = "geojson",
     steps: bool = False,
     annotations: bool = False,
-    timeout: int = 5,
+    timeout: int | None = None,
 ) -> Dict[str, Any]:
+    if timeout is None:
+        timeout = DEFAULT_TIMEOUT
+
     pts: List[Tuple[float, float]] = [origin]
     if waypoints:
         pts.extend(waypoints)
@@ -313,7 +349,8 @@ def build_distance_matrix_osrm(
         # Écrit dans le cache
         try:
             if redis_client is not None and redis_available:
-                redis_client.setex(f"osrm:table:{cache_key}", cache_ttl_s, json.dumps(data))
+                redis_client.setex(f"osrm:table:{cache_key}", CACHE_TTL_SECONDS, json.dumps(data))
+                logger.debug(f"OSRM cache SET key={cache_key} ttl={CACHE_TTL_SECONDS}s")
         except _RedisConnError:
             # Redis HS -> log mais on continue
             redis_available = False
@@ -424,7 +461,8 @@ def route_info(
     # Cache set
     try:
         if redis_client is not None:
-            redis_client.setex(cache_key, cache_ttl_s, json.dumps(res))
+            redis_client.setex(cache_key, CACHE_TTL_SECONDS, json.dumps(res))
+            logger.debug(f"OSRM cache SET key={cache_key} ttl={CACHE_TTL_SECONDS}s")
     except _RedisConnError:
         logger.warning("[OSRM] Redis connection failed when writing to cache - continuing without cache")
     except Exception:
