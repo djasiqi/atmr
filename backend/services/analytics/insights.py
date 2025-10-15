@@ -6,9 +6,11 @@ Analyse les tendances et génère des recommandations.
 
 import logging
 from datetime import date, timedelta
-from typing import List, Dict, Any
-from models import DailyStats
+from typing import Any, Dict, List
+
 from sqlalchemy import and_
+
+from models import DailyStats
 
 logger = logging.getLogger(__name__)
 
@@ -24,15 +26,15 @@ def generate_insights(company_id: int, analytics: Dict[str, Any]) -> List[Dict[s
     Returns:
         Liste d'insights avec type, message et priorité
     """
-    
+
     insights = []
-    
+
     if not analytics or not analytics.get("trends"):
         return insights
-    
+
     summary = analytics.get("summary", {})
     trends = analytics["trends"]
-    
+
     # Insight 1: Taux de ponctualité
     on_time_rate = summary.get("avg_on_time_rate", 0)
     if on_time_rate < 70:
@@ -54,7 +56,7 @@ def generate_insights(company_id: int, analytics: Dict[str, Any]) -> List[Dict[s
             "message": f"Votre taux de ponctualité ({on_time_rate:.1f}%) est excellent ! Continuez ainsi.",
             "action": None
         })
-    
+
     # Insight 2: Retard moyen
     avg_delay = summary.get("avg_delay_minutes", 0)
     if avg_delay > 15:
@@ -67,17 +69,17 @@ def generate_insights(company_id: int, analytics: Dict[str, Any]) -> List[Dict[s
                       "Cela impacte la satisfaction client.",
             "action": "optimize_planning"
         })
-    
+
     # Insight 3: Tendances (évolution sur la période)
     if len(trends) >= 7:  # Au moins une semaine de données
         recent_quality = [t["quality_score"] for t in trends[-7:]]
         previous_quality = [t["quality_score"] for t in trends[:7]]
-        
+
         if recent_quality and previous_quality:
             recent_avg = sum(recent_quality) / len(recent_quality)
             previous_avg = sum(previous_quality) / len(previous_quality)
             evolution = ((recent_avg - previous_avg) / previous_avg * 100) if previous_avg > 0 else 0
-            
+
             if evolution > 10:
                 insights.append({
                     "type": "success",
@@ -96,7 +98,7 @@ def generate_insights(company_id: int, analytics: Dict[str, Any]) -> List[Dict[s
                     "message": f"Votre score de qualité diminue ({evolution:.1f}% sur la période). Action requise.",
                     "action": "review_operations"
                 })
-    
+
     # Insight 4: Jours problématiques
     if trends:
         # Identifier les jours avec le plus de retards
@@ -111,7 +113,7 @@ def generate_insights(company_id: int, analytics: Dict[str, Any]) -> List[Dict[s
                           "Analysez les patterns (jour de la semaine, heure, etc.)",
                 "action": "analyze_patterns"
             })
-    
+
     # Insight 5: Volume de courses
     total_bookings = summary.get("total_bookings", 0)
     days_count = len(trends)
@@ -136,7 +138,7 @@ def generate_insights(company_id: int, analytics: Dict[str, Any]) -> List[Dict[s
                 "message": f"Moyenne de {avg_daily_bookings:.1f} courses/jour. Activité soutenue !",
                 "action": None
             })
-    
+
     # Insight 6: Score de qualité global
     quality_score = summary.get("avg_quality_score", 0)
     if quality_score >= 85:
@@ -157,9 +159,9 @@ def generate_insights(company_id: int, analytics: Dict[str, Any]) -> List[Dict[s
             "message": f"Score global de {quality_score:.1f}/100. Des améliorations urgentes sont nécessaires.",
             "action": "improvement_plan"
         })
-    
+
     logger.info(f"[Insights] Generated {len(insights)} insights for company {company_id}")
-    
+
     return insights
 
 
@@ -174,11 +176,11 @@ def detect_patterns(company_id: int, lookback_days: int = 30) -> Dict[str, Any]:
     Returns:
         Dict contenant les patterns détectés
     """
-    
-    
+
+
     end_date = date.today()
     start_date = end_date - timedelta(days=lookback_days)
-    
+
     stats = DailyStats.query.filter(
         and_(
             DailyStats.company_id == company_id,
@@ -186,10 +188,10 @@ def detect_patterns(company_id: int, lookback_days: int = 30) -> Dict[str, Any]:
             DailyStats.date <= end_date
         )
     ).all()
-    
+
     if not stats:
         return {"patterns": [], "message": "Pas assez de données pour détecter des patterns"}
-    
+
     # Grouper par jour de la semaine (0=lundi, 6=dimanche)
     by_weekday = {i: [] for i in range(7)}
     for s in stats:
@@ -199,19 +201,19 @@ def detect_patterns(company_id: int, lookback_days: int = 30) -> Dict[str, Any]:
             "on_time_rate": s.on_time_rate,
             "bookings": s.total_bookings
         })
-    
+
     # Calculer les moyennes par jour
     weekday_names = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
     weekday_analysis = []
-    
+
     for weekday, data in by_weekday.items():
         if not data:
             continue
-        
+
         avg_delay = sum(d["delay"] for d in data) / len(data)
         avg_on_time = sum(d["on_time_rate"] for d in data) / len(data)
         avg_bookings = sum(d["bookings"] for d in data) / len(data)
-        
+
         weekday_analysis.append({
             "weekday": weekday,
             "weekday_name": weekday_names[weekday],
@@ -220,10 +222,10 @@ def detect_patterns(company_id: int, lookback_days: int = 30) -> Dict[str, Any]:
             "avg_bookings": round(avg_bookings, 1),
             "sample_size": len(data)
         })
-    
+
     # Identifier les patterns
     patterns = []
-    
+
     # Jour avec le plus de retards
     if weekday_analysis:
         worst_day = max(weekday_analysis, key=lambda x: x["avg_delay"])
@@ -233,7 +235,7 @@ def detect_patterns(company_id: int, lookback_days: int = 30) -> Dict[str, Any]:
                 "message": f"{worst_day['weekday_name']} a systématiquement plus de retards (moy: {worst_day['avg_delay']:.1f} min)",
                 "recommendation": f"Ajoutez du temps buffer ou des chauffeurs supplémentaires le {worst_day['weekday_name']}"
             })
-        
+
         # Jour avec le plus de courses
         busiest_day = max(weekday_analysis, key=lambda x: x["avg_bookings"])
         if busiest_day["avg_bookings"] > 0:
@@ -242,7 +244,7 @@ def detect_patterns(company_id: int, lookback_days: int = 30) -> Dict[str, Any]:
                 "message": f"{busiest_day['weekday_name']} est le jour le plus chargé (moy: {busiest_day['avg_bookings']:.0f} courses)",
                 "recommendation": "Assurez-vous d'avoir assez de chauffeurs disponibles"
             })
-    
+
     return {
         "patterns": patterns,
         "weekday_analysis": weekday_analysis

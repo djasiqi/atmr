@@ -5,6 +5,7 @@ Tâches Celery pour les analytics et rapports automatiques.
 
 import logging
 from datetime import date, timedelta
+
 from celery_app import celery
 from models import Company, User
 
@@ -22,25 +23,25 @@ def aggregate_daily_stats_task(company_id: int = None, day: date = None):
     
     Planification: Tous les jours à 1h du matin
     """
-    
+
     try:
         from services.analytics.aggregator import aggregate_daily_stats
-        
+
         if day is None:
             day = date.today() - timedelta(days=1)
-        
+
         if company_id:
             companies = [Company.query.get(company_id)]
         else:
             companies = Company.query.filter_by(is_active=True).all()
-        
+
         success_count = 0
         error_count = 0
-        
+
         for company in companies:
             if not company:
                 continue
-            
+
             try:
                 stats = aggregate_daily_stats(company.id, day)
                 if stats:
@@ -60,18 +61,18 @@ def aggregate_daily_stats_task(company_id: int = None, day: date = None):
                     f"[Analytics] Failed to aggregate daily stats for company {company.id}: {e}",
                     exc_info=True
                 )
-        
+
         logger.info(
             f"[Analytics] Daily aggregation complete: "
             f"{success_count} success, {error_count} errors"
         )
-        
+
         return {
             "success": success_count,
             "errors": error_count,
             "date": day.isoformat()
         }
-        
+
     except Exception as e:
         logger.error(f"[Analytics] Daily aggregation task failed: {e}", exc_info=True)
         raise
@@ -88,46 +89,46 @@ def send_daily_reports_task(company_id: int = None, day: date = None):
     
     Planification: Tous les jours à 8h du matin
     """
-    
+
     try:
         from services.analytics.report_generator import generate_daily_report, generate_email_content
-        
+
         if day is None:
             day = date.today() - timedelta(days=1)
-        
+
         if company_id:
             companies = [Company.query.get(company_id)]
         else:
             companies = Company.query.filter_by(is_active=True).all()
-        
+
         success_count = 0
         error_count = 0
-        
+
         for company in companies:
             if not company:
                 continue
-            
+
             try:
                 # Générer le rapport
                 report = generate_daily_report(company.id, day)
-                
+
                 if "error" in report:
                     logger.warning(
                         f"[Analytics] Cannot generate daily report for company {company.id}: {report['error']}"
                     )
                     error_count += 1
                     continue
-                
+
                 # Générer l'email
                 email_content = generate_email_content(report, "daily")
-                
+
                 # Envoyer aux admins de la company
                 admins = User.query.filter_by(
                     company_id=company.id,
                     is_admin=True,
                     is_active=True
                 ).all()
-                
+
                 for admin in admins:
                     if admin.email:
                         try:
@@ -145,27 +146,27 @@ def send_daily_reports_task(company_id: int = None, day: date = None):
                             logger.error(
                                 f"[Analytics] Failed to send email to {admin.email}: {e}"
                             )
-                
+
                 success_count += 1
-                
+
             except Exception as e:
                 error_count += 1
                 logger.error(
                     f"[Analytics] Failed to generate/send daily report for company {company.id}: {e}",
                     exc_info=True
                 )
-        
+
         logger.info(
             f"[Analytics] Daily reports sent: "
             f"{success_count} success, {error_count} errors"
         )
-        
+
         return {
             "success": success_count,
             "errors": error_count,
             "date": day.isoformat()
         }
-        
+
     except Exception as e:
         logger.error(f"[Analytics] Daily reports task failed: {e}", exc_info=True)
         raise
@@ -182,48 +183,48 @@ def send_weekly_reports_task(company_id: int = None, week_start: date = None):
     
     Planification: Tous les lundis à 9h du matin
     """
-    
+
     try:
-        from services.analytics.report_generator import generate_weekly_report, generate_email_content
-        
+        from services.analytics.report_generator import generate_email_content, generate_weekly_report
+
         if week_start is None:
             today = date.today()
             # Lundi de la semaine dernière
             week_start = today - timedelta(days=today.weekday() + 7)
-        
+
         if company_id:
             companies = [Company.query.get(company_id)]
         else:
             companies = Company.query.filter_by(is_active=True).all()
-        
+
         success_count = 0
         error_count = 0
-        
+
         for company in companies:
             if not company:
                 continue
-            
+
             try:
                 # Générer le rapport
                 report = generate_weekly_report(company.id, week_start)
-                
+
                 if "error" in report:
                     logger.warning(
                         f"[Analytics] Cannot generate weekly report for company {company.id}: {report['error']}"
                     )
                     error_count += 1
                     continue
-                
+
                 # Générer l'email
                 email_content = generate_email_content(report, "weekly")
-                
+
                 # Envoyer aux admins
                 admins = User.query.filter_by(
                     company_id=company.id,
                     is_admin=True,
                     is_active=True
                 ).all()
-                
+
                 for admin in admins:
                     if admin.email:
                         try:
@@ -241,27 +242,27 @@ def send_weekly_reports_task(company_id: int = None, week_start: date = None):
                             logger.error(
                                 f"[Analytics] Failed to send email to {admin.email}: {e}"
                             )
-                
+
                 success_count += 1
-                
+
             except Exception as e:
                 error_count += 1
                 logger.error(
                     f"[Analytics] Failed to generate/send weekly report for company {company.id}: {e}",
                     exc_info=True
                 )
-        
+
         logger.info(
             f"[Analytics] Weekly reports sent: "
             f"{success_count} success, {error_count} errors"
         )
-        
+
         return {
             "success": success_count,
             "errors": error_count,
             "week_start": week_start.isoformat()
         }
-        
+
     except Exception as e:
         logger.error(f"[Analytics] Weekly reports task failed: {e}", exc_info=True)
         raise

@@ -1,9 +1,12 @@
 # services/dispatch_utils.py
-from typing import Dict, Iterable, List
+from collections.abc import Iterable
+from datetime import UTC, datetime, timedelta
+from typing import Dict, List
+
 from sqlalchemy import func, select
-from datetime import datetime, timedelta, timezone
-from models import Booking, BookingStatus
+
 from ext import db
+from models import Booking, BookingStatus
 
 DEFAULT_STATUSES_FOR_COUNT = (
     BookingStatus.ASSIGNED,
@@ -14,8 +17,8 @@ DEFAULT_STATUSES_FOR_COUNT = (
 def _to_utc(dt: datetime) -> datetime:
     # utilitaire de secours si routes.utils.to_utc n’existe pas / crash
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 def count_assigned_bookings_for_day(
     company_id: int,
@@ -34,7 +37,7 @@ def count_assigned_bookings_for_day(
         return {}
 
     if day is None:
-        day = datetime.now(timezone.utc)
+        day = datetime.now(UTC)
 
     # bornes du jour (en UTC)
     local_day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -44,11 +47,11 @@ def count_assigned_bookings_for_day(
 
     # Pylance voit parfois les attributs ORM comme des types natifs -> on passe par getattr
     B = Booking
-    driver_id_col = getattr(B, "driver_id")
-    company_id_col = getattr(B, "company_id")
-    status_col = getattr(B, "status")
-    scheduled_col = getattr(B, "scheduled_time")
-    id_col = getattr(B, "id")
+    driver_id_col = B.driver_id
+    company_id_col = B.company_id
+    status_col = B.status
+    scheduled_col = B.scheduled_time
+    id_col = B.id
 
     stmt = (
         select(driver_id_col, func.count(id_col))

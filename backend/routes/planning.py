@@ -1,31 +1,32 @@
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import date, datetime
+
 from flask import request
+from flask_jwt_extended import jwt_required
 from flask_restx import Namespace, Resource
 
 from ext import db
-from flask_jwt_extended import jwt_required
 from models import (
+    CompanyPlanningSettings,
+    DriverBreak,
     DriverShift,
     DriverUnavailability,
-    DriverBreak,
     DriverWeeklyTemplate,
-    CompanyPlanningSettings,
-)
-from services.planning_service import (
-    validate_shift_overlap,
-    serialize_shift,
-    materialize_template,
 )
 from routes.companies import get_company_from_token
+from services.planning_service import (
+    materialize_template,
+    serialize_shift,
+    validate_shift_overlap,
+)
+
 # from shared.time_utils import parse_local_naive
 from sockets.planning import (
     emit_shift_created,
-    emit_shift_updated,
     emit_shift_deleted,
+    emit_shift_updated,
 )
-
 
 planning_ns = Namespace("planning", description="Planning Chauffeurs")
 

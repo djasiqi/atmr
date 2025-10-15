@@ -5,8 +5,8 @@ Revises: e252718b5271
 Create Date: 2025-10-15 10:00:00.000000
 
 """
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = 'f3a9c7b8d1e2'
@@ -19,9 +19,9 @@ def upgrade():
     Ajoute les index critiques manquants pour améliorer les performances
     des requêtes fréquentes.
     """
-    
+
     # ========== BOOKING ==========
-    
+
     # 1. invoice_line_id (FK sans index)
     op.create_index(
         'ix_booking_invoice_line',
@@ -30,7 +30,7 @@ def upgrade():
         unique=False,
         postgresql_where=sa.text('invoice_line_id IS NOT NULL')
     )
-    
+
     # 2. Composite pour filtres company + status + date
     op.create_index(
         'ix_booking_company_status_scheduled',
@@ -38,9 +38,9 @@ def upgrade():
         ['company_id', 'status', 'scheduled_time'],
         unique=False
     )
-    
+
     # ========== INVOICE ==========
-    
+
     # 3. Composite company + status + due_date (rapports factures en retard)
     op.create_index(
         'ix_invoice_company_status_due',
@@ -48,9 +48,9 @@ def upgrade():
         ['company_id', 'status', 'due_date'],
         unique=False
     )
-    
+
     # ========== ASSIGNMENT ==========
-    
+
     # 4. dispatch_run_id (FK sans index explicite)
     op.create_index(
         'ix_assignment_dispatch_run',
@@ -59,9 +59,9 @@ def upgrade():
         unique=False,
         postgresql_where=sa.text('dispatch_run_id IS NOT NULL')
     )
-    
+
     # ========== DRIVER_STATUS ==========
-    
+
     # 5. current_assignment_id
     op.create_index(
         'ix_driver_status_assignment',
@@ -70,9 +70,9 @@ def upgrade():
         unique=False,
         postgresql_where=sa.text('current_assignment_id IS NOT NULL')
     )
-    
+
     # ========== REALTIME_EVENT ==========
-    
+
     # 6. Timestamp pour requêtes historiques
     op.create_index(
         'ix_realtime_event_timestamp',

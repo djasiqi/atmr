@@ -6,16 +6,17 @@ Génère des recommandations contextuelles basées sur la situation actuelle.
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
-from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
+from datetime import timedelta
+from typing import Any, Dict, List, Tuple
 
 from sqlalchemy import or_
-from models import Booking, Driver, Assignment, BookingStatus
+
+from ext import db
+from models import Assignment, Booking, BookingStatus, Driver
 from services.unified_dispatch.data import haversine_minutes
 from services.unified_dispatch.settings import Settings
 from shared.time_utils import now_local
-from ext import db
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +27,13 @@ class Suggestion:
     action: str  # "reassign", "notify_customer", "add_booking", "adjust_time", "add_driver"
     priority: str  # "low", "medium", "high", "critical"
     message: str
-    estimated_gain_minutes: Optional[int] = None
-    booking_id: Optional[int] = None
-    driver_id: Optional[int] = None
-    alternative_driver_id: Optional[int] = None
-    additional_data: Optional[Dict[str, Any]] = None
+    estimated_gain_minutes: int | None = None
+    booking_id: int | None = None
+    driver_id: int | None = None
+    alternative_driver_id: int | None = None
+    additional_data: Dict[str, Any] | None = None
     auto_applicable: bool = False  # Peut être appliquée automatiquement
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "action": self.action,
@@ -51,10 +52,10 @@ class SuggestionEngine:
     """
     Moteur de génération de suggestions intelligentes
     """
-    
-    def __init__(self, settings: Optional[Settings] = None):
+
+    def __init__(self, settings: Settings | None = None):
         self.settings = settings or Settings()
-    
+
     def generate_suggestions_for_assignment(
         self,
         assignment: Assignment,
@@ -73,14 +74,14 @@ class SuggestionEngine:
             Liste de suggestions classées par priorité
         """
         suggestions = []
-        
+
         # Récupérer le booking et le driver
         booking = db.session.get(Booking, assignment.booking_id)
         driver = db.session.get(Driver, assignment.driver_id) if assignment.driver_id else None
-        
+
         if not booking:
             return suggestions
-        
+
         # Générer des suggestions selon le niveau de retard
         if delay_minutes > 15:
             # Retard critique → notification client URGENTE + réassignation
@@ -114,30 +115,30 @@ class SuggestionEngine:
                 driver_id=driver.id if driver else None,
                 auto_applicable=False
             ))
-        
+
         # Suggestions générales
         suggestions.extend(
             self._suggest_time_adjustments(booking, delay_minutes)
         )
-        
+
         # Trier par priorité
         priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
         suggestions.sort(key=lambda s: priority_order.get(s.priority, 99))
-        
+
         return suggestions
-    
+
     def _suggest_reassignment(
         self,
         booking: Booking,
-        current_driver: Optional[Driver],
+        current_driver: Driver | None,
         delay_minutes: int,
         company_id: int,
         threshold_km: float = 10.0
     ) -> List[Suggestion]:
         """Suggère de réassigner à un chauffeur plus proche"""
-        
+
         suggestions = []
-        
+
         try:
             # Trouver des chauffeurs disponibles à proximité
             nearby_drivers = self._find_nearby_available_drivers(
@@ -146,10 +147,10 @@ class SuggestionEngine:
                 radius_km=threshold_km,
                 exclude_driver_id=current_driver.id if current_driver else None
             )
-            
+
             if not nearby_drivers:
                 return suggestions
-            
+
             # Calculer le gain potentiel pour chaque chauffeur
             for driver, distance_km, eta_minutes in nearby_drivers[:3]:  # Top 3
                 # Estimation du gain
@@ -158,10 +159,10 @@ class SuggestionEngine:
                 )
                 new_eta = eta_minutes
                 gain = current_eta - new_eta
-                
+
                 if gain > 5:  # Gain significatif uniquement
                     priority = "critical" if delay_minutes > 20 else "high"
-                    
+
                     suggestions.append(Suggestion(
                         action="reassign",
                         priority=priority,
@@ -181,21 +182,21 @@ class SuggestionEngine:
                         },
                         auto_applicable=False  # Nécessite validation
                     ))
-        
+
         except Exception as e:
             logger.warning("[Suggestions] Failed to suggest reassignment: %s", e)
-        
+
         return suggestions
-    
+
     def _suggest_customer_notification(
         self,
         booking: Booking,
         delay_minutes: int
     ) -> Suggestion:
         """Suggère de notifier le client du retard"""
-        
+
         priority = "high" if delay_minutes > 10 else "medium"
-        
+
         return Suggestion(
             action="notify_customer",
             priority=priority,
@@ -211,21 +212,21 @@ class SuggestionEngine:
             },
             auto_applicable=True  # Peut être automatique
         )
-    
+
     def _suggest_additional_booking(
         self,
         booking: Booking,
-        driver: Optional[Driver],
+        driver: Driver | None,
         advance_minutes: int,
         company_id: int
     ) -> List[Suggestion]:
         """Suggère d'ajouter une course supplémentaire quand le chauffeur est très en avance"""
-        
+
         suggestions = []
-        
+
         if not driver or advance_minutes < 15:
             return suggestions
-        
+
         try:
             # Chercher des bookings en attente à proximité
             nearby_bookings = self._find_pending_bookings_nearby(
@@ -234,7 +235,7 @@ class SuggestionEngine:
                 time_window_minutes=advance_minutes - 5,
                 radius_km=5.0
             )
-            
+
             for nearby_booking, distance_km, time_available in nearby_bookings[:2]:  # Top 2
                 suggestions.append(Suggestion(
                     action="add_booking",
@@ -254,21 +255,21 @@ class SuggestionEngine:
                     },
                     auto_applicable=False
                 ))
-        
+
         except Exception as e:
             logger.warning("[Suggestions] Failed to suggest additional booking: %s", e)
-        
+
         return suggestions
-    
+
     def _suggest_time_adjustments(
         self,
         booking: Booking,
         delay_minutes: int
     ) -> List[Suggestion]:
         """Suggère des ajustements d'horaire si possible"""
-        
+
         suggestions = []
-        
+
         # Retard critique → URGENT : ajuster l'heure
         if delay_minutes > 30:
             suggestions.append(Suggestion(
@@ -308,7 +309,7 @@ class SuggestionEngine:
             # Vérifier si le booking a une marge de flexibilité
             # (exemple: rendez-vous médical non urgent)
             is_flexible = not getattr(booking, "is_urgent", False)
-            
+
             if is_flexible:
                 suggestions.append(Suggestion(
                     action="adjust_time",
@@ -325,15 +326,15 @@ class SuggestionEngine:
                     },
                     auto_applicable=False
                 ))
-        
+
         return suggestions
-    
+
     def _find_nearby_available_drivers(
         self,
         booking: Booking,
         company_id: int,
         radius_km: float = 10.0,
-        exclude_driver_id: Optional[int] = None
+        exclude_driver_id: int | None = None
     ) -> List[Tuple[Driver, float, int]]:
         """
         Trouve les chauffeurs disponibles à proximité.
@@ -345,38 +346,38 @@ class SuggestionEngine:
             # Position du pickup
             pickup_lat = getattr(booking, "pickup_lat", None)
             pickup_lon = getattr(booking, "pickup_lon", None)
-            
+
             if not pickup_lat or not pickup_lon:
                 return []
-            
+
             pickup_pos = (float(pickup_lat), float(pickup_lon))
-            
+
             # Récupérer les chauffeurs actifs et disponibles
             query = Driver.query.filter(
                 Driver.company_id == company_id,
                 Driver.is_active == True,
                 Driver.is_available == True
             )
-            
+
             if exclude_driver_id:
                 query = query.filter(Driver.id != exclude_driver_id)
-            
+
             drivers = query.all()
-            
+
             # Calculer distance et ETA pour chaque chauffeur
             results = []
             for driver in drivers:
                 driver_lat = getattr(driver, "current_lat", getattr(driver, "latitude", None))
                 driver_lon = getattr(driver, "current_lon", getattr(driver, "longitude", None))
-                
+
                 if not driver_lat or not driver_lon:
                     continue
-                
+
                 driver_pos = (float(driver_lat), float(driver_lon))
-                
+
                 # Distance Haversine
                 distance_km = self._calculate_distance_km(driver_pos, pickup_pos)
-                
+
                 if distance_km <= radius_km:
                     # ETA en minutes
                     eta_minutes = haversine_minutes(
@@ -384,18 +385,18 @@ class SuggestionEngine:
                         pickup_pos,
                         avg_kmh=getattr(self.settings.matrix, "avg_speed_kmh", 25.0)
                     )
-                    
+
                     results.append((driver, distance_km, eta_minutes))
-            
+
             # Trier par distance
             results.sort(key=lambda x: x[1])
-            
+
             return results
-        
+
         except Exception as e:
             logger.warning("[Suggestions] Error finding nearby drivers: %s", e)
             return []
-    
+
     def _find_pending_bookings_nearby(
         self,
         booking: Booking,
@@ -412,16 +413,16 @@ class SuggestionEngine:
         try:
             pickup_lat = getattr(booking, "pickup_lat", None)
             pickup_lon = getattr(booking, "pickup_lon", None)
-            
+
             if not pickup_lat or not pickup_lon:
                 return []
-            
+
             current_pos = (float(pickup_lat), float(pickup_lon))
-            
+
             # Fenêtre de temps
             now = now_local()
             time_window_end = now + timedelta(minutes=time_window_minutes)
-            
+
             # Bookings en attente
             pending_bookings = Booking.query.filter(
                 Booking.company_id == company_id,
@@ -433,18 +434,18 @@ class SuggestionEngine:
                 Booking.scheduled_time <= time_window_end,
                 Booking.id != booking.id  # Exclure le booking actuel
             ).all()
-            
+
             results = []
             for pending_booking in pending_bookings:
                 p_lat = getattr(pending_booking, "pickup_lat", None)
                 p_lon = getattr(pending_booking, "pickup_lon", None)
-                
+
                 if not p_lat or not p_lon:
                     continue
-                
+
                 pending_pos = (float(p_lat), float(p_lon))
                 distance_km = self._calculate_distance_km(current_pos, pending_pos)
-                
+
                 if distance_km <= radius_km:
                     # Temps disponible avant ce booking
                     if pending_booking.scheduled_time:
@@ -452,16 +453,16 @@ class SuggestionEngine:
                             (pending_booking.scheduled_time - now).total_seconds() / 60
                         )
                         results.append((pending_booking, distance_km, time_available))
-            
+
             # Trier par temps disponible (plus urgent en premier)
             results.sort(key=lambda x: x[2])
-            
+
             return results
-        
+
         except Exception as e:
             logger.warning("[Suggestions] Error finding pending bookings: %s", e)
             return []
-    
+
     def _calculate_distance_km(
         self,
         pos1: Tuple[float, float],
@@ -469,23 +470,23 @@ class SuggestionEngine:
     ) -> float:
         """Calcule la distance en km entre deux positions (Haversine)"""
         import math
-        
+
         lat1, lon1 = pos1
         lat2, lon2 = pos2
-        
+
         R = 6371.0  # Rayon de la Terre en km
-        
+
         phi1 = math.radians(lat1)
         phi2 = math.radians(lat2)
         dphi = math.radians(lat2 - lat1)
         dlambda = math.radians(lon2 - lon1)
-        
+
         a = (
             math.sin(dphi / 2) ** 2 +
             math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
         )
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-        
+
         return R * c
 
 
@@ -493,7 +494,7 @@ def generate_suggestions(
     assignment: Assignment,
     delay_minutes: int,
     company_id: int,
-    settings: Optional[Settings] = None
+    settings: Settings | None = None
 ) -> List[Suggestion]:
     """
     Fonction helper pour générer des suggestions.

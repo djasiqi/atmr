@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from flask_restx import Namespace, Resource, fields
-from flask import request
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import Payment, Booking, Client, User, db, UserRole, PaymentStatus
-from ext import role_required
-from app import sentry_sdk
+import logging
 from datetime import datetime
 from typing import Any, cast
-import logging
+
+from flask import request
+from flask_jwt_extended import get_jwt_identity, jwt_required
+from flask_restx import Namespace, Resource, fields
+
+from app import sentry_sdk
+from ext import role_required
+from models import Booking, Client, Payment, PaymentStatus, User, UserRole, db
 
 app_logger = logging.getLogger('app')
 

@@ -1,27 +1,25 @@
 # backend/tasks/dispatch_tasks.py
 from __future__ import annotations
 
-import logging
 import json
-from typing import Dict, Any, Optional, cast
-from datetime import datetime, timezone
+import logging
 import time
+from datetime import UTC, datetime
+from typing import Any, Dict, cast
 
 from celery import shared_task
 from celery.exceptions import MaxRetriesExceededError
-from sqlalchemy import exc as sa_exc
 from flask import current_app as app
-from models import Company
-from services.unified_dispatch import engine
-
+from sqlalchemy import exc as sa_exc
 
 from ext import db
-
+from models import Company
+from services.unified_dispatch import engine
 
 logger = logging.getLogger(__name__)
 
 # ---- Helpers typage ----
-def _safe_int(v: Any) -> Optional[int]:
+def _safe_int(v: Any) -> int | None:
     """Convertit en int Python si possible, sinon None (compatible Column/InstrumentedAttribute)."""
     try:
         return int(v)  # type: ignore[arg-type]
@@ -49,8 +47,8 @@ def run_dispatch_task(
     for_date: str,
     mode: str = "auto",
     regular_first: bool = True,
-    allow_emergency: Optional[bool] = None,
-    overrides: Optional[Dict[str, Any]] = None,
+    allow_emergency: bool | None = None,
+    overrides: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Exécuté par un worker Celery.
@@ -252,7 +250,7 @@ def run_dispatch_task(
 )
 def autorun_tick() -> Dict[str, Any]:
     start_time = time.time()
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
     results: Dict[str, Any] = {"triggered": 0, "skipped": 0, "errors": 0, "companies": []}
 
     # Défensif

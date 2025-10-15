@@ -1,12 +1,14 @@
 """
 Routes API pour OSRM (itinéraires et calculs de durée)
 """
+import logging
+import os
+
 from flask import request
 from flask_restx import Namespace, Resource, fields
-from services.osrm_client import route_info
+
 from ext import redis_client
-import os
-import logging
+from services.osrm_client import route_info
 
 logger = logging.getLogger(__name__)
 

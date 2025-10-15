@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from flask import request
-from flask_restx import Namespace, Resource
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import Message, User, UserRole, Company
-from sqlalchemy.orm import joinedload
 from datetime import datetime
 from typing import Any, cast
 
+from flask import request
+from flask_jwt_extended import get_jwt_identity, jwt_required
+from flask_restx import Namespace, Resource
+from sqlalchemy.orm import joinedload
+
 from ext import app_logger  # si tu utilises un logger structuré
+from models import Company, Message, User, UserRole
 
 messages_ns = Namespace("messages", description="Messagerie entreprise")
 

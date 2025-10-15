@@ -1,14 +1,16 @@
 # backend/sockets/chat.py
 import logging
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any, cast, Mapping, cast as tcast
+from collections.abc import Mapping
+from datetime import UTC, datetime
+from typing import Any, Dict, cast
+from typing import cast as tcast
 
-from flask import session, request
-from flask_socketio import SocketIO, emit, join_room
+from flask import request, session
 from flask_jwt_extended import decode_token
+from flask_socketio import SocketIO, emit, join_room
 
-from models import User, UserRole, Driver, Message, Company
 from ext import db, redis_client
+from models import Company, Driver, Message, User, UserRole
 
 logger = logging.getLogger("socketio")
 
@@ -20,12 +22,12 @@ def _get_sid(fallback_request=None) -> str:
     """Récupère le SID de la requête Socket.IO actuelle."""
     if fallback_request is None:
         fallback_request = request
-    
+
     sid = getattr(fallback_request, "sid", None) or fallback_request.environ.get("socketio.sid")
     return str(sid) if sid is not None else ""
 
 
-def _extract_token(auth) -> Optional[str]:
+def _extract_token(auth) -> str | None:
     """Récupère le token JWT depuis Authorization, auth.token ou ?token="""
     # 1) Header Authorization: Bearer ...
     authz = request.headers.get("Authorization") or request.headers.get("AUTHORIZATION")
@@ -144,18 +146,18 @@ def init_chat_socket(socketio: SocketIO):
                 return
 
             content = (data.get("content") or "").strip()
-            
+
             # ✅ Validation longueur message
             if len(content) > 1000:
                 emit("error", {"error": "Message trop long (max 1000 caractères)."})
                 return
-            
+
             receiver_id = data.get("receiver_id")
-            timestamp = datetime.now(timezone.utc)
+            timestamp = datetime.now(UTC)
             if not content:
                 emit("error", {"error": "Message vide non autorisé."})
                 return
-            
+
             # ✅ Validation receiver_id si fourni
             if receiver_id is not None:
                 try:
@@ -274,24 +276,24 @@ def init_chat_socket(socketio: SocketIO):
             # 1. Récupération du SID pour le debug
             current_sid = _get_sid()
             logger.info(f"📍 driver_location reçu, SID={current_sid}, data={data}")
-            
+
             # 2. Tentative de récupération depuis la session Flask
             user_id = session.get("user_id")
             user_role = session.get("role")
-            
+
             # 3. Fallback vers _SID_INDEX si session vide
             if not user_id:
                 sid_info = _SID_INDEX.get(current_sid, {})
                 logger.info(f"🔍 Fallback _SID_INDEX pour SID={current_sid}: {sid_info}")
                 user_id = sid_info.get("user_id")
                 user_role = sid_info.get("role")
-            
+
             # 4. Nouvelle approche: extraire driver_id du payload si disponible
             payload_driver_id = data.get("driver_id")
-            
+
             # 5. Déterminer le driver à utiliser
-            driver: Optional[Driver] = None
-            
+            driver: Driver | None = None
+
             if payload_driver_id and isinstance(payload_driver_id, (int, str)):
                 # Priorité au driver_id du payload (plus fiable)
                 try:
@@ -303,7 +305,7 @@ def init_chat_socket(socketio: SocketIO):
                         logger.warning(f"⚠️ Driver introuvable via payload_driver_id={candidate_id}")
                 except (ValueError, TypeError):
                     logger.warning(f"⚠️ driver_id non convertible: {payload_driver_id}")
-            
+
             if not driver and user_id and user_role == "driver":
                 # Fallback: recherche via user_id
                 driver = Driver.query.filter_by(user_id=user_id).first()
@@ -311,9 +313,9 @@ def init_chat_socket(socketio: SocketIO):
                     logger.info(f"✅ Driver trouvé via user_id: {driver.id}")
                 else:
                     logger.warning(f"⚠️ Aucun driver associé à user_id={user_id}")
-            
+
             # Évite l'évaluation booléenne d'une colonne SQLA : on récupère un int ou None
-            company_id_val = tcast(Optional[int], getattr(driver, "company_id", None))
+            company_id_val = tcast(int | None, getattr(driver, "company_id", None))
             if (driver is None) or (company_id_val is None):
                 logger.error(
                     f"❌ Driver introuvable: payload_driver_id={payload_driver_id}, user_id={user_id}"
@@ -323,7 +325,7 @@ def init_chat_socket(socketio: SocketIO):
 
             latitude = data.get("latitude")
             longitude = data.get("longitude")
-            
+
             # ✅ Validation stricte lat/lon
             try:
                 lat = float(latitude)
@@ -331,16 +333,16 @@ def init_chat_socket(socketio: SocketIO):
             except (TypeError, ValueError):
                 emit("error", {"error": "Latitude et longitude requises."})
                 return
-            
+
             # ✅ Validation bornes géographiques
             if not (-90 <= lat <= 90):
                 emit("error", {"error": "Latitude invalide (doit être entre -90 et 90)."})
                 return
-            
+
             if not (-180 <= lon <= 180):
                 emit("error", {"error": "Longitude invalide (doit être entre -180 et 180)."})
                 return
-            
+
             latitude, longitude = lat, lon
 
             company_room = f"company_{company_id_val}"
@@ -351,7 +353,7 @@ def init_chat_socket(socketio: SocketIO):
                     "first_name": getattr(getattr(driver, "user", None), "first_name", None),
                     "latitude": latitude,
                     "longitude": longitude,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 },
                 room=company_room,
             )
@@ -362,7 +364,7 @@ def init_chat_socket(socketio: SocketIO):
             emit("error", {"error": str(e)})
 
 
-       
+
     @socketio.on("join_company")
     def handle_join_company(data=None):
            try:
@@ -455,7 +457,7 @@ def init_chat_socket(socketio: SocketIO):
                                "first_name": getattr(getattr(driver, "user", None), "first_name", None),
                                "latitude": loc_data.get("lat"),
                                "longitude": loc_data.get("lon"),
-                               "timestamp": loc_data.get("ts") or datetime.now(timezone.utc).isoformat(),
+                               "timestamp": loc_data.get("ts") or datetime.now(UTC).isoformat(),
                            })
                        elif (driver.latitude is not None) and (driver.longitude is not None):
                            # Fallback to DB if Redis doesnt have data
@@ -464,7 +466,7 @@ def init_chat_socket(socketio: SocketIO):
                                "first_name": getattr(getattr(driver, "user", None), "first_name", None),
                                "latitude": driver.latitude,
                                "longitude": driver.longitude,
-                               "timestamp": datetime.now(timezone.utc).isoformat(),
+                               "timestamp": datetime.now(UTC).isoformat(),
                            })
                    except Exception as e:
                        # driver vient du for → devrait exister, mais on défend le log quand même

@@ -6,18 +6,20 @@ Agrège les métriques quotidiennes et génère des statistiques par période.
 
 import logging
 from datetime import date, datetime, timedelta
-from typing import Dict, Any, Optional
+from typing import Any, Dict
+
 from sqlalchemy import and_
+
 from ext import db
-from models import DispatchMetrics, DailyStats
+from models import DailyStats, DispatchMetrics
 
 logger = logging.getLogger(__name__)
 
 
 class MetricsAggregator:
     """Agrège les métriques pour différentes périodes"""
-    
-    def aggregate_daily_stats(self, company_id: int, day: date) -> Optional[DailyStats]:
+
+    def aggregate_daily_stats(self, company_id: int, day: date) -> DailyStats | None:
         """
         Agrège toutes les métriques d'un jour en statistiques journalières.
         À exécuter à la fin de chaque journée (tâche Celery).
@@ -29,7 +31,7 @@ class MetricsAggregator:
         Returns:
             DailyStats créé/mis à jour ou None en cas d'erreur
         """
-        
+
         try:
             # Récupérer toutes les métriques du jour
             metrics = DispatchMetrics.query.filter(
@@ -38,53 +40,53 @@ class MetricsAggregator:
                     DispatchMetrics.date == day
                 )
             ).all()
-            
+
             if not metrics:
                 logger.warning(
                     f"[Aggregator] No metrics found for company {company_id} on {day}"
                 )
                 return None
-            
+
             # Agréger les métriques
             total_bookings = sum(m.total_bookings for m in metrics)
             on_time_total = sum(m.on_time_bookings for m in metrics)
-            
+
             # Calculs de moyennes pondérées
             delays = [m.average_delay_minutes for m in metrics if m.average_delay_minutes > 0]
             quality_scores = [m.quality_score for m in metrics if m.quality_score > 0]
-            
+
             on_time_rate = (
                 (on_time_total / total_bookings * 100) if total_bookings > 0 else 0.0
             )
             avg_delay = sum(delays) / len(delays) if delays else 0.0
             avg_quality = sum(quality_scores) / len(quality_scores) if quality_scores else 0.0
-            
+
             # Calculer les tendances (vs jour précédent)
             previous_day = day - timedelta(days=1)
             previous_stats = DailyStats.query.filter_by(
                 company_id=company_id, date=previous_day
             ).first()
-            
+
             if previous_stats:
                 bookings_trend = (
-                    ((total_bookings - previous_stats.total_bookings) / 
+                    ((total_bookings - previous_stats.total_bookings) /
                      previous_stats.total_bookings * 100)
                     if previous_stats.total_bookings > 0 else 0.0
                 )
                 delay_trend = (
-                    ((avg_delay - previous_stats.avg_delay) / 
+                    ((avg_delay - previous_stats.avg_delay) /
                      previous_stats.avg_delay * 100)
                     if previous_stats.avg_delay > 0 else 0.0
                 )
             else:
                 bookings_trend = 0.0
                 delay_trend = 0.0
-            
+
             # Créer ou mettre à jour
             daily_stats = DailyStats.query.filter_by(
                 company_id=company_id, date=day
             ).first()
-            
+
             if daily_stats:
                 # Mettre à jour
                 daily_stats.total_bookings = total_bookings
@@ -107,17 +109,17 @@ class MetricsAggregator:
                     delay_trend=delay_trend
                 )
                 db.session.add(daily_stats)
-            
+
             db.session.commit()
-            
+
             logger.info(
                 f"[Aggregator] Daily stats aggregated for {day}: "
                 f"Quality={avg_quality:.1f}, On-time={on_time_rate:.1f}%, "
                 f"Avg delay={avg_delay:.1f}min"
             )
-            
+
             return daily_stats
-            
+
         except Exception as e:
             logger.error(
                 f"[Aggregator] Failed to aggregate daily stats for {day}: {e}",
@@ -125,11 +127,11 @@ class MetricsAggregator:
             )
             db.session.rollback()
             return None
-    
+
     def get_period_analytics(
-        self, 
-        company_id: int, 
-        start_date: date, 
+        self,
+        company_id: int,
+        start_date: date,
         end_date: date
     ) -> Dict[str, Any]:
         """
@@ -144,7 +146,7 @@ class MetricsAggregator:
         Returns:
             Dict contenant les analytics de la période
         """
-        
+
         try:
             stats = DailyStats.query.filter(
                 and_(
@@ -153,7 +155,7 @@ class MetricsAggregator:
                     DailyStats.date <= end_date
                 )
             ).order_by(DailyStats.date).all()
-            
+
             if not stats:
                 logger.warning(
                     f"[Aggregator] No stats found for company {company_id} "
@@ -174,13 +176,13 @@ class MetricsAggregator:
                     "trends": [],
                     "daily_breakdown": []
                 }
-            
+
             # Résumé de la période
             total_bookings = sum(s.total_bookings for s in stats)
             avg_on_time_rate = sum(s.on_time_rate for s in stats) / len(stats)
             avg_delay = sum(s.avg_delay for s in stats) / len(stats)
             avg_quality = sum(s.quality_score for s in stats) / len(stats)
-            
+
             # Tendances jour par jour
             trends = [
                 {
@@ -194,7 +196,7 @@ class MetricsAggregator:
                 }
                 for s in stats
             ]
-            
+
             return {
                 "period": {
                     "start": start_date.isoformat(),
@@ -210,7 +212,7 @@ class MetricsAggregator:
                 "trends": trends,
                 "daily_breakdown": trends
             }
-            
+
         except Exception as e:
             logger.error(
                 f"[Aggregator] Failed to get period analytics: {e}",
@@ -226,7 +228,7 @@ class MetricsAggregator:
                 "trends": [],
                 "error": str(e)
             }
-    
+
     def get_weekly_summary(self, company_id: int, week_start: date) -> Dict[str, Any]:
         """
         Génère un résumé hebdomadaire (pour les rapports automatiques).
@@ -240,12 +242,12 @@ class MetricsAggregator:
         """
         week_end = week_start + timedelta(days=6)
         analytics = self.get_period_analytics(company_id, week_start, week_end)
-        
+
         # Enrichir avec des insights hebdomadaires
         if analytics["trends"]:
             best_day = max(analytics["trends"], key=lambda x: x["quality_score"])
             worst_day = min(analytics["trends"], key=lambda x: x["quality_score"])
-            
+
             analytics["insights"] = {
                 "best_day": {
                     "date": best_day["date"],
@@ -258,7 +260,7 @@ class MetricsAggregator:
                 "total_courses": analytics["summary"]["total_bookings"],
                 "avg_punctuality": analytics["summary"]["avg_on_time_rate"]
             }
-        
+
         return analytics
 
 
@@ -266,7 +268,7 @@ class MetricsAggregator:
 _aggregator = MetricsAggregator()
 
 
-def aggregate_daily_stats(company_id: int, day: date) -> Optional[DailyStats]:
+def aggregate_daily_stats(company_id: int, day: date) -> DailyStats | None:
     """
     Helper function pour agréger les stats d'un jour.
     
@@ -277,8 +279,8 @@ def aggregate_daily_stats(company_id: int, day: date) -> Optional[DailyStats]:
 
 
 def get_period_analytics(
-    company_id: int, 
-    start_date: date, 
+    company_id: int,
+    start_date: date,
     end_date: date
 ) -> Dict[str, Any]:
     """

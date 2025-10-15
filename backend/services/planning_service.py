@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
-from typing import Optional
 
 from ext import db
 from models import DriverShift
@@ -52,7 +51,7 @@ def _normalize_to_local_naive(dt: datetime) -> datetime:
     return dt
 
 
-def validate_shift_overlap(company_id: int, driver_id: int, start_local: datetime, end_local: datetime, *, exclude_id: Optional[int] = None) -> None:
+def validate_shift_overlap(company_id: int, driver_id: int, start_local: datetime, end_local: datetime, *, exclude_id: int | None = None) -> None:
     """Squelette: lève une ValueError si un chevauchement est détecté."""
     # Normalize to naive local for consistent comparisons & DB filters
     start_local = _normalize_to_local_naive(start_local)
@@ -83,9 +82,70 @@ def materialize_template(company_id: int, driver_id: int, from_d: date, to_d: da
 
 
 def is_driver_available_at(company_id: int, driver_id: int, dt: datetime) -> bool:
-    """Hook utilisé par le dispatch (squelette)."""
-    _dt = to_geneva_local(dt)
-    # TODO: vérifier shift actif + indispos
-    return True
+    """
+    Vérifie si un chauffeur est disponible à une date/heure donnée.
+    
+    Vérifie :
+    1. Qu'il a un shift actif à cette heure
+    2. Qu'il n'est pas en indisponibilité (congé, maladie, etc.)
+    3. Qu'il n'est pas en pause
+    
+    Args:
+        company_id: ID de l'entreprise
+        driver_id: ID du chauffeur
+        dt: datetime à vérifier
+    
+    Returns:
+        True si le chauffeur est disponible, False sinon
+    """
+    from sqlalchemy import and_
+
+    from models import DriverShift, DriverUnavailability, ShiftStatus
+
+    try:
+        # Convertir en heure locale Genève
+        local_dt = to_geneva_local(dt)
+        local_date = local_dt.date()
+
+        # 1. Vérifier qu'il a un shift actif ce jour-là
+        shift = DriverShift.query.filter(
+            and_(
+                DriverShift.company_id == company_id,
+                DriverShift.driver_id == driver_id,
+                DriverShift.start_local <= local_dt,
+                DriverShift.end_local >= local_dt,
+                DriverShift.status.in_([ShiftStatus.SCHEDULED, ShiftStatus.ACTIVE])
+            )
+        ).first()
+
+        if not shift:
+            # Pas de shift actif à cette heure
+            return False
+
+        # 2. Vérifier qu'il n'est pas en indisponibilité
+        unavailability = DriverUnavailability.query.filter(
+            and_(
+                DriverUnavailability.company_id == company_id,
+                DriverUnavailability.driver_id == driver_id,
+                DriverUnavailability.start_date <= local_date,
+                DriverUnavailability.end_date >= local_date
+            )
+        ).first()
+
+        if unavailability:
+            # Le chauffeur est indisponible (congé, maladie, etc.)
+            return False
+
+        # 3. TODO futur : Vérifier les pauses (DriverBreak)
+        # Pour l'instant, on considère disponible si shift actif et pas indispo
+
+        return True
+
+    except Exception as e:
+        # En cas d'erreur, considérer comme non disponible par sécurité
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Erreur vérification disponibilité driver #{driver_id} à {dt}: {e}")
+        return False
 
 

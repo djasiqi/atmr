@@ -6,11 +6,11 @@ Anticipe les retards AVANT l'assignation finale et propose des ajustements.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any, Dict, List
 
-from models import Booking, Driver, Assignment
+from models import Booking, Driver
 from services.unified_dispatch.data import calculate_eta
 from services.unified_dispatch.settings import Settings
 from shared.time_utils import now_local
@@ -28,8 +28,8 @@ class DelayPrediction:
     confidence: float  # 0.0 - 1.0
     scheduled_time: datetime
     estimated_arrival: datetime
-    current_eta: Optional[datetime] = None
-    
+    current_eta: datetime | None = None
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "booking_id": self.booking_id,
@@ -53,7 +53,7 @@ class DelayAnalysis:
     average_delay: float
     max_delay: int
     recommendations: List[str]
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "predictions": [p.to_dict() for p in self.predictions],
@@ -72,8 +72,8 @@ class DelayPredictor:
     """
     Prédit les retards potentiels pour les assignations
     """
-    
-    def __init__(self, settings: Optional[Settings] = None):
+
+    def __init__(self, settings: Settings | None = None):
         self.settings = settings or Settings()
         # Seuils de retard
         self.delay_thresholds = {
@@ -82,7 +82,7 @@ class DelayPredictor:
             "high": 15,    # 10-15 min
             "critical": 20 # > 15 min
         }
-    
+
     def predict_delays_before_dispatch(
         self,
         problem: Dict[str, Any],
@@ -108,37 +108,37 @@ class DelayPredictor:
                 max_delay=0,
                 recommendations=["Aucune assignation à analyser"]
             )
-        
+
         bookings_map = {b.id: b for b in problem.get("bookings", [])}
         drivers_map = {d.id: d for d in problem.get("drivers", [])}
-        
+
         predictions: List[DelayPrediction] = []
-        
+
         for assignment in assignments:
             booking_id = getattr(assignment, "booking_id", None)
             driver_id = getattr(assignment, "driver_id", None)
-            
+
             if booking_id is None or driver_id is None:
                 continue
-            
+
             booking = bookings_map.get(booking_id)
             driver = drivers_map.get(driver_id)
-            
+
             if not booking or not driver:
                 continue
-            
+
             # Calculer la prédiction de retard
             prediction = self._predict_single_delay(booking, driver, assignment, problem)
-            
+
             if prediction:
                 predictions.append(prediction)
-        
+
         # Analyser les résultats
         analysis = self._analyze_predictions(predictions)
-        
+
         # Générer des recommandations
         analysis.recommendations = self._generate_recommendations(analysis, problem)
-        
+
         logger.info(
             "[DelayPredictor] Analyzed %d assignments: %d on-time, %d delayed (avg: %.1f min)",
             analysis.total_assignments,
@@ -146,27 +146,27 @@ class DelayPredictor:
             analysis.delayed_count,
             analysis.average_delay
         )
-        
+
         return analysis
-    
+
     def _predict_single_delay(
         self,
         booking: Booking,
         driver: Driver,
         assignment: Any,
         problem: Dict[str, Any]
-    ) -> Optional[DelayPrediction]:
+    ) -> DelayPrediction | None:
         """Prédit le retard pour une seule assignation"""
-        
+
         try:
             # Temps prévu
             scheduled_time = getattr(booking, "scheduled_time", None)
             if not scheduled_time:
                 return None
-            
+
             # ETA estimé
             estimated_pickup = getattr(assignment, "estimated_pickup_arrival", None)
-            
+
             if not estimated_pickup:
                 # Fallback: calculer depuis les coordonnées
                 driver_pos = (
@@ -177,30 +177,30 @@ class DelayPredictor:
                     getattr(booking, "pickup_lat", 46.2044),
                     getattr(booking, "pickup_lon", 6.1432)
                 )
-                
+
                 eta_seconds = calculate_eta(driver_pos, pickup_pos, settings=self.settings)
                 estimated_pickup = now_local() + timedelta(seconds=eta_seconds)
-            
+
             # Calculer le retard
             if isinstance(scheduled_time, datetime):
                 scheduled_dt = scheduled_time
             else:
                 scheduled_dt = now_local()
-            
+
             if isinstance(estimated_pickup, datetime):
                 estimated_dt = estimated_pickup
             else:
                 estimated_dt = now_local()
-            
+
             delay_seconds = (estimated_dt - scheduled_dt).total_seconds()
             delay_minutes = int(delay_seconds / 60)
-            
+
             # Déterminer la sévérité
             severity = self._calculate_severity(delay_minutes)
-            
+
             # Calculer la confiance (basée sur la qualité des données)
             confidence = self._calculate_confidence(booking, driver, problem)
-            
+
             return DelayPrediction(
                 booking_id=booking.id,
                 driver_id=driver.id,
@@ -210,18 +210,18 @@ class DelayPredictor:
                 scheduled_time=scheduled_dt,
                 estimated_arrival=estimated_dt,
             )
-        
+
         except Exception as e:
             logger.warning(
                 "[DelayPredictor] Failed to predict delay for booking %s: %s",
                 getattr(booking, "id", None), e
             )
             return None
-    
+
     def _calculate_severity(self, delay_minutes: int) -> str:
         """Détermine la sévérité du retard"""
         abs_delay = abs(delay_minutes)
-        
+
         if abs_delay < self.delay_thresholds["low"]:
             return "low"
         elif abs_delay < self.delay_thresholds["medium"]:
@@ -230,7 +230,7 @@ class DelayPredictor:
             return "high"
         else:
             return "critical"
-    
+
     def _calculate_confidence(
         self,
         booking: Booking,
@@ -242,14 +242,14 @@ class DelayPredictor:
         Retourne un score entre 0.0 et 1.0.
         """
         confidence = 1.0
-        
+
         # Réduire si coordonnées manquantes ou par défaut
         if not getattr(booking, "pickup_lat", None) or not getattr(booking, "pickup_lon", None):
             confidence -= 0.3
-        
+
         if not getattr(driver, "latitude", None) or not getattr(driver, "longitude", None):
             confidence -= 0.2
-        
+
         # Position du chauffeur récente ?
         last_update = getattr(driver, "last_position_update", None)
         if last_update:
@@ -258,17 +258,17 @@ class DelayPredictor:
                 confidence -= 0.1
         else:
             confidence -= 0.2
-        
+
         # Matrice de distance utilisée
         matrix_provider = problem.get("matrix_provider", "haversine")
         if matrix_provider == "haversine":
             confidence -= 0.1  # OSRM est plus précis
-        
+
         return max(0.0, min(1.0, confidence))
-    
+
     def _analyze_predictions(self, predictions: List[DelayPrediction]) -> DelayAnalysis:
         """Analyse les prédictions et génère des statistiques"""
-        
+
         if not predictions:
             return DelayAnalysis(
                 predictions=[],
@@ -279,15 +279,15 @@ class DelayPredictor:
                 max_delay=0,
                 recommendations=[]
             )
-        
+
         total = len(predictions)
         delayed = [p for p in predictions if p.predicted_delay_minutes > 5]
         on_time = total - len(delayed)
-        
+
         delay_values = [p.predicted_delay_minutes for p in predictions]
         avg_delay = sum(delay_values) / len(delay_values) if delay_values else 0.0
         max_delay = max(delay_values) if delay_values else 0
-        
+
         return DelayAnalysis(
             predictions=predictions,
             total_assignments=total,
@@ -297,20 +297,20 @@ class DelayPredictor:
             max_delay=max_delay,
             recommendations=[]  # Sera rempli par _generate_recommendations
         )
-    
+
     def _generate_recommendations(
         self,
         analysis: DelayAnalysis,
         problem: Dict[str, Any]
     ) -> List[str]:
         """Génère des recommandations basées sur l'analyse"""
-        
+
         recommendations = []
-        
+
         # Taux de retard élevé
         if analysis.total_assignments > 0:
             delay_rate = analysis.delayed_count / analysis.total_assignments
-            
+
             if delay_rate > 0.5:
                 recommendations.append(
                     f"⚠️ Taux de retard élevé ({int(delay_rate * 100)}%). "
@@ -321,14 +321,14 @@ class DelayPredictor:
                     f"⚠️ Taux de retard modéré ({int(delay_rate * 100)}%). "
                     "Surveillez la situation et anticipez les besoins."
                 )
-        
+
         # Retard moyen élevé
         if analysis.average_delay > 15:
             recommendations.append(
                 f"⏰ Retard moyen élevé ({analysis.average_delay:.1f} min). "
                 "Vérifiez les fenêtres horaires et la capacité des chauffeurs."
             )
-        
+
         # Retards critiques
         critical_delays = [p for p in analysis.predictions if p.severity == "critical"]
         if critical_delays:
@@ -336,11 +336,11 @@ class DelayPredictor:
                 f"🚨 {len(critical_delays)} assignation(s) avec retard critique (>15 min). "
                 "Réassignation urgente recommandée."
             )
-        
+
         # Recommandations spécifiques
         drivers_count = len(problem.get("drivers", []))
         bookings_count = len(problem.get("bookings", []))
-        
+
         if drivers_count > 0:
             ratio = bookings_count / drivers_count
             if ratio > 5:
@@ -348,17 +348,17 @@ class DelayPredictor:
                     f"📊 Ratio courses/chauffeur élevé ({ratio:.1f}). "
                     "Ajoutez des chauffeurs pour améliorer les délais."
                 )
-        
+
         if not recommendations:
             recommendations.append("✅ Planning optimal, aucune action requise.")
-        
+
         return recommendations
 
 
 def predict_delays_for_dispatch(
     problem: Dict[str, Any],
     assignments: List[Any],
-    settings: Optional[Settings] = None
+    settings: Settings | None = None
 ) -> DelayAnalysis:
     """
     Fonction helper pour prédire les retards d'un ensemble d'assignations.

@@ -2,17 +2,20 @@
 # ruff: noqa: E402
 
 import eventlet
+
 eventlet.monkey_patch()
 
 import os
+
 import click
-from app import create_app
+from flask_migrate import init as _init  # initialisation du dossier migrations
+from flask_migrate import migrate as _migrate
+from flask_migrate import stamp as _stamp
 
 # Importation des fonctions de migration nécessaires
 from flask_migrate import upgrade as _upgrade
-from flask_migrate import migrate as _migrate
-from flask_migrate import stamp as _stamp
-from flask_migrate import init as _init  # initialisation du dossier migrations
+
+from app import create_app
 
 # Crée une instance de l'application pour le contexte
 config_name = os.getenv('FLASK_ENV') or 'development'

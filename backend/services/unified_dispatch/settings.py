@@ -1,14 +1,13 @@
 # backend/services/unified_dispatch/settings.py
 from __future__ import annotations
 
-import os
-import json
-from dataclasses import dataclass, field, asdict, is_dataclass
 import copy
-from typing import Any, Dict
+import json
+import os
 from ast import literal_eval
+from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime
-
+from typing import Any, Dict
 
 # paramètres centralisés (capacité, buffers, pénalités…)
 # ------------------------------------------------------------
@@ -23,7 +22,7 @@ class HeuristicWeights:
     return_urgency: float = 0.08         # retours déclenchés à la demande
     regular_driver_bonus: float = 0.02   # chauffeur habituel du client
 
-    def normalized(self) -> "HeuristicWeights":
+    def normalized(self) -> HeuristicWeights:
         total = self.proximity + self.driver_load_balance + self.priority + self.return_urgency + self.regular_driver_bonus
         if total == 0:
             return self
@@ -217,7 +216,7 @@ def for_company(company) -> Settings:
     """Crée une configuration pour une entreprise."""
     # Configuration de base
     s = Settings()
-    
+
     # Surcharges spécifiques à l'entreprise
     if hasattr(company, "dispatch_settings") and company.dispatch_settings:
         try:
@@ -225,14 +224,14 @@ def for_company(company) -> Settings:
             s = merge_overrides(s, overrides)
         except (json.JSONDecodeError, TypeError):
             pass
-    
+
     # Surcharges globales depuis l'environnement
     s.matrix.osrm_url = _get_env_or_default("UD_OSRM_URL", s.matrix.osrm_url)
     s.matrix.cache_ttl_sec = _get_env_or_default("UD_MATRIX_CACHE_TTL_SEC", s.matrix.cache_ttl_sec)
     s.solver.time_limit_sec = _get_env_or_default("UD_SOLVER_TIME_LIMIT_SEC", s.solver.time_limit_sec)
     s.autorun.autorun_interval_sec = _get_env_or_default("DISPATCH_AUTORUN_INTERVAL_SEC", s.autorun.autorun_interval_sec)
     s.autorun.autorun_enabled = _get_env_or_default("DISPATCH_AUTORUN_ENABLED", s.autorun.autorun_enabled)
-    
+
     return s
 
 def driver_work_window_from_config(driver_config):
@@ -240,7 +239,7 @@ def driver_work_window_from_config(driver_config):
     Extract driver work window from configuration.
     Retourne (start, end) en naïf local pour la journée courante.
     """
-    from shared.time_utils import day_local_bounds, coerce_local_day
+    from shared.time_utils import coerce_local_day, day_local_bounds
     today_date = datetime.now().date()
     day_str = coerce_local_day(today_date)  # 'YYYY-MM-DD'
     return day_local_bounds(day_str)

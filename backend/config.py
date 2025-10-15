@@ -35,7 +35,7 @@ class Config:
 
     # Ratelimit on/off (tests = off plus bas)
     RATELIMIT_ENABLED = True
-    
+
     # ✅ URLs dynamiques pour PDFs/uploads
     PDF_BASE_URL = os.getenv('PDF_BASE_URL', 'http://localhost:5000')
     UPLOADS_PUBLIC_BASE = os.getenv('UPLOADS_PUBLIC_BASE', '/uploads')
@@ -54,7 +54,7 @@ class DevelopmentConfig(Config):
     MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
     # Supporte DATABASE_URL (standard) ou fallback local SQLite
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL') or os.getenv('DATABASE_URI', f"sqlite:///{base_dir}/development.db")
-    
+
     # CORRECTION: Ajout des configurations de cookies pour le développement
     SESSION_COOKIE_SECURE = False
     SESSION_COOKIE_HTTPONLY = True

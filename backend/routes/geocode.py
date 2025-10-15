@@ -1,14 +1,16 @@
 # backend/routes/geocode.py
 from __future__ import annotations
 
-from flask import request, current_app
-from flask_restx import Namespace, Resource
-from typing import Any, Dict, List, Optional, Tuple, cast
-from sqlalchemy import func
-from models import FavoritePlace
-import requests
 import os
 import re
+from typing import Any, Dict, List, Tuple, cast
+
+import requests
+from flask import current_app, request
+from flask_restx import Namespace, Resource
+from sqlalchemy import func
+
+from models import FavoritePlace
 
 geocode_ns = Namespace("geocode", description="Autocomplete & géocodage (biais Genève)")
 
@@ -37,7 +39,7 @@ def _like_ci(col: Any, like_query: str):
     """LIKE insensible à la casse (équivalent portable à ILIKE)."""
     return func.lower(cast(Any, col)).like(like_query)
 
-def match_alias(q: str) -> Optional[Dict[str, Any]]:
+def match_alias(q: str) -> Dict[str, Any] | None:
     q_norm = (q or "").strip()
     for a in ALIASES:
         for pat in a["keys"]:
@@ -81,10 +83,10 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
             city = props.get("city") or props.get("locality")
             postcode = props.get("postcode")
             country = props.get("country")
-            
+
             # Construire l'adresse complète avec numéro et rue
             street_with_number = " ".join(x for x in [street, housenumber] if x) if street else None
-            
+
             # Construire le label : nom OU adresse complète OU au moins la ville
             if props.get("name"):
                 label = props.get("name")
@@ -96,7 +98,7 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 label = city
             else:
                 label = "Adresse"
-            
+
             address_display = street_with_number or street or label
 
             out.append({

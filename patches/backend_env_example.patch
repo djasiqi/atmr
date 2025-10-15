@@ -1,0 +1,67 @@
+--- /dev/null
++++ b/backend/.env.example
+@@ -0,0 +1,60 @@
++# ======================================
++# Configuration Backend ATMR
++# ======================================
++
++# --- Flask & App ---
++FLASK_CONFIG=development
++FLASK_ENV=development
++SECRET_KEY=your-secret-key-here-change-in-production
++JWT_SECRET_KEY=your-jwt-secret-key-here-change-in-production
++
++# JWT Expiration (seconds)
++JWT_ACCESS_TOKEN_EXPIRES_SECONDS=3600        # 1 hour
++JWT_REFRESH_TOKEN_EXPIRES_SECONDS=2592000    # 30 days
++
++# --- Database ---
++DATABASE_URL=postgresql+psycopg://atmr:atmr@localhost:5432/atmr
++
++# --- Redis ---
++REDIS_URL=redis://localhost:6379/0
++
++# --- Celery ---
++CELERY_BROKER_URL=redis://localhost:6379/0
++CELERY_RESULT_BACKEND=redis://localhost:6379/0
++CELERY_TIMEZONE=Europe/Zurich
++
++# --- Encryption (générer avec: python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())")
++APP_ENCRYPTION_KEY_B64=your-base64-encryption-key-32-bytes
++
++# --- Email (Flask-Mail) ---
++MAIL_SERVER=smtp.gmail.com
++MAIL_PORT=587
++MAIL_USE_TLS=true
++MAIL_USERNAME=your-email@example.com
++MAIL_PASSWORD=your-app-password
++MAIL_DEFAULT_SENDER=noreply@atmr.com
++
++# --- OSRM ---
++UD_OSRM_URL=http://localhost:5000
++UD_DEFAULT_TZ=Europe/Zurich
++
++# --- Dispatch ---
++DISPATCH_AUTORUN_ENABLED=true
++DISPATCH_AUTORUN_INTERVAL_SEC=300
++
++# --- Socket.IO ---
++SOCKETIO_ASYNC_MODE=eventlet
++SOCKETIO_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
++
++# --- PDF/Uploads ---
++PDF_BASE_URL=http://localhost:5000
++UPLOADS_PUBLIC_BASE=/uploads
++
++# --- Logging ---
++APP_LOG_LEVEL=INFO
++WERKZEUG_LOG_LEVEL=ERROR
++MASK_PII_LOGS=true
++
++# --- Sentry (optionnel) ---
++# SENTRY_DSN=https://your-sentry-dsn
++# SENTRY_TRACES_SAMPLE_RATE=1.0
++
++# --- CORS (production) ---
++# FRONTEND_URL=https://app.atmr.com
+

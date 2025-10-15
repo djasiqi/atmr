@@ -2,9 +2,9 @@
 Utilitaires pour masquer les données sensibles (PII) dans les logs
 Conformité GDPR-like
 """
-import re
 import logging
-from typing import Any, Dict
+import re
+from typing import Any
 
 # Patterns à masquer
 EMAIL_PATTERN = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
@@ -17,14 +17,14 @@ def mask_email(email: str) -> str:
     """
     if not email or '@' not in email:
         return email
-    
+
     local, domain = email.rsplit('@', 1)
     domain_parts = domain.split('.')
-    
+
     masked_local = local[0] + '***' if len(local) > 0 else '***'
     masked_domain_name = domain_parts[0][0] + '***' if len(domain_parts[0]) > 0 else '***'
     masked_domain = masked_domain_name + '.' + '.'.join(domain_parts[1:])
-    
+
     return f"{masked_local}@{masked_domain}"
 
 def mask_phone(phone: str) -> str:
@@ -33,11 +33,11 @@ def mask_phone(phone: str) -> str:
     """
     if not phone:
         return phone
-    
+
     digits = re.sub(r'\D', '', phone)
     if len(digits) < 4:
         return '***'
-    
+
     # Garder préfixe pays + 2 derniers chiffres
     return f"{phone[:3]} ** *** ** {digits[-2:]}"
 
@@ -47,7 +47,7 @@ def mask_iban(iban: str) -> str:
     """
     if not iban or len(iban) < 8:
         return iban
-    
+
     return f"{iban[:2]}** **** **** **** **{iban[-2:]}"
 
 def sanitize_log_data(data: Any) -> Any:
@@ -56,30 +56,30 @@ def sanitize_log_data(data: Any) -> Any:
     """
     if isinstance(data, dict):
         return {k: sanitize_log_data(v) for k, v in data.items()}
-    
+
     if isinstance(data, (list, tuple)):
         return [sanitize_log_data(item) for item in data]
-    
+
     if isinstance(data, str):
         # Remplacer patterns sensibles
         sanitized = EMAIL_PATTERN.sub(lambda m: mask_email(m.group(0)), data)
         sanitized = PHONE_PATTERN.sub(lambda m: mask_phone(m.group(0)), sanitized)
         sanitized = IBAN_PATTERN.sub(lambda m: mask_iban(m.group(0)), sanitized)
         return sanitized
-    
+
     return data
 
 class PIIFilter(logging.Filter):
     """Filtre logging pour masquer PII automatiquement"""
-    
+
     def filter(self, record: logging.LogRecord) -> bool:
         # Masquer dans le message
         if hasattr(record, 'msg') and isinstance(record.msg, str):
             record.msg = sanitize_log_data(record.msg)
-        
+
         # Masquer dans args
         if hasattr(record, 'args') and record.args:
             record.args = tuple(sanitize_log_data(arg) for arg in record.args)
-        
+
         return True
 

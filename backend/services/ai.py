@@ -1,11 +1,13 @@
 # services/ai.py (ou routes/ai.py selon ton projet)
-import os
 import logging
+import os
+
 import requests
-from geopy.distance import geodesic
-from ext import db
 from dotenv import load_dotenv
-from models import Driver, Booking, Company, BookingStatus
+from geopy.distance import geodesic
+
+from ext import db
+from models import Booking, BookingStatus, Company, Driver
 
 load_dotenv()
 logger = logging.getLogger(__name__)

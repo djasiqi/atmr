@@ -1,17 +1,18 @@
-from urllib.parse import urlencode
-from flask_restx import Namespace, Resource, fields
-from flask import request
-from typing import Any, cast
-
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import Client, User, Booking, BookingStatus, db, UserRole, GenderEnum
-from datetime import datetime, timezone
-from sqlalchemy.orm import joinedload
-from ext import mail, role_required
-from flask_mail import Message
-from app import sentry_sdk
 import logging
 import re
+from datetime import UTC, datetime
+from typing import Any, cast
+from urllib.parse import urlencode
+
+from flask import request
+from flask_jwt_extended import get_jwt_identity, jwt_required
+from flask_mail import Message
+from flask_restx import Namespace, Resource, fields
+from sqlalchemy.orm import joinedload
+
+from app import sentry_sdk
+from ext import mail, role_required
+from models import Booking, BookingStatus, Client, GenderEnum, User, UserRole, db
 
 app_logger = logging.getLogger('app')
 
@@ -170,17 +171,17 @@ class ClientBookings(Resource):
             required_fields = ['pickup_location', 'dropoff_location', 'scheduled_time']
             if not data or any(field not in data for field in required_fields):
                 return {"error": "Missing required fields"}, 400
-            
+
             # Parse ISO 8601 en préservant un éventuel fuseau, sinon UTC
             try:
                 dt = datetime.fromisoformat(data['scheduled_time'])
-                scheduled_time = dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+                scheduled_time = dt if dt.tzinfo else dt.replace(tzinfo=UTC)
                 if dt.tzinfo:
-                    scheduled_time = dt.astimezone(timezone.utc)
+                    scheduled_time = dt.astimezone(UTC)
             except ValueError:
                 return {"error": "Invalid scheduled_time format"}, 400
 
-            if scheduled_time <= datetime.now(timezone.utc):
+            if scheduled_time <= datetime.now(UTC):
                 return {"error": "Scheduled time must be in the future"}, 400
 
             new_booking = cast(Any, Booking)(

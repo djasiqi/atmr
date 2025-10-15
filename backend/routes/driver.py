@@ -1,20 +1,21 @@
 from __future__ import annotations
 
-from flask import request
-from flask_restx import Namespace, Resource, fields
-from flask_jwt_extended import jwt_required, get_jwt_identity
+import json
+import os
+import traceback
+from datetime import UTC, datetime
 from typing import Any, cast
 from typing import cast as tcast
-from sqlalchemy.sql.elements import ColumnElement
-from sqlalchemy import or_
-from datetime import datetime, timezone
-import os
-import json
-import traceback
-import requests
 
-from models import Driver, User, Booking, UserRole, BookingStatus
-from ext import role_required, app_logger, db, redis_client, socketio
+import requests
+from flask import request
+from flask_jwt_extended import get_jwt_identity, jwt_required
+from flask_restx import Namespace, Resource, fields
+from sqlalchemy import or_
+from sqlalchemy.sql.elements import ColumnElement
+
+from ext import app_logger, db, redis_client, role_required, socketio
+from models import Booking, BookingStatus, Driver, User, UserRole
 
 # sentry (si initialisé dans app.py, on garde try/except pour éviter ImportError en tests)
 try:
@@ -251,8 +252,9 @@ class DriverUpcomingBookings(Resource):
         app_logger.info(f"📱 [Driver Bookings] Driver {driver_name} (ID: {driver.id}) loading bookings")
 
         from datetime import date
+
         from shared.time_utils import day_local_bounds
-        
+
         # ✅ Récupérer les courses d'AUJOURD'HUI (passées et futures) tant qu'elles ne sont pas terminées
         today_start, today_end = day_local_bounds(date.today().strftime("%Y-%m-%d"))
 
@@ -271,12 +273,12 @@ class DriverUpcomingBookings(Resource):
             .order_by(Booking.scheduled_time.asc())
             .all()
         )
-        
+
         # 🔍 LOG : Afficher les courses trouvées
         app_logger.info(f"📱 [Driver Bookings] Found {len(bookings)} bookings for driver {driver_name} (ID: {driver.id})")
         for b in bookings:
             app_logger.info(f"   - Booking #{b.id}: driver_id={b.driver_id}, client={b.customer_name}, time={b.scheduled_time}")
-        
+
         return [b.serialize for b in bookings], 200
 
 @driver_ns.route('/me/bookings/eta')
@@ -291,9 +293,10 @@ class DriverBookingsETA(Resource):
         driver = cast(Driver, driver)
 
         from datetime import date, timedelta
-        from shared.time_utils import day_local_bounds, now_local
+
         from services.unified_dispatch.data import calculate_eta as calc_eta
-        
+        from shared.time_utils import day_local_bounds, now_local
+
         # Récupérer les courses d'aujourd'hui (non terminées)
         today_start, today_end = day_local_bounds(date.today().strftime("%Y-%m-%d"))
 
@@ -316,7 +319,7 @@ class DriverBookingsETA(Resource):
         # Position actuelle du chauffeur
         driver_lat = getattr(driver, 'latitude', None)
         driver_lon = getattr(driver, 'longitude', None)
-        
+
         if not driver_lat or not driver_lon:
             # Pas de position GPS, retourner les durées statiques
             return {
@@ -332,24 +335,24 @@ class DriverBookingsETA(Resource):
 
         driver_pos = (float(driver_lat), float(driver_lon))
         current_time = now_local()
-        
+
         results = []
         for booking in bookings:
             pickup_lat = getattr(booking, 'pickup_lat', None)
             pickup_lon = getattr(booking, 'pickup_lon', None)
             dropoff_lat = getattr(booking, 'dropoff_lat', None)
             dropoff_lon = getattr(booking, 'dropoff_lon', None)
-            
+
             eta_to_pickup = None
             total_duration = booking.duration_seconds
-            
+
             # Si on a les coordonnées, calculer l'ETA dynamique
             if pickup_lat and pickup_lon:
                 try:
                     pickup_pos = (float(pickup_lat), float(pickup_lon))
                     eta_seconds = calc_eta(driver_pos, pickup_pos)
                     eta_to_pickup = eta_seconds
-                    
+
                     # Si on a aussi les coordonnées de destination, recalculer la durée totale
                     if dropoff_lat and dropoff_lon and booking.status != BookingStatus.IN_PROGRESS:
                         dropoff_pos = (float(dropoff_lat), float(dropoff_lon))
@@ -357,7 +360,7 @@ class DriverBookingsETA(Resource):
                         total_duration = pickup_to_dropoff
                 except Exception as e:
                     app_logger.warning(f"ETA calculation failed for booking {booking.id}: {e}")
-            
+
             results.append({
                 'id': booking.id,
                 'eta_to_pickup_seconds': eta_to_pickup,
@@ -406,7 +409,7 @@ class DriverLocation(Resource):
             speed   = float(p.get("speed",   0.0) or 0.0)
             heading = float(p.get("heading", 0.0) or 0.0)
             accuracy= float(p.get("accuracy",0.0) or 0.0)
-            ts = p.get("ts") or datetime.now(timezone.utc).isoformat()
+            ts = p.get("ts") or datetime.now(UTC).isoformat()
 
             OSRM = os.getenv("UD_OSRM_BASE_URL", "http://localhost:5001")
             TTL = int(os.getenv("DRIVER_LOC_TTL_SEC", "600"))
@@ -628,7 +631,7 @@ class UpdateBookingStatus(Resource):
                 if booking.status != BookingStatus.EN_ROUTE:
                     return {"error": "Booking must be en_route before starting"}, 400
                 booking.status = BookingStatus.IN_PROGRESS
-                booking.boarded_at = datetime.now(timezone.utc)
+                booking.boarded_at = datetime.now(UTC)
 
             # TERMINER (ALLER OU RETOUR SELON is_return)
             elif new_status_str == "completed":
@@ -638,14 +641,14 @@ class UpdateBookingStatus(Resource):
                     if booking.status != BookingStatus.IN_PROGRESS:
                         return {"error": "Booking must be in_progress before completing return"}, 400
                     booking.status = BookingStatus.RETURN_COMPLETED
-                    booking.completed_at = datetime.now(timezone.utc)
+                    booking.completed_at = datetime.now(UTC)
                 else:
                     if booking.status == BookingStatus.COMPLETED:
                         return {"message": "Booking already completed"}, 200
                     if booking.status != BookingStatus.IN_PROGRESS:
                         return {"error": "Booking must be in_progress before completing"}, 400
                     booking.status = BookingStatus.COMPLETED
-                    booking.completed_at = datetime.now(timezone.utc)
+                    booking.completed_at = datetime.now(UTC)
 
             # TERMINER RETOUR explicite
             elif new_status_str == "return_completed":
@@ -655,7 +658,7 @@ class UpdateBookingStatus(Resource):
                     return {"error": "Booking must be in_progress before completing return"}, 400
                 if booking.is_return:
                     booking.status = BookingStatus.RETURN_COMPLETED
-                    booking.completed_at = datetime.now(timezone.utc)
+                    booking.completed_at = datetime.now(UTC)
                 else:
                     return {"error": "Not a return trip"}, 400
 
@@ -763,7 +766,7 @@ class ReportBookingIssue(Resource):
             return {"error": "Issue message is required"}, 400
 
         # Assure-toi que ce champ existe dans le modèle Booking
-        setattr(booking, "issue_report", issue_message)
+        booking.issue_report = issue_message
         try:
             db.session.commit()
             return {"message": "Issue reported successfully"}, 200
@@ -804,8 +807,8 @@ class SavePushToken(Resource):
                 app_logger.info("[push-token] driver_id absent du payload, déduction depuis JWT")
                 user_pid = get_jwt_identity()
                 if not user_pid:
-                    return {"error": "Token JWT invalide ou expiré."}, 401                
- 
+                    return {"error": "Token JWT invalide ou expiré."}, 401
+
                 user = User.query.filter_by(public_id=user_pid).one_or_none()
                 if not user:
                     return {"error": "Utilisateur non trouvé pour le JWT."}, 404

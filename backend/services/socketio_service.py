@@ -1,10 +1,10 @@
 # backend/services/socketio_service.py
 from __future__ import annotations
 
-from typing import Any, Optional, cast
 import json
+from typing import Any, cast
 
-from ext import socketio, app_logger
+from ext import app_logger, socketio
 from models import Booking
 
 # ---------------------------------------------------------------------------
@@ -52,7 +52,7 @@ def _safe_emit(
     event: str,
     payload: dict[str, Any],
     *,
-    room: Optional[str] = None,
+    room: str | None = None,
     namespace: str = DEFAULT_NAMESPACE,
 ) -> None:
     """
@@ -290,8 +290,8 @@ def emit_delay_detected(
     delay_minutes: float,
     *,
     has_alternative: bool = False,
-    alternative_driver_id: Optional[int] = None,
-    alternative_delay_minutes: Optional[float] = None,
+    alternative_driver_id: int | None = None,
+    alternative_delay_minutes: float | None = None,
     is_dropoff: bool = False,
     namespace: str = DEFAULT_NAMESPACE,
 ) -> None:

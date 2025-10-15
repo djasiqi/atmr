@@ -1,7 +1,9 @@
 # backend/celery_app.py
 from __future__ import annotations
-import os
+
 import logging
+import os
+
 from celery import Celery
 from flask import Flask
 
@@ -33,6 +35,7 @@ celery.conf.update(
     result_serializer="json",
     task_track_started=True,
     task_time_limit=600,  # 10 minutes max per task
+    task_soft_time_limit=540,  # 9 minutes soft limit (warning before hard kill)
     worker_max_tasks_per_child=200,  # Restart worker after 200 tasks
     worker_prefetch_multiplier=1,  # One task at a time
     task_acks_late=True,  # Acknowledge task after execution
@@ -88,7 +91,7 @@ def init_app(app: Flask) -> Celery:
     """
     global flask_app
     flask_app = app
-    
+
     logger.info(
         f"Celery initialized with broker={CELERY_BROKER_URL}, "
         f"backend={CELERY_RESULT_BACKEND}, timezone={CELERY_TIMEZONE}"

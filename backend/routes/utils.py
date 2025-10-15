@@ -1,11 +1,12 @@
-from flask import jsonify, request
-from flask_restx import Namespace, Resource
-import qrcode
-from qrcode.constants import ERROR_CORRECT_L  # ✅ évite "constants is not a known attribute"
-import io
 import base64
+import io
 import re
 from datetime import datetime
+
+import qrcode
+from flask import jsonify, request
+from flask_restx import Namespace, Resource
+from qrcode.constants import ERROR_CORRECT_L  # ✅ évite "constants is not a known attribute"
 
 utils_ns = Namespace('utils', description="Endpoints utilitaires")
 

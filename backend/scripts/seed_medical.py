@@ -1,9 +1,11 @@
 # backend/scripts/seed_medical.py
 import os
 import sys
-from typing import Any, Dict, List, Optional, cast
-from models import db, MedicalEstablishment, MedicalService  
+from typing import Any, Dict, List, cast
+
 from flask import Flask
+
+from models import MedicalEstablishment, MedicalService, db
 
 # Ajuste le path pour "import app, models" quand lancé directement
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -49,7 +51,7 @@ def upsert_estab(
     (On évite d'appeler le constructeur SQLAlchemy avec des kwargs non typés
     pour ne pas déclencher Pylance `No parameter named "..."`.)
     """
-    e: Optional[MedicalEstablishment] = MedicalEstablishment.query.filter_by(name=name).first()
+    e: MedicalEstablishment | None = MedicalEstablishment.query.filter_by(name=name).first()
     if not e:
         e = MedicalEstablishment()  # type: ignore[call-arg]
         _assign_if_present(
@@ -107,7 +109,7 @@ def add_services(estab: MedicalEstablishment, items: List[Any]) -> None:
         else:
             continue
 
-        svc: Optional[MedicalService] = MedicalService.query.filter_by(
+        svc: MedicalService | None = MedicalService.query.filter_by(
             establishment_id=estab.id, name=name
         ).first()
 
@@ -189,7 +191,7 @@ def main() -> None:
                 "building": "Bâtiment Jean-Louis Prévost",
             },
 
-            # Anesthésiologie           
+            # Anesthésiologie
             {
                 "category": "Service",
                 "name": "Anesthésiologie",
@@ -365,7 +367,7 @@ def main() -> None:
                 "address_line": "Rue Gabrielle-Perret-Gentil 4",
                 "postcode": "1205",
                 "city": "Genève",
-            },   
+            },
 
             # Chirurgie viscérale — Proctologique
             {
@@ -670,7 +672,7 @@ def main() -> None:
                 "city": "Genève",
                 "building": "Bâtiment Jean-Louis Prévost",
             },
-            
+
                 # Laboratoire d'hémostase
             {
                 "category": "Laboratoire",
@@ -1031,7 +1033,7 @@ def main() -> None:
                 "postcode": "1205",
                 "city": "Genève",
             },
-            
+
             # Neurorééducation — consultation ambulatoire
             {
                 "category": "Service",

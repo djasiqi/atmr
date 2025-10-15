@@ -1,0 +1,168 @@
+--- /dev/null
++++ b/frontend/src/setupTests.js
+@@ -0,0 +1,35 @@
++// jest-dom adds custom jest matchers for asserting on DOM nodes.
++import '@testing-library/jest-dom';
++
++// ✅ Mock localStorage
++const localStorageMock = {
++  getItem: jest.fn(),
++  setItem: jest.fn(),
++  removeItem: jest.fn(),
++  clear: jest.fn(),
++};
++global.localStorage = localStorageMock;
++
++// ✅ Mock window.location
++delete window.location;
++window.location = { href: '', reload: jest.fn() };
++
++// ✅ Mock console pour tests propres
++global.console = {
++  ...console,
++  error: jest.fn(),
++  warn: jest.fn(),
++};
++
++// ✅ Mock Socket.IO pour tests composants
++jest.mock('socket.io-client', () => {
++  return {
++    io: jest.fn(() => ({
++      on: jest.fn(),
++      off: jest.fn(),
++      emit: jest.fn(),
++      connect: jest.fn(),
++      disconnect: jest.fn(),
++      connected: false,
++    })),
++  };
++});
+
+--- /dev/null
++++ b/frontend/src/pages/Auth/Login.test.jsx
+@@ -0,0 +1,80 @@
++import { render, screen, fireEvent, waitFor } from '@testing-library/react';
++import { BrowserRouter } from 'react-router-dom';
++import { Provider } from 'react-redux';
++import configureStore from 'redux-mock-store';
++import Login from './Login';
++import authService from '../../services/authService';
++
++jest.mock('../../services/authService');
++
++const mockStore = configureStore([]);
++
++describe('Login Page', () => {
++  let store;
++  
++  beforeEach(() => {
++    store = mockStore({
++      auth: { user: null, token: null, loading: false }
++    });
++    localStorage.clear();
++    jest.clearAllMocks();
++  });
++  
++  const renderLogin = () => {
++    return render(
++      <Provider store={store}>
++        <BrowserRouter>
++          <Login />
++        </BrowserRouter>
++      </Provider>
++    );
++  };
++  
++  it('renders login form', () => {
++    renderLogin();
++    
++    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
++    expect(screen.getByLabelText(/mot de passe/i)).toBeInTheDocument();
++    expect(screen.getByRole('button', { name: /connexion/i })).toBeInTheDocument();
++  });
++  
++  it('submits form with valid credentials', async () => {
++    const mockResponse = {
++      token: 'fake-jwt-token',
++      refresh_token: 'fake-refresh-token',
++      user: { id: 1, email: 'test@example.com', role: 'CLIENT' }
++    };
++    authService.login.mockResolvedValue(mockResponse);
++    
++    renderLogin();
++    
++    fireEvent.change(screen.getByLabelText(/email/i), {
++      target: { value: 'test@example.com' }
++    });
++    fireEvent.change(screen.getByLabelText(/mot de passe/i), {
++      target: { value: 'password123' }
++    });
++    
++    fireEvent.click(screen.getByRole('button', { name: /connexion/i }));
++    
++    await waitFor(() => {
++      expect(authService.login).toHaveBeenCalledWith('test@example.com', 'password123');
++      expect(localStorage.setItem).toHaveBeenCalledWith('authToken', 'fake-jwt-token');
++    });
++  });
++  
++  it('displays error on invalid credentials', async () => {
++    authService.login.mockRejectedValue({
++      response: { status: 401, data: { error: 'Invalid credentials' } }
++    });
++    
++    renderLogin();
++    
++    fireEvent.change(screen.getByLabelText(/email/i), {
++      target: { value: 'wrong@example.com' }
++    });
++    fireEvent.change(screen.getByLabelText(/mot de passe/i), {
++      target: { value: 'wrongpass' }
++    });
++    
++    fireEvent.click(screen.getByRole('button', { name: /connexion/i }));
++    
++    await waitFor(() => {
++      expect(screen.getByText(/erreur/i)).toBeInTheDocument();
++    });
++  });
++});
+
+--- /dev/null
++++ b/frontend/src/hooks/useAuthToken.test.js
+@@ -0,0 +1,45 @@
++import { renderHook } from '@testing-library/react-hooks';
++import useAuthToken, { getAccessToken, getRefreshToken } from './useAuthToken';
++
++describe('useAuthToken', () => {
++  beforeEach(() => {
++    localStorage.clear();
++  });
++  
++  it('returns null if no token stored', () => {
++    const { result } = renderHook(() => useAuthToken());
++    expect(result.current.token).toBeNull();
++    expect(result.current.refreshToken).toBeNull();
++  });
++  
++  it('returns token from localStorage', () => {
++    localStorage.setItem('authToken', 'fake-access-token');
++    localStorage.setItem('refreshToken', 'fake-refresh-token');
++    
++    const { result } = renderHook(() => useAuthToken());
++    
++    expect(result.current.token).toBe('fake-access-token');
++    expect(result.current.refreshToken).toBe('fake-refresh-token');
++  });
++  
++  it('getAccessToken returns correct value', () => {
++    localStorage.setItem('authToken', 'test-token');
++    expect(getAccessToken()).toBe('test-token');
++  });
++  
++  it('getRefreshToken returns correct value', () => {
++    localStorage.setItem('refreshToken', 'test-refresh');
++    expect(getRefreshToken()).toBe('test-refresh');
++  });
++});
+

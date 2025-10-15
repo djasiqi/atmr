@@ -1,40 +1,30 @@
 # backend/routes/dispatch_routes.py
 from __future__ import annotations
 
-import logging
-from datetime import date, datetime, timezone, timedelta
-from typing import Any, Dict, Optional, cast
 import json
+import logging
 import re
+from datetime import UTC, date, datetime, timedelta
+from typing import Any, Dict, cast
 
 from flask import request
-from flask_restx import Namespace, Resource, fields
 from flask_jwt_extended import jwt_required
+from flask_restx import Namespace, Resource, fields
+from werkzeug.exceptions import UnprocessableEntity
 
-from ext import role_required, db
-from models import (
-    UserRole,
-    Company,
-    Booking,
-    BookingStatus,
-    Assignment,
-    Driver,
-    DispatchRun,
-    AssignmentStatus
-)
+from ext import db, role_required
+from models import Assignment, AssignmentStatus, Booking, BookingStatus, Company, DispatchRun, Driver, UserRole
+from routes.companies import get_company_from_token
 from services.unified_dispatch import data
-from services.unified_dispatch.queue import trigger_job, get_status
-from services.unified_dispatch.suggestions import generate_suggestions
+from services.unified_dispatch.queue import get_status, trigger_job
 from services.unified_dispatch.realtime_optimizer import (
+    check_opportunities_manual,
+    get_optimizer_for_company,
     start_optimizer_for_company,
     stop_optimizer_for_company,
-    get_optimizer_for_company,
-    check_opportunities_manual
 )
-from werkzeug.exceptions import UnprocessableEntity
+from services.unified_dispatch.suggestions import generate_suggestions
 from shared.time_utils import day_local_bounds, now_local
-from routes.companies import get_company_from_token
-
 
 dispatch_ns = Namespace("company_dispatch", description="Dispatch par journée (contrat unifié)")
 logger = logging.getLogger(__name__)
@@ -282,7 +272,7 @@ delay_model = dispatch_ns.model(
 
 # ===== Helpers =====
 
-def _coerce_bool_param(v: Optional[str], default: bool = False) -> bool:
+def _coerce_bool_param(v: str | None, default: bool = False) -> bool:
     """Interprète un paramètre bool venant de la query-string."""
     if v is None:
         return default
@@ -306,7 +296,7 @@ def _current_company_id() -> int:
 
 
 
-def _parse_date(date_str: Optional[str]) -> date:
+def _parse_date(date_str: str | None) -> date:
     """Parse une date YYYY-MM-DD. Si None ou vide, retourne aujourd'hui."""
     if not date_str:
         return date.today()
@@ -328,7 +318,7 @@ def _safe_settings_dict(raw: Any) -> Dict[str, Any]:
         return cast(Dict[str, Any], json.loads(raw))
     except Exception:
         return {}
-    
+
 def _enrich_assignments(assignments: list[Assignment]) -> list[Assignment]:
     """Charge booking/driver sur chaque assignment pour le marshalling RESTX."""
     for a in assignments:
@@ -378,11 +368,11 @@ class CompanyDispatchRun(Resource):
         is_async = body.get("async")
         if is_async is None:
             is_async = body.get("run_async", True)
-        
+
         mode = body.get("mode")
 
         # --- Paramètres
-        allow_emergency_val = body.get("allow_emergency", None)
+        allow_emergency_val = body.get("allow_emergency")
         allow_emergency = bool(allow_emergency_val) if allow_emergency_val is not None else None
 
         params = {
@@ -391,7 +381,7 @@ class CompanyDispatchRun(Resource):
             "mode": mode,
             "regular_first": bool(body.get("regular_first", True)),
             "allow_emergency": allow_emergency
-            
+
         }
 
         # --- Surcharges de paramètres
@@ -399,7 +389,7 @@ class CompanyDispatchRun(Resource):
         mode = body.get("mode")
         if mode:
             params["mode"] = mode
-      
+
         overrides = body.get("overrides")
         if overrides:
             params["overrides"] = overrides
@@ -439,7 +429,7 @@ class DispatchPreview(Resource):
     def get(self):
         """Aperçu de la journée (for_date): nb bookings/drivers et horizon (minutes)."""
         company = _get_current_company()
-        company_id = cast(int, getattr(company, "id"))  # <- pas de `int(Column[int])`
+        company_id = cast(int, company.id)  # <- pas de `int(Column[int])`
 
         for_date = request.args.get("for_date")
         if not for_date:
@@ -483,7 +473,7 @@ class DispatchTrigger(Resource):
     def post(self):
         """(Déprécié) Déclenche un run async. Utilisez POST /company_dispatch/run."""
         company = _get_current_company()
-        company_id: int = cast(int, getattr(company, "id"))
+        company_id: int = cast(int, company.id)
 
         body = request.get_json(silent=True) or {}
         for_date = body.get("for_date")
@@ -512,7 +502,7 @@ class DispatchAutorunEnable(Resource):
     @dispatch_ns.expect(autorun_model, validate=True)
     def post(self):
         company = _get_current_company()
-        company_id: int = int(getattr(company, "id"))
+        company_id: int = int(company.id)
 
         body = request.get_json(silent=True) or {}
         enabled = bool(body.get("enabled", True))
@@ -538,7 +528,7 @@ class DispatchAutorunEnable(Resource):
                     pass
 
             # Sauvegarder (évite l'import local de json qui cassait la portée)
-            setattr(company, "dispatch_settings", json.dumps(settings_data))
+            company.dispatch_settings = json.dumps(settings_data)
             db.session.add(company)
             db.session.commit()
 
@@ -561,7 +551,7 @@ class AssignmentsListResource(Resource):
     @dispatch_ns.marshal_list_with(assignment_model)
     def get(self):
         """Liste des assignations pour un jour."""
-        
+
         d = _parse_date(request.args.get("date"))
         # Utiliser day_local_bounds pour obtenir les bornes locales du jour (naïves)
         # Booking.scheduled_time est naïf local, donc on ne convertit PAS en UTC
@@ -596,7 +586,7 @@ class AssignmentsListResource(Resource):
 
         # Assignations pour ces bookings avec eager loading des relations
         from sqlalchemy.orm import joinedload
-        
+
         assignments = []
         if booking_ids:
             assignments = (
@@ -608,7 +598,7 @@ class AssignmentsListResource(Resource):
                 )
                 .all()
             )
-        
+
         # Enrichir manuellement les champs flat pour Flask-RESTX
         for a in assignments:
             if a.driver and a.driver.user:
@@ -632,7 +622,7 @@ class AssignmentResource(Resource):
     def get(self, assignment_id: int):
         """Détail d'une assignation."""
         company = _get_current_company()
-        a_opt: Optional[Assignment] = (
+        a_opt: Assignment | None = (
             Assignment.query.join(Booking, Booking.id == Assignment.booking_id)
             .filter(Assignment.id == assignment_id, Booking.company_id == company.id)
             .first()
@@ -666,7 +656,7 @@ class AssignmentResource(Resource):
             if "status" in data:
                 a.status = data["status"]
 
-            setattr(cast(Any, a), "updated_at", datetime.now(timezone.utc))
+            cast(Any, a).updated_at = datetime.now(UTC)
 
             db.session.add(a)
             db.session.commit()
@@ -708,14 +698,14 @@ class ReassignResource(Resource):
                 dispatch_ns.abort(404, "driver not found")
             driver = cast(Driver, driver_opt)
 
-            setattr(cast(Any, a), "driver_id", new_driver_id)
-            setattr(cast(Any, a), "updated_at", datetime.now(timezone.utc))
+            cast(Any, a).driver_id = new_driver_id
+            cast(Any, a).updated_at = datetime.now(UTC)
 
             db.session.add(a)
             db.session.commit()
 
-            setattr(cast(Any, a), "booking", Booking.query.get(a.booking_id))
-            setattr(cast(Any, a), "driver", driver)
+            cast(Any, a).booking = Booking.query.get(a.booking_id)
+            cast(Any, a).driver = driver
 
             return a
         except Exception as e:
@@ -738,19 +728,19 @@ class RunsListResource(Resource):
         offset = int(request.args.get("offset", 0))
         company = _get_current_company()
         q = DispatchRun.query.filter_by(company_id=company.id)
-        
+
         # Fallback de tri: completed_at > started_at > day > created_at > id
         order_cols = []
         if hasattr(DispatchRun, "completed_at"):
-            order_cols.append(getattr(DispatchRun, "completed_at").desc())
+            order_cols.append(DispatchRun.completed_at.desc())
         if hasattr(DispatchRun, "started_at"):
-            order_cols.append(getattr(DispatchRun, "started_at").desc())
+            order_cols.append(DispatchRun.started_at.desc())
         if hasattr(DispatchRun, "day"):
-            order_cols.append(getattr(DispatchRun, "day").desc())
+            order_cols.append(DispatchRun.day.desc())
         if hasattr(DispatchRun, "created_at"):
-            order_cols.append(getattr(DispatchRun, "created_at").desc())
+            order_cols.append(DispatchRun.created_at.desc())
         order_cols.append(DispatchRun.id.desc())
-        
+
         q = q.order_by(*order_cols)
         return q.limit(limit).offset(offset).all()
 
@@ -769,7 +759,7 @@ class RunResource(Resource):
         """Détail d'un run + ses assignations."""
         company = _get_current_company()
 
-        r_opt: Optional[DispatchRun] = DispatchRun.query.filter_by(
+        r_opt: DispatchRun | None = DispatchRun.query.filter_by(
             id=run_id, company_id=company.id
         ).first()
         if r_opt is None:
@@ -804,12 +794,12 @@ class DelaysResource(Resource):
     @dispatch_ns.marshal_list_with(delay_model)
     def get(self):
         """Retards courants (ETA > horaire + 5 minutes) pour la journée."""
-        
+
         # Validation de la date
         date_str = request.args.get("date")
         if not date_str:
             return {"error": "Paramètre 'date' manquant (format: YYYY-MM-DD)"}, 400
-        
+
         try:
             d = _parse_date(date_str)
         except ValueError as e:
@@ -887,20 +877,20 @@ class DelaysResource(Resource):
             # Toujours renvoyer si on a un ETA; le front pourra afficher "À l'heure" (0)
             if pickup_eta or dropoff_eta:
                 max_delay = max(v for v in [pickup_delay, dropoff_delay] if v is not None) if (pickup_delay is not None or dropoff_delay is not None) else 0
-                
+
                 # ✨ NOUVEAUTÉ: Générer des suggestions intelligentes
                 suggestions_list = []
                 try:
                     if max_delay != 0:  # Générer suggestions si retard ou avance
                         suggestions_list = generate_suggestions(
-                            a, 
+                            a,
                             delay_minutes=max_delay if pickup_delay > 0 else -abs(max_delay),
                             company_id=company.id
                         )
                         suggestions_list = [s.to_dict() for s in suggestions_list]
                 except Exception as e:
                     logger.warning("[Delays] Failed to generate suggestions for assignment %s: %s", a.id, e)
-                
+
                 delay = {
                     "id": a.id,
                     "booking_id": a.booking_id,
@@ -937,12 +927,12 @@ class LiveDelaysResource(Resource):
         Inclut les retards actuels ET prédits, avec suggestions de réassignation
         et impact sur les courses suivantes.
         """
-        
+
         # Validation de la date
         date_str = request.args.get("date")
         if not date_str:
             return {"error": "Paramètre 'date' manquant (format: YYYY-MM-DD)"}, 400
-        
+
         try:
             d = _parse_date(date_str)
         except ValueError as e:
@@ -952,7 +942,7 @@ class LiveDelaysResource(Resource):
 
         company = _get_current_company()
         time_expr = _booking_time_expr()
-        
+
         # Récupérer toutes les assignations actives (EXCLURE les courses terminées)
         assigns = (
             Assignment.query.join(Booking, Booking.id == Assignment.booking_id)
@@ -975,7 +965,7 @@ class LiveDelaysResource(Resource):
             b = Booking.query.get(a.booking_id)
             if not b:
                 continue
-            
+
             # ✅ Double vérification : skip les courses terminées
             if b.status in [
                 BookingStatus.COMPLETED,
@@ -986,7 +976,7 @@ class LiveDelaysResource(Resource):
 
             # Récupérer le chauffeur pour position temps réel
             driver = Driver.query.get(a.driver_id) if a.driver_id else None
-            
+
             # Position actuelle du chauffeur
             if driver:
                 driver_pos = (
@@ -995,12 +985,12 @@ class LiveDelaysResource(Resource):
                 )
             else:
                 driver_pos = None
-            
+
             # Position pickup
             pickup_lat = getattr(b, "pickup_lat", None)
             pickup_lon = getattr(b, "pickup_lon", None)
             pickup_pos = (pickup_lat, pickup_lon) if pickup_lat and pickup_lon else None
-            
+
             # Temps prévus
             pickup_time = getattr(b, "pickup_time", None) or getattr(b, "scheduled_time", None)
             dropoff_time = getattr(b, "dropoff_time", None)
@@ -1015,7 +1005,7 @@ class LiveDelaysResource(Resource):
                     return datetime.fromisoformat(str(v))
                 except Exception:
                     return None
-            
+
             pickup_time = _to_dt(pickup_time)
             dropoff_time = _to_dt(dropoff_time)
 
@@ -1028,7 +1018,7 @@ class LiveDelaysResource(Resource):
                     current_eta = now_local() + timedelta(seconds=eta_seconds)
                 except Exception as e:
                     logger.warning("[LiveDelays] Failed to calculate ETA for assignment %s: %s", a.id, e)
-            
+
             # Utiliser ETA planifié en fallback
             if not current_eta:
                 current_eta = (
@@ -1041,12 +1031,12 @@ class LiveDelaysResource(Resource):
             # Calcul du retard
             delay_minutes = 0
             status = "unknown"
-            
+
             if pickup_time and current_eta:
                 try:
                     delay_seconds = (current_eta - pickup_time).total_seconds()
                     delay_minutes = int(delay_seconds / 60)
-                    
+
                     if delay_minutes > 5:
                         status = "late"
                     elif delay_minutes < -5:
@@ -1061,7 +1051,7 @@ class LiveDelaysResource(Resource):
                 try:
                     current_time = now_local()
                     time_diff_seconds = (current_time - pickup_time).total_seconds()
-                    
+
                     # Si l'heure actuelle est déjà passée et le chauffeur n'est pas arrivé
                     if time_diff_seconds > 300:  # 5 minutes de buffer
                         delay_minutes = int(time_diff_seconds / 60)
@@ -1080,7 +1070,7 @@ class LiveDelaysResource(Resource):
                 try:
                     suggestions = generate_suggestions(a, delay_minutes, company.id)
                     suggestions_list = [s.to_dict() for s in suggestions]
-                    logger.info("[LiveDelays] Generated %d suggestions for assignment %s (delay: %d min)", 
+                    logger.info("[LiveDelays] Generated %d suggestions for assignment %s (delay: %d min)",
                                len(suggestions_list), a.id, delay_minutes)
                 except Exception as e:
                     logger.exception("[LiveDelays] Failed to generate suggestions for assignment %s: %s", a.id, e)
@@ -1103,7 +1093,7 @@ class LiveDelaysResource(Resource):
                         .limit(3)
                         .all()
                     )
-                    
+
                     for next_a in next_assignments:
                         next_b = Booking.query.get(next_a.booking_id)
                         if next_b:
@@ -1129,13 +1119,13 @@ class LiveDelaysResource(Resource):
                     "scheduled_time": pickup_time.isoformat() if pickup_time else None,
                     "pickup_time": pickup_time.isoformat() if pickup_time else None,
                     "dropoff_time": dropoff_time.isoformat() if dropoff_time else None,
-                    
+
                     # ✨ Suggestions intelligentes
                     "suggestions": suggestions_list,
-                    
+
                     # ✨ Impact cascade
                     "impacts_next_bookings": cascade_impact,
-                    
+
                     # Infos contextuelles
                     "booking": {
                         "id": b.id,
@@ -1160,7 +1150,7 @@ class LiveDelaysResource(Resource):
         late = len([d for d in delays if d["status"] == "late"])
         early = len([d for d in delays if d["status"] == "early"])
         on_time = len([d for d in delays if d["status"] == "on_time"])
-        
+
         avg_delay = 0
         if delays:
             delay_values = [d["delay_minutes"] for d in delays]
@@ -1189,20 +1179,20 @@ class OptimizerStartResource(Resource):
         Surveille automatiquement les retards et propose des optimisations.
         """
         company = _get_current_company()
-        company_id = int(getattr(company, "id"))
-        
+        company_id = int(company.id)
+
         body = request.get_json(silent=True) or {}
         check_interval = int(body.get("check_interval_seconds", 120))  # 2 min par défaut
-        
+
         try:
             optimizer = start_optimizer_for_company(company_id, check_interval)
             status = optimizer.get_status()
-            
+
             return {
                 "message": "Monitoring temps réel démarré",
                 "status": status
             }, 200
-        
+
         except Exception as e:
             logger.exception("[Optimizer] Failed to start for company %s", company_id)
             return {"error": f"Échec du démarrage: {e}"}, 500
@@ -1215,16 +1205,16 @@ class OptimizerStopResource(Resource):
     def post(self):
         """Arrête le monitoring en temps réel pour l'entreprise."""
         company = _get_current_company()
-        company_id = int(getattr(company, "id"))
-        
+        company_id = int(company.id)
+
         try:
             stop_optimizer_for_company(company_id)
-            
+
             return {
                 "message": "Monitoring temps réel arrêté",
                 "company_id": company_id
             }, 200
-        
+
         except Exception as e:
             logger.exception("[Optimizer] Failed to stop for company %s", company_id)
             return {"error": f"Échec de l'arrêt: {e}"}, 500
@@ -1237,21 +1227,21 @@ class OptimizerStatusResource(Resource):
     def get(self):
         """Récupère le statut du monitoring temps réel."""
         company = _get_current_company()
-        company_id = int(getattr(company, "id"))
-        
+        company_id = int(company.id)
+
         try:
             optimizer = get_optimizer_for_company(company_id)
-            
+
             if optimizer is None:
                 return {
                     "running": False,
                     "company_id": company_id,
                     "message": "Monitoring non démarré"
                 }, 200
-            
+
             status = optimizer.get_status()
             return status, 200
-        
+
         except Exception as e:
             logger.exception("[Optimizer] Failed to get status for company %s", company_id)
             return {"error": f"Échec récupération statut: {e}"}, 500
@@ -1268,21 +1258,21 @@ class OptimizerOpportunitiesResource(Resource):
         Mode manuel: lance une vérification à la demande.
         """
         company = _get_current_company()
-        company_id = int(getattr(company, "id"))
-        
+        company_id = int(company.id)
+
         date_str = request.args.get("date")
-        
+
         try:
             # Vérifier si un optimizer est actif
             optimizer = get_optimizer_for_company(company_id)
-            
+
             if optimizer and optimizer.get_status()["running"]:
                 # Utiliser le cache du monitoring actif
                 opportunities = optimizer.get_current_opportunities()
             else:
                 # Vérification manuelle
                 opportunities = check_opportunities_manual(company_id, date_str)
-            
+
             return {
                 "opportunities": [o.to_dict() for o in opportunities],
                 "count": len(opportunities),
@@ -1290,7 +1280,7 @@ class OptimizerOpportunitiesResource(Resource):
                 "high_count": len([o for o in opportunities if o.severity == "high"]),
                 "timestamp": now_local().isoformat(),
             }, 200
-        
+
         except Exception as e:
             logger.exception("[Optimizer] Failed to get opportunities for company %s", company_id)
             return {"error": f"Échec récupération opportunités: {e}"}, 500

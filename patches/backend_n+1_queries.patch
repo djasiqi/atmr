@@ -1,0 +1,104 @@
+--- a/backend/routes/bookings.py
++++ b/backend/routes/bookings.py
+@@ -7,6 +7,7 @@
+ from flask_jwt_extended import jwt_required, get_jwt_identity
+ from typing import Any, cast
+ 
++from sqlalchemy.orm import joinedload
+ from ext import db, role_required
+ from models import Booking, BookingStatus, Client, User, UserRole
+ from shared.time_utils import to_utc
+@@ -200,7 +201,12 @@
+         if not user or user.role != UserRole.client:
+             return {"message": "Non autorisé"}, 403
+ 
+-        bookings = Booking.query.filter_by(client_id=client.id).all()
++        # ✅ Eager load client + user pour éviter N+1
++        bookings = Booking.query.options(
++            joinedload(Booking.client).joinedload(Client.user),
++            joinedload(Booking.driver).joinedload(Driver.user),
++            joinedload(Booking.company)
++        ).filter_by(client_id=client.id).order_by(Booking.scheduled_time.desc()).limit(100).all()
+         
+         return {"bookings": [b.serialize for b in bookings]}, 200
+
+--- a/backend/routes/invoices.py
++++ b/backend/routes/invoices.py
+@@ -5,6 +5,7 @@
+ from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
+ from datetime import datetime, timedelta
+ 
++from sqlalchemy.orm import joinedload
+ from ext import db, role_required
+ from models import (
+     Invoice, InvoiceLine, InvoicePayment, InvoiceReminder,
+@@ -45,7 +46,13 @@
+         period_month = data.get('period_month')
+         
+         # Liste filtrée (optionnel)
+-        query = Invoice.query.filter_by(company_id=company_id)
++        # ✅ Eager load client + lines pour éviter N+1
++        query = Invoice.query.options(
++            joinedload(Invoice.client).joinedload(Client.user),
++            joinedload(Invoice.bill_to_client).joinedload(Client.user),
++            joinedload(Invoice.lines),
++            joinedload(Invoice.payments)
++        ).filter_by(company_id=company_id)
+         
+         if status:
+             query = query.filter_by(status=status)
+@@ -55,7 +62,8 @@
+         if period_month:
+             query = query.filter_by(period_month=period_month)
+         
+-        invoices = query.all()
++        # ✅ Pagination par défaut
++        invoices = query.order_by(Invoice.issued_at.desc()).limit(100).all()
+         return {"invoices": [inv.to_dict() for inv in invoices]}, 200
+
+--- a/backend/routes/companies.py
++++ b/backend/routes/companies.py
+@@ -6,6 +6,7 @@
+ from datetime import datetime, timedelta
+ from typing import cast
+ 
++from sqlalchemy.orm import joinedload
+ from ext import db, role_required
+ from models import (
+     Company, Driver, Booking, BookingStatus,
+@@ -80,7 +81,12 @@
+         if not company:
+             return {"error": "Entreprise introuvable"}, 404
+ 
+-        drivers = Driver.query.filter_by(company_id=company.id).all()
++        # ✅ Eager load user pour éviter N+1
++        drivers = Driver.query.options(
++            joinedload(Driver.user),
++            joinedload(Driver.vacations)
++        ).filter_by(company_id=company.id).all()
++        
+         return {"drivers": [d.serialize for d in drivers]}, 200
+
+@@ -105,7 +111,10 @@
+         # Filtres optionnels
+         query = Booking.query.filter_by(company_id=company.id)
+         
++        # ✅ Eager load relations
++        query = query.options(
++            joinedload(Booking.client).joinedload(Client.user),
++            joinedload(Booking.driver).joinedload(Driver.user)
++        )
++        
+         status = request.args.get('status')
+         if status:
+             query = query.filter_by(status=status)
+@@ -119,7 +128,8 @@
+         driver_id = request.args.get('driver_id', type=int)
+         if driver_id:
+             query = query.filter_by(driver_id=driver_id)
+         
+-        bookings = query.all()
++        # ✅ Pagination + tri
++        bookings = query.order_by(Booking.scheduled_time.desc()).limit(200).all()
+         return {"bookings": [b.serialize for b in bookings]}, 200
+

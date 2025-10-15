@@ -13,11 +13,10 @@ No external deps. Thread-safe. Can be used from sockets, cron, or workers.
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Tuple
-import threading
-
+from typing import Dict, Tuple
 
 # -----------------------------
 # Basic helpers (stateless)
@@ -99,7 +98,7 @@ class AntiFlapDelayChecker:
             # emit one alert
     """
 
-    def __init__(self, config: Optional[AntiFlapConfig] = None) -> None:
+    def __init__(self, config: AntiFlapConfig | None = None) -> None:
         self.config = config or AntiFlapConfig()
         # store: key -> (count, first_ts, last_ts, last_state)
         self._store: Dict[Tuple[str, str], Tuple[int, float, float, bool]] = {}
@@ -191,7 +190,7 @@ class DelayDecider:
         pickup_buffer_min: int = 5,
         dropoff_buffer_min: int = 5,
         thresholds: SeverityThresholds = SeverityThresholds(),
-        anti_flap: Optional[AntiFlapDelayChecker] = None,
+        anti_flap: AntiFlapDelayChecker | None = None,
     ) -> None:
         self.pickup_buffer_min = pickup_buffer_min
         self.dropoff_buffer_min = dropoff_buffer_min

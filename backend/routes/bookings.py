@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import logging
-
-from flask import request
-from flask_restx import Namespace, Resource, fields
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from typing import Any, cast
 
-from sqlalchemy.orm import joinedload
-from ext import db, role_required
-from models import Booking, BookingStatus, Client, User, UserRole, Driver
-from shared.time_utils import to_utc
-from services.maps import get_distance_duration, geocode_address
-from services.unified_dispatch import queue
 import sentry_sdk
+from flask import request
+from flask_jwt_extended import get_jwt_identity, jwt_required
+from flask_restx import Namespace, Resource, fields
+from sqlalchemy.orm import joinedload
+
+from ext import db, role_required
+from models import Booking, BookingStatus, Client, Driver, User, UserRole
+from services.maps import geocode_address, get_distance_duration
+from services.unified_dispatch import queue
+from shared.time_utils import to_utc
 
 app_logger = logging.getLogger('app')
 

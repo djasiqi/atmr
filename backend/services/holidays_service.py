@@ -1,10 +1,12 @@
 # holidays_service.py
 from datetime import date
-from functools import lru_cache
+from functools import cache
 from typing import Set
+
 from holidays import country_holidays
 
-@lru_cache(maxsize=None)
+
+@cache
 def get_geneva_holidays(year: int) -> Set[date]:
     # Suisse = CH ; subdivision Genève = GE
     hols = country_holidays("CH", subdiv="GE", years=year)

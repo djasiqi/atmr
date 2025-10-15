@@ -6,25 +6,26 @@ from typing import Any
 
 from flask_restx import Api
 
+from routes.admin import admin_ns
+from routes.analytics import analytics_ns  # /analytics
+
 # Existing imports …
 from routes.auth import auth_ns
-from routes.clients import clients_ns
-from routes.admin import admin_ns
-from routes.companies import companies_ns
-from routes.driver import driver_ns
 from routes.bookings import bookings_ns
-from routes.payments import payments_ns
-from routes.messages import messages_ns
-from routes.utils import utils_ns
-from routes.geocode import geocode_ns
-from routes.medical import medical_ns
-from routes.invoices import invoices_ns
-from routes.planning import planning_ns
-from routes.osrm import osrm_ns
+from routes.clients import clients_ns
+from routes.companies import companies_ns
 
 # --- IMPORTANT: mount both dispatch namespaces with different paths
 from routes.dispatch_routes import dispatch_ns as company_dispatch_ns  # /company_dispatch
-from routes.analytics import analytics_ns  # /analytics
+from routes.driver import driver_ns
+from routes.geocode import geocode_ns
+from routes.invoices import invoices_ns
+from routes.medical import medical_ns
+from routes.messages import messages_ns
+from routes.osrm import osrm_ns
+from routes.payments import payments_ns
+from routes.planning import planning_ns
+from routes.utils import utils_ns
 
 authorizations = {
     "BearerAuth": {"type": "apiKey", "in": "header", "name": "Authorization"}
@@ -81,6 +82,7 @@ api.add_namespace(analytics_ns, path="/analytics")
 
 # --- Company Settings namespace
 from routes.company_settings import settings_ns
+
 api.add_namespace(settings_ns, path="/company-settings")
 
 # AI routes

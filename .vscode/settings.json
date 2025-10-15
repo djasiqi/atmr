@@ -49,5 +49,11 @@
 
   "workbench.view.alwaysShowHeaderActions": true,
   "java.compile.nullAnalysis.mode": "automatic",
-  "java.configuration.updateBuildConfiguration": "interactive"
+  "java.configuration.updateBuildConfiguration": "interactive",
+  "cursorpyright.analysis.autoSearchPaths": true,
+  "cursorpyright.analysis.extraPaths": [
+    "${workspaceFolder}/backend"
+  ],
+  "cursorpyright.analysis.typeCheckingMode": "basic",
+  "cursorpyright.analysis.useLibraryCodeForTypes": true
 }

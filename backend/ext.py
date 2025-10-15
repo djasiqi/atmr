@@ -1,18 +1,19 @@
 # backend/ext.py
-from flask_sqlalchemy import SQLAlchemy
-from flask_jwt_extended import JWTManager, get_jwt_identity
-from flask_mail import Mail
-from flask_bcrypt import Bcrypt
-from flask_migrate import Migrate
-from typing import Literal, cast
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from flask_socketio import SocketIO
-from functools import wraps
-from flask import abort, jsonify
 import logging
 import os
+from functools import wraps
+from typing import Literal, cast
+
 import redis
+from flask import abort, jsonify
+from flask_bcrypt import Bcrypt
+from flask_jwt_extended import JWTManager, get_jwt_identity
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_mail import Mail
+from flask_migrate import Migrate
+from flask_socketio import SocketIO
+from flask_sqlalchemy import SQLAlchemy
 
 # Initialisation des extensions (singleton importables partout)
 db = SQLAlchemy()
@@ -58,7 +59,7 @@ dispatch_status = {'is_running': False, 'last_run_time': None}
 app_logger = logging.getLogger('app')
 
 
-#  JWT error handlers 
+#  JWT error handlers
 @jwt.expired_token_loader
 def expired_token_callback(jwt_header, jwt_payload):
     return jsonify({"error": "Le token a expiré. Veuillez vous reconnecter."}), 401
@@ -75,7 +76,7 @@ def missing_token_callback(error):
 def token_not_fresh_callback(jwt_header, jwt_payload):
     return jsonify({"error": "Le token n'est pas frais. Veuillez vous reconnecter."}), 401
 
-#  Decorator role_required 
+#  Decorator role_required
 def role_required(*roles):
     def decorator(fn):
         @wraps(fn)
@@ -91,7 +92,7 @@ def role_required(*roles):
             # Convertir les rôles en objets UserRole pour la comparaison
             from models import UserRole
             allowed_roles = []
-            
+
             # Gérer les deux formats : @role_required(['ADMIN', 'COMPANY']) et @role_required(UserRole.company)
             if roles and len(roles) > 0:
                 first_arg = roles[0]
@@ -104,13 +105,13 @@ def role_required(*roles):
                 else:
                     # Format: @role_required('COMPANY')
                     role_list = [first_arg]
-                
+
                 for role_str in role_list:
                     try:
                         allowed_roles.append(UserRole[role_str])
                     except KeyError:
                         app_logger.warning("Rôle invalide dans la configuration : %s", role_str)
-            
+
             if user.role not in allowed_roles:
                 app_logger.warning("⛔ Accès refusé : %s (%s) a tenté d'accéder à une route restreinte.",
                                    user.username, user.role)

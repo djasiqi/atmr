@@ -6,14 +6,14 @@ Génère des rapports PDF/Email pour les analytics.
 
 import logging
 from datetime import date, timedelta
-from typing import Dict, Any
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
 
 class ReportGenerator:
     """Générateur de rapports analytics"""
-    
+
     def generate_daily_report(self, company_id: int, day: date) -> Dict[str, Any]:
         """
         Génère un rapport quotidien.
@@ -25,24 +25,24 @@ class ReportGenerator:
         Returns:
             Dict avec le contenu du rapport
         """
-        
+
+        from models import Company
         from services.analytics.aggregator import get_period_analytics
         from services.analytics.insights import generate_insights
-        from models import Company
-        
+
         company = Company.query.get(company_id)
         if not company:
             return {"error": "Company not found"}
-        
+
         # Récupérer les analytics du jour
         analytics = get_period_analytics(company_id, day, day)
-        
+
         if not analytics or not analytics.get("trends"):
             return {"error": "No data for this day"}
-        
+
         daily_data = analytics["trends"][0] if analytics["trends"] else {}
         insights = generate_insights(company_id, analytics)
-        
+
         # Générer le contenu
         report = {
             "company_name": company.name,
@@ -56,9 +56,9 @@ class ReportGenerator:
             "insights": insights,
             "summary": self._generate_daily_summary(daily_data)
         }
-        
+
         return report
-    
+
     def generate_weekly_report(self, company_id: int, week_start: date) -> Dict[str, Any]:
         """
         Génère un rapport hebdomadaire.
@@ -70,27 +70,27 @@ class ReportGenerator:
         Returns:
             Dict avec le contenu du rapport
         """
-        
+
+        from models import Company
         from services.analytics.aggregator import get_weekly_summary
         from services.analytics.insights import generate_insights
-        from models import Company
-        
+
         company = Company.query.get(company_id)
         if not company:
             return {"error": "Company not found"}
-        
+
         # Récupérer le résumé hebdomadaire
         analytics = get_weekly_summary(company_id, week_start)
-        
+
         if not analytics or not analytics.get("trends"):
             return {"error": "No data for this week"}
-        
+
         insights = generate_insights(company_id, analytics)
-        
+
         # Calculer les highlights
         week_end = week_start + timedelta(days=6)
         summary = analytics.get("summary", {})
-        
+
         report = {
             "company_name": company.name,
             "week_start": week_start.isoformat(),
@@ -105,16 +105,16 @@ class ReportGenerator:
             "trends": analytics.get("trends", []),
             "recommendations": self._generate_weekly_recommendations(analytics, insights)
         }
-        
+
         return report
-    
+
     def _generate_daily_summary(self, daily_data: Dict[str, Any]) -> str:
         """Génère un résumé texte du jour"""
-        
+
         bookings = daily_data.get("bookings", 0)
         on_time_rate = daily_data.get("on_time_rate", 0)
         quality = daily_data.get("quality_score", 0)
-        
+
         if quality >= 85:
             performance = "excellente"
             emoji = "🎉"
@@ -127,25 +127,25 @@ class ReportGenerator:
         else:
             performance = "faible"
             emoji = "🔴"
-        
+
         return (
             f"{emoji} Journée {performance} avec {bookings} courses effectuées. "
             f"Taux de ponctualité : {on_time_rate:.1f}% "
             f"(Score qualité : {quality:.0f}/100)"
         )
-    
+
     def _generate_weekly_recommendations(
         self,
         analytics: Dict[str, Any],
         insights: list
     ) -> list:
         """Génère des recommandations hebdomadaires"""
-        
+
         recommendations = []
-        
+
         summary = analytics.get("summary", {})
         on_time_rate = summary.get("avg_on_time_rate", 0)
-        
+
         # Recommandation sur la ponctualité
         if on_time_rate < 70:
             recommendations.append({
@@ -154,7 +154,7 @@ class ReportGenerator:
                 "description": "Le taux de ponctualité est faible. "
                               "Analysez les causes récurrentes de retards."
             })
-        
+
         # Recommandations des insights
         for insight in insights:
             if insight.get("priority") == "critical" or insight.get("priority") == "high":
@@ -163,16 +163,16 @@ class ReportGenerator:
                     "title": insight.get("title"),
                     "description": insight.get("message")
                 })
-        
+
         if not recommendations:
             recommendations.append({
                 "priority": "low",
                 "title": "Maintenir la performance",
                 "description": "Continuez sur cette lancée ! Aucune action urgente requise."
             })
-        
+
         return recommendations
-    
+
     def generate_email_content(self, report: Dict[str, Any], report_type: str = "daily") -> Dict[str, str]:
         """
         Génère le contenu d'un email à partir d'un rapport.
@@ -184,22 +184,22 @@ class ReportGenerator:
         Returns:
             Dict avec subject et body
         """
-        
+
         if report_type == "daily":
             return self._generate_daily_email(report)
         else:
             return self._generate_weekly_email(report)
-    
+
     def _generate_daily_email(self, report: Dict[str, Any]) -> Dict[str, str]:
         """Génère l'email quotidien"""
-        
+
         company_name = report.get("company_name", "")
         date = report.get("date", "")
         metrics = report.get("metrics", {})
         summary = report.get("summary", "")
-        
+
         subject = f"📊 Rapport Quotidien - {date}"
-        
+
         body = f"""
         <html>
         <body style="font-family: Arial, sans-serif; color: #333;">
@@ -253,20 +253,20 @@ class ReportGenerator:
         </body>
         </html>
         """
-        
+
         return {"subject": subject, "body": body}
-    
+
     def _generate_weekly_email(self, report: Dict[str, Any]) -> Dict[str, str]:
         """Génère l'email hebdomadaire"""
-        
+
         company_name = report.get("company_name", "")
         week_start = report.get("week_start", "")
         week_end = report.get("week_end", "")
         summary = report.get("summary", {})
         recommendations = report.get("recommendations", [])
-        
+
         subject = f"📊 Rapport Hebdomadaire - Semaine du {week_start}"
-        
+
         # Générer la liste des recommandations
         reco_html = ""
         for reco in recommendations[:5]:  # Limiter à 5
@@ -278,7 +278,7 @@ class ReportGenerator:
                 <span style="color: #666; font-size: 14px;">{reco.get('description', '')}</span>
             </li>
             """
-        
+
         body = f"""
         <html>
         <body style="font-family: Arial, sans-serif; color: #333;">
@@ -332,7 +332,7 @@ class ReportGenerator:
         </body>
         </html>
         """
-        
+
         return {"subject": subject, "body": body}
 
 

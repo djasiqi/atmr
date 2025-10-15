@@ -5,14 +5,14 @@ import logging
 import math
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple, Optional
 from datetime import datetime, timedelta
-
+from typing import Any, Dict, List, Tuple
 
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
 from models import Booking, Driver
 from services.unified_dispatch.settings import Settings
+
 DEFAULT_SETTINGS = Settings()
 
 SAFE_MAX_NODES = int(os.getenv("UD_SOLVER_MAX_NODES", "800"))           # total nodes = drivers + 2*bookings
@@ -35,8 +35,8 @@ class SolverAssignment:
     # Estimations min depuis t0 (base_time du problème)
     estimated_pickup_min: int = 0
     estimated_dropoff_min: int = 0
-    base_time: Optional[datetime] = None
-    dispatch_run_id: Optional[int] = None  # Ensure this field is included
+    base_time: datetime | None = None
+    dispatch_run_id: int | None = None  # Ensure this field is included
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -92,7 +92,7 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
     driver_windows: List[Tuple[int, int]] = problem.get("driver_windows", [])
     pair_min_gaps: List[int] = problem.get("pair_min_gaps", [])
     # Capacités véhicules (optionnel) – défaut: 1 place / chauffeur
-    vehicle_capacities: Optional[List[int]] = problem.get("vehicle_capacities")
+    vehicle_capacities: List[int] | None = problem.get("vehicle_capacities")
     # horizon minutes depuis settings, avec fallback robuste
     horizon: int = int(
         problem.get(
@@ -100,8 +100,8 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
             getattr(getattr(settings, "time", None), "horizon_minutes", 12 * 60),
         )
     )
-    base_time: Optional[datetime] = problem.get("base_time")
-    dispatch_run_id: Optional[int] = problem.get("dispatch_run_id")
+    base_time: datetime | None = problem.get("base_time")
+    dispatch_run_id: int | None = problem.get("dispatch_run_id")
 
     # -------- Sanity checks
     n_nodes = len(time_matrix)
@@ -111,7 +111,7 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
             unassigned_booking_ids=[int(getattr(b, "id", 0) or 0) for b in bookings],
             debug={"reason": "empty_matrix"},
         )
-    
+
     # Matrice carrée
     for r in time_matrix:
         if len(r) != n_nodes:
@@ -160,8 +160,8 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
                 return_to_outbound_map[b_id] = p_int
 
     # ---- Safety guard: cap problem size to avoid native crashes
-    if (len(bookings) > SAFE_MAX_TASKS or 
-        num_vehicles > SAFE_MAX_VEH or 
+    if (len(bookings) > SAFE_MAX_TASKS or
+        num_vehicles > SAFE_MAX_VEH or
         n_nodes > SAFE_MAX_NODES):
         logger.warning("[Solver] Problem too large -> fallback (veh=%d, tasks=%d, nodes=%d; caps=%d/%d/%d)",
                        num_vehicles, len(bookings), n_nodes,
@@ -240,7 +240,7 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
         base_cost = int(getattr(getattr(settings, "solver", None), "vehicle_fixed_cost", 0))
         emg_fixed = int(getattr(getattr(settings, "emergency", None), "emergency_vehicle_fixed_cost", 0))
         if (DriverType is not None and getattr(d, "driver_type", None) == DriverType.EMERGENCY) or \
-           (DriverType is None and getattr(d, "driver_type", None) and str(getattr(d, "driver_type")).endswith("EMERGENCY")):
+           (DriverType is None and getattr(d, "driver_type", None) and str(d.driver_type).endswith("EMERGENCY")):
             base_cost += emg_fixed
         if base_cost:
             try:
@@ -493,7 +493,7 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
             if veh_is_emergency[v]:
                 a = manager.IndexToNode(index)
                 b = manager.IndexToNode(nxt)
-                emergency_travel_min += _travel_minutes(a, b)                    
+                emergency_travel_min += _travel_minutes(a, b)
             index = solution.Value(routing.NextVar(index))
             order += 1
 
@@ -526,7 +526,7 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
         "regular_stops": int(sum(1 for v in range(num_vehicles) for _ in [0] if not veh_is_emergency[v])),
         "emergency_stops": int(emergency_stops),
         "pair_min_gaps_snapshot": list(pair_min_gaps[:min(len(pair_min_gaps), 10)]),
-        "matrix_provider": problem.get("matrix_provider", None),
+        "matrix_provider": problem.get("matrix_provider"),
     }
     # km estimés pour les urgences (temps de trajet * vitesse moyenne / 60)
     try:

@@ -5,17 +5,16 @@ Extrait depuis models.py (lignes ~1644-1762).
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from sqlalchemy import (
-    Column, Integer, Float, DateTime, ForeignKey,
-    CheckConstraint, Index, func
-)
+from datetime import UTC, datetime
+
+from sqlalchemy import CheckConstraint, Column, DateTime, Float, ForeignKey, Index, Integer, func
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship, validates
 
 from ext import db
-from .enums import PaymentStatus, PaymentMethod
+
 from .base import _as_float, _iso
+from .enums import PaymentMethod, PaymentStatus
 
 
 class Payment(db.Model):
@@ -113,7 +112,7 @@ class Payment(db.Model):
     def validate_date(self, _key, value):
         if value is None:
             raise ValueError("La date de paiement ne peut pas être nulle")
-        if value > datetime.now(timezone.utc):
+        if value > datetime.now(UTC):
             raise ValueError("La date de paiement ne peut pas être dans le futur")
         return value
 

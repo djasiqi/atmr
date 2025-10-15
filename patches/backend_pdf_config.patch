@@ -1,0 +1,82 @@
+--- a/backend/services/pdf_service.py
++++ b/backend/services/pdf_service.py
+@@ -1,5 +1,6 @@
+ import os
+ from datetime import datetime
++from flask import current_app
+ from sqlalchemy.orm import joinedload
+ from models import Invoice, CompanyBillingSettings, Client, InvoiceLineType
+ from services.qrbill_service import QRBillService
+@@ -43,8 +44,11 @@
+             with open(filepath, 'wb') as f:
+                 f.write(pdf_content)
+             
+-            # Retourner l'URL absolue vers le backend
+-            pdf_url = f"http://localhost:5000/uploads/invoices/{filename}"
++            # ✅ URL dynamique depuis config
++            pdf_base_url = current_app.config.get('PDF_BASE_URL', 'http://localhost:5000')
++            uploads_base = current_app.config.get('UPLOADS_PUBLIC_BASE', '/uploads')
++            
++            pdf_url = f"{pdf_base_url}{uploads_base}/invoices/{filename}"
+             
+             app_logger.info(f"PDF de facture généré: {pdf_url}")
+             return pdf_url
+@@ -78,8 +82,10 @@
+             with open(filepath, 'wb') as f:
+                 f.write(pdf_content)
+             
+-            # Retourner l'URL absolue vers le backend
+-            pdf_url = f"http://localhost:5000/uploads/invoices/{filename}"
++            # ✅ URL dynamique
++            pdf_base_url = current_app.config.get('PDF_BASE_URL', 'http://localhost:5000')
++            uploads_base = current_app.config.get('UPLOADS_PUBLIC_BASE', '/uploads')
++            pdf_url = f"{pdf_base_url}{uploads_base}/invoices/{filename}"
+             
+             app_logger.info(f"PDF de rappel généré: {pdf_url}")
+             return pdf_url
+
+--- a/backend/config.py
++++ b/backend/config.py
+@@ -36,6 +36,10 @@
+ 
+     # Ratelimit on/off (tests = off plus bas)
+     RATELIMIT_ENABLED = True
++    
++    # ✅ URLs dynamiques pour PDFs/uploads
++    PDF_BASE_URL = os.getenv('PDF_BASE_URL', 'http://localhost:5000')
++    UPLOADS_PUBLIC_BASE = os.getenv('UPLOADS_PUBLIC_BASE', '/uploads')
+ 
+     # Logique d'initialisation commune (optionnel)
+     @staticmethod
+@@ -59,6 +63,11 @@
+     REMEMBER_COOKIE_HTTPONLY = True
+     REMEMBER_COOKIE_SAMESITE = "Lax"
+ 
++    # Dev: PDFs accessibles en local
++    PDF_BASE_URL = os.getenv('PDF_BASE_URL', 'http://localhost:5000')
++    UPLOADS_PUBLIC_BASE = '/uploads'
++
++
+ class ProductionConfig(Config):
+     """Configuration pour la production."""
+     DEBUG = False
+@@ -75,6 +84,11 @@
+     REMEMBER_COOKIE_HTTPONLY = True
+     REMEMBER_COOKIE_SAMESITE = os.getenv('REMEMBER_COOKIE_SAMESITE', 'Lax')
+ 
++    # ✅ Prod: URL backend publique (depuis env)
++    PDF_BASE_URL = os.getenv('PDF_BASE_URL')
++    if not PDF_BASE_URL:
++        raise RuntimeError("PDF_BASE_URL requis en production")
++
+ class TestingConfig(Config):
+     TESTING = True
+     SECRET_KEY = 'test-secret-key'
+@@ -82,6 +96,8 @@
+     MAIL_PASSWORD = 'test-mail-password'
+     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+     WTF_CSRF_ENABLED = False
+     RATELIMIT_ENABLED = False
++    PDF_BASE_URL = 'http://testserver'
++    UPLOADS_PUBLIC_BASE = '/uploads'
+

@@ -1,16 +1,15 @@
 # backend/services/unified_dispatch/apply.py
 from __future__ import annotations
 
-import os
 import logging
+import os
 from collections import defaultdict
-from typing import Any, Dict, List, Tuple, Optional, cast
-
+from typing import Any, Dict, List, Tuple, cast
 
 from sqlalchemy.orm import joinedload
 
 from ext import db
-from models import Booking, BookingStatus, Driver, Assignment, AssignmentStatus
+from models import Assignment, AssignmentStatus, Booking, BookingStatus, Driver
 from shared.time_utils import now_utc  # UTC centralisé
 
 logger = logging.getLogger(__name__)
@@ -21,7 +20,7 @@ def apply_assignments(
     company_id: int,
     assignments: List[_Assignment],
     *,
-    dispatch_run_id: Optional[int] = None,
+    dispatch_run_id: int | None = None,
     allow_reassign: bool = True,
     respect_existing: bool = True,
     enforce_driver_checks: bool = True,
@@ -39,8 +38,8 @@ def apply_assignments(
     # Log pour tracer la propagation du dispatch_run_id
     if dispatch_run_id:
         logger.info("[Apply] Using dispatch_run_id=%s for assignments", dispatch_run_id)
-    
-    # Helper: attr ou clé dict 
+
+    # Helper: attr ou clé dict
     def _aget(obj: Any, name: str, default: Any = None) -> Any:
         if hasattr(obj, name):
             try:
@@ -151,7 +150,7 @@ def apply_assignments(
 
         cur_driver_id_raw = getattr(b_any, "driver_id", None)
         try:
-            cur_driver_id: Optional[int] = int(cur_driver_id_raw) if cur_driver_id_raw is not None else None
+            cur_driver_id: int | None = int(cur_driver_id_raw) if cur_driver_id_raw is not None else None
         except Exception:
             cur_driver_id = None
 
@@ -245,14 +244,14 @@ def apply_assignments(
                             c_any.updated_at = now
             else:
                 logger.info("[Apply] No desired assignments to upsert (company_id=%s)", company_id)
-        
+
         db.session.commit()  # ✅ Commit après le savepoint
 
     except Exception as e:
         logger.exception("[Apply] DB error while applying assignments (company_id=%s)", company_id)
         db.session.rollback()  # ✅ Rollback sur erreur
         return {
-            "applied": [], "skipped": {b_id: "db_error" for b_id in applied_ids},
+            "applied": [], "skipped": dict.fromkeys(applied_ids, "db_error"),
             "conflicts": [], "driver_load": {}, "error": str(e),
         }
     if dispatch_run_id:

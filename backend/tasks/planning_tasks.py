@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from celery import shared_task
-from datetime import datetime
+
 from ext import db
 from models import DriverShift
 from services.planning_service import serialize_shift

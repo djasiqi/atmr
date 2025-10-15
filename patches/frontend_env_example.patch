@@ -1,0 +1,23 @@
+--- /dev/null
++++ b/frontend/.env.example
+@@ -0,0 +1,18 @@
++# ======================================
++# Configuration Frontend ATMR (React)
++# ======================================
++
++# --- API Backend ---
++REACT_APP_API_URL=http://localhost:5000/api
++REACT_APP_API_BASE_URL=http://localhost:5000/api
++
++# --- WebSocket ---
++REACT_APP_WS_URL=http://localhost:5000
++
++# --- Environment ---
++NODE_ENV=development
++
++# --- Build Options ---
++GENERATE_SOURCEMAP=true
++
++# --- Analytics (optionnel) ---
++# REACT_APP_GA_TRACKING_ID=UA-XXXXXXXXX-X
+

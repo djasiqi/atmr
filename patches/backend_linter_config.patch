@@ -1,0 +1,119 @@
+--- /dev/null
++++ b/backend/ruff.toml
+@@ -0,0 +1,45 @@
++# Ruff configuration pour backend ATMR
++# Documentation: https://docs.astral.sh/ruff/
++
++target-version = "py311"
++line-length = 120
++
++[lint]
++select = [
++    "E",   # pycodestyle errors
++    "W",   # pycodestyle warnings
++    "F",   # pyflakes
++    "I",   # isort
++    "N",   # pep8-naming
++    "UP",  # pyupgrade
++    "B",   # flake8-bugbear
++    "C4",  # flake8-comprehensions
++    "DTZ", # flake8-datetimez (timezone aware)
++    "T20", # flake8-print
++    "SIM", # flake8-simplify
++]
++
++ignore = [
++    "E501",   # Line too long (géré par formatter)
++    "B008",   # Function call in argument defaults (courant SQLAlchemy)
++    "N805",   # First argument should be self (validators ORM)
++    "UP006",  # Use type instead of Type (compat Python <3.9)
++    "UP007",  # Use X | Y for unions (compat Python <3.10)
++]
++
++[lint.per-file-ignores]
++"__init__.py" = ["F401"]  # Imports inutilisés OK dans __init__
++"migrations/**/*.py" = ["E501", "F401", "N999"]  # Alembic auto-generated
++"tests/**/*.py" = ["S101", "F401"]  # Assert OK dans tests
++
++[format]
++quote-style = "double"
++indent-style = "space"
++line-ending = "auto"
++
++--- /dev/null
++++ b/backend/mypy.ini
+@@ -0,0 +1,30 @@
++[mypy]
++python_version = 3.11
++warn_return_any = True
++warn_unused_configs = True
++disallow_untyped_defs = False  # Progressif: activer plus tard
++check_untyped_defs = True
++
++# Chemins
++mypy_path = .
++exclude = (venv|migrations|tests)
++
++# Plugins
++plugins = sqlalchemy.ext.mypy.plugin
++
++# Ignore imports manquants (libs sans stubs)
++ignore_missing_imports = True
++
++# Strict typing progressif
++# disallow_any_generics = True
++# disallow_subclassing_any = True
++# disallow_untyped_calls = True
++# disallow_incomplete_defs = True
++# no_implicit_optional = True
++
++# Warnings utiles
++warn_redundant_casts = True
++warn_unused_ignores = True
++warn_no_return = True
++warn_unreachable = True
++
++--- /dev/null
++++ b/frontend/.eslintrc.json
+@@ -0,0 +1,35 @@
++{
++  "extends": [
++    "react-app",
++    "react-app/jest"
++  ],
++  "rules": {
++    "no-unused-vars": ["warn", {
++      "argsIgnorePattern": "^_",
++      "varsIgnorePattern": "^_"
++    }],
++    "no-console": ["warn", {
++      "allow": ["warn", "error"]
++    }],
++    "react-hooks/exhaustive-deps": "warn",
++    "react/prop-types": "off",
++    "no-debugger": "error"
++  },
++  "overrides": [
++    {
++      "files": ["**/*.test.js", "**/*.test.jsx"],
++      "env": {
++        "jest": true
++      }
++    }
++  ]
++}
++
++--- /dev/null
++++ b/frontend/.prettierrc.json
+@@ -0,0 +1,10 @@
++{
++  "semi": true,
++  "trailingComma": "es5",
++  "singleQuote": true,
++  "printWidth": 100,
++  "tabWidth": 2,
++  "useTabs": false,
++  "arrowParens": "always",
++  "endOfLine": "lf"
++}
+

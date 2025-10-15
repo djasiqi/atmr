@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import os
-import pytz
-from datetime import datetime, date, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
+from typing import Tuple, Union
 from zoneinfo import ZoneInfo
-from typing import Optional, Union, Tuple
 
+import pytz
 
 # ---------------------------------------------------------------------------
 # MODE NAÏF LOCAL (Europe/Zurich implicite) — AUCUNE CONVERSION UTC
@@ -25,7 +25,7 @@ def _normalize_local_string(s: str) -> str:
         s = s.replace(" ", "T")
     return s
 
-def parse_local_naive(dt: Union[str, datetime, None]) -> Optional[datetime]:
+def parse_local_naive(dt: Union[str, datetime, None]) -> datetime | None:
     """Retourne un datetime **naïf** (ou None) en interprétant toute entrée comme locale."""
     if dt is None:
         return None
@@ -38,7 +38,7 @@ def parse_local_naive(dt: Union[str, datetime, None]) -> Optional[datetime]:
 def now_local() -> datetime:
     """Horloge unique : maintenant en **naïf local** (Europe/Zurich)."""
     # Get current UTC time
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     # Convert to Europe/Zurich
     now_zurich = now_utc.astimezone(pytz.timezone('Europe/Zurich'))
     # Return as naive datetime
@@ -82,7 +82,7 @@ def sort_key_local(dt: Union[str, datetime, None]) -> datetime:
         return now_local() + timedelta(days=365 * 50)
     return parsed
 
-def split_date_time_local(dt: Union[str, datetime, None]) -> Tuple[Optional[str], Optional[str]]:
+def split_date_time_local(dt: Union[str, datetime, None]) -> Tuple[str | None, str | None]:
     """
     Retourne ('YYYY-MM-DD', 'HH:MM') sans conversions — pour l’affichage.
     """
@@ -125,7 +125,7 @@ __all__ = [
 
 # RÉTRO-COMPAT UTC : **ici, on corrige pour du vrai UTC aware**
 # ---------------------------------------------------------------------------
-def _ensure_dt(obj: Union[str, datetime, None]) -> Optional[datetime]:
+def _ensure_dt(obj: Union[str, datetime, None]) -> datetime | None:
     if obj is None:
         return None
     if isinstance(obj, datetime):
@@ -134,7 +134,7 @@ def _ensure_dt(obj: Union[str, datetime, None]) -> Optional[datetime]:
     d = parse_local_naive(obj)
     return d
 
-def to_utc(dt: Union[str, datetime, None]) -> Optional[datetime]:
+def to_utc(dt: Union[str, datetime, None]) -> datetime | None:
     """
     Normalise en **UTC aware**.
     - Si dt est naïf: supposé en LOCAL_TZ → converti en UTC.
@@ -145,9 +145,9 @@ def to_utc(dt: Union[str, datetime, None]) -> Optional[datetime]:
         return None
     if d.tzinfo is None:
         d = d.replace(tzinfo=LOCAL_TZ)
-    return d.astimezone(timezone.utc)
+    return d.astimezone(UTC)
 
-def to_utc_from_db(dt: Union[str, datetime, None]) -> Optional[datetime]:
+def to_utc_from_db(dt: Union[str, datetime, None]) -> datetime | None:
     """
     Datetime venant de la DB (souvent aware si timezone=True).
     Ramène toujours en **UTC aware**.
@@ -157,15 +157,15 @@ def to_utc_from_db(dt: Union[str, datetime, None]) -> Optional[datetime]:
         return None
     if d.tzinfo is None:
         d = d.replace(tzinfo=LOCAL_TZ)
-    return d.astimezone(timezone.utc)
+    return d.astimezone(UTC)
 
-def ensure_aware_utc(dt: Union[str, datetime, None]) -> Optional[datetime]:
+def ensure_aware_utc(dt: Union[str, datetime, None]) -> datetime | None:
     """Alias explicite vers to_utc (UTC aware)."""
     return to_utc(dt)
 
 def now_utc() -> datetime:
     """Maintenant en **UTC aware** (pour comparer avec des DateTime timezone=True)."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 def minutes_from_now(dt: Union[str, datetime, None]) -> int:
     """Minutes (>=0) entre maintenant (UTC) et dt (normalisé UTC)."""
@@ -187,7 +187,7 @@ def sort_key_utc(dt: Union[str, datetime, None]) -> datetime:
     d = to_utc(dt)
     return d if d is not None else (now_utc() + timedelta(days=365 * 50))
 
-def to_geneva_local(dt: Union[str, datetime, None]) -> Optional[datetime]:
+def to_geneva_local(dt: Union[str, datetime, None]) -> datetime | None:
     """Retourne un datetime **aware** en fuseau LOCAL_TZ."""
     d = _ensure_dt(dt)
     if d is None:
@@ -196,7 +196,7 @@ def to_geneva_local(dt: Union[str, datetime, None]) -> Optional[datetime]:
         d = d.replace(tzinfo=LOCAL_TZ)
     return d.astimezone(LOCAL_TZ)
 
-def format_geneva(dt: Union[str, datetime, None]) -> Tuple[Optional[str], Optional[str]]:
+def format_geneva(dt: Union[str, datetime, None]) -> Tuple[str | None, str | None]:
     """
     Retourne ('YYYY-MM-DD','HH:MM') en **LOCAL_TZ** (aware), pratique pour l'affichage.
     """
@@ -205,7 +205,7 @@ def format_geneva(dt: Union[str, datetime, None]) -> Tuple[Optional[str], Option
         return None, None
     return d.strftime("%Y-%m-%d"), d.strftime("%H:%M")
 
-def iso_utc_z(dt: Union[str, datetime, None]) -> Optional[str]:
+def iso_utc_z(dt: Union[str, datetime, None]) -> str | None:
     """ISO 8601 en UTC, suffixé 'Z' (ex: 2025-09-21T10:30:00Z)."""
     d = to_utc(dt)
     return d.strftime("%Y-%m-%dT%H:%M:%SZ") if d else None

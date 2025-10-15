@@ -1,12 +1,15 @@
 from __future__ import annotations
-import time
-import math
-import logging
-import json
+
 import hashlib
-import threading
 import itertools
-from typing import List, Tuple, Iterable, Optional, Dict, Any, Callable, cast
+import json
+import logging
+import math
+import threading
+import time
+from collections.abc import Callable, Iterable
+from typing import Any, Dict, List, Tuple, cast
+
 import requests
 
 logger = logging.getLogger(__name__)
@@ -127,8 +130,8 @@ def _table(
     base_url: str,
     profile: str,
     coords: List[Tuple[float, float]],
-    sources: Optional[List[int]],
-    destinations: Optional[List[int]],
+    sources: List[int] | None,
+    destinations: List[int] | None,
     timeout: int,
 ) -> Dict[str, Any]:
     # 6 décimales pour OSRM; la clé de cache utilisera son propre arrondi.
@@ -150,7 +153,7 @@ def _route(
     origin: Tuple[float, float],
     destination: Tuple[float, float],
     *,
-    waypoints: Optional[List[Tuple[float, float]]] = None,
+    waypoints: List[Tuple[float, float]] | None = None,
     overview: str = "false",   # "false" | "simplified" | "full"
     geometries: str = "geojson",
     steps: bool = False,
@@ -180,8 +183,8 @@ def _route(
 # ============================================================
 
 def _canonical_key_table(coords: List[Tuple[float, float]],
-                         sources: Optional[List[int]],
-                         destinations: Optional[List[int]],
+                         sources: List[int] | None,
+                         destinations: List[int] | None,
                          *, coord_precision: int = 5) -> str:
     def _round(t):
         lat, lon = t
@@ -197,7 +200,7 @@ def _canonical_key_table(coords: List[Tuple[float, float]],
 
 def _canonical_key_route(origin: Tuple[float, float],
                          destination: Tuple[float, float],
-                         waypoints: Optional[List[Tuple[float, float]]] = None,
+                         waypoints: List[Tuple[float, float]] | None = None,
                          *, coord_precision: int = 5, profile: str = "driving") -> str:
     def _round(t):
         lat, lon = t
@@ -222,7 +225,7 @@ def build_distance_matrix_osrm(
     max_retries: int = 2,
     backoff_ms: int = 250,
     # Cache/mémo optionnel
-    redis_client: Optional[Any] = None,
+    redis_client: Any | None = None,
     cache_ttl_s: int = 900,
     coord_precision: int = 5,
 ) -> List[List[float]]:
@@ -342,9 +345,9 @@ def route_info(
     *,
     base_url: str,
     profile: str = "driving",
-    waypoints: Optional[List[Tuple[float, float]]] = None,
+    waypoints: List[Tuple[float, float]] | None = None,
     timeout: int = 5,
-    redis_client: Optional[Any] = None,
+    redis_client: Any | None = None,
     cache_ttl_s: int = 900,
     coord_precision: int = 5,
     overview: str = "false",
@@ -408,7 +411,7 @@ def route_info(
         logger.warning("[OSRM] route failed -> fallback haversine: %s", e)
         pts: List[Tuple[float, float]] = [origin] + (waypoints or []) + [destination]
         dist_m = 0.0
-        for a, b in zip(pts[:-1], pts[1:]):
+        for a, b in zip(pts[:-1], pts[1:], strict=False):
             dist_m += _haversine_km(a, b) * 1000.0
         sec = (dist_m / 1000.0) / max(avg_speed_kmh_fallback, 1e-3) * 3600.0
         res = {
@@ -435,9 +438,9 @@ def eta_seconds(
     *,
     base_url: str,
     profile: str = "driving",
-    waypoints: Optional[List[Tuple[float, float]]] = None,
+    waypoints: List[Tuple[float, float]] | None = None,
     timeout: int = 5,
-    redis_client: Optional[Any] = None,
+    redis_client: Any | None = None,
     cache_ttl_s: int = 900,
     coord_precision: int = 5,
     avg_speed_kmh_fallback: float = 25.0,

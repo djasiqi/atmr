@@ -1,13 +1,15 @@
 """
 Routes API pour les paramètres avancés de l'entreprise
 """
-from flask import request
-from flask_restx import Namespace, Resource, fields
-from flask_jwt_extended import jwt_required
-from models import Company, CompanyBillingSettings, CompanyPlanningSettings, UserRole
-from ext import db, role_required
-from routes.companies import get_company_from_token
 import logging
+
+from flask import request
+from flask_jwt_extended import jwt_required
+from flask_restx import Namespace, Resource, fields
+
+from ext import db, role_required
+from models import CompanyBillingSettings, CompanyPlanningSettings, UserRole
+from routes.companies import get_company_from_token
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,7 @@ class OperationalSettings(Resource):
         company, err, code = get_company_from_token()
         if err:
             return {"success": False, "error": err}, code
-        
+
         return {
             "success": True,
             "data": {
@@ -69,7 +71,7 @@ class OperationalSettings(Resource):
                 "longitude": company.longitude,
             }
         }, 200
-    
+
     @jwt_required()
     @role_required(UserRole.company)
     @settings_ns.expect(operational_settings_model)
@@ -78,9 +80,9 @@ class OperationalSettings(Resource):
         company, err, code = get_company_from_token()
         if err:
             return {"success": False, "error": err}, code
-        
+
         data = request.get_json()
-        
+
         try:
             if 'service_area' in data:
                 company.service_area = data['service_area']
@@ -92,10 +94,10 @@ class OperationalSettings(Resource):
                 company.latitude = float(data['latitude']) if data['latitude'] else None
             if 'longitude' in data:
                 company.longitude = float(data['longitude']) if data['longitude'] else None
-            
+
             db.session.commit()
             logger.info(f"[Settings] Operational settings updated for company {company.id}")
-            
+
             return {
                 "success": True,
                 "message": "Paramètres opérationnels mis à jour",
@@ -123,10 +125,10 @@ class BillingSettings(Resource):
         company, err, code = get_company_from_token()
         if err:
             return {"success": False, "error": err}, code
-        
+
         # Récupérer ou créer les billing settings
         billing = CompanyBillingSettings.query.filter_by(company_id=company.id).first()
-        
+
         if not billing:
             # Créer avec valeurs par défaut
             billing = CompanyBillingSettings(
@@ -144,9 +146,9 @@ class BillingSettings(Resource):
             )
             db.session.add(billing)
             db.session.commit()
-        
+
         return billing.to_dict(), 200
-    
+
     @jwt_required()
     @role_required(UserRole.company)
     @settings_ns.expect(billing_settings_model)
@@ -155,16 +157,16 @@ class BillingSettings(Resource):
         company, err, code = get_company_from_token()
         if err:
             return {"success": False, "error": err}, code
-        
+
         data = request.get_json()
-        
+
         try:
             billing = CompanyBillingSettings.query.filter_by(company_id=company.id).first()
-            
+
             if not billing:
                 billing = CompanyBillingSettings(company_id=company.id)
                 db.session.add(billing)
-            
+
             # Mise à jour des champs
             updatable_fields = [
                 'payment_terms_days', 'overdue_fee', 'reminder1_fee', 'reminder2_fee',
@@ -175,14 +177,14 @@ class BillingSettings(Resource):
                 'reminder2_template', 'reminder3_template',
                 'legal_footer', 'pdf_template_variant'
             ]
-            
+
             for field in updatable_fields:
                 if field in data:
                     setattr(billing, field, data[field])
-            
+
             db.session.commit()
             logger.info(f"[Settings] Billing settings updated for company {company.id}")
-            
+
             return {
                 "success": True,
                 "message": "Paramètres de facturation mis à jour",
@@ -203,9 +205,9 @@ class PlanningSettings(Resource):
         company, err, code = get_company_from_token()
         if err:
             return {"success": False, "error": err}, code
-        
+
         planning = CompanyPlanningSettings.query.filter_by(company_id=company.id).first()
-        
+
         if not planning:
             planning = CompanyPlanningSettings(
                 company_id=company.id,
@@ -213,12 +215,12 @@ class PlanningSettings(Resource):
             )
             db.session.add(planning)
             db.session.commit()
-        
+
         return {
             "success": True,
             "data": planning.settings
         }, 200
-    
+
     @jwt_required()
     @role_required(UserRole.company)
     def put(self):
@@ -226,12 +228,12 @@ class PlanningSettings(Resource):
         company, err, code = get_company_from_token()
         if err:
             return {"success": False, "error": err}, code
-        
+
         data = request.get_json()
-        
+
         try:
             planning = CompanyPlanningSettings.query.filter_by(company_id=company.id).first()
-            
+
             if not planning:
                 planning = CompanyPlanningSettings(
                     company_id=company.id,
@@ -240,10 +242,10 @@ class PlanningSettings(Resource):
                 db.session.add(planning)
             else:
                 planning.settings = data.get('settings', {})
-            
+
             db.session.commit()
             logger.info(f"[Settings] Planning settings updated for company {company.id}")
-            
+
             return {
                 "success": True,
                 "message": "Paramètres de planning mis à jour",

@@ -1,12 +1,13 @@
 # backend/services/notification_service.py
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, cast  # <-- ajout de cast
+from typing import Any, Dict, cast  # <-- ajout de cast
 
 import requests
 
-from ext import socketio, app_logger
+from ext import app_logger, socketio
 from models import Booking
+
 
 # ---------- Helper d'émission compatible v4/v5 ----------
 def _emit_room(event: str, payload: Dict[str, Any], room: str, *, namespace: str = "/") -> None:
@@ -99,7 +100,7 @@ def notify_dispatch_run_completed(
     company_id: int,
     dispatch_run_id: int | str,
     assignments_count: int,
-    date_str: Optional[str] = None,
+    date_str: str | None = None,
 ) -> None:
     """
     Notification unifiée quand un run de dispatch est terminé.
@@ -113,7 +114,7 @@ def notify_dispatch_run_completed(
                 from models import DispatchRun
                 dr = DispatchRun.query.get(dispatch_run_id)  # type: ignore[arg-type]
                 if dr and getattr(dr, "day", None):
-                    d = getattr(dr, "day")
+                    d = dr.day
                     date_str = d.isoformat() if hasattr(d, "isoformat") else str(d)
                     app_logger.info(
                         "[notify_dispatch_run_completed] Retrieved date_str=%s from dispatch_run_id=%s",
@@ -157,12 +158,12 @@ def notify_dispatcher_optimization_opportunity(opportunity_data: Dict[str, Any])
     """
     try:
         from services.socketio_service import emit_company_event
-        
+
         company_id = opportunity_data.get("company_id")
         if not company_id:
             app_logger.warning("[notify_dispatcher_optimization_opportunity] No company_id in data")
             return
-        
+
         payload: Dict[str, Any] = {
             "type": "optimization_opportunity",
             "assignment_id": opportunity_data.get("assignment_id"),
@@ -173,14 +174,14 @@ def notify_dispatcher_optimization_opportunity(opportunity_data: Dict[str, Any])
             "suggestions": opportunity_data.get("suggestions", []),
             "auto_apply": opportunity_data.get("auto_apply", False),
         }
-        
+
         app_logger.info(
             "[notify_dispatcher_optimization_opportunity] Emitting to company %s: severity=%s delay=%d",
             company_id,
             payload.get("severity"),
             payload.get("current_delay")
         )
-        
+
         emit_company_event(company_id, "optimization_opportunity", payload)
     except Exception as e:
         app_logger.error("[notify_dispatcher_optimization_opportunity] emit failed: %s", e)

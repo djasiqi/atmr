@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from flask import current_app
-from flask_restx import Namespace, Resource, reqparse
-from sqlalchemy import or_, func
 from typing import Any, cast
 
-from models import db, MedicalEstablishment, MedicalService
+from flask import current_app
+from flask_restx import Namespace, Resource, reqparse
+from sqlalchemy import func, or_
+
+from models import MedicalEstablishment, MedicalService, db
 
 # --- Namespace et Parsers ---
 

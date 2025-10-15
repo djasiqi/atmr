@@ -1,13 +1,15 @@
 # services/maps.py
-import requests
-import os
-import json
 import hashlib
-from ext import app_logger
+import json
 import math
-import time
+import os
 import threading
-from typing import List, Tuple, Optional, Dict, Any, cast
+import time
+from typing import Any, Dict, List, Tuple, cast
+
+import requests
+
+from ext import app_logger
 
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 _GOOGLE_TIMEOUT = 10  # s
@@ -33,7 +35,7 @@ def get_distance_duration(
     pickup_address: Any,
     dropoff_address: Any,
     *,
-    departure_time: Optional[int] = None,
+    departure_time: int | None = None,
     traffic_model: str = "best_guess",
     units: str = "metric",
     region: str = "CH",
@@ -53,7 +55,7 @@ def get_distance_duration(
             dist_km = _haversine_km(pickup_address, dropoff_address)  # type: ignore[arg-type]
             dur_s = int((dist_km / _AVG_SPEED_KMH) * 3600)
             return max(1, dur_s), int(dist_km * 1000)
-        raise EnvironmentError("Clé API Google Maps manquante et aucune coordonnée pour fallback.")
+        raise OSError("Clé API Google Maps manquante et aucune coordonnée pour fallback.")
 
     url = "https://maps.googleapis.com/maps/api/distancematrix/json"
     params: Dict[str, str] = {
@@ -92,7 +94,7 @@ def get_distance_duration(
             return max(1, dur_s), int(dist_km * 1000)
         raise
 
-def geocode_address(address: str, *, country: str | None = None, language: str = "fr") -> Optional[Tuple[float, float]]:
+def geocode_address(address: str, *, country: str | None = None, language: str = "fr") -> Tuple[float, float] | None:
     """
     Géocode une adresse → (lat, lon) | None.
     - country: code ISO (ex: "CH") pour biaiser la recherche
@@ -100,7 +102,7 @@ def geocode_address(address: str, *, country: str | None = None, language: str =
     """
     if not GOOGLE_MAPS_API_KEY:
         app_logger.error("❌ Clé API Google Maps manquante.")
-        raise EnvironmentError("Clé API Google Maps non définie.")
+        raise OSError("Clé API Google Maps non définie.")
 
     address = (address or "").strip()
     if not address:
@@ -178,7 +180,7 @@ def _singleflight(key: str, fn):
             raise ent["err"]
     return ent["res"]
 
-def _decode_cached_duration(v: Any) -> Optional[int]:
+def _decode_cached_duration(v: Any) -> int | None:
     """
     Convertit une valeur redis (bytes/bytearray/str/int/float) en int.
     Ignore les objets Awaitable éventuels (clients Redis async).
@@ -250,7 +252,7 @@ def _dm_request(
     origins: List[str],
     dests: List[str],
     *,
-    departure_time: Optional[int] = None,
+    departure_time: int | None = None,
     traffic_model: str = "best_guess",
     units: str = "metric",
     region: str = "CH",
@@ -259,7 +261,7 @@ def _dm_request(
     max_retries: int = 3,
     retry_backoff_ms: int = 250,
     rate_limit_per_sec: float = UD_MATRIX_RATE_LIMIT
-) -> List[List[Optional[int]]]:
+) -> List[List[int | None]]:
     """
     Appelle l'API Distance Matrix une seule fois pour origins × dests.
     Retourne une matrice (len(origins) × len(dests)) en SECONDES (int | None).
@@ -280,7 +282,7 @@ def _dm_request(
 
     inflight_key = hashlib.sha1(json.dumps({"o": origins, "d": dests, "p": params}, sort_keys=True).encode("utf-8")).hexdigest()
 
-    def _do() -> List[List[Optional[int]]]:
+    def _do() -> List[List[int | None]]:
         for attempt in range(max_retries + 1):
             try:
                 resp = requests.get(url, params=params, timeout=timeout)
@@ -289,9 +291,9 @@ def _dm_request(
                     raise RuntimeError(f"status={data.get('status')} err={data.get('error_message')}")
 
                 rows = data.get("rows", [])
-                out: List[List[Optional[int]]] = []
+                out: List[List[int | None]] = []
                 for r in rows:
-                    row_vals: List[Optional[int]] = []
+                    row_vals: List[int | None] = []
                     for el in r.get("elements", []):
                         if el.get("status") == "OK":
                             dur = (el.get("duration_in_traffic") or el.get("duration") or {}).get("value", 0)
@@ -315,7 +317,7 @@ def _dm_request(
         return [[None for _ in dests] for _ in origins]
 
     start = time.time()
-    res = cast(List[List[Optional[int]]], _singleflight(inflight_key, _do))
+    res = cast(List[List[int | None]], _singleflight(inflight_key, _do))
     app_logger.info(f"[GDM] table_fetch o={len(origins)} d={len(dests)} duration_ms={int((time.time()-start)*1000)}")
     return res
 
@@ -369,7 +371,7 @@ def _fill_from_cache(matrix: List[List[int]], block_o_idx: List[int], block_d_id
                 if v2 and v2[0] >= now:
                     matrix[i][j] = v2[1]
 
-def _update_cache_from_block(block: List[List[Optional[int]]], block_o_idx: List[int], block_d_idx: List[int], qcoords: List[Tuple[float,float]]) -> None:
+def _update_cache_from_block(block: List[List[int | None]], block_o_idx: List[int], block_d_idx: List[int], qcoords: List[Tuple[float,float]]) -> None:
     expires = time.time() + UD_MATRIX_CACHE_TTL
     r = _get_redis()
     for ii, i in enumerate(block_o_idx):
@@ -399,7 +401,7 @@ def _update_cache_from_block(block: List[List[Optional[int]]], block_o_idx: List
 def build_distance_matrix_google(
     coords: List[Tuple[float,float]],
     *,
-    departure_time: Optional[int] = None,
+    departure_time: int | None = None,
     traffic_model: str = "best_guess",
     units: str = "metric",
     region: str = "CH",
@@ -407,7 +409,7 @@ def build_distance_matrix_google(
     timeout: int = 12,
     max_retries: int = 3,
     retry_backoff_ms: int = 250,
-    rate_limit_per_sec: Optional[float] = None,
+    rate_limit_per_sec: float | None = None,
 ) -> List[List[int]]:
     """
     Matrice NxN des durées en SECONDES entre tous les points `coords` (lat, lon).
@@ -444,7 +446,7 @@ def build_distance_matrix_google(
                 continue
 
             dests = [_to_str(coords[j]) for j in d_idx]
-            block: List[List[Optional[int]]]
+            block: List[List[int | None]]
             if GOOGLE_MAPS_API_KEY:
                 block = _dm_request(
                     origins, dests,

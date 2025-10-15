@@ -1,0 +1,243 @@
+--- /dev/null
++++ b/backend/tests/test_routes_invoices.py
+@@ -0,0 +1,165 @@
++"""
++Tests des routes invoices
++"""
++import pytest
++from datetime import datetime, timedelta, timezone
++from decimal import Decimal
++from flask_jwt_extended import create_access_token
++from models import (
++    Invoice, InvoiceLine, InvoiceStatus, InvoiceLineType,
++    Company, Client, Booking, BookingStatus, User, UserRole, db,
++    CompanyBillingSettings
++)
++
++
++class TestGenerateInvoice:
++    """Tests génération factures"""
++    
++    @pytest.fixture
++    def completed_bookings(self, app, company_user, client_user):
++        """Crée bookings complétées pour facturation"""
++        company, _ = company_user
++        client, _ = client_user
++        
++        with app.app_context():
++            # Créer billing settings
++            settings = CompanyBillingSettings(
++                company_id=company.id,
++                payment_terms_days=30,
++                invoice_prefix='TEST'
++            )
++            db.session.add(settings)
++            
++            # Créer 3 bookings septembre 2025
++            bookings = []
++            for i in range(3):
++                booking = Booking(
++                    customer_name=f'Patient {i+1}',
++                    pickup_location='Genève Centre',
++                    dropoff_location='HUG',
++                    scheduled_time=datetime(2025, 9, 10 + i, 10, 0),
++                    amount=50.0 + i*10,
++                    status=BookingStatus.COMPLETED,
++                    user_id=client.user_id,
++                    client_id=client.id,
++                    company_id=company.id
++                )
++                db.session.add(booking)
++                bookings.append(booking)
++            
++            db.session.commit()
++            
++            yield bookings
++            
++            # Cleanup
++            for b in bookings:
++                db.session.delete(b)
++            db.session.delete(settings)
++            db.session.commit()
++    
++    def test_generate_invoice_success(self, test_client, company_user, completed_bookings, app, mocker):
++        """Test génération facture pour période"""
++        company, user = company_user
++        
++        # Mock PDF generation
++        mocker.patch('services.pdf_service.PDFService.generate_invoice_pdf',
++                     return_value='http://localhost:5000/uploads/invoices/test.pdf')
++        
++        with app.app_context():
++            token = create_access_token(identity=user.public_id)
++        
++        response = test_client.post(
++            '/api/companies/me/invoices',
++            json={
++                'client_id': completed_bookings[0].client_id,
++                'period_year': 2025,
++                'period_month': 9
++            },
++            headers={'Authorization': f'Bearer {token}'}
++        )
++        
++        assert response.status_code == 201
++        data = response.get_json()
++        
++        assert 'invoice' in data
++        invoice = data['invoice']
++        assert invoice['period_year'] == 2025
++        assert invoice['period_month'] == 9
++        assert float(invoice['subtotal_amount']) == 170.0  # 50+60+70
++        assert len(invoice['lines']) == 3
++        assert invoice['pdf_url'] is not None
++    
++    def test_generate_invoice_no_bookings(self, test_client, company_user, client_user, app):
++        """Test génération sans bookings → erreur"""
++        company, user = company_user
++        client, _ = client_user
++        
++        with app.app_context():
++            token = create_access_token(identity=user.public_id)
++        
++        response = test_client.post(
++            '/api/companies/me/invoices',
++            json={
++                'client_id': client.id,
++                'period_year': 2025,
++                'period_month': 8  # Aucun booking
++            },
++            headers={'Authorization': f'Bearer {token}'}
++        )
++        
++        assert response.status_code == 400
++        data = response.get_json()
++        assert 'error' in data
++    
++    def test_generate_invoice_third_party(self, test_client, company_user, app, mocker):
++        """Test facturation tierce (clinique paie)"""
++        company, user = company_user
++        
++        with app.app_context():
++            # Créer client institution
++            institution_user = User(
++                username='clinic',
++                email='clinic@test.com',
++                role=UserRole.CLIENT
++            )
++            institution_user.set_password('pass')
++            db.session.add(institution_user)
++            db.session.flush()
++            
++            institution = Client(
++                user_id=institution_user.id,
++                company_id=company.id,
++                is_institution=True,
++                institution_name='Clinique Test',
++                billing_address='Route Test 1, 1200 Genève'
++            )
++            db.session.add(institution)
++            
++            # Créer patient
++            patient_user = User(
++                username='patient',
++                email='patient@test.com',
++                role=UserRole.CLIENT
++            )
++            patient_user.set_password('pass')
++            db.session.add(patient_user)
++            db.session.flush()
++            
++            patient = Client(
++                user_id=patient_user.id,
++                company_id=company.id
++            )
++            db.session.add(patient)
++            db.session.commit()
++            
++            # Créer booking
++            booking = Booking(
++                customer_name='Patient A',
++                pickup_location='A',
++                dropoff_location='B',
++                scheduled_time=datetime(2025, 9, 15, 10, 0),
++                amount=60.0,
++                status=BookingStatus.COMPLETED,
++                user_id=patient_user.id,
++                client_id=patient.id,
++                company_id=company.id
++            )
++            db.session.add(booking)
++            db.session.commit()
++        
++        mocker.patch('services.pdf_service.PDFService.generate_invoice_pdf',
++                     return_value='http://localhost:5000/uploads/test.pdf')
++        
++        with app.app_context():
++            token = create_access_token(identity=user.public_id)
++        
++        response = test_client.post(
++            '/api/companies/me/invoices',
++            json={
++                'client_id': patient.id,
++                'bill_to_client_id': institution.id,  # Clinique paie
++                'period_year': 2025,
++                'period_month': 9
++            },
++            headers={'Authorization': f'Bearer {token}'}
++        )
++        
++        assert response.status_code == 201
++        data = response.get_json()
++        
++        invoice = data['invoice']
++        assert invoice['bill_to_client_id'] == institution.id
++        assert invoice['client_id'] == patient.id
+
+
++class TestInvoiceReminders:
++    """Tests rappels de paiement"""
++    
++    def test_generate_reminder_level_1(self, test_client, company_user, app, mocker):
++        """Test génération 1er rappel"""
++        company, user = company_user
++        
++        with app.app_context():
++            # Créer facture en retard
++            invoice = Invoice(
++                company_id=company.id,
++                client_id=1,  # Assume fixture client existe
++                period_month=8,
++                period_year=2025,
++                invoice_number='TEST-2025-08-0001',
++                subtotal_amount=Decimal('100.0'),
++                total_amount=Decimal('100.0'),
++                balance_due=Decimal('100.0'),
++                issued_at=datetime.now(timezone.utc) - timedelta(days=45),
++                due_date=datetime.now(timezone.utc) - timedelta(days=15),  # En retard
++                status=InvoiceStatus.OVERDUE,
++                reminder_level=0
++            )
++            db.session.add(invoice)
++            db.session.commit()
++            invoice_id = invoice.id
++        
++        mocker.patch('services.pdf_service.PDFService.generate_reminder_pdf',
++                     return_value='http://localhost:5000/uploads/reminder.pdf')
++        
++        with app.app_context():
++            token = create_access_token(identity=user.public_id)
++        
++        response = test_client.post(
++            f'/api/companies/me/invoices/{invoice_id}/reminders',
++            json={'level': 1},
++            headers={'Authorization': f'Bearer {token}'}
++        )
++        
++        assert response.status_code == 201
++        data = response.get_json()
++        
++        assert data['reminder']['level'] == 1
++        assert 'added_fee' in data['reminder']
++        assert data['invoice']['reminder_level'] == 1
+

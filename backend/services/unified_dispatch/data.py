@@ -2,29 +2,28 @@
 # backend/services/unified_dispatch/data.py
 from __future__ import annotations
 
-import math
-import logging
-from datetime import timedelta, datetime
-import pytz
-from typing import List, Dict, Tuple, Any, Optional, cast
-import os
-import time
 import functools
 import json
+import logging
+import math
+import os
 import threading
+import time
+from datetime import datetime, timedelta
+from functools import lru_cache
+from typing import Any, Dict, List, Tuple, cast
 
-from sqlalchemy import and_, or_, func  # (optionnel) peut \u00eatre nettoy\u00e9 si non utilis\u00e9s
+import pytz
+from sqlalchemy import and_, func, or_  # (optionnel) peut \u00eatre nettoy\u00e9 si non utilis\u00e9s
 from sqlalchemy.orm import joinedload
 
-from models import Booking, BookingStatus, Driver, Company
+from models import Booking, BookingStatus, Company, Driver
+from services.dispatch_utils import count_assigned_bookings_for_day
 from services.maps import geocode_address
 from services.osrm_client import build_distance_matrix_osrm
-from services.dispatch_utils import count_assigned_bookings_for_day
-from functools import lru_cache
-from services.unified_dispatch.settings import Settings, driver_work_window_from_config
-
 from services.unified_dispatch.heuristics import haversine_minutes
-from shared.time_utils import parse_local_naive, now_local, day_local_bounds
+from services.unified_dispatch.settings import Settings, driver_work_window_from_config
+from shared.time_utils import day_local_bounds, now_local, parse_local_naive
 
 logger = logging.getLogger(__name__)
 DEFAULT_SETTINGS = Settings()
@@ -42,7 +41,7 @@ _dispatch_locks: Dict[str, Any] = {}
 # ------------------------------------------------------------
 # Helpers cache/m\u00e9mo
 # ------------------------------------------------------------
-def _get_redis_from_settings(settings) -> Optional[Any]:
+def _get_redis_from_settings(settings) -> Any | None:
     """
     Tente de r\u00e9cup\u00e9rer un client Redis depuis les settings (ou via REDIS_URL).
     Retourne None si indisponible.
@@ -86,14 +85,14 @@ def _haversine_matrix_cached(coords_key_json: str, avg_speed_kmh: float) -> List
         logger.warning(f"[Dispatch] Failed to parse coords_key_json: {e}")
         # En dernier recours, on utilise des coordonn\u00e9es par d\u00e9faut
         coords = [(46.2044, 6.1432), (46.2044, 6.1432)]  # Gen\u00e8ve par d\u00e9faut
-    
+
     # Ensure coords is not empty and is a list to avoid errors
     if not coords or len(coords) < 1:
         coords = [(46.2044, 6.1432), (46.2044, 6.1432)]  # Gen\u00e8ve par d\u00e9faut
-    
+
     if not isinstance(coords, list):
         coords = [(46.2044, 6.1432), (46.2044, 6.1432)]  # Gen\u00e8ve par d\u00e9faut
-    
+
     # Ensure all coordinates are valid tuples with proper validation
     valid_coords = []
     for coord in coords:
@@ -115,12 +114,12 @@ def _haversine_matrix_cached(coords_key_json: str, avg_speed_kmh: float) -> List
         except (ValueError, TypeError) as e:
             logger.warning(f"[Dispatch] Failed to parse coordinate {coord}: {e}, using fallback")
             valid_coords.append((46.2044, 6.1432))
-    
+
     # Ensure we have at least 2 coordinates for matrix calculation
     if len(valid_coords) < 2:
         logger.warning("[Dispatch] Less than 2 valid coordinates, using fallback")
         valid_coords = [(46.2044, 6.1432), (46.2044, 6.1432)]
-    
+
     logger.info(f"[Dispatch] Using {len(valid_coords)} valid coordinates for haversine matrix")
     return _build_distance_matrix_haversine(valid_coords, avg_speed_kmh)
 
@@ -157,29 +156,29 @@ def get_bookings_for_dispatch(company_id: int, horizon_minutes: int) -> List[Boo
     # 🚫 Exclure les retours avec heure à confirmer (time_confirmed = False)
     filtered_bookings = []
     excluded_count = 0
-    
+
     logger.warning(f"[DATA] 🔍 Filtrage de {len(bookings)} courses...")
-    
+
     for b in bookings:
         scheduled = getattr(b, "scheduled_time", None)
         if scheduled is None:
             logger.warning(f"⏸️ Course #{b.id} EXCLUE : scheduled_time est NULL")
             continue
-        
+
         # Si c'est un retour avec time_confirmed = False → exclure du dispatch
         is_return = bool(getattr(b, "is_return", False))
         time_confirmed = bool(getattr(b, "time_confirmed", True))
-        
+
         logger.info(f"[DATA] Course #{b.id}: is_return={is_return}, time_confirmed={time_confirmed}")
-        
+
         if is_return and not time_confirmed:
             excluded_count += 1
             logger.error(f"⏸️ Course #{b.id} ({getattr(b, 'customer_name', 'N/A')}) EXCLUE du dispatch : retour avec heure à confirmer")
             continue
-        
+
         logger.info(f"[DATA] ✅ Course #{b.id} INCLUSE dans le dispatch")
         filtered_bookings.append(b)
-    
+
     logger.error(f"[DATA] ✅ {len(filtered_bookings)} courses après filtrage ({excluded_count} retours exclus)")
     return filtered_bookings
 
@@ -215,21 +214,22 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
     """
     import logging
     from datetime import datetime
+
     import pytz
-    
+
     logger = logging.getLogger(__name__)
-    
+
     # Use the imported models if not provided
     if Booking is None:
         from models import Booking
     if BookingStatus is None:
         from models import BookingStatus
-    
+
     # Ensure day_str is in the correct format
     if not day_str or not isinstance(day_str, str):
         logger.warning(f"[Dispatch] Invalid day_str: {day_str}, using today's date")
         day_str = datetime.now().strftime("%Y-%m-%d")
-    
+
     # Parse the day string to get year, month, day
     try:
         y, m, d = map(int, day_str.split("-"))
@@ -237,31 +237,31 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
         logger.warning(f"[Dispatch] Failed to parse day_str: {day_str}, using today's date")
         today = datetime.now()
         y, m, d = today.year, today.month, today.day
-    
+
     # Create local timezone bounds (Europe/Zurich)
     zurich_tz = pytz.timezone('Europe/Zurich')
-    
+
     # Create start and end datetime objects in Europe/Zurich timezone
     start_local = datetime(y, m, d, 0, 0, 0)
     end_local = datetime(y, m, d, 23, 59, 59)
-    
+
     # Make them timezone-aware
     start_local_aware = zurich_tz.localize(start_local)
     end_local_aware = zurich_tz.localize(end_local)
-    
+
     # Convert to UTC for comparison with timezone-aware datetimes
     start_utc = start_local_aware.astimezone(pytz.UTC)
     end_utc = end_local_aware.astimezone(pytz.UTC)
-    
+
     # Get valid statuses for dispatch
     valid_statuses = []
-    
+
     # Add enum values
     if hasattr(BookingStatus, 'ACCEPTED'):
         valid_statuses.append(BookingStatus.ACCEPTED)
     if hasattr(BookingStatus, 'ASSIGNED'):
         valid_statuses.append(BookingStatus.ASSIGNED)
-       
+
     # Create a time expression that checks multiple time fields
     def booking_time_expr():
         """
@@ -274,10 +274,10 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
             if col is None:
                 continue
             expr = col if expr is None else func.coalesce(expr, col)
-        return expr or getattr(Booking, "scheduled_time")
-    
+        return expr or Booking.scheduled_time
+
     time_expr = booking_time_expr()
-    
+
     # Query with a more tolerant time window filter
     try:
         # ✅ Inclure PENDING si utilisé, et enlever lower() sur Enum (Postgres enum)
@@ -286,14 +286,14 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
             cast(Any, Booking.status) == BookingStatus.ASSIGNED,
         ]
         if hasattr(BookingStatus, 'PENDING'):
-            status_filters.append(cast(Any, Booking.status) == getattr(BookingStatus, 'PENDING'))
+            status_filters.append(cast(Any, Booking.status) == BookingStatus.PENDING)
 
         bookings = (
             Booking.query
             .filter(
                 Booking.company_id == company_id,
                 or_(*status_filters),
-                time_expr.isnot(None), 
+                time_expr.isnot(None),
                 # Use OR condition to match both timezone-aware and naive datetimes
                 or_(
                     # For timezone-aware datetimes (UTC)
@@ -312,36 +312,36 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
             )
             .order_by(time_expr.asc())
         )
-        
+
         result = bookings.all()
-        
+
         # Log detailed information about the found bookings
         booking_ids = [b.id for b in result]
         booking_times = [getattr(b, 'scheduled_time', None) for b in result]
-        
+
         logger.info(f"[Dispatch] Found {len(result)} bookings for company {company_id} on {day_str}")
         if result:
             logger.info(f"[Dispatch] Booking IDs: {booking_ids[:3]}...")
             logger.info(f"[Dispatch] Booking times: {booking_times[:3]}...")
-        
+
         # 🚫 FILTRE PYTHON : Exclure les retours avec heure à confirmer (time_confirmed = False)
         filtered_result = []
         excluded_count = 0
-        
+
         logger.error(f"[DATA] 🔍 FILTRAGE de {len(result)} courses pour retours non confirmés...")
-        
+
         for b in result:
             # Si c'est un retour avec time_confirmed = False → exclure du dispatch
             is_return = bool(getattr(b, "is_return", False))
             time_confirmed = bool(getattr(b, "time_confirmed", True))
-            
+
             if is_return and not time_confirmed:
                 excluded_count += 1
                 logger.error(f"⏸️ Course #{b.id} ({getattr(b, 'customer_name', 'N/A')}) EXCLUE : retour avec time_confirmed=False")
                 continue
-            
+
             filtered_result.append(b)
-        
+
         logger.error(f"[DATA] ✅ {len(filtered_result)} courses après filtrage ({excluded_count} retours exclus avec heure à confirmer)")
         return filtered_result
     except Exception as e:
@@ -446,14 +446,14 @@ def _company_latlon(company: Company) -> tuple[float, float]:
     # Fallback Gen\u00e8ve (centre-ville)
     return 46.2044, 6.1432
 
-def _to_float_opt(x: Any) -> Optional[float]:
+def _to_float_opt(x: Any) -> float | None:
     try:
         return None if x is None else float(x)
     except Exception:
         return None
 
 @lru_cache(maxsize=256)
-def _geocode_safe_cached(address: str) -> Optional[tuple[float, float]]:
+def _geocode_safe_cached(address: str) -> tuple[float, float] | None:
     if not address or not address.strip():
         return None
     try:
@@ -555,11 +555,11 @@ def enrich_driver_coords(drivers: List[Driver], company: Company) -> None:
 
         # cast safe
         try:
-            setattr(d, "current_lat", float(cast(Any, lat)))
-            setattr(d, "current_lon", float(cast(Any, lon)))
+            d.current_lat = float(cast(Any, lat))
+            d.current_lon = float(cast(Any, lon))
         except Exception:
-            setattr(d, "current_lat", float(default_latlon[0]))
-            setattr(d, "current_lon", float(default_latlon[1]))
+            d.current_lat = float(default_latlon[0])
+            d.current_lon = float(default_latlon[1])
 
 # ============================================================
 # 3\ufe0f\u20e3 Matrice de temps / distances
@@ -623,7 +623,7 @@ def build_time_matrix(
         coords_key = json.dumps(coords_canon, separators=(",", ":"))
     except Exception:
         coords_key = str(coords_canon)
- 
+
     if provider == "osrm":
         start = time.time()
         try:
@@ -684,7 +684,7 @@ def _to_minutes_window(win: Any, t0: datetime, horizon: int) -> tuple[int, int]:
     """
     try:
         # 3-tuple ou 2-tuple d'ints
-        s = win[0]             
+        s = win[0]
         e = win[1]
         if isinstance(s, (int, float)) and isinstance(e, (int, float)):
             return int(s), int(e)
@@ -714,10 +714,10 @@ def _build_distance_matrix_haversine(coords: List[Tuple[float,float]], avg_speed
     if n < 2:
         logger.warning(f"[Dispatch] _build_distance_matrix_haversine: need at least 2 coordinates, got {n}")
         return [[0.0] * max(n, 1) for _ in range(max(n, 1))]
-    
+
     matrix = [[0.0]*n for _ in range(n)]
     avg_speed_kmh = max(5.0, float(avg_speed_kmh))
-    
+
     for i in range(n):
         for j in range(n):
             if i == j:
@@ -730,7 +730,7 @@ def _build_distance_matrix_haversine(coords: List[Tuple[float,float]], avg_speed
             except (IndexError, TypeError, ValueError) as e:
                 logger.warning(f"[Dispatch] Error calculating haversine distance for coords {i},{j}: {e}")
                 matrix[i][j] = 3600.0  # 1 hour default fallback
-    
+
     logger.info(f"[Dispatch] Generated haversine matrix {n}x{n} with avg_speed={avg_speed_kmh} km/h")
     return matrix
 
@@ -796,11 +796,11 @@ def build_vrptw_problem(
     t0 = parse_local_naive(base_time) or now_local()
 
     for i, b in enumerate(bookings):
-        
+
         # Index des n\u0153uds pickup et dropoff dans la matrice de temps
         p_node_idx = num_vehicles + (i * 2)
         d_node_idx = p_node_idx + 1
-        
+
         # R\u00e9cup\u00e9rer la dur\u00e9e du trajet (pickup -> dropoff) depuis la matrice
         # Fallback \u00e0 30 min si la matrice a un probl\u00e8me inattendu.
         trip_duration_min = (
@@ -830,7 +830,7 @@ def build_vrptw_problem(
                          getattr(b, "id", None), int(trip_duration_min),
                          post_buf, int(min_gap))
         except Exception:
-            pass        
+            pass
 
         # Calcul des fen\u00eatres horaires (Time Windows)
         scheduled_local = parse_local_naive(cast(Any, getattr(b, "scheduled_time", None))) or t0
@@ -841,12 +841,12 @@ def build_vrptw_problem(
         p_start = max(0, start_min_raw - buf)
         p_end = start_min_raw + buf
         time_windows.append(_clamp_range(p_start, p_end, horizon))
-        
+
         # Fen\u00eatre du Dropoff (large, car le temps de trajet est d\u00e9j\u00e0 dans le service_time)
         d_start = p_start + trip_duration_min
         d_end = d_start + 120  # Fen\u00eatre large pour le dropoff
         time_windows.append(_clamp_range(d_start, d_end, horizon))
-        
+
     # 3) Fen\u00eatres de travail chauffeurs (minutes)
     driver_windows: list[tuple[int, int]] = []
     for d in drivers:
@@ -870,12 +870,12 @@ def build_vrptw_problem(
         "starts": starts,
         "ends": ends,
         "num_vehicles": num_vehicles,
-        "coords": coords,                    
+        "coords": coords,
         "fairness_counts": fairness_counts,
         "driver_windows": driver_windows,
         "horizon": horizon,
         "base_time": t0,
-        "for_date": for_date,                
+        "for_date": for_date,
         # ----- facultatif, pratique pour debug/observabilit\u00e9 -----
         "matrix_provider": (settings.matrix.provider or "haversine").lower(),
         "matrix_units": "minutes",
@@ -890,7 +890,7 @@ def build_problem_data(
     company_id: int,
     settings=DEFAULT_SETTINGS,
     for_date: str | None = None,
-    *, 
+    *,
     regular_first: bool = True,
     allow_emergency: bool = True,
     overrides: Dict[str, Any] | None = None,
@@ -919,13 +919,13 @@ def build_problem_data(
 
     # Log the number of bookings found
     logger.info(f"[Dispatch] Found {len(bookings)} bookings for company {company_id} for date {for_date or 'today'}")
-    
+
     # 2) Pool de chauffeurs (actifs & disponibles)
     #    Si desired: priorit\u00e9 aux r\u00e9guliers, puis urgences si allow_emergency
     if regular_first:
         regs, emgs = get_available_drivers_split(company_id)
         drivers = regs + (emgs if allow_emergency else [])
-        
+
         # Log detailed information about the driver selection
         logger.info(f"[Dispatch] Using {len(regs)} regular drivers for company {company_id}")
         if allow_emergency:
@@ -935,7 +935,7 @@ def build_problem_data(
     else:
         drivers = get_available_drivers(company_id)
         logger.info(f"[Dispatch] Using all {len(drivers)} drivers without priority (regular_first=False)")
-    
+
     # Log the total number of drivers found
     logger.info(f"[Dispatch] Total: {len(drivers)} available drivers for company {company_id}")
 
@@ -1120,7 +1120,7 @@ def detect_delay(
     driver_position: Tuple[float, float],
     pickup_coords: Tuple[float, float],
     scheduled_time,
-    buffer_minutes: Optional[int] = None,
+    buffer_minutes: int | None = None,
     settings=DEFAULT_SETTINGS
 ) -> Tuple[bool, int]:
     """

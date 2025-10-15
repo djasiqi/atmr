@@ -1,17 +1,28 @@
-from flask_restx import Namespace, Resource, fields, reqparse
-from flask import request
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import (
-    Company, Client, Invoice, InvoicePayment, InvoiceStatus, PaymentMethod, CompanyBillingSettings,
-    User, Booking, BookingStatus, db
-)
+import logging
 from datetime import datetime
+from decimal import Decimal
+
+from flask import request
+from flask_jwt_extended import get_jwt_identity, jwt_required
+from flask_restx import Namespace, Resource, fields, reqparse
 from sqlalchemy.orm import joinedload
-from ext import role_required, limiter
+
+from ext import limiter, role_required
+from models import (
+    Booking,
+    BookingStatus,
+    Client,
+    Company,
+    CompanyBillingSettings,
+    Invoice,
+    InvoicePayment,
+    InvoiceStatus,
+    PaymentMethod,
+    User,
+    db,
+)
 from services.invoice_service import InvoiceService
 from services.pdf_service import PDFService
-import logging
-from decimal import Decimal
 
 # Configuration du logger
 app_logger = logging.getLogger("invoices")
@@ -166,20 +177,21 @@ class InvoicesList(Resource):
             # Recherche sur numéro de facture + nom client/patient + nom institution
             from sqlalchemy import or_
             from sqlalchemy.orm import aliased
+
             from models import User as MUser
-            
+
             # Alias pour distinguer client (patient) et institution (payeur)
             PatientClient = aliased(Client)
             BillToClient = aliased(Client)
             PatientUser = aliased(MUser)
-            
+
             # Jointure avec le client (patient)
             query = query.join(PatientClient, Invoice.client_id == PatientClient.id)
             query = query.join(PatientUser, PatientClient.user_id == PatientUser.id)
-            
+
             # Jointure OPTIONNELLE avec l'institution payeuse (bill_to_client)
             query = query.outerjoin(BillToClient, Invoice.bill_to_client_id == BillToClient.id)
-            
+
             like = f"%{q}%"
             query = query.filter(or_(
                 Invoice.invoice_number.ilike(like),
@@ -235,11 +247,11 @@ class CompanyBillingSettingsResource(Resource):
         user = User.query.filter_by(public_id=user_public_id).first()
         if not user:
             return {'error': 'Utilisateur non trouvé'}, 404
-        
+
         company = Company.query.filter_by(id=company_id).first()
         if not company or company.user_id != user.id:
             return {'error': 'Entreprise non trouvée ou accès refusé'}, 404
-        
+
         billing_settings = CompanyBillingSettings.query.filter_by(company_id=company_id).first()
         if not billing_settings:
             # Créer des paramètres par défaut si non existants
@@ -257,21 +269,21 @@ class CompanyBillingSettingsResource(Resource):
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user:
                 return {'error': 'Utilisateur non trouvé'}, 404
-            
+
             company = Company.query.filter_by(id=company_id).first()
             if not company or company.user_id != user.id:
                 return {'error': 'Entreprise non trouvée ou accès refusé'}, 404
-            
+
             billing_settings = CompanyBillingSettings.query.filter_by(company_id=company_id).first()
             if not billing_settings:
                 return {'error': 'Paramètres de facturation non trouvés'}, 404
-            
+
             data = request.get_json()
             app_logger.info(f"Données reçues pour les paramètres de facturation: {data}")
-            
+
             if not data:
                 return {'error': 'Aucune donnée fournie'}, 400
-            
+
             # Convertir les chaînes vides en None pour les champs numériques
             for field in ['payment_terms_days', 'overdue_fee', 'reminder1_fee', 'reminder2_fee', 'reminder3_fee']:
                 if field in data:
@@ -317,11 +329,11 @@ class CompanyBillingSettingsResource(Resource):
             # auto_reminders_enabled si fourni
             if 'auto_reminders_enabled' in data:
                 billing_settings.auto_reminders_enabled = bool(data.get('auto_reminders_enabled'))
-            
+
             app_logger.info("Paramètres mis à jour avec succès")
             db.session.commit()
             return billing_settings.to_dict()
-            
+
         except Exception as e:
             app_logger.error(f"Erreur lors de la mise à jour des paramètres: {str(e)}")
             db.session.rollback()
@@ -340,35 +352,35 @@ class GenerateInvoice(Resource):
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user or not user.company or user.company.id != company_id:
                 return {'error': 'Entreprise non trouvée ou accès refusé'}, 404
-            
+
             data = request.get_json()
             client_id = data.get('client_id')
             client_ids = data.get('client_ids', [])  # NOUVEAU: pour facturation groupée
             bill_to_client_id = data.get('bill_to_client_id')  # NOUVEAU: support facturation tierce
             period_year = data.get('period_year')
             period_month = data.get('period_month')
-            
+
             if not all([period_year, period_month]):
                 return {'error': 'period_year et period_month sont requis'}, 400
-            
+
             invoice_service = InvoiceService()
-            
+
             # Cas 1: Facturation groupée de plusieurs clients vers une institution
             if client_ids and bill_to_client_id:
                 app_logger.info(f"Génération factures consolidées: {len(client_ids)} clients vers institution {bill_to_client_id}")
-                
+
                 # Vérifier que l'institution existe et appartient à l'entreprise
                 institution = Client.query.filter_by(id=bill_to_client_id, company_id=company_id).first()
                 if not institution:
                     return {'error': 'Institution non trouvée'}, 404
-                
+
                 if not institution.is_institution:
                     return {'error': "Le client sélectionné n'est pas une institution"}, 400
-                
+
                 # NOUVEAU: Support de la sélection manuelle de réservations
                 # Format: { client_id: [reservation_ids] }
                 client_reservations = data.get('client_reservations')
-                
+
                 # Générer les factures
                 result = invoice_service.generate_consolidated_invoice(
                     company_id=company_id,
@@ -378,7 +390,7 @@ class GenerateInvoice(Resource):
                     bill_to_client_id=bill_to_client_id,
                     client_reservations=client_reservations  # NOUVEAU
                 )
-                
+
                 return {
                     'message': f"{result['success_count']} facture(s) générée(s), {result['error_count']} erreur(s)",
                     'invoices': [inv.to_dict() for inv in result['invoices']],
@@ -386,14 +398,14 @@ class GenerateInvoice(Resource):
                     'success_count': result['success_count'],
                     'error_count': result['error_count']
                 }, 201
-            
+
             # Cas 2: Facturation simple (avec ou sans tierce)
             elif client_id:
                 # Vérifier que le client appartient à l'entreprise
                 client = Client.query.filter_by(id=client_id, company_id=company_id).first()
                 if not client:
                     return {'error': 'Client non trouvé'}, 404
-                
+
                 # Si facturation tierce, vérifier l'institution
                 if bill_to_client_id:
                     institution = Client.query.filter_by(id=bill_to_client_id, company_id=company_id).first()
@@ -401,14 +413,14 @@ class GenerateInvoice(Resource):
                         return {'error': 'Institution payeuse non trouvée'}, 404
                     if not institution.is_institution:
                         return {'error': "Le client sélectionné n'est pas une institution"}, 400
-                
+
                 # NOUVEAU: Support de la sélection manuelle de réservations
                 reservation_ids = data.get('reservation_ids')
-                
+
                 # ✅ DÉSACTIVÉ : Permettre plusieurs factures pour la même période
                 # La facturation se fait par booking/transport, pas par période mensuelle fixe
                 # Un client peut avoir plusieurs factures dans le même mois selon les transports effectués
-                
+
                 # Générer la facture
                 invoice = invoice_service.generate_invoice(
                     company_id=company_id,
@@ -418,12 +430,12 @@ class GenerateInvoice(Resource):
                     bill_to_client_id=bill_to_client_id,
                     reservation_ids=reservation_ids  # NOUVEAU
                 )
-                
+
                 return invoice.to_dict(), 201
-            
+
             else:
                 return {'error': 'client_id ou client_ids requis'}, 400
-            
+
         except ValueError as e:
             app_logger.error(f"Erreur de validation: {str(e)}")
             return {'error': str(e)}, 400
@@ -443,7 +455,7 @@ class InvoiceDetail(Resource):
             company = Company.query.filter_by(id=company_id).first()
             if not company or company.user_id != user_id:
                 return {'error': 'Entreprise non trouvée ou accès refusé'}, 404
-            
+
             invoice = Invoice.query.filter_by(
                 id=invoice_id, company_id=company_id
             ).options(
@@ -452,12 +464,12 @@ class InvoiceDetail(Resource):
                 joinedload(Invoice.payments),
                 joinedload(Invoice.reminders)
             ).first()
-            
+
             if not invoice:
                 return {'error': 'Facture non trouvée'}, 404
-            
+
             return invoice.to_dict()
-            
+
         except Exception as e:
             app_logger.error(f"Erreur lors de la récupération de la facture: {str(e)}")
             return {'error': 'Erreur interne du serveur'}, 500
@@ -478,7 +490,7 @@ class InvoiceDetail(Resource):
 @invoices_ns.route('/companies/<int:company_id>/invoices/<int:invoice_id>/send')
 class SendInvoice(Resource):
     """Endpoint pour marquer une facture comme envoyée"""
-    
+
     @jwt_required()
     @role_required(['ADMIN', 'COMPANY'])
     def post(self, company_id, invoice_id):
@@ -489,19 +501,19 @@ class SendInvoice(Resource):
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user or not user.company or user.company.id != company_id:
                 return {'error': 'Non autorisé'}, 403
-            
+
             # Récupérer la facture
             invoice = Invoice.query.filter_by(id=invoice_id, company_id=company_id).first()
             if not invoice:
                 return {'error': 'Facture non trouvée'}, 404
-            
+
             # Marquer comme envoyée
             invoice.status = InvoiceStatus.SENT
             invoice.sent_at = datetime.utcnow()
             db.session.commit()
-            
+
             return {'message': 'Facture marquée comme envoyée', 'status': invoice.status.value}
-            
+
         except Exception as e:
             app_logger.error(f"Erreur lors de l'envoi de la facture: {str(e)}")
             db.session.rollback()
@@ -511,7 +523,7 @@ class SendInvoice(Resource):
 @invoices_ns.route('/companies/<int:company_id>/invoices/<int:invoice_id>/payments')
 class InvoicePayments(Resource):
     """Endpoint pour enregistrer un paiement"""
-    
+
     @jwt_required()
     @role_required(['ADMIN', 'COMPANY'])
     def post(self, company_id, invoice_id):
@@ -522,12 +534,12 @@ class InvoicePayments(Resource):
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user or not user.company or user.company.id != company_id:
                 return {'error': 'Non autorisé'}, 403
-            
+
             # Récupérer la facture
             invoice = Invoice.query.filter_by(id=invoice_id, company_id=company_id).first()
             if not invoice:
                 return {'error': 'Facture non trouvée'}, 404
-            
+
             data = request.get_json()
             raw_amount = data.get('amount', 0)
             try:
@@ -557,10 +569,10 @@ class InvoicePayments(Resource):
             method_value = payment_method.value
             app_logger.info(f"Paiement: method reçu='{method}', normalisé='{method_norm}', value='{method_value}'")
             waive_reminder_fees = bool(data.get('waive_reminder_fees', False))
-            
+
             if amount <= 0:
                 return {'error': 'Le montant doit être positif'}, 400
-            
+
             # Optionnel: annuler les frais de rappel avant d'appliquer le paiement
             if waive_reminder_fees and hasattr(invoice, 'reminder_fee_amount'):
                 try:
@@ -574,7 +586,7 @@ class InvoicePayments(Resource):
                         subtotal = Decimal(str(invoice.subtotal_amount or 0))
                         late_fee = Decimal(str(invoice.late_fee_amount or 0))
                         invoice.total_amount = subtotal + late_fee
-            
+
             # Créer le paiement
             payment = InvoicePayment(
                 invoice_id=invoice.id,
@@ -583,29 +595,29 @@ class InvoicePayments(Resource):
                 paid_at=datetime.utcnow()
             )
             db.session.add(payment)
-            
+
             # Mettre à jour le montant payé de la facture
             current_paid = Decimal(str(invoice.amount_paid or 0))
             total_amount = Decimal(str(invoice.total_amount or 0))
             invoice.amount_paid = current_paid + amount
             invoice.balance_due = total_amount - invoice.amount_paid
-            
+
             # Mettre à jour le statut
             if invoice.balance_due <= 0:
                 invoice.status = InvoiceStatus.PAID
                 invoice.paid_at = datetime.utcnow()
             elif invoice.amount_paid > 0:
                 invoice.status = InvoiceStatus.PARTIALLY_PAID
-            
+
             db.session.commit()
-            
+
             return {
                 'message': 'Paiement enregistré',
                 'balance_due': float(invoice.balance_due),
                 'amount_paid': float(invoice.amount_paid),
                 'status': invoice.status.value
             }
-            
+
         except Exception as e:
             app_logger.error(f"Erreur lors de l'enregistrement du paiement: {str(e)}")
             db.session.rollback()
@@ -615,7 +627,7 @@ class InvoicePayments(Resource):
 @invoices_ns.route('/companies/<int:company_id>/invoices/<int:invoice_id>/reminders')
 class InvoiceReminders(Resource):
     """Endpoint pour générer un rappel"""
-    
+
     @jwt_required()
     @role_required(['ADMIN', 'COMPANY'])
     def post(self, company_id, invoice_id):
@@ -626,36 +638,36 @@ class InvoiceReminders(Resource):
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user or not user.company or user.company.id != company_id:
                 return {'error': 'Non autorisé'}, 403
-            
+
             # Récupérer la facture
             invoice = Invoice.query.filter_by(id=invoice_id, company_id=company_id).first()
             if not invoice:
                 return {'error': 'Facture non trouvée'}, 404
-            
+
             data = request.get_json()
             level = int(data.get('level', 1))
-            
+
             # Générer le rappel
             invoice_service = InvoiceService()
             reminder = invoice_service.generate_reminder(invoice_id, level)
-            
+
             if reminder:
                 # Régénérer le PDF pour inclure les frais de rappel
                 pdf_service = PDFService()
                 pdf_url = pdf_service.generate_invoice_pdf(invoice)
-                
+
                 if pdf_url:
                     invoice.pdf_url = pdf_url
                     db.session.commit()
-                
+
                 return {
-                    'message': f'Rappel niveau {level} généré et PDF mis à jour', 
+                    'message': f'Rappel niveau {level} généré et PDF mis à jour',
                     'reminder_level': invoice.reminder_level,
                     'pdf_url': pdf_url
                 }
             else:
                 return {'error': 'Erreur lors de la génération du rappel'}, 500
-            
+
         except Exception as e:
             app_logger.error(f"Erreur lors de la génération du rappel: {str(e)}")
             return {'error': 'Erreur interne du serveur'}, 500
@@ -664,7 +676,7 @@ class InvoiceReminders(Resource):
 @invoices_ns.route('/companies/<int:company_id>/invoices/<int:invoice_id>/regenerate-pdf')
 class RegenerateInvoicePdf(Resource):
     """Endpoint pour régénérer le PDF d'une facture"""
-    
+
     @jwt_required()
     @role_required(['ADMIN', 'COMPANY'])
     def post(self, company_id, invoice_id):
@@ -675,23 +687,23 @@ class RegenerateInvoicePdf(Resource):
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user or not user.company or user.company.id != company_id:
                 return {'error': 'Non autorisé'}, 403
-            
+
             # Récupérer la facture
             invoice = Invoice.query.filter_by(id=invoice_id, company_id=company_id).first()
             if not invoice:
                 return {'error': 'Facture non trouvée'}, 404
-            
+
             # Régénérer le PDF
             pdf_service = PDFService()
             pdf_url = pdf_service.generate_invoice_pdf(invoice)
-            
+
             if pdf_url:
                 invoice.pdf_url = pdf_url
                 db.session.commit()
                 return {'message': 'PDF régénéré', 'pdf_url': pdf_url}
             else:
                 return {'error': 'Erreur lors de la génération du PDF'}, 500
-            
+
         except Exception as e:
             app_logger.error(f"Erreur lors de la régénération du PDF: {str(e)}")
             return {'error': 'Erreur interne du serveur'}, 500
@@ -700,7 +712,7 @@ class RegenerateInvoicePdf(Resource):
 @invoices_ns.route('/companies/<int:company_id>/invoices/<int:invoice_id>/cancel')
 class CancelInvoice(Resource):
     """Endpoint pour annuler une facture"""
-    
+
     @jwt_required()
     @role_required(['ADMIN', 'COMPANY'])
     def post(self, company_id, invoice_id):
@@ -711,19 +723,19 @@ class CancelInvoice(Resource):
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user or not user.company or user.company.id != company_id:
                 return {'error': 'Non autorisé'}, 403
-            
+
             # Récupérer la facture
             invoice = Invoice.query.filter_by(id=invoice_id, company_id=company_id).first()
             if not invoice:
                 return {'error': 'Facture non trouvée'}, 404
-            
+
             # Annuler la facture
             invoice.status = InvoiceStatus.CANCELLED
             invoice.cancelled_at = datetime.utcnow()
             db.session.commit()
-            
+
             return {'message': 'Facture annulée', 'status': invoice.status.value}
-            
+
         except Exception as e:
             app_logger.error(f"Erreur lors de l'annulation de la facture: {str(e)}")
             db.session.rollback()
@@ -733,7 +745,7 @@ class CancelInvoice(Resource):
 @invoices_ns.route('/companies/<int:company_id>/clients/institutions')
 class InstitutionsList(Resource):
     """Endpoint pour récupérer la liste des institutions (cliniques)"""
-    
+
     @jwt_required()
     @role_required(['ADMIN', 'COMPANY'])
     def get(self, company_id):
@@ -743,14 +755,14 @@ class InstitutionsList(Resource):
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user or not user.company or user.company.id != company_id:
                 return {'error': 'Non autorisé'}, 403
-            
+
             # Récupérer toutes les institutions actives de l'entreprise
             institutions = Client.query.filter_by(
                 company_id=company_id,
                 is_institution=True,
                 is_active=True
             ).all()
-            
+
             return {
                 'institutions': [
                     {
@@ -768,7 +780,7 @@ class InstitutionsList(Resource):
                     for inst in institutions
                 ]
             }
-            
+
         except Exception as e:
             app_logger.error(f"Erreur lors de la récupération des institutions: {str(e)}")
             return {'error': 'Erreur interne du serveur'}, 500
@@ -777,7 +789,7 @@ class InstitutionsList(Resource):
 @invoices_ns.route('/companies/<int:company_id>/clients/<int:client_id>/toggle-institution')
 class ToggleInstitution(Resource):
     """Endpoint pour marquer/démarquer un client comme institution"""
-    
+
     @jwt_required()
     @role_required(['ADMIN', 'COMPANY'])
     def post(self, company_id, client_id):
@@ -787,28 +799,28 @@ class ToggleInstitution(Resource):
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user or not user.company or user.company.id != company_id:
                 return {'error': 'Non autorisé'}, 403
-            
+
             client = Client.query.filter_by(id=client_id, company_id=company_id).first()
             if not client:
                 return {'error': 'Client non trouvé'}, 404
-            
+
             data = request.get_json() or {}
             is_institution = data.get('is_institution', not client.is_institution)
             institution_name = data.get('institution_name')
-            
+
             client.is_institution = is_institution
             if is_institution and institution_name:
                 client.institution_name = institution_name
             elif not is_institution:
                 client.institution_name = None
-            
+
             db.session.commit()
-            
+
             return {
                 'message': f"Client {'marqué comme' if is_institution else 'démarqué en tant que'} institution",
                 'client': client.serialize
             }
-            
+
         except Exception as e:
             app_logger.error(f"Erreur lors de la modification du statut d'institution: {str(e)}")
             db.session.rollback()
@@ -818,7 +830,7 @@ class ToggleInstitution(Resource):
 @invoices_ns.route('/companies/<int:company_id>/clients/<int:client_id>/unbilled-reservations')
 class UnbilledReservations(Resource):
     """Endpoint pour récupérer les réservations non encore facturées d'un client"""
-    
+
     @jwt_required()
     @role_required(['ADMIN', 'COMPANY'])
     def get(self, company_id, client_id):
@@ -834,12 +846,12 @@ class UnbilledReservations(Resource):
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user or not user.company or user.company.id != company_id:
                 return {'error': 'Non autorisé'}, 403
-            
+
             # Récupérer les paramètres
             period_year = request.args.get('year', type=int)
             period_month = request.args.get('month', type=int)
             billed_to_filter = request.args.get('billed_to_type', type=str)
-            
+
             # Query de base : réservations TERMINÉES non facturées (seulement COMPLETED et RETURN_COMPLETED)
             query = Booking.query.filter(
                 Booking.company_id == company_id,
@@ -851,13 +863,13 @@ class UnbilledReservations(Resource):
                 ]),
                 Booking.invoice_line_id.is_(None)  # Pas encore facturé
             )
-            
+
             # 🔍 LOG : Debug pour voir ce qui est trouvé
             app_logger.warning(
                 f"🔍 [Unbilled] Recherche pour client_id={client_id}, company_id={company_id}, "
                 f"year={period_year}, month={period_month}, billed_to_filter={billed_to_filter}"
             )
-            
+
             # Filtrer par période si fournie
             if period_year and period_month:
                 from datetime import datetime
@@ -866,29 +878,29 @@ class UnbilledReservations(Resource):
                     end_date = datetime(period_year + 1, 1, 1)
                 else:
                     end_date = datetime(period_year, period_month + 1, 1)
-                
+
                 query = query.filter(
                     Booking.scheduled_time >= start_date,
                     Booking.scheduled_time < end_date
                 )
-            
+
             # 🔍 LOG : Compter AVANT filtre billed_to_type
             count_before_filter = query.count()
             app_logger.warning(f"🔍 [Unbilled] Avant filtre billed_to_type: {count_before_filter} bookings trouvés")
-            
+
             # ⚠️ NE PAS filtrer par billed_to_type : on veut TOUS les transports non facturés du client
             # Même si le type de facturation ne correspond pas, on affiche tout
             # Le dispatcher pourra choisir ce qu'il veut facturer
             # if billed_to_filter and billed_to_filter in ['patient', 'clinic', 'insurance']:
             #     query = query.filter(Booking.billed_to_type == billed_to_filter)
             #     app_logger.warning(f"🔍 [Unbilled] Filtre appliqué: billed_to_type={billed_to_filter}")
-            
+
             # Trier par date
             from sqlalchemy import asc
             query = query.order_by(asc(Booking.scheduled_time))
-            
+
             reservations = query.all()
-            
+
             # 🔍 LOG : Afficher les résultats trouvés
             app_logger.warning(f"🔍 [Unbilled] FINAL: Trouvé {len(reservations)} réservations non facturées")
             for r in reservations:
@@ -896,7 +908,7 @@ class UnbilledReservations(Resource):
                     f"   - Booking #{r.id}: {r.customer_name}, {r.scheduled_time}, "
                     f"status={r.status}, billed_to_type={r.billed_to_type}, invoice_line_id={r.invoice_line_id}"
                 )
-            
+
             return {
                 'reservations': [
                     {
@@ -924,7 +936,7 @@ class UnbilledReservations(Resource):
                     'insurance': sum(1 for r in reservations if r.billed_to_type == 'insurance'),
                 }
             }
-            
+
         except Exception as e:
             app_logger.error(f"Erreur lors de la récupération des réservations non facturées: {str(e)}")
             return {'error': 'Erreur interne du serveur'}, 500

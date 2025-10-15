@@ -2,23 +2,26 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict
-from typing import Dict, Any, List, Optional, Iterable, Callable, cast
 import threading
-from datetime import datetime, date, timezone 
+from collections.abc import Callable, Iterable
+from contextlib import contextmanager
+from dataclasses import asdict
+from datetime import UTC, date, datetime
+from typing import Any, Dict, List, cast
+
 from sqlalchemy.exc import IntegrityError
+
 from ext import db
-from models import Company, Booking, Driver, DriverType, DispatchRun, Assignment, DispatchStatus
-from services.unified_dispatch import data, heuristics, solver, settings
+from models import Assignment, Booking, Company, DispatchRun, DispatchStatus, Driver, DriverType
+from services.notification_service import notify_booking_assigned, notify_dispatch_run_completed
+from services.unified_dispatch import data, heuristics, settings, solver
 from services.unified_dispatch import settings as ud_settings
 from services.unified_dispatch.apply import apply_assignments
-from services.notification_service import notify_booking_assigned, notify_dispatch_run_completed
-from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
 def utcnow():
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 # ---------- Helpers typage/runtime ----------
 def _to_date_ymd(s: str) -> date:
@@ -29,8 +32,8 @@ def _to_date_ymd(s: str) -> date:
         return datetime.fromisoformat(s).date()
     except Exception:
         raise ValueError(f"for_date invalide: {s!r} (attendu 'YYYY-MM-DD')")
-    
-def _safe_int(v: Any) -> Optional[int]:
+
+def _safe_int(v: Any) -> int | None:
     """
     Convertit n'importe quelle valeur (y compris un InstrumentedAttribute/Column)
     en int Python ou retourne None. Typé pour apaiser Pylance.
@@ -47,10 +50,10 @@ def _in_tx() -> bool:
     sans dépendre d'un stub précis (Pylance-friendly).
     """
     try:
-        meth: Optional[Callable[[], Any]] = getattr(db.session, "in_transaction", None)
+        meth: Callable[[], Any] | None = getattr(db.session, "in_transaction", None)
         if callable(meth):
             return bool(meth())
-        get_tx: Optional[Callable[[], Any]] = getattr(db.session, "get_transaction", None)
+        get_tx: Callable[[], Any] | None = getattr(db.session, "get_transaction", None)
         if callable(get_tx):
             return get_tx() is not None
     except Exception:
@@ -97,13 +100,13 @@ def _release_day_lock(company_id: int, day_str: str) -> None:
 def run(
     company_id: int,
     mode: str = "auto",
-    custom_settings: Optional[settings.Settings] = None,
+    custom_settings: settings.Settings | None = None,
     *,
-    for_date: Optional[str] = None,
-    date_range: Optional[dict] = None,
+    for_date: str | None = None,
+    date_range: dict | None = None,
     regular_first: bool = True,
-    allow_emergency: Optional[bool] = None,
-    overrides: Optional[dict] = None,
+    allow_emergency: bool | None = None,
+    overrides: dict | None = None,
 ) -> Dict[str, Any]:
     """
     Run the dispatch optimization for a company on a specific date.
@@ -114,7 +117,7 @@ def run(
     except Exception:
         pass
 
-    company: Optional[Company] = Company.query.get(company_id)
+    company: Company | None = Company.query.get(company_id)
     if not company:
         logger.warning("[Engine] Company %s introuvable", company_id)
         return {
@@ -151,7 +154,7 @@ def run(
             "debug": {"reason": "locked", "for_date": for_date, "day": day_str},
         }
 
-    dispatch_run: Optional[DispatchRun] = None
+    dispatch_run: DispatchRun | None = None
     try:
         # 2) Créer / réutiliser le DispatchRun (unique: company_id+day)
 
@@ -242,7 +245,7 @@ def run(
             n_b = len(problem.get("bookings", []))
             n_d = len(problem.get("drivers", []))
             logger.info("[Engine] Problem built: bookings=%d drivers=%d for_date=%s", n_b, n_d, for_date or day_str)
-            
+
             # Propager le dispatch_run_id dans le problem pour qu'il arrive jusqu'au solver
             if dispatch_run:
                 drid = _safe_int(getattr(dispatch_run, "id", None))
@@ -272,7 +275,7 @@ def run(
                     with _begin_tx():
                         dispatch_run.mark_completed({"reason": "no_data"})
                 except Exception:
-                    logger.exception("[Engine] Failed to complete DispatchRun (no_data)")    
+                    logger.exception("[Engine] Failed to complete DispatchRun (no_data)")
             return {
                 "assignments": [], "unassigned": [], "bookings": [], "drivers": [],
                 "meta": {"reason": "no_data", "for_date": for_date or day_str},
@@ -405,7 +408,7 @@ def run(
                         prob_regs["driver_scheduled_times"] = h_res.debug.get("driver_scheduled_times", {})
                         prob_regs["proposed_load"] = h_res.debug.get("proposed_load", {})
                         logger.warning(f"[Engine] 📥 Injection état vers fallback: busy_until={prob_regs.get('busy_until')}, proposed_load={prob_regs.get('proposed_load')}")
-                    
+
                     fb = heuristics.closest_feasible(prob_regs, remaining_ids, settings=s)
                     used_fallback = True
                     _extend_unique(fb.assignments)
@@ -428,7 +431,7 @@ def run(
                     company, problem["bookings"], regs + emgs, settings=s,
                     base_time=problem.get("base_time"), for_date=problem.get("for_date")
                 )
-                
+
                 # 📅 Injecter les états du Pass 1 dans le Pass 2 pour éviter les conflits
                 # Utiliser fb (fallback) en priorité car il contient les états les plus à jour
                 # Sinon utiliser h_res (heuristique)
@@ -467,7 +470,7 @@ def run(
                         prob_full["driver_scheduled_times"] = h2.debug.get("driver_scheduled_times", {})
                         prob_full["proposed_load"] = h2.debug.get("proposed_load", {})
                         logger.warning(f"[Engine] 📥 Injection état P2 → Fallback P2: busy_until={prob_full.get('busy_until')}, proposed_load={prob_full.get('proposed_load')}")
-                    
+
                     fb2 = heuristics.closest_feasible(prob_full, rem, settings=s)
                     used_fallback = True
                     _extend_unique(fb2.assignments)
@@ -517,8 +520,8 @@ def run(
         # Sérialiser les entités réellement utilisées par le solver
         ser_bookings = [_serialize_booking(b) for b in problem.get("bookings", [])]
         ser_drivers  = [_serialize_driver(d)  for d in problem.get("drivers", [])]
-        
-        logger.info("[Engine] Serialized %d bookings, %d drivers for response", 
+
+        logger.info("[Engine] Serialized %d bookings, %d drivers for response",
                     len(ser_bookings), len(ser_drivers))
 
         debug_info: Dict[str, Any] = {
@@ -568,7 +571,7 @@ def run(
 
         return {
             "assignments": [_serialize_assignment(a) for a in final_assignments],
-            
+
             "unassigned": rem,
             "unassigned_reasons": unassigned_reasons,
             "bookings": ser_bookings,
@@ -630,24 +633,24 @@ def _filter_problem(
         # repli : utiliser l'objet company reçu en param de run() si nécessaire
         # (on évite un N+1 en DB, mais on reste safe)
         company_id = getattr(Company.query.get(getattr(problem, "company_id", None)), "id", None)
-    
+
     # Propager for_date et dispatch_run_id
     for_date = problem.get("for_date")
     dispatch_run_id = problem.get("dispatch_run_id")
-  
+
 
     company = cast(Company, Company.query.get(company_id))
     result = data.build_vrptw_problem(
         company, new_bookings, drivers, settings=s,
         base_time=problem.get("base_time"), for_date=problem.get("for_date")
     )
-    
+
     # Assurer que for_date et dispatch_run_id sont propagés
     if for_date:
         result["for_date"] = for_date
     if dispatch_run_id:
         result["dispatch_run_id"] = dispatch_run_id
-    
+
     # 📅 CRUCIAL: Propager les états de disponibilité des chauffeurs
     if "busy_until" in problem:
         result["busy_until"] = problem["busy_until"]
@@ -655,10 +658,10 @@ def _filter_problem(
         result["driver_scheduled_times"] = problem["driver_scheduled_times"]
     if "proposed_load" in problem:
         result["proposed_load"] = problem["proposed_load"]
-    
+
     return result
 
-def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: Optional[int]) -> None:
+def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: int | None) -> None:
     """
     Applique les assignations en base et émet événements/notifications.
     """
@@ -729,7 +732,7 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: O
             except Exception as e:
                 logger.warning("[Engine] Failed to load DispatchRun %s: %s", dispatch_run_id, e)
 
-            date_str: Optional[str] = None
+            date_str: str | None = None
             if dr is not None:
                 dr_day = getattr(dr, "day", None)
                 # ✅ évite le test booléen sur une Column; vérifie le type valeur
@@ -760,10 +763,10 @@ def _serialize_assignment(a: Any) -> Dict[str, Any]:
     """
     if hasattr(a, "to_dict"):
         return a.to_dict()
-    
+
     # Fallback manuel si pas de to_dict()
     out = {}
-    for field in ["booking_id", "driver_id", "status", "estimated_pickup_arrival", 
+    for field in ["booking_id", "driver_id", "status", "estimated_pickup_arrival",
                  "estimated_dropoff_arrival", "reason", "route_index", "dispatch_run_id"]:
         if hasattr(a, field):
             out[field] = getattr(a, field)

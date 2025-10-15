@@ -4,9 +4,8 @@ Revision ID: 623409ab335b
 Revises: 19fc92c2ba30
 Create Date: 2025-10-07 10:34:08.865530
 """
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = '623409ab335b'

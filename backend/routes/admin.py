@@ -1,17 +1,18 @@
-from typing import Any, Optional, cast
-from flask import request
-from flask_restx import Namespace, Resource, fields
-from flask_jwt_extended import jwt_required
-from models import User, Booking, Invoice, UserRole, Client, BookingStatus
-from ext import db, role_required, app_logger
-from datetime import datetime, timezone
-from sqlalchemy import select, func, and_
-from sqlalchemy.sql.elements import BinaryExpression
-from sqlalchemy.orm import joinedload
 import random
 import string
-import sentry_sdk
+from datetime import UTC, datetime
+from typing import Any, cast
 
+import sentry_sdk
+from flask import request
+from flask_jwt_extended import jwt_required
+from flask_restx import Namespace, Resource, fields
+from sqlalchemy import and_, func, select
+from sqlalchemy.orm import joinedload
+from sqlalchemy.sql.elements import BinaryExpression
+
+from ext import app_logger, db, role_required
+from models import Booking, BookingStatus, Client, Invoice, User, UserRole
 
 admin_ns = Namespace("admin", description="Admin operations")
 
@@ -36,7 +37,7 @@ class AdminStats(Resource):
             total_users = User.query.count()
             total_invoices = Invoice.query.count()
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             if now.month == 12:
                 end_of_month = now.replace(year=now.year + 1, month=1, day=1,
@@ -182,7 +183,7 @@ class UpdateUserRole(Resource):
         """
         try:
             # ---------- 1) Charger l'utilisateur + relations ----------
-            user_opt: Optional[User] = (
+            user_opt: User | None = (
                 User.query.options(
                     joinedload(User.driver),
                     joinedload(User.company),

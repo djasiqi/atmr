@@ -1,23 +1,18 @@
-from flask import request, make_response, current_app
-from flask_restx import Namespace, Resource, fields
-from flask_jwt_extended import (
-    create_access_token,
-    create_refresh_token,
-    jwt_required,
-    get_jwt_identity
-)
-from marshmallow import Schema, fields as ma_fields, ValidationError
+import logging
 from datetime import timedelta
 from typing import Any, Dict, cast
-import logging
 
-import sentry_sdk # CORRECTION : Importer directement
-
+import sentry_sdk  # CORRECTION : Importer directement
+from flask import current_app, make_response, request
+from flask_jwt_extended import create_access_token, create_refresh_token, get_jwt_identity, jwt_required
 from flask_mail import Message
+from flask_restx import Namespace, Resource, fields
 from itsdangerous import URLSafeTimedSerializer
+from marshmallow import Schema, ValidationError
+from marshmallow import fields as ma_fields
 
-from models import User, Client, UserRole
-from ext import db, mail, limiter
+from ext import db, limiter, mail
+from models import Client, User, UserRole
 
 app_logger = logging.getLogger('app')
 
@@ -48,7 +43,7 @@ class UserSchema(Schema):
     username = ma_fields.String(required=True)
     email = ma_fields.Email(required=True)
     password = ma_fields.String(required=True)
-    
+
     # --- CORRECTION APPLIQUÉE ICI ---
     # Remplacement de 'missing' par 'load_default'
     first_name = ma_fields.String(load_default=None)
@@ -92,7 +87,7 @@ class Login(Resource):
                 additional_claims=claims,
                 expires_delta=timedelta(hours=1)
             )
-            
+
             # Création du refresh token (valide 30 jours)
             refresh_token = create_refresh_token(
                 identity=str(user.public_id),

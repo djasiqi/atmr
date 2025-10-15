@@ -1,0 +1,235 @@
+--- /dev/null
++++ b/backend/tests/test_routes_bookings.py
+@@ -0,0 +1,180 @@
++"""
++Tests des routes bookings
++"""
++import pytest
++from datetime import datetime, timedelta
++from flask_jwt_extended import create_access_token
++from models import Booking, BookingStatus, Client, Company, Driver, User, UserRole, db
++from shared.time_utils import now_local
++
++
++class TestCreateBooking:
++    """Tests création bookings"""
++    
++    @pytest.fixture
++    def driver_company(self, app, company_user):
++        """Crée un chauffeur pour l'entreprise"""
++        company, _ = company_user
++        
++        with app.app_context():
++            driver_user = User(
++                username='driver1',
++                email='driver@test.com',
++                role=UserRole.DRIVER
++            )
++            driver_user.set_password('driverpass')
++            db.session.add(driver_user)
++            db.session.flush()
++            
++            driver = Driver(
++                user_id=driver_user.id,
++                company_id=company.id,
++                is_active=True,
++                is_available=True
++            )
++            db.session.add(driver)
++            db.session.commit()
++            
++            yield driver, driver_user
++            
++            # Cleanup
++            db.session.delete(driver)
++            db.session.delete(driver_user)
++            db.session.commit()
++    
++    def test_create_booking_success(self, test_client, client_user, app, mocker):
++        """Test création booking standard"""
++        client, user = client_user
++        
++        # Mock services externes
++        mocker.patch('services.maps.get_distance_duration', return_value=(1800, 15000))
++        mocker.patch('services.maps.geocode_address', return_value=(46.2044, 6.1432))
++        mocker.patch('services.unified_dispatch.queue.trigger_on_booking_change')
++        
++        with app.app_context():
++            token = create_access_token(identity=user.public_id)
++        
++        scheduled = (now_local() + timedelta(hours=2)).isoformat()
++        
++        response = test_client.post(
++            f'/api/bookings/clients/{user.public_id}/bookings',
++            json={
++                'customer_name': 'Jean Dupont',
++                'pickup_location': 'Rue de Genève 1, 1200 Genève',
++                'dropoff_location': 'Hôpital Cantonal, 1211 Genève',
++                'scheduled_time': scheduled,
++                'amount': 45.50,
++                'medical_facility': 'HUG',
++                'doctor_name': 'Dr. Martin',
++                'is_round_trip': False
++            },
++            headers={'Authorization': f'Bearer {token}'}
++        )
++        
++        assert response.status_code == 201
++        data = response.get_json()
++        
++        assert data['customer_name'] == 'Jean Dupont'
++        assert data['status'] == 'PENDING'
++        assert data['duration_seconds'] == 1800
++        assert data['distance_meters'] == 15000
++        assert 'id' in data
++    
++    def test_create_booking_round_trip(self, test_client, client_user, app, mocker):
++        """Test création booking aller-retour"""
++        client, user = client_user
++        
++        mocker.patch('services.maps.get_distance_duration', return_value=(1800, 15000))
++        mocker.patch('services.maps.geocode_address', return_value=(46.2044, 6.1432))
++        mocker.patch('services.unified_dispatch.queue.trigger_on_booking_change')
++        
++        with app.app_context():
++            token = create_access_token(identity=user.public_id)
++        
++        response = test_client.post(
++            f'/api/bookings/clients/{user.public_id}/bookings',
++            json={
++                'customer_name': 'Marie Martin',
++                'pickup_location': 'A',
++                'dropoff_location': 'B',
++                'scheduled_time': (now_local() + timedelta(hours=3)).isoformat(),
++                'amount': 50.0,
++                'is_round_trip': True  # ✅ Créer retour
++            },
++            headers={'Authorization': f'Bearer {token}'}
++        )
++        
++        assert response.status_code == 201
++        data = response.get_json()
++        
++        # Vérifier booking aller
++        assert data['is_round_trip'] is True
++        assert data['is_return'] is False
++        
++        # Vérifier booking retour créé
++        if 'return_booking' in data:
++            return_booking = data['return_booking']
++            assert return_booking['is_return'] is True
++            assert return_booking['status'] == 'PENDING'
++    
++    def test_create_booking_past_time(self, test_client, client_user, app, mocker):
++        """Test création booking dans le passé → erreur"""
++        client, user = client_user
++        
++        with app.app_context():
++            token = create_access_token(identity=user.public_id)
++        
++        # Horaire dans le passé
++        past_time = (now_local() - timedelta(hours=1)).isoformat()
++        
++        response = test_client.post(
++            f'/api/bookings/clients/{user.public_id}/bookings',
++            json={
++                'customer_name': 'Test',
++                'pickup_location': 'A',
++                'dropoff_location': 'B',
++                'scheduled_time': past_time,
++                'amount': 40.0
++            },
++            headers={'Authorization': f'Bearer {token}'}
++        )
++        
++        assert response.status_code == 400
++        data = response.get_json()
++        assert 'error' in data or 'message' in data
++    
++    def test_create_booking_unauthorized(self, test_client, client_user):
++        """Test création sans token → 401"""
++        client, user = client_user
++        
++        response = test_client.post(
++            f'/api/bookings/clients/{user.public_id}/bookings',
++            json={
++                'customer_name': 'Test',
++                'pickup_location': 'A',
++                'dropoff_location': 'B',
++                'scheduled_time': (now_local() + timedelta(hours=1)).isoformat(),
++                'amount': 40.0
++            }
++            # Pas de header Authorization
++        )
++        
++        assert response.status_code == 401
+
+
++class TestAssignDriver:
++    """Tests assignation chauffeur"""
++    
++    def test_assign_driver_success(self, test_client, company_user, client_user, driver_company, app, mocker):
++        """Test assignation chauffeur à booking"""
++        company, company_user_obj = company_user
++        client, client_user_obj = client_user
++        driver, driver_user_obj = driver_company
++        
++        mocker.patch('services.unified_dispatch.queue.trigger_on_booking_change')
++        
++        # Créer booking
++        with app.app_context():
++            booking = Booking(
++                customer_name='Test Patient',
++                pickup_location='A',
++                dropoff_location='B',
++                scheduled_time=now_local() + timedelta(hours=2),
++                amount=50.0,
++                status=BookingStatus.PENDING,
++                user_id=client_user_obj.id,
++                client_id=client.id,
++                company_id=company.id
++            )
++            db.session.add(booking)
++            db.session.commit()
++            booking_id = booking.id
++        
++        # Login as company
++        with app.app_context():
++            token = create_access_token(identity=company_user_obj.public_id)
++        
++        # Assign driver
++        response = test_client.post(
++            f'/api/bookings/{booking_id}/assign',
++            json={'driver_id': driver.id},
++            headers={'Authorization': f'Bearer {token}'}
++        )
++        
++        assert response.status_code == 200
++        data = response.get_json()
++        assert data['driver_id'] == driver.id
++        assert data['status'] == 'ASSIGNED'
++    
++    def test_assign_driver_not_available(self, test_client, mocker):
++        """Test assignation chauffeur non disponible"""
++        # Create booking + busy driver
++        # Assert error 400
++        pass
+
+
++class TestCancelBooking:
++    """Tests annulation booking"""
++    
++    def test_cancel_booking_success(self, test_client, client_user, app, mocker):
++        """Test annulation booking autorisée"""
++        # Create booking ASSIGNED
++        # DELETE /api/bookings/{id}
++        # Assert status = CANCELED
++        pass
++    
++    def test_cancel_completed_booking(self, test_client, client_user, app):
++        """Test annulation booking COMPLETED → erreur"""
++        # Create booking COMPLETED
++        # DELETE /api/bookings/{id}
++        # Assert error 400
++        pass
+

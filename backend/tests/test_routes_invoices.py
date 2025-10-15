@@ -1,30 +1,29 @@
 """
 Tests des routes invoices
 """
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
+
 from flask_jwt_extended import create_access_token
-from models import (
-    Invoice, InvoiceStatus, Booking, BookingStatus, db,
-    CompanyBillingSettings
-)
+
+from models import Booking, BookingStatus, CompanyBillingSettings, Invoice, InvoiceStatus, db
 
 
 class TestListInvoices:
     """Tests liste factures"""
-    
+
     def test_list_invoices_success(self, test_client, company_user, app):
         """Test récupération liste factures"""
         company, user = company_user
-        
+
         with app.app_context():
             token = create_access_token(identity=user.public_id)
-        
+
         response = test_client.get(
             '/api/companies/me/invoices',
             headers={'Authorization': f'Bearer {token}'}
         )
-        
+
         assert response.status_code == 200
         data = response.get_json()
         assert 'invoices' in data
@@ -33,17 +32,17 @@ class TestListInvoices:
 
 class TestGenerateInvoice:
     """Tests génération factures"""
-    
+
     def test_generate_invoice_success(self, test_client, company_user, client_user, app, mocker):
         """Test génération facture pour période"""
         company, user = company_user
         client, _ = client_user
-        
+
         # Mock PDF generation
         mocker.patch('services.pdf_service.PDFService.generate_invoice_pdf',
                      return_value='http://localhost:5000/uploads/invoices/test.pdf')
         mocker.patch('services.invoice_service.InvoiceService.generate_invoice')
-        
+
         with app.app_context():
             # Créer billing settings
             settings = CompanyBillingSettings()
@@ -51,7 +50,7 @@ class TestGenerateInvoice:
             settings.payment_terms_days = 30  # type: ignore
             settings.invoice_prefix = 'TEST'  # type: ignore
             db.session.add(settings)
-            
+
             # Créer booking complété
             booking = Booking()
             booking.customer_name = 'Patient Test'  # type: ignore
@@ -65,10 +64,10 @@ class TestGenerateInvoice:
             booking.company_id = company.id  # type: ignore
             db.session.add(booking)
             db.session.commit()
-        
+
         with app.app_context():
             token = create_access_token(identity=user.public_id)
-        
+
         response = test_client.post(
             '/api/companies/me/invoices',
             json={
@@ -78,14 +77,14 @@ class TestGenerateInvoice:
             },
             headers={'Authorization': f'Bearer {token}'}
         )
-        
+
         # Peut retourner 201 ou 200 selon l'implémentation
         assert response.status_code in [200, 201]
-    
+
     def test_generate_invoice_unauthorized(self, test_client, client_user):
         """Test génération sans auth → 401"""
         client, _ = client_user
-        
+
         response = test_client.post(
             '/api/companies/me/invoices',
             json={
@@ -94,18 +93,18 @@ class TestGenerateInvoice:
                 'period_month': 9
             }
         )
-        
+
         assert response.status_code == 401
 
 
 class TestInvoiceDetails:
     """Tests détails facture"""
-    
+
     def test_get_invoice_success(self, test_client, company_user, client_user, app):
         """Test récupération détails facture"""
         company, user = company_user
         client, _ = client_user
-        
+
         # Créer facture
         with app.app_context():
             invoice = Invoice()
@@ -117,21 +116,21 @@ class TestInvoiceDetails:
             invoice.subtotal_amount = Decimal('100.0')  # type: ignore
             invoice.total_amount = Decimal('100.0')  # type: ignore
             invoice.balance_due = Decimal('100.0')  # type: ignore
-            invoice.issued_at = datetime.now(timezone.utc)  # type: ignore
-            invoice.due_date = datetime.now(timezone.utc) + timedelta(days=30)  # type: ignore
+            invoice.issued_at = datetime.now(UTC)  # type: ignore
+            invoice.due_date = datetime.now(UTC) + timedelta(days=30)  # type: ignore
             invoice.status = InvoiceStatus.DRAFT  # type: ignore
             db.session.add(invoice)
             db.session.commit()
             invoice_id = invoice.id
-        
+
         with app.app_context():
             token = create_access_token(identity=user.public_id)
-        
+
         response = test_client.get(
             f'/api/companies/me/invoices/{invoice_id}',
             headers={'Authorization': f'Bearer {token}'}
         )
-        
+
         assert response.status_code == 200
         data = response.get_json()
         assert data['invoice_number'] == 'TEST-2025-09-0001'
@@ -140,12 +139,12 @@ class TestInvoiceDetails:
 
 class TestInvoiceReminders:
     """Tests rappels de paiement"""
-    
+
     def test_generate_reminder_level_1(self, test_client, company_user, client_user, app, mocker):
         """Test génération 1er rappel"""
         company, user = company_user
         client, _ = client_user
-        
+
         with app.app_context():
             # Créer facture en retard
             invoice = Invoice()
@@ -158,27 +157,27 @@ class TestInvoiceReminders:
             invoice.total_amount = Decimal('100.0')  # type: ignore
             invoice.balance_due = Decimal('100.0')  # type: ignore
             invoice.amount_paid = Decimal('0.0')  # type: ignore
-            invoice.issued_at = datetime.now(timezone.utc) - timedelta(days=45)  # type: ignore
-            invoice.due_date = datetime.now(timezone.utc) - timedelta(days=15)  # type: ignore
+            invoice.issued_at = datetime.now(UTC) - timedelta(days=45)  # type: ignore
+            invoice.due_date = datetime.now(UTC) - timedelta(days=15)  # type: ignore
             invoice.status = InvoiceStatus.OVERDUE  # type: ignore
             invoice.reminder_level = 0  # type: ignore
             db.session.add(invoice)
             db.session.commit()
             invoice_id = invoice.id
-        
+
         mocker.patch('services.pdf_service.PDFService.generate_reminder_pdf',
                      return_value='http://localhost:5000/uploads/reminder.pdf')
         mocker.patch('services.invoice_service.InvoiceService.generate_reminder')
-        
+
         with app.app_context():
             token = create_access_token(identity=user.public_id)
-        
+
         response = test_client.post(
             f'/api/companies/me/invoices/{invoice_id}/reminders',
             json={'level': 1},
             headers={'Authorization': f'Bearer {token}'}
         )
-        
+
         # Accepter 200, 201 ou 404 si route non implémentée
         assert response.status_code in [200, 201, 404]
 

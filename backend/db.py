@@ -1,7 +1,8 @@
 # 1. Importez les dépendances nécessaires
-from ext import db, app_logger
-from models import Booking  
 from typing import Any, Dict, cast
+
+from ext import app_logger, db
+from models import Booking
 
 
 def une_fonction_qui_cree_une_reservation(data: Dict[str, Any]):
@@ -54,11 +55,11 @@ def une_fonction_qui_cree_une_reservation(data: Dict[str, Any]):
         # Pylance n'a pas de signature kwargs pour SQLAlchemy -> cast/ignore
         BookingCtor = cast(Any, Booking)
         nouvelle_reservation = BookingCtor(**payload)
-       
+
         db.session.add(nouvelle_reservation)
         db.session.commit()
         app_logger.info(f"Nouvelle réservation {nouvelle_reservation.id} créée avec succès.")
-        
+
         return {"message": "Réservation créée", "booking_id": nouvelle_reservation.id}, 201
 
     except Exception as e:

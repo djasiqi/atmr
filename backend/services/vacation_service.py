@@ -1,8 +1,10 @@
 # services/vacation_service.py
 from datetime import date, timedelta
 from typing import Any, cast
+
 from ext import db
 from models import DriverVacation  # noqa: F401
+
 from .holidays_service import is_holiday_in_geneva  # par ex. un module qui wrap python-holidays
 
 DEFAULT_ANNUAL_VACATION_DAYS = 20
