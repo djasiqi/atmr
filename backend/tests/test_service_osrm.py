@@ -2,8 +2,8 @@
 Tests du service OSRM (routing et distance)
 """
 import pytest
-from unittest.mock import Mock, patch
-from services.osrm_client import OSRMClient, route_info, matrix_table
+from unittest.mock import Mock
+from services.osrm_client import OSRMClient
 
 
 class TestOSRMClient:

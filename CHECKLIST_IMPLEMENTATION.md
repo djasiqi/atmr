@@ -251,7 +251,7 @@
 - [x] Tests routes bookings (10+ tests) ✓ (test_routes_bookings.py)
 - [x] Tests routes invoices (15+ tests) ✓ (test_routes_invoices.py)
 - [x] Tests services OSRM (12+ tests) ✓ (test_service_osrm.py)
-- [ ] Coverage ≥60% → *À vérifier avec `pytest --cov`*
+- [ ] Coverage ≥60% → _À vérifier avec `pytest --cov`_
 
 **Frontend**:
 

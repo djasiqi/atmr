@@ -2,7 +2,7 @@
 Fixtures pytest partagées pour tous les tests backend
 """
 import pytest
-from models import db, User, Client, Company, UserRole
+from models import db, User, Client, Company, Driver, UserRole
 from app import create_app
 
 @pytest.fixture(scope='session')
