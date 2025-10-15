@@ -1,33 +1,32 @@
 # backend/app.py
 
-import os
 import json
 import logging
-from enum import Enum
+import os
 import re
+from enum import Enum
 from pathlib import Path
 from typing import Literal, cast
 
-# TypeAlias (Py<3.10 via typing_extensions)
+# TypeAlias import (compatible Python 3.10+)
 try:
-    from typing import TypeAlias  # type: ignore
-except Exception:  # pragma: no cover
-    from typing_extensions import TypeAlias  # type: ignore
+    from typing import TypeAlias
+except ImportError:  # pragma: no cover
+    from typing_extensions import TypeAlias  # type: ignore  # noqa: UP035
 
 # --- Imports de libs tiers (tous en haut pour Ruff E402) ---
+import sentry_sdk
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify, make_response, send_from_directory, current_app
+from flask import Flask, current_app, jsonify, make_response, request, send_from_directory
 from flask_cors import CORS
 from flask_talisman import Talisman
+from sentry_sdk.integrations.flask import FlaskIntegration
 from werkzeug.exceptions import HTTPException, NotFound
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-import sentry_sdk
-from sentry_sdk.integrations.flask import FlaskIntegration
-
 # Extensions & config
-from ext import db, jwt, mail, bcrypt, migrate, limiter, socketio
 from config import config
+from ext import bcrypt, db, jwt, limiter, mail, migrate, socketio
 
 # ---------- Chargement .env ----------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -119,9 +118,8 @@ def create_app(config_name: str | None = None):
         sio_engineio_logger = False
 
     allow_ws_upgrades = True
-    if config_name == "development":
-        if os.getenv("SIO_DISABLE_UPGRADES", "true").lower() == "true":
-            allow_ws_upgrades = False
+    if config_name == "development" and os.getenv("SIO_DISABLE_UPGRADES", "true").lower() == "true":
+        allow_ws_upgrades = False
 
     # NB: pas de 'upgrade_timeout' (paramètre inexistant) ni 'cookie=True' (type incompatible)
     socketio.init_app(
@@ -145,8 +143,8 @@ def create_app(config_name: str | None = None):
         if p.startswith("/socket.io"):
             app.logger.debug("📡 SIO %s %s from %s", request.method, request.full_path, request.remote_addr)
         return None
-    
-    # à l’initialisation Flask
+
+    # à l'initialisation Flask
     @app.teardown_appcontext
     def shutdown_session(exception=None):
         db.session.remove()
@@ -237,7 +235,7 @@ def create_app(config_name: str | None = None):
     logging.getLogger("werkzeug").setLevel(
         getattr(logging, os.getenv("WERKZEUG_LOG_LEVEL", "ERROR").upper(), logging.ERROR)
     )
-    
+
     # ✅ Ajout filtre PII si activé
     if os.getenv("MASK_PII_LOGS", "true").lower() == "true":
         from shared.logging_utils import PIIFilter
@@ -252,8 +250,9 @@ def create_app(config_name: str | None = None):
 
     # 9) Routes / sockets / handlers
     with app.app_context():
-        import models  # noqa: F401
         from sqlalchemy.orm import configure_mappers
+
+        import models  # noqa: F401
 
         configure_mappers()
 
@@ -287,21 +286,20 @@ def create_app(config_name: str | None = None):
         @app.before_request
         def _auth_login_shim_any_version():
             p = request.path or ""
-            if request.method in ("POST", "OPTIONS"):
+            if request.method in ("POST", "OPTIONS") and re.fullmatch(r"/api(?:/v\d+)?/auth/login", p):
                 # Correspond à /api/auth/login ou /api/v<number>/auth/login
-                if re.fullmatch(r"/api(?:/v\d+)?/auth/login", p):
-                    if request.method == "OPTIONS":
-                        return make_response("", 204)
-                    try:
-                        from routes.auth import Login
-                        return Login().post()
-                    except Exception:
+                if request.method == "OPTIONS":
+                    return make_response("", 204)
+                try:
+                    from routes.auth import Login
+                    return Login().post()
+                except Exception:
                         # Laisse la suite normale (404 si absent)
                         return None
             return None
 
         # Compat: routes legacy sans /api
-        LEGACY_PREFIXES = (
+        legacy_prefixes = (  # noqa: N806
             "auth",
             "clients",
             "admin",
@@ -337,7 +335,7 @@ def create_app(config_name: str | None = None):
 
             current_app.logger.debug("Legacy shim: %s %s", request.method, path)
 
-            if any(path == f"/{p}" or path.startswith(f"/{p}/") for p in LEGACY_PREFIXES):
+            if any(path == f"/{p}" or path.startswith(f"/{p}/") for p in legacy_prefixes):
                 if request.method == "OPTIONS":
                     return make_response("", 204)
                 new_path = "/api" + path
@@ -367,9 +365,9 @@ def create_app(config_name: str | None = None):
                 from routes.geocode import GeocodeAutocomplete
                 res = GeocodeAutocomplete()
                 return res.get()
-            except Exception:
+            except Exception as err:
                 # Laisse la 404 standard si la ressource n'est pas dispo
-                raise NotFound()
+                raise NotFound() from err
 
         # Compat: accès direct au login (certains environnements/proxy peuvent rater la déclaration RESTX)
         @app.route("/api/auth/login", methods=["POST", "OPTIONS"])
@@ -447,14 +445,14 @@ def create_app(config_name: str | None = None):
                 }
             ), 200
 
-        NOISY_PATHS = {
+        noisy_paths = {
             "/companies/me/dispatch/status",
             "/company_dispatch/status",
         }
 
         @app.after_request
         def log_request_info(response):
-            if request.path in NOISY_PATHS and request.method in ("GET", "OPTIONS"):
+            if request.path in noisy_paths and request.method in ("GET", "OPTIONS"):
                 return response
             app.logger.debug("%s %s -> %s", request.method, request.path, response.status_code)
             return response
@@ -494,8 +492,8 @@ def create_app(config_name: str | None = None):
         sid_val = getattr(request, "sid", None)
         if isinstance(sid_val, str):
             info = _sid_index.pop(sid_val, None)
-            print(f"👋 SIO disconnect sid={sid_val} info={info}")
+            app.logger.debug(f"👋 SIO disconnect sid={sid_val} info={info}")
         else:
-            print("👋 SIO disconnect (sid non disponible)")
+            app.logger.debug("👋 SIO disconnect (sid non disponible)")
 
     return app
