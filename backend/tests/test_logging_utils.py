@@ -2,14 +2,15 @@
 Tests pour les utilitaires de masquage PII (logging_utils).
 """
 import pytest
-from shared.logging_utils import mask_email, mask_phone, mask_iban, sanitize_log_data, PIIFilter
+
+from shared.logging_utils import PIIFilter, mask_email, mask_iban, mask_phone, sanitize_log_data
 
 
 def test_mask_email():
     """Masquage d'email fonctionne."""
     masked = mask_email("john.doe@example.com")
     assert masked == "j***@e***.com"
-    
+
     masked2 = mask_email("a@test.ch")
     assert "@" in masked2
     assert "***" in masked2
@@ -33,7 +34,7 @@ def test_sanitize_log_data_string():
     """Sanitize masque les PII dans les strings."""
     data = "Contact: john@example.com, phone: +41791234567"
     sanitized = sanitize_log_data(data)
-    
+
     assert "john@example.com" not in sanitized
     assert "***" in sanitized
 
@@ -46,7 +47,7 @@ def test_sanitize_log_data_dict():
         "nested": {"phone": "+41791234567"}
     }
     sanitized = sanitize_log_data(data)
-    
+
     assert sanitized["name"] == "John"
     assert "***" in sanitized["email"]
     assert "**" in sanitized["nested"]["phone"]
@@ -55,9 +56,9 @@ def test_sanitize_log_data_dict():
 def test_pii_filter():
     """PIIFilter filtre les logs."""
     import logging
-    
+
     filter_obj = PIIFilter()
-    
+
     # Créer un log record
     record = logging.LogRecord(
         name="test",
@@ -68,9 +69,9 @@ def test_pii_filter():
         args=(),
         exc_info=None
     )
-    
+
     result = filter_obj.filter(record)
-    
+
     assert result is True
     assert "***" in record.msg
 

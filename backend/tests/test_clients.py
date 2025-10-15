@@ -30,7 +30,7 @@ def test_create_client(client, auth_headers, db, sample_company):
         "phone": "+41791234567",
         "billing_address": "Rue Test 1, 1000 Lausanne"
     }
-    
+
     # Note: Adapter selon l'API réelle
     # response = client.post('/api/clients/', json=client_data, headers=auth_headers)
     # assert response.status_code == 201
@@ -44,7 +44,7 @@ def test_client_validation_email_required():
         email='client@test.com',
         role=UserRole.client
     )
-    
+
     # Email est requis
     assert user.email is not None
 
@@ -69,7 +69,7 @@ def test_client_serialize(db, sample_client):
     """Client.serialize retourne dict avec données."""
     client_obj = Client.query.get(sample_client.id)
     serialized = client_obj.serialize
-    
+
     assert isinstance(serialized, dict)
     assert 'id' in serialized
     assert 'user' in serialized
@@ -81,9 +81,9 @@ def test_client_toggle_active(db, sample_client):
     """Client.toggle_active change is_active."""
     client_obj = Client.query.get(sample_client.id)
     initial_status = client_obj.is_active
-    
+
     new_status = client_obj.toggle_active()
-    
+
     assert new_status != initial_status
     assert client_obj.is_active == new_status
 

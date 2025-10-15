@@ -33,7 +33,7 @@ ignore = [
 [lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Imports inutilisés OK dans __init__
 "migrations/**/*.py" = ["E501", "F401", "N999"]  # Alembic auto-generated
-"tests/**/*.py" = ["S101", "F401"]  # Assert OK dans tests
+"tests/**/*.py" = ["S101", "F401", "E402"]  # Assert OK, imports hors top OK (mocks)
 
 [format]
 quote-style = "double"

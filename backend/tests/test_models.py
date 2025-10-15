@@ -2,7 +2,8 @@
 Tests unitaires des modèles (sans DB complète).
 """
 import pytest
-from models.enums import BookingStatus, UserRole, PaymentStatus
+
+from models.enums import BookingStatus, PaymentStatus, UserRole
 
 
 def test_booking_status_values():
@@ -11,7 +12,7 @@ def test_booking_status_values():
     assert hasattr(BookingStatus, 'ACCEPTED')
     assert hasattr(BookingStatus, 'COMPLETED')
     assert hasattr(BookingStatus, 'CANCELED')
-    
+
     assert BookingStatus.PENDING.value == 'PENDING'
     assert BookingStatus.COMPLETED.value == 'COMPLETED'
 
@@ -22,7 +23,7 @@ def test_user_role_values():
     assert hasattr(UserRole, 'CLIENT')
     assert hasattr(UserRole, 'DRIVER')
     assert hasattr(UserRole, 'COMPANY')
-    
+
     roles = [UserRole.ADMIN, UserRole.CLIENT, UserRole.DRIVER, UserRole.COMPANY]
     assert len(roles) == 4
 
@@ -32,7 +33,7 @@ def test_payment_status_values():
     assert hasattr(PaymentStatus, 'PENDING')
     assert hasattr(PaymentStatus, 'COMPLETED')
     assert hasattr(PaymentStatus, 'FAILED')
-    
+
     statuses = [PaymentStatus.PENDING, PaymentStatus.COMPLETED, PaymentStatus.FAILED]
     assert len(statuses) == 3
 
