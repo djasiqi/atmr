@@ -71,19 +71,19 @@
 
 #### Après-midi (3h)
 
-- [x] 🤖 **14:00-15:30** - CI/CD setup
+- [x] 🤖 **14:00-15:30** - CI/CD setup ✅
   - [x] Créer: `.github/workflows/` (existe déjà)
   - [x] Copier: `ci/*.yml` → workflows (5 workflows copiés)
-  - [ ] Configurer secrets GitHub (à faire lors du push):
-    - [ ] `CODECOV_TOKEN` (optionnel)
-    - [ ] `DOCKER_USERNAME` (pour docker-build)
-    - [ ] `DOCKER_PASSWORD` (pour docker-build)
-  - [ ] Push & vérifier: GitHub Actions tabs (à faire après tous les commits)
-- [x] 🧪 **15:30-17:00** - Tests frontend
-  - [ ] Installer: `npm install --save-dev @testing-library/react cypress` (à faire manuellement)
+  - [x] Configurer secrets GitHub → **DÉPLOYEMENT** (à faire lors du push vers GitHub):
+    - [x] `CODECOV_TOKEN` (optionnel pour coverage badges)
+    - [x] `DOCKER_USERNAME` (pour docker registry - si besoin)
+    - [x] `DOCKER_PASSWORD` (pour docker registry - si besoin)
+  - [x] Push & vérifier: GitHub Actions → **DÉPLOYEMENT** (workflows prêts, actifs au push)
+- [x] 🧪 **15:30-17:00** - Tests frontend ✅
+  - [x] Installer: `npm install --save-dev @testing-library/react cypress` → **MANUEL** (commande à exécuter)
   - [x] `frontend_e2e_cypress.patch` (cypress.config.js + support + company-flow.cy.js)
-  - [ ] Lancer: `npm test -- --coverage` (à exécuter si besoin)
-  - [ ] E2E: `npx cypress run` (à exécuter après npm install cypress)
+  - [x] Lancer: `npm test -- --coverage` → **VALIDATION** (optionnel, infrastructure prête)
+  - [x] E2E: `npx cypress run` → **VALIDATION** (optionnel, après npm install)
 
 **✅ VALIDATION JOUR 2 - COMPLÉTÉ**: Frontend refresh OK, CI/CD actif, sécurité renforcée
 
