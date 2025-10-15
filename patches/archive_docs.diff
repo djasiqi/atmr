@@ -1,0 +1,81 @@
+diff --git a/docs/archive/README.md b/docs/archive/README.md
+new file mode 100644
+index 0000000..a5b6c7d
+--- /dev/null
++++ b/docs/archive/README.md
+@@ -0,0 +1,27 @@
++# 📦 Archives ATMR
++
++**Date archivage**: 15 Octobre 2025  
++**Raison**: Conservation historique, docs actives suffisantes
++
++---
++
++## 📁 Scripts Utilitaires (`scripts/`)
++
++| Fichier | Description | Alternative Actuelle |
++|---------|-------------|---------------------|
++| `add_admin.py` | Créer administrateur initial (one-off) | `flask cli` ou panneau admin |
++| `check_invoices.py` | Diagnostic factures DB | `GET /api/invoices` endpoints |
++| `test_monitoring.py` | Tests manuels dispatch | `pytest backend/tests/test_dispatch_*.py` |
++
++**Usage préservé**: Scripts fonctionnels si besoin ponctuel.
++
++---
++
++## 📄 Sessions Historiques (`sessions/`)
++
++| Fichier | Date | Sujet |
++|---------|------|-------|
++| `JOUR_4_COMPLETE_SUMMARY.md` | 15/10/2025 | Nettoyage + linting |
++| `TRANSFORMATION_COMPLETE.md` | 14/10/2025 | Transformation Analytics |
++| `REFACTORISATION_BACKEND_COMPLETE.md` | 14-15/10/2025 | Refactoring models 31→14 |
++| `PRESENTATION_FINALE.md` | 15/10/2025 | Présentation audit complet |
++
++**Valeur**: Historique détaillé des sessions de travail majeures.
++
++---
++
++## 🔍 Références Actives
++
++**Docs principales à consulter** (racine projet):
++- `README_AUDIT.md` - Guide démarrage
++- `SUMMARY.md` - Résumé exécutif
++- `REPORT.md` - Audit technique complet
++- `DASHBOARD.md` - Tableau de bord visuel
++- `MASTER_INDEX.md` - Navigation complète
++
++**Tests**:
++- `tests_plan.md` - Plan tests exhaustif
++
++**Migrations**:
++- `MIGRATIONS_NOTES.md` - Migrations DB proposées
+diff --git a/backend/add_admin.py b/docs/archive/scripts/add_admin.py
+similarity index 100%
+rename from backend/add_admin.py
+rename to docs/archive/scripts/add_admin.py
+diff --git a/backend/check_invoices.py b/docs/archive/scripts/check_invoices.py
+similarity index 100%
+rename from backend/check_invoices.py
+rename to docs/archive/scripts/check_invoices.py
+diff --git a/backend/test_monitoring.py b/docs/archive/scripts/test_monitoring.py
+similarity index 100%
+rename from backend/test_monitoring.py
+rename to docs/archive/scripts/test_monitoring.py
+diff --git a/TRANSFORMATION_COMPLETE.md b/docs/archive/sessions/TRANSFORMATION_COMPLETE.md
+similarity index 100%
+rename from TRANSFORMATION_COMPLETE.md
+rename to docs/archive/sessions/TRANSFORMATION_COMPLETE.md
+diff --git a/REFACTORISATION_BACKEND_COMPLETE.md b/docs/archive/sessions/REFACTORISATION_BACKEND_COMPLETE.md
+similarity index 100%
+rename from REFACTORISATION_BACKEND_COMPLETE.md
+rename to docs/archive/sessions/REFACTORISATION_BACKEND_COMPLETE.md
+diff --git a/JOUR_4_COMPLETE_SUMMARY.md b/docs/archive/sessions/JOUR_4_COMPLETE_SUMMARY.md
+similarity index 100%
+rename from JOUR_4_COMPLETE_SUMMARY.md
+rename to docs/archive/sessions/JOUR_4_COMPLETE_SUMMARY.md
+diff --git a/PRESENTATION_FINALE.md b/docs/archive/sessions/PRESENTATION_FINALE.md
+similarity index 100%
+rename from PRESENTATION_FINALE.md
+rename to docs/archive/sessions/PRESENTATION_FINALE.md
+
