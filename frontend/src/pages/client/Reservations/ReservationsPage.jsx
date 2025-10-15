@@ -1,19 +1,14 @@
-import React, { useEffect, useState } from "react";
-import { fetchBookings } from "../../../services/bookingService";
-import { fetchClient } from "../../../services/clientService";
-import styles from "./Reservations.module.css";
-import {
-  FaMapMarkerAlt,
-  FaCalendarAlt,
-  FaMoneyBillWave,
-  FaFilePdf,
-} from "react-icons/fa";
+import React, { useEffect, useState } from 'react';
+import { fetchBookings } from '../../../services/bookingService';
+import { fetchClient } from '../../../services/clientService';
+import styles from './Reservations.module.css';
+import { FaMapMarkerAlt, FaCalendarAlt, FaMoneyBillWave, FaFilePdf } from 'react-icons/fa';
 
-import apiClient from "../../../utils/apiClient";
+import apiClient from '../../../utils/apiClient';
 // ✅ SUPPRIMÉ: mergeInvoiceAndQRBill - Génération PDF déplacée vers backend
-import HeaderDashboard from "../../../components/layout/Header/HeaderDashboard";
-import Footer from "../../../components/layout/Footer/Footer";
-import useCompanyData from "../../../hooks/useCompanyData";
+import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
+import Footer from '../../../components/layout/Footer/Footer';
+import useCompanyData from '../../../hooks/useCompanyData';
 
 const ReservationsPage = () => {
   const { company: _company } = useCompanyData(); // Récupérer les données de l'entreprise
@@ -21,9 +16,9 @@ const ReservationsPage = () => {
   const [_clientData, setClientData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [sortBy, setSortBy] = useState("scheduled_time");
-  const [filter, setFilter] = useState("all");
-  const [selectedMonth, setSelectedMonth] = useState("");
+  const [sortBy, setSortBy] = useState('scheduled_time');
+  const [filter, setFilter] = useState('all');
+  const [selectedMonth, setSelectedMonth] = useState('');
   const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
@@ -31,7 +26,7 @@ const ReservationsPage = () => {
   }, []);
 
   useEffect(() => {
-    const publicId = localStorage.getItem("public_id");
+    const publicId = localStorage.getItem('public_id');
     if (publicId) {
       setLoading(true);
       fetchBookings(publicId)
@@ -39,7 +34,7 @@ const ReservationsPage = () => {
           setBookings(data);
         })
         .catch((err) => {
-          setError("Erreur lors du chargement des réservations.");
+          setError('Erreur lors du chargement des réservations.');
         })
         .finally(() => {
           setLoading(false);
@@ -52,30 +47,25 @@ const ReservationsPage = () => {
       const client = await fetchClient(); // Cette fonction doit retourner le profil client du user connecté
       setClientData(client);
     } catch (err) {
-      console.error("Erreur lors du chargement du profil client :", err);
+      console.error('Erreur lors du chargement du profil client :', err);
     }
   };
 
   // 🎯 Annuler une réservation
   const handleCancelBooking = async (bookingId) => {
-    if (!window.confirm("Voulez-vous vraiment annuler cette réservation ?"))
-      return;
+    if (!window.confirm('Voulez-vous vraiment annuler cette réservation ?')) return;
 
     try {
       setBookings((prevBookings) =>
-        prevBookings.map((b) =>
-          b.id === bookingId ? { ...b, isCancelling: true } : b
-        )
+        prevBookings.map((b) => (b.id === bookingId ? { ...b, isCancelling: true } : b))
       );
 
       const response = await apiClient.delete(`/bookings/${bookingId}`);
 
       if (response.status === 200) {
         const updatedBookings = await fetchBookings();
-        setBookings(
-          updatedBookings.map((b) => ({ ...b, isCancelling: false }))
-        );
-        alert("Réservation annulée avec succès !");
+        setBookings(updatedBookings.map((b) => ({ ...b, isCancelling: false })));
+        alert('Réservation annulée avec succès !');
       } else {
         throw new Error("L'annulation a échoué.");
       }
@@ -92,9 +82,9 @@ const ReservationsPage = () => {
     }
 
     // Vérifier que les infos du client sont chargées
-    const publicId = localStorage.getItem("public_id");
+    const publicId = localStorage.getItem('public_id');
     if (!publicId) {
-      alert("Les informations client ne sont pas disponibles.");
+      alert('Les informations client ne sont pas disponibles.');
       return;
     }
 
@@ -102,13 +92,11 @@ const ReservationsPage = () => {
     try {
       // Filtrer les réservations pour le mois sélectionné ET appartenant au client connecté
       const monthBookings = bookings.filter(
-        (booking) =>
-          new Date(booking.scheduled_time).getMonth() + 1 ===
-          parseInt(selectedMonth, 10)
+        (booking) => new Date(booking.scheduled_time).getMonth() + 1 === parseInt(selectedMonth, 10)
       );
 
       if (monthBookings.length === 0) {
-        alert("Aucune réservation trouvée pour ce mois.");
+        alert('Aucune réservation trouvée pour ce mois.');
         setIsExporting(false);
         return;
       }
@@ -120,10 +108,10 @@ const ReservationsPage = () => {
       //   period_month: selectedMonth.getMonth() + 1
       // });
       // window.open(response.data.pdf_url, '_blank');
-      
-      alert("Génération PDF déplacée vers backend API - À implémenter");
 
-      alert("Facture générée avec succès !");
+      alert('Génération PDF déplacée vers backend API - À implémenter');
+
+      alert('Facture générée avec succès !');
     } catch (error) {
       console.error("Erreur lors de l'exportation du PDF :", error);
       alert("Une erreur est survenue lors de l'exportation.");
@@ -135,18 +123,18 @@ const ReservationsPage = () => {
   const sortedBookings = [...bookings].sort((a, b) => {
     if (!a || !b) return 0;
 
-    if (sortBy === "scheduled_time") {
+    if (sortBy === 'scheduled_time') {
       return new Date(a.scheduled_time) - new Date(b.scheduled_time);
-    } else if (sortBy === "amount") {
+    } else if (sortBy === 'amount') {
       return parseFloat(b.amount || 0) - parseFloat(a.amount || 0);
-    } else if (sortBy === "status") {
+    } else if (sortBy === 'status') {
       return a.status.localeCompare(b.status);
     }
     return 0;
   });
 
   const filteredBookings = sortedBookings.filter((booking) => {
-    if (filter === "all") return true;
+    if (filter === 'all') return true;
     return booking.status === filter;
   });
 
@@ -178,19 +166,15 @@ const ReservationsPage = () => {
               <option value="">📅 Sélectionner un mois</option>
               {[...Array(12)].map((_, i) => (
                 <option key={i + 1} value={i + 1}>
-                  {new Date(2025, i).toLocaleString("fr-FR", {
-                    month: "long",
+                  {new Date(2025, i).toLocaleString('fr-FR', {
+                    month: 'long',
                   })}
                 </option>
               ))}
             </select>
 
-            <button
-              className={styles.exportBtn}
-              onClick={handleExportPDF}
-              disabled={isExporting}
-            >
-              <FaFilePdf /> {isExporting ? "Exportation..." : "Exporter en PDF"}
+            <button className={styles.exportBtn} onClick={handleExportPDF} disabled={isExporting}>
+              <FaFilePdf /> {isExporting ? 'Exportation...' : 'Exporter en PDF'}
             </button>
           </div>
         </div>
@@ -220,16 +204,15 @@ const ReservationsPage = () => {
               return (
                 <div className={styles.reservationCard} key={booking.id}>
                   <h3>
-                    <FaCalendarAlt />{" "}
-                    {new Date(booking.scheduled_time).toLocaleDateString()}
+                    <FaCalendarAlt /> {new Date(booking.scheduled_time).toLocaleDateString()}
                   </h3>
                   <p>
-                    <FaMapMarkerAlt /> <strong>Départ :</strong>{" "}
-                    {booking.pickup_location || "Inconnu"}
+                    <FaMapMarkerAlt /> <strong>Départ :</strong>{' '}
+                    {booking.pickup_location || 'Inconnu'}
                   </p>
                   <p>
-                    <FaMapMarkerAlt /> <strong>Arrivée :</strong>{" "}
-                    {booking.dropoff_location || "Inconnu"}
+                    <FaMapMarkerAlt /> <strong>Arrivée :</strong>{' '}
+                    {booking.dropoff_location || 'Inconnu'}
                   </p>
                   <p>
                     🚖 <strong>Entreprise :</strong> {booking.company_name}
@@ -238,42 +221,42 @@ const ReservationsPage = () => {
                     👨‍✈️ <strong>Chauffeur :</strong> {booking.driver_name}
                   </p>
                   <p>
-                    <FaMoneyBillWave /> <strong>Montant :</strong>{" "}
-                    {status === "canceled"
-                      ? "0 CHF"
+                    <FaMoneyBillWave /> <strong>Montant :</strong>{' '}
+                    {status === 'canceled'
+                      ? '0 CHF'
                       : booking.amount
                       ? `${booking.amount} CHF`
-                      : "N/A"}
+                      : 'N/A'}
                   </p>
                   <p>
-                    <strong>Statut :</strong>{" "}
+                    <strong>Statut :</strong>{' '}
                     <span
                       className={
-                        status === "completed"
+                        status === 'completed'
                           ? styles.statusCompleted
-                          : status === "in_progress"
+                          : status === 'in_progress'
                           ? styles.statusInProgress
-                          : status === "canceled"
+                          : status === 'canceled'
                           ? styles.statusCanceled
                           : styles.statusDefault
                       }
                     >
-                      {status === "completed"
-                        ? "✅ Terminé"
-                        : status === "in_progress"
-                        ? "🚖 En cours"
-                        : status === "canceled"
-                        ? "❌ Annulé"
-                        : "🔄 En attente"}
+                      {status === 'completed'
+                        ? '✅ Terminé'
+                        : status === 'in_progress'
+                        ? '🚖 En cours'
+                        : status === 'canceled'
+                        ? '❌ Annulé'
+                        : '🔄 En attente'}
                     </span>
                   </p>
-                  {status !== "canceled" && (
+                  {status !== 'canceled' && (
                     <button
                       className={styles.cancelBtn}
                       onClick={() => handleCancelBooking(booking.id)}
                       disabled={booking.isCancelling}
                     >
-                      {booking.isCancelling ? "Annulation..." : "Annuler"}
+                      {booking.isCancelling ? 'Annulation...' : 'Annuler'}
                     </button>
                   )}
                 </div>
@@ -291,41 +274,40 @@ const ReservationsPage = () => {
             pastBookings.map((booking) => (
               <div className={styles.reservationCard} key={booking.id}>
                 <h3>
-                  <FaCalendarAlt />{" "}
-                  {new Date(booking.scheduled_time).toLocaleDateString()}
+                  <FaCalendarAlt /> {new Date(booking.scheduled_time).toLocaleDateString()}
                 </h3>
                 <p>
-                  <FaMapMarkerAlt /> <strong>Départ :</strong>{" "}
-                  {booking.pickup_location || "Inconnu"}
+                  <FaMapMarkerAlt /> <strong>Départ :</strong>{' '}
+                  {booking.pickup_location || 'Inconnu'}
                 </p>
                 <p>
-                  <FaMapMarkerAlt /> <strong>Arrivée :</strong>{" "}
-                  {booking.dropoff_location || "Inconnu"}
+                  <FaMapMarkerAlt /> <strong>Arrivée :</strong>{' '}
+                  {booking.dropoff_location || 'Inconnu'}
                 </p>
                 <p>
-                  <FaMoneyBillWave /> <strong>Montant :</strong>{" "}
-                  {booking.amount ? `${booking.amount} CHF` : "N/A"}
+                  <FaMoneyBillWave /> <strong>Montant :</strong>{' '}
+                  {booking.amount ? `${booking.amount} CHF` : 'N/A'}
                 </p>
                 <p>
-                  <strong>Statut :</strong>{" "}
+                  <strong>Statut :</strong>{' '}
                   <span
                     className={
-                      booking.status === "completed"
+                      booking.status === 'completed'
                         ? styles.statusCompleted
-                        : booking.status === "in_progress"
+                        : booking.status === 'in_progress'
                         ? styles.statusInProgress
-                        : booking.status === "canceled"
+                        : booking.status === 'canceled'
                         ? styles.statusCanceled
                         : styles.statusDefault
                     }
                   >
-                    {booking.status === "completed"
-                      ? "✅ Terminé"
-                      : booking.status === "in_progress"
-                      ? "🚖 En cours"
-                      : booking.status === "canceled"
-                      ? "❌ Annulé"
-                      : "🔄 En attente"}
+                    {booking.status === 'completed'
+                      ? '✅ Terminé'
+                      : booking.status === 'in_progress'
+                      ? '🚖 En cours'
+                      : booking.status === 'canceled'
+                      ? '❌ Annulé'
+                      : '🔄 En attente'}
                   </span>
                 </p>
               </div>
