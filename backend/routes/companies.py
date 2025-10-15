@@ -810,7 +810,7 @@ class ListInvoices(Resource):
 
         invoices = (
             Invoice.query
-            .options(joinedload(Invoice.booking))
+            .options(joinedload(Invoice.lines))
             .join(Booking)
             .filter(Booking.company_id == cid)
             .all()
@@ -1127,33 +1127,33 @@ class CreateManualReservation(Resource):
             recurrence_dates = [scheduled]
             base_date = scheduled
             
-            if recurrence_type == 'daily':
+            if recurrence_type == 'daily' and base_date:
                 # Tous les jours
                 for i in range(1, occurrences):
                     next_date = base_date + timedelta(days=i)
                     if recurrence_end_date_str:
                         try:
                             end_date = parse_local_naive(recurrence_end_date_str)
-                            if next_date > end_date:
+                            if end_date and next_date > end_date:
                                 break
                         except Exception:
                             pass
                     recurrence_dates.append(next_date)
             
-            elif recurrence_type == 'weekly':
+            elif recurrence_type == 'weekly' and base_date:
                 # Toutes les semaines (même jour)
                 for i in range(1, occurrences):
                     next_date = base_date + timedelta(weeks=i)
                     if recurrence_end_date_str:
                         try:
                             end_date = parse_local_naive(recurrence_end_date_str)
-                            if next_date > end_date:
+                            if end_date and next_date > end_date:
                                 break
                         except Exception:
                             pass
                     recurrence_dates.append(next_date)
             
-            elif recurrence_type == 'custom' and recurrence_days:
+            elif recurrence_type == 'custom' and recurrence_days and base_date:
                 # Jours personnalisés (ex: lundi, mercredi, vendredi)
                 # Pour ce mode, "occurrences" signifie X fois CHAQUE jour
                 app_logger.info(f"🗓️ Mode jours personnalisés - Jours demandés: {recurrence_days}")
@@ -1170,28 +1170,29 @@ class CreateManualReservation(Resource):
                         iteration += 1
                         
                         # Trouver le prochain jour qui correspond
-                        if current_date.weekday() == target_weekday:
+                        if current_date and current_date.weekday() == target_weekday:
                             if recurrence_end_date_str:
                                 try:
                                     end_date = parse_local_naive(recurrence_end_date_str)
-                                    if current_date > end_date:
+                                    if end_date and current_date > end_date:
                                         app_logger.info(f"  ⛔ Date de fin atteinte pour jour {target_weekday}: {end_date}")
                                         break
                                 except Exception:
                                     pass
                             
                             # Ajouter cette date si ce n'est pas déjà la date de base
-                            if current_date != base_date or target_weekday == base_date.weekday():
+                            if current_date != base_date or (base_date and target_weekday == base_date.weekday()):
                                 if current_date not in recurrence_dates:
                                     recurrence_dates.append(current_date)
                                     app_logger.info(f"  ✅ Date ajoutée: {current_date.strftime('%d/%m/%Y')} ({target_weekday})")
                                 count += 1
                         
                         # Avancer au jour suivant
-                        current_date += timedelta(days=1)
+                        if current_date:
+                            current_date += timedelta(days=1)
             
             # Trier les dates par ordre chronologique
-            recurrence_dates.sort()
+            recurrence_dates.sort(key=lambda x: x)
             app_logger.info(f"✅ {len(recurrence_dates)} dates de récurrence générées: {[d.strftime('%d/%m/%Y') for d in recurrence_dates]}")        
 # ---------- 2) Estimation distance/durée avec OSRM (best-effort) ----------
         dur_s, dist_m = None, None
@@ -1320,7 +1321,7 @@ class CreateManualReservation(Resource):
                 # Calculer la date de retour pour cette occurrence si aller-retour
                 occurrence_return_dt = None
                 if is_rt:
-                    if return_dt:
+                    if return_dt and scheduled:
                         # Heure de retour fournie : garder le même écart de temps
                         time_diff = return_dt - scheduled
                         occurrence_return_dt = occurrence_date + time_diff
