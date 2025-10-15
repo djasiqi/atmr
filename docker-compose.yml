@@ -59,6 +59,8 @@ services:
       - FLASK_CONFIG=${FLASK_CONFIG:-development}
       - FLASK_ENV=${FLASK_ENV:-development}
       - TZ=Europe/Zurich
+      - PDF_BASE_URL=${PDF_BASE_URL:-http://localhost:5000}
+      - UPLOADS_PUBLIC_BASE=${UPLOADS_PUBLIC_BASE:-http://localhost:5000/uploads}
     volumes:
       - ./backend:/app
     depends_on:
