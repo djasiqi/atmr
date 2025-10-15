@@ -1,11 +1,16 @@
 // src/screens/trip-details.tsx
-import React, { useEffect, useState } from 'react';
-import { View, ScrollView, Text, Alert } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
-import { getTripDetails, updateTripStatus, Booking, BookingStatus } from '@/services/api';
-import { Button } from '@/components/ui/Button';
-import { Loader } from '@/components/ui/Loader';
-import { styles } from '@/styles/tripDetailsStyles';
+import React, { useEffect, useState } from "react";
+import { View, ScrollView, Text, Alert } from "react-native";
+import { useLocalSearchParams, router } from "expo-router";
+import {
+  getTripDetails,
+  updateTripStatus,
+  Booking,
+  BookingStatus,
+} from "@/services/api";
+import { Button } from "@/components/ui/Button";
+import { Loader } from "@/components/ui/Loader";
+import { styles } from "@/styles/tripDetailsStyles";
 
 export default function TripDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -18,7 +23,7 @@ export default function TripDetailsScreen() {
       const details = await getTripDetails(Number(id));
       setTrip(details);
     } catch {
-      Alert.alert('Erreur', 'Impossible de charger les détails du trajet.');
+      Alert.alert("Erreur", "Impossible de charger les détails du trajet.");
       router.back();
     } finally {
       setLoading(false);
@@ -35,9 +40,9 @@ export default function TripDetailsScreen() {
     try {
       await updateTripStatus(trip.id, status);
       await fetchTripDetails();
-      Alert.alert('Succès', `Le statut du trajet est passé à ${status}.`);
+      Alert.alert("Succès", `Le statut du trajet est passé à ${status}.`);
     } catch {
-      Alert.alert('Erreur', 'Impossible de mettre à jour le statut.');
+      Alert.alert("Erreur", "Impossible de mettre à jour le statut.");
     } finally {
       setLoading(false);
     }
@@ -45,7 +50,7 @@ export default function TripDetailsScreen() {
 
   if (loading || !trip) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <Loader />
       </View>
     );
@@ -109,7 +114,10 @@ export default function TripDetailsScreen() {
         <View style={styles.rowBetween}>
           <Text style={styles.label}>Distance :</Text>
           <Text style={styles.value}>
-            {(trip.distance_meters / 1000).toFixed(1)} km
+            {trip.distance_meters
+              ? (trip.distance_meters / 1000).toFixed(1)
+              : "—"}{" "}
+            km
           </Text>
         </View>
       </View>
@@ -118,7 +126,10 @@ export default function TripDetailsScreen() {
         <View style={styles.rowBetween}>
           <Text style={styles.label}>Durée :</Text>
           <Text style={styles.value}>
-            {Math.ceil(trip.duration_seconds / 60)} min
+            {trip.duration_seconds
+              ? Math.ceil(trip.duration_seconds / 60)
+              : "—"}{" "}
+            min
           </Text>
         </View>
       </View>
@@ -171,7 +182,7 @@ export default function TripDetailsScreen() {
       <View style={styles.section}>
         <View style={styles.rowBetween}>
           <Text style={styles.label}>Statut :</Text>
-          <Text style={[styles.value, { color: '#00796B' }]}>
+          <Text style={[styles.value, { color: "#00796B" }]}>
             {trip.status}
           </Text>
         </View>
@@ -179,31 +190,36 @@ export default function TripDetailsScreen() {
 
       {/* Actions */}
       <View style={styles.actionsRow}>
-        {trip.status === 'ASSIGNED' && (
+        {trip.status === "ASSIGNED" && (
           <View style={styles.actionButton}>
-            <Button onPress={() => handleUpdateStatus('IN_PROGRESS' as BookingStatus)}>
+            <Button
+              onPress={() => handleUpdateStatus("IN_PROGRESS" as BookingStatus)}
+            >
               Commencer
             </Button>
           </View>
         )}
-        {trip.status === 'IN_PROGRESS' && (
+        {trip.status === "IN_PROGRESS" && (
           <View style={styles.actionButton}>
             <Button
               onPress={() =>
                 handleUpdateStatus(
-                  trip.is_return ? 'return_completed' : 'completed'
+                  trip.is_return ? "return_completed" : "completed"
                 )
               }
             >
-              {trip.is_return ? 'Terminer retour' : 'Terminer'}
+              {trip.is_return ? "Terminer retour" : "Terminer"}
             </Button>
           </View>
         )}
         <View style={styles.actionButton}>
-          <Button variant="secondary" onPress={() => {
-            console.log("[TripDetails] Bouton Retour pressé");
-            router.back();
-          }}>
+          <Button
+            variant="secondary"
+            onPress={() => {
+              console.log("[TripDetails] Bouton Retour pressé");
+              router.back();
+            }}
+          >
             Retour
           </Button>
         </View>
