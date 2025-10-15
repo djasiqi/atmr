@@ -1191,8 +1191,9 @@ class CreateManualReservation(Resource):
                         if current_date:
                             current_date += timedelta(days=1)
             
-            # Trier les dates par ordre chronologique
-            recurrence_dates.sort(key=lambda x: x)
+            # Trier les dates par ordre chronologique (filtrer les None d'abord)
+            recurrence_dates = [d for d in recurrence_dates if d is not None]
+            recurrence_dates.sort()
             app_logger.info(f"✅ {len(recurrence_dates)} dates de récurrence générées: {[d.strftime('%d/%m/%Y') for d in recurrence_dates]}")        
 # ---------- 2) Estimation distance/durée avec OSRM (best-effort) ----------
         dur_s, dist_m = None, None
@@ -1321,7 +1322,7 @@ class CreateManualReservation(Resource):
                 # Calculer la date de retour pour cette occurrence si aller-retour
                 occurrence_return_dt = None
                 if is_rt:
-                    if return_dt and scheduled:
+                    if return_dt and scheduled and occurrence_date:
                         # Heure de retour fournie : garder le même écart de temps
                         time_diff = return_dt - scheduled
                         occurrence_return_dt = occurrence_date + time_diff
