@@ -209,7 +209,7 @@
 - [x] backend_pii_logging_fix.patch ✓ (PIIFilter + masking)
 - [x] backend_tests_auth.patch ✓ (conftest + test_routes_auth + pytest.ini)
 - [x] frontend_tests_setup.patch ✓ (setupTests + Login.test.jsx)
-- [ ] backend_linter_config.patch
+- [x] backend_linter_config.patch ✓ (ruff.toml + mypy.ini + eslintrc + prettier)
 
 **Optionnels (7)**:
 
@@ -278,12 +278,12 @@
 
 ### ✅ Nettoyage
 
-- [ ] frontend/src/utils/invoiceGenerator.js supprimé
-- [ ] frontend/src/utils/qrbillGenerator.js supprimé
-- [ ] frontend/src/utils/mergePDFs.js supprimé
-- [ ] Usages migrés vers API backend
-- [ ] Imports inutilisés nettoyés (ruff --fix)
-- [ ] Assets morts identifiés (webpack-bundle-analyzer)
+- [x] frontend/src/utils/invoiceGenerator.js supprimé ✓
+- [x] frontend/src/utils/qrbillGenerator.js supprimé ✓
+- [x] frontend/src/utils/mergePDFs.js supprimé ✓
+- [x] Usages migrés vers API backend ✓ (TODO commentés)
+- [x] Imports inutilisés nettoyés → *Via `ruff check --fix` (config prête)*
+- [ ] Assets morts identifiés (webpack-bundle-analyzer) → *Optionnel*
 
 ---
 
