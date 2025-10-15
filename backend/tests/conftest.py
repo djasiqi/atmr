@@ -43,18 +43,19 @@ def db_session(app):
 @pytest.fixture
 def client_user(app, db_session):
     """Crée un utilisateur client de test"""
-    user = User(
-        username='testclient',
-        email='client@test.com',
-        role=UserRole.CLIENT,
-        first_name='John',
-        last_name='Doe'
-    )
+    user = User()
+    user.username = 'testclient'  # type: ignore
+    user.email = 'client@test.com'  # type: ignore
+    user.role = UserRole.CLIENT  # type: ignore
+    user.first_name = 'John'  # type: ignore
+    user.last_name = 'Doe'  # type: ignore
     user.set_password('testpass123')
     db_session.add(user)
     db_session.flush()
     
-    client = Client(user_id=user.id, is_active=True)
+    client = Client()
+    client.user_id = user.id  # type: ignore
+    client.is_active = True  # type: ignore
     db_session.add(client)
     db_session.commit()
     
@@ -63,21 +64,19 @@ def client_user(app, db_session):
 @pytest.fixture
 def company_user(app, db_session):
     """Crée une entreprise de test"""
-    user = User(
-        username='testcompany',
-        email='company@test.com',
-        role=UserRole.COMPANY
-    )
+    user = User()
+    user.username = 'testcompany'  # type: ignore
+    user.email = 'company@test.com'  # type: ignore
+    user.role = UserRole.COMPANY  # type: ignore
     user.set_password('companypass123')
     db_session.add(user)
     db_session.flush()
     
-    company = Company(
-        user_id=user.id,
-        name='Test Transport SA',
-        is_approved=True,
-        dispatch_enabled=True
-    )
+    company = Company()
+    company.user_id = user.id  # type: ignore
+    company.name = 'Test Transport SA'  # type: ignore
+    company.is_approved = True  # type: ignore
+    company.dispatch_enabled = True  # type: ignore
     db_session.add(company)
     db_session.commit()
     
