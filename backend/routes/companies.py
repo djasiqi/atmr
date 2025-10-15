@@ -1,7 +1,7 @@
 import glob
 import logging
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, cast
 from uuid import uuid4
 
@@ -51,12 +51,11 @@ def _allowed_logo(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_LOGO_EXT
 
 def _remove_existing_logos(company_id: int, logos_dir: str):
-    """Supprime les anciens logos de l’entreprise (si l’extension change, etc.)."""
+    """Supprime les anciens logos de l'entreprise (si l'extension change, etc.)."""
+    import contextlib
     for p in glob.glob(os.path.join(logos_dir, f"company_{company_id}.*")):
-        try:
+        with contextlib.suppress(OSError):
             os.remove(p)
-        except OSError:
-            pass
 
 # Dans routes/companies.py, en haut du fichier
 create_driver_model = companies_ns.model('CreateDriver', {
@@ -593,15 +592,11 @@ class AssignDriver(Resource):
             # ⚙️ Pylance : protège .date() quand scheduled_time ou le retour de to_geneva_local peuvent être None
             st = getattr(booking, "scheduled_time", None)
             if st is None:
-                day_local = date.today()
+                day_local = datetime.now(datetime.UTC).date()
             else:
                 # Certains stubs typent to_geneva_local -> Optional[datetime]
                 dt_local_any = to_geneva_local(cast(Any, st))
-                if dt_local_any is None:
-                    # Fallback : on prend la date naïve du scheduled_time
-                    day_local = cast(Any, st).date()
-                else:
-                    day_local = cast(Any, dt_local_any).date()
+                day_local = cast(Any, st).date() if dt_local_any is None else cast(Any, dt_local_any).date()
             dispatch_run = DispatchRun.query.filter_by(company_id=company_id, day=day_local).first()
             if not dispatch_run:
                 # 🛠️ Constructeur SQLAlchemy dynamique → cast(Any, ...) pour Pylance
@@ -868,7 +863,7 @@ class CompanyDispatchActivate(Resource):
         if not hasattr(company, "dispatch_enabled"):
             return {"error": "Le champ 'dispatch_enabled' n'existe pas sur Company"}, 400
 
-        company.dispatch_enabled = enabled
+        company.dispatch_enabled = enabled  # type: ignore[assignment]
         db.session.commit()
 
         if enabled:
@@ -903,7 +898,7 @@ class DeactivateDispatch(Resource):
             cid = None
 
         # ⚙️ Pylance + SQLAlchemy : éviter l'assign direct sur une Column -> utiliser setattr
-        company.dispatch_enabled = False
+        company.dispatch_enabled = False  # type: ignore[assignment]
         db.session.commit()
 
         if cid is not None:
@@ -966,7 +961,7 @@ class DriverVacationsResource(Resource):
     @role_required(UserRole.company)
     def post(self, driver_id):
         """
-        Crée une période de congés/vacances pour un chauffeur, 
+        Crée une période de congés/vacances pour un chauffeur,
         en tenant compte des jours fériés genevois et du quota.
         """
         # Vérifier que l'utilisateur a bien le rôle "company"
@@ -1287,7 +1282,7 @@ class CreateManualReservation(Resource):
                 dist_m = int(route_data.get('distance', 0))
 
                 # 🚦 Facteur rush hour : ajuster selon l'heure de la réservation
-                scheduled_hour = scheduled.hour if scheduled else datetime.now().hour
+                scheduled_hour = scheduled.hour if scheduled else datetime.now(datetime.UTC).hour
                 rush_hour_factor = 1.0
 
                 # Heures de pointe du matin (7h-9h) : +30%
@@ -1764,7 +1759,7 @@ class CompanyClients(Resource):
         raw_bd = arg("birth_date")
         if raw_bd:
             try:
-                birth_date = datetime.strptime(str(raw_bd), "%Y-%m-%d").date()
+                birth_date = datetime.strptime(str(raw_bd), "%Y-%m-%d").date()  # noqa: DTZ007
             except ValueError:
                 return {"error": "Format de date de naissance invalide. Utiliser YYYY-MM-DD."}, 400
 
