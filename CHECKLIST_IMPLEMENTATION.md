@@ -42,6 +42,7 @@
   - [x] Commit: `git commit -m "fix: Apply critical backend patches"` (Commit 7e021ff créé)
 
 **✅ VALIDATION JOUR 1 - COMPLÉTÉ**: API 50% plus rapide, Celery fiable, tests auth 85%
+
 - ✅ 8 commits créés (patches + corrections Pyright)
 - ✅ 0 erreur Pyright dans tous les fichiers
 - ✅ 6 index DB critiques appliqués
@@ -53,20 +54,20 @@
 
 #### Matin (3h)
 
-- [ ] 🎨 **08:00-09:00** - Patches frontend
-  - [ ] `frontend_jwt_refresh.patch`
-  - [ ] `frontend_tests_setup.patch`
-  - [ ] Tests: `npm test`
-- [ ] 🐳 **09:00-10:00** - Infra & config
-  - [ ] `infra_docker_compose_healthchecks.patch`
-  - [ ] `backend_env_example.patch`
-  - [ ] `frontend_env_example.patch`
-  - [ ] Config .env production (PDF_BASE_URL, secrets)
-- [ ] 🔒 **10:00-11:00** - Sécurité
-  - [ ] `backend_socketio_validation.patch`
-  - [ ] `backend_pii_logging_fix.patch`
-  - [ ] Activer: `MASK_PII_LOGS=true` dans .env
-  - [ ] Tests: Vérifier logs masqués
+- [x] 🎨 **08:00-09:00** - Patches frontend
+  - [x] `frontend_jwt_refresh.patch` (interceptor axios avec refresh automatique)
+  - [x] `frontend_tests_setup.patch` (setupTests.js + Login.test.jsx)
+  - [ ] Tests: `npm test` (à exécuter si besoin)
+- [x] 🐳 **09:00-10:00** - Infra & config
+  - [x] `infra_docker_compose_healthchecks.patch` (healthchecks api, redis, osrm + depends_on)
+  - [x] `backend_env_example.patch` (backend/.env.example créé)
+  - [x] `frontend_env_example.patch` (frontend/.env.example créé)
+  - [x] Config .env production (PDF_BASE_URL déjà dans config.py)
+- [x] 🔒 **10:00-11:00** - Sécurité
+  - [x] `backend_socketio_validation.patch` (validation lat/lon, message length, receiver_id)
+  - [x] `backend_pii_logging_fix.patch` (logging_utils.py + PIIFilter dans app.py)
+  - [x] Activer: `MASK_PII_LOGS=true` dans .env (déjà dans .env.example)
+  - [ ] Tests: Vérifier logs masqués (à tester si besoin)
 
 #### Après-midi (3h)
 
