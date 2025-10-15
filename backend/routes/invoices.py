@@ -125,7 +125,13 @@ class InvoicesList(Resource):
         page = args.get('page', default=1, type=int)
         per_page = args.get('per_page', default=20, type=int)
 
-        query = Invoice.query.filter(Invoice.company_id == company_id)
+        # ✅ Eager load client + lines pour éviter N+1
+        query = Invoice.query.options(
+            joinedload(Invoice.client).joinedload(Client.user),
+            joinedload(Invoice.bill_to_client).joinedload(Client.user),
+            joinedload(Invoice.lines),
+            joinedload(Invoice.payments)
+        ).filter(Invoice.company_id == company_id)
 
         # Status mapping frontend -> enum value
         status_map = {

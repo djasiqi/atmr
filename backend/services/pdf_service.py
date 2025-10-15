@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from flask import current_app
 from sqlalchemy.orm import joinedload
 from models import Invoice, CompanyBillingSettings, Client, InvoiceLineType
 from services.qrbill_service import QRBillService
@@ -43,8 +44,11 @@ class PDFService:
             with open(filepath, 'wb') as f:
                 f.write(pdf_content)
             
-            # Retourner l'URL absolue vers le backend
-            pdf_url = f"http://localhost:5000/uploads/invoices/{filename}"
+            # ✅ URL dynamique depuis config
+            pdf_base_url = current_app.config.get('PDF_BASE_URL', 'http://localhost:5000')
+            uploads_base = current_app.config.get('UPLOADS_PUBLIC_BASE', '/uploads')
+            
+            pdf_url = f"{pdf_base_url}{uploads_base}/invoices/{filename}"
             
             app_logger.info(f"PDF de facture généré: {pdf_url}")
             return pdf_url
@@ -78,8 +82,10 @@ class PDFService:
             with open(filepath, 'wb') as f:
                 f.write(pdf_content)
             
-            # Retourner l'URL absolue vers le backend
-            pdf_url = f"http://localhost:5000/uploads/invoices/{filename}"
+            # ✅ URL dynamique
+            pdf_base_url = current_app.config.get('PDF_BASE_URL', 'http://localhost:5000')
+            uploads_base = current_app.config.get('UPLOADS_PUBLIC_BASE', '/uploads')
+            pdf_url = f"{pdf_base_url}{uploads_base}/invoices/{filename}"
             
             app_logger.info(f"PDF de rappel généré: {pdf_url}")
             return pdf_url

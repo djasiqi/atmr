@@ -1,6 +1,6 @@
 import logging
 from celery import Celery
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from models import db, Invoice, InvoiceStatus, CompanyBillingSettings
 from services.invoice_service import InvoiceService
 from services.notification_service import NotificationService
@@ -11,7 +11,13 @@ app_logger = logging.getLogger("billing_tasks")
 # Instance Celery (à adapter selon votre configuration)
 celery_app = Celery('billing')
 
-@celery_app.task
+@celery_app.task(
+    bind=True,
+    acks_late=True,
+    task_time_limit=300,
+    max_retries=2,
+    autoretry_for=(Exception,)
+)
 def check_overdues_and_trigger_reminders():
     """
     Tâche quotidienne pour vérifier les factures en retard et déclencher les rappels automatiques
@@ -34,7 +40,13 @@ def check_overdues_and_trigger_reminders():
         app_logger.error(f"Erreur lors de la vérification des factures en retard: {str(e)}")
         raise
 
-@celery_app.task
+@celery_app.task(
+    bind=True,
+    acks_late=True,
+    task_time_limit=600,
+    max_retries=2,
+    autoretry_for=(Exception,)
+)
 def send_reminder_notifications():
     """
     Tâche pour envoyer les notifications de rappel par email
@@ -45,7 +57,7 @@ def send_reminder_notifications():
         notification_service = NotificationService()
         
         # Récupérer les rappels générés aujourd'hui qui n'ont pas encore été envoyés
-        today = datetime.utcnow().date()
+        today = datetime.now(timezone.utc).date()
         reminders_to_send = db.session.query(InvoiceReminder).filter(
             InvoiceReminder.generated_at >= today,
             InvoiceReminder.sent_at.is_(None),
@@ -58,7 +70,7 @@ def send_reminder_notifications():
                 notification_service.send_reminder_notification(reminder)
                 
                 # Marquer comme envoyé
-                reminder.sent_at = datetime.utcnow()
+                reminder.sent_at = datetime.now(timezone.utc)
                 db.session.commit()
                 
                 app_logger.info(f"Notification de rappel envoyée pour la facture {reminder.invoice.invoice_number}")
@@ -73,7 +85,13 @@ def send_reminder_notifications():
         app_logger.error(f"Erreur lors de l'envoi des notifications de rappel: {str(e)}")
         raise
 
-@celery_app.task
+@celery_app.task(
+    bind=True,
+    acks_late=True,
+    task_time_limit=900,  # 15 min (peut générer beaucoup de factures)
+    max_retries=1,
+    autoretry_for=(Exception,)
+)
 def generate_monthly_invoices():
     """
     Tâche mensuelle pour générer automatiquement les factures des clients actifs
@@ -84,7 +102,7 @@ def generate_monthly_invoices():
         invoice_service = InvoiceService()
         
         # Calculer la période précédente
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if now.month == 1:
             period_year = now.year - 1
             period_month = 12
@@ -148,7 +166,13 @@ def generate_monthly_invoices():
         app_logger.error(f"Erreur lors de la génération mensuelle des factures: {str(e)}")
         raise
 
-@celery_app.task
+@celery_app.task(
+    bind=True,
+    acks_late=True,
+    task_time_limit=600,
+    max_retries=1,
+    autoretry_for=(Exception,)
+)
 def cleanup_old_invoices():
     """
     Tâche de nettoyage pour archiver les anciennes factures
@@ -157,7 +181,7 @@ def cleanup_old_invoices():
         app_logger.info("Début du nettoyage des anciennes factures")
         
         # Factures payées depuis plus de 7 ans
-        cutoff_date = datetime.utcnow() - timedelta(days=7*365)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=7*365)
         
         old_paid_invoices = db.session.query(Invoice).filter(
             Invoice.status == InvoiceStatus.PAID,
@@ -183,7 +207,13 @@ def cleanup_old_invoices():
         app_logger.error(f"Erreur lors du nettoyage des factures: {str(e)}")
         raise
 
-@celery_app.task
+@celery_app.task(
+    bind=True,
+    acks_late=True,
+    task_time_limit=300,
+    max_retries=2,
+    autoretry_for=(Exception,)
+)
 def send_invoice_summary():
     """
     Tâche pour envoyer un résumé mensuel des factures aux entreprises
@@ -194,7 +224,7 @@ def send_invoice_summary():
         notification_service = NotificationService()
         
         # Calculer la période précédente
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if now.month == 1:
             period_year = now.year - 1
             period_month = 12

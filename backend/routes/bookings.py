@@ -7,8 +7,9 @@ from flask_restx import Namespace, Resource, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from typing import Any, cast
 
+from sqlalchemy.orm import joinedload
 from ext import db, role_required
-from models import Booking, BookingStatus, Client, User, UserRole
+from models import Booking, BookingStatus, Client, User, UserRole, Driver
 from shared.time_utils import to_utc
 from services.maps import get_distance_duration, geocode_address
 from services.unified_dispatch import queue
@@ -301,7 +302,12 @@ class ListBookings(Resource):
                 client = Client.query.filter_by(user_id=user.id).one_or_none()
                 if not client:
                     return {"error": "Unauthorized: No client profile found"}, 403
-                bookings = Booking.query.filter_by(client_id=client.id).all()
+                # ✅ Eager load client + user pour éviter N+1
+                bookings = Booking.query.options(
+                    joinedload(Booking.client).joinedload(Client.user),
+                    joinedload(Booking.driver).joinedload(Driver.user),
+                    joinedload(Booking.company)
+                ).filter_by(client_id=client.id).order_by(Booking.scheduled_time.desc()).limit(100).all()
             else:
                 return {"error": "Unauthorized: You don't have permission"}, 403
 

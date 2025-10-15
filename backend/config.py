@@ -35,6 +35,10 @@ class Config:
 
     # Ratelimit on/off (tests = off plus bas)
     RATELIMIT_ENABLED = True
+    
+    # ✅ URLs dynamiques pour PDFs/uploads
+    PDF_BASE_URL = os.getenv('PDF_BASE_URL', 'http://localhost:5000')
+    UPLOADS_PUBLIC_BASE = os.getenv('UPLOADS_PUBLIC_BASE', '/uploads')
 
     # Logique d'initialisation commune (optionnel)
     @staticmethod
@@ -59,6 +63,11 @@ class DevelopmentConfig(Config):
     REMEMBER_COOKIE_HTTPONLY = True
     REMEMBER_COOKIE_SAMESITE = "Lax"
 
+    # Dev: PDFs accessibles en local
+    PDF_BASE_URL = os.getenv('PDF_BASE_URL', 'http://localhost:5000')
+    UPLOADS_PUBLIC_BASE = '/uploads'
+
+
 class ProductionConfig(Config):
     """Configuration pour la production."""
     DEBUG = False
@@ -75,6 +84,11 @@ class ProductionConfig(Config):
     REMEMBER_COOKIE_HTTPONLY = True
     REMEMBER_COOKIE_SAMESITE = os.getenv('REMEMBER_COOKIE_SAMESITE', 'Lax')
 
+    # ✅ Prod: URL backend publique (depuis env)
+    PDF_BASE_URL = os.getenv('PDF_BASE_URL')
+    if not PDF_BASE_URL:
+        raise RuntimeError("PDF_BASE_URL requis en production")
+
 class TestingConfig(Config):
     TESTING = True
     SECRET_KEY = 'test-secret-key'
@@ -83,6 +97,8 @@ class TestingConfig(Config):
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     WTF_CSRF_ENABLED = False
     RATELIMIT_ENABLED = False
+    PDF_BASE_URL = 'http://testserver'
+    UPLOADS_PUBLIC_BASE = '/uploads'
 
 
 # C'est ce que votre "Application Factory" utilisera

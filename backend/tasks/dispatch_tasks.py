@@ -32,6 +32,9 @@ def _safe_int(v: Any) -> Optional[int]:
 
 @shared_task(
     bind=True,
+    acks_late=True,  # ✅ Ne pas ack avant traitement complet
+    task_time_limit=300,  # 5 minutes max
+    task_soft_time_limit=270,
     max_retries=3,
     default_retry_delay=30,
     autoretry_for=(Exception,),
@@ -242,7 +245,11 @@ def run_dispatch_task(
             except Exception:
                 pass
 
-@shared_task(name="tasks.dispatch_tasks.autorun_tick")
+@shared_task(
+    name="tasks.dispatch_tasks.autorun_tick",
+    acks_late=True,
+    task_time_limit=600  # 10 minutes (peut lancer plusieurs dispatch)
+)
 def autorun_tick() -> Dict[str, Any]:
     start_time = time.time()
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")

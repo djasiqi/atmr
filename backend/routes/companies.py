@@ -682,9 +682,13 @@ class CompanyDriversList(Resource):
             cid = None
         if cid is None:
             return {"error": "Entreprise introuvable (ID invalide)."}, 500
+        # ✅ Eager load user + vacations pour éviter N+1
         drivers = (
             Driver.query
-            .options(joinedload(Driver.user))
+            .options(
+                joinedload(Driver.user),
+                joinedload(Driver.vacations)
+            )
             .filter_by(company_id=cid)
             .all()
         )
