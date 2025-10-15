@@ -15,6 +15,7 @@ from flask import Flask
 # Forcer environnement de test avant d'importer l'app
 os.environ['FLASK_ENV'] = 'testing'
 os.environ['PDF_BASE_URL'] = 'http://localhost:5000'  # Valeur factice pour tests
+os.environ.setdefault('TEST_DATABASE_URL', 'postgresql://atmr:atmr@localhost:5432/atmr_test')
 
 from app import create_app
 from ext import db as _db
@@ -26,12 +27,24 @@ def app() -> Flask:
     """Crée une instance Flask en mode test."""
 
     app = create_app()
+
+    # Utiliser PostgreSQL si disponible (Docker), sinon SQLite
+    #database_url = os.getenv(
+    #    'TEST_DATABASE_URL',
+    #    'postgresql+psycopg2://atmr:atmr@localhost:5432/atmr_test'
+    #)
+
+    # Note: Les tests d'intégration nécessitent PostgreSQL via CI/GitHub Actions
+    # Les tests unitaires (OSRM, logging, models) fonctionnent avec SQLite
+    database_url = 'sqlite:///:memory:'
+
     app.config.update({
         'TESTING': True,
-        'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',
+        'SQLALCHEMY_DATABASE_URI': database_url,
         'WTF_CSRF_ENABLED': False,
         'JWT_SECRET_KEY': 'test-secret-key',
         'SECRET_KEY': 'test-secret-key',
+        'SQLALCHEMY_ECHO': False,  # Pas de logs SQL verbeux en tests
     })
     return app
 
