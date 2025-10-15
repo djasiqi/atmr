@@ -20,6 +20,16 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import sys,urllib.request; r=urllib.request.urlopen(''http://127.0.0.1:5000/health'', timeout=3); sys.exit(0 if getattr(r,''status'',200)==200 else 1)"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     command: >
       gunicorn wsgi:app
       --bind 0.0.0.0:5000
@@ -52,9 +62,12 @@ services:
     volumes:
       - ./backend:/app
     depends_on:
-      - postgres
-      - redis
-      - osrm
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      osrm:
+        condition: service_started
     restart: unless-stopped
 
   celery-worker:
@@ -91,10 +104,12 @@ services:
     volumes:
       - ./backend:/app
     depends_on:
-      - postgres
-      - redis
-      - osrm
-      - api
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
   celery-beat:
@@ -129,9 +144,12 @@ services:
     volumes:
       - ./backend:/app
     depends_on:
-      - postgres
-      - redis
-      - api
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
   flower:
@@ -158,9 +176,12 @@ services:
     volumes:
       - ./backend:/app
     depends_on:
-      - postgres
-      - redis
-      - celery-worker
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      celery-worker:
+        condition: service_started
     restart: unless-stopped
 
   redis:
@@ -169,6 +190,11 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     command: redis-server --appendonly yes
     restart: unless-stopped
 
@@ -176,6 +202,16 @@ services:
     image: osrm/osrm-backend:latest
     volumes:
       - ./osrm/data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --spider -q http://localhost:5000/route/v1/driving/6.143,46.204;6.632,46.520 || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     command: osrm-routed --algorithm mld /data/switzerland-latest.osrm
     restart: unless-stopped
 
