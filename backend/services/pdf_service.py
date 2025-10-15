@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 from flask import current_app
 from sqlalchemy.orm import joinedload
@@ -40,7 +40,7 @@ class PDFService:
             pdf_content = self._create_invoice_pdf_content(invoice)
 
             # Sauvegarder le fichier
-            filename = f"invoice_{invoice.invoice_number}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            filename = f"invoice_{invoice.invoice_number}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
             filepath = os.path.join(self.invoices_dir, filename)
 
             with open(filepath, 'wb') as f:
@@ -78,7 +78,7 @@ class PDFService:
             pdf_content = self._create_reminder_pdf_content(invoice, level)
 
             # Sauvegarder le fichier
-            filename = f"reminder_{invoice.invoice_number}_level{level}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            filename = f"reminder_{invoice.invoice_number}_level{level}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
             filepath = os.path.join(self.invoices_dir, filename)
 
             with open(filepath, 'wb') as f:

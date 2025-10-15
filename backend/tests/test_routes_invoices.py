@@ -56,7 +56,7 @@ class TestGenerateInvoice:
             booking.customer_name = 'Patient Test'  # type: ignore
             booking.pickup_location = 'Genève'  # type: ignore
             booking.dropoff_location = 'Lausanne'  # type: ignore
-            booking.scheduled_time = datetime(2025, 9, 15, 10, 0)  # type: ignore
+            booking.scheduled_time = datetime(2025, 9, 15, 10, 0, tzinfo=UTC)  # type: ignore
             booking.amount = 50.0  # type: ignore
             booking.status = BookingStatus.COMPLETED  # type: ignore
             booking.user_id = user.id  # type: ignore

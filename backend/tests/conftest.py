@@ -31,7 +31,7 @@ def db_session(app):
         transaction = connection.begin()
 
         # Bind session à cette transaction
-        options = dict(bind=connection, binds={})
+        options = {"bind": connection, "binds": {}}
         session = db.create_scoped_session(options=options)
         db.session = session
 
