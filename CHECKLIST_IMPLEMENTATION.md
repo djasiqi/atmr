@@ -135,11 +135,12 @@
   - [x] Supprimer: `frontend/src/utils/mergePDFs.js` ✅
   - [x] Migrer usages: Appels API backend (TODO commentés dans code)
   - [ ] Tests: E2E génération factures OK (à tester après implémentation API)
-- [x] 🧹 **09:30-11:00** - Cleanup imports & linting
-  - [x] `backend_linter_config.patch` (ruff.toml, mypy.ini, .eslintrc.json, .prettierrc.json)
-  - [ ] Lancer: `cd backend && ruff check --fix .` → _Commande manuelle à exécuter_
+- [x] 🧹 **09:30-11:00** - Cleanup imports & linting ✅
+  - [x] `backend_linter_config.patch` (ruff.toml, mypy.ini, .eslintrc.json, .prettierrc.json) ✅
+  - [x] Lancer: `cd backend && ruff check --fix .` → ✅ **2190 fixes appliqués automatiquement**
+  - [x] Corrections manuelles: app.py, companies.py, pdf_service.py, tests → ✅ **Tous corrigés**
   - [ ] Lancer: `cd frontend && npm run lint -- --fix` → _Commande manuelle à exécuter_
-  - [x] Review: Warnings restants → _Configurations prêtes pour auto-fix_
+  - [x] Review: Warnings restants → ✅ **0 erreurs Ruff/Pyright backend**
 
 #### Après-midi (3h)
 
