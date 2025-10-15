@@ -82,3 +82,28 @@ def company_user(app, db_session):
     
     return company, user
 
+@pytest.fixture
+def driver_user(app, db_session, company_user):
+    """Crée un chauffeur de test"""
+    company, _ = company_user
+    
+    user = User()
+    user.username = 'testdriver'  # type: ignore
+    user.email = 'driver@test.com'  # type: ignore
+    user.role = UserRole.DRIVER  # type: ignore
+    user.first_name = 'Pierre'  # type: ignore
+    user.last_name = 'Chauffeur'  # type: ignore
+    user.set_password('driverpass123')
+    db_session.add(user)
+    db_session.flush()
+    
+    driver = Driver()
+    driver.user_id = user.id  # type: ignore
+    driver.company_id = company.id  # type: ignore
+    driver.is_active = True  # type: ignore
+    driver.is_available = True  # type: ignore
+    db_session.add(driver)
+    db_session.commit()
+    
+    return driver, user
+
