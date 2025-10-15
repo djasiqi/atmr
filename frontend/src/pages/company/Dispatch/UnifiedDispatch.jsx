@@ -9,28 +9,25 @@
  * 4. Liste détaillée des assignations
  */
 
-import React, { useState, useEffect, useCallback } from "react";
-import CompanyHeader from "../../../components/layout/Header/CompanyHeader";
-import CompanySidebar from "../../../components/layout/Sidebar/CompanySidebar/CompanySidebar";
-import useCompanySocket from "../../../hooks/useCompanySocket";
-import useDispatchStatus from "../../../hooks/useDispatchStatus";
-import {
-  runDispatchForDay,
-  fetchAssignedReservations,
-} from "../../../services/companyService";
+import React, { useState, useEffect, useCallback } from 'react';
+import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
+import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
+import useCompanySocket from '../../../hooks/useCompanySocket';
+import useDispatchStatus from '../../../hooks/useDispatchStatus';
+import { runDispatchForDay, fetchAssignedReservations } from '../../../services/companyService';
 import {
   getLiveDelays,
   getOptimizerStatus,
   startRealTimeOptimizer,
   stopRealTimeOptimizer,
   applySuggestion,
-} from "../../../services/dispatchMonitoringService";
-import styles from "./UnifiedDispatch.module.css";
+} from '../../../services/dispatchMonitoringService';
+import styles from './UnifiedDispatch.module.css';
 
 // Helpers
 const makeToday = () => {
   const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
+  const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
@@ -57,7 +54,7 @@ const UnifiedDispatch = () => {
   const [rescheduleModalVisible, setRescheduleModalVisible] = useState(false);
   const [selectedDelay, setSelectedDelay] = useState(null);
   const [selectedSuggestion, setSelectedSuggestion] = useState(null);
-  const [newTime, setNewTime] = useState("");
+  const [newTime, setNewTime] = useState('');
 
   // WebSocket pour temps réel
   const socket = useCompanySocket();
@@ -78,7 +75,7 @@ const UnifiedDispatch = () => {
       // Le backend exclura automatiquement les retours time_confirmed=false du dispatch
       setDispatches(dispatches);
     } catch (err) {
-      console.error("[UnifiedDispatch] Error loading dispatches:", err);
+      console.error('[UnifiedDispatch] Error loading dispatches:', err);
     }
   }, [date]);
 
@@ -89,7 +86,7 @@ const UnifiedDispatch = () => {
       setDelays(response.delays || []);
       setSummary(response.summary || null);
     } catch (err) {
-      console.error("[UnifiedDispatch] Error loading delays:", err);
+      console.error('[UnifiedDispatch] Error loading delays:', err);
     }
   }, [date]);
 
@@ -99,7 +96,7 @@ const UnifiedDispatch = () => {
       const status = await getOptimizerStatus();
       setOptimizerStatus(status);
     } catch (err) {
-      console.error("[UnifiedDispatch] Error loading optimizer:", err);
+      console.error('[UnifiedDispatch] Error loading optimizer:', err);
     }
   }, []);
 
@@ -112,15 +109,13 @@ const UnifiedDispatch = () => {
     try {
       setLoading(true);
       setError(null);
-      const result = await runDispatchForDay({
+      await runDispatchForDay({
         forDate: date,
         regularFirst: regularFirst,
         allowEmergency: allowEmergency,
-        mode: "auto",
+        mode: 'auto',
         runAsync: true,
       });
-
-      console.log("[UnifiedDispatch] Dispatch job started:", result);
 
       // Attendre 3 secondes puis rafraîchir pour laisser le temps au backend
       setTimeout(() => {
@@ -128,8 +123,8 @@ const UnifiedDispatch = () => {
         loadDelays();
       }, 3000);
     } catch (err) {
-      console.error("[UnifiedDispatch] Error running dispatch:", err);
-      setError("Erreur lors du lancement du dispatch");
+      console.error('[UnifiedDispatch] Error running dispatch:', err);
+      setError('Erreur lors du lancement du dispatch');
       setLoading(false);
     }
   };
@@ -144,7 +139,7 @@ const UnifiedDispatch = () => {
       }
       await loadOptimizerStatus();
     } catch (err) {
-      console.error("[UnifiedDispatch] Error toggling optimizer:", err);
+      console.error('[UnifiedDispatch] Error toggling optimizer:', err);
       alert("Erreur lors de l'activation/désactivation du monitoring");
     }
   };
@@ -152,8 +147,8 @@ const UnifiedDispatch = () => {
   // Copier le numéro de téléphone dans le presse-papier
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text).then(
-      () => alert("📋 Numéro copié dans le presse-papier !"),
-      () => alert("❌ Erreur lors de la copie")
+      () => alert('📋 Numéro copié dans le presse-papier !'),
+      () => alert('❌ Erreur lors de la copie')
     );
   };
 
@@ -161,9 +156,8 @@ const UnifiedDispatch = () => {
   const handleReschedule = async () => {
     if (!selectedDelay || !newTime) return;
 
-    const scheduledTime =
-      selectedDelay.booking?.scheduled_time || selectedDelay.pickup_time;
-    const [hours, minutes] = newTime.split(":").map(Number);
+    const scheduledTime = selectedDelay.booking?.scheduled_time || selectedDelay.pickup_time;
+    const [hours, minutes] = newTime.split(':').map(Number);
 
     if (isNaN(hours) || isNaN(minutes)) {
       alert("❌ Format d'horaire invalide");
@@ -177,7 +171,7 @@ const UnifiedDispatch = () => {
       // TODO: Appeler l'API pour reporter la course
       alert(
         `✅ Course reportée avec succès !\n\n` +
-          `Nouveau RDV: ${newDate.toLocaleString("fr-FR")}\n` +
+          `Nouveau RDV: ${newDate.toLocaleString('fr-FR')}\n` +
           `Recherche d'un chauffeur disponible en cours...`
       );
 
@@ -185,8 +179,8 @@ const UnifiedDispatch = () => {
       loadDelays();
       loadDispatches();
     } catch (err) {
-      console.error("[UnifiedDispatch] Error rescheduling:", err);
-      alert("❌ Erreur lors du report");
+      console.error('[UnifiedDispatch] Error rescheduling:', err);
+      alert('❌ Erreur lors du report');
     }
   };
 
@@ -203,7 +197,7 @@ const UnifiedDispatch = () => {
   // Gérer les actions sur les suggestions
   const handleSuggestionAction = async (suggestion, delay) => {
     // 📞 CONTACTER : Ouvrir le modal de contact
-    if (suggestion.action === "notify_customer") {
+    if (suggestion.action === 'notify_customer') {
       setSelectedDelay(delay);
       setSelectedSuggestion(suggestion);
       setContactModalVisible(true);
@@ -211,7 +205,7 @@ const UnifiedDispatch = () => {
     }
 
     // ⏰ REPORTER : Ouvrir le modal de report
-    if (suggestion.action === "adjust_time") {
+    if (suggestion.action === 'adjust_time') {
       setSelectedDelay(delay);
       setSelectedSuggestion(suggestion);
 
@@ -219,11 +213,9 @@ const UnifiedDispatch = () => {
       const scheduledTime = delay.booking?.scheduled_time || delay.pickup_time;
       if (scheduledTime) {
         const suggestedTime = new Date(scheduledTime);
-        suggestedTime.setMinutes(
-          suggestedTime.getMinutes() + delay.delay_minutes
-        );
-        const hours = String(suggestedTime.getHours()).padStart(2, "0");
-        const minutes = String(suggestedTime.getMinutes()).padStart(2, "0");
+        suggestedTime.setMinutes(suggestedTime.getMinutes() + delay.delay_minutes);
+        const hours = String(suggestedTime.getHours()).padStart(2, '0');
+        const minutes = String(suggestedTime.getMinutes()).padStart(2, '0');
         setNewTime(`${hours}:${minutes}`);
       }
 
@@ -232,9 +224,9 @@ const UnifiedDispatch = () => {
     }
 
     // 🔄 RÉASSIGNER
-    if (suggestion.action === "reassign") {
+    if (suggestion.action === 'reassign') {
       if (!suggestion.alternative_driver_id) {
-        alert("Cette suggestion ne peut pas être appliquée automatiquement");
+        alert('Cette suggestion ne peut pas être appliquée automatiquement');
         return;
       }
 
@@ -246,25 +238,21 @@ const UnifiedDispatch = () => {
       if (!confirmed) return;
 
       try {
-        await applySuggestion(
-          delay.assignment_id,
-          suggestion.alternative_driver_id
-        );
-        alert("✅ Suggestion appliquée avec succès!");
+        await applySuggestion(delay.assignment_id, suggestion.alternative_driver_id);
+        alert('✅ Suggestion appliquée avec succès!');
         loadDelays();
         loadDispatches();
       } catch (err) {
-        console.error("[UnifiedDispatch] Error applying suggestion:", err);
+        console.error('[UnifiedDispatch] Error applying suggestion:', err);
         alert("❌ Erreur lors de l'application");
       }
       return;
     }
 
     // 🚨 REDISTRIBUER (plusieurs courses d'un même chauffeur en retard)
-    if (suggestion.action === "redistribute") {
+    if (suggestion.action === 'redistribute') {
       const tripsCount = suggestion.additional_data?.delayed_trips_count || 2;
-      const driverName =
-        suggestion.additional_data?.driver_name || `#${suggestion.driver_id}`;
+      const driverName = suggestion.additional_data?.driver_name || `#${suggestion.driver_id}`;
       const totalDelay = suggestion.additional_data?.total_delay || 0;
 
       alert(
@@ -305,36 +293,27 @@ const UnifiedDispatch = () => {
     if (!socket) return;
 
     const handleDispatchComplete = (data) => {
-      console.log(
-        "[UnifiedDispatch] Dispatch completed - refreshing data",
-        data
-      );
       setLoading(false);
-      setDispatchSuccess(
-        `✅ Dispatch terminé ! ${
-          data?.assignments_count || 0
-        } courses assignées`
-      );
+      setDispatchSuccess(`✅ Dispatch terminé ! ${data?.assignments_count || 0} courses assignées`);
       setTimeout(() => setDispatchSuccess(null), 5000); // Masquer après 5s
       loadDispatches();
       loadDelays();
     };
 
-    const handleBookingUpdated = (data) => {
-      console.log("[UnifiedDispatch] Booking updated - refreshing data", data);
+    const handleBookingUpdated = () => {
       // Rafraîchir immédiatement les données
       loadDispatches();
       loadDelays();
     };
 
-    socket.on("dispatch_run_completed", handleDispatchComplete);
-    socket.on("booking_updated", handleBookingUpdated);
-    socket.on("new_booking", handleBookingUpdated); // Aussi pour nouvelles courses
+    socket.on('dispatch_run_completed', handleDispatchComplete);
+    socket.on('booking_updated', handleBookingUpdated);
+    socket.on('new_booking', handleBookingUpdated); // Aussi pour nouvelles courses
 
     return () => {
-      socket.off("dispatch_run_completed", handleDispatchComplete);
-      socket.off("booking_updated", handleBookingUpdated);
-      socket.off("new_booking", handleBookingUpdated);
+      socket.off('dispatch_run_completed', handleDispatchComplete);
+      socket.off('booking_updated', handleBookingUpdated);
+      socket.off('new_booking', handleBookingUpdated);
     };
   }, [socket, loadDispatches, loadDelays]);
 
@@ -385,12 +364,12 @@ const UnifiedDispatch = () => {
   // Rendu d'une alerte de retard
   const renderDelayAlert = (delay) => {
     const statusColors = {
-      late: "#dc3545",
-      on_time: "#28a745",
-      early: "#17a2b8",
+      late: '#dc3545',
+      on_time: '#28a745',
+      early: '#17a2b8',
     };
 
-    if (delay.status === "on_time") return null; // Pas d'alerte si à l'heure
+    if (delay.status === 'on_time') return null; // Pas d'alerte si à l'heure
 
     return (
       <div key={delay.assignment_id} className={styles.delayAlert}>
@@ -401,10 +380,8 @@ const UnifiedDispatch = () => {
               🔴 Course #{delay.booking_id} - {delay.booking?.customer_name}
             </h4>
             <p className={styles.delayMeta}>
-              Chauffeur: {delay.driver?.name || `#${delay.driver_id}`} • Retard:{" "}
-              <strong style={{ color: statusColors.late }}>
-                +{delay.delay_minutes} min
-              </strong>
+              Chauffeur: {delay.driver?.name || `#${delay.driver_id}`} • Retard:{' '}
+              <strong style={{ color: statusColors.late }}>+{delay.delay_minutes} min</strong>
             </p>
           </div>
 
@@ -417,20 +394,19 @@ const UnifiedDispatch = () => {
                   className={`${styles.suggestionBtn} ${
                     styles[
                       `suggestionBtn${
-                        suggestion.priority.charAt(0).toUpperCase() +
-                        suggestion.priority.slice(1)
+                        suggestion.priority.charAt(0).toUpperCase() + suggestion.priority.slice(1)
                       }`
                     ]
                   }`}
                   onClick={() => handleSuggestionAction(suggestion, delay)}
                   title={suggestion.message}
                 >
-                  {suggestion.action === "notify_customer"
-                    ? "📞 Contacter"
-                    : suggestion.action === "adjust_time"
-                    ? "⏰ Reporter"
-                    : suggestion.action === "reassign"
-                    ? "🔄 Réassigner"
+                  {suggestion.action === 'notify_customer'
+                    ? '📞 Contacter'
+                    : suggestion.action === 'adjust_time'
+                    ? '⏰ Reporter'
+                    : suggestion.action === 'reassign'
+                    ? '🔄 Réassigner'
                     : suggestion.action}
                 </button>
               ))}
@@ -444,77 +420,68 @@ const UnifiedDispatch = () => {
   // Rendu d'une course dans la liste détaillée
   const renderDispatch = (dispatch) => {
     const statusColors = {
-      pending: "#6c757d",
-      accepted: "#17a2b8",
-      scheduled: "#6c757d",
-      assigned: "#0f766e",
-      en_route_pickup: "#17a2b8",
-      arrived_pickup: "#ffc107",
-      onboard: "#fd7e14",
-      en_route_dropoff: "#0f766e",
-      completed: "#28a745",
-      cancelled: "#dc3545",
+      pending: '#6c757d',
+      accepted: '#17a2b8',
+      scheduled: '#6c757d',
+      assigned: '#0f766e',
+      en_route_pickup: '#17a2b8',
+      arrived_pickup: '#ffc107',
+      onboard: '#fd7e14',
+      en_route_dropoff: '#0f766e',
+      completed: '#28a745',
+      cancelled: '#dc3545',
     };
 
     // Extraire les infos du chauffeur
     const assignment = dispatch.assignment;
-    const driver = assignment?.driver || dispatch.driver;
-
-    // DEBUG : Afficher la structure
-    console.log("[renderDispatch] dispatch:", dispatch);
-    console.log("[renderDispatch] assignment:", assignment);
-    console.log("[renderDispatch] driver:", driver);
-    if (driver) {
-      console.log("[renderDispatch] driver.full_name:", driver.full_name);
-      console.log("[renderDispatch] driver.first_name:", driver.first_name);
-      console.log("[renderDispatch] driver.last_name:", driver.last_name);
-      console.log("[renderDispatch] driver.username:", driver.username);
-      console.log("[renderDispatch] driver.user:", driver.user);
-    }
+    // ⚠️ IMPORTANT : driver doit être un objet ou null, jamais une chaîne
+    const driver =
+      assignment?.driver && typeof assignment.driver === 'object'
+        ? assignment.driver
+        : dispatch.driver && typeof dispatch.driver === 'object'
+        ? dispatch.driver
+        : null;
 
     // Essayer d'abord les champs flat (ajoutés côté backend)
-    let driverName = driver?.full_name || null;
+    let driverName = null;
 
-    // Si pas de full_name, construire depuis first_name + last_name
-    if (!driverName && driver) {
-      const firstName = driver.first_name || driver.user?.first_name || "";
-      const lastName = driver.last_name || driver.user?.last_name || "";
-      const fullName = `${firstName} ${lastName}`.trim();
-      driverName = fullName || driver.username || driver.user?.username || null;
+    if (driver) {
+      // Priorité 1 : full_name pré-calculé
+      driverName = driver.full_name;
+
+      // Priorité 2 : Construire depuis first_name + last_name
+      if (!driverName) {
+        const firstName = driver.first_name || driver.user?.first_name || '';
+        const lastName = driver.last_name || driver.user?.last_name || '';
+        const fullName = `${firstName} ${lastName}`.trim();
+        driverName = fullName || driver.username || driver.user?.username || null;
+      }
     }
 
-    // Dernier fallback
+    // Dernier fallback : chercher dans dispatch directement
     if (!driverName) {
-      driverName =
-        dispatch.driver_username || dispatch.driver_name || dispatch.full_name;
+      driverName = dispatch.driver_username || dispatch.driver_name || dispatch.full_name || null;
     }
 
     const driverId = assignment?.driver_id || dispatch.driver_id || driver?.id;
 
     // Extraire les adresses
     const pickupAddress =
-      dispatch.pickup_address ||
-      dispatch.pickup_location ||
-      dispatch.origin ||
-      "—";
+      dispatch.pickup_address || dispatch.pickup_location || dispatch.origin || '—';
 
     const dropoffAddress =
-      dispatch.dropoff_address ||
-      dispatch.dropoff_location ||
-      dispatch.destination ||
-      "—";
+      dispatch.dropoff_address || dispatch.dropoff_location || dispatch.destination || '—';
 
-    const statusKey = (dispatch.status || "pending").toLowerCase();
+    const statusKey = (dispatch.status || 'pending').toLowerCase();
 
     return (
       <tr key={dispatch.id}>
         <td>#{dispatch.id}</td>
-        <td>{dispatch.customer_name || "—"}</td>
+        <td>{dispatch.customer_name || '—'}</td>
         <td>
           {(() => {
-            const scheduledTime =
-              dispatch.scheduled_time || dispatch.pickup_time;
-            if (!scheduledTime) return "—";
+            const scheduledTime = dispatch.scheduled_time || dispatch.pickup_time;
+            if (!scheduledTime) return '—';
 
             const date = new Date(scheduledTime);
             const hours = date.getHours();
@@ -523,23 +490,22 @@ const UnifiedDispatch = () => {
             // Si c'est un retour avec heure non confirmée OU heure à 00:00
             if (
               dispatch.is_return &&
-              (dispatch.time_confirmed === false ||
-                (hours === 0 && minutes === 0))
+              (dispatch.time_confirmed === false || (hours === 0 && minutes === 0))
             ) {
-              return "Heure à confirmer";
+              return 'Heure à confirmer';
             }
 
-            return date.toLocaleTimeString("fr-FR", {
-              hour: "2-digit",
-              minute: "2-digit",
+            return date.toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit',
             });
           })()}
         </td>
-        <td>{driverName || (driverId ? `#${driverId}` : "Non assigné")}</td>
+        <td>{driverName || (driverId ? `#${driverId}` : 'Non assigné')}</td>
         <td>
           <span
             className={styles.statusBadge}
-            style={{ backgroundColor: statusColors[statusKey] || "#999" }}
+            style={{ backgroundColor: statusColors[statusKey] || '#999' }}
           >
             {dispatch.status}
           </span>
@@ -550,7 +516,7 @@ const UnifiedDispatch = () => {
     );
   };
 
-  const delaysOnly = delays.filter((d) => d.status === "late");
+  const delaysOnly = delays.filter((d) => d.status === 'late');
 
   return (
     <div className={styles.companyContainer}>
@@ -610,9 +576,7 @@ const UnifiedDispatch = () => {
                   onClick={handleRunDispatch}
                   disabled={isDispatching || loading}
                 >
-                  {isDispatching
-                    ? "⏳ En cours..."
-                    : "🚀 Lancer Dispatch Automatique"}
+                  {isDispatching ? '⏳ En cours...' : '🚀 Lancer Dispatch Automatique'}
                 </button>
 
                 <label className={styles.checkbox}>
@@ -642,41 +606,33 @@ const UnifiedDispatch = () => {
               )}
 
               {/* Message de succès */}
-              {dispatchSuccess && (
-                <div className={styles.successBanner}>{dispatchSuccess}</div>
-              )}
+              {dispatchSuccess && <div className={styles.successBanner}>{dispatchSuccess}</div>}
 
               {/* Optimiseur temps réel */}
               <div className={styles.optimizerControl}>
                 <button
                   className={`${styles.optimizerBtn} ${
-                    optimizerStatus?.running ? styles.active : ""
+                    optimizerStatus?.running ? styles.active : ''
                   }`}
                   onClick={handleToggleOptimizer}
                 >
                   {optimizerStatus?.running
-                    ? "⏸️ Arrêter Monitoring Auto"
-                    : "▶️ Démarrer Monitoring Auto"}
+                    ? '⏸️ Arrêter Monitoring Auto'
+                    : '▶️ Démarrer Monitoring Auto'}
                 </button>
                 {optimizerStatus?.running && (
                   <span className={styles.optimizerInfo}>
-                    🤖 Actif - Dernière vérification:{" "}
+                    🤖 Actif - Dernière vérification:{' '}
                     {optimizerStatus.last_check
-                      ? new Date(optimizerStatus.last_check).toLocaleTimeString(
-                          "fr-FR"
-                        )
-                      : "Jamais"}
+                      ? new Date(optimizerStatus.last_check).toLocaleTimeString('fr-FR')
+                      : 'Jamais'}
                   </span>
                 )}
               </div>
             </section>
 
             {/* ==================== ZONE 2 : STATISTIQUES ==================== */}
-            {summary && (
-              <section className={styles.statsSection}>
-                {renderSummary()}
-              </section>
-            )}
+            {summary && <section className={styles.statsSection}>{renderSummary()}</section>}
 
             {/* ==================== ZONE 3 : ALERTES RETARDS ==================== */}
             {delaysOnly.length > 0 && (
@@ -687,9 +643,7 @@ const UnifiedDispatch = () => {
                     {delaysOnly.length} retard(s) détecté(s)
                   </span>
                 </div>
-                <div className={styles.alertsList}>
-                  {delaysOnly.map(renderDelayAlert)}
-                </div>
+                <div className={styles.alertsList}>{delaysOnly.map(renderDelayAlert)}</div>
               </section>
             )}
 
@@ -713,9 +667,7 @@ const UnifiedDispatch = () => {
                 <div className={styles.emptyState}>
                   <div className={styles.emptyIcon}>📦</div>
                   <h3>Aucune course pour cette date</h3>
-                  <p>
-                    Lancez le dispatch automatique pour assigner les courses
-                  </p>
+                  <p>Lancez le dispatch automatique pour assigner les courses</p>
                 </div>
               ) : (
                 <div className={styles.tableWrapper}>
@@ -742,32 +694,22 @@ const UnifiedDispatch = () => {
 
       {/* Modal de Contact Client */}
       {contactModalVisible && selectedDelay && (
-        <div
-          className={styles.modalOverlay}
-          onClick={() => setContactModalVisible(false)}
-        >
+        <div className={styles.modalOverlay} onClick={() => setContactModalVisible(false)}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h3>📞 Contacter le Client</h3>
-              <button
-                className={styles.modalClose}
-                onClick={() => setContactModalVisible(false)}
-              >
+              <button className={styles.modalClose} onClick={() => setContactModalVisible(false)}>
                 ✕
               </button>
             </div>
 
             <div className={styles.modalBody}>
               {/* Vérifier si le numéro existe */}
-              {!selectedDelay.booking?.customer_phone &&
-              !selectedDelay.booking?.phone ? (
+              {!selectedDelay.booking?.customer_phone && !selectedDelay.booking?.phone ? (
                 <div className={styles.noPhoneWarning}>
                   <div className={styles.warningIcon}>❌</div>
                   <h4>Numéro de téléphone non disponible</h4>
-                  <p>
-                    Ce client n'a pas de numéro de téléphone enregistré dans le
-                    système.
-                  </p>
+                  <p>Ce client n'a pas de numéro de téléphone enregistré dans le système.</p>
                 </div>
               ) : (
                 <>
@@ -776,15 +718,13 @@ const UnifiedDispatch = () => {
                     <div className={styles.infoRow}>
                       <span className={styles.infoLabel}>Client :</span>
                       <span className={styles.infoValue}>
-                        {selectedDelay.booking?.customer_name || "N/A"}
+                        {selectedDelay.booking?.customer_name || 'N/A'}
                       </span>
                     </div>
 
                     <div className={styles.infoRow}>
                       <span className={styles.infoLabel}>Course :</span>
-                      <span className={styles.infoValue}>
-                        #{selectedDelay.booking_id}
-                      </span>
+                      <span className={styles.infoValue}>#{selectedDelay.booking_id}</span>
                     </div>
 
                     <div className={styles.infoRow}>
@@ -804,16 +744,14 @@ const UnifiedDispatch = () => {
                       <div className={styles.phoneInfo}>
                         <span className={styles.phoneLabel}>Téléphone</span>
                         <span className={styles.phoneNumber}>
-                          {selectedDelay.booking?.customer_phone ||
-                            selectedDelay.booking?.phone}
+                          {selectedDelay.booking?.customer_phone || selectedDelay.booking?.phone}
                         </span>
                       </div>
                       <button
                         className={styles.copyBtn}
                         onClick={() =>
                           copyToClipboard(
-                            selectedDelay.booking?.customer_phone ||
-                              selectedDelay.booking?.phone
+                            selectedDelay.booking?.customer_phone || selectedDelay.booking?.phone
                           )
                         }
                       >
@@ -821,15 +759,13 @@ const UnifiedDispatch = () => {
                       </button>
                     </div>
 
-                    {(selectedDelay.booking?.customer_email ||
-                      selectedDelay.booking?.email) && (
+                    {(selectedDelay.booking?.customer_email || selectedDelay.booking?.email) && (
                       <div className={styles.emailBox}>
                         <div className={styles.emailIcon}>📧</div>
                         <div className={styles.emailInfo}>
                           <span className={styles.emailLabel}>Email</span>
                           <span className={styles.emailAddress}>
-                            {selectedDelay.booking?.customer_email ||
-                              selectedDelay.booking?.email}
+                            {selectedDelay.booking?.customer_email || selectedDelay.booking?.email}
                           </span>
                         </div>
                       </div>
@@ -838,9 +774,7 @@ const UnifiedDispatch = () => {
 
                   {/* Message suggéré */}
                   <div className={styles.messageSection}>
-                    <label className={styles.messageLabel}>
-                      💬 Message suggéré
-                    </label>
+                    <label className={styles.messageLabel}>💬 Message suggéré</label>
                     <textarea
                       className={styles.messageTextarea}
                       readOnly
@@ -848,7 +782,7 @@ const UnifiedDispatch = () => {
                       value={
                         selectedSuggestion?.additional_data?.auto_message ||
                         `Bonjour ${
-                          selectedDelay.booking?.customer_name || ""
+                          selectedDelay.booking?.customer_name || ''
                         },\n\nVotre chauffeur arrivera avec environ ${
                           selectedDelay.delay_minutes
                         } minutes de retard. Nous nous excusons pour ce désagrément.`
@@ -860,10 +794,7 @@ const UnifiedDispatch = () => {
             </div>
 
             <div className={styles.modalFooter}>
-              <button
-                className={styles.btnSecondary}
-                onClick={() => setContactModalVisible(false)}
-              >
+              <button className={styles.btnSecondary} onClick={() => setContactModalVisible(false)}>
                 Fermer
               </button>
             </div>
@@ -873,10 +804,7 @@ const UnifiedDispatch = () => {
 
       {/* Modal de Report de Course */}
       {rescheduleModalVisible && selectedDelay && (
-        <div
-          className={styles.modalOverlay}
-          onClick={() => setRescheduleModalVisible(false)}
-        >
+        <div className={styles.modalOverlay} onClick={() => setRescheduleModalVisible(false)}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h3>⏰ Reporter le Rendez-vous</h3>
@@ -894,15 +822,13 @@ const UnifiedDispatch = () => {
                 <div className={styles.infoRow}>
                   <span className={styles.infoLabel}>Client :</span>
                   <span className={styles.infoValue}>
-                    {selectedDelay.booking?.customer_name || "N/A"}
+                    {selectedDelay.booking?.customer_name || 'N/A'}
                   </span>
                 </div>
 
                 <div className={styles.infoRow}>
                   <span className={styles.infoLabel}>Course :</span>
-                  <span className={styles.infoValue}>
-                    #{selectedDelay.booking_id}
-                  </span>
+                  <span className={styles.infoValue}>#{selectedDelay.booking_id}</span>
                 </div>
 
                 <div className={styles.infoRow}>
@@ -918,31 +844,25 @@ const UnifiedDispatch = () => {
                   <span className={styles.infoLabel}>Horaire actuel :</span>
                   <span className={styles.infoValue}>
                     {selectedDelay.booking?.scheduled_time
-                      ? new Date(
-                          selectedDelay.booking.scheduled_time
-                        ).toLocaleString("fr-FR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
+                      ? new Date(selectedDelay.booking.scheduled_time).toLocaleString('fr-FR', {
+                          hour: '2-digit',
+                          minute: '2-digit',
                         })
-                      : "N/A"}
+                      : 'N/A'}
                   </span>
                 </div>
               </div>
 
               {/* Sélection nouvel horaire */}
               <div className={styles.timeSelection}>
-                <label className={styles.timeLabel}>
-                  Nouvel horaire (HH:MM)
-                </label>
+                <label className={styles.timeLabel}>Nouvel horaire (HH:MM)</label>
                 <input
                   type="time"
                   className={styles.timeInput}
                   value={newTime}
                   onChange={(e) => setNewTime(e.target.value)}
                 />
-                <p className={styles.timeHint}>
-                  💡 Horaire suggéré : {newTime}
-                </p>
+                <p className={styles.timeHint}>💡 Horaire suggéré : {newTime}</p>
               </div>
 
               {/* Actions automatiques */}
@@ -958,10 +878,7 @@ const UnifiedDispatch = () => {
             </div>
 
             <div className={styles.modalFooter}>
-              <button
-                className={styles.btnDanger}
-                onClick={handleCancelReschedule}
-              >
+              <button className={styles.btnDanger} onClick={handleCancelReschedule}>
                 ⚠️ Marquer comme Urgente
               </button>
               <button className={styles.btnPrimary} onClick={handleReschedule}>

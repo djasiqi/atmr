@@ -219,7 +219,7 @@ def build_distance_matrix_osrm(
     *,
     base_url: str,
     profile: str = "driving",
-    timeout: int = 5,
+    timeout: int = 10,  # ✅ PERF: Increased timeout for large matrices
     max_sources_per_call: int = 60,
     rate_limit_per_sec: int = 8,
     max_retries: int = 2,

@@ -17,6 +17,8 @@ class Config:
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
         "pool_recycle": 1800,
+        "pool_size": 10,        # ✅ PERF: Connection pooling
+        "max_overflow": 20,     # ✅ PERF: Max connections overflow
     }
 
     # --- JWT (délais par défaut, surclassables par env) ---

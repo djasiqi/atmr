@@ -213,7 +213,13 @@ class Booking(db.Model):
                 "full_name": self.customer_full_name,
             },
             "company": self.company.name if self.company else "Non assignée",
-            "driver": self.driver.user.username if (self.driver and self.driver.user) else "Non assigné",
+            "driver": {
+                "id": self.driver.id,
+                "username": self.driver.user.username if self.driver.user else None,
+                "first_name": self.driver.user.first_name if self.driver.user else None,
+                "last_name": self.driver.user.last_name if self.driver.user else None,
+                "full_name": f"{self.driver.user.first_name or ''} {self.driver.user.last_name or ''}".strip() or self.driver.user.username if self.driver.user else None,
+            } if self.driver else None,
             "driver_id": self.driver_id,
             "duration_seconds": self.duration_seconds,
             "distance_meters": self.distance_meters,
@@ -292,7 +298,7 @@ class Booking(db.Model):
             try:
                 status = BookingStatus[status]
             except KeyError:
-                raise ValueError(f"Statut invalide : {status}. Doit être l'un de {list(BookingStatus.__members__.keys())}")
+                raise ValueError(f"Statut invalide : {status}. Doit être l'un de {list(BookingStatus.__members__.keys())}") from None
         if not isinstance(status, BookingStatus):
             raise ValueError(f"Statut invalide : {status}. Doit être un BookingStatus valide.")
         return status

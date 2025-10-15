@@ -260,6 +260,10 @@ def create_app(config_name: str | None = None):
 
         init_namespaces(app)
 
+        # ✅ Enhanced healthcheck with DB/Redis checks
+        from routes.healthcheck import healthcheck_bp
+        app.register_blueprint(healthcheck_bp)
+
         # Réponse générique aux préflights CORS (toutes routes)
         @app.before_request
         def _cors_preflights_any():

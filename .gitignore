@@ -57,18 +57,13 @@ yarn-error.log*
 pnpm-debug.log*
 
 # ===== Env / secrets =====
-backend/.env
 .env
 *.env
-*.env.*
+.env.*
+backend/.env
 frontend/.env
 frontend/.env.local
 frontend/.env.*.local
-backend/.env
-# Conserver les exemples d'env
-!.env.example
-!*.env.example
-!.env.*.example
 
 # ===== Mobile / Android / iOS =====
 **/android/.gradle/
@@ -96,3 +91,39 @@ atmr-project/
 backend/instance/*.db
 *.sqlite
 *.sqlite3
+devdb/
+backup_*.sql
+
+# ===== Celery (schedules générés) =====
+celerybeat-schedule*
+backend/celerybeat-schedule*
+
+# ===== Documentation temporaire / Audits =====
+*_AUDIT*.md
+*_CHECKLIST*.md
+*_RAPPORT*.md
+*_RESUME*.md
+*_NOTES.md
+ROLLBACK.md
+safety_report.txt
+patches/
+
+# ===== Fichiers temporaires =====
+*.tmp
+*.bak
+*.swp
+*~
+
+# ===== Tests =====
+frontend/cypress/
+cypress.config.js
+cypress.config.ts
+**/cypress/videos/
+**/cypress/screenshots/
+backend/tests/
+tests/
+*.test.js
+*.test.jsx
+setupTests.js
+pytest.ini
+.pytest_cache/
