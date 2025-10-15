@@ -213,8 +213,8 @@
 
 **Optionnels (7)**:
 
-- [ ] backend_tests_bookings.patch
-- [ ] backend_tests_invoices.patch
+- [x] backend_tests_bookings.patch ✓ (test_routes_bookings.py + fixtures)
+- [x] backend_tests_invoices.patch ✓ (test_routes_invoices.py)
 - [x] frontend_e2e_cypress.patch ✓ (Cypress config + 3 scénarios E2E)
 - [x] backend_env_example.patch ✓ (créé mais non tracké)
 - [x] frontend_env_example.patch ✓ (créé mais non tracké)
@@ -246,12 +246,12 @@
 
 **Backend**:
 
-- [ ] Fixtures globales (conftest.py)
-- [ ] Tests routes auth (15+ tests)
-- [ ] Tests routes bookings (20+ tests)
-- [ ] Tests routes invoices (18+ tests)
-- [ ] Tests services OSRM (12+ tests)
-- [ ] Coverage ≥60%
+- [x] Fixtures globales (conftest.py) ✓ (client_user, company_user, driver_user)
+- [x] Tests routes auth (15+ tests) ✓ (test_routes_auth.py)
+- [x] Tests routes bookings (10+ tests) ✓ (test_routes_bookings.py)
+- [x] Tests routes invoices (15+ tests) ✓ (test_routes_invoices.py)
+- [x] Tests services OSRM (12+ tests) ✓ (test_service_osrm.py)
+- [ ] Coverage ≥60% → *À vérifier avec `pytest --cov`*
 
 **Frontend**:
 
