@@ -46,3 +46,7 @@ export default useAuthToken;
 export function getAccessToken() {
   return localStorage.getItem("authToken");
 }
+
+export function getRefreshToken() {
+  return localStorage.getItem("refreshToken");
+}
