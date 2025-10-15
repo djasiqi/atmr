@@ -37,9 +37,9 @@
   - [x] Installer: `pip install pytest pytest-cov pytest-mock` (déjà présent dans Docker)
   - [ ] Lancer: `pytest --cov=routes --cov-report=html` (tests créés, prêts à exécuter)
   - [ ] Review coverage: `open htmlcov/index.html` (après exécution)
-- [ ] 📝 **16:30-17:00** - Documentation & review
-  - [ ] Vérifier: `git status`, `git diff`
-  - [ ] Commit: `git commit -m "fix: Apply critical backend patches"`
+- [x] 📝 **16:30-17:00** - Documentation & review
+  - [x] Vérifier: `git status`, `git diff`
+  - [x] Commit: `git commit -m "fix: Apply critical backend patches"` (Commit 7e021ff créé)
 
 **Validation Jour 1**: API 50% plus rapide, Celery fiable, tests auth 85%
 
