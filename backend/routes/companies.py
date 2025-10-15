@@ -1,7 +1,7 @@
 import glob
 import logging
 import os
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from typing import Any, cast
 from uuid import uuid4
 
@@ -592,7 +592,7 @@ class AssignDriver(Resource):
             # ⚙️ Pylance : protège .date() quand scheduled_time ou le retour de to_geneva_local peuvent être None
             st = getattr(booking, "scheduled_time", None)
             if st is None:
-                day_local = datetime.now(datetime.UTC).date()
+                day_local = datetime.now(timezone.utc).date()
             else:
                 # Certains stubs typent to_geneva_local -> Optional[datetime]
                 dt_local_any = to_geneva_local(cast(Any, st))
@@ -1282,7 +1282,7 @@ class CreateManualReservation(Resource):
                 dist_m = int(route_data.get('distance', 0))
 
                 # 🚦 Facteur rush hour : ajuster selon l'heure de la réservation
-                scheduled_hour = scheduled.hour if scheduled else datetime.now(datetime.UTC).hour
+                scheduled_hour = scheduled.hour if scheduled else datetime.now(timezone.utc).hour
                 rush_hour_factor = 1.0
 
                 # Heures de pointe du matin (7h-9h) : +30%
