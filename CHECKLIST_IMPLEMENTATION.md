@@ -137,9 +137,9 @@
   - [ ] Tests: E2E génération factures OK (à tester après implémentation API)
 - [x] 🧹 **09:30-11:00** - Cleanup imports & linting
   - [x] `backend_linter_config.patch` (ruff.toml, mypy.ini, .eslintrc.json, .prettierrc.json)
-  - [ ] Lancer: `cd backend && ruff check --fix .` → *Commande manuelle à exécuter*
-  - [ ] Lancer: `cd frontend && npm run lint -- --fix` → *Commande manuelle à exécuter*
-  - [x] Review: Warnings restants → *Configurations prêtes pour auto-fix*
+  - [ ] Lancer: `cd backend && ruff check --fix .` → _Commande manuelle à exécuter_
+  - [ ] Lancer: `cd frontend && npm run lint -- --fix` → _Commande manuelle à exécuter_
+  - [x] Review: Warnings restants → _Configurations prêtes pour auto-fix_
 
 #### Après-midi (3h)
 
@@ -282,8 +282,8 @@
 - [x] frontend/src/utils/qrbillGenerator.js supprimé ✓
 - [x] frontend/src/utils/mergePDFs.js supprimé ✓
 - [x] Usages migrés vers API backend ✓ (TODO commentés)
-- [x] Imports inutilisés nettoyés → *Via `ruff check --fix` (config prête)*
-- [ ] Assets morts identifiés (webpack-bundle-analyzer) → *Optionnel*
+- [x] Imports inutilisés nettoyés → _Via `ruff check --fix` (config prête)_
+- [ ] Assets morts identifiés (webpack-bundle-analyzer) → _Optionnel_
 
 ---
 
