@@ -144,11 +144,27 @@ def init_chat_socket(socketio: SocketIO):
                 return
 
             content = (data.get("content") or "").strip()
+            
+            # ✅ Validation longueur message
+            if len(content) > 1000:
+                emit("error", {"error": "Message trop long (max 1000 caractères)."})
+                return
+            
             receiver_id = data.get("receiver_id")
             timestamp = datetime.now(timezone.utc)
             if not content:
                 emit("error", {"error": "Message vide non autorisé."})
                 return
+            
+            # ✅ Validation receiver_id si fourni
+            if receiver_id is not None:
+                try:
+                    receiver_id = int(receiver_id)
+                    if receiver_id <= 0:
+                        raise ValueError()
+                except (TypeError, ValueError):
+                    emit("error", {"error": "receiver_id invalide."})
+                    return
 
             if user.role == UserRole.driver:
                 driver = Driver.query.filter_by(user_id=user.id).first()
@@ -307,9 +323,25 @@ def init_chat_socket(socketio: SocketIO):
 
             latitude = data.get("latitude")
             longitude = data.get("longitude")
-            if latitude is None or longitude is None:
+            
+            # ✅ Validation stricte lat/lon
+            try:
+                lat = float(latitude)
+                lon = float(longitude)
+            except (TypeError, ValueError):
                 emit("error", {"error": "Latitude et longitude requises."})
                 return
+            
+            # ✅ Validation bornes géographiques
+            if not (-90 <= lat <= 90):
+                emit("error", {"error": "Latitude invalide (doit être entre -90 et 90)."})
+                return
+            
+            if not (-180 <= lon <= 180):
+                emit("error", {"error": "Longitude invalide (doit être entre -180 et 180)."})
+                return
+            
+            latitude, longitude = lat, lon
 
             company_room = f"company_{company_id_val}"
             cast(Any, emit)(

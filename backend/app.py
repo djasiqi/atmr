@@ -237,6 +237,14 @@ def create_app(config_name: str | None = None):
     logging.getLogger("werkzeug").setLevel(
         getattr(logging, os.getenv("WERKZEUG_LOG_LEVEL", "ERROR").upper(), logging.ERROR)
     )
+    
+    # ✅ Ajout filtre PII si activé
+    if os.getenv("MASK_PII_LOGS", "true").lower() == "true":
+        from shared.logging_utils import PIIFilter
+        pii_filter = PIIFilter()
+        app.logger.addFilter(pii_filter)
+        logging.getLogger("werkzeug").addFilter(pii_filter)
+        logging.getLogger().addFilter(pii_filter)
 
     # 8) Unified dispatch queue
     from services.unified_dispatch import queue as ud_queue
