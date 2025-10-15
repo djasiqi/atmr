@@ -1,0 +1,22 @@
+# Build outputs
+build/
+dist/
+
+# Dependencies
+node_modules/
+
+# Coverage
+coverage/
+
+# Generated files
+*.min.js
+*.bundle.js
+
+# Config files that use CommonJS
+config-overrides.js
+
+# Test files with special globals
+cypress/
+*.test.js
+*.spec.js
+
