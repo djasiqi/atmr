@@ -170,7 +170,7 @@ class PDFService:
         if logo_img:
             # Utiliser un Paragraph avec alignement à gauche pour forcer l'alignement
             from reportlab.lib.styles import ParagraphStyle
-            from reportlab.lib.enums import TA_LEFT
+            # TA_LEFT déjà importé plus haut (ligne 105)
             
             logo_style = ParagraphStyle(
                 'LogoStyle',
@@ -577,7 +577,8 @@ class PDFService:
         
         # Référence
         left_section.append(Paragraph("Referenz", label_style))
-        left_section.append(Paragraph(self.qrbill_service.generate_qr_reference(invoice), value_style))
+        qr_ref = self.qrbill_service.generate_qr_reference(invoice) or ""
+        left_section.append(Paragraph(qr_ref, value_style))
         left_section.append(Spacer(1, 8))
         
         # Montant
@@ -617,7 +618,8 @@ class PDFService:
         
         # Référence
         right_section.append(Paragraph("Referenz", label_style))
-        right_section.append(Paragraph(self.qrbill_service.generate_qr_reference(invoice), value_style))
+        qr_ref = self.qrbill_service.generate_qr_reference(invoice) or ""
+        right_section.append(Paragraph(qr_ref, value_style))
         right_section.append(Spacer(1, 8))
         
         # Montant
@@ -709,7 +711,8 @@ class PDFService:
         
         # Referenz
         left_content.append(Paragraph("Referenz", label_style))
-        left_content.append(Paragraph(self.qrbill_service.generate_qr_reference(invoice), value_style))
+        qr_ref = self.qrbill_service.generate_qr_reference(invoice) or ""
+        left_content.append(Paragraph(qr_ref, value_style))
         left_content.append(Spacer(1, 6))
         
         # Währung et Betrag
@@ -748,7 +751,8 @@ class PDFService:
         
         # Referenz
         right_content.append(Paragraph("Referenz", label_style))
-        right_content.append(Paragraph(self.qrbill_service.generate_qr_reference(invoice), value_style))
+        qr_ref = self.qrbill_service.generate_qr_reference(invoice) or ""
+        right_content.append(Paragraph(qr_ref, value_style))
         right_content.append(Spacer(1, 6))
         
         # Währung et Betrag
