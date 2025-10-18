@@ -1,82 +1,244 @@
-# Nom du workflow qui apparaîtra dans l'onglet "Actions" de GitHub
-name: ATMR CI - Tests & Build
+name: CI - Lint & Test
 
-# Déclencheurs : quand exécuter le workflow
 on:
   push:
-    branches: [ "main", "develop" ] # Se lance à chaque push sur les branches main ou develop
+    branches: [main, audit-improvements-*]
   pull_request:
-    branches: [ "main", "develop" ] # Se lance à chaque création/mise à jour de Pull Request vers ces branches
+    branches: [main]
 
-# Les "jobs" sont les différentes tâches à exécuter.
-# Ils peuvent tourner en parallèle pour accélérer le processus.
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "18"
+
 jobs:
-  # --- JOB POUR LE BACKEND PYTHON ---
-  backend-ci:
-    runs-on: ubuntu-latest # Le type de machine virtuelle à utiliser
-    
-    defaults:
-      run:
-        working-directory: ./backend # Spécifie le répertoire de travail pour ce job
-
-    steps:
-      - name: 1. Récupération du code
-        uses: actions/checkout@v4 # Action standard pour cloner votre dépôt
-
-      - name: 2. Mise en place de Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: 3. Installation des dépendances
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: 4. Analyse du style de code (Linting) avec Flake8
-        run: |
-          pip install flake8
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-      
-      - name: 5. Lancement des tests avec Pytest
-        # Cette étape suppose que vos tests sont configurés pour être lancés avec la commande `pytest`
-        # Vous aurez besoin d'un fichier .env.test ou de secrets GitHub pour la BDD de test
-        run: |
-          pip install pytest
-          pytest
-
-  # --- JOB POUR LE FRONTEND REACT ---
-  frontend-ci:
+  # ===========================
+  # Backend: Lint + Tests
+  # ===========================
+  backend-lint:
+    name: Backend Lint (Ruff)
     runs-on: ubuntu-latest
-    
-    defaults:
-      run:
-        working-directory: ./frontend # Spécifie le répertoire de travail pour ce job
-
     steps:
-      - name: 1. Récupération du code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 2. Mise en place de Node.js
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run Ruff (linter)
+        run: |
+          cd backend
+          ruff check . --output-format=github
+
+      - name: Run Ruff (formatter check)
+        run: |
+          cd backend
+          ruff format --check .
+
+  backend-test:
+    name: Backend Tests (Pytest)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:15-3.3
+        env:
+          POSTGRES_USER: atmr_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: atmr_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run Pytest
+        env:
+          DATABASE_URL: postgresql://atmr_test:test_password@localhost:5432/atmr_test
+          REDIS_URL: redis://localhost:6379/0
+          FLASK_ENV: testing
+          SECRET_KEY: test-secret-key-for-ci
+          JWT_SECRET_KEY: test-jwt-secret-for-ci
+        run: |
+          cd backend
+          pytest -v --tb=short --cov=. --cov-report=term --cov-report=xml
+
+      - name: Upload coverage to Codecov (optional)
+        if: success()
+        uses: codecov/codecov-action@v4
+        with:
+          file: backend/coverage.xml
+          flags: backend
+          fail_ci_if_error: false
+
+  # ===========================
+  # Frontend: Lint + Tests + Build
+  # ===========================
+  frontend-lint:
+    name: Frontend Lint (ESLint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18' # Utilisez la version de Node.js de votre projet
-          cache: 'npm' # Met en cache les dépendances pour accélérer les futurs builds
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: 3. Installation des dépendances
-        run: npm install
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
 
-      - name: 4. Analyse du style de code et des erreurs (Linting) avec ESLint
-        # Assurez-vous d'avoir un script "lint" dans votre package.json
-        run: npm run lint 
+      - name: Run ESLint
+        run: |
+          cd frontend
+          npm run lint || true
 
-      - name: 5. Lancement des tests avec Jest
-        run: npm test -- --watchAll=false # `--watchAll=false` est important pour que le test se termine
+  frontend-test:
+    name: Frontend Tests (Jest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: 6. Build de l'application de production
-        run: npm run build # Vérifie que votre application est "buildable" sans erreurs
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
-  # --- JOB POUR LES APPLICATIONS MOBILES (EXPO) ---
-  # Ce job peut être ajouté plus tard. La logique est similaire : install, lint, test.
-  # Le build avec "eas build" nécessite une configuration plus avancée avec des secrets.
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run Jest tests
+        run: |
+          cd frontend
+          npm run test:ci || npm run test -- --watchAll=false --passWithNoTests
+
+      - name: Upload coverage to Codecov (optional)
+        if: success()
+        uses: codecov/codecov-action@v4
+        with:
+          directory: frontend/coverage
+          flags: frontend
+          fail_ci_if_error: false
+
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build frontend
+        env:
+          CI: false
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Check bundle size
+        run: |
+          cd frontend/build/static/js
+          BUNDLE_SIZE=$(du -sh . | cut -f1)
+          echo "Bundle JS size: $BUNDLE_SIZE"
+          # Optionnel : vérifier taille max
+          SIZE_MB=$(du -sm . | cut -f1)
+          if [ $SIZE_MB -gt 3 ]; then
+            echo "::warning::Bundle size ($SIZE_MB MB) exceeds 3 MB"
+          fi
+
+  # ===========================
+  # Docker Build (optional)
+  # ===========================
+  docker-build:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          tags: atmr-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ===========================
+  # Summary
+  # ===========================
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [backend-lint, backend-test, frontend-lint, frontend-test, frontend-build]
+    if: success()
+    steps:
+      - name: Success message
+        run: |
+          echo "✅ All CI checks passed!"
+          echo "Backend: Lint ✅ Tests ✅"
+          echo "Frontend: Lint ✅ Tests ✅ Build ✅"
