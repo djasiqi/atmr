@@ -6,10 +6,16 @@ import logging
 import re
 from typing import Any
 
-# Patterns à masquer
+# Patterns à masquer (renforcés pour RGPD/OWASP)
 EMAIL_PATTERN = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
 PHONE_PATTERN = re.compile(r'\+?\d[\d\s\-\(\)]{6,20}\d')
+# ✅ Pattern IBAN Suisse spécifique (CHxx xxxx xxxx xxxx xxxx x)
 IBAN_PATTERN = re.compile(r'\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b')
+IBAN_CH_PATTERN = re.compile(r'\bCH\d{2}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{1}\b')
+# ✅ Pattern carte bancaire (16 chiffres avec espaces/tirets optionnels)
+CARD_PATTERN = re.compile(r'\b\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b')
+# ✅ Pattern téléphone suisse (079... 10 chiffres)
+PHONE_CH_PATTERN = re.compile(r'\b0\d{9}\b')
 
 def mask_email(email: str) -> str:
     """
@@ -65,6 +71,10 @@ def sanitize_log_data(data: Any) -> Any:
         sanitized = EMAIL_PATTERN.sub(lambda m: mask_email(m.group(0)), data)
         sanitized = PHONE_PATTERN.sub(lambda m: mask_phone(m.group(0)), sanitized)
         sanitized = IBAN_PATTERN.sub(lambda m: mask_iban(m.group(0)), sanitized)
+        # ✅ SECURITY: Patterns supplémentaires pour RGPD
+        sanitized = IBAN_CH_PATTERN.sub('[IBAN_REDACTED]', sanitized)
+        sanitized = CARD_PATTERN.sub('[CARD_REDACTED]', sanitized)
+        sanitized = PHONE_CH_PATTERN.sub('[PHONE_REDACTED]', sanitized)
         return sanitized
 
     return data

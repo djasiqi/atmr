@@ -77,10 +77,12 @@ class Login(Resource):
                 return {"error": "Email ou mot de passe invalide."}, 401
 
             # Création du token avec le rôle dans additional_claims
+            # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
             claims = {
                 "role": user.role.value,
                 "company_id": getattr(user, "company_id", None),
                 "driver_id": getattr(user, "driver_id", None),
+                "aud": "atmr-api",  # Audience claim pour sécurité
             }
             access_token = create_access_token(
                 identity=str(user.public_id), # ⚠️ ID numérique attendu par dispatch_routes
@@ -131,10 +133,12 @@ class RefreshToken(Resource):
             if not user:
                 return {"error": "User not found"}, 404
 
+            # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
             claims = {
                 "role": user.role.value,
                 "company_id": getattr(user, "company_id", None),
                 "driver_id": getattr(user, "driver_id", None),
+                "aud": "atmr-api",  # Audience claim pour sécurité
             }
             new_token = create_access_token(
                 identity=str(user.public_id),
