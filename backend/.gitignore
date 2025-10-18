@@ -1,2 +1,21 @@
 ".env" 
 "venv/"
+
+# Artefacts temporaires
+*.csv
+*.xlsx
+!data/samples/*.xlsx
+
+# Scripts de debug
+test_delete.py
+check_*.py
+
+# Celery Beat persistence
+celerybeat-schedule*
+
+# Coverage et tests
+.pytest_cache/
+.coverage
+htmlcov/
+*.pyc
+__pycache__/
