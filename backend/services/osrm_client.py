@@ -255,7 +255,7 @@ def build_distance_matrix_osrm(
     *,
     base_url: str,
     profile: str = "driving",
-    timeout: int = 10,  # ✅ PERF: Increased timeout for large matrices
+    timeout: int = 30,  # ✅ PERF: Augmenté à 30s pour matrices volumineuses
     max_sources_per_call: int = 60,
     rate_limit_per_sec: int = 8,
     max_retries: int = 2,
@@ -267,7 +267,7 @@ def build_distance_matrix_osrm(
 ) -> List[List[float]]:
     """
     Retourne une matrice de durées en SECONDES (float), shape NxN, diagonale = 0.0.
-    Fallback haversine en cas d’échec.
+    Fallback haversine en cas d'échec.
     """
     n = len(coords)
     if n <= 1:
@@ -276,7 +276,10 @@ def build_distance_matrix_osrm(
     M = [[0.0] * n for _ in range(n)]
     all_dests = list(range(n))
 
-    for src_block in _chunks(range(n), max(1, int(max_sources_per_call))):
+    # ✅ PERF: Chunking adaptatif - petits chunks pour grandes matrices
+    adaptive_chunk_size = 40 if n > 100 else max_sources_per_call
+
+    for src_block in _chunks(range(n), max(1, int(adaptive_chunk_size))):
         # --- Cache key pour ce sous-bloc ---
         cache_key = _canonical_key_table(coords, list(src_block), all_dests, coord_precision=coord_precision)
         cached = None
@@ -506,3 +509,84 @@ def eta_seconds(
         return int(max(1, round(float(dur))))
     except Exception:
         return _fallback_eta_seconds(origin, destination, avg_kmh=avg_speed_kmh_fallback)
+
+
+# ============================================================
+# ✅ NEW: Circuit-Breaker pattern pour OSRM
+# ============================================================
+class CircuitBreaker:
+    """
+    Circuit-breaker pour protéger OSRM des surcharges.
+    États : CLOSED (normal) -> OPEN (échecs) -> HALF_OPEN (test) -> CLOSED
+    """
+    def __init__(self, failure_threshold: int = 5, timeout_duration: int = 60):
+        self.failure_threshold = failure_threshold
+        self.timeout_duration = timeout_duration
+        self.failure_count = 0
+        self.last_failure_time = None
+        self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
+        self._lock = threading.Lock()
+    
+    def call(self, func, *args, **kwargs):
+        """Execute function with circuit-breaker protection."""
+        with self._lock:
+            if self.state == "OPEN":
+                # Vérifier si timeout expiré -> passer en HALF_OPEN
+                if self.last_failure_time and (time.time() - self.last_failure_time) > self.timeout_duration:
+                    logger.info("[CircuitBreaker] OPEN -> HALF_OPEN (timeout expired)")
+                    self.state = "HALF_OPEN"
+                else:
+                    raise Exception(f"CircuitBreaker OPEN (failures: {self.failure_count})")
+        
+        try:
+            result = func(*args, **kwargs)
+            
+            # Succès -> reset
+            with self._lock:
+                if self.state == "HALF_OPEN":
+                    logger.info("[CircuitBreaker] HALF_OPEN -> CLOSED (success)")
+                    self.state = "CLOSED"
+                self.failure_count = 0
+            
+            return result
+        
+        except Exception as e:
+            with self._lock:
+                self.failure_count += 1
+                self.last_failure_time = time.time()
+                
+                if self.failure_count >= self.failure_threshold:
+                    if self.state != "OPEN":
+                        logger.warning(
+                            "[CircuitBreaker] CLOSED -> OPEN (failures: %d >= threshold: %d)",
+                            self.failure_count, self.failure_threshold
+                        )
+                    self.state = "OPEN"
+            raise
+
+
+# Instance globale du circuit-breaker OSRM
+_osrm_circuit_breaker = CircuitBreaker(failure_threshold=5, timeout_duration=60)
+
+
+def build_distance_matrix_osrm_with_cb(
+    coords: List[Tuple[float, float]],
+    **kwargs
+) -> List[List[float]]:
+    """
+    Wrapper de build_distance_matrix_osrm avec circuit-breaker.
+    En cas de circuit ouvert, fallback immédiat vers haversine.
+    """
+    try:
+        return _osrm_circuit_breaker.call(
+            build_distance_matrix_osrm,
+            coords,
+            **kwargs
+        )
+    except Exception as e:
+        logger.warning(
+            "[OSRM] Circuit-breaker triggered or call failed: %s, using haversine fallback",
+            e
+        )
+        avg_kmh = kwargs.get('avg_speed_kmh_fallback', 25.0)
+        return _fallback_matrix(coords, avg_kmh=avg_kmh)
