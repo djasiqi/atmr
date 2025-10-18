@@ -7,7 +7,7 @@ import sentry_sdk
 from flask import request, url_for
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from flask_restx import Namespace, Resource, fields
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from ext import db, role_required
 from models import Booking, BookingStatus, Client, Driver, User, UserRole
@@ -146,15 +146,25 @@ class CreateBooking(Resource):
 
             # Géocodage (best effort, pas bloquant)
             try:
-                # on passe les valeurs str de la requête (évite Column[str] -> str)
-                c = geocode_address(data["pickup_location"])
-                if c:
-                    cast(Any, new_booking).pickup_lat, cast(Any, new_booking).pickup_lon = c
-                c2 = geocode_address(data["dropoff_location"])
-                if c2:
-                    cast(Any, new_booking).dropoff_lat, cast(Any, new_booking).dropoff_lon = c2
+                # Géocoder l'adresse de départ
+                pickup_coords = geocode_address(data["pickup_location"], country="CH")
+                if pickup_coords:
+                    cast(Any, new_booking).pickup_lat = pickup_coords.get("lat")
+                    cast(Any, new_booking).pickup_lon = pickup_coords.get("lon")
+                    app_logger.info(f"✅ Adresse de départ géocodée: {data['pickup_location']} -> ({pickup_coords.get('lat')}, {pickup_coords.get('lon')})")
+                else:
+                    app_logger.warning(f"⚠️ Impossible de géocoder l'adresse de départ: {data['pickup_location']}")
+
+                # Géocoder l'adresse d'arrivée
+                dropoff_coords = geocode_address(data["dropoff_location"], country="CH")
+                if dropoff_coords:
+                    cast(Any, new_booking).dropoff_lat = dropoff_coords.get("lat")
+                    cast(Any, new_booking).dropoff_lon = dropoff_coords.get("lon")
+                    app_logger.info(f"✅ Adresse d'arrivée géocodée: {data['dropoff_location']} -> ({dropoff_coords.get('lat')}, {dropoff_coords.get('lon')})")
+                else:
+                    app_logger.warning(f"⚠️ Impossible de géocoder l'adresse d'arrivée: {data['dropoff_location']}")
             except Exception as e:
-                app_logger.warning(f"Géocodage best-effort échoué: {e}")
+                app_logger.warning(f"⚠️ Géocodage best-effort échoué: {e}")
 
             # Retour « placeholder » si demandé (toujours PENDING, éventuellement sans horaire)
             if bool(data.get("is_round_trip", False)):
@@ -338,7 +348,12 @@ class ListBookings(Resource):
             status_filter = request.args.get('status')
 
             if user.role == UserRole.admin:
-                query = Booking.query
+                # ✅ PERF: Eager loading pour éviter N+1 queries
+                query = Booking.query.options(
+                    selectinload(Booking.driver).selectinload(Driver.user),
+                    selectinload(Booking.client).selectinload(Client.user),
+                    selectinload(Booking.company)
+                )
                 if status_filter:
                     query = query.filter_by(status=status_filter)
                 pagination = query.paginate(page=page, per_page=per_page, error_out=False)

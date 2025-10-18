@@ -286,7 +286,7 @@ def _get_current_company() -> Company:
         # err est typiquement {"error": "..."}
         msg = (err or {}).get("error") if isinstance(err, dict) else "Accès refusé"
         dispatch_ns.abort(code or 403, msg)
-        assert False
+        raise AssertionError("Company should not be None after abort")
     return cast(Company, company)
 
 def _current_company_id() -> int:
@@ -299,12 +299,13 @@ def _current_company_id() -> int:
 def _parse_date(date_str: str | None) -> date:
     """Parse une date YYYY-MM-DD. Si None ou vide, retourne aujourd'hui."""
     if not date_str:
-        return date.today()
+        return datetime.now(UTC).date()
     try:
-        return datetime.strptime(date_str, "%Y-%m-%d").date()
-    except ValueError:
+        # Parse sans timezone (intentionnel car on veut juste la date)
+        return date.fromisoformat(date_str)  # noqa: DTZ007
+    except ValueError as err:
         dispatch_ns.abort(400, f"Format de date invalide: {date_str} (attendu: YYYY-MM-DD)")
-        assert False
+        raise AssertionError("Date parsing should not continue after abort") from err
 
 def _booking_time_expr() -> Any:
     B = cast(Any, Booking)
@@ -502,7 +503,7 @@ class DispatchAutorunEnable(Resource):
     @dispatch_ns.expect(autorun_model, validate=True)
     def post(self):
         company = _get_current_company()
-        company_id: int = int(company.id)
+        company_id: int = _current_company_id()
 
         body = request.get_json(silent=True) or {}
         enabled = bool(body.get("enabled", True))
@@ -521,14 +522,12 @@ class DispatchAutorunEnable(Resource):
             # Mettre à jour
             settings_data["autorun_enabled"] = enabled
             if interval_sec is not None:
-                try:
+                from contextlib import suppress
+                with suppress(TypeError, ValueError):
                     settings_data["autorun_interval_sec"] = int(interval_sec)
-                except (TypeError, ValueError):
-                    # on ignore silencieusement une valeur invalide
-                    pass
 
             # Sauvegarder (évite l'import local de json qui cassait la portée)
-            company.dispatch_settings = json.dumps(settings_data)
+            cast(Any, company).dispatch_settings = json.dumps(settings_data)
             db.session.add(company)
             db.session.commit()
 
@@ -564,10 +563,17 @@ class AssignmentsListResource(Resource):
         time_expr = _booking_time_expr()
 
         # Ids des bookings du jour (entreprise courante), en excluant les statuts terminés/annulés
+        # ✅ PERF: Import selectinload au début du fichier pour éviter import local répété
+        from sqlalchemy.orm import selectinload as sel_load
+        
         booking_ids = [
             b.id
             for b in (
-                Booking.query.filter(
+                Booking.query.options(
+                    sel_load(Booking.driver).selectinload(Driver.user),
+                    sel_load(Booking.client).selectinload(Client.user),
+                    sel_load(Booking.company)
+                ).filter(
                     Booking.company_id == company.id,
                        time_expr >= d0,     # Comparaison avec bornes locales naïves
                        time_expr < d1,
@@ -585,7 +591,7 @@ class AssignmentsListResource(Resource):
         ]
 
         # Assignations pour ces bookings avec eager loading des relations
-        from sqlalchemy.orm import joinedload
+        from sqlalchemy.orm import joinedload, selectinload
 
         assignments = []
         if booking_ids:
@@ -751,12 +757,11 @@ class RunResource(Resource):
     @role_required(UserRole.company)
     @dispatch_ns.marshal_with(dispatch_run_detail_model)
     def get(self, run_id: int):
-        # S’assure que la session n’est pas en état “aborted”
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
         """Détail d'un run + ses assignations."""
+        # S'assure que la session n'est pas en état "aborted"
+        from contextlib import suppress
+        with suppress(Exception):
+            db.session.rollback()
         company = _get_current_company()
 
         r_opt: DispatchRun | None = DispatchRun.query.filter_by(
@@ -882,10 +887,11 @@ class DelaysResource(Resource):
                 suggestions_list = []
                 try:
                     if max_delay != 0:  # Générer suggestions si retard ou avance
+                        company_id_int = int(cast(Any, company.id))
                         suggestions_list = generate_suggestions(
                             a,
                             delay_minutes=max_delay if pickup_delay > 0 else -abs(max_delay),
-                            company_id=company.id
+                            company_id=company_id_int
                         )
                         suggestions_list = [s.to_dict() for s in suggestions_list]
                 except Exception as e:
@@ -1068,7 +1074,8 @@ class LiveDelaysResource(Resource):
             suggestions_list = []
             if delay_minutes != 0:
                 try:
-                    suggestions = generate_suggestions(a, delay_minutes, company.id)
+                    company_id_int = int(cast(Any, company.id))
+                    suggestions = generate_suggestions(a, delay_minutes, company_id_int)
                     suggestions_list = [s.to_dict() for s in suggestions]
                     logger.info("[LiveDelays] Generated %d suggestions for assignment %s (delay: %d min)",
                                len(suggestions_list), a.id, delay_minutes)
@@ -1077,7 +1084,7 @@ class LiveDelaysResource(Resource):
 
             # Vérifier l'impact cascade (courses suivantes du même chauffeur)
             cascade_impact = []
-            if driver and delay_minutes > 5:
+            if driver and delay_minutes > 5 and pickup_time is not None:
                 try:
                     # Trouver les prochaines courses du chauffeur
                     next_assignments = (
@@ -1178,8 +1185,7 @@ class OptimizerStartResource(Resource):
         Démarre le monitoring en temps réel pour l'entreprise.
         Surveille automatiquement les retards et propose des optimisations.
         """
-        company = _get_current_company()
-        company_id = int(company.id)
+        company_id = _current_company_id()
 
         body = request.get_json(silent=True) or {}
         check_interval = int(body.get("check_interval_seconds", 120))  # 2 min par défaut
@@ -1204,8 +1210,7 @@ class OptimizerStopResource(Resource):
     @role_required(UserRole.company)
     def post(self):
         """Arrête le monitoring en temps réel pour l'entreprise."""
-        company = _get_current_company()
-        company_id = int(company.id)
+        company_id = _current_company_id()
 
         try:
             stop_optimizer_for_company(company_id)
@@ -1226,8 +1231,7 @@ class OptimizerStatusResource(Resource):
     @role_required(UserRole.company)
     def get(self):
         """Récupère le statut du monitoring temps réel."""
-        company = _get_current_company()
-        company_id = int(company.id)
+        company_id = _current_company_id()
 
         try:
             optimizer = get_optimizer_for_company(company_id)
@@ -1257,8 +1261,7 @@ class OptimizerOpportunitiesResource(Resource):
         Récupère les opportunités d'optimisation détectées.
         Mode manuel: lance une vérification à la demande.
         """
-        company = _get_current_company()
-        company_id = int(company.id)
+        company_id = _current_company_id()
 
         date_str = request.args.get("date")
 
@@ -1284,3 +1287,404 @@ class OptimizerOpportunitiesResource(Resource):
         except Exception as e:
             logger.exception("[Optimizer] Failed to get opportunities for company %s", company_id)
             return {"error": f"Échec récupération opportunités: {e}"}, 500
+
+
+@dispatch_ns.route("/dashboard/realtime")
+class RealtimeDashboardResource(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    @dispatch_ns.doc(params={"date": "YYYY-MM-DD (optionnel, défaut: aujourd'hui)"})
+    def get(self):
+        """
+        Dashboard temps réel pour les dispatchers.
+        Combine métriques de qualité, retards, opportunités et charge chauffeurs.
+        """
+        company_id = _current_company_id()
+
+        date_str = request.args.get("date")
+        if not date_str:
+            date_str = datetime.now(UTC).date().strftime("%Y-%m-%d")
+
+        try:
+            # 1. Métriques de qualité du dernier dispatch
+            quality_metrics = None
+            try:
+                from services.unified_dispatch.dispatch_metrics import DispatchMetricsCollector
+                collector = DispatchMetricsCollector(company_id)
+                metrics = collector.collect_for_date(date_str)
+                quality_metrics = metrics.to_summary()
+            except Exception as e:
+                logger.warning("[Dashboard] Failed to get quality metrics: %s", e)
+                quality_metrics = {
+                    'quality_score': 0,
+                    'assignment_rate': 0,
+                    'on_time_rate': 0,
+                    'pooling_rate': 0,
+                    'fairness': 0,
+                    'avg_delay': 0
+                }
+
+            # 2. Retards en cours (live)
+            try:
+                d0, d1 = day_local_bounds(date_str)
+                assigns = (
+                    Assignment.query.join(Booking, Booking.id == Assignment.booking_id)
+                    .filter(
+                        Booking.company_id == company_id,
+                        Booking.scheduled_time >= d0,
+                        Booking.scheduled_time < d1,
+                        cast(Any, Booking.status).notin_([
+                            BookingStatus.COMPLETED,
+                            BookingStatus.RETURN_COMPLETED,
+                            BookingStatus.CANCELED,
+                        ])
+                    )
+                    .all()
+                )
+
+                current_delays = []
+                for a in assigns:
+                    b = Booking.query.get(a.booking_id)
+                    if not b or not b.scheduled_time:
+                        continue
+
+                    # Calculer retard simplifié
+                    current_time = now_local()
+                    if a.eta_pickup_at and b.scheduled_time:
+                        delay_minutes = int((a.eta_pickup_at - b.scheduled_time).total_seconds() / 60)
+                    else:
+                        # Fallback: comparer heure actuelle vs scheduled_time
+                        delay_minutes = int((current_time - b.scheduled_time).total_seconds() / 60)
+
+                    if abs(delay_minutes) >= 5:
+                        current_delays.append({
+                            'assignment_id': a.id,
+                            'booking_id': b.id,
+                            'driver_id': a.driver_id,
+                            'delay_minutes': delay_minutes,
+                            'status': 'late' if delay_minutes > 0 else 'early',
+                            'customer_name': b.customer_name,
+                            'scheduled_time': b.scheduled_time.isoformat() if b.scheduled_time else None
+                        })
+
+                # Trier par retard décroissant
+                current_delays.sort(key=lambda x: -abs(x['delay_minutes']))
+
+            except Exception as e:
+                logger.warning("[Dashboard] Failed to get current delays: %s", e)
+                current_delays = []
+
+            # 3. Opportunités d'optimisation
+            opportunities = []
+            try:
+                optimizer = get_optimizer_for_company(company_id)
+                if optimizer and optimizer.get_status()["running"]:
+                    opportunities = [o.to_dict() for o in optimizer.get_current_opportunities()]
+                else:
+                    opportunities = [o.to_dict() for o in check_opportunities_manual(company_id, date_str)]
+            except Exception as e:
+                logger.warning("[Dashboard] Failed to get opportunities: %s", e)
+
+            # 4. Charge par chauffeur
+            driver_load = {}
+            try:
+                for a in assigns:
+                    if a.driver_id:
+                        driver_load[a.driver_id] = driver_load.get(a.driver_id, 0) + 1
+
+                # Enrichir avec infos chauffeur
+                driver_load_details = []
+                for driver_id, count in driver_load.items():
+                    driver = Driver.query.get(driver_id)
+                    if driver and driver.user:
+                        driver_load_details.append({
+                            'driver_id': driver_id,
+                            'name': f"{driver.user.first_name} {driver.user.last_name}",
+                            'bookings_count': count,
+                            'is_emergency': getattr(driver, 'is_emergency', False)
+                        })
+
+                # Trier par charge décroissante
+                driver_load_details.sort(key=lambda x: -x['bookings_count'])
+
+            except Exception as e:
+                logger.warning("[Dashboard] Failed to get driver load: %s", e)
+                driver_load_details = []
+
+            # 5. Statistiques rapides
+            stats = {
+                'total_bookings': len(assigns),
+                'delayed_bookings': len([d for d in current_delays if d['status'] == 'late']),
+                'early_bookings': len([d for d in current_delays if d['status'] == 'early']),
+                'on_time_bookings': len(assigns) - len(current_delays),
+                'critical_opportunities': len([o for o in opportunities if o.get('severity') == 'critical']),
+                'drivers_active': len(driver_load),
+            }
+
+            return {
+                'date': date_str,
+                'timestamp': now_local().isoformat(),
+                'quality_metrics': quality_metrics,
+                'current_delays': current_delays[:20],  # Top 20
+                'opportunities': opportunities[:10],  # Top 10
+                'driver_load': driver_load_details[:15],  # Top 15
+                'stats': stats
+            }, 200
+
+        except Exception as e:
+            logger.exception("[Dashboard] Failed to build realtime dashboard for company %s", company_id)
+            return {"error": f"Échec dashboard: {e}"}, 500
+
+
+# ===== GESTION DES MODES AUTONOMES =====
+
+@dispatch_ns.route("/mode")
+class DispatchModeResource(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """
+        Récupère le mode de dispatch actuel et la configuration autonome.
+        Returns:
+            - dispatch_mode: Mode actuel (manual, semi_auto, fully_auto)
+            - autonomous_config: Configuration détaillée
+            - description: Explication des modes
+        """
+        company = _get_current_company()
+        company_id = _current_company_id()
+
+        return {
+            "company_id": company_id,
+            "dispatch_mode": company.dispatch_mode.value,
+            "autonomous_config": company.get_autonomous_config(),
+            "modes_available": {
+                "manual": {
+                    "label": "Manuel",
+                    "description": "Assignations 100% manuelles, aucune automatisation",
+                    "features": [
+                        "Contrôle total sur chaque assignation",
+                        "Suggestions affichées uniquement",
+                        "Aucun dispatch automatique"
+                    ]
+                },
+                "semi_auto": {
+                    "label": "Semi-Automatique",
+                    "description": "Dispatch sur demande ou périodique, validation manuelle",
+                    "features": [
+                        "Dispatch optimisé avec OR-Tools",
+                        "Monitoring temps réel",
+                        "Suggestions affichées (non appliquées)",
+                        "Déclenchement manuel ou périodique"
+                    ]
+                },
+                "fully_auto": {
+                    "label": "Totalement Automatique",
+                    "description": "Système 100% autonome avec application automatique",
+                    "features": [
+                        "Dispatch automatique périodique",
+                        "Monitoring temps réel actif",
+                        "Application automatique des suggestions 'safe'",
+                        "Ré-optimisation automatique si problème",
+                        "Intervention humaine pour cas critiques uniquement"
+                    ]
+                }
+            }
+        }, 200
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def put(self):
+        """
+        Change le mode de dispatch et/ou met à jour la configuration autonome.
+        Body:
+        {
+            "dispatch_mode": "fully_auto",  // optionnel
+            "autonomous_config": { ... }     // optionnel
+        }
+        Returns:
+            Configuration mise à jour
+        """
+        company = _get_current_company()
+        company_id = _current_company_id()
+        body = request.get_json() or {}
+
+        # Changer le mode
+        new_mode = body.get("dispatch_mode")
+        if new_mode:
+            from models import DispatchMode
+            try:
+                cast(Any, company).dispatch_mode = DispatchMode(new_mode)
+                logger.info(
+                    "[Dispatch] Company %s changed mode to: %s",
+                    company_id, new_mode
+                )
+            except ValueError:
+                return {
+                    "error": f"Mode invalide: {new_mode}. "
+                             f"Valeurs possibles: manual, semi_auto, fully_auto"
+                }, 400
+
+        # Mettre à jour la config
+        new_config = body.get("autonomous_config")
+        if new_config:
+            # Valider et merger avec config par défaut
+            current_config = company.get_autonomous_config()
+
+            # Deep merge de la nouvelle config
+            def deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+                result = base.copy()
+                for key, value in override.items():
+                    if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                        result[key] = deep_merge(result[key], value)
+                    else:
+                        result[key] = value
+                return result
+
+            merged_config = deep_merge(current_config, new_config)
+            company.set_autonomous_config(merged_config)
+
+            logger.info(
+                "[Dispatch] Company %s updated autonomous config: %s",
+                company_id, list(new_config.keys())
+            )
+
+        try:
+            db.session.add(company)
+            db.session.commit()
+
+            return {
+                "company_id": company_id,
+                "dispatch_mode": company.dispatch_mode.value,
+                "autonomous_config": company.get_autonomous_config(),
+                "message": "Configuration mise à jour avec succès"
+            }, 200
+
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("[Dispatch] Failed to update mode/config")
+            return {"error": f"Échec de la mise à jour: {e}"}, 500
+
+
+@dispatch_ns.route("/autonomous/status")
+class AutonomousStatusResource(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """
+        Récupère le statut du système autonome pour l'entreprise.
+        Returns:
+            - Mode actuel
+            - État des automatisations (autorun, realtime optimizer)
+            - Configuration active
+            - Statistiques récentes
+        """
+        company_id = _current_company_id()
+
+        from services.unified_dispatch.autonomous_manager import get_manager_for_company
+
+        try:
+            manager = get_manager_for_company(company_id)
+
+            # Vérifier si le RealtimeOptimizer tourne actuellement
+            from services.unified_dispatch.realtime_optimizer import get_optimizer_for_company
+            optimizer = get_optimizer_for_company(company_id)
+            optimizer_running = optimizer.get_status() if optimizer else {"running": False}
+
+            return {
+                "company_id": company_id,
+                "dispatch_mode": manager.mode.value,
+                "autorun_enabled": manager.should_run_autorun(),
+                "realtime_optimizer_enabled": manager.should_run_realtime_optimizer(),
+                "config": manager.config,
+                "celery_status": {
+                    "autorun_tick": "running via Celery Beat (every 5 min)",
+                    "realtime_monitoring": "running via Celery Beat (every 2 min)",
+                },
+                "optimizer_thread_status": optimizer_running,
+                "features_active": {
+                    "auto_dispatch": manager.should_run_autorun(),
+                    "realtime_monitoring": manager.should_run_realtime_optimizer(),
+                    "auto_apply_suggestions": manager.mode == "fully_auto",
+                    "auto_reoptimization": manager.mode == "fully_auto",
+                }
+            }, 200
+
+        except Exception as e:
+            logger.exception("[Dispatch] Failed to get autonomous status")
+            return {"error": f"Échec récupération statut: {e}"}, 500
+
+
+@dispatch_ns.route("/autonomous/test")
+class AutonomousTestResource(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):
+        """
+        Teste le système autonome en mode dry-run (simulation).
+        Permet de voir ce que le système ferait sans réellement appliquer les actions.
+        Body:
+        {
+            "date": "2025-01-17"  // optionnel, défaut: aujourd'hui
+        }
+        Returns:
+            Simulation des actions qui seraient effectuées
+        """
+        company_id = _current_company_id()
+        body = request.get_json() or {}
+
+        date_str = body.get("date")
+        if not date_str:
+            date_str = datetime.now(UTC).date().strftime("%Y-%m-%d")
+
+        try:
+            # Créer le gestionnaire
+            from services.unified_dispatch.autonomous_manager import get_manager_for_company
+            manager = get_manager_for_company(company_id)
+
+            # Récupérer les opportunités actuelles
+            from services.unified_dispatch.realtime_optimizer import check_opportunities_manual
+            opportunities = check_opportunities_manual(
+                company_id=company_id,
+                for_date=date_str,
+                app=None
+            )
+
+            # Simuler le traitement (dry_run=True)
+            stats = manager.process_opportunities(opportunities, dry_run=True)
+
+            # Construire le résultat détaillé
+            simulated_actions = []
+            for opp in opportunities:
+                for suggestion in opp.suggestions:
+                    can_apply = manager.can_auto_apply_suggestion(suggestion)
+                    simulated_actions.append({
+                        "action": suggestion.action,
+                        "message": suggestion.message,
+                        "priority": suggestion.priority,
+                        "booking_id": suggestion.booking_id,
+                        "driver_id": suggestion.driver_id,
+                        "would_auto_apply": can_apply,
+                        "reason": "auto-applicable" if can_apply else "requires manual approval"
+                    })
+
+            return {
+                "company_id": company_id,
+                "dispatch_mode": manager.mode.value,
+                "date": date_str,
+                "test_results": {
+                    "opportunities_found": len(opportunities),
+                    "would_auto_apply": stats["auto_applied"],
+                    "would_require_manual": stats["manual_required"],
+                    "blocked_by_limits": stats["blocked_by_limits"],
+                },
+                "simulated_actions": simulated_actions,
+                "recommendation": (
+                    "✅ Le système autonome fonctionnerait correctement"
+                    if stats["auto_applied"] > 0
+                    else "ℹ️ Aucune action automatique détectée (normal si pas de retard)"
+                )
+            }, 200
+
+        except Exception as e:
+            logger.exception("[Dispatch] Failed to test autonomous system")
+            return {"error": f"Échec test autonome: {e}"}, 500
