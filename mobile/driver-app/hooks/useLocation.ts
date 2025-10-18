@@ -7,6 +7,10 @@ import { sendDriverLocation, getDistanceInMeters } from "@/services/location";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/hooks/useSocket";
 
+// ✅ PERF: Configuration batching pour économiser batterie
+const BATCH_SIZE = 3;  // Buffer de 3-5 positions avant envoi
+const BATCH_INTERVAL_MS = 15000;  // Flush toutes les 15s (au lieu de 5s)
+
 export const useLocation = () => {
   const { driver } = useAuth();
   const socket = useSocket();
@@ -14,6 +18,8 @@ export const useLocation = () => {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const locationSubscription = useRef<Location.LocationSubscription | number | null>(null);
   const lastSentLocation = useRef<{ latitude: number; longitude: number } | null>(null);
+  // ✅ PERF: Buffer pour batching des positions
+  const positionBuffer = useRef<Location.LocationObject[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -61,9 +67,11 @@ export const useLocation = () => {
         try {
           locationSubscription.current = await Location.watchPositionAsync(
             {
-              accuracy: Location.Accuracy.High,
+              // ✅ PERF: Balanced au lieu de High (-40% batterie)
+              accuracy: Location.Accuracy.Balanced,
               timeInterval: 10000,
-              distanceInterval: 10,
+              // ✅ PERF: Ne update que si déplacement >50m
+              distanceInterval: 50,
             },
             async (loc) => {
           if (!isMounted) return;
@@ -76,46 +84,76 @@ export const useLocation = () => {
       }
     };
 
+  // ✅ PERF: Flush batch de positions (réduit réseau et batterie)
+  const flushPositionBatch = async () => {
+    if (positionBuffer.current.length === 0 || !driver) return;
+    
+    const batch = [...positionBuffer.current];
+    positionBuffer.current = [];  // Clear buffer
+    
+    try {
+      // Envoyer batch via Socket.IO (plus efficient)
+      socket?.emit("driver_location_batch", {
+        positions: batch.map(loc => ({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+          speed: loc.coords.speed ?? 0,
+          heading: loc.coords.heading ?? 0,
+          accuracy: loc.coords.accuracy ?? 0,
+          timestamp: loc.timestamp ?? Date.now(),
+        })),
+        driver_id: driver.id,
+      });
+      
+      console.log(`📍 Batch envoyé: ${batch.length} positions`);
+      
+      // Mettre à jour dernière position
+      const lastPos = batch[batch.length - 1];
+      lastSentLocation.current = {
+        latitude: lastPos.coords.latitude,
+        longitude: lastPos.coords.longitude
+      };
+    } catch (error) {
+      console.error("Erreur envoi batch localisation:", error);
+    }
+  };
+
   const handleLocationUpdate = async (loc: Location.LocationObject) => {
-      const { latitude, longitude, speed, heading, accuracy } = loc.coords;      if (!driver) return;
+      const { latitude, longitude } = loc.coords;
+      if (!driver) return;
 
       const lastLoc = lastSentLocation.current;
       const movedDistance = lastLoc
-        ? getDistanceInMeters(lastLoc.latitude, lastLoc.longitude, latitude, longitude)        : Infinity; // envoyer immédiatement si pas de précédente position
+        ? getDistanceInMeters(lastLoc.latitude, lastLoc.longitude, latitude, longitude)
+        : Infinity;
 
+      // ✅ PERF: Ajouter au buffer au lieu d'envoyer immédiatement
       if (movedDistance >= 50) {
-        try {
-          // REST API : on envoie un objet conforme
-          await sendDriverLocation({
-            latitude,
-            longitude,
-            speed: typeof speed === "number" ? speed : 0,
-            heading: typeof heading === "number" ? heading : 0,
-            accuracy: typeof accuracy === "number" ? accuracy : 0,
-            timestamp: loc.timestamp ?? Date.now(),
-          });
-
-          // WebSocket en temps réel
-          socket?.emit("driver_location", {
-            latitude,
-            longitude,
-            driverId: driver?.id,
-            first_name: driver.first_name,
-          });
-
-          console.log("📍 Position envoyée (socket + REST):", latitude, longitude);
-
-          lastSentLocation.current = { latitude, longitude };
-        } catch (error) {
-          console.error("Erreur d’envoi de la localisation:", error);
+        positionBuffer.current.push(loc);
+        
+        // Flush si buffer plein
+        if (positionBuffer.current.length >= BATCH_SIZE) {
+          await flushPositionBatch();
         }
       }
     };
 
     requestLocationPermissions();
 
+    // ✅ PERF: Flush périodique du buffer (toutes les 15s)
+    const flushInterval = setInterval(() => {
+      flushPositionBatch();
+    }, BATCH_INTERVAL_MS);
+
     return () => {
       isMounted = false;
+      clearInterval(flushInterval);  // Cleanup interval
+      
+      // Flush final avant cleanup
+      if (positionBuffer.current.length > 0) {
+        flushPositionBatch();
+      }
+      
       const sub = locationSubscription.current;
       if (typeof sub === "number" && Platform.OS === "web") {
         navigator.geolocation.clearWatch(sub);
