@@ -1,6 +1,7 @@
 # backend/sockets/chat.py
 import logging
 from collections.abc import Mapping
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any, Dict, cast
 from typing import cast as tcast
@@ -46,9 +47,11 @@ def _extract_token(auth) -> str | None:
 
 
 def init_chat_socket(socketio: SocketIO):
+    logger.info("🔧 [INIT] Initialisation des handlers Socket.IO chat")
 
-    @socketio.on("connect")
+    @socketio.on("connect", namespace="/")
     def handle_connect(auth):
+        logger.info(f"🔌 [CONNECT] HANDLER APPELÉ ! auth={auth}")
         client_ip = request.environ.get("REMOTE_ADDR")
         ua = request.headers.get("User-Agent", "Unknown")
         logger.info(f"🔌 SIO connect from {client_ip} UA={ua}")
@@ -126,21 +129,23 @@ def init_chat_socket(socketio: SocketIO):
 
         except Exception as e:
             logger.exception(f"❌ Erreur de connexion WebSocket : {e}")
-            try:
-                emit("unauthorized", {"error": str(e)})
-            finally:
-                return False
+            emit("unauthorized", {"error": str(e)})
+            return False
 
     @socketio.on("team_chat_message")
     def handle_team_chat(data):
         local_id = data.get("_localId")
         try:
-            user_id = session.get("user_id")
-            if not user_id:
-                emit("error", {"error": "Session utilisateur introuvable."})
+            # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX au lieu de session Flask
+            sid = _get_sid()
+            sid_data = _SID_INDEX.get(sid, {})
+            user_public_id = sid_data.get("user_public_id")
+
+            if not user_public_id:
+                emit("error", {"error": "Session JWT introuvable. Reconnectez-vous."})
                 return
 
-            user = User.query.get(user_id)
+            user = User.query.filter_by(public_id=user_public_id).first()
             if not user:
                 emit("error", {"error": "Utilisateur non reconnu."})
                 return
@@ -212,7 +217,7 @@ def init_chat_socket(socketio: SocketIO):
                 "receiver_id": receiver_id,
                 "receiver_name": message.receiver.first_name if message.receiver else None,
                 "sender_role": sender_role,
-                "sender_name": session.get("first_name") or user.first_name,
+                "sender_name": user.first_name,  # ✅ Utiliser user.first_name directement
                 "content": content,
                 "timestamp": timestamp.isoformat(),
                 "type": "chat",
@@ -240,12 +245,16 @@ def init_chat_socket(socketio: SocketIO):
     @socketio.on("join_driver_room")
     def handle_join_driver_room(data=None):
         try:
-            user_id = session.get("user_id")
-            if not user_id:
-                emit("error", {"error": "Session non trouvée"})
+            # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
+            sid = _get_sid()
+            sid_data = _SID_INDEX.get(sid, {})
+            user_public_id = sid_data.get("user_public_id")
+
+            if not user_public_id:
+                emit("error", {"error": "Session JWT introuvable. Reconnectez-vous."})
                 return
 
-            user = User.query.get(user_id)
+            user = User.query.filter_by(public_id=user_public_id).first()
             if not user or user.role != UserRole.driver:
                 emit("error", {"error": "Seuls les chauffeurs peuvent rejoindre cette room."})
                 return
@@ -277,16 +286,22 @@ def init_chat_socket(socketio: SocketIO):
             current_sid = _get_sid()
             logger.info(f"📍 driver_location reçu, SID={current_sid}, data={data}")
 
-            # 2. Tentative de récupération depuis la session Flask
-            user_id = session.get("user_id")
-            user_role = session.get("role")
+            # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX uniquement
+            sid_info = _SID_INDEX.get(current_sid, {})
+            user_public_id = sid_info.get("user_public_id")
+            user_role = sid_info.get("role")
 
-            # 3. Fallback vers _SID_INDEX si session vide
-            if not user_id:
-                sid_info = _SID_INDEX.get(current_sid, {})
-                logger.info(f"🔍 Fallback _SID_INDEX pour SID={current_sid}: {sid_info}")
-                user_id = sid_info.get("user_id")
-                user_role = sid_info.get("role")
+            if not user_public_id:
+                logger.warning(f"⛔ driver_location sans JWT public_id pour SID={current_sid}")
+                emit("error", {"error": "Session JWT introuvable"})
+                return
+
+            # Récupérer l'user_id depuis la DB
+            user = User.query.filter_by(public_id=user_public_id).first()
+            if not user:
+                emit("error", {"error": "Utilisateur introuvable"})
+                return
+            user_id = user.id
 
             # 4. Nouvelle approche: extraire driver_id du payload si disponible
             payload_driver_id = data.get("driver_id")
@@ -368,14 +383,24 @@ def init_chat_socket(socketio: SocketIO):
     @socketio.on("join_company")
     def handle_join_company(data=None):
            try:
-               user_id = session.get("user_id")
-               user_role = session.get("role")
-               if not user_id:
-                   emit("error", {"error": "Session utilisateur introuvable."})
+               # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
+               sid = _get_sid()
+               sid_data = _SID_INDEX.get(sid, {})
+               user_public_id = sid_data.get("user_public_id")
+               user_role = sid_data.get("role")
+
+               if not user_public_id:
+                   emit("error", {"error": "Session JWT introuvable. Reconnectez-vous."})
+                   return
+
+               # Récupérer user depuis public_id
+               user = User.query.filter_by(public_id=user_public_id).first()
+               if not user:
+                   emit("error", {"error": "Utilisateur introuvable."})
                    return
 
                if user_role == "company":
-                   company = Company.query.filter_by(user_id=user_id).first()
+                   company = Company.query.filter_by(user_id=user.id).first()
                    if not company:
                        emit("error", {"error": "Entreprise introuvable."})
                        return
@@ -385,7 +410,7 @@ def init_chat_socket(socketio: SocketIO):
                    emit("joined_company", {"company_id": company.id, "room": room})
                    logger.info(f"🏢 Company {company.id} joined room: {room}")
                elif user_role == "driver":
-                   driver = Driver.query.filter_by(user_id=user_id).first()
+                   driver = Driver.query.filter_by(user_id=user.id).first()
                    if not driver or not driver.company_id:
                        emit("error", {"error": "Chauffeur ou entreprise associée introuvable."})
                        return
@@ -404,15 +429,16 @@ def init_chat_socket(socketio: SocketIO):
     @socketio.on("get_driver_locations")
     def handle_get_driver_locations():
            try:
-               user_id = session.get("user_id")
-               user_role = session.get("role")
-               if not user_id or user_role != "company":
+               # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
+               sid = _get_sid()
+               company_info = _SID_INDEX.get(sid, {})
+               user_public_id = company_info.get("user_public_id")
+               user_role = company_info.get("role")
+               company_id = company_info.get("company_id")
+
+               if not user_public_id or user_role != "company":
                    emit("error", {"error": "Accès non autorisé pour la demande de localisation."})
                    return
-
-               # Get company ID from session
-               company_info = _SID_INDEX.get(_get_sid(), {})
-               company_id = company_info.get("company_id")
 
                if not company_id:
                    emit("error", {"error": "Entreprise non identifiée."})
@@ -446,10 +472,8 @@ def init_chat_socket(socketio: SocketIO):
                            # Cast numeric fields
                            for kf in ("lat","lon","speed","heading","accuracy"):
                                if kf in loc_data:
-                                   try:
+                                   with suppress(Exception):
                                        loc_data[kf] = float(loc_data[kf])
-                                   except Exception:
-                                       pass
 
                            # Emit location to the company room
                            cast(Any, emit)("driver_location_update", {
