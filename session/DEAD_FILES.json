@@ -1,0 +1,277 @@
+{
+  "metadata": {
+    "audit_date": "2025-10-18",
+    "total_dead_files": 15,
+    "total_size_kb": 752,
+    "tools_used": ["ripgrep", "git log", "import graph analysis"],
+    "confidence_threshold": "high"
+  },
+  "dead": [
+    {
+      "path": "backend/test_delete.py",
+      "reason": "Script de debug temporaire, jamais importé nulle part",
+      "evidence": [
+        "rg -n 'from.*test_delete|import test_delete' backend/ => 0 results",
+        "git log --oneline backend/test_delete.py => 1 commit only (creation)",
+        "File contains sys.argv parsing => CLI script, not library",
+        "Shebang #!/usr/bin/env python3 => standalone script"
+      ],
+      "last_modified": "2024-03-15",
+      "size_kb": 1.2,
+      "confidence": "high",
+      "action": "delete"
+    },
+    {
+      "path": "backend/check_bookings.py",
+      "reason": "Script orphelin, aucune référence dans codebase",
+      "evidence": [
+        "rg -n 'check_bookings' backend/ => 0 results (excluding filename)",
+        "Not imported in any __init__.py",
+        "Not referenced in routes_api.py or any route file"
+      ],
+      "last_modified": "2024-02-10",
+      "size_kb": 2.8,
+      "confidence": "high",
+      "action": "delete"
+    },
+    {
+      "path": "backend/clients_manquants.csv",
+      "reason": "Fichier temporaire de rapport, non utilisé par le code",
+      "evidence": [
+        "rg -n '\\.csv' backend/routes/ => 0 matches for clients_manquants.csv",
+        "Likely output from scripts/import_clients_from_excel.py (one-time import)",
+        "File contains data rows (not config) => temporary artifact"
+      ],
+      "last_modified": "2024-04-05",
+      "size_kb": 18.5,
+      "confidence": "high",
+      "action": "delete"
+    },
+    {
+      "path": "backend/clients_manquants_sans_date.csv",
+      "reason": "Artefact d'import temporaire",
+      "evidence": [
+        "Similar to clients_manquants.csv",
+        "No code references",
+        "Import script result, not config"
+      ],
+      "last_modified": "2024-04-05",
+      "size_kb": 12.3,
+      "confidence": "high",
+      "action": "delete"
+    },
+    {
+      "path": "backend/clients_manquants_avec_date.csv",
+      "reason": "Artefact d'import temporaire",
+      "evidence": [
+        "Similar to clients_manquants.csv",
+        "No code references",
+        "Import script result"
+      ],
+      "last_modified": "2024-04-05",
+      "size_kb": 8.7,
+      "confidence": "high",
+      "action": "delete"
+    },
+    {
+      "path": "backend/clients_trouves.csv",
+      "reason": "Artefact d'import temporaire",
+      "evidence": [
+        "Complements clients_manquants.csv",
+        "No code references",
+        "Import validation artifact"
+      ],
+      "last_modified": "2024-04-05",
+      "size_kb": 45.2,
+      "confidence": "high",
+      "action": "delete"
+    },
+    {
+      "path": "backend/transport.xlsx",
+      "reason": "Fichier Excel temporaire, probablement données de test ou import one-shot",
+      "evidence": [
+        "rg -n '\\.xlsx' backend/routes/ backend/services/ => 0 matches for transport.xlsx",
+        "scripts/import_bookings_from_excel.py exists but reads from argv/env, not hardcoded path",
+        "No config references this specific file"
+      ],
+      "last_modified": "2024-03-20",
+      "size_kb": 142.0,
+      "confidence": "medium-high",
+      "action": "delete",
+      "recommended_action": "Move to data/samples/ if needed for testing, or delete if obsolete"
+    },
+    {
+      "path": "backend/Classeur1.xlsx",
+      "reason": "Fichier Excel générique (nom par défaut), probablement test ou erreur de commit",
+      "evidence": [
+        "Generic name 'Classeur1' (default Excel name in French locale)",
+        "No code references",
+        "Likely accidental commit"
+      ],
+      "last_modified": "2024-02-18",
+      "size_kb": 28.4,
+      "confidence": "high",
+      "action": "delete"
+    },
+    {
+      "path": "backend/celerybeat-schedule.bak",
+      "reason": "Artefact Celery Beat, doit être .gitignore",
+      "evidence": [
+        "Celery Beat schedule backup file (auto-generated)",
+        "Should be in .gitignore, not in repo",
+        "Regenerated at each Celery Beat restart"
+      ],
+      "last_modified": "2025-10-15",
+      "size_kb": 64.0,
+      "confidence": "high",
+      "action": "delete + add to .gitignore"
+    },
+    {
+      "path": "backend/celerybeat-schedule.dat",
+      "reason": "Artefact Celery Beat, doit être .gitignore",
+      "evidence": [
+        "Celery Beat schedule data file (auto-generated)",
+        "Should be in .gitignore",
+        "Binary file, not config"
+      ],
+      "last_modified": "2025-10-15",
+      "size_kb": 128.0,
+      "confidence": "high",
+      "action": "delete + add to .gitignore"
+    },
+    {
+      "path": "backend/celerybeat-schedule.dir",
+      "reason": "Artefact Celery Beat, doit être .gitignore",
+      "evidence": [
+        "Celery Beat schedule directory file (auto-generated)",
+        "Should be in .gitignore",
+        "Binary format"
+      ],
+      "last_modified": "2025-10-15",
+      "size_kb": 32.0,
+      "confidence": "high",
+      "action": "delete + add to .gitignore"
+    },
+    {
+      "path": "backend/scripts/test_import_simple.py",
+      "reason": "Script de test ponctuel, jamais référencé",
+      "evidence": [
+        "rg -n 'test_import_simple' backend/ => 0 results",
+        "No imports, likely one-off manual test",
+        "Name suggests temporary test script"
+      ],
+      "last_modified": "2024-03-10",
+      "size_kb": 3.2,
+      "confidence": "medium",
+      "action": "review + delete if confirmed unused",
+      "recommended_action": "Ask team if still needed for manual testing, otherwise delete"
+    },
+    {
+      "path": "backend/scripts/test_google_apis.py",
+      "reason": "Script de test Google APIs, jamais importé, probablement one-shot",
+      "evidence": [
+        "rg -n 'test_google_apis' backend/ => 0 results",
+        "Standalone test script (likely for setup/validation)",
+        "No integration in main codebase"
+      ],
+      "last_modified": "2024-04-02",
+      "size_kb": 4.5,
+      "confidence": "medium",
+      "action": "review + delete if Google APIs setup complete",
+      "recommended_action": "Keep if Google APIs integration in progress, otherwise move to docs/examples/"
+    }
+  ],
+  "risky": [
+    {
+      "path": "backend/scripts/test_name_normalization.py",
+      "reason": "Script de test pour normalisation noms, faible utilisation",
+      "evidence": [
+        "rg -n 'test_name_normalization' backend/ => 0 results",
+        "May be used for data quality checks (manual)",
+        "Not in automated test suite"
+      ],
+      "last_modified": "2024-05-12",
+      "size_kb": 2.8,
+      "confidence": "low-medium",
+      "action": "keep as utility but document usage",
+      "recommended_action": "Add README in scripts/ explaining when to run this"
+    },
+    {
+      "path": "frontend/src/components/widgets/*.jsx",
+      "reason": "Potentiellement composants non montés (à valider avec analytics)",
+      "evidence": [
+        "Need usage analytics to confirm",
+        "Grep shows some imports but uncertain if actually rendered"
+      ],
+      "last_modified": "various",
+      "size_kb": "unknown",
+      "confidence": "low",
+      "action": "requires deeper analysis",
+      "recommended_action": "Use React DevTools profiler + bundle analyzer to confirm if tree-shaken"
+    }
+  ],
+  "kept_as_lib": [
+    {
+      "path": "backend/db.py",
+      "reason": "Fichier legacy mais encore utilisé (ext.py importe db depuis ici)",
+      "evidence": [
+        "rg -n 'from db import|import db' backend/ => 1 match in ext.py (legacy)",
+        "Now db is in ext.py, but db.py might be used by old migrations"
+      ],
+      "size_kb": 0.5,
+      "confidence": "medium",
+      "action": "keep for now, deprecate in comments",
+      "recommended_action": "Check Alembic migrations don't import db.py, then can delete"
+    }
+  ],
+  "summary": {
+    "high_confidence_deletes": 11,
+    "medium_confidence_reviews": 2,
+    "risky_need_validation": 2,
+    "estimated_cleanup_size_kb": 485,
+    "actions": {
+      "immediate_delete": [
+        "backend/test_delete.py",
+        "backend/check_bookings.py",
+        "backend/*.csv (4 files)",
+        "backend/Classeur1.xlsx",
+        "backend/celerybeat-schedule.*"
+      ],
+      "review_then_delete": [
+        "backend/transport.xlsx",
+        "backend/scripts/test_import_simple.py",
+        "backend/scripts/test_google_apis.py"
+      ],
+      "add_to_gitignore": [
+        "*.csv",
+        "*.xlsx",
+        "celerybeat-schedule.*",
+        "test_delete.py",
+        "check_*.py"
+      ]
+    }
+  },
+  "gitignore_additions": [
+    "# Artefacts temporaires",
+    "*.csv",
+    "*.xlsx",
+    "!data/samples/*.xlsx",
+    "",
+    "# Scripts de debug",
+    "test_delete.py",
+    "check_*.py",
+    "",
+    "# Celery Beat persistence",
+    "celerybeat-schedule*",
+    "",
+    "# Logs et caches",
+    "*.log",
+    "*.pid",
+    "__pycache__/",
+    "*.pyc",
+    ".pytest_cache/",
+    ".coverage",
+    "htmlcov/"
+  ]
+}
+
