@@ -18,29 +18,28 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
-  
+
   // NOUVEAU: Gestion des sélections de réservations par client
-  const [selectedReservations, setSelectedReservations] = useState({});  // { client_id: [reservation_objects] }
+  const [selectedReservations, setSelectedReservations] = useState({}); // { client_id: [reservation_objects] }
   const [showReservationSelection, setShowReservationSelection] = useState(false);
 
   // Charger la liste des clients et institutions
   useEffect(() => {
     const loadData = async () => {
       if (!companyId) return;
-      
+
       try {
         setLoading(true);
-        
+
         // Charger les clients
         const clientsData = await fetchCompanyClients();
         // Filtrer pour ne garder que les clients non-institutions pour la sélection patient
-        const regularClients = clientsData.filter(c => !c.is_institution);
+        const regularClients = clientsData.filter((c) => !c.is_institution);
         setClients(regularClients);
-        
+
         // Charger les institutions
         const institutionsData = await invoiceService.fetchInstitutions(companyId);
         setInstitutions(institutionsData.institutions || []);
-        
       } catch (err) {
         console.error('Erreur lors du chargement des données:', err);
         setError('Erreur lors du chargement des données');
@@ -56,65 +55,71 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: name.includes('year') || name.includes('month') ? parseInt(value) : value
+      [name]: name.includes('year') || name.includes('month') ? parseInt(value) : value,
     }));
   };
 
   const handleClientToggle = (clientId) => {
-    setFormData(prev => {
+    setFormData((prev) => {
       const isSelected = prev.client_ids.includes(clientId);
       const newClientIds = isSelected
-        ? prev.client_ids.filter(id => id !== clientId)
+        ? prev.client_ids.filter((id) => id !== clientId)
         : [...prev.client_ids, clientId];
-      
+
       // Si on désélectionne un client, supprimer aussi ses réservations sélectionnées
       if (isSelected) {
-        setSelectedReservations(prevReservations => {
+        setSelectedReservations((prevReservations) => {
           if (!prevReservations) return {};
-          const { [clientId]: removed, ...rest } = prevReservations;
+          const { [clientId]: _removed, ...rest } = prevReservations;
           return rest;
         });
       }
-      
+
       return {
         ...prev,
-        client_ids: newClientIds
+        client_ids: newClientIds,
       };
     });
   };
 
   // IMPORTANT: Utiliser useCallback pour éviter les re-renders infinis
   const handleReservationSelectionChange = useCallback((clientId, reservations) => {
-    setSelectedReservations(prev => {
+    setSelectedReservations((prev) => {
       // Vérifier que prev existe, sinon initialiser à {}
       const current = prev || {};
-      
+
       // Ne mettre à jour que si les réservations ont changé
-      const prevIds = (current[clientId] || []).map(r => r?.id || r).sort().join(',');
-      const newIds = (reservations || []).map(r => r?.id || r).sort().join(',');
-      
+      const prevIds = (current[clientId] || [])
+        .map((r) => r?.id || r)
+        .sort()
+        .join(',');
+      const newIds = (reservations || [])
+        .map((r) => r?.id || r)
+        .sort()
+        .join(',');
+
       if (prevIds === newIds) {
         return current; // Pas de changement, retourner le même objet
       }
-      
+
       return {
         ...current,
-        [clientId]: reservations || []
+        [clientId]: reservations || [],
       };
     });
   }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Validation en fonction du type de facturation
     if (billingType === 'direct' && !formData.client_id) {
       setError('Veuillez sélectionner un client');
       return;
     }
-    
+
     if (billingType === 'third_party') {
       if (formData.client_ids.length === 0) {
         setError('Veuillez sélectionner au moins un patient');
@@ -130,79 +135,84 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
       setLoading(true);
       setError(null);
       setSuccessMessage(null);
-      
+
       let result;
-      
+
       if (billingType === 'direct') {
         // Facturation directe
         const clientId = parseInt(formData.client_id);
         const reservs = selectedReservations?.[clientId];
-        const reservationIds = Array.isArray(reservs) ? reservs.map(r => r?.id || r) : undefined;
-        
+        const reservationIds = Array.isArray(reservs) ? reservs.map((r) => r?.id || r) : undefined;
+
         result = await generateInvoice(companyId, {
           client_id: clientId,
           period_year: formData.period_year,
           period_month: formData.period_month,
-          reservation_ids: reservationIds  // NOUVEAU: Support sélection manuelle
+          reservation_ids: reservationIds, // NOUVEAU: Support sélection manuelle
         });
-        
+
         // Ouvrir le PDF dans un nouvel onglet
         if (result.pdf_url) {
           window.open(result.pdf_url, '_blank');
         }
-        
+
         onInvoiceGenerated(result);
-        
       } else {
         // Facturation tierce (consolidée)
         // NOUVEAU: Préparer le mapping des réservations par client
         const clientReservations = {};
-        formData.client_ids.forEach(clientId => {
+        formData.client_ids.forEach((clientId) => {
           const reservs = selectedReservations?.[clientId];
           if (reservs && Array.isArray(reservs) && reservs.length > 0) {
-            clientReservations[clientId] = reservs.map(r => r?.id || r);
+            clientReservations[clientId] = reservs.map((r) => r?.id || r);
           }
         });
-        
+
         result = await invoiceService.generateConsolidatedInvoice(companyId, {
-          client_ids: formData.client_ids.map(id => parseInt(id)),
+          client_ids: formData.client_ids.map((id) => parseInt(id)),
           bill_to_client_id: parseInt(formData.bill_to_client_id),
           period_year: formData.period_year,
           period_month: formData.period_month,
-          client_reservations: Object.keys(clientReservations).length > 0 ? clientReservations : undefined  // NOUVEAU
+          client_reservations:
+            Object.keys(clientReservations).length > 0 ? clientReservations : undefined, // NOUVEAU
         });
-        
+
         if (result.invoices && result.invoices.length > 0) {
           setSuccessMessage(
-            `${result.success_count} facture(s) générée(s) avec succès${result.error_count > 0 ? `, ${result.error_count} erreur(s)` : ''}`
+            `${result.success_count} facture(s) générée(s) avec succès${
+              result.error_count > 0 ? `, ${result.error_count} erreur(s)` : ''
+            }`
           );
-          
+
           // Ouvrir les PDFs dans de nouveaux onglets
-          result.invoices.forEach(inv => {
+          result.invoices.forEach((inv) => {
             if (inv.pdf_url) {
               window.open(inv.pdf_url, '_blank');
             }
           });
-          
+
           // Notifier le parent pour chaque facture
-          result.invoices.forEach(inv => onInvoiceGenerated(inv));
+          result.invoices.forEach((inv) => onInvoiceGenerated(inv));
         }
-        
+
         if (result.errors && result.errors.length > 0) {
-          const errorMessages = result.errors.map(e => `Client ${e.client_id}: ${e.error}`).join('\n');
+          const errorMessages = result.errors
+            .map((e) => `Client ${e.client_id}: ${e.error}`)
+            .join('\n');
           setError(`Erreurs:\n${errorMessages}`);
         }
       }
-      
+
       // Fermer le modal si tout s'est bien passé et pas d'erreurs
       if (!result.errors || result.errors.length === 0) {
         setTimeout(() => {
           onClose();
         }, 2000);
       }
-      
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Erreur lors de la génération de la facture');
+      setError(
+        err.response?.data?.error || err.message || 'Erreur lors de la génération de la facture'
+      );
     } finally {
       setLoading(false);
     }
@@ -244,27 +254,19 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
   const years = Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i);
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modal}>
-        <div className={styles.modalHeader}>
-          <h2>Nouvelle facture</h2>
-          <button className={styles.closeBtn} onClick={handleClose}>
+    <div className="modal-overlay">
+      <div className="modal-content modal-xl">
+        <div className="modal-header">
+          <h2 className="modal-title">Nouvelle facture</h2>
+          <button className="modal-close" onClick={handleClose}>
             ✕
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
-          {error && (
-            <div className={styles.error}>
-              {error}
-            </div>
-          )}
+          {error && <div className="alert alert-error mb-md">{error}</div>}
 
-          {successMessage && (
-            <div className={styles.success}>
-              {successMessage}
-            </div>
-          )}
+          {successMessage && <div className={styles.success}>{successMessage}</div>}
 
           {/* Type de facturation */}
           <div className={styles.formGroup}>
@@ -312,7 +314,8 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
                   <option value="">Sélectionner un client</option>
                   {clients.map((client) => (
                     <option key={client.id} value={client.id}>
-                      {`${client.first_name || ''} ${client.last_name || ''}`.trim() || client.username}
+                      {`${client.first_name || ''} ${client.last_name || ''}`.trim() ||
+                        client.username}
                     </option>
                   ))}
                 </select>
@@ -322,9 +325,7 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
               {formData.client_id && (
                 <div className={styles.formGroup}>
                   <div className={styles.sectionHeader}>
-                    <label className={styles.label}>
-                      Transports à facturer
-                    </label>
+                    <label className={styles.label}>Transports à facturer</label>
                     <button
                       type="button"
                       className={styles.toggleBtn}
@@ -333,23 +334,26 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
                       {showReservationSelection ? '▼ Masquer' : '▶ Sélectionner'}
                     </button>
                   </div>
-                  
+
                   {showReservationSelection && (
                     <ReservationSelector
                       companyId={companyId}
                       clientId={parseInt(formData.client_id)}
-                      clientName={clients.find(c => c.id === parseInt(formData.client_id))?.full_name || ''}
+                      clientName={
+                        clients.find((c) => c.id === parseInt(formData.client_id))?.full_name || ''
+                      }
                       period={{ year: formData.period_year, month: formData.period_month }}
                       billToType="patient"
-                      onSelectionChange={(reservations) => 
+                      onSelectionChange={(reservations) =>
                         handleReservationSelectionChange(parseInt(formData.client_id), reservations)
                       }
                     />
                   )}
-                  
+
                   {selectedReservations?.[parseInt(formData.client_id)]?.length > 0 && (
                     <small className={styles.hint}>
-                      {selectedReservations[parseInt(formData.client_id)].length} transport(s) sélectionné(s)
+                      {selectedReservations[parseInt(formData.client_id)].length} transport(s)
+                      sélectionné(s)
                     </small>
                   )}
                 </div>
@@ -388,10 +392,8 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
               </div>
 
               <div className={styles.formGroup}>
-                <label className={styles.label}>
-                  Sélection des patients
-                </label>
-                
+                <label className={styles.label}>Sélection des patients</label>
+
                 {/* Liste simplifiée pour sélectionner les patients */}
                 <div className={styles.clientsList}>
                   {clients.map((client) => (
@@ -402,7 +404,8 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
                         onChange={() => handleClientToggle(client.id)}
                         disabled={loading}
                       />
-                      {`${client.first_name || ''} ${client.last_name || ''}`.trim() || client.username}
+                      {`${client.first_name || ''} ${client.last_name || ''}`.trim() ||
+                        client.username}
                     </label>
                   ))}
                 </div>
@@ -411,22 +414,21 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
               {/* Sélection des transports pour chaque patient sélectionné */}
               {formData.client_ids.length > 0 && formData.period_year && formData.period_month && (
                 <div className={styles.formGroup}>
-                  <label className={styles.label}>
-                    Transports à facturer
-                  </label>
-                  
+                  <label className={styles.label}>Transports à facturer</label>
+
                   <div className={styles.patientsWithReservations}>
                     {formData.client_ids.map((clientId) => {
-                      const client = clients.find(c => c.id === clientId);
+                      const client = clients.find((c) => c.id === clientId);
                       if (!client) return null;
-                      
+
                       const reservationsCount = selectedReservations?.[clientId]?.length || 0;
-                      
+
                       return (
                         <div key={clientId} className={styles.patientSection}>
                           <div className={styles.patientSectionHeader}>
                             <h4 className={styles.patientName}>
-                              {`${client.first_name || ''} ${client.last_name || ''}`.trim() || client.username}
+                              {`${client.first_name || ''} ${client.last_name || ''}`.trim() ||
+                                client.username}
                             </h4>
                             {reservationsCount > 0 && (
                               <span className={styles.reservationCount}>
@@ -434,13 +436,15 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
                               </span>
                             )}
                           </div>
-                          
+
                           <div className={styles.patientReservations}>
                             <ReservationSelector
                               key={`${clientId}-${formData.period_year}-${formData.period_month}`}
                               companyId={companyId}
                               clientId={clientId}
-                              clientName={client.full_name || `${client.first_name} ${client.last_name}`}
+                              clientName={
+                                client.full_name || `${client.first_name} ${client.last_name}`
+                              }
                               period={{ year: formData.period_year, month: formData.period_month }}
                               billToType="clinic"
                               onSelectionChange={handleReservationSelectionChange}
@@ -452,10 +456,14 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
                   </div>
                 </div>
               )}
-              
+
               <small className={styles.hint}>
-                {formData.client_ids.length} patient(s) sélectionné(s) • {' '}
-                {Object.values(selectedReservations || {}).reduce((sum, res) => sum + (res?.length || 0), 0)} transport(s) au total
+                {formData.client_ids.length} patient(s) sélectionné(s) •{' '}
+                {Object.values(selectedReservations || {}).reduce(
+                  (sum, res) => sum + (res?.length || 0),
+                  0
+                )}{' '}
+                transport(s) au total
               </small>
             </>
           )}
@@ -503,22 +511,23 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
             </div>
           </div>
 
-          <div className={styles.modalActions}>
+          <div className="modal-footer">
             <button
               type="button"
               onClick={handleClose}
-              className={styles.cancelBtn}
+              className="btn btn-secondary"
               disabled={loading}
             >
               Annuler
             </button>
             <button
               type="submit"
-              className={styles.submitBtn}
+              className="btn btn-primary"
               disabled={
                 loading ||
                 (billingType === 'direct' && !formData.client_id) ||
-                (billingType === 'third_party' && (formData.client_ids.length === 0 || !formData.bill_to_client_id))
+                (billingType === 'third_party' &&
+                  (formData.client_ids.length === 0 || !formData.bill_to_client_id))
               }
             >
               {loading ? 'Génération...' : 'Générer la facture'}

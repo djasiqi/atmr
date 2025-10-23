@@ -3,135 +3,135 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 20px;
-  background-color: #00796b; /* Vert turquoise */
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--brand-primary);
   color: #fff;
   position: relative;
   font-family: Arial, sans-serif;
-  z-index: 1000; /* Assure que le header est au-dessus des autres éléments */
+  z-index: var(--z-modal-backdrop);
 }
 
 /* Logo */
 .logo {
-  font-size: 1.5em;
-  font-weight: bold;
-  color: #e0f7fa; /* Couleur claire pour le logo */
-  text-decoration: none; /* Supprimer soulignement */
+  font-size: var(--font-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--cyan-100);
+  text-decoration: none;
   cursor: pointer;
 }
 
 .logo:hover {
-  color: #b2dfdb; /* Couleur légèrement plus claire au survol */
+  color: var(--teal-200);
 }
 
 /* Navigation */
 .nav {
   display: flex;
   align-items: center;
-  gap: 20px; /* Espacement entre les liens */
+  gap: var(--spacing-lg);
 }
 
 .navList {
   display: flex;
   list-style: none;
-  gap: 20px;
+  gap: var(--spacing-lg);
   margin: 0;
   padding: 0;
 }
 
 .navList li a {
-  color: #e0f7fa; /* Teinte claire */
+  color: var(--cyan-100);
   text-decoration: none;
-  font-size: 0.9em;
-  transition: color 0.3s ease;
+  font-size: var(--font-sm);
+  transition: color var(--transition-base);
 }
 
 .navList li a:hover {
-  color: #b2dfdb; /* Couleur plus claire au survol */
+  color: var(--teal-200);
 }
 
 /* Auth and Hamburger */
 .authAndMenu {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: var(--spacing-md);
 }
 
 .login {
-  color: #e0f7fa; /* Teinte claire */
+  color: var(--cyan-100);
   text-decoration: none;
-  font-size: 0.9em;
-  transition: color 0.3s ease;
+  font-size: var(--font-sm);
+  transition: color var(--transition-base);
 }
 
 .login:hover {
-  color: #b2dfdb;
+  color: var(--teal-200);
 }
 
 .signUp {
-  padding: 8px 15px;
-  background-color: #ffffff; /* Fond blanc */
-  color: #003d33; /* Texte foncé */
+  padding: var(--spacing-xs) var(--spacing-md);
+  background-color: var(--bg-primary);
+  color: var(--teal-900);
   border: none;
-  border-radius: 20px;
+  border-radius: var(--radius-full);
   cursor: pointer;
-  font-size: 0.9em;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  font-size: var(--font-sm);
+  transition: background-color var(--transition-base), color var(--transition-base);
 }
 
 .signUp:hover {
-  background-color: #003d33;
+  background-color: var(--teal-900);
   color: #fff;
 }
 
 /* Hamburger button */
 .hamburgerButton {
-  display: none; /* Caché sur grands écrans */
+  display: none;
   background-color: transparent;
   border: none;
-  color: #e0f7fa; /* Teinte claire */
-  font-size: 1.8em;
+  color: var(--cyan-100);
+  font-size: var(--font-2xl);
   cursor: pointer;
-  transition: color 0.3s ease;
-  z-index: 1001; /* Assure que le bouton est toujours au-dessus des autres éléments */
+  transition: color var(--transition-base);
+  z-index: var(--z-modal);
   position: relative;
 }
 
 .hamburgerButton:hover {
-  color: #b2dfdb;
+  color: var(--teal-200);
 }
 
 /* Responsive behavior */
 @media (max-width: 768px) {
   .hamburgerButton {
-    display: block; /* Afficher le bouton hamburger sur petits écrans */
+    display: block;
   }
 
   .navList {
-    display: none; /* Masquer les liens par défaut */
+    display: none;
     position: absolute;
     top: 100%;
     right: 0;
-    background-color: #004d40; /* Fond vert foncé */
+    background-color: var(--teal-900);
     flex-direction: column;
     width: 100%;
-    padding: 20px;
-    border-radius: 5px;
-    text-align: center; /* Centrer le texte */
-    transition: all 0.3s ease; /* Transition fluide */
-    z-index: 1000; /* Mettre le menu au-dessus des autres éléments */
+    padding: var(--spacing-lg);
+    border-radius: var(--radius-sm);
+    text-align: center;
+    transition: all var(--transition-base);
+    z-index: var(--z-modal-backdrop);
   }
 
   .navListOpen {
-    display: flex; /* Afficher la navigation lorsque le menu est ouvert */
+    display: flex;
   }
 
   .navListClosed {
-    display: none; /* Masquer lorsque le menu est fermé */
+    display: none;
   }
 
   .navList li {
-    margin: 15px 0; /* Espacement uniforme entre les liens */
+    margin: var(--spacing-md) 0;
   }
 
   .signUp {

@@ -1,42 +1,65 @@
-const { createProxyMiddleware } = require("http-proxy-middleware");
+/* eslint-disable no-console */
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
 module.exports = function (app) {
+  console.log('🔧 setupProxy.js chargé - Configuration du proxy...');
+
+  // 🔌 Proxy Socket.IO avec support WebSocket
+  console.log('✅ Configuring /socket.io proxy...');
   app.use(
-    "/api",
+    '/socket.io',
     createProxyMiddleware({
-      // Important: cible sur /api pour conserver le préfixe côté backend RESTX
-      target: "http://127.0.0.1:5000",
+      target: 'http://127.0.0.1:5000',
       changeOrigin: true,
-      logLevel: "debug",
+      ws: true, // Support WebSocket
       secure: false,
-      // Le mount "/api" d'Express est retiré du path; on le réinjecte pour le backend
-      pathRewrite: (path) => `/api${path}`,
-      // Pas de pathRewrite: le mount "/api" côté CRA est retiré automatiquement,
-      // donc la cible incluant "/api" reconstruit bien /api/... côté backend
+      logLevel: 'info',
+      // IMPORTANT : remettre /socket.io dans le chemin
+      pathRewrite: function (path) {
+        return '/socket.io' + path;
+      },
+      onProxyReq: (proxyReq, req) => {
+        console.log(`[SOCKET.IO] ${req.method} ${req.url} -> ${proxyReq.path}`);
+      },
+      onProxyReqWs: (proxyReq, req) => {
+        console.log(`[SOCKET.IO WS] Upgrade: ${req.url}`);
+      },
+      onError: (err, _req, _res) => {
+        console.error('[SOCKET.IO ERROR]:', err.message);
+      },
     })
   );
 
-  // ⚡ Proxy Socket.IO (indispensable pour éviter le timeout)
+  // 📁 Proxy Uploads (images, PDFs, etc.)
+  console.log('✅ Configuring /uploads proxy...');
   app.use(
-    "/socket.io",
+    '/uploads',
     createProxyMiddleware({
-      target: "http://127.0.0.1:5000",
-
+      target: 'http://127.0.0.1:5000',
       changeOrigin: true,
-      ws: true, // Active le proxy WebSocket
-      logLevel: "debug",
       secure: false,
+      logLevel: 'warn',
+      pathRewrite: function (path) {
+        return '/uploads' + path;
+      },
     })
   );
 
-  // 📄 Proxy pour les fichiers uploads (PDFs, images, etc.)
+  // 📡 Proxy API REST
+  console.log('✅ Configuring /api proxy...');
   app.use(
-    "/uploads",
+    '/api',
     createProxyMiddleware({
-      target: "http://127.0.0.1:5000",
+      target: 'http://127.0.0.1:5000',
       changeOrigin: true,
-      logLevel: "debug",
       secure: false,
+      logLevel: 'warn',
+      pathRewrite: function (path) {
+        return '/api' + path;
+      },
     })
   );
+
+  console.log('✅ Tous les proxies configurés !');
+  console.log('📋 Routes: /socket.io, /uploads, /api');
 };

@@ -1,19 +1,17 @@
 // src/components/common/Modal.jsx
-import React from "react";
-import styles from "./Modal.module.css";
+import React from 'react';
 
 const Modal = ({ children, onClose }) => {
   const handleClickOutside = (e) => {
-    if (e.target.className === styles.modal) {
+    // Ferme le modal si on clique sur l'overlay (pas sur le contenu)
+    if (e.target.classList.contains('modal-overlay')) {
       onClose();
     }
   };
 
   return (
-    <div className={styles.modal} onClick={handleClickOutside}>
-      <div className={styles.modalContent}>
-        {children}
-      </div>
+    <div className="modal-overlay" onClick={handleClickOutside}>
+      <div className="modal-content modal-lg">{children}</div>
     </div>
   );
 };

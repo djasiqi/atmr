@@ -1,35 +1,34 @@
 // src/pages/company/Dashboard/components/DriverLiveMap.jsx
-import React, { useEffect, useRef, useState } from "react";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import { getCompanySocket } from "../../../../services/companySocket";
-import useCompanyData from "../../../../hooks/useCompanyData";
+import React, { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { getCompanySocket } from '../../../../services/companySocket';
+import useCompanyData from '../../../../hooks/useCompanyData';
 
 // Icône Leaflet par défaut (corrige le bug d'icône manquante)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
 const defaultCenter = [46.8182, 8.2275]; // CH
 
 // ---- Icônes personnalisées pour les chauffeurs ----
-const createDriverIcon = (status = "available") => {
+const createDriverIcon = (status = 'available') => {
   const colors = {
-    available: "#00796b", // Vert de marque
-    busy: "#ff9800", // Orange
-    offline: "#9e9e9e", // Gris
-    emergency: "#f44336", // Rouge
+    available: '#00796b', // Vert de marque
+    busy: '#ff9800', // Orange
+    offline: '#9e9e9e', // Gris
+    emergency: '#f44336', // Rouge
   };
 
   const emojis = {
-    available: "🚗",
-    busy: "🚕",
-    offline: "🚙",
-    emergency: "🚨",
+    available: '🚗',
+    busy: '🚕',
+    offline: '🚙',
+    emergency: '🚨',
   };
 
   return L.divIcon({
@@ -50,7 +49,7 @@ const createDriverIcon = (status = "available") => {
         ${emojis[status]}
       </div>
     `,
-    className: "custom-driver-icon",
+    className: 'custom-driver-icon',
     iconSize: [32, 32],
     iconAnchor: [16, 16],
     popupAnchor: [0, -16],
@@ -77,27 +76,27 @@ const resolveDriverCoords = (d) =>
 
 // Déterminer le statut du chauffeur
 const getDriverStatus = (driver) => {
-  if (!driver.is_active) return "offline";
-  if (driver.current_booking_id || driver.status === "busy") return "busy";
-  if (driver.emergency_mode) return "emergency";
-  return "available";
+  if (!driver.is_active) return 'offline';
+  if (driver.current_booking_id || driver.status === 'busy') return 'busy';
+  if (driver.emergency_mode) return 'emergency';
+  return 'available';
 };
 
 // Créer un tooltip stylé
 const createStyledTooltip = (driver) => {
   const status = getDriverStatus(driver);
   const statusText = {
-    available: "Disponible",
-    busy: "En course",
-    offline: "Hors ligne",
-    emergency: "Urgence",
+    available: 'Disponible',
+    busy: 'En course',
+    offline: 'Hors ligne',
+    emergency: 'Urgence',
   };
 
   const statusColors = {
-    available: "#00796b",
-    busy: "#ff9800",
-    offline: "#9e9e9e",
-    emergency: "#f44336",
+    available: '#00796b',
+    busy: '#ff9800',
+    offline: '#9e9e9e',
+    emergency: '#f44336',
   };
 
   return `
@@ -131,13 +130,13 @@ const createStyledTooltip = (driver) => {
         line-height: 1;
       ">
         <span>${
-          status === "available"
-            ? "🟢"
-            : status === "busy"
-            ? "🟡"
-            : status === "offline"
-            ? "⚫"
-            : "🔴"
+          status === 'available'
+            ? '🟢'
+            : status === 'busy'
+            ? '🟡'
+            : status === 'offline'
+            ? '⚫'
+            : '🔴'
         }</span>
         ${statusText[status]}
       </div>
@@ -149,8 +148,8 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
   const mapRef = useRef(null);
   const mapElRef = useRef(null);
   const markersRef = useRef({}); // { [driverId]: L.Marker }
-  const [driverLocations, setDriverLocations] = useState({});
-  const [searchQuery, setSearchQuery] = useState("");
+  const [_driverLocations, setDriverLocations] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
   const { driver: staticDrivers, company } = useCompanyData();
 
   // Utiliser les drivers passés en props si disponibles, sinon ceux de useCompanyData
@@ -158,9 +157,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
 
   // Filtrer les drivers selon la recherche
   const drivers = searchQuery
-    ? allDrivers.filter((d) =>
-        d.username?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+    ? allDrivers.filter((d) => d.username?.toLowerCase().includes(searchQuery.toLowerCase()))
     : allDrivers;
 
   // petits helpers pour éviter d'appeler Leaflet sur une map détruite
@@ -209,10 +206,9 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       center: defaultCenter,
       zoom: 9,
     });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors',
     }).addTo(map);
 
     mapRef.current = map;
@@ -241,12 +237,47 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
 
       const status = getDriverStatus(d);
       const m = L.marker(ll, { icon: createDriverIcon(status) }).addTo(map);
-      m.bindTooltip(createStyledTooltip(d), {
-        permanent: true,
-        direction: "top",
-        offset: [0, -25], // Rapproché du badge de position
-        className: "custom-driver-tooltip",
-      }).openTooltip();
+
+      // Logique intelligente 4 directions : haut/bas ET gauche/droite
+      const updateTooltipDirection = () => {
+        const bounds = map.getBounds();
+        const center = bounds.getCenter();
+        const markerLat = ll[0];
+        const markerLng = ll[1];
+
+        // Calculer la distance au centre en vertical et horizontal
+        const verticalDist = Math.abs(markerLat - center.lat);
+        const horizontalDist = Math.abs(markerLng - center.lng);
+
+        // Déterminer quelle direction est prioritaire
+        let direction;
+        let offset;
+
+        if (verticalDist > horizontalDist) {
+          // Position dominante = vertical (haut/bas)
+          direction = markerLat > center.lat ? 'bottom' : 'top';
+          offset = direction === 'bottom' ? [0, 20] : [0, -20];
+        } else {
+          // Position dominante = horizontal (gauche/droite)
+          direction = markerLng > center.lng ? 'left' : 'right';
+          offset = direction === 'left' ? [-10, 0] : [10, 0];
+        }
+
+        // Re-bind tooltip avec nouvelle direction
+        m.unbindTooltip();
+        m.bindTooltip(createStyledTooltip(d), {
+          permanent: true,
+          direction: direction,
+          offset: offset,
+          className: 'custom-driver-tooltip',
+        }).openTooltip();
+      };
+
+      // Appliquer au chargement
+      updateTooltipDirection();
+
+      // Mettre à jour quand la carte bouge ou zoom
+      map.on('moveend zoomend', updateTooltipDirection);
 
       markersRef.current[d.id] = m;
       placed++;
@@ -293,7 +324,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
 
     if (company?.id) {
       try {
-        socket.emit("join_company", { company_id: company.id });
+        socket.emit('join_company', { company_id: company.id });
       } catch {}
     }
 
@@ -324,33 +355,101 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         };
         const status = getDriverStatus(fullDriver);
         const m = L.marker(ll, { icon: createDriverIcon(status) }).addTo(map);
-        m.bindTooltip(createStyledTooltip(fullDriver), {
-          permanent: true,
-          direction: "top",
-          offset: [0, -25], // Rapproché du badge de position
-          className: "custom-driver-tooltip",
-        }).openTooltip();
+
+        // Fonction pour mettre à jour la direction du tooltip
+        const updateTooltipDirection = () => {
+          const bounds = map.getBounds();
+          const center = bounds.getCenter();
+          const markerLat = ll[0];
+          const markerLng = ll[1];
+
+          // Calculer la distance au centre en vertical et horizontal
+          const verticalDist = Math.abs(markerLat - center.lat);
+          const horizontalDist = Math.abs(markerLng - center.lng);
+
+          let direction;
+          let offset;
+
+          if (verticalDist > horizontalDist) {
+            // Position dominante = vertical (haut/bas)
+            direction = markerLat > center.lat ? 'bottom' : 'top';
+            offset = direction === 'bottom' ? [0, 20] : [0, -20];
+          } else {
+            // Position dominante = horizontal (gauche/droite)
+            direction = markerLng > center.lng ? 'left' : 'right';
+            offset = direction === 'left' ? [-10, 0] : [10, 0];
+          }
+
+          m.unbindTooltip();
+          m.bindTooltip(createStyledTooltip(fullDriver), {
+            permanent: true,
+            direction: direction,
+            offset: offset,
+            className: 'custom-driver-tooltip',
+          }).openTooltip();
+        };
+
+        updateTooltipDirection();
+        map.on('moveend zoomend', updateTooltipDirection);
+
         markersRef.current[id] = m;
       } else {
-        markersRef.current[id].setLatLng(ll);
-        const tt = markersRef.current[id].getTooltip();
-        if (tt) tt.setContent(firstName);
+        // Mettre à jour la position
+        const marker = markersRef.current[id];
+        marker.setLatLng(ll);
+
+        // Mettre à jour le contenu et la direction
+        const fullDriver = drivers.find((d) => d.id === id) || {
+          id,
+          first_name: firstName,
+          is_active: true,
+        };
+
+        const bounds = map.getBounds();
+        const center = bounds.getCenter();
+        const markerLat = ll[0];
+        const markerLng = ll[1];
+
+        // Calculer la distance au centre
+        const verticalDist = Math.abs(markerLat - center.lat);
+        const horizontalDist = Math.abs(markerLng - center.lng);
+
+        let direction;
+        let offset;
+
+        if (verticalDist > horizontalDist) {
+          direction = markerLat > center.lat ? 'bottom' : 'top';
+          offset = direction === 'bottom' ? [0, 20] : [0, -20];
+        } else {
+          direction = markerLng > center.lng ? 'left' : 'right';
+          offset = direction === 'left' ? [-10, 0] : [10, 0];
+        }
+
+        marker.unbindTooltip();
+        marker
+          .bindTooltip(createStyledTooltip(fullDriver), {
+            permanent: true,
+            direction: direction,
+            offset: offset,
+            className: 'custom-driver-tooltip',
+          })
+          .openTooltip();
       }
 
       fitBoundsToMarkers(14);
     };
 
-    socket.on("driver_location", onLoc);
+    socket.on('driver_location', onLoc);
 
     // Explicitly request driver locations when component mounts
     try {
-      socket.emit("get_driver_locations");
+      socket.emit('get_driver_locations');
     } catch (e) {
-      console.error("Failed to request driver locations:", e);
+      console.error('Failed to request driver locations:', e);
     }
 
     return () => {
-      socket.off("driver_location", onLoc);
+      socket.off('driver_location', onLoc);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company?.id]);
@@ -362,8 +461,8 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
 
     // Créer le contrôle personnalisé
     const DriverCounterControl = L.Control.extend({
-      onAdd: function (map) {
-        const container = L.DomUtil.create("div", "driver-counter-control");
+      onAdd: function (_map) {
+        const container = L.DomUtil.create('div', 'driver-counter-control');
         container.style.cssText = `
           background: rgba(255,255,255,0.9);
           border: 1px solid #ddd;
@@ -383,7 +482,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         return container;
       },
 
-      onRemove: function (map) {
+      onRemove: function (_map) {
         // Nettoyage si nécessaire
       },
     });
@@ -395,15 +494,13 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
 
     // Ajouter le nouveau contrôle
     map._driverCounterControl = new DriverCounterControl({
-      position: "bottomleft",
+      position: 'bottomleft',
     });
     map.addControl(map._driverCounterControl);
 
     // Mettre à jour le compteur
     const updateCounter = () => {
-      const countElement = map._driverCounterControl
-        .getContainer()
-        ?.querySelector(".driver-count");
+      const countElement = map._driverCounterControl.getContainer()?.querySelector('.driver-count');
       if (countElement) {
         countElement.textContent = Object.keys(markersRef.current).length;
       }
@@ -429,8 +526,8 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
 
     // Créer le contrôle de recherche personnalisé
     const SearchControl = L.Control.extend({
-      onAdd: function (map) {
-        const container = L.DomUtil.create("div", "search-control");
+      onAdd: function (_map) {
+        const container = L.DomUtil.create('div', 'search-control');
         container.style.cssText = `
           background: rgba(255,255,255,0.95);
           border: 1px solid #ddd;
@@ -445,9 +542,9 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
           min-width: 200px;
         `;
 
-        const input = L.DomUtil.create("input", "search-input");
-        input.type = "text";
-        input.placeholder = "Rechercher un chauffeur...";
+        const input = L.DomUtil.create('input', 'search-input');
+        input.type = 'text';
+        input.placeholder = 'Rechercher un chauffeur...';
         input.value = searchQuery;
         input.style.cssText = `
           border: none;
@@ -458,8 +555,8 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
           color: #334155;
         `;
 
-        const clearBtn = L.DomUtil.create("button", "clear-search");
-        clearBtn.innerHTML = "✕";
+        const clearBtn = L.DomUtil.create('button', 'clear-search');
+        clearBtn.innerHTML = '✕';
         clearBtn.style.cssText = `
           border: none;
           background: #e2e8f0;
@@ -469,7 +566,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
           height: 20px;
           cursor: pointer;
           font-size: 12px;
-          display: ${searchQuery ? "flex" : "none"};
+          display: ${searchQuery ? 'flex' : 'none'};
           align-items: center;
           justify-content: center;
         `;
@@ -478,15 +575,15 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         container.appendChild(clearBtn);
 
         // Événements
-        input.addEventListener("input", (e) => {
+        input.addEventListener('input', (e) => {
           setSearchQuery(e.target.value);
-          clearBtn.style.display = e.target.value ? "flex" : "none";
+          clearBtn.style.display = e.target.value ? 'flex' : 'none';
         });
 
-        clearBtn.addEventListener("click", () => {
-          input.value = "";
-          setSearchQuery("");
-          clearBtn.style.display = "none";
+        clearBtn.addEventListener('click', () => {
+          input.value = '';
+          setSearchQuery('');
+          clearBtn.style.display = 'none';
         });
 
         // Empêcher la propagation des événements
@@ -496,13 +593,13 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         return container;
       },
 
-      onRemove: function (map) {
+      onRemove: function (_map) {
         // Nettoyage si nécessaire
       },
     });
 
     // Ajouter le contrôle
-    map._searchControl = new SearchControl({ position: "topright" });
+    map._searchControl = new SearchControl({ position: 'topright' });
     map.addControl(map._searchControl);
 
     return () => {
@@ -511,11 +608,11 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         delete map._searchControl;
       }
     };
-  }, []); // Dépendances vides = une seule fois
+  }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div style={{ width: "100%", height: "100%", position: "relative" }}>
-      <div ref={mapElRef} style={{ width: "100%", height: "100%" }} />
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <div ref={mapElRef} style={{ width: '100%', height: '100%' }} />
     </div>
   );
 }

@@ -1,9 +1,9 @@
 # backend/tasks/dispatch_tasks.py
 from __future__ import annotations
 
-import json
 import logging
 import time
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any, Dict, cast
 
@@ -72,11 +72,8 @@ def run_dispatch_task(
     # On fait tout sous app_context pour une session/teardown propre
     with app.app_context():
         # Assainit d'abord la session si elle a été "polluée" par un appel précédent
-        try:
+        with suppress(Exception):
             db.session.rollback()
-        except Exception:
-            # au pire on ignore — remove() en finally nettoiera
-            pass
 
         logger.info(
             "[Celery] Starting dispatch task company_id=%s for_date=%s mode=%s task_id=%s",
@@ -104,12 +101,13 @@ def run_dispatch_task(
             raw_result: Any = engine.run(**run_kwargs)
 
             # -------- Normalisation résultat --------
+            result: Dict[str, Any]
             if isinstance(raw_result, dict):
-                result: Dict[str, Any] = cast(Dict[str, Any], raw_result)
+                result = cast(Dict[str, Any], raw_result)
             elif raw_result is None:
-                result: Dict[str, Any] = {}
+                result = {}
             else:
-                result: Dict[str, Any] = {"meta": {"raw": raw_result}}
+                result = {"meta": {"raw": raw_result}}
             # assignments
             _assignments = result.get("assignments")
             if not isinstance(_assignments, list):
@@ -128,11 +126,7 @@ def run_dispatch_task(
                 result["drivers"] = []
             # meta
             _meta = result.get("meta")
-            if not isinstance(_meta, dict):
-                _meta = {}
-            else:
-                # on copie pour éviter d'éditer une éventuelle mapping-proxy/etc.
-                _meta = dict(_meta)
+            _meta = {} if not isinstance(_meta, dict) else dict(_meta)
             result["meta"] = _meta
             # dispatch_run_id (laisser None si absent)
             if "dispatch_run_id" not in result:
@@ -169,19 +163,15 @@ def run_dispatch_task(
 
             # Pas de commit ici : on suppose que les écritures DB (si besoin)
             # sont gérées/commit par les couches appelées. On garde la session propre.
-            try:
+            with suppress(Exception):
                 db.session.expunge_all()
-            except Exception:
-                pass
 
             return result
 
         except Exception as e:
             # Nettoie la session pour éviter l'état 'InFailedSqlTransaction'
-            try:
+            with suppress(Exception):
                 db.session.rollback()
-            except Exception:
-                pass
 
             import traceback
             tb = "".join(traceback.format_exception(type(e), e, e.__traceback__))
@@ -214,10 +204,8 @@ def run_dispatch_task(
             transient = isinstance(e, (sa_exc.OperationalError, sa_exc.DBAPIError)) and getattr(e, "connection_invalidated", False)
 
             if transient:
-                try:
-                    raise self.retry(exc=e)
-                except MaxRetriesExceededError:
-                    pass  # tombera dans le retour 'run_failed' ci-dessous
+                with suppress(MaxRetriesExceededError):
+                    raise self.retry(exc=e) from e
 
             # Retour déterministe (UI friendly)
             return {
@@ -231,17 +219,15 @@ def run_dispatch_task(
                     "task_id": task_id,
                     "company_id": company_id,
                     "for_date": for_date,
-                    "retries_exhausted": True if transient else False,
+                    "retries_exhausted": bool(transient),
                 },
                 "dispatch_run_id": None,
             }
 
         finally:
             # Toujours remettre la session à zéro côté worker
-            try:
+            with suppress(Exception):
                 db.session.remove()
-            except Exception:
-                pass
 
 @shared_task(
     name="tasks.dispatch_tasks.autorun_tick",
@@ -254,10 +240,8 @@ def autorun_tick() -> Dict[str, Any]:
     results: Dict[str, Any] = {"triggered": 0, "skipped": 0, "errors": 0, "companies": []}
 
     # Défensif
-    try:
+    with suppress(Exception):
         db.session.rollback()
-    except Exception:
-        pass
 
     try:
         companies = Company.query.filter_by(dispatch_enabled=True).all()
@@ -269,21 +253,25 @@ def autorun_tick() -> Dict[str, Any]:
                 logger.warning("[Celery] Autorun: company sans id utilisable, skip.")
                 results["skipped"] += 1
                 continue
-            try:
-                autorun_enabled = True
-                if hasattr(company, 'dispatch_settings') and company.dispatch_settings:
-                    try:
-                        settings_data = json.loads(company.dispatch_settings)
-                        autorun_enabled = settings_data.get('autorun_enabled', True)
-                    except (json.JSONDecodeError, AttributeError):
-                        pass
 
-                if not autorun_enabled:
-                    logger.debug(f"[Celery] Autorun skipped for company_id={company_id} (disabled)")
+            try:
+                # 🆕 Utiliser le gestionnaire autonome pour décider si le dispatch doit tourner
+                from services.unified_dispatch.autonomous_manager import get_manager_for_company
+                manager = get_manager_for_company(company_id)
+
+                # Vérifier si l'autorun doit s'exécuter selon le mode
+                if not manager.should_run_autorun():
+                    logger.debug(
+                        "[Celery] Autorun skipped for company_id=%s (mode: %s, autorun disabled)",
+                        company_id, manager.mode.value
+                    )
                     results["skipped"] += 1
                     continue
 
-                logger.info(f"[Celery] Autorun triggering dispatch for company_id={company_id} date={today}")
+                logger.info(
+                    "[Celery] Autorun triggering dispatch for company_id=%s mode=%s date=%s",
+                    company_id, manager.mode.value, today
+                )
                 task = cast(Any, run_dispatch_task).delay(
                     company_id=company_id,
                     for_date=str(today),
@@ -295,16 +283,15 @@ def autorun_tick() -> Dict[str, Any]:
                 results["triggered"] += 1
                 cast(list, results["companies"]).append({
                     "company_id": company_id,
+                    "dispatch_mode": manager.mode.value,
                     "task_id": task.id,
                     "for_date": today
                 })
 
             except Exception as e:
                 # 🔁 Sur erreur pendant la boucle → rollback pour la suite
-                try:
+                with suppress(Exception):
                     db.session.rollback()
-                except Exception:
-                    pass
 
                 logger.exception(f"[Celery] Autorun error for company_id={company_id}: {e}")
                 results["errors"] += 1
@@ -314,10 +301,8 @@ def autorun_tick() -> Dict[str, Any]:
                 })
 
     except Exception as e:
-        try:
+        with suppress(Exception):
             db.session.rollback()
-        except Exception:
-            pass
         logger.exception(f"[Celery] Autorun tick failed: {e}")
         results["error"] = str(e)
     finally:
@@ -329,4 +314,135 @@ def autorun_tick() -> Dict[str, Any]:
         f"skipped={results['skipped']} errors={results['errors']} "
         f"duration={results['duration']:.3f}s"
     )
+    return results
+
+
+@shared_task(
+    name="tasks.dispatch_tasks.realtime_monitoring_tick",
+    acks_late=True,
+    task_time_limit=300  # 5 minutes max
+)
+def realtime_monitoring_tick() -> Dict[str, Any]:
+    """
+    Tâche Celery périodique pour le monitoring temps réel du dispatch.
+    Remplace le thread RealtimeOptimizer pour survivre aux redémarrages serveur.
+
+    Cette tâche :
+    - Vérifie les opportunités d'optimisation pour chaque entreprise
+    - Applique automatiquement les suggestions selon le mode (fully_auto)
+    - S'exécute toutes les 2 minutes via Celery Beat
+
+    Returns:
+        Statistiques du monitoring (entreprises vérifiées, opportunités, actions)
+    """
+    start_time = time.time()
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+
+    results: Dict[str, Any] = {
+        "companies_checked": 0,
+        "total_opportunities": 0,
+        "auto_applied": 0,
+        "manual_required": 0,
+        "errors": 0,
+        "companies": []
+    }
+
+    # Défensif : nettoyer la session
+    with suppress(Exception):
+        db.session.rollback()
+
+    try:
+        # Récupérer toutes les entreprises avec dispatch activé
+        companies = Company.query.filter(
+            Company.dispatch_enabled == True  # noqa: E712
+        ).all()
+
+        for company in companies:
+            company_id = _safe_int(getattr(company, "id", None))
+            if company_id is None:
+                continue
+
+            try:
+                # Créer le gestionnaire autonome
+                from services.unified_dispatch.autonomous_manager import get_manager_for_company
+                manager = get_manager_for_company(company_id)
+
+                # Vérifier si le monitoring doit tourner pour cette entreprise
+                if not manager.should_run_realtime_optimizer():
+                    logger.debug(
+                        "[RealtimeMonitoring] Skipped for company %s (mode: %s, optimizer disabled)",
+                        company_id, manager.mode.value
+                    )
+                    continue
+
+                results["companies_checked"] += 1
+
+                # Vérifier les opportunités d'optimisation
+                from services.unified_dispatch.realtime_optimizer import check_opportunities_manual
+                opportunities = check_opportunities_manual(
+                    company_id=company_id,
+                    for_date=today,
+                    app=None  # Le contexte Flask est fourni par ContextTask
+                )
+
+                results["total_opportunities"] += len(opportunities)
+
+                # Traiter les opportunités (appliquer si mode fully_auto)
+                if opportunities:
+                    stats = manager.process_opportunities(opportunities, dry_run=False)
+                    results["auto_applied"] += stats["auto_applied"]
+                    results["manual_required"] += stats["manual_required"]
+
+                    logger.info(
+                        "[RealtimeMonitoring] Company %s: %d opportunities, %d auto-applied, %d manual",
+                        company_id, len(opportunities), stats["auto_applied"], stats["manual_required"]
+                    )
+
+                # Ajouter aux résultats
+                results["companies"].append({
+                    "company_id": company_id,
+                    "mode": manager.mode.value,
+                    "opportunities": len(opportunities),
+                    "auto_applied": stats.get("auto_applied", 0) if opportunities else 0,
+                    "manual_required": stats.get("manual_required", 0) if opportunities else 0
+                })
+
+            except Exception as e:
+                results["errors"] += 1
+                logger.exception(
+                    "[RealtimeMonitoring] Error for company %s: %s",
+                    company_id, e
+                )
+
+                results["companies"].append({
+                    "company_id": company_id,
+                    "error": str(e)
+                })
+
+                # Rollback pour ne pas polluer la suite
+                with suppress(Exception):
+                    db.session.rollback()
+
+    except Exception as e:
+        logger.exception("[RealtimeMonitoring] Tick failed: %s", e)
+        results["error"] = str(e)
+        with suppress(Exception):
+            db.session.rollback()
+
+    finally:
+        db.session.remove()
+
+    results["duration"] = float(time.time() - start_time)
+
+    logger.info(
+        "[RealtimeMonitoring] Tick completed: companies=%d opportunities=%d auto_applied=%d "
+        "manual=%d errors=%d duration=%.3fs",
+        results["companies_checked"],
+        results["total_opportunities"],
+        results["auto_applied"],
+        results["manual_required"],
+        results["errors"],
+        results["duration"]
+    )
+
     return results

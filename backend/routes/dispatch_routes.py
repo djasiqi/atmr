@@ -1,4 +1,7 @@
 # backend/routes/dispatch_routes.py
+# pyright: reportAttributeAccessIssue=false
+# ruff: noqa: DTZ003, W293
+
 from __future__ import annotations
 
 import json
@@ -10,24 +13,93 @@ from typing import Any, Dict, cast
 from flask import request
 from flask_jwt_extended import jwt_required
 from flask_restx import Namespace, Resource, fields
+from marshmallow import INCLUDE, Schema, validate
+from marshmallow import fields as ma_fields
 from werkzeug.exceptions import UnprocessableEntity
 
 from ext import db, role_required
-from models import Assignment, AssignmentStatus, Booking, BookingStatus, Company, DispatchRun, Driver, UserRole
+from models import Assignment, AssignmentStatus, Booking, BookingStatus, Client, Company, DispatchRun, Driver, UserRole
 from routes.companies import get_company_from_token
 from services.unified_dispatch import data
 from services.unified_dispatch.queue import get_status, trigger_job
+from services.unified_dispatch.reactive_suggestions import generate_reactive_suggestions as generate_suggestions
 from services.unified_dispatch.realtime_optimizer import (
     check_opportunities_manual,
     get_optimizer_for_company,
     start_optimizer_for_company,
     stop_optimizer_for_company,
 )
-from services.unified_dispatch.suggestions import generate_suggestions
 from shared.time_utils import day_local_bounds, now_local
+
+# RL Dispatch (déploiement production)
+try:
+    from services.rl.rl_dispatch_manager import RLDispatchManager
+    RL_AVAILABLE = True
+except ImportError:
+    RL_AVAILABLE = False
+    RLDispatchManager = None
+
+# Shadow Mode ( Monitoring seulement)
+try:
+    from services.rl.shadow_mode_manager import ShadowModeManager
+    SHADOW_MODE_AVAILABLE = True
+    _shadow_manager = None
+except ImportError:
+    SHADOW_MODE_AVAILABLE = False
+    ShadowModeManager = None
+    _shadow_manager = None
+
+
+def get_shadow_manager():
+    """Récupère l'instance du shadow manager (singleton)."""
+    global _shadow_manager
+    if not SHADOW_MODE_AVAILABLE:
+        return None
+    if _shadow_manager is None:
+        try:
+            _shadow_manager = ShadowModeManager(
+                model_path="data/rl/models/dqn_best.pth",
+                log_dir="data/rl/shadow_mode",
+                enable_logging=True
+            )
+            logger.info("✅ Shadow Mode Manager initialisé pour dispatch")
+        except Exception as e:
+            logger.error(f"❌ Erreur init Shadow Mode: {e}")
+            _shadow_manager = None
+    return _shadow_manager
 
 dispatch_ns = Namespace("company_dispatch", description="Dispatch par journée (contrat unifié)")
 logger = logging.getLogger(__name__)
+
+# ===== Schémas de validation Marshmallow =====
+
+class DispatchOverridesSchema(Schema):
+    """Schéma de validation pour les overrides de dispatch."""
+    heuristic = ma_fields.Dict(required=False)
+    solver = ma_fields.Dict(required=False)
+    service_times = ma_fields.Dict(required=False)
+    pooling = ma_fields.Dict(required=False)
+    time = ma_fields.Dict(required=False)
+    realtime = ma_fields.Dict(required=False)
+    fairness = ma_fields.Dict(required=False)
+    emergency = ma_fields.Dict(required=False)
+    matrix = ma_fields.Dict(required=False)
+    logging = ma_fields.Dict(required=False)
+    features = ma_fields.Dict(required=False)
+    autorun = ma_fields.Dict(required=False)
+
+    class Meta:
+        unknown = INCLUDE  # Allow unknown fields like 'mode'
+
+class DispatchRunSchema(Schema):
+    """Schéma de validation pour les paramètres de lancement de dispatch."""
+    for_date = ma_fields.Str(required=True, validate=validate.Regexp(r'^\d{4}-\d{2}-\d{2}$'))
+    mode = ma_fields.Str(validate=validate.OneOf(['auto', 'heuristic_only', 'solver_only']))
+    regular_first = ma_fields.Bool()
+    allow_emergency = ma_fields.Bool()
+    overrides = ma_fields.Nested(DispatchOverridesSchema)
+    # ✅ UNIFIÉ : Une seule variante pour 'async' avec valeur par défaut
+    async_param = ma_fields.Bool(data_key='async', load_default=True)
 
 # ===== Schemas RESTX (simples) =====
 
@@ -352,7 +424,13 @@ class CompanyDispatchRun(Resource):
         body: Dict[str, Any] = request.get_json(force=True) or {}
         logger.info("[Dispatch] /run body: %s", body)
 
-        # --- Validation for_date: doit matcher YYYY-MM-DD
+        # --- Validation avec Marshmallow
+        schema = DispatchRunSchema()
+        errors = schema.validate(body)
+        if errors:
+            dispatch_ns.abort(400, f"Paramètres invalides: {errors}")
+
+        # --- Validation for_date: doit matcher YYYY-MM-DD (double sécurité)
         for_date = body.get("for_date")
         if not for_date:
             dispatch_ns.abort(400, "for_date manquant (YYYY-MM-DD). Utilisez plutôt POST /company_dispatch/run.")
@@ -364,11 +442,9 @@ class CompanyDispatchRun(Resource):
         _cid = getattr(company, "id", None)
         company_id: int = _cid if isinstance(_cid, int) else int(cast(Any, _cid))
 
-        # --- Mode async ou sync
-        # Accept both 'async' and 'run_async' for compatibility
-        is_async = body.get("async")
-        if is_async is None:
-            is_async = body.get("run_async", True)
+        # --- Mode async ou sync (unifié)
+        # La validation Marshmallow garantit que 'async' est présent avec défaut True
+        is_async = body.get("async", True)
 
         mode = body.get("mode")
 
@@ -402,7 +478,37 @@ class CompanyDispatchRun(Resource):
 
         # --- Mode sync: exécute immédiatement
         from services.unified_dispatch import engine
+        from services.unified_dispatch.validation import validate_assignments
+        
         result = engine.run(**params)
+        
+        # ✅ VALIDATION POST-DISPATCH : Détecter conflits temporels
+        assignments_list = result.get("assignments", [])
+        if assignments_list:
+            validation_result = validate_assignments(assignments_list, strict=False)
+            
+            if not validation_result["valid"]:
+                logger.warning(
+                    "[Dispatch] Conflits temporels détectés pour company %s, date %s",
+                    company_id, for_date
+                )
+                for error in validation_result["errors"]:
+                    logger.error(f"  {error}")
+                
+                # Ajouter warnings au résultat
+                result["validation"] = {
+                    "has_errors": True,
+                    "errors": validation_result["errors"],
+                    "warnings": validation_result["warnings"]
+                }
+            else:
+                # Ajouter warnings si présents
+                if validation_result.get("warnings"):
+                    result["validation"] = {
+                        "has_errors": False,
+                        "warnings": validation_result["warnings"]
+                    }
+        
         return result, 200
 
 @dispatch_ns.route("/status")
@@ -565,7 +671,7 @@ class AssignmentsListResource(Resource):
         # Ids des bookings du jour (entreprise courante), en excluant les statuts terminés/annulés
         # ✅ PERF: Import selectinload au début du fichier pour éviter import local répété
         from sqlalchemy.orm import selectinload as sel_load
-        
+
         booking_ids = [
             b.id
             for b in (
@@ -591,7 +697,7 @@ class AssignmentsListResource(Resource):
         ]
 
         # Assignations pour ces bookings avec eager loading des relations
-        from sqlalchemy.orm import joinedload, selectinload
+        from sqlalchemy.orm import joinedload
 
         assignments = []
         if booking_ids:
@@ -698,17 +804,141 @@ class ReassignResource(Resource):
 
         try:
             a = cast(Assignment, a_opt)
+            booking = Booking.query.get(a.booking_id)
 
+            # ✅ SHADOW MODE: Prédiction DQN (NON-BLOQUANTE)
+            shadow_prediction = None
+            if SHADOW_MODE_AVAILABLE and booking:
+                try:
+                    shadow_mgr = get_shadow_manager()
+                    if shadow_mgr:
+                        available_drivers = Driver.query.filter_by(
+                            company_id=company.id,
+                            is_available=True
+                        ).all()
+
+                        from collections import defaultdict
+                        current_assignments = defaultdict(list)
+                        active_assignments = Assignment.query.join(Booking).filter(
+                            Booking.company_id == company.id,
+                            Assignment.status.in_([AssignmentStatus.pending, AssignmentStatus.confirmed])
+                        ).all()
+                        for assign in active_assignments:
+                            current_assignments[assign.driver_id].append(assign.booking_id)
+
+                        shadow_prediction = shadow_mgr.predict_driver_assignment(
+                            booking=booking,
+                            available_drivers=available_drivers,
+                            current_assignments=dict(current_assignments)
+                        )
+                        logger.debug(f"Shadow prediction for reassign: {shadow_prediction}")
+                except Exception as e:
+                    logger.warning(f"Shadow mode error (non-critique): {e}")
+
+            # ✅ SYSTÈME ACTUEL: Logique INCHANGÉE
             driver_opt = Driver.query.filter_by(id=new_driver_id, company_id=company.id).first()
             if driver_opt is None:
                 dispatch_ns.abort(404, "driver not found")
             driver = cast(Driver, driver_opt)
+
+            # ✅ VALIDATION : Vérifier conflit temporel AVANT assignation
+            if booking and booking.scheduled_time:
+                from services.unified_dispatch.validation import check_existing_assignment_conflict
+                
+                has_conflict, conflict_msg = check_existing_assignment_conflict(
+                    driver_id=new_driver_id,
+                    scheduled_time=booking.scheduled_time,
+                    booking_id=booking.id,
+                    tolerance_minutes=30
+                )
+                
+                if has_conflict:
+                    logger.warning(
+                        f"[Dispatch] Tentative de réassignation créerait un conflit: {conflict_msg}"
+                    )
+                    dispatch_ns.abort(
+                        409,  # HTTP 409 Conflict
+                        f"❌ Impossible d'assigner ce chauffeur : {conflict_msg}"
+                    )
 
             cast(Any, a).driver_id = new_driver_id
             cast(Any, a).updated_at = datetime.now(UTC)
 
             db.session.add(a)
             db.session.commit()
+
+            # ✅ MÉTRIQUES : Marquer suggestion comme appliquée
+            try:
+                from models import RLSuggestionMetric
+
+                # Trouver la métrique correspondante (la plus récente non appliquée)
+                metric = RLSuggestionMetric.query.filter(
+                    RLSuggestionMetric.assignment_id == assignment_id,
+                    RLSuggestionMetric.suggested_driver_id == new_driver_id,
+                    RLSuggestionMetric.applied_at.is_(None),
+                    RLSuggestionMetric.rejected_at.is_(None)
+                ).order_by(RLSuggestionMetric.generated_at.desc()).first()
+
+                if metric:
+                    metric.applied_at = datetime.now(UTC)
+
+                    # Calculer gain réel (approximation basée sur ETA)
+                    # Note : Le gain réel précis nécessiterait de tracker l'ETA avant/après
+                    # Pour l'instant, on marque comme "appliqué" et on calculera le gain plus tard
+                    metric.was_successful = True  # Assume succès (à affiner)
+
+                    db.session.add(metric)
+                    db.session.commit()
+                    logger.info(f"[RL] Metric {metric.suggestion_id} marked as applied")
+                else:
+                    logger.debug(f"[RL] No metric found for assignment {assignment_id}, driver {new_driver_id}")
+            except Exception as e:
+                db.session.rollback()
+                logger.warning(f"[RL] Failed to update metric (non-critique): {e}")
+
+            # ✅ CACHE REDIS : Invalider cache suggestions après réassignation
+            from ext import redis_client
+            if redis_client:
+                try:
+                    # Récupérer la date de l'assignment
+                    booking_for_cache = Booking.query.get(a.booking_id)
+                    if booking_for_cache and booking_for_cache.scheduled_time:
+                        for_date_cache = booking_for_cache.scheduled_time.date().isoformat()
+
+                        # Supprimer toutes les clés de cache pour cette company/date
+                        pattern = f"rl_suggestions:{company.id}:{for_date_cache}:*"
+                        deleted_count = 0
+                        for key in redis_client.scan_iter(match=pattern):
+                            redis_client.delete(key)
+                            deleted_count += 1
+
+                        logger.info(f"[RL] Cache invalidated: {deleted_count} keys deleted for company {company.id}, date {for_date_cache}")
+                except Exception as e:
+                    logger.warning(f"[RL] Cache invalidation error (non-critique): {e}")
+
+            # ✅ SHADOW MODE: Comparaison (NON-BLOQUANTE)
+            if shadow_prediction:
+                try:
+                    shadow_mgr = get_shadow_manager()
+                    if shadow_mgr and booking and driver:
+                        from shared.geo_utils import haversine_distance
+                        distance = None
+                        if booking.pickup_lat and driver.current_lat:
+                            distance = haversine_distance(
+                                booking.pickup_lat, booking.pickup_lon,
+                                driver.current_lat, driver.current_lon
+                            )
+
+                        shadow_mgr.compare_with_actual_decision(
+                            prediction=shadow_prediction,
+                            actual_driver_id=new_driver_id,
+                            outcome_metrics={
+                                'distance_km': distance,
+                                'reassignment': True
+                            }
+                        )
+                except Exception as e:
+                    logger.warning(f"Shadow comparison error (non-critique): {e}")
 
             cast(Any, a).booking = Booking.query.get(a.booking_id)
             cast(Any, a).driver = driver
@@ -1688,3 +1918,699 @@ class AutonomousTestResource(Resource):
         except Exception as e:
             logger.exception("[Dispatch] Failed to test autonomous system")
             return {"error": f"Échec test autonome: {e}"}, 500
+
+
+# ===== RL DISPATCH (PRODUCTION) =====
+
+@dispatch_ns.route("/rl/status")
+class RLDispatchStatus(Resource):
+    """Statut de l'agent RL en production."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """
+        Récupère le statut de l'agent RL.
+
+        Returns:
+            - available: Agent RL disponible
+            - loaded: Modèle chargé
+            - statistics: Statistiques d'utilisation
+        """
+        if not RL_AVAILABLE:
+            return {
+                "available": False,
+                "message": "Module RL non disponible (dépendances manquantes)"
+            }, 200
+
+        try:
+            # Initialiser manager RL
+            rl_manager = RLDispatchManager()
+
+            stats = rl_manager.get_statistics()
+
+            return {
+                "available": True,
+                "loaded": stats['is_loaded'],
+                "model_path": stats['model_path'],
+                "statistics": {
+                    "suggestions_total": stats['suggestions_count'],
+                    "errors": stats['errors_count'],
+                    "fallbacks": stats['fallback_count'],
+                    "success_rate": f"{stats['success_rate']*100:.1f}%",
+                    "fallback_rate": f"{stats['fallback_rate']*100:.1f}%"
+                }
+            }, 200
+
+        except Exception as e:
+            logger.exception("[RL] Failed to get RL status")
+            return {"error": f"Échec récupération statut RL: {e}"}, 500
+
+
+@dispatch_ns.route("/rl/suggestions")
+class RLDispatchSuggestions(Resource):
+    """Obtenir toutes les suggestions RL pour une date."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """
+        Obtient toutes les suggestions RL pour une date donnée.
+
+        Query params:
+            for_date: Date au format YYYY-MM-DD
+            min_confidence: Confiance minimale (0.0-1.0, défaut: 0.0)
+            limit: Nombre max de suggestions (défaut: 20)
+
+        Returns:
+            Liste de suggestions triées par confiance décroissante
+        """
+        if not RL_AVAILABLE:
+            return {
+                "suggestions": [],
+                "message": "Module RL non disponible"
+            }, 200
+
+        try:
+            company = _get_current_company()
+            for_date_str = request.args.get('for_date')
+            min_confidence = float(request.args.get('min_confidence', 0.0))
+            limit = int(request.args.get('limit', 20))
+
+            if not for_date_str:
+                return {"error": "for_date requis (YYYY-MM-DD)"}, 400
+
+            # ✅ CACHE REDIS : Clé unique par company/date/params
+            from ext import redis_client
+            cache_key = f"rl_suggestions:{company.id}:{for_date_str}:{min_confidence}:{limit}"
+
+            # Check cache
+            if redis_client:
+                try:
+                    cached_bytes = redis_client.get(cache_key)
+                    if cached_bytes:
+                        logger.info(f"[RL] Cache hit for {cache_key}")
+                        # Décoder bytes → str avant json.loads
+                        cached_str = cached_bytes.decode('utf-8')
+                        suggestions_data = json.loads(cached_str)
+                        return {
+                            "suggestions": suggestions_data,
+                            "total": len(suggestions_data),
+                            "date": for_date_str,
+                            "cached": True
+                        }, 200
+                except Exception as e:
+                    logger.warning(f"[RL] Cache read error: {e}")
+
+            # Parse date (DTZ007: OK car on compare juste la date, pas de timezone nécessaire)
+            for_date = datetime.strptime(for_date_str, '%Y-%m-%d').date()  # noqa: DTZ007
+
+            # Récupérer tous les assignments actifs pour cette date
+            from sqlalchemy.orm import joinedload
+
+            from models import Assignment, Driver
+            from models.enums import AssignmentStatus
+
+            assignments = Assignment.query.options(
+                joinedload(Assignment.booking),  # type: ignore[arg-type]
+                joinedload(Assignment.driver).joinedload(Driver.user)  # type: ignore[arg-type]
+            ).join(Booking).filter(
+                Booking.company_id == company.id,
+                Booking.scheduled_time >= datetime.combine(for_date, datetime.min.time()),
+                Booking.scheduled_time < datetime.combine(for_date, datetime.max.time()),
+                Assignment.status.in_([
+                    AssignmentStatus.SCHEDULED,
+                    AssignmentStatus.EN_ROUTE_PICKUP,
+                    AssignmentStatus.ARRIVED_PICKUP,
+                    AssignmentStatus.ONBOARD,
+                    AssignmentStatus.EN_ROUTE_DROPOFF,
+                ])
+            ).all()
+
+            if not assignments:
+                return {
+                    "suggestions": [],
+                    "message": "Aucun assignment actif pour cette date"
+                }, 200
+
+            # Récupérer tous les conducteurs disponibles avec leur relation user
+            # Inclure REGULAR en priorité, puis EMERGENCY si besoin
+            drivers = Driver.query.options(
+                joinedload(Driver.user)  # type: ignore[arg-type]
+            ).filter(
+                Driver.company_id == company.id,
+                Driver.is_available == True  # noqa: E712
+            ).order_by(
+                # REGULAR d'abord, EMERGENCY après
+                Driver.driver_type.desc()
+            ).limit(10).all()
+
+            if not drivers:
+                return {
+                    "suggestions": [],
+                    "message": "Aucun conducteur disponible"
+                }, 200
+
+            # Utiliser le générateur RL pour créer des suggestions
+            from services.rl.suggestion_generator import get_suggestion_generator
+
+            generator = get_suggestion_generator()
+            all_suggestions = generator.generate_suggestions(
+                company_id=int(company.id),  # type: ignore[arg-type]
+                assignments=assignments,
+                drivers=drivers,
+                for_date=for_date_str,
+                min_confidence=min_confidence,
+                max_suggestions=limit
+            )
+
+            # ✅ MÉTRIQUES : Logger les suggestions générées
+            try:
+                from datetime import datetime as dt
+
+                from models import RLSuggestionMetric
+
+                for suggestion in all_suggestions:
+                    # Créer ID unique pour la suggestion
+                    suggestion_id = f"{suggestion['assignment_id']}_{int(dt.now(UTC).timestamp() * 1000)}"
+
+                    metric = RLSuggestionMetric(
+                        company_id=int(company.id),  # type: ignore[arg-type]
+                        suggestion_id=suggestion_id,
+                        booking_id=suggestion['booking_id'],
+                        assignment_id=suggestion['assignment_id'],
+                        current_driver_id=suggestion['current_driver_id'],
+                        suggested_driver_id=suggestion['suggested_driver_id'],
+                        confidence=suggestion['confidence'],
+                        expected_gain_minutes=suggestion.get('expected_gain_minutes', 0),
+                        q_value=suggestion.get('q_value'),
+                        source=suggestion['source'],
+                        generated_at=dt.now(UTC),
+                        additional_data={
+                            'message': suggestion.get('message'),
+                            'for_date': for_date_str,
+                            'min_confidence': min_confidence
+                        }
+                    )
+                    db.session.add(metric)
+
+                    # Ajouter l'ID à la suggestion pour tracking frontend
+                    suggestion['metric_id'] = suggestion_id
+
+                db.session.commit()
+                logger.info(f"[RL] Logged {len(all_suggestions)} suggestion metrics")
+            except Exception as e:
+                db.session.rollback()
+                logger.warning(f"[RL] Failed to log metrics (non-critique): {e}")
+
+            # ✅ CACHE REDIS : Stocker en cache (TTL 30s)
+            if redis_client and all_suggestions:
+                try:
+                    redis_client.setex(
+                        cache_key,
+                        30,  # TTL 30 secondes (sync avec auto-refresh frontend)
+                        json.dumps(all_suggestions)
+                    )
+                    logger.info(f"[RL] Cached {len(all_suggestions)} suggestions for {cache_key}")
+                except Exception as e:
+                    logger.warning(f"[RL] Cache write error: {e}")
+
+            return {
+                "suggestions": all_suggestions,
+                "total": len(all_suggestions),
+                "date": for_date_str,
+                "cached": False
+            }, 200
+
+        except ValueError:
+            return {"error": "Format date invalide (attendu: YYYY-MM-DD)"}, 400
+        except Exception as e:
+            logger.exception("[RL] Failed to get RL suggestions")
+            return {"error": f"Échec récupération suggestions RL: {e}"}, 500
+
+
+@dispatch_ns.route("/rl/metrics")
+class RLMetricsResource(Resource):
+    """Récupérer les métriques de performance des suggestions RL."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """
+        Récupère les métriques de performance des suggestions RL.
+        
+        Query params:
+            days: Nombre de jours d'historique (défaut: 30)
+            
+        Returns:
+            Statistiques agrégées et détails des suggestions
+        """
+        try:
+            company_id = _current_company_id()
+            days = int(request.args.get('days', 30))
+
+            # Importer le modèle de métriques
+            from models import RLSuggestionMetric
+
+            # Calculer date de début
+            cutoff = datetime.now(UTC) - timedelta(days=days)
+
+            # Récupérer toutes les métriques pour cette entreprise
+            metrics = RLSuggestionMetric.query.filter(
+                RLSuggestionMetric.company_id == company_id,
+                RLSuggestionMetric.generated_at >= cutoff
+            ).order_by(RLSuggestionMetric.generated_at.desc()).all()
+
+            if not metrics:
+                return {
+                    "period_days": days,
+                    "total_suggestions": 0,
+                    "message": "Aucune métrique disponible pour cette période"
+                }, 200
+
+            # Calculer statistiques agrégées
+            total = len(metrics)
+            applied = len([m for m in metrics if m.applied_at])
+            rejected = len([m for m in metrics if m.rejected_at])
+            pending = total - applied - rejected
+
+            # Confiance moyenne
+            avg_confidence = sum(m.confidence for m in metrics) / total if total else 0
+
+            # Précision gain (seulement pour suggestions appliquées)
+            applied_metrics = [m for m in metrics if m.actual_gain_minutes is not None]
+            if applied_metrics:
+                accuracies = [m.calculate_gain_accuracy() for m in applied_metrics if m.calculate_gain_accuracy() is not None]
+                avg_accuracy = sum(accuracies) / len(accuracies) if accuracies else 0
+            else:
+                avg_accuracy = None
+
+            # Répartition par source
+            dqn_count = len([m for m in metrics if m.source == "dqn_model"])
+            heuristic_count = len([m for m in metrics if m.source == "basic_heuristic"])
+            fallback_rate = heuristic_count / total if total else 0
+
+            # Gain total estimé et réel
+            total_expected_gain = sum(m.expected_gain_minutes or 0 for m in metrics)
+            total_actual_gain = sum(m.actual_gain_minutes or 0 for m in applied_metrics)
+
+            # Top suggestions (meilleures performances)
+            top_suggestions = sorted(
+                [m.to_dict() for m in applied_metrics if m.was_successful],
+                key=lambda x: x.get('actual_gain', 0),
+                reverse=True
+            )[:10]
+
+            # Évolution par jour (derniers 7 jours)
+            from collections import defaultdict
+            from typing import List as TList
+            daily_stats: dict[str, dict[str, Any]] = defaultdict(lambda: {'generated': 0, 'applied': 0, 'avg_confidence': []})
+
+            for m in metrics:
+                day_key = m.generated_at.date().isoformat() if m.generated_at else 'unknown'
+                daily_stats[day_key]['generated'] += 1
+                conf_list = cast(TList[float], daily_stats[day_key]['avg_confidence'])
+                conf_list.append(m.confidence)
+                if m.applied_at:
+                    daily_stats[day_key]['applied'] += 1
+
+            # Formater daily_stats
+            confidence_history = []
+            for day, stats in sorted(daily_stats.items(), reverse=True)[:7]:
+                conf_values = cast(TList[float], stats['avg_confidence'])
+                avg_conf = sum(conf_values) / len(conf_values) if conf_values else 0
+                confidence_history.append({
+                    'date': day,
+                    'generated': stats['generated'],
+                    'applied': stats['applied'],
+                    'avg_confidence': round(avg_conf, 2)
+                })
+
+            confidence_history.reverse()  # Ordre chronologique
+
+            return {
+                "period_days": days,
+                "total_suggestions": total,
+                "applied_count": applied,
+                "rejected_count": rejected,
+                "pending_count": pending,
+                "application_rate": round(applied / total, 2) if total else 0,
+                "rejection_rate": round(rejected / total, 2) if total else 0,
+                "avg_confidence": round(avg_confidence, 2),
+                "avg_gain_accuracy": round(avg_accuracy, 2) if avg_accuracy is not None else None,
+                "fallback_rate": round(fallback_rate, 2),
+                "total_expected_gain_minutes": total_expected_gain,
+                "total_actual_gain_minutes": total_actual_gain,
+                "by_source": {
+                    "dqn_model": dqn_count,
+                    "basic_heuristic": heuristic_count
+                },
+                "top_suggestions": top_suggestions,
+                "confidence_history": confidence_history,
+                "timestamp": datetime.now(UTC).isoformat()
+            }, 200
+
+        except Exception as e:
+            logger.exception("[RL] Failed to get metrics")
+            return {"error": f"Échec récupération métriques: {e}"}, 500
+
+
+@dispatch_ns.route("/rl/feedback")
+class RLFeedbackResource(Resource):
+    """Enregistrer feedback utilisateur sur suggestion RL."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):
+        """
+        Enregistre le feedback utilisateur sur une suggestion RL.
+        
+        Body:
+        {
+            "suggestion_id": "123_1234567890",
+            "action": "applied" | "rejected" | "ignored",
+            "feedback_reason": "Optionnel: Pourquoi rejeté",
+            "actual_outcome": {  # Optionnel, si appliqué
+                "gain_minutes": 12,
+                "was_better": true,
+                "satisfaction": 4
+            }
+        }
+        
+        Returns:
+            Feedback enregistré + métriques mises à jour
+        """
+        try:
+            company_id = _current_company_id()
+            body = request.get_json() or {}
+            
+            # Validation
+            suggestion_id = body.get('suggestion_id')
+            action = body.get('action')
+            
+            if not suggestion_id:
+                return {"error": "suggestion_id requis"}, 400
+            
+            if action not in ['applied', 'rejected', 'ignored']:
+                return {"error": "action doit être 'applied', 'rejected' ou 'ignored'"}, 400
+            
+            # Importer modèles
+            from models import RLFeedback, RLSuggestionMetric
+            
+            # Récupérer la métrique de suggestion associée
+            metric = RLSuggestionMetric.query.filter_by(
+                suggestion_id=suggestion_id,
+                company_id=company_id
+            ).first()
+            
+            if not metric:
+                return {"error": "Suggestion non trouvée"}, 404
+            
+            # Vérifier si feedback déjà existant
+            existing_feedback = RLFeedback.query.filter_by(
+                suggestion_id=suggestion_id,
+                company_id=company_id
+            ).first()
+            
+            if existing_feedback:
+                return {"error": "Feedback déjà enregistré pour cette suggestion"}, 409
+            
+            # Récupérer user_id depuis JWT
+            from flask_jwt_extended import get_jwt_identity
+            user_id_from_jwt = get_jwt_identity()
+            
+            # Créer feedback
+            feedback = RLFeedback(
+                company_id=company_id,
+                suggestion_id=suggestion_id,
+                booking_id=metric.booking_id,
+                assignment_id=metric.assignment_id,
+                current_driver_id=metric.current_driver_id,
+                suggested_driver_id=metric.suggested_driver_id,
+                action=action,
+                feedback_reason=body.get('feedback_reason'),
+                user_id=user_id_from_jwt,
+                created_at=datetime.now(UTC),
+                suggestion_generated_at=metric.generated_at,
+                suggestion_confidence=metric.confidence,
+                actual_outcome=body.get('actual_outcome'),
+                additional_data=body.get('additional_data')
+            )
+            
+            # Si appliqué avec résultat, extraire infos
+            if action == 'applied' and body.get('actual_outcome'):
+                outcome = body['actual_outcome']
+                feedback.was_successful = outcome.get('was_better', True)
+                feedback.actual_gain_minutes = outcome.get('gain_minutes', 0)
+                
+                # Mettre à jour la métrique aussi
+                metric.applied_at = datetime.now(UTC)
+                metric.actual_gain_minutes = feedback.actual_gain_minutes
+                metric.was_successful = feedback.was_successful
+                db.session.add(metric)
+            
+            elif action == 'rejected':
+                # Marquer la métrique comme rejetée
+                metric.rejected_at = datetime.now(UTC)
+                metric.was_successful = False
+                db.session.add(metric)
+            
+            # Sauvegarder feedback
+            db.session.add(feedback)
+            db.session.commit()
+            
+            logger.info(
+                f"[RL] Feedback enregistré: {suggestion_id} action={action} "
+                f"company={company_id}"
+            )
+            
+            # Calculer reward pour le ré-entraînement
+            reward = feedback.calculate_reward()
+            
+            # Statistiques après ce feedback
+            total_feedbacks = RLFeedback.query.filter_by(company_id=company_id).count()
+            applied_count = RLFeedback.query.filter_by(
+                company_id=company_id,
+                action='applied'
+            ).count()
+            
+            return {
+                "message": "Feedback enregistré avec succès",
+                "feedback_id": feedback.id,
+                "suggestion_id": suggestion_id,
+                "action": action,
+                "reward": reward,
+                "stats": {
+                    "total_feedbacks": total_feedbacks,
+                    "applied_count": applied_count,
+                    "application_rate": applied_count / total_feedbacks if total_feedbacks > 0 else 0
+                }
+            }, 201
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("[RL] Failed to record feedback")
+            return {"error": f"Échec enregistrement feedback: {e}"}, 500
+
+
+@dispatch_ns.route("/rl/toggle")
+class RLDispatchToggle(Resource):
+    """Activer/désactiver dispatch RL."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):
+        """
+        Active ou désactive le dispatch RL pour l'entreprise.
+
+        Body:
+        {
+            "enabled": true/false
+        }
+
+        Returns:
+            Configuration mise à jour
+        """
+        company = _get_current_company()
+        body = request.get_json() or {}
+
+        enabled = body.get('enabled')
+        if enabled is None:
+            return {"error": "enabled requis (true/false)"}, 400
+
+        try:
+            # Mettre à jour config
+            config = company.get_autonomous_config()
+
+            if 'rl_dispatch' not in config:
+                config['rl_dispatch'] = {}
+
+            config['rl_dispatch']['enabled'] = bool(enabled)
+            config['rl_dispatch']['model_path'] = config['rl_dispatch'].get(
+                'model_path',
+                'data/rl/models/dqn_best.pth'
+            )
+            config['rl_dispatch']['fallback_to_heuristic'] = config['rl_dispatch'].get(
+                'fallback_to_heuristic',
+                True
+            )
+
+            company.set_autonomous_config(config)
+            db.session.add(company)
+            db.session.commit()
+
+            logger.info(
+                "[RL] Company %s %s RL dispatch",
+                company.id,
+                "enabled" if enabled else "disabled"
+            )
+
+            return {
+                "company_id": company.id,
+                "rl_dispatch_enabled": enabled,
+                "config": config['rl_dispatch'],
+                "message": f"Dispatch RL {'activé' if enabled else 'désactivé'} avec succès"
+            }, 200
+
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("[RL] Failed to toggle RL dispatch")
+            return {"error": f"Échec toggle RL: {e}"}, 500
+
+
+# ===== PARAMÈTRES AVANCÉS DE DISPATCH =====
+
+@dispatch_ns.route("/advanced_settings")
+class DispatchAdvancedSettingsResource(Resource):
+    """
+    Gestion des paramètres avancés de dispatch (heuristic, solver, fairness, emergency, etc.)
+    Stockés dans company.autonomous_config sous la clé 'dispatch_overrides'.
+    """
+    
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """
+        Récupère les paramètres avancés de dispatch sauvegardés.
+        Returns:
+            {
+                "dispatch_overrides": { ... } ou null si non configuré
+            }
+        """
+        company = _get_current_company()
+        company_id = _current_company_id()
+        
+        # Récupérer la config autonome complète
+        autonomous_config = company.get_autonomous_config()
+        
+        # Extraire les dispatch_overrides
+        dispatch_overrides = autonomous_config.get('dispatch_overrides', None)
+        
+        logger.info(
+            "[Dispatch] Company %s fetched advanced settings: %s",
+            company_id,
+            "configured" if dispatch_overrides else "not configured"
+        )
+        
+        return {
+            "company_id": company_id,
+            "dispatch_overrides": dispatch_overrides
+        }, 200
+    
+    @jwt_required()
+    @role_required(UserRole.company)
+    def put(self):
+        """
+        Sauvegarde les paramètres avancés de dispatch.
+        Body:
+        {
+            "dispatch_overrides": {
+                "heuristic": { "proximity_weight": 0.3, ... },
+                "solver": { "time_limit": 60, ... },
+                "emergency": { "allow_emergency": false, ... },
+                ...
+            }
+        }
+        Returns:
+            Paramètres sauvegardés
+        """
+        company = _get_current_company()
+        company_id = _current_company_id()
+        body = request.get_json() or {}
+        
+        dispatch_overrides = body.get("dispatch_overrides")
+        
+        if dispatch_overrides is None:
+            return {"error": "Le champ 'dispatch_overrides' est requis"}, 400
+        
+        # Valider que c'est un dict
+        if not isinstance(dispatch_overrides, dict):
+            return {"error": "dispatch_overrides doit être un objet JSON"}, 400
+        
+        # Récupérer la config actuelle
+        current_config = company.get_autonomous_config()
+        
+        # Mettre à jour uniquement la clé dispatch_overrides
+        current_config['dispatch_overrides'] = dispatch_overrides
+        
+        # Sauvegarder
+        company.set_autonomous_config(current_config)
+        
+        try:
+            db.session.add(company)
+            db.session.commit()
+            
+            logger.info(
+                "[Dispatch] Company %s saved advanced settings: %s",
+                company_id,
+                list(dispatch_overrides.keys())
+            )
+            
+            return {
+                "company_id": company_id,
+                "dispatch_overrides": dispatch_overrides,
+                "message": "Paramètres avancés sauvegardés avec succès"
+            }, 200
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("[Dispatch] Failed to save advanced settings")
+            return {"error": f"Échec de la sauvegarde: {e}"}, 500
+    
+    @jwt_required()
+    @role_required(UserRole.company)
+    def delete(self):
+        """
+        Supprime les paramètres avancés (reset aux valeurs par défaut).
+        """
+        company = _get_current_company()
+        company_id = _current_company_id()
+        
+        # Récupérer la config actuelle
+        current_config = company.get_autonomous_config()
+        
+        # Supprimer la clé dispatch_overrides
+        if 'dispatch_overrides' in current_config:
+            del current_config['dispatch_overrides']
+        
+        # Sauvegarder
+        company.set_autonomous_config(current_config)
+        
+        try:
+            db.session.add(company)
+            db.session.commit()
+            
+            logger.info(
+                "[Dispatch] Company %s deleted advanced settings (reset to defaults)",
+                company_id
+            )
+            
+            return {
+                "company_id": company_id,
+                "message": "Paramètres avancés réinitialisés aux valeurs par défaut"
+            }, 200
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("[Dispatch] Failed to delete advanced settings")
+            return {"error": f"Échec de la suppression: {e}"}, 500

@@ -14,7 +14,7 @@ export default function useDispatchStatus(socket) {
   // Polling du statut (backup si pas de socket)
   useEffect(() => {
     if (!pollingActive) return;
-    
+
     const fetchStatus = async () => {
       try {
         const data = await getDispatchStatus();
@@ -22,7 +22,7 @@ export default function useDispatchStatus(socket) {
         setStatus(isRunning ? 'running' : 'idle');
         setProgress(data?.progress || 0);
         setLabel(isRunning ? `Optimisation en cours (${data?.progress || 0}%)` : 'Prêt');
-        
+
         // Si on atteint 100% ou si on n'est plus en cours, on arrête le polling
         if (data?.progress >= 100 || !isRunning) {
           setPollingActive(false);
@@ -41,114 +41,100 @@ export default function useDispatchStatus(socket) {
     return () => clearInterval(intervalId);
   }, [pollingActive, setStatus, setProgress, setLabel, setPollingActive, setUpdatedAt]);
 
-// Fonction pour rafraîchir les assignations pour une date donnée
-const refreshAssignmentsForDate = useCallback(async (dateStr) => {
-  try {
-    console.log(`🔄 Refreshing assignments for date: ${dateStr}`);
-    // Attendre un court instant pour s'assurer que les données sont persistées
-    await new Promise(resolve => setTimeout(resolve, 500));
-    // Récupérer les assignations pour cette date
-    const assignments = await fetchAssignedReservations(dateStr);
-    console.log(`✅ Assignments refreshed for date: ${dateStr}, received ${assignments.length} items`);
-    return assignments;
-  } catch (error) {
-    console.error(`❌ Error refreshing assignments for date ${dateStr}:`, error);
-    throw error;
-  }
-}, []);
+  // Fonction pour rafraîchir les assignations pour une date donnée
+  const refreshAssignmentsForDate = useCallback(async (dateStr) => {
+    try {
+      // Attendre un court instant pour s'assurer que les données sont persistées
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Récupérer les assignations pour cette date
+      const assignments = await fetchAssignedReservations(dateStr);
+      return assignments;
+    } catch (error) {
+      console.error(`❌ Error refreshing assignments for date ${dateStr}:`, error);
+      throw error;
+    }
+  }, []);
 
   // Écoute des événements socket
-useEffect(() => {
-  if (!socket) return;
+  useEffect(() => {
+    if (!socket) return;
 
-  const handleDispatchStatus = (data) => {
-    setStatus(data.is_running ? 'running' : 'idle');
-    setProgress(data.progress || 0);
-    setLabel(data.is_running 
-      ? `Optimisation en cours (${data.progress || 0}%)` 
-      : 'Prêt');
-    
-    if (!data.is_running) {
+    const handleDispatchStatus = (data) => {
+      setStatus(data.is_running ? 'running' : 'idle');
+      setProgress(data.progress || 0);
+      setLabel(data.is_running ? `Optimisation en cours (${data.progress || 0}%)` : 'Prêt');
+
+      if (!data.is_running) {
+        setUpdatedAt(Date.now());
+      }
+    };
+
+    const handleDispatchRunCompleted = (data) => {
+      setStatus('completed');
+      setProgress(100);
+      setLabel('Optimisation terminée');
+      setLastRunId(data.dispatch_run_id);
+      setPollingActive(false);
       setUpdatedAt(Date.now());
-    }
-  };
 
-  const handleDispatchRunCompleted = (data) => {
-    console.log('🎉 Dispatch run completed event received:', data);
-    setStatus('completed');
-    setProgress(100);
-    setLabel('Optimisation terminée');
-    setLastRunId(data.dispatch_run_id);
-    setPollingActive(false);
-    setUpdatedAt(Date.now());
-    
-    // Si la date est fournie dans l'événement, la mémoriser pour le rafraîchissement
-    if (data.date) {
-      console.log(`📅 Dispatch completed for date: ${data.date}`);
-      setCurrentDate(data.date);
-      // Déclencher un rafraîchissement des données pour cette date
-      refreshAssignmentsForDate(data.date);
-    } else {
-      console.warn('⚠️ No date provided in dispatch_run_completed event');
-      // Try to refresh with the last known date if available
-      if (currentDate) {
-        console.log(`📅 Using last known date for refresh: ${currentDate}`);
+      // Si la date est fournie dans l'événement, la mémoriser pour le rafraîchissement
+      if (data.date) {
+        setCurrentDate(data.date);
+        // Déclencher un rafraîchissement des données pour cette date
+        refreshAssignmentsForDate(data.date);
+      } else if (currentDate) {
+        // Try to refresh with the last known date if available
         refreshAssignmentsForDate(currentDate);
       }
-    }
-  };
+    };
 
-  socket.on('dispatch_status', handleDispatchStatus);
-  socket.on('dispatch_run_completed', handleDispatchRunCompleted);
+    socket.on('dispatch_status', handleDispatchStatus);
+    socket.on('dispatch_run_completed', handleDispatchRunCompleted);
 
-  return () => {
-    socket.off('dispatch_status', handleDispatchStatus);
-    socket.off('dispatch_run_completed', handleDispatchRunCompleted);
-  };
-}, [socket, refreshAssignmentsForDate, currentDate]);
+    return () => {
+      socket.off('dispatch_status', handleDispatchStatus);
+      socket.off('dispatch_run_completed', handleDispatchRunCompleted);
+    };
+  }, [socket, refreshAssignmentsForDate, currentDate]);
 
+  // Traitement de la réponse d'un job de dispatch
+  const handleDispatchJobResponse = useCallback(
+    (response) => {
+      // Si on a un job_id, c'est un job async
+      if (response?.job_id) {
+        setStatus('running');
+        setProgress(5); // Valeur initiale
+        setLabel('Optimisation en cours (5%)');
+        setPollingActive(true); // Active le polling
 
+        // Mémoriser la date si elle est présente dans la réponse
+        if (response.for_date) {
+          setCurrentDate(response.for_date);
+        }
 
-// Traitement de la réponse d'un job de dispatch
-const handleDispatchJobResponse = useCallback((response) => {
-  console.log('📊 Dispatch job response:', response);
-  
-  // Si on a un job_id, c'est un job async
-  if (response?.job_id) {
-    setStatus('running');
-    setProgress(5); // Valeur initiale
-    setLabel('Optimisation en cours (5%)');
-    setPollingActive(true); // Active le polling
-    
-    // Mémoriser la date si elle est présente dans la réponse
-    if (response.for_date) {
-      console.log(`📅 Setting current date from job response: ${response.for_date}`);
-      setCurrentDate(response.for_date);
-    }
-    
-    // Mémoriser le dispatch_run_id si présent
-    if (response.dispatch_run_id) {
-      console.log(`🆔 Setting dispatch_run_id from job response: ${response.dispatch_run_id}`);
-      setLastRunId(response.dispatch_run_id);
-    }
-  } 
-  // Si on a un résultat direct (sync)
-  else if (response?.assignments) {
-    setStatus('completed');
-    setProgress(100);
-    setLabel('Optimisation terminée');
-    setLastRunId(response.dispatch_run_id || response.meta?.dispatch_run_id);
-    setUpdatedAt(Date.now());
-    
-    // Mémoriser la date si elle est présente dans la réponse
-    if (response.for_date) {
-      console.log(`📅 Setting current date from sync response: ${response.for_date}`);
-      setCurrentDate(response.for_date);
-      // Rafraîchir les assignations immédiatement
-      refreshAssignmentsForDate(response.for_date);
-    }
-  }
-}, [refreshAssignmentsForDate]);
+        // Mémoriser le dispatch_run_id si présent
+        if (response.dispatch_run_id) {
+          setLastRunId(response.dispatch_run_id);
+        }
+      }
+      // Si on a un résultat direct (sync)
+      else if (response?.assignments) {
+        setStatus('completed');
+        setProgress(100);
+        setLabel('Optimisation terminée');
+        setLastRunId(response.dispatch_run_id || response.meta?.dispatch_run_id);
+        setUpdatedAt(Date.now());
+
+        // Mémoriser la date si elle est présente dans la réponse
+        if (response.for_date) {
+          setCurrentDate(response.for_date);
+          // Rafraîchir les assignations immédiatement
+          refreshAssignmentsForDate(response.for_date);
+        }
+      }
+    },
+    [refreshAssignmentsForDate]
+  );
 
   return {
     status,
@@ -160,6 +146,6 @@ const handleDispatchJobResponse = useCallback((response) => {
     currentDate,
     setUpdatedAt,
     handleDispatchJobResponse,
-    refreshAssignmentsForDate
+    refreshAssignmentsForDate,
   };
 }

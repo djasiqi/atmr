@@ -1,30 +1,32 @@
-import React, { useState } from "react";
-import styles from "./EditClientModal.module.css";
-import AddressAutocomplete from "../../../../components/common/AddressAutocomplete";
+import React, { useState } from 'react';
+import styles from './ClientFormModal.module.css';
+import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
 
 const EditClientModal = ({ client, onClose, onSave }) => {
   const [formData, setFormData] = useState({
     is_institution: client.is_institution || false,
-    institution_name: client.institution_name || "",
-    contact_email: client.contact_email || "",
-    contact_phone: client.contact_phone || "",
-    billing_address: client.billing_address || "",
-    domicile_address: client.domicile?.address || "",
-    domicile_zip: client.domicile?.zip || "",
-    domicile_city: client.domicile?.city || "",
-    preferential_rate: client.preferential_rate || "",
+    institution_name: client.institution_name || '',
+    residence_facility: client.residence_facility || '',
+    birth_date: client.user?.birth_date || '',
+    contact_email: client.contact_email || '',
+    contact_phone: client.contact_phone || '',
+    billing_address: client.billing_address || '',
+    domicile_address: client.domicile?.address || '',
+    domicile_zip: client.domicile?.zip || '',
+    domicile_city: client.domicile?.city || '',
+    preferential_rate: client.preferential_rate || '',
     is_active: client.is_active !== false, // Par défaut actif
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
+
   // Coordonnées GPS pour adresse de domicile
   const [domicileCoords, setDomicileCoords] = useState({
     lat: client.domicile?.lat || null,
     lon: client.domicile?.lon || null,
   });
-  
+
   // Coordonnées GPS pour adresse de facturation
   const [billingCoords, setBillingCoords] = useState({
     lat: client.billing_lat || null,
@@ -35,48 +37,48 @@ const EditClientModal = ({ client, onClose, onSave }) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: type === 'checkbox' ? checked : value,
     }));
   };
 
   // Gérer la sélection d'adresse de domicile via autocomplete
   const handleDomicileAddressSelect = (item) => {
-    console.log("📍 [Domicile] Adresse sélectionnée:", item);
-    
-    const address = item.address || item.label || "";
-    const postcode = item.postcode || "";
-    const city = item.city || "";
-    
+    console.log('📍 [Domicile] Adresse sélectionnée:', item);
+
+    const address = item.address || item.label || '';
+    const postcode = item.postcode || '';
+    const city = item.city || '';
+
     setFormData((prev) => ({
       ...prev,
       domicile_address: address,
       domicile_zip: postcode,
       domicile_city: city,
     }));
-    
+
     setDomicileCoords({
       lat: item.lat ?? null,
       lon: item.lon ?? null,
     });
-    
+
     console.log(`📍 [Domicile] GPS: ${item.lat}, ${item.lon}`);
   };
 
   // Gérer la sélection d'adresse de facturation via autocomplete
   const handleBillingAddressSelect = (item) => {
-    console.log("📍 [Facturation] Adresse sélectionnée:", item);
-    
-    const fullAddress = item.label || "";
+    console.log('📍 [Facturation] Adresse sélectionnée:', item);
+
+    const fullAddress = item.label || '';
     setFormData((prev) => ({
       ...prev,
       billing_address: fullAddress,
     }));
-    
+
     setBillingCoords({
       lat: item.lat ?? null,
       lon: item.lon ?? null,
     });
-    
+
     console.log(`📍 [Facturation] GPS: ${item.lat}, ${item.lon}`);
   };
 
@@ -101,32 +103,28 @@ const EditClientModal = ({ client, onClose, onSave }) => {
         billing_lat: billingCoords.lat,
         billing_lon: billingCoords.lon,
       };
-      
+
+      console.log('📤 Payload envoyé:', payload);
+
       await onSave(payload);
     } catch (err) {
-      setError(
-        err.response?.data?.error ||
-          err.message ||
-          "Erreur lors de la sauvegarde"
-      );
+      setError(err.response?.data?.error || err.message || 'Erreur lors de la sauvegarde');
       setLoading(false);
     }
   };
 
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
-          <h2>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content modal-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 className="modal-title">
             {formData.is_institution
               ? `Éditer l'institution${
-                  formData.institution_name
-                    ? ` : ${formData.institution_name}`
-                    : ""
+                  formData.institution_name ? ` : ${formData.institution_name}` : ''
                 }`
-              : "Éditer le client"}
+              : 'Éditer le client'}
           </h2>
-          <button className={styles.closeBtn} onClick={onClose}>
+          <button className="modal-close" onClick={onClose}>
             ✕
           </button>
         </div>
@@ -137,9 +135,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
           {/* Informations client */}
           <div className={styles.section}>
             <h3 className={styles.sectionTitle}>
-              {formData.is_institution
-                ? "Informations institution"
-                : "Informations client"}
+              {formData.is_institution ? 'Informations institution' : 'Informations client'}
             </h3>
 
             <div className={styles.infoCard}>
@@ -148,10 +144,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                   <div className={styles.infoRow}>
                     <span className={styles.label}>Institution :</span>
                     <span className={styles.value}>
-                      🏥{" "}
-                      {formData.institution_name ||
-                        client.institution_name ||
-                        "Non défini"}
+                      🏥 {formData.institution_name || client.institution_name || 'Non défini'}
                     </span>
                   </div>
                   <div className={styles.infoRow}>
@@ -162,12 +155,28 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                   </div>
                 </>
               ) : (
-                <div className={styles.infoRow}>
-                  <span className={styles.label}>Nom :</span>
-                  <span className={styles.value}>
-                    {client.first_name} {client.last_name}
-                  </span>
-                </div>
+                <>
+                  <div className={styles.infoRow}>
+                    <span className={styles.label}>Nom :</span>
+                    <span className={styles.value}>
+                      {client.first_name} {client.last_name}
+                    </span>
+                  </div>
+                  <div className="form-group mt-sm">
+                    <label htmlFor="birth_date" className="form-label">
+                      Date de naissance
+                    </label>
+                    <input
+                      type="date"
+                      id="birth_date"
+                      name="birth_date"
+                      value={formData.birth_date}
+                      onChange={handleChange}
+                      className="form-input"
+                      disabled={loading}
+                    />
+                  </div>
+                </>
               )}
               {client.user?.email && (
                 <div className={styles.infoRow}>
@@ -265,28 +274,42 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                   setBillingCoords({ lat: null, lon: null });
                   setFormData((prev) => ({
                     ...prev,
-                    billing_address: e.target.value
+                    billing_address: e.target.value,
                   }));
                 }}
                 onSelect={handleBillingAddressSelect}
                 placeholder="Ex: Avenue de la Gare 5, 1003, Lausanne"
                 disabled={loading}
               />
-              <small style={{ fontSize: "12px", color: "#666", marginTop: "4px", display: "block" }}>
-                💡 Si différente de l'adresse de domicile
-              </small>
+              <small className={styles.hint}>💡 Si différente de l'adresse de domicile</small>
             </div>
           </div>
 
           {/* Adresse de domicile */}
           <div className={styles.section}>
             <h3 className={styles.sectionTitle}>🏠 Adresse de domicile</h3>
-            <p
-              style={{ fontSize: "13px", color: "#666", marginBottom: "12px" }}
-            >
-              Adresse où le client habite (utilisée pour la prise en charge par
-              défaut)
+            <p className={styles.sectionDescription}>
+              Adresse où le client habite (utilisée pour la prise en charge par défaut)
             </p>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="residence_facility" className={styles.label}>
+                Établissement de résidence
+              </label>
+              <input
+                type="text"
+                id="residence_facility"
+                name="residence_facility"
+                value={formData.residence_facility}
+                onChange={handleChange}
+                className={styles.input}
+                placeholder="Ex: EMS Maison de Vessy, Foyer Clair Bois..."
+                disabled={loading}
+              />
+              <small className={styles.hint}>
+                💡 Indiquer si le client habite dans un EMS, Foyer, ou autre établissement
+              </small>
+            </div>
 
             <div className={styles.formGroup}>
               <label htmlFor="domicile_address" className={styles.label}>
@@ -294,17 +317,17 @@ const EditClientModal = ({ client, onClose, onSave }) => {
               </label>
               <AddressAutocomplete
                 name="domicile_address"
-                value={`${formData.domicile_address}${formData.domicile_zip ? ', ' + formData.domicile_zip : ''}${formData.domicile_city ? ', ' + formData.domicile_city : ''}`}
-                onChange={(e) => {
+                value={`${formData.domicile_address}${
+                  formData.domicile_zip ? ', ' + formData.domicile_zip : ''
+                }${formData.domicile_city ? ', ' + formData.domicile_city : ''}`}
+                onChange={(_e) => {
                   setDomicileCoords({ lat: null, lon: null });
                 }}
                 onSelect={handleDomicileAddressSelect}
                 placeholder="Ex: Avenue Ernest-Pictet 9, 1203, Genève"
                 disabled={loading}
               />
-              <small style={{ fontSize: "12px", color: "#666", marginTop: "4px", display: "block" }}>
-                💡 Tapez pour rechercher une nouvelle adresse
-              </small>
+              <small className={styles.hint}>💡 Tapez pour rechercher une nouvelle adresse</small>
             </div>
 
             <div className={styles.formRow}>
@@ -319,7 +342,6 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                   value={formData.domicile_address}
                   className={styles.input}
                   readOnly
-                  style={{ backgroundColor: "#f8f9fa" }}
                   disabled={loading}
                 />
               </div>
@@ -336,7 +358,6 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                   className={styles.input}
                   placeholder="Rempli automatiquement"
                   readOnly
-                  style={{ backgroundColor: "#f8f9fa" }}
                   disabled={loading}
                 />
               </div>
@@ -353,7 +374,6 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                   className={styles.input}
                   placeholder="Rempli automatiquement"
                   readOnly
-                  style={{ backgroundColor: "#f8f9fa" }}
                   disabled={loading}
                 />
               </div>
@@ -367,18 +387,11 @@ const EditClientModal = ({ client, onClose, onSave }) => {
             <div className={styles.formGroup}>
               <label htmlFor="preferential_rate" className={styles.label}>
                 Tarif par trajet (CHF)
-                <small
-                  style={{
-                    display: "block",
-                    fontWeight: "normal",
-                    color: "#666",
-                    marginTop: "4px",
-                  }}
-                >
-                  Prix d'un trajet simple. Pour un aller-retour, ce tarif sera
-                  appliqué 2 fois. Laisser vide pour utiliser le tarif standard.
-                </small>
               </label>
+              <small className={styles.hint}>
+                Prix d'un trajet simple. Pour un aller-retour, ce tarif sera appliqué 2 fois.
+                Laisser vide pour utiliser le tarif standard.
+              </small>
               <input
                 type="number"
                 id="preferential_rate"
@@ -409,26 +422,24 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                 />
                 <span className={styles.checkboxText}>
                   <strong>Client actif</strong>
-                  <small>
-                    Les clients inactifs n'apparaissent pas dans les sélections
-                  </small>
+                  <small>Les clients inactifs n'apparaissent pas dans les sélections</small>
                 </span>
               </label>
             </div>
           </div>
 
           {/* Actions */}
-          <div className={styles.modalActions}>
+          <div className="modal-footer">
             <button
               type="button"
               onClick={onClose}
-              className={styles.cancelBtn}
+              className="btn btn-secondary"
               disabled={loading}
             >
               Annuler
             </button>
-            <button type="submit" className={styles.saveBtn} disabled={loading}>
-              {loading ? "Sauvegarde..." : "Enregistrer"}
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'Sauvegarde...' : 'Enregistrer'}
             </button>
           </div>
         </form>

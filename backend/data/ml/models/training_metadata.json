@@ -1,0 +1,68 @@
+{
+  "train_samples": 4000,
+  "test_samples": 1000,
+  "n_features": 35,
+  "metrics": {
+    "train": {
+      "mae": 0.8044811499999999,
+      "rmse": 1.0244188384152255,
+      "r2": 0.9541542353905096
+    },
+    "test": {
+      "mae": 2.2555205,
+      "rmse": 2.841438902477053,
+      "r2": 0.6757490130182454
+    },
+    "prediction_time_ms": 34.06815767288208,
+    "overfitting": 0.27840522237226417
+  },
+  "cv_results": {
+    "cv_mae_mean": 2.17028265,
+    "cv_mae_std": 0.04763164791412316,
+    "cv_r2_mean": 0.6680983353833458,
+    "cv_r2_std": 0.0195638381759637,
+    "stability": 0.0195638381759637
+  },
+  "top_features": [
+    {
+      "feature": "distance_x_weather",
+      "importance": 0.34728165008012174
+    },
+    {
+      "feature": "traffic_x_weather",
+      "importance": 0.18984837672735097
+    },
+    {
+      "feature": "distance_km",
+      "importance": 0.06999091825675147
+    },
+    {
+      "feature": "distance_squared",
+      "importance": 0.06153489646419093
+    },
+    {
+      "feature": "driver_total_bookings",
+      "importance": 0.05041472504333719
+    },
+    {
+      "feature": "driver_exp_log",
+      "importance": 0.049077373723771356
+    },
+    {
+      "feature": "distance_x_traffic",
+      "importance": 0.04906450279147584
+    },
+    {
+      "feature": "weather_factor",
+      "importance": 0.03145998915012158
+    },
+    {
+      "feature": "duration_seconds",
+      "importance": 0.02589813782119734
+    },
+    {
+      "feature": "month",
+      "importance": 0.018016113654424726
+    }
+  ]
+}

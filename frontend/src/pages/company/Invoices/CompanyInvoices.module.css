@@ -6,7 +6,7 @@
   flex-direction: column;
   min-height: 100vh;
   padding-top: 0;
-  background-color: #f4f7fc;
+  background-color: var(--bg-secondary);
   box-sizing: border-box;
 }
 
@@ -14,113 +14,385 @@
   display: flex;
   flex-grow: 1;
   height: 100%;
-  /* 👇 décale toute la zone droite selon la largeur courante de la sidebar */
-  margin-left: var(--sidebar-w);
 }
 
 .content {
   flex: 1;
-  padding: 24px;
-  margin: 20px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
+  padding: var(--spacing-xl);
+  margin: var(--spacing-lg);
+  margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
+  max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow-x: hidden;
+  overflow-y: visible;
+  box-sizing: border-box;
+  transition: margin-left var(--transition-base), max-width var(--transition-base);
 }
 
 .content h1 {
-  margin-bottom: 20px;
-  font-size: 1.8rem;
-  font-weight: 600;
-  color: #1e293b;
+  margin-bottom: var(--spacing-lg);
+  font-size: var(--font-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+/* ========================
+   KPI - Design comme Dashboard
+   ======================== */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+  width: 100%;
+  max-width: 100%;
+}
+
+.statCard {
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  transition: all var(--transition-base);
+  border: 1px solid var(--border-primary);
+  position: relative;
+}
+
+.statCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--brand-primary);
+}
+
+.statIcon {
+  font-size: var(--font-3xl);
+  line-height: 1;
+  opacity: 0.9;
+  flex-shrink: 0;
+}
+
+.statContent {
+  flex: 1;
+  text-align: left;
+}
+
+.statLabel {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  margin: 0 0 var(--spacing-xxs) 0;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.statValue {
+  font-size: var(--font-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--brand-primary);
+  margin: 0;
 }
 
 /* ========================
    Gestion des erreurs
    ======================== */
 .error {
-  background: #fee2e2;
-  border: 1px solid #fca5a5;
-  color: #b91c1c;
-  padding: 12px;
-  border-radius: 6px;
-  margin-bottom: 20px;
-  font-size: 14px;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger-primary);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--spacing-lg);
+  font-size: var(--font-sm);
 }
 
 /* ========================
    Tableau factures
    ======================== */
+.tableContainer {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
-  color: #374151;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
 }
 
 .table thead {
-  background: #f1f5f9;
+  background: var(--bg-hover);
 }
 
 .table th,
 .table td {
-  padding: 12px 16px;
+  padding: var(--spacing-sm) var(--spacing-md);
   text-align: left;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-primary);
 }
 
 .table th {
-  font-weight: 600;
-  color: #1e293b;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
 }
 
 .table tbody tr:hover {
-  background: #f9fafb;
+  background: var(--bg-secondary);
+}
+
+/* Colonnes avec largeur limitée */
+.clientCell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.descriptionCell {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ========================
    Statuts factures
    ======================== */
 .table td:last-child {
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .table td:last-child::before {
   content: "• ";
-  font-size: 18px;
+  font-size: var(--font-lg);
   vertical-align: middle;
-  margin-right: 6px;
+  margin-right: var(--spacing-xs);
 }
 
 .table td:last-child:contains("PAID") {
-  color: #15803d; /* vert */
+  color: var(--success-primary);
 }
 
 .table td:last-child:contains("PENDING") {
-  color: #ca8a04; /* jaune */
+  color: var(--warning-primary);
 }
 
 .table td:last-child:contains("CANCELED"),
 .table td:last-child:contains("FAILED") {
-  color: #b91c1c; /* rouge */
+  color: var(--danger-primary);
 }
 
 /* ========================
    Responsive
    ======================== */
+
+/* Tablette */
+@media (max-width: 1024px) {
+  .content {
+    margin: var(--spacing-md);
+    margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-md));
+    max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-md) * 2));
+    padding: var(--spacing-md);
+  }
+
+  /* Stats en 2 colonnes sur tablette */
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Mobile */
 @media (max-width: 768px) {
   .content {
-    margin: 10px;
-    padding: 16px;
+    margin: var(--spacing-xs) !important;
+    margin-left: calc(60px + var(--spacing-xs)) !important;
+    max-width: calc(100vw - 60px - calc(var(--spacing-xs) * 2)) !important;
+    width: calc(100vw - 60px - calc(var(--spacing-xs) * 2)) !important;
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    box-sizing: border-box;
+  }
+
+  .content h1 {
+    font-size: var(--font-xl);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .tableContainer {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto;
+    box-sizing: border-box;
+  }
+
+  .table {
+    width: 100% !important;
+    min-width: 100%;
+    font-size: var(--font-xs);
+    box-sizing: border-box;
   }
 
   .table th,
   .table td {
-    padding: 8px 10px;
-    font-size: 13px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+
+  .table th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-hover);
+    z-index: 10;
+  }
+
+  .clientCell {
+    max-width: 140px;
+  }
+
+  .descriptionCell {
+    max-width: 150px;
+  }
+
+  /* Stats KPI en 2 colonnes */
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .statCard {
+    padding: var(--spacing-sm) var(--spacing-md);
+    gap: var(--spacing-sm);
+  }
+
+  .statCard:hover {
+    transform: none;
+  }
+
+  .statIcon {
+    font-size: var(--font-2xl);
+  }
+
+  .statValue {
+    font-size: var(--font-xl);
+  }
+
+  .statLabel {
+    font-size: 0.7rem;
+  }
+}
+
+/* Petit mobile */
+@media (max-width: 480px) {
+  .content {
+    margin: 0 !important;
+    margin-left: 60px !important;
+    max-width: calc(100vw - 60px) !important;
+    width: calc(100vw - 60px) !important;
+    padding: var(--spacing-xs);
+    border-radius: 0;
   }
 
   .content h1 {
-    font-size: 1.5rem;
+    font-size: var(--font-lg);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .table {
+    font-size: 0.65rem;
+  }
+
+  .table th,
+  .table td {
+    padding: var(--spacing-xxs) var(--spacing-xs);
+    font-size: 0.65rem;
+  }
+
+  .clientCell {
+    max-width: 110px;
+  }
+
+  .descriptionCell {
+    max-width: 120px;
+  }
+
+  /* Stats KPI compacts */
+  .statsGrid {
+    gap: var(--spacing-xs);
+  }
+
+  .statCard {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    gap: var(--spacing-xs);
+    flex-direction: row;
+  }
+
+  .statIcon {
+    font-size: var(--font-xl);
+  }
+
+  .statContent {
+    text-align: left;
+  }
+
+  .statValue {
+    font-size: var(--font-md);
+  }
+
+  .statLabel {
+    font-size: 0.6rem;
+  }
+}
+
+/* Très petit mobile */
+@media (max-width: 390px) {
+  .content {
+    padding: 6px;
+  }
+
+  .content h1 {
+    font-size: var(--font-md);
+  }
+
+  .table th,
+  .table td {
+    padding: 2px 4px;
+    font-size: 0.6rem;
+  }
+
+  .clientCell {
+    max-width: 100px;
+  }
+
+  .descriptionCell {
+    max-width: 100px;
+  }
+
+  /* Stats KPI ultra-compacts */
+  .statCard {
+    padding: var(--spacing-xs);
+    gap: var(--spacing-xs);
+  }
+
+  .statIcon {
+    font-size: var(--font-lg);
+  }
+
+  .statValue {
+    font-size: var(--font-md);
+  }
+
+  .statLabel {
+    font-size: 0.6rem;
   }
 }

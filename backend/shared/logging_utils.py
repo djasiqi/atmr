@@ -16,6 +16,8 @@ IBAN_CH_PATTERN = re.compile(r'\bCH\d{2}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{1}
 CARD_PATTERN = re.compile(r'\b\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b')
 # ✅ Pattern téléphone suisse (079... 10 chiffres)
 PHONE_CH_PATTERN = re.compile(r'\b0\d{9}\b')
+# ✅ Pattern GPS haute précision (6+ décimales) - RGPD Art. 32
+GPS_PATTERN = re.compile(r'\b(\d+\.\d{6,}),\s*(\d+\.\d{6,})\b')
 
 def mask_email(email: str) -> str:
     """
@@ -56,6 +58,22 @@ def mask_iban(iban: str) -> str:
 
     return f"{iban[:2]}** **** **** **** **{iban[-2:]}"
 
+def mask_gps_coords(lat: str, lon: str) -> str:
+    """
+    Réduit précision GPS de 6+ décimales à 4 décimales.
+    Précision GPS:
+    - 6 décimales: ~0.11m (identification individu)
+    - 4 décimales: ~11m (conformité RGPD)
+    Exemple: "46.519654, 6.632273" → "46.5197, 6.6323 [GPS_APPROX]"
+    """
+    try:
+        lat_float = float(lat)
+        lon_float = float(lon)
+        # Arrondir à 4 décimales (précision ~11m)
+        return f"{lat_float:.4f}, {lon_float:.4f} [GPS_APPROX]"
+    except (ValueError, TypeError):
+        return f"{lat}, {lon} [GPS_REDACTED]"
+
 def sanitize_log_data(data: Any) -> Any:
     """
     Nettoie récursivement les données sensibles dans dict/str
@@ -67,14 +85,21 @@ def sanitize_log_data(data: Any) -> Any:
         return [sanitize_log_data(item) for item in data]
 
     if isinstance(data, str):
-        # Remplacer patterns sensibles
-        sanitized = EMAIL_PATTERN.sub(lambda m: mask_email(m.group(0)), data)
-        sanitized = PHONE_PATTERN.sub(lambda m: mask_phone(m.group(0)), sanitized)
-        sanitized = IBAN_PATTERN.sub(lambda m: mask_iban(m.group(0)), sanitized)
-        # ✅ SECURITY: Patterns supplémentaires pour RGPD
-        sanitized = IBAN_CH_PATTERN.sub('[IBAN_REDACTED]', sanitized)
+        # ✅ IMPORTANT: Appliquer patterns spécifiques AVANT patterns génériques
+        # pour éviter conflits (ex: 0791234567 masqué par PHONE_PATTERN avant PHONE_CH_PATTERN)
+
+        # 1. Patterns spécifiques (prioritaires)
+        sanitized = IBAN_CH_PATTERN.sub('[IBAN_REDACTED]', data)
         sanitized = CARD_PATTERN.sub('[CARD_REDACTED]', sanitized)
         sanitized = PHONE_CH_PATTERN.sub('[PHONE_REDACTED]', sanitized)
+        # ✅ SECURITY CWE-778: Masquer coordonnées GPS précises (RGPD Art. 32)
+        sanitized = GPS_PATTERN.sub(lambda m: mask_gps_coords(m.group(1), m.group(2)), sanitized)
+
+        # 2. Patterns génériques (fallback)
+        sanitized = EMAIL_PATTERN.sub(lambda m: mask_email(m.group(0)), sanitized)
+        sanitized = PHONE_PATTERN.sub(lambda m: mask_phone(m.group(0)), sanitized)
+        sanitized = IBAN_PATTERN.sub(lambda m: mask_iban(m.group(0)), sanitized)
+
         return sanitized
 
     return data

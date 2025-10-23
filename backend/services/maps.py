@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Tuple, cast
 import requests
 
 from ext import app_logger
+from shared.geo_utils import haversine_tuple as _haversine_km
 
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 _GOOGLE_TIMEOUT = 10  # s
@@ -20,16 +21,6 @@ def _as_origin_str(addr_or_coord: Any) -> str:
     if isinstance(addr_or_coord, (list, tuple)) and len(addr_or_coord) == 2:
         return f"{float(addr_or_coord[0])},{float(addr_or_coord[1])}"
     return str(addr_or_coord)
-
-def _haversine_km(a: Tuple[float, float], b: Tuple[float, float]) -> float:
-    lat1, lon1 = float(a[0]), float(a[1])
-    lat2, lon2 = float(b[0]), float(b[1])
-    R = 6371.0
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-    x = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
-    return R * (2 * math.atan2(math.sqrt(x), math.sqrt(1 - x)))
 
 def get_distance_duration(
     pickup_address: Any,
@@ -94,15 +85,15 @@ def get_distance_duration(
             return max(1, dur_s), int(dist_km * 1000)
         raise
 
-def geocode_address(address: str, *, country: str | None = None, language: str = "fr") -> Tuple[float, float] | None:
+def geocode_address(address: str, *, country: str | None = None, language: str = "fr") -> Dict[str, float] | None:
     """
-    Géocode une adresse → (lat, lon) | None.
+    Géocode une adresse → {'lat': float, 'lon': float} | None.
     - country: code ISO (ex: "CH") pour biaiser la recherche
     - language: "fr" par défaut
     """
     if not GOOGLE_MAPS_API_KEY:
-        app_logger.error("❌ Clé API Google Maps manquante.")
-        raise OSError("Clé API Google Maps non définie.")
+        app_logger.warning("⚠️ Clé API Google Maps manquante, utilisation de Nominatim (OSM).")
+        return geocode_address_nominatim(address, country=country)
 
     address = (address or "").strip()
     if not address:
@@ -127,10 +118,54 @@ def geocode_address(address: str, *, country: str | None = None, language: str =
             return None
 
         loc = data["results"][0]["geometry"]["location"]
-        return float(loc["lat"]), float(loc["lng"])
+        return {"lat": float(loc["lat"]), "lon": float(loc["lng"])}
 
     except requests.RequestException as e:
         app_logger.error(f"❌ Erreur API Google Maps pour '{address}' (country={country}): {e}")
+        return None
+
+
+def geocode_address_nominatim(address: str, *, country: str | None = None) -> Dict[str, float] | None:
+    """
+    Géocode une adresse avec Nominatim (OpenStreetMap) → {'lat': float, 'lon': float} | None.
+    - country: code ISO (ex: "CH") pour biaiser la recherche
+    """
+    address = (address or "").strip()
+    if not address:
+        raise ValueError("Adresse vide ou invalide pour le géocodage.")
+
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {
+        "q": address,
+        "format": "json",
+        "limit": 1,
+        "addressdetails": 1,
+    }
+
+    if country:
+        params["countrycodes"] = country.lower()
+
+    headers = {
+        "User-Agent": "ATMR-Transport-App/1.0"
+    }
+
+    try:
+        # Nominatim a une limite de 1 requête par seconde
+        time.sleep(1.1)
+
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+
+        if not data or len(data) == 0:
+            app_logger.warning(f"⚠️ Nominatim: Aucune coordonnée trouvée pour '{address}'")
+            return None
+
+        result = data[0]
+        return {"lat": float(result["lat"]), "lon": float(result["lon"])}
+
+    except requests.RequestException as e:
+        app_logger.error(f"❌ Erreur Nominatim pour '{address}': {e}")
         return None
 
 # Defaults
@@ -216,15 +251,12 @@ def _get_redis():
         return None
 
 def _haversine_seconds(a: Tuple[float,float], b: Tuple[float,float], avg_kmh: float = 40.0) -> int:
+    # Import centralisé depuis shared.geo_utils
+    from shared.geo_utils import haversine_seconds
     lat1, lon1 = float(a[0]), float(a[1])
     lat2, lon2 = float(b[0]), float(b[1])
-    R = 6371.0
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-    x = math.sin(dphi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda/2)**2
-    dist_km = R * (2 * math.atan2(math.sqrt(x), math.sqrt(1 - x)))
-    return max(1, int((dist_km / avg_kmh) * 3600))
+    result = haversine_seconds(lat1, lon1, lat2, lon2, avg_kmh)
+    return max(1, result)
 
 def _round_coord(coord: Tuple[float,float], meters: int) -> Tuple[float,float]:
     """Arrondit une coordonnée sur une grille (≃meters) pour mieux hit le cache."""

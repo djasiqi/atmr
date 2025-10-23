@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
-import styles from "./Filters.module.css";
-import { fetchCompanyClients } from "../../../../../services/companyService";
+import React, { useState, useEffect } from 'react';
+import styles from './Filters.module.css';
+import { fetchCompanyClients } from '../../../../../services/companyService';
 
 const Filters = ({ filters, onFilterChange, companyId }) => {
   const [clients, setClients] = useState([]);
@@ -16,7 +16,7 @@ const Filters = ({ filters, onFilterChange, companyId }) => {
         const clientsData = await fetchCompanyClients();
         setClients(clientsData);
       } catch (error) {
-        console.error("Erreur lors du chargement des clients:", error);
+        console.error('Erreur lors du chargement des clients:', error);
       } finally {
         setLoadingClients(false);
       }
@@ -31,11 +31,11 @@ const Filters = ({ filters, onFilterChange, companyId }) => {
 
   const handleReset = () => {
     onFilterChange({
-      status: "",
-      client_id: "",
+      status: '',
+      client_id: '',
       year: new Date().getFullYear(),
-      month: "",
-      q: "",
+      month: '',
+      q: '',
       with_balance: false,
       with_reminders: false,
       page: 1,
@@ -45,33 +45,33 @@ const Filters = ({ filters, onFilterChange, companyId }) => {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
   const months = [
-    { value: "", label: "Tous les mois" },
-    { value: 1, label: "Janvier" },
-    { value: 2, label: "Février" },
-    { value: 3, label: "Mars" },
-    { value: 4, label: "Avril" },
-    { value: 5, label: "Mai" },
-    { value: 6, label: "Juin" },
-    { value: 7, label: "Juillet" },
-    { value: 8, label: "Août" },
-    { value: 9, label: "Septembre" },
-    { value: 10, label: "Octobre" },
-    { value: 11, label: "Novembre" },
-    { value: 12, label: "Décembre" },
+    { value: '', label: 'Tous les mois' },
+    { value: 1, label: 'Janvier' },
+    { value: 2, label: 'Février' },
+    { value: 3, label: 'Mars' },
+    { value: 4, label: 'Avril' },
+    { value: 5, label: 'Mai' },
+    { value: 6, label: 'Juin' },
+    { value: 7, label: 'Juillet' },
+    { value: 8, label: 'Août' },
+    { value: 9, label: 'Septembre' },
+    { value: 10, label: 'Octobre' },
+    { value: 11, label: 'Novembre' },
+    { value: 12, label: 'Décembre' },
   ];
 
   const statusOptions = [
-    { value: "", label: "Tous les statuts" },
-    { value: "draft", label: "Brouillon" },
-    { value: "sent", label: "Envoyée" },
-    { value: "partially_paid", label: "Partiellement payée" },
-    { value: "paid", label: "Payée" },
-    { value: "overdue", label: "En retard" },
-    { value: "cancelled", label: "Annulée" },
+    { value: '', label: 'Tous les statuts' },
+    { value: 'draft', label: 'Brouillon' },
+    { value: 'sent', label: 'Envoyée' },
+    { value: 'partially_paid', label: 'Partiellement payée' },
+    { value: 'paid', label: 'Payée' },
+    { value: 'overdue', label: 'En retard' },
+    { value: 'cancelled', label: 'Annulée' },
   ];
 
   return (
-    <div className={styles.filters}>
+    <>
       <div className={styles.filtersGrid}>
         {/* Recherche textuelle */}
         <div className={styles.filterGroup}>
@@ -80,8 +80,8 @@ const Filters = ({ filters, onFilterChange, companyId }) => {
             type="text"
             className={styles.filterInput}
             placeholder="N° facture, client..."
-            value={filters.q || ""}
-            onChange={(e) => handleFilterChange("q", e.target.value)}
+            value={filters.q || ''}
+            onChange={(e) => handleFilterChange('q', e.target.value)}
           />
         </div>
 
@@ -90,8 +90,8 @@ const Filters = ({ filters, onFilterChange, companyId }) => {
           <label className={styles.filterLabel}>Statut</label>
           <select
             className={styles.filterSelect}
-            value={filters.status || ""}
-            onChange={(e) => handleFilterChange("status", e.target.value)}
+            value={filters.status || ''}
+            onChange={(e) => handleFilterChange('status', e.target.value)}
           >
             {statusOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -106,16 +106,14 @@ const Filters = ({ filters, onFilterChange, companyId }) => {
           <label className={styles.filterLabel}>Client</label>
           <select
             className={styles.filterSelect}
-            value={filters.client_id || ""}
-            onChange={(e) => handleFilterChange("client_id", e.target.value)}
+            value={filters.client_id || ''}
+            onChange={(e) => handleFilterChange('client_id', e.target.value)}
             disabled={loadingClients}
           >
             <option value="">Tous les clients</option>
             {clients.map((client) => (
               <option key={client.id} value={client.id}>
-                {`${client.first_name || ""} ${
-                  client.last_name || ""
-                }`.trim() || client.username}
+                {`${client.first_name || ''} ${client.last_name || ''}`.trim() || client.username}
               </option>
             ))}
           </select>
@@ -126,8 +124,8 @@ const Filters = ({ filters, onFilterChange, companyId }) => {
           <label className={styles.filterLabel}>Année</label>
           <select
             className={styles.filterSelect}
-            value={filters.year || ""}
-            onChange={(e) => handleFilterChange("year", e.target.value)}
+            value={filters.year || ''}
+            onChange={(e) => handleFilterChange('year', e.target.value)}
           >
             {years.map((year) => (
               <option key={year} value={year}>
@@ -142,8 +140,8 @@ const Filters = ({ filters, onFilterChange, companyId }) => {
           <label className={styles.filterLabel}>Mois</label>
           <select
             className={styles.filterSelect}
-            value={filters.month || ""}
-            onChange={(e) => handleFilterChange("month", e.target.value)}
+            value={filters.month || ''}
+            onChange={(e) => handleFilterChange('month', e.target.value)}
           >
             {months.map((month) => (
               <option key={month.value} value={month.value}>
@@ -159,9 +157,7 @@ const Filters = ({ filters, onFilterChange, companyId }) => {
           <select
             className={styles.filterSelect}
             value={filters.per_page || 20}
-            onChange={(e) =>
-              handleFilterChange("per_page", parseInt(e.target.value))
-            }
+            onChange={(e) => handleFilterChange('per_page', parseInt(e.target.value))}
           >
             <option value={10}>10</option>
             <option value={20}>20</option>
@@ -178,9 +174,7 @@ const Filters = ({ filters, onFilterChange, companyId }) => {
             type="checkbox"
             id="with_balance"
             checked={filters.with_balance || false}
-            onChange={(e) =>
-              handleFilterChange("with_balance", e.target.checked)
-            }
+            onChange={(e) => handleFilterChange('with_balance', e.target.checked)}
           />
           <label htmlFor="with_balance">Avec solde &gt; 0</label>
         </div>
@@ -190,9 +184,7 @@ const Filters = ({ filters, onFilterChange, companyId }) => {
             type="checkbox"
             id="with_reminders"
             checked={filters.with_reminders || false}
-            onChange={(e) =>
-              handleFilterChange("with_reminders", e.target.checked)
-            }
+            onChange={(e) => handleFilterChange('with_reminders', e.target.checked)}
           />
           <label htmlFor="with_reminders">Avec rappels en cours</label>
         </div>
@@ -215,7 +207,7 @@ const Filters = ({ filters, onFilterChange, companyId }) => {
           Appliquer
         </button>
       </div>
-    </div>
+    </>
   );
 };
 

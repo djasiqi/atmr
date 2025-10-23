@@ -1,0 +1,74 @@
+/* EmptyState.module.css */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl, 3rem) var(--spacing-lg, 2rem);
+  min-height: 300px;
+  background: var(--bg-primary, #ffffff);
+  border-radius: var(--radius-lg, 12px);
+  border: 2px dashed var(--border-light, #e0e0e0);
+  margin: var(--spacing-lg, 2rem) 0;
+}
+
+.emptyIcon {
+  font-size: 4rem;
+  margin-bottom: var(--spacing-md, 1rem);
+  opacity: 0.6;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.emptyTitle {
+  font-size: var(--font-lg, 1.25rem);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--text-primary, #1a1a1a);
+  margin: 0 0 var(--spacing-sm, 0.5rem) 0;
+  text-align: center;
+}
+
+.emptyMessage {
+  font-size: var(--font-sm, 0.875rem);
+  color: var(--text-secondary, #666666);
+  margin: 0 0 var(--spacing-lg, 2rem) 0;
+  text-align: center;
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+.emptyAction {
+  margin-top: var(--spacing-md, 1rem);
+}
+
+.emptyAction button {
+  padding: var(--spacing-sm, 0.75rem) var(--spacing-lg, 2rem);
+  background: var(--brand-primary, #007bff);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--font-sm, 0.875rem);
+  font-weight: var(--font-weight-medium, 500);
+  cursor: pointer;
+  transition: all var(--transition-base, 0.2s ease);
+}
+
+.emptyAction button:hover {
+  background: var(--brand-hover, #0056b3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.emptyAction button:active {
+  transform: translateY(0);
+}
+

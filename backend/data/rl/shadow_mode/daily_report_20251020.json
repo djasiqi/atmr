@@ -1,0 +1,27 @@
+{
+  "date": "20251020",
+  "summary": {
+    "total_predictions": 0,
+    "total_comparisons": 0,
+    "agreements": 0,
+    "agreement_rate": 0.0,
+    "avg_confidence": 0.0
+  },
+  "action_distribution": {
+    "dqn": {
+      "assigns": 0,
+      "waits": 0,
+      "assign_rate": 0.0
+    },
+    "actual": {
+      "assigns": 0,
+      "waits": 0,
+      "assign_rate": 0.0
+    }
+  },
+  "confidence_stats": {
+    "mean": 0.0,
+    "high_confidence_predictions": 0,
+    "low_confidence_predictions": 0
+  }
+}

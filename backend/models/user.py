@@ -29,10 +29,10 @@ class User(db.Model):
     username = Column(String(100), nullable=False, unique=True, index=True)
     first_name = Column(String(100), nullable=True)
     last_name = Column(String(100), nullable=True)
-    email = Column(String(100), nullable=True, unique=True, index=True)
+    email = Column(String(255), nullable=True, unique=True, index=True)
 
     # ↓ Champs présents pour tous les rôles (client, driver, etc.)
-    phone = Column(String(20), nullable=True)
+    phone = Column(String(255), nullable=True)
     address = Column(String(200), nullable=True)
     birth_date = Column(Date, nullable=True)
     gender = Column(SAEnum(GenderEnum, name="gender"), nullable=True)

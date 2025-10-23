@@ -1,7 +1,7 @@
 // C:\Users\jasiq\atmr\frontend\src\pages\driver\components\Dashboard\DriverTable.jsx
-import React from "react";
+import React from 'react';
 import styles from '../../Dashboard/DriverDashboard.module.css';
-import { FiRepeat, FiUserX, FiUserCheck } from "react-icons/fi";
+import { FiRepeat, FiUserX, FiUserCheck } from 'react-icons/fi';
 
 // La prop "onToggleAvailability" a été retirée
 const DriverTable = ({ driver, loading, onToggle, onToggleType }) => {
@@ -21,23 +21,23 @@ const DriverTable = ({ driver, loading, onToggle, onToggleType }) => {
       <tbody>
         {driver.map((drv) => (
           <tr key={drv.id}>
-            <td>{drv.username}</td>
+            <td className={styles.driverNameCell}>{drv.username}</td>
             <td>{drv.driver_type === 'EMERGENCY' ? 'Urgence' : 'Régulier'}</td>
-            <td>{drv.is_available ? "Disponible" : "Indisponible"}</td>
+            <td>{drv.is_available ? 'Disponible' : 'Indisponible'}</td>
             <td>
               {/* Bouton pour changer le TYPE */}
-              <button 
-                onClick={() => onToggleType(drv.id)} 
-                title="Changer le type (Régulier/Urgence)" 
+              <button
+                onClick={() => onToggleType(drv.id)}
+                title="Changer le type (Régulier/Urgence)"
                 className={styles.actionButton}
               >
                 <FiRepeat />
               </button>
 
               {/* Bouton pour changer le STATUT DU COMPTE */}
-              <button 
-                onClick={() => onToggle(drv.id, drv.is_active)} 
-                title={drv.is_active ? "Désactiver le compte" : "Activer le compte"} 
+              <button
+                onClick={() => onToggle(drv.id, drv.is_active)}
+                title={drv.is_active ? 'Désactiver le compte' : 'Activer le compte'}
                 className={styles.actionButton}
               >
                 {drv.is_active ? <FiUserX /> : <FiUserCheck />}

@@ -1,0 +1,103 @@
+{
+  "input_file": "data/ml/training_data.csv",
+  "n_samples": 5000,
+  "n_features": 17,
+  "statistics": {
+    "total_samples": 5000,
+    "features": [
+      "time_of_day",
+      "day_of_week",
+      "month",
+      "distance_km",
+      "duration_seconds",
+      "is_medical",
+      "is_urgent",
+      "is_round_trip",
+      "booking_priority",
+      "driver_total_bookings",
+      "traffic_density",
+      "weather_factor",
+      "booking_id",
+      "driver_id",
+      "assignment_id",
+      "company_id",
+      "actual_delay_minutes"
+    ],
+    "missing_values": {
+      "time_of_day": 0,
+      "day_of_week": 0,
+      "month": 0,
+      "distance_km": 0,
+      "duration_seconds": 0,
+      "is_medical": 0,
+      "is_urgent": 0,
+      "is_round_trip": 0,
+      "booking_priority": 0,
+      "driver_total_bookings": 0,
+      "traffic_density": 0,
+      "weather_factor": 0,
+      "booking_id": 0,
+      "driver_id": 0,
+      "assignment_id": 0,
+      "company_id": 0,
+      "actual_delay_minutes": 0
+    },
+    "data_types": {
+      "time_of_day": "int64",
+      "day_of_week": "int64",
+      "month": "int64",
+      "distance_km": "float64",
+      "duration_seconds": "int64",
+      "is_medical": "float64",
+      "is_urgent": "float64",
+      "is_round_trip": "float64",
+      "booking_priority": "float64",
+      "driver_total_bookings": "int64",
+      "traffic_density": "float64",
+      "weather_factor": "float64",
+      "booking_id": "int64",
+      "driver_id": "int64",
+      "assignment_id": "int64",
+      "company_id": "int64",
+      "actual_delay_minutes": "float64"
+    },
+    "target_stats": {
+      "mean": 6.278052,
+      "median": 5.78,
+      "std": 4.826796755476631,
+      "min": -6.52,
+      "max": 57.48,
+      "q1": 3.15,
+      "q3": 8.7
+    }
+  },
+  "correlations": {
+    "distance_km": 0.6194733707785339,
+    "duration_seconds": 0.5854159993350843,
+    "traffic_density": 0.35694497691617816,
+    "weather_factor": 0.29417020446086134,
+    "is_urgent": 0.05744902114903348,
+    "booking_priority": 0.023796834555845917,
+    "month": 0.00583448664674071,
+    "is_round_trip": -0.006953071441692954,
+    "is_medical": -0.0089147757515633,
+    "time_of_day": -0.04680193357913668,
+    "day_of_week": -0.14031790511669917,
+    "driver_total_bookings": -0.1993064566730954
+  },
+  "outliers": {
+    "iqr": {
+      "Q1": 3.15,
+      "Q3": 8.7,
+      "IQR": 5.549999999999999,
+      "lower_bound": -5.174999999999999,
+      "upper_bound": 17.025,
+      "n_outliers": 138,
+      "pct_outliers": 2.76
+    },
+    "zscore": {
+      "n_outliers": 63,
+      "pct_outliers": 1.26
+    }
+  }
+}

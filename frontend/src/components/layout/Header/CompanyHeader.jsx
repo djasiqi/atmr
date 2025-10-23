@@ -1,33 +1,40 @@
 // src/components/layout/Header/CompanyHeader.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useLocation } from "react-router-dom";
-import styles from "./CompanyHeader.module.css";
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useParams, useLocation } from 'react-router-dom';
+import styles from './CompanyHeader.module.css';
 
-import useCompanyData from "../../../hooks/useCompanyData";
-import useDispatchDelays from "../../../hooks/useDispatchDelays";
-import { logoutUser } from "../../../utils/apiClient";
+import useCompanyData from '../../../hooks/useCompanyData';
+import useDispatchDelays from '../../../hooks/useDispatchDelays';
+import { logoutUser } from '../../../utils/apiClient';
 
-const API_BASE = (process.env.REACT_APP_API_BASE_URL || "").replace(/\/$/, "");
+const API_BASE = (process.env.REACT_APP_API_BASE_URL || '').replace(/\/$/, '');
 
-function getInitials(name = "") {
+function getInitials(name = '') {
   const parts = name.trim().split(/\s+/).slice(0, 2);
-  return parts.map((p) => p[0]?.toUpperCase() || "").join("") || "CO";
+  return parts.map((p) => p[0]?.toUpperCase() || '').join('') || 'CO';
 }
 
 function resolveLogoUrl(url) {
-  if (!url) return "";
+  if (!url) return '';
   if (/^https?:\/\//i.test(url)) return url;
 
-  // Si c'est un chemin d'upload, construire l'URL complète sans /api
-  if (url.startsWith("/uploads/")) {
-    const baseUrl = (process.env.REACT_APP_API_BASE_URL || "").replace(
-      /\/api.*$/,
-      ""
-    );
-    return `${baseUrl}${url}`;
+  // ✅ En mode dev (localhost:3000), retourner le chemin relatif pour utiliser le proxy
+  const isDevelopment =
+    typeof window !== 'undefined' &&
+    window.location &&
+    /localhost:3000$/i.test(window.location.host);
+
+  if (url.startsWith('/uploads/') || url.startsWith('/')) {
+    // En dev, utiliser le chemin relatif (proxy)
+    if (isDevelopment) {
+      return url;
+    }
+    // En prod, construire l'URL complète
+    const baseUrl = (process.env.REACT_APP_API_BASE_URL || '').replace(/\/api.*$/, '');
+    return baseUrl ? `${baseUrl}${url}` : url;
   }
 
-  return `${API_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
+  return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`;
 }
 
 const CompanyHeader = () => {
@@ -46,13 +53,13 @@ const CompanyHeader = () => {
   const company = companyData.company || null;
 
   const [logoOk, setLogoOk] = useState(true);
-  const name = company?.name || "Entreprise";
+  const name = company?.name || 'Entreprise';
 
   const logoSrc = useMemo(() => {
     const abs = resolveLogoUrl(company?.logo_url);
-    if (!abs) return "";
+    if (!abs) return '';
     // Ajouter un timestamp pour éviter le cache du navigateur
-    const sep = abs.includes("?") ? "&" : "?";
+    const sep = abs.includes('?') ? '&' : '?';
     return `${abs}${sep}v=${Date.now()}`;
   }, [company?.logo_url]);
 
@@ -61,20 +68,14 @@ const CompanyHeader = () => {
     setLogoOk(true);
   }, [company?.logo_url]);
 
-  const homeHref = routePublicId
-    ? `/dashboard/company/${routePublicId}`
-    : "/dashboard/company";
+  const homeHref = routePublicId ? `/dashboard/company/${routePublicId}` : '/dashboard/company';
 
   // 🆕 Hook pour les retards (refresh toutes les 2 minutes)
   const { delayCount, hasCriticalDelays } = useDispatchDelays(null, 120000);
 
   return (
     <header className={styles.header} role="banner">
-      <Link
-        to={homeHref}
-        className={styles.brand}
-        aria-label="Tableau de bord entreprise"
-      >
+      <Link to={homeHref} className={styles.brand} aria-label="Tableau de bord entreprise">
         <div className={styles.logoWrap}>
           {logoSrc && logoOk ? (
             <img
@@ -97,14 +98,10 @@ const CompanyHeader = () => {
         {delayCount > 0 && (
           <Link
             to={`/dashboard/company/${routePublicId}/dispatch/monitor`}
-            className={`${styles.delayBadge} ${
-              hasCriticalDelays ? styles.critical : ""
-            }`}
+            className={`${styles.delayBadge} ${hasCriticalDelays ? styles.critical : ''}`}
             title={`${delayCount} retard(s) détecté(s) - Cliquer pour voir les détails`}
           >
-            <span className={styles.badgeIcon}>
-              {hasCriticalDelays ? "🚨" : "⚠️"}
-            </span>
+            <span className={styles.badgeIcon}>{hasCriticalDelays ? '🚨' : '⚠️'}</span>
             <span className={styles.badgeCount}>{delayCount}</span>
           </Link>
         )}

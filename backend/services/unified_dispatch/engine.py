@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import logging
-import threading
 from collections.abc import Callable, Iterable
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import asdict
 from datetime import UTC, date, datetime
 from typing import Any, Dict, List, cast
@@ -30,8 +29,8 @@ def _to_date_ymd(s: str) -> date:
         if len(s) == 10 and s[4] == "-" and s[7] == "-":
             return date.fromisoformat(s)
         return datetime.fromisoformat(s).date()
-    except Exception:
-        raise ValueError(f"for_date invalide: {s!r} (attendu 'YYYY-MM-DD')")
+    except Exception as err:
+        raise ValueError(f"for_date invalide: {s!r} (attendu 'YYYY-MM-DD')") from err
 
 def _safe_int(v: Any) -> int | None:
     """
@@ -68,32 +67,117 @@ def _begin_tx():
     - Si une transaction est déjà ouverte (implicitement ou non), on utilise un savepoint (begin_nested).
     - Sinon, on ouvre une transaction normale (begin).
     """
-    if _in_tx():
-        cm = db.session.begin_nested()
-    else:
-        cm = db.session.begin()
+    cm = db.session.begin_nested() if _in_tx() else db.session.begin()
     with cm:
         yield
 
 
 # ------------------------------------------------------------------
-# Simple verrou "un run par jour et par entreprise"
-# clé = (company_id, day_str "YYYY-MM-DD")
-_DAY_LOCKS: dict[tuple[int, str], threading.Lock] = {}
+# Verrous distribués Redis pour environnement multi-workers
+# clé = dispatch:lock:{company_id}:{day_str}
 
 def _acquire_day_lock(company_id: int, day_str: str) -> bool:
-    key = (int(company_id), str(day_str))
-    lock = _DAY_LOCKS.get(key)
-    if lock is None:
-        lock = threading.Lock()
-        _DAY_LOCKS[key] = lock
-    return lock.acquire(blocking=False)
+    """Acquiert un verrou distribué Redis pour éviter les runs concurrents."""
+    from ext import redis_client
+
+    key = f"dispatch:lock:{company_id}:{day_str}"
+    try:
+        # Utiliser SET avec NX (Not eXists) et EX (EXpire) pour créer un verrou avec TTL
+        result = redis_client.set(key, "1", nx=True, ex=300)  # TTL 5 minutes
+        return result is True
+    except Exception as e:
+        logger.warning("[Engine] Failed to acquire Redis lock for company=%s day=%s: %s",
+                      company_id, day_str, e)
+        return False
 
 def _release_day_lock(company_id: int, day_str: str) -> None:
-    key = (int(company_id), str(day_str))
-    lock = _DAY_LOCKS.get(key)
-    if lock and lock.locked():
-        lock.release()
+    """Libère le verrou distribué Redis."""
+    from ext import redis_client
+
+    key = f"dispatch:lock:{company_id}:{day_str}"
+    try:
+        redis_client.delete(key)
+    except Exception as e:
+        logger.warning("[Engine] Failed to release Redis lock for company=%s day=%s: %s",
+                      company_id, day_str, e)
+
+def _analyze_unassigned_reasons(problem: Dict[str, Any], assignments: List[Any], unassigned_ids: List[int]) -> Dict[int, List[str]]:
+    """
+    Analyse les raisons détaillées pour lesquelles certaines courses n'ont pas pu être assignées.
+    """
+    reasons = {}
+    bookings = problem.get("bookings", [])
+    drivers = problem.get("drivers", [])
+
+    # Créer des dictionnaires pour un accès rapide
+    bookings_dict = {b.id: b for b in bookings}
+    _drivers_dict = {d.id: d for d in drivers}
+    _assigned_booking_ids = {a.booking_id for a in assignments}
+
+    for booking_id in unassigned_ids:
+        booking = bookings_dict.get(booking_id)
+        if not booking:
+            reasons[booking_id] = ["booking_not_found"]
+            continue
+
+        booking_reasons = []
+
+        # Vérifier la disponibilité des chauffeurs
+        available_drivers = [d for d in drivers if getattr(d, 'is_available', True)]
+        if not available_drivers:
+            booking_reasons.append("no_driver_available")
+
+        # Vérifier la capacité
+        if hasattr(booking, 'capacity_required') and booking.capacity_required:
+            suitable_drivers = [d for d in available_drivers
+                              if hasattr(d, 'capacity') and d.capacity >= booking.capacity_required]
+            if not suitable_drivers:
+                booking_reasons.append("capacity_exceeded")
+
+        # Vérifier les fenêtres horaires
+        if hasattr(booking, 'scheduled_time') and booking.scheduled_time:
+            # Vérifier si l'heure est dans une fenêtre de travail
+            booking_time = booking.scheduled_time
+            working_drivers = []
+            for driver in available_drivers:
+                if hasattr(driver, 'work_windows') and driver.work_windows:
+                    for window in driver.work_windows:
+                        if window.start <= booking_time <= window.end:
+                            working_drivers.append(driver)
+                            break
+
+            if not working_drivers:
+                booking_reasons.append("time_window_infeasible")
+
+        # Vérifier les contraintes géographiques
+        if hasattr(booking, 'pickup_lat') and hasattr(booking, 'pickup_lon'):
+            # Vérifier si des chauffeurs sont dans la zone
+            nearby_drivers = []
+            for driver in available_drivers:
+                if hasattr(driver, 'current_lat') and hasattr(driver, 'current_lon'):
+                    # Calculer la distance (simplifié)
+                    distance = ((booking.pickup_lat - driver.current_lat) ** 2 +
+                              (booking.pickup_lon - driver.current_lon) ** 2) ** 0.5
+                    if distance < 0.1:  # ~10km
+                        nearby_drivers.append(driver)
+
+            if not nearby_drivers:
+                booking_reasons.append("no_nearby_drivers")
+
+        # Vérifier les contraintes d'urgence
+        if hasattr(booking, 'is_emergency') and booking.is_emergency:
+            emergency_drivers = [d for d in available_drivers
+                               if hasattr(d, 'can_handle_emergency') and d.can_handle_emergency]
+            if not emergency_drivers:
+                booking_reasons.append("no_emergency_drivers")
+
+        # Si aucune raison spécifique n'a été trouvée
+        if not booking_reasons:
+            booking_reasons.append("unknown_constraint")
+
+        reasons[booking_id] = booking_reasons
+
+    return reasons
 
 
 
@@ -112,10 +196,8 @@ def run(
     Run the dispatch optimization for a company on a specific date.
     Creates a DispatchRun record and links assignments to it.
     """
-    try:
+    with suppress(Exception):
         db.session.rollback()
-    except Exception:
-        pass
 
     company: Company | None = Company.query.get(company_id)
     if not company:
@@ -128,15 +210,22 @@ def run(
     # 1) Configuration
     s = custom_settings or settings.for_company(company)
     if overrides:
+        logger.info("[Engine] Applying overrides: %s", list(overrides.keys()))
         try:
             s = ud_settings.merge_overrides(s, overrides)
-        except Exception:
-            logger.warning("[Engine] merge_overrides failed; using base settings", exc_info=True)
+            # Vérifier que les paramètres ont bien été appliqués
+            if hasattr(s, 'heuristic'):
+                logger.info("[Engine] After merge - heuristic.driver_load_balance=%s, proximity=%s",
+                           s.heuristic.driver_load_balance, s.heuristic.proximity)
+            if hasattr(s, 'fairness'):
+                logger.info("[Engine] After merge - fairness.fairness_weight=%s",
+                           s.fairness.fairness_weight)
+        except Exception as e:
+            logger.exception("[Engine] merge_overrides failed with error: %s", e)
+            logger.warning("[Engine] Using base settings due to merge failure")
     if allow_emergency is not None:
-        try:
+        with suppress(Exception):
             s.emergency.allow_emergency_drivers = bool(allow_emergency)
-        except Exception:
-            pass
     allow_emg = bool(getattr(getattr(s, "emergency", None), "allow_emergency_drivers", True))
 
     logger.info(
@@ -145,7 +234,7 @@ def run(
     )
 
     # 1.b Verrou d'idempotence par (entreprise, jour)
-    day_str = (for_date or datetime.now().strftime("%Y-%m-%d"))
+    day_str = (for_date or datetime.now(UTC).strftime("%Y-%m-%d"))
     if not _acquire_day_lock(company_id, day_str):
         logger.warning("[Engine] Run skipped (locked) company=%s day=%s", company_id, day_str)
         return {
@@ -162,7 +251,7 @@ def run(
             day_date = _to_date_ymd(day_str)
         except Exception:
             logger.warning("[Engine] Invalid day_str=%r, fallback to today", day_str)
-            day_date = date.today()
+            day_date = datetime.now(UTC).date()
 
         logger.info(f"[Engine] Using day_date: {day_date} for dispatch run")
 
@@ -358,6 +447,95 @@ def run(
                     _extend_unique(h_res.assignments)
                     logger.info("[Engine] Heuristic P1: %d assignés, %d restants",
                                 len(h_res.assignments), len(h_res.unassigned_booking_ids))
+
+                    # 🧠 Optimisation RL (si modèle disponible)
+                    if mode == "auto" and len(final_assignments) > 0:
+                        try:
+                            from services.unified_dispatch.rl_optimizer import RLDispatchOptimizer
+
+                            logger.info("[Engine] 🧠 Tentative d'optimisation RL des assignations...")
+
+                            optimizer = RLDispatchOptimizer(
+                                model_path="data/rl/models/dispatch_optimized_v2.pth",  # 🆕 v2 (23 dispatches, gap~2)
+                                max_swaps=15,  # Plus de swaps pour gap ≤1
+                                min_improvement=0.3,  # Accepter plus facilement les améliorations
+                                config_context="production",  # 🆕 Sprint 1: Configuration optimale
+                            )
+
+                            if optimizer.is_available():
+                                # Convertir assignments en format optimisable
+                                initial = [
+                                    {
+                                        "booking_id": a.booking_id,
+                                        "driver_id": a.driver_id,
+                                    }
+                                    for a in final_assignments
+                                ]
+
+                                # Optimiser
+                                optimized = optimizer.optimize_assignments(
+                                    initial_assignments=initial,
+                                    bookings=problem["bookings"],
+                                    drivers=regs,
+                                )
+
+                                # Appliquer les changements
+                                for i, a in enumerate(final_assignments):
+                                    new_driver_id = optimized[i]["driver_id"]
+                                    if a.driver_id != new_driver_id:
+                                        logger.info(
+                                            "[Engine] RL swap: Booking %d → Driver %d (was %d)",
+                                            a.booking_id,
+                                            new_driver_id,
+                                            a.driver_id,
+                                        )
+                                        a.driver_id = new_driver_id
+
+                                logger.info("[Engine] ✅ Optimisation RL terminée")
+                            else:
+                                logger.info("[Engine] ⏳ Optimiseur RL non disponible (modèle non trouvé)")
+
+                        except Exception as e:
+                            logger.warning("[Engine] ⚠️ Optimisation RL échouée: %s", e)
+                            # Continuer avec l'heuristique seule
+
+                    # ⚠️ Vérification d'équité : TEMPORAIREMENT DÉSACTIVÉE
+                    # Le solver OR-Tools échoue avec "No solution" à cause de contraintes trop strictes.
+                    # L'heuristique fonctionne et assigne tout, même si la répartition n'est pas parfaite.
+                    # TODO : Améliorer l'heuristique pour mieux équilibrer dès le départ
+                    if False:  # Désactivé temporairement - voir commentaires ci-dessus
+                        # Calculer la charge par chauffeur
+                        driver_loads = {}
+                        for a in final_assignments:
+                            did = getattr(a, 'driver_id', None)
+                            if did:
+                                driver_loads[did] = driver_loads.get(did, 0) + 1
+
+                        if driver_loads:
+                            max_load = max(driver_loads.values())
+                            min_load = min(driver_loads.values())
+                            load_gap = max_load - min_load
+
+                            # Si écart > 2 courses ET fairness activé, forcer solver
+                            fairness_threshold = 2
+                            if load_gap > fairness_threshold and getattr(s.fairness, 'enabled', True):
+                                logger.warning(
+                                    "[Engine] ⚖️ Équité insatisfaisante après heuristique : écart=%d courses (max=%d, min=%d). "
+                                    "Relancement avec solver pour optimisation globale...",
+                                    load_gap, max_load, min_load
+                                )
+                                # Vider final_assignments pour que le solver réassigne TOUT
+                                final_assignments.clear()
+                                assigned_set.clear()
+                                # Recréer un problème vierge pour le solver (sans état précédent)
+                                prob_regs = data.build_vrptw_problem(
+                                    company, problem["bookings"], regs, settings=s,
+                                    base_time=problem.get("base_time")
+                                )
+                                # Forcer remaining_ids à contenir TOUTES les courses
+                                h_res.unassigned_booking_ids = [b.id for b in prob_regs.get("bookings", [])]
+                                logger.info("[Engine] ♻️ Problème recréé from scratch pour solver: %d courses", len(prob_regs.get("bookings", [])))
+
                     if mode == "heuristic_only":
                         _apply_and_emit(company, final_assignments, dispatch_run_id=(int(cast(Any, dispatch_run.id)) if dispatch_run and getattr(dispatch_run, "id", None) is not None else None))
                         dispatch_run.mark_completed({
@@ -375,6 +553,7 @@ def run(
                     logger.exception("[Engine] Heuristic pass-1 failed")
 
             remaining_ids = remaining_ids_from(prob_regs)
+
             if remaining_ids and mode in ("auto", "solver_only") and getattr(s.features, "enable_solver", True):
                 try:
                     s_sub = _filter_problem(prob_regs, remaining_ids, s)
@@ -419,7 +598,8 @@ def run(
 
         # 6.c Pass 2 — urgences si nécessaire
         remaining_all = remaining_ids_from(problem)
-        allow_emg2 = allow_emg if allow_emergency is None else bool(allow_emergency)
+        # ✅ Toujours utiliser allow_emg (calculé depuis settings + overrides) au lieu de allow_emergency (param brut)
+        allow_emg2 = allow_emg
         logger.info("[Engine] Checking for Pass 2: remaining=%d, allow_emergency=%s, emergency_drivers=%d",
                     len(remaining_all), allow_emg2, len(emgs))
 
@@ -507,15 +687,37 @@ def run(
         )
         # 8) Résumé & debug + 9) Finir le run
         rem = remaining_ids_from(problem)
+
+        # Analyser les raisons détaillées de non-assignation
+        unassigned_reasons = _analyze_unassigned_reasons(problem, final_assignments, rem)
+
+        # Mesures de performance agrégées si disponibles
+        h_calls = 0
+        h_avg = 0
+        h_time = 0
+        if h_res is not None:
+            with suppress(Exception):
+                h_calls = int(getattr(h_res, 'osrm_calls', 0))
+                h_avg = int(getattr(h_res, 'osrm_avg_latency_ms', 0))
+                h_time = int(getattr(h_res, 'heuristic_time_ms', 0))
+        s_time = 0
+        if s_res is not None:
+            with suppress(Exception):
+                s_time = int(getattr(s_res, 'solver_time_ms', 0))
+
         metrics = {
             "assignments_count": len(final_assignments),
             "unassigned_count": len(rem),
             "mode": mode,
             "regular_first": regular_first,
             "allow_emergency": allow_emg,
+            # Métriques enrichies
+            "unassigned_reasons": unassigned_reasons,
+            "osrm_calls": h_calls,
+            "osrm_avg_latency_ms": h_avg,
+            "heuristic_time_ms": h_time,
+            "solver_time_ms": s_time,
         }
-        # reasons placeholder (enrichissable plus tard)
-        unassigned_reasons = {bid: ["unknown"] for bid in rem}
 
         # Sérialiser les entités réellement utilisées par le solver
         ser_bookings = [_serialize_booking(b) for b in problem.get("bookings", [])]
@@ -558,16 +760,35 @@ def run(
             logger.exception("[Engine] Failed to complete DispatchRun id=%s", getattr(dispatch_run, "id", None))
 
         # 10) Collecter les métriques analytics (asynchrone, ne bloque pas le dispatch)
-        try:
+        with suppress(Exception):
             from services.analytics.metrics_collector import collect_dispatch_metrics
-            collect_dispatch_metrics(
-                dispatch_run_id=drid,
-                company_id=company_id,
-                day=for_date if isinstance(for_date, date) else _to_date_ymd(for_date or day_str)
-            )
+            if drid is not None:
+                collect_dispatch_metrics(
+                    dispatch_run_id=drid,
+                    company_id=company_id,
+                    day=for_date if isinstance(for_date, date) else _to_date_ymd(for_date or day_str)
+                )
+
+        # 11) Collecter les métriques de qualité du dispatch
+        try:
+            from services.unified_dispatch.dispatch_metrics import collect_dispatch_metrics as collect_quality_metrics
+            if drid is not None:
+                quality_metrics = collect_quality_metrics(
+                    dispatch_run_id=drid,
+                    company_id=company_id,
+                    day=for_date if isinstance(for_date, date) else _to_date_ymd(for_date or day_str)
+                )
+                logger.info(
+                    "[Engine] Dispatch quality score: %.1f/100 (assignment: %.1f%%, on-time: %.1f%%, pooling: %.1f%%)",
+                    quality_metrics.quality_score,
+                    quality_metrics.assignment_rate,
+                    (quality_metrics.on_time_bookings / max(1, quality_metrics.total_bookings)) * 100,
+                    quality_metrics.pooling_rate
+                )
+                # Ajouter au debug_info pour le retour API
+                debug_info["quality_metrics"] = quality_metrics.to_summary()
         except Exception as e:
-            logger.warning("[Engine] Failed to collect analytics metrics: %s", e)
-            # Ne pas bloquer le dispatch si la collecte échoue
+            logger.warning("[Engine] Failed to collect quality metrics: %s", e)
 
         return {
             "assignments": [_serialize_assignment(a) for a in final_assignments],
@@ -669,10 +890,8 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
         return
 
     # Session propre avant les writes
-    try:
+    with suppress(Exception):
         db.session.rollback()
-    except Exception:
-        pass
 
     # 1) Apply en DB
     try:
@@ -692,10 +911,8 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
         )
     except Exception:
         logger.exception("[Engine] DB apply failed")
-        try:
+        with suppress(Exception):
             db.session.rollback()
-        except Exception:
-            pass
         raise
 
     # 2) Notifications par booking (ne touche pas à la session sauf pour le .get)
@@ -704,26 +921,18 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
         bid = getattr(a, "booking_id", None)
         if bid is None:
             continue
-        try:
+        with suppress(Exception):
             b = Booking.query.get(bid)
-        except Exception:
-            b = None
-        if not b:
-            continue
-        try:
-            notify_booking_assigned(b)
-            applied_count += 1
-        except Exception as e:
-            logger.error("[Engine] Notification/socket error: %s", e)
+            if b:
+                notify_booking_assigned(b)
+                applied_count += 1
 
     # 3) Notification globale de fin de run
     try:
         if dispatch_run_id:
             # Assainir la session avant un SELECT (évite InFailedSqlTransaction)
-            try:
+            with suppress(Exception):
                 db.session.rollback()
-            except Exception:
-                pass
 
             # Charger le DispatchRun proprement
             dr = None
@@ -752,8 +961,9 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
                 applied_count,
                 date_str,
             )
-    except Exception as e:
-        logger.error("[Engine] Notification/socket error: %s", e)
+    except Exception:
+        with suppress(Exception):
+            logger.error("[Engine] Notification/socket error")
 
 
 def _serialize_assignment(a: Any) -> Dict[str, Any]:

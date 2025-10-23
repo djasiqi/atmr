@@ -58,8 +58,8 @@ const ScheduleReturnModal = ({ isOpen, onClose, reservation, onConfirm }) => {
   if (!isOpen) return null;
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content modal-md" onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h2 className={styles.title}>🕐 Planifier l'heure de retour</h2>
           <button
@@ -71,7 +71,7 @@ const ScheduleReturnModal = ({ isOpen, onClose, reservation, onConfirm }) => {
           </button>
         </div>
 
-        <div className={styles.body}>
+        <div className="modal-body">
           {reservation && (
             <div className={styles.reservationInfo}>
               <div className={styles.infoRow}>
@@ -97,52 +97,52 @@ const ScheduleReturnModal = ({ isOpen, onClose, reservation, onConfirm }) => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className={styles.form}>
-            <div className={styles.formGroup}>
-              <label htmlFor="return-date" className={styles.label}>
-                Date du retour *
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label htmlFor="return-date" className="form-label required">
+                Date du retour
               </label>
               <input
                 type="date"
                 id="return-date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className={styles.input}
+                className="form-input"
                 required
                 disabled={loading}
               />
             </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="return-time" className={styles.label}>
-                Heure du retour *
+            <div className="form-group">
+              <label htmlFor="return-time" className="form-label required">
+                Heure du retour
               </label>
               <input
                 type="time"
                 id="return-time"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
-                className={styles.input}
+                className="form-input"
                 required
                 disabled={loading}
               />
-              <small className={styles.hint}>
+              <small className="form-hint">
                 ℹ️ Heure approximative. Vous pourrez ajuster si nécessaire.
               </small>
             </div>
 
-            <div className={styles.actions}>
+            <div className="modal-footer">
               <button
                 type="button"
                 onClick={onClose}
-                className={styles.cancelButton}
+                className="btn btn-secondary"
                 disabled={loading}
               >
                 Annuler
               </button>
               <button
                 type="submit"
-                className={styles.confirmButton}
+                className="btn btn-primary"
                 disabled={loading}
               >
                 {loading ? "Planification..." : "Confirmer l'heure"}

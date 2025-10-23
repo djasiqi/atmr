@@ -1,0 +1,235 @@
+{
+  "best_reward": 202.091545676051,
+  "best_trial_number": 12,
+  "best_params": {
+    "hidden_size_1": 256,
+    "hidden_size_2": 512,
+    "hidden_size_3": 64,
+    "dropout": 0.15687881439894807,
+    "learning_rate": 0.006741219802132525,
+    "gamma": 0.939242607969078,
+    "batch_size": 64,
+    "epsilon_start": 0.9161685307531425,
+    "epsilon_end": 0.056652770250985904,
+    "epsilon_decay": 0.997120337545582,
+    "buffer_size": 50000,
+    "target_update_freq": 16,
+    "num_drivers": 11,
+    "max_bookings": 10
+  },
+  "n_trials_total": 50,
+  "n_trials_completed": 16,
+  "n_trials_pruned": 34,
+  "optimization_history": [
+    {
+      "trial": 12,
+      "value": 202.091545676051,
+      "params": {
+        "hidden_size_1": 256,
+        "hidden_size_2": 512,
+        "hidden_size_3": 64,
+        "dropout": 0.15687881439894807,
+        "learning_rate": 0.006741219802132525,
+        "gamma": 0.939242607969078,
+        "batch_size": 64,
+        "epsilon_start": 0.9161685307531425,
+        "epsilon_end": 0.056652770250985904,
+        "epsilon_decay": 0.997120337545582,
+        "buffer_size": 50000,
+        "target_update_freq": 16,
+        "num_drivers": 11,
+        "max_bookings": 10
+      },
+      "state": "COMPLETE"
+    },
+    {
+      "trial": 13,
+      "value": 115.464615328226,
+      "params": {
+        "hidden_size_1": 256,
+        "hidden_size_2": 512,
+        "hidden_size_3": 64,
+        "dropout": 0.15822948191878142,
+        "learning_rate": 0.009811513395034801,
+        "gamma": 0.9449817345731945,
+        "batch_size": 64,
+        "epsilon_start": 0.9236103671567198,
+        "epsilon_end": 0.05741273284254725,
+        "epsilon_decay": 0.9969525492765041,
+        "buffer_size": 50000,
+        "target_update_freq": 15,
+        "num_drivers": 10,
+        "max_bookings": 10
+      },
+      "state": "COMPLETE"
+    },
+    {
+      "trial": 41,
+      "value": 83.21168888727986,
+      "params": {
+        "hidden_size_1": 1024,
+        "hidden_size_2": 512,
+        "hidden_size_3": 64,
+        "dropout": 0.12939936043739794,
+        "learning_rate": 0.005720868046575011,
+        "gamma": 0.9004887410352548,
+        "batch_size": 64,
+        "epsilon_start": 0.8934139743572878,
+        "epsilon_end": 0.052477127819777585,
+        "epsilon_decay": 0.9974597471117953,
+        "buffer_size": 200000,
+        "target_update_freq": 18,
+        "num_drivers": 11,
+        "max_bookings": 10
+      },
+      "state": "COMPLETE"
+    },
+    {
+      "trial": 46,
+      "value": -86.68719968682983,
+      "params": {
+        "hidden_size_1": 1024,
+        "hidden_size_2": 256,
+        "hidden_size_3": 256,
+        "dropout": 0.1451185668157734,
+        "learning_rate": 0.006914425656820916,
+        "gamma": 0.9240504617194285,
+        "batch_size": 64,
+        "epsilon_start": 0.9084620995380082,
+        "epsilon_end": 0.03274694902399744,
+        "epsilon_decay": 0.9955078305577688,
+        "buffer_size": 200000,
+        "target_update_freq": 19,
+        "num_drivers": 11,
+        "max_bookings": 11
+      },
+      "state": "COMPLETE"
+    },
+    {
+      "trial": 31,
+      "value": -110.68162511112828,
+      "params": {
+        "hidden_size_1": 1024,
+        "hidden_size_2": 512,
+        "hidden_size_3": 64,
+        "dropout": 0.12375456731137593,
+        "learning_rate": 0.004211082833300569,
+        "gamma": 0.9209169427679247,
+        "batch_size": 64,
+        "epsilon_start": 0.8967989576590868,
+        "epsilon_end": 0.05249834150842812,
+        "epsilon_decay": 0.9975103848358462,
+        "buffer_size": 200000,
+        "target_update_freq": 18,
+        "num_drivers": 10,
+        "max_bookings": 10
+      },
+      "state": "COMPLETE"
+    },
+    {
+      "trial": 20,
+      "value": -208.0143682218169,
+      "params": {
+        "hidden_size_1": 1024,
+        "hidden_size_2": 512,
+        "hidden_size_3": 64,
+        "dropout": 0.11640253420313645,
+        "learning_rate": 0.005780908458685892,
+        "gamma": 0.9187353609115723,
+        "batch_size": 64,
+        "epsilon_start": 0.8804507811790885,
+        "epsilon_end": 0.053828771684426464,
+        "epsilon_decay": 0.9978246899904831,
+        "buffer_size": 200000,
+        "target_update_freq": 18,
+        "num_drivers": 10,
+        "max_bookings": 10
+      },
+      "state": "COMPLETE"
+    },
+    {
+      "trial": 21,
+      "value": -230.5366893725476,
+      "params": {
+        "hidden_size_1": 1024,
+        "hidden_size_2": 512,
+        "hidden_size_3": 64,
+        "dropout": 0.1302299707124352,
+        "learning_rate": 0.005742422333665293,
+        "gamma": 0.9167275936073469,
+        "batch_size": 64,
+        "epsilon_start": 0.8902696978840499,
+        "epsilon_end": 0.05261982975366704,
+        "epsilon_decay": 0.9974840863118103,
+        "buffer_size": 200000,
+        "target_update_freq": 18,
+        "num_drivers": 10,
+        "max_bookings": 10
+      },
+      "state": "COMPLETE"
+    },
+    {
+      "trial": 23,
+      "value": -242.2810509269787,
+      "params": {
+        "hidden_size_1": 1024,
+        "hidden_size_2": 512,
+        "hidden_size_3": 64,
+        "dropout": 0.10999876709929332,
+        "learning_rate": 0.0019736749931196906,
+        "gamma": 0.9031276805653916,
+        "batch_size": 64,
+        "epsilon_start": 0.9146807533490096,
+        "epsilon_end": 0.046969602197095506,
+        "epsilon_decay": 0.998021654327684,
+        "buffer_size": 200000,
+        "target_update_freq": 17,
+        "num_drivers": 8,
+        "max_bookings": 10
+      },
+      "state": "COMPLETE"
+    },
+    {
+      "trial": 30,
+      "value": -469.8708889550347,
+      "params": {
+        "hidden_size_1": 512,
+        "hidden_size_2": 128,
+        "hidden_size_3": 256,
+        "dropout": 0.19701709183700214,
+        "learning_rate": 0.0020185940961016517,
+        "gamma": 0.9582518469059682,
+        "batch_size": 64,
+        "epsilon_start": 0.8704476514614167,
+        "epsilon_end": 0.060320347665950125,
+        "epsilon_decay": 0.9966502877273807,
+        "buffer_size": 100000,
+        "target_update_freq": 8,
+        "num_drivers": 7,
+        "max_bookings": 10
+      },
+      "state": "COMPLETE"
+    },
+    {
+      "trial": 11,
+      "value": -650.7026198887995,
+      "params": {
+        "hidden_size_1": 256,
+        "hidden_size_2": 512,
+        "hidden_size_3": 64,
+        "dropout": 0.14981631081378274,
+        "learning_rate": 0.005327751734087875,
+        "gamma": 0.9409105289436761,
+        "batch_size": 64,
+        "epsilon_start": 0.9275223267776544,
+        "epsilon_end": 0.06481664770903703,
+        "epsilon_decay": 0.9969171586746699,
+        "buffer_size": 50000,
+        "target_update_freq": 10,
+        "num_drivers": 11,
+        "max_bookings": 10
+      },
+      "state": "COMPLETE"
+    }
+  ]
+}

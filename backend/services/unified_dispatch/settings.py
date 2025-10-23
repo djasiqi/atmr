@@ -16,11 +16,11 @@ from typing import Any, Dict
 
 @dataclass
 class HeuristicWeights:
-    proximity: float = 0.45              # distance/temps vers pickup
-    driver_load_balance: float = 0.30    # équité (courses du jour)
-    priority: float = 0.15               # priorité booking (médical, VIP…)
-    return_urgency: float = 0.08         # retours déclenchés à la demande
-    regular_driver_bonus: float = 0.02   # chauffeur habituel du client
+    proximity: float = 0.20              # distance/temps vers pickup (réduit encore)
+    driver_load_balance: float = 0.70    # équité (courses du jour) - AUGMENTÉ à 70% pour forcer répartition 3-3-3
+    priority: float = 0.06               # priorité booking (médical, VIP…)
+    return_urgency: float = 0.03         # retours déclenchés à la demande
+    regular_driver_bonus: float = 0.01   # chauffeur habituel du client
 
     def normalized(self) -> HeuristicWeights:
         total = self.proximity + self.driver_load_balance + self.priority + self.return_urgency + self.regular_driver_bonus
@@ -50,6 +50,21 @@ class SolverParams:
     regular_first_two_phase: bool = True     # passe 1 réguliers, passe 2 urgences si besoin
 
 @dataclass
+class ServiceTimesSettings:
+    """Paramètres de temps de service pour les courses."""
+    pickup_service_min: int = 5              # temps de pickup (minutes)
+    dropoff_service_min: int = 10            # temps de dropoff (minutes)
+    min_transition_margin_min: int = 15      # marge minimale entre deux courses (minutes)
+
+@dataclass
+class PoolingSettings:
+    """Paramètres de regroupement de courses (ride-pooling)."""
+    enabled: bool = True                     # activer le regroupement de courses
+    time_tolerance_min: int = 10             # tolérance temporelle pour le pickup (±10min)
+    pickup_distance_m: int = 500             # distance maximale entre pickups (mètres)
+    max_detour_min: int = 15                 # détour maximal acceptable pour les dropoffs (minutes)
+
+@dataclass
 class TimeSettings:
     # Buffers et marges (minutes)
     pickup_buffer_min: int = 5               # marge avant pickup (±5min → fenêtre 17h55-18h05 pour course à 18h00)
@@ -58,9 +73,6 @@ class TimeSettings:
     dropoff_window_min: int = 10             # fenêtre de dropoff
     horizon_min: int = 240                   # horizon de planification (4h)
     horizon_max: int = 1440                  # horizon max (24h)
-    # Temps de service (minutes) - RÈGLES MÉTIER
-    pickup_service_min: int = 10             # temps de prise en charge (installation client)
-    dropoff_service_min: int = 15            # temps de dépose (désinstallation client)
     # Seuils (minutes)
     late_threshold_min: int = 5              # seuil de retard
     early_threshold_min: int = 5             # seuil d'avance
@@ -128,6 +140,8 @@ class FeatureFlags:
 class Settings:
     heuristic: HeuristicWeights = field(default_factory=HeuristicWeights)
     solver: SolverParams = field(default_factory=SolverParams)
+    service_times: ServiceTimesSettings = field(default_factory=ServiceTimesSettings)
+    pooling: PoolingSettings = field(default_factory=PoolingSettings)
     time: TimeSettings = field(default_factory=TimeSettings)
     realtime: RealtimeSettings = field(default_factory=RealtimeSettings)
     fairness: FairnessSettings = field(default_factory=FairnessSettings)

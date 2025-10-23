@@ -24,6 +24,7 @@ celery: Celery = Celery(
     include=[
         "tasks.dispatch_tasks",
         "tasks.planning_tasks",
+        "tasks.rl_tasks",
     ],
 )
 
@@ -45,15 +46,40 @@ celery.conf.update(
 
 # Configure Beat schedule
 celery.conf.beat_schedule = {
+    # Dispatch automatique périodique (toutes les 5 min par défaut)
     "dispatch-autorun": {
         "task": "tasks.dispatch_tasks.autorun_tick",
         "schedule": DISPATCH_AUTORUN_INTERVAL_SEC,
         "options": {"expires": DISPATCH_AUTORUN_INTERVAL_SEC * 2},
     },
+    # 🆕 Monitoring temps réel pour dispatch autonome (toutes les 2 min)
+    "realtime-monitoring": {
+        "task": "tasks.dispatch_tasks.realtime_monitoring_tick",
+        "schedule": 120.0,  # 2 minutes
+        "options": {"expires": 240},  # Expire après 4 min
+    },
     # Planning scans (daily at ~04:15, seconds granularity acceptable in dev)
     "planning-compliance-scan": {
         "task": "planning.compliance_scan",
         "schedule": 24 * 3600,
+        "options": {"expires": 6 * 3600},
+    },
+    # 🆕 RL: Ré-entraînement DQN hebdomadaire (dimanche à 3h)
+    "rl-retrain-weekly": {
+        "task": "tasks.rl_retrain_model",
+        "schedule": 7 * 24 * 3600,  # 1 semaine
+        "options": {"expires": 12 * 3600},  # Expire après 12h
+    },
+    # 🆕 RL: Nettoyage feedbacks mensuels (1er du mois à 4h)
+    "rl-cleanup-monthly": {
+        "task": "tasks.rl_cleanup_old_feedbacks",
+        "schedule": 30 * 24 * 3600,  # ~1 mois
+        "options": {"expires": 24 * 3600},
+    },
+    # 🆕 RL: Rapport hebdomadaire (lundi à 8h)
+    "rl-weekly-report": {
+        "task": "tasks.rl_generate_weekly_report",
+        "schedule": 7 * 24 * 3600,  # 1 semaine
         "options": {"expires": 6 * 3600},
     },
 }

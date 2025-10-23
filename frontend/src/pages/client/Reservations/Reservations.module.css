@@ -1,16 +1,16 @@
 .pageContainer {
-  padding-top: 100px; /* Ajustez la valeur en fonction de la hauteur du header */
+  padding-top: 100px;
 }
 
 
 /* 📌 Conteneur principal */
 .reservationsContainer {
   max-width: 900px;
-  margin: 20px auto;
-  padding: 20px;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+  margin: var(--spacing-lg) auto;
+  padding: var(--spacing-lg);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
 /* 📌 En-tête */
@@ -19,40 +19,40 @@
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--spacing-sm);
 }
 
 /* 📌 Bouton d'exportation */
 .exportBtn {
-  background: #d32f2f;
+  background: var(--danger-primary);
   color: white;
   border: none;
-  padding: 10px 15px;
+  padding: var(--spacing-sm) var(--spacing-md);
   display: flex;
   align-items: center;
-  gap: 5px;
-  border-radius: 5px;
+  gap: var(--spacing-xs);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: 0.3s;
+  transition: var(--transition-base);
 }
 
 .exportBtn:hover {
-  background: #b71c1c;
+  background: var(--danger-hover);
 }
 
 /* 📌 Bouton de rafraîchissement */
 .refreshBtn {
-  background: #007bff;
+  background: var(--brand-primary);
   color: white;
   border: none;
-  padding: 10px;
-  border-radius: 5px;
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: 0.3s;
+  transition: var(--transition-base);
 }
 
 .refreshBtn:hover {
-  background: #0056b3;
+  background: var(--brand-hover);
 }
 
 /* 📌 Filtres et tri */
@@ -61,39 +61,39 @@
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 15px;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
 }
 
 .sortSelect,
 .filterSelect {
-  padding: 8px;
-  border-radius: 5px;
-  border: 1px solid #ccc;
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-secondary);
   background: white;
   cursor: pointer;
-  transition: all 0.3s ease-in-out;
+  transition: all var(--transition-base);
 }
 
 .sortSelect:hover,
 .filterSelect:hover {
-  border-color: #007bff;
+  border-color: var(--brand-primary);
 }
 
 /* 📌 Liste des réservations */
 .reservationList {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: var(--spacing-md);
 }
 
 /* 📌 Carte de réservation */
 .reservationCard {
-  background: #f5f5f5;
-  padding: 15px;
-  border-radius: 8px;
-  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s ease-in-out;
+  background: var(--gray-100);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-base);
 }
 
 .reservationCard:hover {
@@ -109,60 +109,60 @@
 
 /* 📌 Statut */
 .status {
-  padding: 5px 10px;
-  border-radius: 5px;
-  font-weight: bold;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-bold);
   text-transform: uppercase;
 }
 
 .status.pending {
-  background: #fdd835;
-  color: #333;
+  background: var(--warning-primary);
+  color: var(--text-primary);
 }
 .status.completed {
-  background: #43a047;
+  background: var(--success-primary);
   color: white;
 }
 .status.canceled {
-  background: #d32f2f;
+  background: var(--danger-primary);
   color: white;
 }
 .status.in_progress {
-  background: #ff9800;
+  background: var(--orange-500);
   color: white;
 }
 
 /* 📌 Bouton d'annulation */
 .cancelBtn {
-  background: #ff5252;
+  background: var(--danger-primary);
   color: white;
   border: none;
-  padding: 8px 10px;
-  border-radius: 5px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: 0.3s;
+  transition: var(--transition-base);
 }
 
 .cancelBtn:hover {
-  background: #d32f2f;
+  background: var(--danger-hover);
 }
 
 /* 📌 Affichage de l'entreprise et du chauffeur */
 .bookingDetails {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  font-size: 14px;
-  margin-top: 10px;
+  gap: var(--spacing-xs);
+  font-size: var(--font-sm);
+  margin-top: var(--spacing-sm);
 }
 
 .bookingDetails p {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--font-sm);
 }
 
 .bookingDetails strong {
-  color: #007bff;
+  color: var(--brand-primary);
 }
 
 /* 📌 Responsive */
@@ -183,10 +183,10 @@
   }
 
   .reservationCard {
-    padding: 10px;
+    padding: var(--spacing-sm);
   }
 
   .status {
-    font-size: 12px;
+    font-size: var(--font-xs);
   }
 }

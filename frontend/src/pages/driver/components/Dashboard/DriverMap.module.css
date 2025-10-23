@@ -1,35 +1,14 @@
 /* Fichier: C:\Users\jasiq\atmr\frontend\src\pages\driver\components\Dashboard\DriverMap.module.css */
 
-/* --- Design tokens locaux --- */
-:root {
-  --brand: #0f766e;
-  --border: #e2e8f0;
-  --bg: #ffffff;
-  --panel: #f8fafc;
-  --text: #334155;
-  --text-light: #64748b;
-
-  --success: #16a34a;
-  --success-bg: #dcfce7;
-
-  --warn: #ca8a04;
-  --warn-bg: #fef9c3;
-
-  --danger: #b91c1c;
-  --danger-bg: #fee2e2;
-
-  --shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -2px rgba(0,0,0,.1);
-}
-
 /* --- Conteneur principal de la carte --- */
 .driverMapContainer {
   width: 100%;
   height: 400px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
   position: relative;
 }
 
@@ -52,23 +31,23 @@
 
 /* Popup look & feel */
 .driverMapContainer :global(.leaflet-popup-content-wrapper) {
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
+  box-shadow: var(--shadow-sm);
 }
 .driverMapContainer :global(.leaflet-popup-content) {
-  margin: 10px 12px;
-  color: var(--text);
-  font-size: 0.92rem;
+  margin: var(--spacing-sm);
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
 }
 .driverMapContainer :global(.leaflet-popup-tip) {
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
 }
 
 /* Focus ring accessible quand on navigue au clavier */
 .driverMapContainer:focus-within {
-  outline: 2px solid color-mix(in oklab, var(--brand), white 30%);
+  outline: 2px solid var(--brand-light);
   outline-offset: 3px;
 }
 
@@ -109,55 +88,55 @@
   .dropoff-marker { animation: none; }
 }
 
-/* --- Légende optionnelle (si tu l’ajoutes plus tard) --- */
+/* --- Légende optionnelle (si tu l'ajoutes plus tard) --- */
 .legend {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px 10px;
+  right: var(--spacing-sm);
+  bottom: var(--spacing-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xs) var(--spacing-sm);
   display: grid;
-  gap: 6px;
+  gap: var(--spacing-xs);
   min-width: 160px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
   backdrop-filter: blur(4px);
 }
 .legendTitle {
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--text);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
 }
 .legendItem {
   display: grid;
   grid-template-columns: 14px 1fr auto;
   align-items: center;
-  gap: 8px;
-  font-size: 0.86rem;
-  color: var(--text-light);
+  gap: var(--spacing-xs);
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
 }
 .swatch {
   width: 14px;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
 }
-.swatchRoute { background: #3388ff; } /* route par défaut */
-.swatchLateMild { background: #faad14; } /* <10 min */
-.swatchLateHigh { background: #f5222d; } /* >=10 min */
+.swatchRoute { background: var(--blue-500); }
+.swatchLateMild { background: var(--warning-primary); }
+.swatchLateHigh { background: var(--danger-primary); }
 
-/* --- Badges d’état si besoin dans la légende --- */
+/* --- Badges d'état si besoin dans la légende --- */
 .badge {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 700;
+  padding: var(--spacing-xxs) var(--spacing-xs);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-bold);
 }
-.badgeOk { background: var(--success-bg); color: var(--success); }
-.badgeWarn { background: var(--warn-bg); color: var(--warn); }
-.badgeDanger { background: var(--danger-bg); color: var(--danger); }
+.badgeOk { background: var(--success-bg); color: var(--success-primary); }
+.badgeWarn { background: var(--warning-bg); color: var(--warning-primary); }
+.badgeDanger { background: var(--danger-bg); color: var(--danger-primary); }
 
 /* --- Responsiveness --- */
 @media (max-width: 900px) {
@@ -165,25 +144,18 @@
 }
 @media (max-width: 640px) {
   .driverMapContainer { height: 320px; }
-  .legend { right: 8px; bottom: 8px; padding: 6px 8px; }
+  .legend { right: var(--spacing-xs); bottom: var(--spacing-xs); padding: var(--spacing-xs); }
 }
 
 /* --- Dark mode --- */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0b1220;
-    --panel: #0f172a;
-    --border: #1f2937;
-    --text: #e5e7eb;
-    --text-light: #9ca3af;
-  }
   .driverMapContainer { box-shadow: none; }
   .driverMapContainer :global(.leaflet-popup-content-wrapper) {
-    background: var(--bg);
-    border-color: var(--border);
+    background: var(--bg-primary);
+    border-color: var(--border-primary);
   }
-  .driverMapContainer :global(.leaflet-popup-content) { color: var(--text); }
-  .driverMapContainer :global(.leaflet-popup-tip) { border-color: var(--border); }
+  .driverMapContainer :global(.leaflet-popup-content) { color: var(--text-secondary); }
+  .driverMapContainer :global(.leaflet-popup-tip) { border-color: var(--border-primary); }
 }
 
 /* --- Scroll & touch tweaks --- */

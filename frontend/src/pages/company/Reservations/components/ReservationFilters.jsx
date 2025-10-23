@@ -1,5 +1,5 @@
-import React from "react";
-import styles from "./ReservationFilters.module.css";
+import React from 'react';
+import styles from './ReservationFilters.module.css';
 
 const ReservationFilters = ({
   selectedDay,
@@ -11,61 +11,61 @@ const ReservationFilters = ({
   sortOrder,
   setSortOrder,
 }) => {
-  const [dateMode, setDateMode] = React.useState("all"); // "all", "single", "range"
-  const [startDate, setStartDate] = React.useState("");
-  const [endDate, setEndDate] = React.useState("");
+  const [dateMode, setDateMode] = React.useState('all'); // "all", "single", "range"
+  const [startDate, setStartDate] = React.useState('');
+  const [endDate, setEndDate] = React.useState('');
 
   // Fonction pour réinitialiser tous les filtres
   const handleResetFilters = () => {
-    setSelectedDay("all");
-    setDateMode("all");
-    setStartDate("");
-    setEndDate("");
-    setSearchTerm("");
-    setStatusFilter("all");
-    setSortOrder("desc");
+    setSelectedDay('all');
+    setDateMode('all');
+    setStartDate('');
+    setEndDate('');
+    setSearchTerm('');
+    setStatusFilter('all');
+    setSortOrder('desc');
   };
 
   // Vérifier si des filtres sont actifs
-  const hasActiveFilters = 
-    selectedDay !== "all" || 
-    dateMode !== "all" ||
-    startDate !== "" ||
-    endDate !== "" ||
-    searchTerm !== "" || 
-    statusFilter !== "all" || 
-    sortOrder !== "desc";
+  const hasActiveFilters =
+    selectedDay !== 'all' ||
+    dateMode !== 'all' ||
+    startDate !== '' ||
+    endDate !== '' ||
+    searchTerm !== '' ||
+    statusFilter !== 'all' ||
+    sortOrder !== 'desc';
 
   // Gérer le changement de mode de date
   const handleDateModeChange = (mode) => {
     setDateMode(mode);
-    if (mode === "all") {
-      setSelectedDay("all");
-      setStartDate("");
-      setEndDate("");
-    } else if (mode === "single") {
-      setStartDate("");
-      setEndDate("");
-    } else if (mode === "range") {
-      setSelectedDay("");
+    if (mode === 'all') {
+      setSelectedDay('all');
+      setStartDate('');
+      setEndDate('');
+    } else if (mode === 'single') {
+      setStartDate('');
+      setEndDate('');
+    } else if (mode === 'range') {
+      setSelectedDay('');
     }
   };
 
   // Appliquer la plage de dates
   React.useEffect(() => {
-    if (dateMode === "range" && startDate && endDate) {
+    if (dateMode === 'range' && startDate && endDate) {
       // Créer une chaîne de plage pour le backend
       setSelectedDay(`${startDate}:${endDate}`);
     }
   }, [dateMode, startDate, endDate, setSelectedDay]);
 
   return (
-    <div className={styles.filtersContainer}>
+    <>
       <div className={styles.filtersHeader}>
         <h3>🔍 Filtres et Recherche</h3>
         {hasActiveFilters && (
-          <button 
-            onClick={handleResetFilters} 
+          <button
+            onClick={handleResetFilters}
             className={styles.resetButton}
             title="Réinitialiser tous les filtres"
           >
@@ -81,38 +81,32 @@ const ReservationFilters = ({
             <div className={styles.dateModeButtons}>
               <button
                 type="button"
-                onClick={() => handleDateModeChange("all")}
-                className={`${styles.dateModeButton} ${
-                  dateMode === "all" ? styles.active : ""
-                }`}
+                onClick={() => handleDateModeChange('all')}
+                className={`${styles.dateModeButton} ${dateMode === 'all' ? styles.active : ''}`}
               >
                 Toutes
               </button>
               <button
                 type="button"
-                onClick={() => handleDateModeChange("single")}
-                className={`${styles.dateModeButton} ${
-                  dateMode === "single" ? styles.active : ""
-                }`}
+                onClick={() => handleDateModeChange('single')}
+                className={`${styles.dateModeButton} ${dateMode === 'single' ? styles.active : ''}`}
               >
                 Une date
               </button>
               <button
                 type="button"
-                onClick={() => handleDateModeChange("range")}
-                className={`${styles.dateModeButton} ${
-                  dateMode === "range" ? styles.active : ""
-                }`}
+                onClick={() => handleDateModeChange('range')}
+                className={`${styles.dateModeButton} ${dateMode === 'range' ? styles.active : ''}`}
               >
                 Période
               </button>
             </div>
 
-            {dateMode === "single" && (
+            {dateMode === 'single' && (
               <div className={styles.singleDateContainer}>
                 <input
                   type="date"
-                  value={selectedDay === "all" || selectedDay.includes(":") ? "" : selectedDay}
+                  value={selectedDay === 'all' || selectedDay.includes(':') ? '' : selectedDay}
                   onChange={(e) => setSelectedDay(e.target.value)}
                   className={styles.dateInput}
                   placeholder="Sélectionner une date"
@@ -120,7 +114,7 @@ const ReservationFilters = ({
               </div>
             )}
 
-            {dateMode === "range" && (
+            {dateMode === 'range' && (
               <div className={styles.dateRangeContainer}>
                 <input
                   type="date"
@@ -156,7 +150,7 @@ const ReservationFilters = ({
             {searchTerm && (
               <button
                 type="button"
-                onClick={() => setSearchTerm("")}
+                onClick={() => setSearchTerm('')}
                 className={styles.clearSearchButton}
                 title="Effacer la recherche"
               >
@@ -195,7 +189,7 @@ const ReservationFilters = ({
           </select>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

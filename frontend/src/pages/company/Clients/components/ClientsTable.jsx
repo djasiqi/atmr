@@ -1,7 +1,7 @@
 import React from 'react';
 import styles from './ClientsTable.module.css';
 
-const ClientsTable = ({ clients, onEdit, onDelete, onRefresh }) => {
+const ClientsTable = ({ clients, onEdit, onDelete, onRefresh: _onRefresh }) => {
   if (!clients || clients.length === 0) {
     return (
       <div className={styles.empty}>
@@ -53,18 +53,14 @@ const ClientsTable = ({ clients, onEdit, onDelete, onRefresh }) => {
                     )}
                   </div>
                   {!client.is_institution && client.institution_name && (
-                    <div className={styles.clientSubInfo}>
-                      {client.institution_name}
-                    </div>
+                    <div className={styles.clientSubInfo}>{client.institution_name}</div>
                   )}
                 </div>
               </td>
               <td>
                 <span
                   className={`${styles.typeBadge} ${
-                    client.is_institution
-                      ? styles.institution
-                      : styles.regular
+                    client.is_institution ? styles.institution : styles.regular
                   }`}
                 >
                   {client.is_institution ? 'Institution' : 'Client'}
@@ -73,14 +69,10 @@ const ClientsTable = ({ clients, onEdit, onDelete, onRefresh }) => {
               <td>
                 <div className={styles.contactInfo}>
                   {client.contact_email && (
-                    <div className={styles.email}>
-                      📧 {client.contact_email}
-                    </div>
+                    <div className={styles.email}>📧 {client.contact_email}</div>
                   )}
                   {client.contact_phone && (
-                    <div className={styles.phone}>
-                      📞 {client.contact_phone}
-                    </div>
+                    <div className={styles.phone}>📞 {client.contact_phone}</div>
                   )}
                   {!client.contact_email && !client.contact_phone && (
                     <span className={styles.noContact}>-</span>
@@ -89,8 +81,10 @@ const ClientsTable = ({ clients, onEdit, onDelete, onRefresh }) => {
               </td>
               <td>
                 <div className={styles.address}>
-                  {client.domicile?.address 
-                    ? `${client.domicile.address}${client.domicile.zip ? ', ' + client.domicile.zip : ''}${client.domicile.city ? ', ' + client.domicile.city : ''}`
+                  {client.domicile?.address
+                    ? `${client.domicile.address}${
+                        client.domicile.zip ? ', ' + client.domicile.zip : ''
+                      }${client.domicile.city ? ', ' + client.domicile.city : ''}`
                     : client.billing_address || '-'}
                 </div>
               </td>
@@ -108,14 +102,14 @@ const ClientsTable = ({ clients, onEdit, onDelete, onRefresh }) => {
                 <div className={styles.actions}>
                   <button
                     onClick={() => onEdit(client)}
-                    className={styles.editBtn}
+                    className={`btn btn-sm btn-primary ${styles.editBtn}`}
                     title="Éditer le client"
                   >
                     ✏️ Éditer
                   </button>
                   <button
                     onClick={() => onDelete(client)}
-                    className={styles.deleteBtn}
+                    className={`btn btn-sm ${styles.deleteBtn}`}
                     title="Supprimer le client"
                   >
                     🗑️
@@ -131,4 +125,3 @@ const ClientsTable = ({ clients, onEdit, onDelete, onRefresh }) => {
 };
 
 export default ClientsTable;
-

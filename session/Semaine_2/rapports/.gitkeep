@@ -1,0 +1,25 @@
+# Dossier Rapports Quotidiens - Semaine 2
+
+Ce dossier contient vos rapports quotidiens pour la Semaine 2.
+
+## Structure Attendue
+
+```
+rapports/
+├── jour_1.md    (Lundi - Profiling DB)
+├── jour_2.md    (Mardi - Index DB)
+├── jour_3.md    (Mercredi - Bulk Inserts)
+├── jour_4.md    (Jeudi - Queries N+1)
+└── jour_5.md    (Vendredi - Validation)
+```
+
+## Comment Utiliser
+
+Chaque soir, copiez le template et remplissez-le :
+
+```bash
+# Exemple pour Jour 1
+cp ../RAPPORT_QUOTIDIEN_TEMPLATE.md rapports/jour_1.md
+# Puis éditez jour_1.md
+```
+

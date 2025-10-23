@@ -2,48 +2,48 @@ name: Backend Tests
 
 on:
   push:
-    branches: [ main, develop, audit/** ]
+    branches: [main, develop, audit/**]
     paths:
-      - 'backend/**'
-      - '.github/workflows/backend-tests.yml'
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
-      - 'backend/**'
+      - "backend/**"
 
 jobs:
   lint:
     name: Lint (Ruff)
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
           cache-dependency-path: backend/requirements.txt
-      
+
       - name: Install Ruff
         run: pip install ruff
-      
+
       - name: Run Ruff linter
         run: |
           cd backend
           ruff check . --output-format=github
-      
+
       - name: Run Ruff formatter check
         run: |
           cd backend
           ruff format --check .
-  
+
   test:
     name: Tests (pytest)
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:16-alpine
@@ -58,7 +58,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      
+
       redis:
         image: redis:7-alpine
         ports:
@@ -68,25 +68,25 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
           cache-dependency-path: backend/requirements.txt
-      
+
       - name: Install dependencies
         run: |
           cd backend
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-flask pytest-cov fakeredis responses
-      
+          pip install -r requirements-dev.txt
+
       - name: Run pytest with coverage
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
@@ -97,55 +97,78 @@ jobs:
         run: |
           cd backend
           pytest -v --cov=. --cov-report=xml --cov-report=html --cov-report=term-missing
-      
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./backend/coverage.xml
-          flags: backend
-          name: backend-coverage
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
-      
+
+      - name: Check coverage for critical modules
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
+          REDIS_URL: redis://localhost:6379/0
+          FLASK_CONFIG: testing
+          SECRET_KEY: test-secret-key
+          JWT_SECRET_KEY: test-jwt-secret
+        run: |
+          cd backend
+          echo "Checking coverage for critical dispatch modules..."
+          pytest tests/test_heuristics.py tests/test_solver.py tests/test_autonomous_manager.py \
+            --cov=services/unified_dispatch/heuristics.py \
+            --cov=services/unified_dispatch/solver.py \
+            --cov=services/unified_dispatch/autonomous_manager.py \
+            --cov-report=term-missing \
+            --cov-fail-under=70 \
+            -v
+          echo "✅ Critical modules coverage >= 70%"
+
+      # Upload Codecov désactivé jusqu'à configuration du token
+      # Pour activer : ajouter CODECOV_TOKEN dans GitHub Secrets et décommenter
+      # - name: Upload coverage to Codecov
+      #   uses: codecov/codecov-action@v4
+      #   if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+      #   with:
+      #     file: ./backend/coverage.xml
+      #     flags: backend
+      #     name: backend-coverage
+      #     token: ${{ secrets.CODECOV_TOKEN }}
+      #     fail_ci_if_error: false
+      #   continue-on-error: true
+
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage-report
           path: backend/htmlcov/
           retention-days: 7
-  
+
   security:
     name: Security Audit (pip-audit)
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      
+          python-version: "3.11"
+
       - name: Install pip-audit
         run: pip install pip-audit
-      
+
       - name: Run pip-audit
         run: |
           cd backend
           pip-audit --requirement requirements.txt --vulnerability-service osv
-      
+
       - name: Check for known CVEs
         run: |
           cd backend
           pip-audit --requirement requirements.txt --format json > audit.json
           cat audit.json
         continue-on-error: true
-  
+
   migrations:
     name: Migrations Check
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:16-alpine
@@ -160,23 +183,23 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
           cache-dependency-path: backend/requirements.txt
-      
+
       - name: Install dependencies
         run: |
           cd backend
           pip install -r requirements.txt
-      
+
       - name: Run migrations (upgrade)
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
@@ -186,7 +209,7 @@ jobs:
         run: |
           cd backend
           flask db upgrade head
-      
+
       - name: Test rollback (downgrade -1)
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
@@ -197,7 +220,7 @@ jobs:
           cd backend
           flask db downgrade -1
           flask db upgrade head
-      
+
       - name: Check for pending migrations
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
@@ -213,4 +236,3 @@ jobs:
             cat pending.sql
             exit 1
           fi
-

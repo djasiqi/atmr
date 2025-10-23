@@ -1,0 +1,552 @@
+/* frontend/src/pages/company/Dispatch/modes/Manual.module.css */
+/*
+ * Styles spécifiques au MODE MANUEL
+ * Mode validé et terminé ✅
+ */
+
+/* ================== Contrôles Mode Manuel ================== */
+
+.manualControls {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  padding: var(--spacing-xl);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-xl);
+  box-shadow: var(--shadow-md);
+}
+
+.simpleControls {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* .refreshBtn supprimé : non utilisé (code mort) */
+
+/* ================== Statistiques Mode Manuel ================== */
+
+.basicStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+}
+
+.statItem {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.statItem h3 {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: var(--font-3xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--brand-primary);
+}
+
+.statItem p {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+/* ================== Pro Tip ================== */
+
+.proTip {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-left: 4px solid #0ea5e9;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  margin-top: var(--spacing-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.proTip h4 {
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: var(--font-md);
+  color: #0369a1;
+  font-weight: var(--font-weight-semibold);
+}
+
+.proTip p {
+  margin: 0;
+  font-size: var(--font-md);
+  color: var(--text-primary);
+  line-height: var(--line-height-normal);
+}
+
+/* ================== Header Amélioré Mode Manuel ================== */
+
+.headerSection {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  padding: var(--spacing-xl);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-xl);
+  box-shadow: var(--shadow-md);
+}
+
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 2px solid var(--border-primary);
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.titleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-md);
+  width: 100%;
+  flex-wrap: nowrap;
+}
+
+.modeBadge {
+  margin: 0;
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  color: #475569;
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--shadow-xs);
+  border: 1px solid #cbd5e1;
+  display: inline-block;
+  width: fit-content;
+  white-space: nowrap;
+}
+
+/* ================== Filtres Compacts Mode Manuel ================== */
+
+.compactFilters {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  margin-top: var(--spacing-lg);
+}
+
+.compactInput,
+.compactSelect {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  background: white;
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-base);
+}
+
+.compactInput {
+  min-width: 140px;
+}
+
+.compactSelect {
+  min-width: 100px;
+}
+
+.compactInput:focus,
+.compactSelect:focus {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.inlineLabel {
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.filterSeparator {
+  color: var(--border-primary);
+  font-size: var(--font-md);
+  user-select: none;
+  opacity: 0.5;
+}
+
+.compactToggle {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.compactToggle:hover {
+  background: var(--brand-primary);
+  color: white;
+  border-color: var(--brand-primary);
+}
+
+.compactRefresh {
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-hover) 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  box-shadow: var(--shadow-sm);
+}
+
+.compactRefresh:hover {
+  background: linear-gradient(135deg, var(--brand-hover) 0%, var(--brand-primary-dark) 100%);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.compactBadge {
+  margin-left: auto;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: white;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: #475569;
+  white-space: nowrap;
+}
+
+/* ================== Grille Stats Mode Manuel ================== */
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xl);
+  margin-bottom: var(--spacing-xl);
+  width: 100%;
+}
+
+.statCard {
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  transition: all var(--transition-base);
+  border: 1px solid var(--border-primary);
+  min-height: 70px;
+  max-height: 80px;
+}
+
+.statCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--brand-primary);
+}
+
+.statIcon {
+  font-size: var(--font-3xl);
+  line-height: 1;
+  opacity: 0.9;
+  flex-shrink: 0;
+}
+
+.statContent {
+  flex: 1;
+  text-align: left;
+}
+
+.statLabel {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  margin: 0 0 var(--spacing-xxs) 0;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.statValue {
+  font-size: var(--font-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--brand-primary);
+  margin: 0;
+}
+
+/* ================== Toolbar Mode Manuel ================== */
+
+/* Panel de contrôle mode manuel */
+.manualPanel {
+  background: var(--bg-primary);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-primary);
+  margin-bottom: var(--spacing-lg);
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.panelHeader h3 {
+  margin: 0;
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-sm) 0;
+}
+
+.sortControls {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+.sortControls label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+}
+
+.sortControls select {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  margin-left: var(--spacing-xs);
+}
+
+.sortButton {
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  transition: all var(--transition-base);
+  color: var(--text-primary);
+}
+
+.sortButton:hover {
+  background: var(--brand-primary);
+  color: white;
+  border-color: var(--brand-primary);
+  transform: translateY(-2px);
+}
+
+.resultsCount {
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ================== Responsive Mode Manuel ================== */
+
+@media (max-width: 1024px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .headerSection {
+    padding: var(--spacing-md);
+  }
+
+  .titleRow {
+    flex-wrap: wrap;
+  }
+
+  .compactFilters {
+    gap: var(--spacing-xs);
+  }
+
+  .inlineLabel,
+  .filterSeparator {
+    display: none;
+  }
+
+  .manualControls {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .compactInput,
+  .compactSelect {
+    flex: 1;
+    min-width: 90px;
+  }
+
+  .compactRefresh {
+    flex: 1;
+  }
+
+  .compactBadge {
+    width: 100%;
+    text-align: center;
+    margin-left: 0;
+  }
+}
+
+/* ================== Bannières de mode ================== */
+
+.dispatchModeBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl);
+  border-radius: var(--radius-lg);
+  margin: var(--spacing-lg) 0;
+  box-shadow: var(--shadow-md);
+  border: 1px solid;
+  transition: all var(--transition-base);
+}
+
+.dispatchModeBanner.manual {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border-color: #2196f3;
+  border-left: 4px solid #1976d2;
+}
+
+.bannerIcon {
+  font-size: 3rem;
+  flex-shrink: 0;
+}
+
+.bannerContent {
+  flex: 1;
+}
+
+.bannerContent h3 {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.bannerContent p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  line-height: 1.5;
+}
+
+.bannerAction {
+  flex-shrink: 0;
+}
+
+.settingsLink {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: var(--brand-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  white-space: nowrap;
+}
+
+.settingsLink:hover {
+  background: var(--brand-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+/* Conseil Pro */
+.proTip {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border: 1px solid #ffb74d;
+  border-left: 4px solid #ff9800;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  margin: var(--spacing-lg) 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.proTip h4 {
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: #e65100;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.proTip p {
+  margin: 0;
+  color: #5d4037;
+  font-size: var(--font-sm);
+  line-height: 1.6;
+}
+
+.proTip strong {
+  color: #d84315;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Responsive bannières */
+@media (max-width: 768px) {
+  .dispatchModeBanner {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .bannerIcon {
+    font-size: 2.5rem;
+  }
+
+  .settingsLink {
+    width: 100%;
+  }
+}
+

@@ -2,20 +2,20 @@
 
 /* --- Conteneur principal --- */
 .scheduleContainer {
-  background-color: #ffffff;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-  margin-top: 20px;
+  background-color: var(--bg-primary);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  margin-top: var(--spacing-lg);
 }
 
 .scheduleTitle {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1e293b; /* Texte foncé */
-  margin: 0 0 16px 0;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e2e8f0;
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-md) 0;
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border-primary);
 }
 
 /* --- Liste des courses --- */
@@ -29,25 +29,25 @@
 .scheduleItem {
   display: flex;
   flex-direction: row;
-  align-items: flex-start; /* Aligne le temps et les détails en haut */
-  padding: 16px 0;
-  gap: 16px; /* Espace entre la colonne de l'heure et les détails */
+  align-items: flex-start;
+  padding: var(--spacing-md) 0;
+  gap: var(--spacing-md);
 }
 
 /* Applique une bordure sauf pour le dernier élément */
 .scheduleItem:not(:last-child) {
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--bg-hover);
 }
 
 /* --- Colonne de l'heure --- */
 .timeColumn {
-  flex-shrink: 0; /* Empêche la colonne de se rétrécir */
-  font-size: 1rem;
-  font-weight: 600;
-  color: #4f46e5; /* Couleur d'accentuation */
-  background-color: #eef2ff;
-  padding: 6px 12px;
-  border-radius: 6px;
+  flex-shrink: 0;
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--indigo-600);
+  background-color: var(--indigo-100);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
   text-align: center;
   width: 90px;
 }
@@ -56,25 +56,25 @@
 .detailsColumn {
   display: flex;
   flex-direction: column;
-  gap: 8px; /* Espace entre le pickup et le dropoff */
-  flex-grow: 1; /* Prend l'espace restant */
+  gap: var(--spacing-xs);
+  flex-grow: 1;
 }
 
 .location {
   display: flex;
   align-items: center;
-  font-size: 0.9rem;
-  color: #475569; /* Texte secondaire */
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
 }
 
 .location svg {
-  margin-right: 8px;
-  color: #94a3b8; /* Couleur des icônes */
+  margin-right: var(--spacing-xs);
+  color: var(--text-tertiary);
   flex-shrink: 0;
 }
 
 .noAssignments {
-  color: #64748b;
-  padding: 20px 0;
+  color: var(--text-tertiary);
+  padding: var(--spacing-lg) 0;
   text-align: center;
 }

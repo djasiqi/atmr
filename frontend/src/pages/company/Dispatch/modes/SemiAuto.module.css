@@ -1,0 +1,816 @@
+/* ============================================================================
+ * SEMIAUTO.MODULE.CSS - Styles Mode Semi-Automatique ⚙️
+ * ============================================================================
+ * 
+ * 📋 DESCRIPTION :
+ * Styles spécifiques au mode SEMI-AUTOMATIQUE (Semi-Auto).
+ * Le système propose des suggestions intelligentes que l'utilisateur valide.
+ * 
+ * 🎯 UTILISATION :
+ * Importé dynamiquement dans UnifiedDispatch.jsx quand mode = 'semi_auto' :
+ * - import semiAutoStyles from './modes/SemiAuto.module.css'
+ * - Fusionné avec Common.module.css via getModeStyles()
+ * 
+ * 🎨 THÈME DU MODE :
+ * - Couleur principale : BLEU (#3b82f6)
+ * - Badge : Gradient bleu clair (#dbeafe → #bfdbfe)
+ * - Filtres : Fond bleu pâle (#eff6ff → #dbeafe)
+ * - Icône : ⚙️ (Engrenage)
+ * 
+ * 📦 CONTENU DU FICHIER :
+ * 
+ * 1. HEADER MODE SEMI-AUTO
+ *    • .headerSection         - Container du header
+ *    • .pageHeader            - Layout flex du header avec border-bottom
+ *    • .titleRow              - Ligne titre + badge
+ *    • .modeBadge             - Badge "Mode actuel: ⚙️ Semi-Automatique" (BLEU)
+ * 
+ * 2. FILTRES COMPACTS
+ *    • .compactFilters                - Container des filtres (THÈME BLEU)
+ *    • .compactFilters .dateInput     - Input de date
+ *    • .compactFilters .checkboxLabel - Label checkbox
+ *    • .compactFilters .checkbox      - Checkbox
+ *    • .dispatchBtn                   - Bouton dispatch (bleu)
+ *    • .courseCount                   - Compteur de courses (bleu)
+ * 
+ * 3. SUGGESTIONS À VALIDER
+ *    • .suggestionsToValidate - Container des suggestions
+ *    • .suggestionCount       - Badge compteur suggestions
+ *    • .suggestionsList       - Liste des suggestions
+ *    • .suggestionCard        - Carte suggestion individuelle
+ *    • .suggestionHeader      - Header de la carte
+ *    • .delayBadge            - Badge retard (rouge)
+ * 
+ * 4. ITEMS DE SUGGESTION
+ *    • .suggestionItems       - Container items
+ *    • .suggestionItem        - Item individuel
+ *    • .suggestionContent     - Contenu de l'item
+ *    • .suggestionIcon        - Icône de l'item
+ *    • .suggestionText        - Texte de l'item
+ *    • .suggestionActions     - Boutons d'action
+ * 
+ * 5. BOUTONS D'ACTION
+ *    • .btnApprove            - Bouton accepter (vert)
+ *    • .btnReject             - Bouton refuser (rouge)
+ * 
+ * 🔗 STRUCTURE DE LA PAGE (Ordre d'affichage) :
+ * 1. Header (titre + badge + filtres)
+ * 2. Tableau des Courses du Jour
+ * 3. Cartes de Statistiques
+ * 4. Bannière du Mode
+ * 5. Suggestions d'Optimisation (si applicables)
+ * 
+ * ⚠️ IMPORTANT :
+ * - Ce fichier est AUTONOME : header + filtres + suggestions
+ * - Utilise Common.module.css pour les tableaux, boutons génériques, etc.
+ * - Thème cohérent : BLEU pour tout le mode semi-automatique
+ * 
+ * 🔗 FICHIERS LIÉS :
+ * - Common.module.css      (Styles partagés)
+ * - Manual.module.css      (Mode manuel)
+ * - FullyAuto.module.css   (Mode automatique)
+ * - UnifiedDispatch.jsx    (Component principal)
+ * 
+ * ============================================================================
+ */
+
+/* ================== STATUT DU PLANNING (SIMPLIFIÉ) ================== */
+
+.planningStatus {
+  margin: 20px 0;
+}
+
+.statusOptimal,
+.statusWithSuggestions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.statusOptimal {
+  border-left: 4px solid #10b981;
+  background: #f0fdf4;
+}
+
+.statusWithSuggestions {
+  border-left: 4px solid #f59e0b;
+  background: #fffbeb;
+}
+
+.statusIcon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.statusText strong {
+  display: block;
+  font-size: 1.1rem;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.statusText p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+/* ================== SUGGESTIONS (SIMPLES) ================== */
+
+.suggestionsSection {
+  margin: 30px 0;
+  padding: 20px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.suggestionsHeader h4 {
+  margin: 0 0 8px 0;
+  color: #1f2937;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.suggestionsSubtitle {
+  margin: 0 0 20px 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.suggestionsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 15px;
+}
+
+@media (min-width: 1200px) {
+  .suggestionsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ================== Header Mode Semi-Auto ================== */
+
+.headerSection {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  padding: var(--spacing-xl);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-xl);
+  box-shadow: var(--shadow-md);
+}
+
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 2px solid var(--border-primary);
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.titleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-md);
+  width: 100%;
+  flex-wrap: nowrap;
+}
+
+.modeBadge {
+  margin: 0;
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1e40af;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--shadow-xs);
+  border: 1px solid #93c5fd;
+  display: inline-block;
+  width: fit-content;
+  white-space: nowrap;
+}
+
+/* ================== Filtres Compacts Mode Semi-Auto ================== */
+
+.compactFilters {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-radius: var(--radius-md);
+  margin-top: var(--spacing-lg);
+  border: 1px solid #93c5fd;
+}
+
+.compactFilters .dateInput {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  background: white;
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-base);
+  min-width: 140px;
+}
+
+.compactFilters .dateInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.compactFilters .checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.compactFilters .checkbox {
+  cursor: pointer;
+}
+
+.dispatchBtn {
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-sm);
+}
+
+.dispatchBtn:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.courseCount {
+  margin-left: auto;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: white;
+  border: 1px solid #93c5fd;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: #1e40af;
+}
+
+/* ================== Suggestions à Valider ================== */
+
+.suggestionsToValidate {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  padding: var(--spacing-xl);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-xl);
+  box-shadow: var(--shadow-md);
+}
+
+.suggestionCount {
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--info-bg);
+  color: var(--info-primary);
+  border-radius: var(--radius-full);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.suggestionsList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.suggestionCard {
+  background: var(--bg-tertiary);
+  border: 2px solid var(--info-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.suggestionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.suggestionHeader h4 {
+  margin: 0;
+  font-size: var(--font-lg);
+  color: var(--text-primary);
+}
+
+.delayBadge {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--error-bg);
+  color: var(--error-primary);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.suggestionItems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.suggestionItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  background: white;
+  border-radius: var(--radius-md);
+  gap: var(--spacing-md);
+}
+
+.suggestionContent {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex: 1;
+}
+
+.suggestionIcon {
+  font-size: var(--font-2xl);
+}
+
+.suggestionText {
+  font-size: var(--font-md);
+  color: var(--text-primary);
+  line-height: var(--line-height-normal);
+}
+
+.suggestionActions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.btnApprove {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--success-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btnApprove:hover {
+  background: var(--success-hover);
+}
+
+.btnReject {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--error-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btnReject:hover {
+  background: var(--error-hover);
+}
+
+/* ================== Panel SemiAuto ================== */
+
+.semiAutoPanel {
+  background: var(--bg-primary);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-primary);
+  margin-bottom: var(--spacing-lg);
+}
+
+.panelHeader {
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.panelHeader h3 {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.panelHeader p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+}
+
+/* Sections délais et suggestions */
+.delaysSection {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-lg);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+}
+
+.delaysSection h4 {
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.delaysList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.delayItem {
+  padding: var(--spacing-md);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+}
+
+.delayTime {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  display: block;
+  margin-bottom: var(--spacing-xs);
+}
+
+.delayReason {
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+}
+
+.suggestions {
+  margin-top: var(--spacing-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.suggestionButton {
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-hover) 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-base);
+  text-align: left;
+}
+
+.suggestionButton:hover {
+  background: linear-gradient(135deg, var(--brand-hover) 0%, var(--brand-primary-dark) 100%);
+  transform: translateX(4px);
+}
+
+/* Styles pour les cards de retard */
+.delayCard {
+  padding: var(--spacing-md);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-md);
+  transition: all var(--transition-base);
+}
+
+.delayCard:hover {
+  border-color: var(--warning-primary);
+  box-shadow: 0 2px 8px rgba(255, 152, 0, 0.1);
+}
+
+.delayInfo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  flex: 1;
+}
+
+.delayInfo strong {
+  font-size: var(--font-md);
+  color: var(--text-primary);
+}
+
+.delayMinutes {
+  color: var(--warning-primary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-sm);
+}
+
+.delayActions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.btnContact,
+.btnReschedule {
+  padding: var(--spacing-xs) var(--spacing-md);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.btnContact:hover {
+  background: var(--brand-primary);
+  color: white;
+  border-color: var(--brand-primary);
+}
+
+.btnReschedule:hover {
+  background: var(--warning-primary);
+  color: white;
+  border-color: var(--warning-primary);
+}
+
+/* Section suggestions à valider */
+.suggestionsSection {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-lg);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+}
+
+.suggestionsSection h4 {
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.suggestionsList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.suggestionCard {
+  padding: var(--spacing-md);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-md);
+  transition: all var(--transition-base);
+}
+
+.suggestionCard:hover {
+  border-color: var(--brand-primary);
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
+}
+
+.suggestionInfo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  flex: 1;
+}
+
+.suggestionInfo strong {
+  font-size: var(--font-md);
+  color: var(--text-primary);
+}
+
+.suggestionDetails {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.suggestionScore {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--brand-primary);
+}
+
+.suggestionActions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+/* Modals temporaires (en attendant les vrais composants Modal) */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modalContent {
+  background: var(--bg-primary);
+  padding: var(--spacing-xl);
+  border-radius: var(--radius-lg);
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modalContent h3 {
+  margin: 0 0 var(--spacing-lg) 0;
+  font-size: var(--font-xl);
+  color: var(--text-primary);
+}
+
+.modalContent p {
+  margin: var(--spacing-sm) 0;
+  color: var(--text-primary);
+}
+
+.formGroup {
+  margin: var(--spacing-lg) 0;
+}
+
+.formGroup label {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.timeInput {
+  width: 100%;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-md);
+}
+
+.modalActions {
+  display: flex;
+  gap: var(--spacing-sm);
+  justify-content: flex-end;
+  margin-top: var(--spacing-lg);
+}
+
+.btnClose,
+.btnConfirm,
+.btnCancel {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.btnClose {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.btnClose:hover {
+  background: var(--bg-hover);
+}
+
+.btnConfirm {
+  background: var(--success-primary);
+  color: white;
+}
+
+.btnConfirm:hover {
+  background: var(--success-hover);
+}
+
+.btnConfirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btnCancel {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.btnCancel:hover {
+  background: var(--error-primary);
+  color: white;
+}
+
+/* ================== Bannière Mode Semi-Auto ================== */
+
+.dispatchModeBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl);
+  border-radius: var(--radius-lg);
+  margin: var(--spacing-lg) 0;
+  box-shadow: var(--shadow-md);
+  border: 1px solid;
+  transition: all var(--transition-base);
+}
+
+.dispatchModeBanner.semiAuto {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border-color: #66bb6a;
+  border-left: 4px solid #43a047;
+}
+
+.bannerIcon {
+  font-size: 3rem;
+  flex-shrink: 0;
+}
+
+.bannerContent {
+  flex: 1;
+}
+
+.bannerContent h3 {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.bannerContent p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  line-height: 1.5;
+}
+
+/* Responsive bannières */
+@media (max-width: 768px) {
+  .dispatchModeBanner {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .bannerIcon {
+    font-size: 2.5rem;
+  }
+}
+

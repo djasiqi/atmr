@@ -1,17 +1,17 @@
 // frontend/src/pages/company/Settings/tabs/GeneralTab.jsx
-import React, { useRef } from "react";
-import styles from "../CompanySettings.module.css";
+import React, { useRef } from 'react';
+import styles from '../CompanySettings.module.css';
 
 // Helpers
-const formatIbanPretty = (value = "") => {
-  const v = value.replace(/\s+/g, "").toUpperCase();
-  return v.replace(/(.{4})/g, "$1 ").trim();
+const formatIbanPretty = (value = '') => {
+  const v = value.replace(/\s+/g, '').toUpperCase();
+  return v.replace(/(.{4})/g, '$1 ').trim();
 };
 
 const ReadonlyField = ({ label, value }) => (
   <div className={`${styles.formGroup} ${styles.readonlyField}`}>
     <label style={{ opacity: 0.75 }}>{label}</label>
-    <div className={styles.readonlyBox}>{value || "—"}</div>
+    <div className={styles.readonlyBox}>{value || '—'}</div>
   </div>
 );
 
@@ -22,7 +22,7 @@ const GeneralTab = ({
   fieldErrors,
   handleChange,
   logoPreview,
-  onClickPickFile,
+  onClickPickFile: _onClickPickFile,
   onPickFile,
   logoUrlEditOpen,
   setLogoUrlEditOpen,
@@ -49,7 +49,7 @@ const GeneralTab = ({
                 className={styles.logoPreview}
                 loading="lazy"
                 onError={(e) => {
-                  e.currentTarget.src = "";
+                  e.currentTarget.src = '';
                 }}
               />
             ) : (
@@ -60,9 +60,7 @@ const GeneralTab = ({
           </div>
 
           <div className={styles.logoActions}>
-            <div className={styles.chip}>
-              Formats: PNG / JPG / SVG — Max 2 Mo
-            </div>
+            <div className={styles.chip}>Formats: PNG / JPG / SVG — Max 2 Mo</div>
 
             <div className={styles.actionsRow}>
               <button
@@ -71,14 +69,14 @@ const GeneralTab = ({
                 onClick={() => fileInputRef.current?.click()}
                 disabled={logoBusy}
               >
-                {logoBusy ? "Téléversement…" : "📤 Téléverser un fichier"}
+                {logoBusy ? 'Téléversement…' : '📤 Téléverser un fichier'}
               </button>
 
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/png, image/jpeg, image/svg+xml"
-                style={{ display: "none" }}
+                style={{ display: 'none' }}
                 onChange={onPickFile}
               />
 
@@ -88,7 +86,7 @@ const GeneralTab = ({
                 onClick={() => setLogoUrlEditOpen((v) => !v)}
                 disabled={logoBusy}
               >
-                {logoUrlEditOpen ? "Annuler URL" : "🔗 Utiliser une URL"}
+                {logoUrlEditOpen ? 'Annuler URL' : '🔗 Utiliser une URL'}
               </button>
 
               {company?.logo_url && (
@@ -132,53 +130,32 @@ const GeneralTab = ({
           <section className={styles.section}>
             <h2>📍 Coordonnées</h2>
             <ReadonlyField label="Nom de l'entreprise" value={company.name} />
-            <ReadonlyField
-              label="Adresse opérationnelle"
-              value={company.address}
-            />
+            <ReadonlyField label="Adresse opérationnelle" value={company.address} />
             <ReadonlyField
               label="Email de contact"
               value={company.contact_email || company.email}
             />
-            <ReadonlyField
-              label="Téléphone"
-              value={company.contact_phone || company.phone}
-            />
+            <ReadonlyField label="Téléphone" value={company.contact_phone || company.phone} />
           </section>
 
           <section className={styles.section}>
             <h2>💼 Légal & facturation</h2>
             <ReadonlyField
               label="IBAN"
-              value={company.iban ? formatIbanPretty(company.iban) : ""}
+              value={company.iban ? formatIbanPretty(company.iban) : ''}
             />
             <ReadonlyField label="IDE / UID" value={company.uid_ide} />
-            <ReadonlyField
-              label="Email de facturation"
-              value={company.billing_email}
-            />
-            <ReadonlyField
-              label="Notes de facturation"
-              value={company.billing_notes}
-            />
+            <ReadonlyField label="Email de facturation" value={company.billing_email} />
+            <ReadonlyField label="Notes de facturation" value={company.billing_notes} />
           </section>
 
           <section className={styles.section}>
             <h2>🏢 Adresse de domiciliation</h2>
-            <ReadonlyField
-              label="Adresse (ligne 1)"
-              value={company.domicile_address_line1}
-            />
-            <ReadonlyField
-              label="Adresse (ligne 2)"
-              value={company.domicile_address_line2}
-            />
+            <ReadonlyField label="Adresse (ligne 1)" value={company.domicile_address_line1} />
+            <ReadonlyField label="Adresse (ligne 2)" value={company.domicile_address_line2} />
             <ReadonlyField label="NPA" value={company.domicile_zip} />
             <ReadonlyField label="Ville" value={company.domicile_city} />
-            <ReadonlyField
-              label="Pays (ISO-2)"
-              value={company.domicile_country || "CH"}
-            />
+            <ReadonlyField label="Pays (ISO-2)" value={company.domicile_country || 'CH'} />
           </section>
         </>
       )}
@@ -187,30 +164,17 @@ const GeneralTab = ({
       {editMode && (
         <section className={styles.section}>
           <div className={styles.settingsForm}>
-            <h2 style={{ gridColumn: "1 / -1" }}>📍 Coordonnées</h2>
+            <h2 style={{ gridColumn: '1 / -1' }}>📍 Coordonnées</h2>
 
             <div className={styles.formGroup}>
               <label htmlFor="name">Nom de l'entreprise</label>
-              <input
-                id="name"
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                required
-              />
-              {fieldErrors.name && (
-                <small className={styles.fieldError}>{fieldErrors.name}</small>
-              )}
+              <input id="name" name="name" value={form.name} onChange={handleChange} required />
+              {fieldErrors.name && <small className={styles.fieldError}>{fieldErrors.name}</small>}
             </div>
 
             <div className={styles.formGroup}>
               <label htmlFor="address">Adresse opérationnelle</label>
-              <input
-                id="address"
-                name="address"
-                value={form.address}
-                onChange={handleChange}
-              />
+              <input id="address" name="address" value={form.address} onChange={handleChange} />
             </div>
 
             <div className={styles.formGroup}>
@@ -223,9 +187,7 @@ const GeneralTab = ({
                 onChange={handleChange}
               />
               {fieldErrors.contact_email && (
-                <small className={styles.fieldError}>
-                  {fieldErrors.contact_email}
-                </small>
+                <small className={styles.fieldError}>{fieldErrors.contact_email}</small>
               )}
             </div>
 
@@ -238,13 +200,11 @@ const GeneralTab = ({
                 onChange={handleChange}
               />
               {fieldErrors.contact_phone && (
-                <small className={styles.fieldError}>
-                  {fieldErrors.contact_phone}
-                </small>
+                <small className={styles.fieldError}>{fieldErrors.contact_phone}</small>
               )}
             </div>
 
-            <h2 style={{ gridColumn: "1 / -1" }}>💼 Légal & facturation</h2>
+            <h2 style={{ gridColumn: '1 / -1' }}>💼 Légal & facturation</h2>
 
             <div className={styles.formGroup}>
               <label htmlFor="iban">IBAN</label>
@@ -255,9 +215,7 @@ const GeneralTab = ({
                 onChange={handleChange}
                 placeholder="CH93 0076 2011 6238 5295 7"
               />
-              {fieldErrors.iban && (
-                <small className={styles.fieldError}>{fieldErrors.iban}</small>
-              )}
+              {fieldErrors.iban && <small className={styles.fieldError}>{fieldErrors.iban}</small>}
             </div>
 
             <div className={styles.formGroup}>
@@ -270,9 +228,7 @@ const GeneralTab = ({
                 placeholder="CHE-123.456.789"
               />
               {fieldErrors.uid_ide && (
-                <small className={styles.fieldError}>
-                  {fieldErrors.uid_ide}
-                </small>
+                <small className={styles.fieldError}>{fieldErrors.uid_ide}</small>
               )}
             </div>
 
@@ -286,9 +242,7 @@ const GeneralTab = ({
                 onChange={handleChange}
               />
               {fieldErrors.billing_email && (
-                <small className={styles.fieldError}>
-                  {fieldErrors.billing_email}
-                </small>
+                <small className={styles.fieldError}>{fieldErrors.billing_email}</small>
               )}
             </div>
 
@@ -303,9 +257,7 @@ const GeneralTab = ({
               />
             </div>
 
-            <h2 style={{ gridColumn: "1 / -1" }}>
-              🏢 Adresse de domiciliation
-            </h2>
+            <h2 style={{ gridColumn: '1 / -1' }}>🏢 Adresse de domiciliation</h2>
 
             <div className={styles.formGroup}>
               <label htmlFor="domicile_address_line1">Adresse (ligne 1)</label>

@@ -1,32 +1,35 @@
-/* Style élégant identique au Dashboard - KPIs Compacts */
+/* KPI Cards - Design moderne uniforme (comme Dashboard/Clients) */
 
 .statsContainer {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+  width: 100%;
+  max-width: 100%;
 }
 
 .statCard {
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  padding: 14px 18px;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   display: flex;
   align-items: center;
-  gap: 14px;
-  transition: all 0.3s ease;
-  border: 1px solid #e2e8f0;
+  gap: var(--spacing-md);
+  transition: all var(--transition-base);
+  border: 1px solid var(--border-primary);
+  position: relative;
 }
 
 .statCard:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 121, 107, 0.12);
-  border-color: #00796b;
+  box-shadow: var(--shadow-md);
+  border-color: var(--brand-primary);
 }
 
 .statIcon {
-  font-size: 2rem;
+  font-size: var(--font-3xl);
   line-height: 1;
   opacity: 0.9;
   flex-shrink: 0;
@@ -38,45 +41,56 @@
 }
 
 .statContent .statLabel {
-  font-size: 0.8rem;
-  font-weight: 500;
-  margin: 0 0 4px 0;
-  color: #64748b;
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  margin: 0 0 var(--spacing-xxs) 0;
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .statContent .statValue {
-  font-size: 1.6rem;
-  font-weight: 700;
+  font-size: var(--font-2xl);
+  font-weight: var(--font-weight-bold);
   margin: 0;
-  color: #00796b;
-  line-height: 1;
+  color: var(--brand-primary);
+  line-height: 1.2;
 }
 
-/* Responsive : passage en 2 colonnes puis 1 colonne sur petits écrans */
+/* Responsive */
 @media (max-width: 1200px) {
   .statsContainer {
     grid-template-columns: repeat(3, 1fr);
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .statsContainer {
     grid-template-columns: repeat(2, 1fr);
   }
-  
-  .statCard {
-    padding: 12px 16px;
-    gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .statsContainer {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-sm);
   }
   
+  .statCard {
+    padding: var(--spacing-sm) var(--spacing-md);
+    gap: var(--spacing-sm);
+  }
+
+  .statCard:hover {
+    transform: none;
+  }
+
   .statIcon {
-    font-size: 1.5rem;
+    font-size: var(--font-xl);
   }
   
   .statContent .statValue {
-    font-size: 1.3rem;
+    font-size: var(--font-lg);
   }
   
   .statContent .statLabel {
@@ -86,6 +100,43 @@
 
 @media (max-width: 480px) {
   .statsContainer {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-xs);
+  }
+
+  .statCard {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    gap: var(--spacing-xs);
+  }
+
+  .statIcon {
+    font-size: var(--font-lg);
+  }
+
+  .statContent .statValue {
+    font-size: var(--font-sm);
+  }
+
+  .statContent .statLabel {
+    font-size: 0.6rem;
+  }
+}
+
+@media (max-width: 390px) {
+  .statCard {
+    padding: var(--spacing-xs);
+    gap: var(--spacing-xs);
+  }
+
+  .statIcon {
+    font-size: var(--font-md);
+  }
+
+  .statContent .statValue {
+    font-size: var(--font-sm);
+  }
+
+  .statContent .statLabel {
+    font-size: 0.6rem;
   }
 }

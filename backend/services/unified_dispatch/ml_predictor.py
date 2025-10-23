@@ -62,15 +62,17 @@ class DelayMLPredictor:
         Args:
             model_path: Chemin vers le modèle sauvegardé (optionnel)
         """
-        self.model_path = model_path or "backend/data/ml_models/delay_predictor.pkl"
+        self.model_path = model_path or "data/ml/models/delay_predictor.pkl"
         self.model: RandomForestRegressor | None = None
-        self.scaler: StandardScaler | None = None
+        self.scaler_params: Dict[str, Any] | None = None
         self.feature_names: List[str] = []
         self.is_trained = False
 
         # Charger le modèle existant si disponible
         if os.path.exists(self.model_path):
             self.load_model()
+        else:
+            logger.warning(f"[MLPredictor] Model not found at {self.model_path}")
 
     def extract_features(
         self,
@@ -80,7 +82,6 @@ class DelayMLPredictor:
     ) -> Dict[str, float]:
         """
         Extrait les features pour la prédiction.
-        
         Features utilisées:
         - time_of_day: Heure de la journée (0-23)
         - day_of_week: Jour de la semaine (0-6)
@@ -93,7 +94,7 @@ class DelayMLPredictor:
         - traffic_density: Densité du trafic estimée (0-1)
         """
         if current_time is None:
-            current_time = datetime.now()
+            current_time = datetime.now()  # noqa: DTZ005
 
         scheduled_time = getattr(booking, "scheduled_time", current_time)
 
@@ -135,38 +136,25 @@ class DelayMLPredictor:
     def _estimate_distance(self, booking: Any) -> float:
         """Estime la distance en km (Haversine)"""
         try:
-            import math
 
             lat1 = float(getattr(booking, "pickup_lat", 46.2044))
             lon1 = float(getattr(booking, "pickup_lon", 6.1432))
             lat2 = float(getattr(booking, "dropoff_lat", 46.2044))
             lon2 = float(getattr(booking, "dropoff_lon", 6.1432))
 
-            R = 6371.0  # Rayon de la Terre en km
-            phi1 = math.radians(lat1)
-            phi2 = math.radians(lat2)
-            dphi = math.radians(lat2 - lat1)
-            dlambda = math.radians(lon2 - lon1)
-
-            a = (
-                math.sin(dphi / 2) ** 2 +
-                math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-            )
-            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-            return R * c
+            # Import centralisé depuis shared.geo_utils
+            from shared.geo_utils import haversine_distance
+            return haversine_distance(lat1, lon1, lat2, lon2)
         except Exception:
             return 5.0  # Distance par défaut
 
     def _calculate_driver_punctuality(self, driver: Any) -> float:
         """
         Calcule un score de ponctualité du chauffeur (0-1) basé sur l'historique réel.
-        
         Méthode :
         - Récupère les 50 dernières courses du chauffeur
         - Calcule le % de courses terminées à temps (delay <= 5 min)
         - Retourne 0.75 par défaut si < 10 courses (pas assez de données)
-        
         Returns:
             Score entre 0.0 (toujours en retard) et 1.0 (toujours à l'heure)
         """
@@ -182,11 +170,11 @@ class DelayMLPredictor:
                 return 0.75  # Valeur par défaut si driver inconnu
 
             # Récupérer les 50 dernières courses terminées dans les 90 derniers jours
-            cutoff_date = datetime.utcnow() - timedelta(days=90)
+            cutoff_date = datetime.utcnow() - timedelta(days=90)  # noqa: DTZ003
             recent_bookings = Booking.query.filter(
                 and_(
                     Booking.driver_id == driver_id,
-                    Booking.status == BookingStatus.COMPLETED,
+                    Booking.status == BookingStatus.COMPLETED,  # type: ignore[arg-type]
                     Booking.completed_at >= cutoff_date
                 )
             ).order_by(Booking.completed_at.desc()).limit(50).all()
@@ -263,11 +251,9 @@ class DelayMLPredictor:
     ) -> Dict[str, Any]:
         """
         Entraîne le modèle sur des données historiques.
-        
         Args:
             historical_data: Liste de dicts avec features + actual_delay_minutes
             save_model: Sauvegarder le modèle après entraînement
-        
         Returns:
             Métriques d'entraînement
         """
@@ -349,60 +335,108 @@ class DelayMLPredictor:
         current_time: datetime | None = None
     ) -> DelayPrediction:
         """
-        Prédit le retard pour une assignation.
-        
+        Prédit le retard pour une assignation avec le modèle entraîné.
+
         Returns:
             DelayPrediction avec la prédiction et la confiance
         """
-        if not self.is_trained:
-            raise RuntimeError("Model is not trained. Call train_on_historical_data() first.")
+        if not self.is_trained or self.model is None:
+            logger.warning("[MLPredictor] Model not trained, using fallback heuristic")
+            # Fallback: estimation simple basée sur distance
+            from shared.geo_utils import haversine_distance
+            pickup_lat = float(getattr(booking, 'pickup_lat', 0) or 0)
+            pickup_lon = float(getattr(booking, 'pickup_lon', 0) or 0)
+            dropoff_lat = float(getattr(booking, 'dropoff_lat', 0) or 0)
+            dropoff_lon = float(getattr(booking, 'dropoff_lon', 0) or 0)
+
+            if all([pickup_lat, pickup_lon, dropoff_lat, dropoff_lon]):
+                distance_km = haversine_distance(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+                predicted_delay = distance_km * 0.5  # Simple heuristique
+            else:
+                predicted_delay = 3.0
+
+            return DelayPrediction(
+                booking_id=getattr(booking, "id", 0),
+                predicted_delay_minutes=predicted_delay,
+                confidence=0.3,  # Faible confiance (fallback)
+                risk_level="medium",
+                contributing_factors={"heuristic": 1.0}
+            )
 
         if not SKLEARN_AVAILABLE:
             raise ImportError("scikit-learn is required for prediction")
 
-        # Extraire features
-        features = self.extract_features(booking, driver, current_time)
+        try:
+            # Utiliser le nouveau pipeline de feature engineering
+            from services.ml_features import (
+                engineer_features,
+                features_to_dataframe,
+                normalize_features,
+            )
 
-        # Préparer le vecteur de features dans le bon ordre
-        feature_vector = np.array([[features.get(f, 0.0) for f in self.feature_names]])
+            # 1. Feature engineering complet
+            features = engineer_features(booking, driver)
 
-        # Standardiser
-        if self.scaler:
-            feature_vector_scaled = self.scaler.transform(feature_vector)
-        else:
-            feature_vector_scaled = feature_vector
+            # 2. Normaliser
+            if self.scaler_params:
+                features = normalize_features(features, self.scaler_params)
 
-        # Prédire
-        predicted_delay = float(self.model.predict(feature_vector_scaled)[0])
+            # 3. Convertir en DataFrame avec bon ordre de colonnes
+            feature_df = features_to_dataframe(features, self.feature_names)
 
-        # Calculer la confiance (basée sur la variance des arbres)
-        # Plus les arbres sont d'accord, plus la confiance est élevée
-        tree_predictions = [tree.predict(feature_vector_scaled)[0] for tree in self.model.estimators_]
-        std = np.std(tree_predictions)
-        confidence = max(0.0, min(1.0, 1.0 - (std / 30.0)))  # Normaliser
+            # 4. Prédire
+            predicted_delay = float(self.model.predict(feature_df)[0])
 
-        # Déterminer le niveau de risque
-        abs_delay = abs(predicted_delay)
-        if abs_delay < 5:
-            risk_level = "low"
-        elif abs_delay < 10:
-            risk_level = "medium"
-        else:
-            risk_level = "high"
+            # 5. Calculer la confiance (basée sur variance des arbres)
+            tree_predictions = [tree.predict(feature_df)[0] for tree in self.model.estimators_]
+            std = float(np.std(tree_predictions))
+            confidence = max(0.0, min(1.0, 1.0 - (std / 10.0)))
 
-        # Facteurs contributifs (feature importance pour cette prédiction)
-        contributing_factors = {
-            name: float(features.get(name, 0.0) * self.model.feature_importances_[i])
-            for i, name in enumerate(self.feature_names)
-        }
+            # 6. Niveau de risque
+            abs_delay = abs(predicted_delay)
+            if abs_delay < 5:
+                risk_level = "low"
+            elif abs_delay < 10:
+                risk_level = "medium"
+            else:
+                risk_level = "high"
 
-        return DelayPrediction(
-            booking_id=getattr(booking, "id", 0),
-            predicted_delay_minutes=predicted_delay,
-            confidence=confidence,
-            risk_level=risk_level,
-            contributing_factors=contributing_factors
-        )
+            # 7. Top 5 facteurs contributifs
+            feature_importances = self.model.feature_importances_
+            top_factors = {}
+            for i, name in enumerate(self.feature_names):
+                if i < len(feature_importances):
+                    impact = float(features.get(name, 0.0) * feature_importances[i])
+                    if abs(impact) > 0.01:  # Seulement facteurs significatifs
+                        top_factors[name] = impact
+
+            # Garder top 5
+            sorted_factors = sorted(top_factors.items(), key=lambda x: abs(x[1]), reverse=True)[:5]
+            contributing_factors = dict(sorted_factors)
+
+            logger.info(
+                f"[MLPredictor] Prediction for booking {getattr(booking, 'id', 0)}: "
+                f"{predicted_delay:.2f} min (confidence: {confidence:.2f})"
+            )
+
+            return DelayPrediction(
+                booking_id=getattr(booking, "id", 0),
+                predicted_delay_minutes=predicted_delay,
+                confidence=confidence,
+                risk_level=risk_level,
+                contributing_factors=contributing_factors
+            )
+
+        except Exception as e:
+            logger.error(f"[MLPredictor] Prediction failed: {e}", exc_info=True)
+            # Fallback en cas d'erreur
+            return DelayPrediction(
+                booking_id=getattr(booking, "id", 0),
+                predicted_delay_minutes=5.0,
+                confidence=0.2,
+                risk_level="medium",
+                contributing_factors={"error": 1.0}
+            )
 
     def save_model(self) -> None:
         """Sauvegarde le modèle sur disque"""
@@ -416,7 +450,7 @@ class DelayMLPredictor:
             "scaler": self.scaler,
             "feature_names": self.feature_names,
             "is_trained": self.is_trained,
-            "trained_at": datetime.now().isoformat(),
+            "trained_at": datetime.now().isoformat(),  # noqa: DTZ005
         }
 
         with open(self.model_path, "wb") as f:
@@ -429,30 +463,147 @@ class DelayMLPredictor:
         if not os.path.exists(self.model_path):
             raise FileNotFoundError(f"Model file not found: {self.model_path}")
 
-        with open(self.model_path, "rb") as f:
-            model_data = pickle.load(f)
+        try:
+            with open(self.model_path, "rb") as f:
+                model_data = pickle.load(f)
 
-        self.model = model_data["model"]
-        self.scaler = model_data["scaler"]
-        self.feature_names = model_data["feature_names"]
-        self.is_trained = model_data["is_trained"]
+            self.model = model_data["model"]
+            self.feature_names = model_data["feature_names"]
+            self.is_trained = True
 
-        logger.info(
-            f"[MLPredictor] Model loaded from {self.model_path} "
-            f"(trained at: {model_data.get('trained_at', 'unknown')})"
-        )
+            # Charger scalers depuis scalers.json
+            scaler_path = "data/ml/scalers.json"
+            if os.path.exists(scaler_path):
+                import json
+                with open(scaler_path) as f:
+                    self.scaler_params = json.load(f).get('standard_scaler', None)
+
+            logger.info(
+                f"[MLPredictor] Model loaded from {self.model_path} "
+                f"(trained at: {model_data.get('trained_at', 'unknown')}, "
+                f"features: {len(self.feature_names)}, "
+                f"MAE test: {model_data.get('metrics', {}).get('test', {}).get('mae', 'N/A')})"
+            )
+        except Exception as e:
+            logger.error(f"[MLPredictor] Failed to load model: {e}")
+            self.is_trained = False
 
 
 # Fonction helper pour faciliter l'utilisation
 _global_predictor: DelayMLPredictor | None = None
 
 
-def get_ml_predictor(model_path: str | None = None) -> DelayMLPredictor:
-    """Récupère ou crée un prédicteur ML global"""
+def get_ml_predictor() -> DelayMLPredictor:
+    """Récupère l'instance globale du prédicteur."""
     global _global_predictor
-
     if _global_predictor is None:
-        _global_predictor = DelayMLPredictor(model_path)
-
+        _global_predictor = DelayMLPredictor()
     return _global_predictor
+
+
+def predict_with_feature_flag(
+    booking: Any,
+    driver: Any,
+    current_time: datetime | None = None,
+    request_id: str | None = None
+) -> DelayPrediction:
+    """
+    Prédiction avec feature flag et logging exhaustif.
+
+    Args:
+        booking: Booking à prédire
+        driver: Driver assigné
+        current_time: Timestamp actuel (optionnel)
+        request_id: ID de la requête pour tracking
+
+    Returns:
+        DelayPrediction (ML ou fallback selon feature flag)
+    """
+    from feature_flags import FeatureFlags
+
+    booking_id = getattr(booking, 'id', 'unknown')
+    driver_id = getattr(driver, 'id', 'unknown')
+
+    # Vérifier feature flag
+    use_ml = FeatureFlags.is_ml_enabled(request_id=request_id or f"booking_{booking_id}")
+
+    try:
+        if use_ml:
+            # Utiliser ML
+            predictor = get_ml_predictor()
+
+            if not predictor.is_trained:
+                logger.warning(
+                    f"[ML] Model not trained for booking {booking_id}, using fallback"
+                )
+                FeatureFlags.record_ml_failure()
+                prediction = predictor.predict_delay(booking, driver, current_time)
+            else:
+                # ML prédiction
+                import time
+                start_time = time.time()
+
+                prediction = predictor.predict_delay(booking, driver, current_time)
+
+                elapsed_ms = (time.time() - start_time) * 1000
+
+                # Logging exhaustif
+                logger.info(
+                    f"[ML] Prediction for booking {booking_id} (driver {driver_id}): "
+                    f"delay={prediction.predicted_delay_minutes:.2f} min, "
+                    f"confidence={prediction.confidence:.2f}, "
+                    f"risk={prediction.risk_level}, "
+                    f"time={elapsed_ms:.1f}ms, "
+                    f"request_id={request_id}"
+                )
+
+                # Enregistrer succès
+                FeatureFlags.record_ml_success()
+        else:
+            # Utiliser fallback
+            logger.info(
+                f"[ML] Using fallback for booking {booking_id} "
+                f"(ML disabled or outside traffic percentage)"
+            )
+
+            predictor = get_ml_predictor()
+            prediction = predictor.predict_delay(booking, driver, current_time)
+
+    except Exception as e:
+        # En cas d'erreur, utiliser fallback si activé
+        logger.error(
+            f"[ML] Prediction failed for booking {booking_id}: {e}",
+            exc_info=True
+        )
+
+        FeatureFlags.record_ml_failure()
+
+        if FeatureFlags.should_fallback_on_error():
+            logger.warning(f"[ML] Using fallback for booking {booking_id} after error")
+
+            # Fallback simple
+            from shared.geo_utils import haversine_distance
+
+            pickup_lat = float(getattr(booking, 'pickup_lat', 0) or 0)
+            pickup_lon = float(getattr(booking, 'pickup_lon', 0) or 0)
+            dropoff_lat = float(getattr(booking, 'dropoff_lat', 0) or 0)
+            dropoff_lon = float(getattr(booking, 'dropoff_lon', 0) or 0)
+
+            if all([pickup_lat, pickup_lon, dropoff_lat, dropoff_lon]):
+                distance_km = haversine_distance(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+                predicted_delay = distance_km * 0.5
+            else:
+                predicted_delay = 5.0
+
+            prediction = DelayPrediction(
+                booking_id=int(booking_id) if isinstance(booking_id, (int, str)) and str(booking_id).isdigit() else 0,
+                predicted_delay_minutes=predicted_delay,
+                confidence=0.2,
+                risk_level="medium",
+                contributing_factors={"fallback_error": 1.0}
+            )
+        else:
+            # Re-raise si fallback désactivé
+            raise
+    return prediction
 

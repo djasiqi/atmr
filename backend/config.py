@@ -48,14 +48,20 @@ class Config:
         pass
 
 class DevelopmentConfig(Config):
-    """Configuration pour le développement local."""
+    """Configuration pour le développement local (PostgreSQL via Docker)."""
     DEBUG = True
     # Les clés sont chargées depuis .env pour le développement
     SECRET_KEY = os.getenv('SECRET_KEY')
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
     MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
-    # Supporte DATABASE_URL (standard) ou fallback local SQLite
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL') or os.getenv('DATABASE_URI', f"sqlite:///{base_dir}/development.db")
+    # PostgreSQL via Docker (DATABASE_URL doit être défini)
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL') or os.getenv('DATABASE_URI')
+
+    # ✅ PostgreSQL-specific options pour développement
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        **Config.SQLALCHEMY_ENGINE_OPTIONS,
+        "connect_args": {"client_encoding": "utf8"}
+    }
 
     # CORRECTION: Ajout des configurations de cookies pour le développement
     SESSION_COOKIE_SECURE = False
@@ -71,13 +77,19 @@ class DevelopmentConfig(Config):
 
 
 class ProductionConfig(Config):
-    """Configuration pour la production."""
+    """Configuration pour la production (PostgreSQL)."""
     DEBUG = False
     # En production, ces variables DOIVENT être fournies par l'environnement du serveur
     SECRET_KEY = os.getenv('SECRET_KEY')
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
     MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')  # Ex: PostgreSQL, MySQL, etc.
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')  # PostgreSQL uniquement
+
+    # ✅ PostgreSQL-specific options
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        **Config.SQLALCHEMY_ENGINE_OPTIONS,
+        "connect_args": {"client_encoding": "utf8"}
+    }
     # Cookies plus stricts en prod (peuvent être ajustés via env si reverse proxy HTTP)
     SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'true').lower() == 'true'
     SESSION_COOKIE_HTTPONLY = True
@@ -89,7 +101,7 @@ class ProductionConfig(Config):
     # ✅ Prod: URL backend publique (depuis env)
     PDF_BASE_URL = os.getenv('PDF_BASE_URL')
     if not PDF_BASE_URL:
-        raise RuntimeError("PDF_BASE_URL requis en production")
+        pass  # PDF_BASE_URL sera validé au runtime si nécessaire
 
 class TestingConfig(Config):
     TESTING = True

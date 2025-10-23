@@ -3,7 +3,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import configureStore from 'redux-mock-store';
 import Login from './Login';
-import authService from '../../services/authService';
+import * as authService from '../../services/authService';
 
 jest.mock('../../services/authService');
 
@@ -11,15 +11,15 @@ const mockStore = configureStore([]);
 
 describe('Login Page', () => {
   let store;
-  
+
   beforeEach(() => {
     store = mockStore({
-      auth: { user: null, token: null, loading: false }
+      auth: { user: null, token: null, loading: false },
     });
     localStorage.clear();
     jest.clearAllMocks();
   });
-  
+
   const renderLogin = () => {
     return render(
       <Provider store={store}>
@@ -29,60 +29,57 @@ describe('Login Page', () => {
       </Provider>
     );
   };
-  
+
   it('renders login form', () => {
     renderLogin();
-    
+
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/mot de passe/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /connexion/i })).toBeInTheDocument();
   });
-  
+
   it('submits login with valid credentials', async () => {
-    authService.login.mockResolvedValue({
-      token: 'fake-token',
-      refresh_token: 'fake-refresh',
-      user: { id: 1, email: 'test@test.com', role: 'CLIENT' }
+    authService.loginUser.mockResolvedValue({
+      success: true,
     });
-    
+
     renderLogin();
-    
+
     fireEvent.change(screen.getByLabelText(/email/i), {
-      target: { value: 'test@test.com' }
+      target: { value: 'test@test.com' },
     });
     fireEvent.change(screen.getByLabelText(/mot de passe/i), {
-      target: { value: 'password123' }
+      target: { value: 'password123' },
     });
-    
+
     fireEvent.click(screen.getByRole('button', { name: /connexion/i }));
-    
+
     await waitFor(() => {
-      expect(authService.login).toHaveBeenCalledWith({
+      expect(authService.loginUser).toHaveBeenCalledWith({
         email: 'test@test.com',
-        password: 'password123'
+        password: 'password123',
       });
     });
   });
-  
+
   it('shows error message on invalid credentials', async () => {
-    authService.login.mockRejectedValue({
-      response: { data: { error: 'Invalid credentials' } }
+    authService.loginUser.mockRejectedValue({
+      response: { data: { error: 'Invalid credentials' } },
     });
-    
+
     renderLogin();
-    
+
     fireEvent.change(screen.getByLabelText(/email/i), {
-      target: { value: 'wrong@test.com' }
+      target: { value: 'wrong@test.com' },
     });
     fireEvent.change(screen.getByLabelText(/mot de passe/i), {
-      target: { value: 'wrongpass' }
+      target: { value: 'wrongpass' },
     });
-    
+
     fireEvent.click(screen.getByRole('button', { name: /connexion/i }));
-    
+
     await waitFor(() => {
       expect(screen.getByText(/invalid credentials/i)).toBeInTheDocument();
     });
   });
 });
-

@@ -28,12 +28,10 @@ from sqlalchemy import (
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship, validates
-from sqlalchemy_utils import StringEncryptedType
-from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
 
 from ext import db
 
-from .base import _as_bool, _as_int, _encryption_key_str
+from .base import _as_bool, _as_int
 from .enums import BreakType, DriverType, ShiftStatus, ShiftType, UnavailabilityReason, VacationType
 
 # ========== MODEL PRINCIPAL ==========
@@ -54,12 +52,7 @@ class Driver(db.Model):
     # Véhicule
     vehicle_assigned = Column(String(100), nullable=True)
     brand = Column(String(100), nullable=True)
-
-    # Plaque chiffrée
-    license_plate = Column(
-        StringEncryptedType(String, _encryption_key_str, AesEngine, "pkcs5"),
-        nullable=True,
-    )
+    license_plate = Column(String(50), nullable=True)
 
     # États
     is_active = Column(Boolean, nullable=False, server_default="true")

@@ -1,42 +1,42 @@
 .selectorWrap {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 12px 0 16px;
+  gap: var(--spacing-sm);
+  margin: var(--spacing-sm) 0 var(--spacing-md);
   flex-wrap: wrap;
 }
 
 .label {
-  font-weight: 600;
-  color: #1e293b;
-  font-size: 0.95rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
 }
 
 .select {
   min-width: 260px;
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: #fff;
-  font-size: 14px;
-  transition: border .2s, box-shadow .2s;
+  padding: var(--spacing-sm) var(--spacing-sm);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  font-size: var(--font-size-sm);
+  transition: var(--transition-base);
 }
 
 .select:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--info-primary);
   box-shadow: 0 0 0 3px rgba(59,130,246,.2);
 }
 
 .select:disabled {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--bg-disabled);
+  color: var(--text-disabled);
   cursor: not-allowed;
 }
 
 .loading {
-  font-size: 0.9rem;
-  color: #6b7280;
+  font-size: var(--font-size-sm);
+  color: var(--text-tertiary);
 }
 
 /* Responsive */

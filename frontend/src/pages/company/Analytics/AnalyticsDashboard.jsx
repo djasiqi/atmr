@@ -9,7 +9,7 @@
  * - Export de données
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   LineChart,
   Line,
@@ -23,20 +23,20 @@ import {
   ResponsiveContainer,
   Area,
   AreaChart,
-} from "recharts";
-import CompanyHeader from "../../../components/layout/Header/CompanyHeader";
-import CompanySidebar from "../../../components/layout/Sidebar/CompanySidebar/CompanySidebar";
-import styles from "./AnalyticsDashboard.module.css";
+} from 'recharts';
+import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
+import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
+import styles from './AnalyticsDashboard.module.css';
 import {
   fetchDashboardAnalytics,
   exportAnalytics,
   downloadCsvFile,
   openJsonInNewTab,
-} from "../../../services/analyticsService";
+} from '../../../services/analyticsService';
 
 const AnalyticsDashboard = () => {
   // États
-  const [period, setPeriod] = useState("7d"); // Changé à 7d pour inclure le 15 octobre
+  const [period, setPeriod] = useState('7d'); // Changé à 7d pour inclure le 15 octobre
   const [loading, setLoading] = useState(false);
   const [analytics, setAnalytics] = useState(null);
   const [error, setError] = useState(null);
@@ -50,8 +50,8 @@ const AnalyticsDashboard = () => {
       const data = await fetchDashboardAnalytics({ period });
       setAnalytics(data);
     } catch (err) {
-      setError(err.message || "Impossible de charger les analytics");
-      console.error("Failed to fetch analytics:", err);
+      setError(err.message || 'Impossible de charger les analytics');
+      console.error('Failed to fetch analytics:', err);
     } finally {
       setLoading(false);
     }
@@ -70,7 +70,7 @@ const AnalyticsDashboard = () => {
           <CompanySidebar />
           <div className={styles.mainContent}>
             <div className={styles.loadingContainer}>
-              <div className={styles.spinner}></div>
+              <div className="spinner spinner-lg"></div>
               <p>Chargement de l'entreprise...</p>
             </div>
           </div>
@@ -88,7 +88,7 @@ const AnalyticsDashboard = () => {
           <CompanySidebar />
           <div className={styles.mainContent}>
             <div className={styles.loadingContainer}>
-              <div className={styles.spinner}></div>
+              <div className="spinner spinner-lg"></div>
               <p>Chargement des analytics...</p>
             </div>
           </div>
@@ -108,8 +108,8 @@ const AnalyticsDashboard = () => {
             <div className={styles.errorContainer}>
               <h2>❌ Erreur</h2>
               <p>{error}</p>
-              <button onClick={fetchAnalytics} className={styles.retryButton}>
-                Réessayer
+              <button onClick={fetchAnalytics} className="btn btn-primary">
+                🔄 Réessayer
               </button>
             </div>
           </div>
@@ -150,42 +150,64 @@ const AnalyticsDashboard = () => {
 
         <div className={styles.mainContent}>
           <div className={styles.analytics}>
-            {/* Header avec sélecteur de période */}
-            <header className={styles.analyticsHeader}>
-              <div className={styles.headerLeft}>
-                <h1>📊 Analytics & Performance</h1>
-                <p className={styles.subtitle}>
-                  Analyse de la performance du système de dispatch
-                </p>
-              </div>
+            {/* Section Header + Insights */}
+            <section className={styles.headerSection}>
+              {/* Header avec sélecteur de période */}
+              <header className={styles.analyticsHeader}>
+                <div className={styles.headerLeft}>
+                  <h1>📊 Analytics & Performance</h1>
+                  <p className={styles.subtitle}>
+                    Analyse de la performance du système de dispatch
+                  </p>
+                </div>
 
-              <div className={styles.periodSelector}>
-                <button
-                  className={
-                    period === "7d" ? styles.periodActive : styles.periodButton
-                  }
-                  onClick={() => setPeriod("7d")}
-                >
-                  7 jours
-                </button>
-                <button
-                  className={
-                    period === "30d" ? styles.periodActive : styles.periodButton
-                  }
-                  onClick={() => setPeriod("30d")}
-                >
-                  30 jours
-                </button>
-                <button
-                  className={
-                    period === "90d" ? styles.periodActive : styles.periodButton
-                  }
-                  onClick={() => setPeriod("90d")}
-                >
-                  90 jours
-                </button>
-              </div>
-            </header>
+                <div className={styles.periodSelector}>
+                  <button
+                    className={period === '7d' ? styles.periodActive : styles.periodButton}
+                    onClick={() => setPeriod('7d')}
+                  >
+                    7 jours
+                  </button>
+                  <button
+                    className={period === '30d' ? styles.periodActive : styles.periodButton}
+                    onClick={() => setPeriod('30d')}
+                  >
+                    30 jours
+                  </button>
+                  <button
+                    className={period === '90d' ? styles.periodActive : styles.periodButton}
+                    onClick={() => setPeriod('90d')}
+                  >
+                    90 jours
+                  </button>
+                </div>
+              </header>
+
+              {/* Insights dans le même conteneur */}
+              {insights && insights.length > 0 && (
+                <div className={styles.insightsContainer}>
+                  <h2 className={styles.insightsTitle}>💡 Insights & Recommandations</h2>
+                  <div className={styles.insightsList}>
+                    {insights.map((insight, index) => (
+                      <div
+                        key={index}
+                        className={`${styles.insightCard} ${styles[`insight${insight.severity}`]}`}
+                      >
+                        <div className={styles.insightIcon}>
+                          {insight.severity === 'critical' && '🔴'}
+                          {insight.severity === 'warning' && '⚠️'}
+                          {insight.severity === 'info' && '💡'}
+                        </div>
+                        <div className={styles.insightContent}>
+                          <h4>{insight.title}</h4>
+                          <p>{insight.message}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
 
             {/* KPI Cards */}
             <div className={styles.kpiGrid}>
@@ -193,9 +215,7 @@ const AnalyticsDashboard = () => {
                 <div className={styles.kpiIcon}>📦</div>
                 <div className={styles.kpiContent}>
                   <h3 className={styles.kpiLabel}>Total Courses</h3>
-                  <p className={styles.kpiValue}>
-                    {summary.total_bookings || 0}
-                  </p>
+                  <p className={styles.kpiValue}>{summary.total_bookings || 0}</p>
                 </div>
               </div>
 
@@ -204,10 +224,7 @@ const AnalyticsDashboard = () => {
                 <div className={styles.kpiContent}>
                   <h3 className={styles.kpiLabel}>Taux à l'heure</h3>
                   <p className={styles.kpiValue}>
-                    {summary.avg_on_time_rate
-                      ? summary.avg_on_time_rate.toFixed(1)
-                      : "0.0"}
-                    %
+                    {summary.avg_on_time_rate ? summary.avg_on_time_rate.toFixed(1) : '0.0'}%
                   </p>
                 </div>
               </div>
@@ -217,10 +234,7 @@ const AnalyticsDashboard = () => {
                 <div className={styles.kpiContent}>
                   <h3 className={styles.kpiLabel}>Retard moyen</h3>
                   <p className={styles.kpiValue}>
-                    {summary.avg_delay_minutes
-                      ? summary.avg_delay_minutes.toFixed(1)
-                      : "0.0"}{" "}
-                    min
+                    {summary.avg_delay_minutes ? summary.avg_delay_minutes.toFixed(1) : '0.0'} min
                   </p>
                 </div>
               </div>
@@ -230,52 +244,12 @@ const AnalyticsDashboard = () => {
                 <div className={styles.kpiContent}>
                   <h3 className={styles.kpiLabel}>Score Qualité</h3>
                   <p className={styles.kpiValue}>
-                    {summary.avg_quality_score
-                      ? summary.avg_quality_score.toFixed(0)
-                      : "0"}
+                    {summary.avg_quality_score ? summary.avg_quality_score.toFixed(0) : '0'}
                     /100
                   </p>
                 </div>
               </div>
             </div>
-
-            {/* Insights */}
-            {insights && insights.length > 0 && (
-              <div className={styles.insightsSection}>
-                <h2 className={styles.sectionTitle}>
-                  💡 Insights & Recommandations
-                </h2>
-                <div className={styles.insightsList}>
-                  {insights.map((insight, index) => (
-                    <div
-                      key={index}
-                      className={`${styles.insightCard} ${
-                        styles[
-                          `insight${
-                            insight.priority.charAt(0).toUpperCase() +
-                            insight.priority.slice(1)
-                          }`
-                        ]
-                      }`}
-                    >
-                      <div className={styles.insightHeader}>
-                        <span className={styles.insightIcon}>
-                          {insight.type === "success"
-                            ? "✅"
-                            : insight.type === "warning"
-                            ? "⚠️"
-                            : "ℹ️"}
-                        </span>
-                        <span className={styles.insightTitle}>
-                          {insight.title}
-                        </span>
-                      </div>
-                      <p className={styles.insightMessage}>{insight.message}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Graphiques */}
             <div className={styles.chartsGrid}>
@@ -287,27 +261,22 @@ const AnalyticsDashboard = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 12, fill: "#6b7280" }}
+                      tick={{ fontSize: 12, fill: '#6b7280' }}
                       tickFormatter={(value) => {
                         const d = new Date(value);
                         return `${d.getDate()}/${d.getMonth() + 1}`;
                       }}
                     />
-                    <YAxis tick={{ fontSize: 12, fill: "#6b7280" }} />
+                    <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} />
                     <Tooltip
                       contentStyle={{
-                        background: "#ffffff",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "8px",
+                        background: '#ffffff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
                       }}
                     />
                     <Legend />
-                    <Bar
-                      dataKey="bookings"
-                      fill="#0f766e"
-                      name="Courses"
-                      radius={[8, 8, 0, 0]}
-                    />
+                    <Bar dataKey="bookings" fill="#0f766e" name="Courses" radius={[8, 8, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -320,21 +289,18 @@ const AnalyticsDashboard = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 12, fill: "#6b7280" }}
+                      tick={{ fontSize: 12, fill: '#6b7280' }}
                       tickFormatter={(value) => {
                         const d = new Date(value);
                         return `${d.getDate()}/${d.getMonth() + 1}`;
                       }}
                     />
-                    <YAxis
-                      tick={{ fontSize: 12, fill: "#6b7280" }}
-                      domain={[0, 100]}
-                    />
+                    <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} domain={[0, 100]} />
                     <Tooltip
                       contentStyle={{
-                        background: "#ffffff",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "8px",
+                        background: '#ffffff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
                       }}
                       formatter={(value) => `${value.toFixed(1)}%`}
                     />
@@ -359,18 +325,18 @@ const AnalyticsDashboard = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 12, fill: "#6b7280" }}
+                      tick={{ fontSize: 12, fill: '#6b7280' }}
                       tickFormatter={(value) => {
                         const d = new Date(value);
                         return `${d.getDate()}/${d.getMonth() + 1}`;
                       }}
                     />
-                    <YAxis tick={{ fontSize: 12, fill: "#6b7280" }} />
+                    <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} />
                     <Tooltip
                       contentStyle={{
-                        background: "#ffffff",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "8px",
+                        background: '#ffffff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
                       }}
                       formatter={(value) => `${value.toFixed(1)} min`}
                     />
@@ -380,7 +346,7 @@ const AnalyticsDashboard = () => {
                       dataKey="avg_delay"
                       stroke="#ef4444"
                       strokeWidth={2}
-                      dot={{ fill: "#ef4444", r: 4 }}
+                      dot={{ fill: '#ef4444', r: 4 }}
                       activeDot={{ r: 6 }}
                       name="Retard moyen (min)"
                     />
@@ -396,21 +362,18 @@ const AnalyticsDashboard = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 12, fill: "#6b7280" }}
+                      tick={{ fontSize: 12, fill: '#6b7280' }}
                       tickFormatter={(value) => {
                         const d = new Date(value);
                         return `${d.getDate()}/${d.getMonth() + 1}`;
                       }}
                     />
-                    <YAxis
-                      tick={{ fontSize: 12, fill: "#6b7280" }}
-                      domain={[0, 100]}
-                    />
+                    <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} domain={[0, 100]} />
                     <Tooltip
                       contentStyle={{
-                        background: "#ffffff",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "8px",
+                        background: '#ffffff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
                       }}
                       formatter={(value) => `${value.toFixed(0)}/100`}
                     />
@@ -430,16 +393,10 @@ const AnalyticsDashboard = () => {
 
             {/* Bouton Export */}
             <div className={styles.actionsBar}>
-              <button
-                className={styles.exportButton}
-                onClick={() => handleExport("csv")}
-              >
+              <button className="btn btn-ghost" onClick={() => handleExport('csv')}>
                 📥 Exporter en CSV
               </button>
-              <button
-                className={styles.exportButton}
-                onClick={() => handleExport("json")}
-              >
+              <button className="btn btn-ghost" onClick={() => handleExport('json')}>
                 📄 Exporter en JSON
               </button>
             </div>
@@ -452,16 +409,14 @@ const AnalyticsDashboard = () => {
   // Handler pour l'export
   async function handleExport(format) {
     try {
-      const today = new Date().toISOString().split("T")[0];
+      const today = new Date().toISOString().split('T')[0];
       const startDate = new Date();
-      startDate.setDate(
-        startDate.getDate() - (period === "7d" ? 7 : period === "90d" ? 90 : 30)
-      );
-      const start = startDate.toISOString().split("T")[0];
+      startDate.setDate(startDate.getDate() - (period === '7d' ? 7 : period === '90d' ? 90 : 30));
+      const start = startDate.toISOString().split('T')[0];
 
       const data = await exportAnalytics(start, today, format);
 
-      if (format === "csv") {
+      if (format === 'csv') {
         downloadCsvFile(data, `analytics_${start}_${today}.csv`);
       } else {
         openJsonInNewTab(data);

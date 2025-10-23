@@ -1,22 +1,22 @@
-/* frontend/src/components/ui/ToggleField.module.css */
+/* Composant Toggle Switch personnalisé */
 
 .toggleField {
-  padding: 16px;
-  background: linear-gradient(135deg, #fafbfc 0%, #f4f7fc 100%);
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  transition: all 0.2s ease;
+  padding: var(--spacing-md);
+  background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  transition: var(--transition-base);
 }
 
 .toggleField:hover {
-  border-color: #cbd5e1;
+  border-color: var(--border-secondary);
 }
 
 .toggleRow {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: var(--spacing-md);
 }
 
 .toggleInfo {
@@ -24,19 +24,19 @@
 }
 
 .toggleLabel {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #0f172a;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-xs);
   cursor: pointer;
 }
 
 .toggleHint {
-  font-size: 0.85rem;
-  color: #64748b;
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
   margin: 0;
-  line-height: 1.4;
+  line-height: var(--line-height-normal);
 }
 
 /* Toggle Switch */
@@ -62,9 +62,9 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #cbd5e1;
-  transition: 0.3s;
-  border-radius: 28px;
+  background-color: var(--border-secondary);
+  transition: var(--transition-base);
+  border-radius: var(--radius-full);
 }
 
 .toggleSlider:before {
@@ -75,13 +75,13 @@
   left: 4px;
   bottom: 4px;
   background-color: white;
-  transition: 0.3s;
-  border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: var(--transition-base);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
 }
 
 .toggleSwitch input:checked + .toggleSlider {
-  background: linear-gradient(135deg, #0f766e 0%, #0d5e56 100%);
+  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary-dark) 100%);
 }
 
 .toggleSwitch input:checked + .toggleSlider:before {
@@ -98,7 +98,7 @@
   .toggleRow {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
+    gap: var(--spacing-sm);
   }
   
   .toggleSwitch {

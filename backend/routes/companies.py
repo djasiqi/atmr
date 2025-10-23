@@ -167,6 +167,7 @@ manual_booking_model = companies_ns.model('ManualBooking', {
     'customer_phone':      fields.String,
     'is_round_trip':       fields.Boolean(default=False),
     'return_time':         fields.String(description="ISO 8601"),
+    'return_date':         fields.String(description="Date du retour (YYYY-MM-DD)"),
     'amount':              fields.Float,
     'medical_facility':    fields.String,
     'doctor_name':         fields.String,
@@ -179,6 +180,23 @@ manual_booking_model = companies_ns.model('ManualBooking', {
     'billed_to_type': fields.String(description="patient | clinic | insurance"),
     'billed_to_company_id': fields.Integer(description="ID société payeuse si clinic/insurance"),
     'billed_to_contact': fields.String(description="Email/nom facturation"),
+
+    # 🏥 Nouveaux champs médicaux structurés
+    'establishment_id': fields.Integer(description="ID de l'établissement médical"),
+    'medical_service_id': fields.Integer(description="ID du service médical"),
+
+    # 📍 Coordonnées GPS (optionnelles)
+    'pickup_lat': fields.Float(description="Latitude du point de départ"),
+    'pickup_lon': fields.Float(description="Longitude du point de départ"),
+    'dropoff_lat': fields.Float(description="Latitude de la destination"),
+    'dropoff_lon': fields.Float(description="Longitude de la destination"),
+
+    # 🔄 Récurrence
+    'is_recurring': fields.Boolean(default=False, description="Réservation récurrente"),
+    'recurrence_type': fields.String(description="Type de récurrence: daily | weekly | custom"),
+    'recurrence_days': fields.List(fields.Integer, description="Jours de la semaine (0=Lundi, 6=Dimanche)"),
+    'recurrence_end_date': fields.String(description="Date de fin de récurrence (YYYY-MM-DD)"),
+    'occurrences': fields.Integer(description="Nombre d'occurrences de la récurrence"),
 })
 
 
@@ -1670,11 +1688,13 @@ class CompanyClients(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @companies_ns.param('search', 'Terme à chercher dans le prénom ou le nom')
+    @companies_ns.param('page', 'Numéro de page (défaut: 1)')
+    @companies_ns.param('per_page', 'Résultats par page (défaut: 100, max: 1000)')
     def get(self):
         """
-        GET /companies/me/clients?search=<query>
+        GET /companies/me/clients?search=<query>&page=1&per_page=100
         Retourne les clients manuels (PRIVATE ou CORPORATE) de l'entreprise courante,
-        éventuellement filtrés par prénom ou nom.
+        éventuellement filtrés par prénom ou nom (paginés).
         """
         company, err, code = get_company_from_token()
         if err:
@@ -1687,6 +1707,10 @@ class CompanyClients(Resource):
             cid = None
         if cid is None:
             return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        # Pagination
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 1000)
 
         q = request.args.get('search', '').strip()
         # On ne prend que les clients rattachés à cette entreprise,
@@ -1708,9 +1732,22 @@ class CompanyClients(Resource):
                 )
             )
 
-        clients = query.all()
+        # Paginer
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        total = pagination.total or 0
+        clients = pagination.items
+
+        # Construire headers pagination (optionnel - liens de navigation)
+        # Note: Flask-RESTx génère les noms d'endpoints avec underscores
+        try:
+            from routes.bookings import _build_pagination_links
+            headers = _build_pagination_links(page, per_page, total, 'companies_company_clients')
+        except Exception:
+            # Si la génération des liens échoue, continuer sans headers
+            headers = {}
+
         # Chaque c.serialize retournera aussi c.user.serialize
-        return [cast(Any, c).serialize for c in clients], 200
+        return {"clients": [cast(Any, c).serialize for c in clients], "total": total}, 200, headers
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -1861,6 +1898,8 @@ class CompanyClientDetail(Resource):
 
         data = request.get_json(silent=True) or {}
 
+        app_logger.info(f"📝 Mise à jour client {client_id}: {data}")
+
         try:
             # Mise à jour des coordonnées de contact/facturation
             if 'contact_email' in data:
@@ -1890,6 +1929,10 @@ class CompanyClientDetail(Resource):
                 elif not client.is_institution:
                     client.institution_name = None
 
+            # Gestion de l'établissement de résidence
+            if 'residence_facility' in data:
+                client.residence_facility = data['residence_facility'] or None
+
             # Gestion de l'adresse de domicile
             if 'domicile_address' in data:
                 client.domicile_address = data['domicile_address'] or None
@@ -1917,6 +1960,18 @@ class CompanyClientDetail(Resource):
                         client.preferential_rate = Decimal(str(rate_value))
                     except (ValueError, TypeError):
                         return {"error": "Tarif préférentiel invalide"}, 400
+
+            # Gestion de la date de naissance (mise à jour de l'utilisateur)
+            if 'birth_date' in data and client.user:
+                from datetime import datetime
+                birth_date_value = data['birth_date']
+                if birth_date_value:
+                    try:
+                        client.user.birth_date = datetime.strptime(str(birth_date_value), "%Y-%m-%d").date()  # noqa: DTZ007
+                    except (ValueError, TypeError):
+                        return {"error": "Format de date de naissance invalide. Utiliser YYYY-MM-DD."}, 400
+                else:
+                    client.user.birth_date = None
 
             db.session.commit()
             return cast(Any, client).serialize, 200
@@ -2184,8 +2239,30 @@ class SingleReservation(Resource):
         if not booking:
             return {"error": "Réservation non trouvée."}, 404
 
-        # Règle métier selon le statut
+        # Règle métier selon le statut ET le timing
         try:
+            from datetime import datetime
+
+            from models import Assignment
+
+            # Calculer le temps restant avant/après la course
+            now = datetime.now(UTC)
+            scheduled_time = booking.scheduled_time
+
+            # Si pas de scheduled_time, considérer comme "récent"
+            if scheduled_time:
+                # Convertir en UTC si nécessaire
+                if scheduled_time.tzinfo is None:
+                    # Supposer que c'est l'heure locale (Europe/Zurich)
+                    from pytz import timezone as pytz_tz
+                    local_tz = pytz_tz('Europe/Zurich')
+                    scheduled_time = local_tz.localize(scheduled_time)
+                    scheduled_time = scheduled_time.astimezone(UTC)
+
+                time_diff_hours = (scheduled_time - now).total_seconds() / 3600
+            else:
+                time_diff_hours = 0  # Traiter comme "maintenant"
+
             # ✅ Règle 1: PENDING ou ACCEPTED (non assignée) → SUPPRESSION physique
             if booking.status in [BookingStatus.PENDING, BookingStatus.ACCEPTED]:
                 db.session.delete(booking)
@@ -2194,16 +2271,28 @@ class SingleReservation(Resource):
                 app_logger.info(f"🗑️ Suppression - Course #{reservation_id} (statut: {booking.status.value})")
                 return {"message": "La réservation a été supprimée avec succès."}, 200
 
-            # 🚫 Règle 2: ASSIGNED (assignée mais pas démarrée) → ANNULATION (garde historique)
+            # 🚫 Règle 2: ASSIGNED → Logique intelligente selon timing
             elif booking.status == BookingStatus.ASSIGNED:
-                booking.status = BookingStatus.CANCELED
-                # Libérer le chauffeur
-                if booking.driver_id:
-                    booking.driver_id = None
-                db.session.commit()
-                _maybe_trigger_dispatch(cid, "cancel")
-                app_logger.info(f"🚫 Annulation - Course #{reservation_id} (chauffeur libéré)")
-                return {"message": "La réservation a été annulée avec succès."}, 200
+                # 🗑️ Cas A: Course passée (< -24h) → SUPPRESSION physique
+                if time_diff_hours < -24:
+                    # Supprimer les assignments associés d'abord
+                    Assignment.query.filter_by(booking_id=reservation_id).delete()
+                    db.session.delete(booking)
+                    db.session.commit()
+                    _maybe_trigger_dispatch(cid, "cancel")
+                    app_logger.info(f"🗑️ Suppression physique - Course #{reservation_id} passée (< -24h)")
+                    return {"message": "La réservation a été supprimée avec succès."}, 200
+
+                # 🚫 Cas B: Course future (> +24h) OU récente (-24h à maintenant) → ANNULATION
+                else:
+                    booking.status = BookingStatus.CANCELED
+                    # Libérer le chauffeur
+                    if booking.driver_id:
+                        booking.driver_id = None
+                    db.session.commit()
+                    _maybe_trigger_dispatch(cid, "cancel")
+                    app_logger.info(f"🚫 Annulation - Course #{reservation_id} (dans {time_diff_hours:.1f}h, chauffeur libéré)")
+                    return {"message": "La réservation a été annulée avec succès."}, 200
 
             # ❌ Règle 3: IN_PROGRESS, COMPLETED, etc. → IMPOSSIBLE
             else:
@@ -2254,6 +2343,19 @@ class ScheduleReservation(Resource):
         if booking.status not in [BookingStatus.PENDING, BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]:
             return {"error": f"Statut '{booking.status.value}' non modifiable."}, 400
 
+        # 🔒 SÉCURITÉ : Vérifier que la course aller est complétée avant de planifier un retour
+        if booking.is_return and booking.parent_booking_id:
+            outbound = Booking.query.filter_by(id=booking.parent_booking_id).first()
+            if outbound:
+                completed_statuses = [BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED]
+                if outbound.status not in completed_statuses:
+                    return {
+                        "error": "Impossible de planifier un retour.",
+                        "message": f"La course aller (ID: {outbound.id}) doit être complétée avant de planifier le retour. Statut actuel: {outbound.status.value}",
+                        "outbound_status": outbound.status.value,
+                        "outbound_id": outbound.id
+                    }, 400
+
         from shared.time_utils import parse_local_naive
         try:
             sched_local = parse_local_naive(iso)
@@ -2267,6 +2369,7 @@ class ScheduleReservation(Resource):
             booking.status = BookingStatus.ACCEPTED
 
         db.session.commit()
+        db.session.refresh(booking)  # ✅ Rafraîchir l'objet pour obtenir les valeurs à jour
 
         # Déclenche la réoptimisation si activé
         if bool(getattr(company, "dispatch_enabled", True)):
@@ -2300,18 +2403,31 @@ class DispatchNowReservation(Resource):
 
         from datetime import timedelta
 
-        from shared.time_utils import now_utc
-        now = now_utc()
+        from shared.time_utils import now_local
+        now = now_local()  # ✅ Utiliser l'heure locale (Genève) au lieu d'UTC
 
         booking = Booking.query.filter_by(id=booking_id, company_id=cid).first()
         if not booking:
             return {"error": "Réservation introuvable."}, 404
 
-        # Si pas d'heure, fixe maintenant + offset
-        if not booking.scheduled_time:
-            booking.scheduled_time = now + timedelta(minutes=minutes_offset)  # UTC aware
+        # 🔒 SÉCURITÉ : Vérifier que la course aller est complétée avant de déclencher un retour
+        if booking.is_return and booking.parent_booking_id:
+            outbound = Booking.query.filter_by(id=booking.parent_booking_id).first()
+            if outbound:
+                completed_statuses = [BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED]
+                if outbound.status not in completed_statuses:
+                    return {
+                        "error": "Impossible de déclencher un retour d'urgence.",
+                        "message": f"La course aller (ID: {outbound.id}) doit être complétée avant de déclencher le retour. Statut actuel: {outbound.status.value}",
+                        "outbound_status": outbound.status.value,
+                        "outbound_id": outbound.id
+                    }, 400
 
-        # L'heure est maintenant confirmée (que ce soit un nouveau scheduled_time ou existant)
+        # ✅ Pour dispatch-now, on fixe TOUJOURS l'heure à maintenant + offset
+        # Cela permet de mettre à jour les retours avec heure à confirmer (00:00)
+        booking.scheduled_time = now + timedelta(minutes=minutes_offset)  # UTC aware
+
+        # L'heure est maintenant confirmée
         booking.time_confirmed = True
 
         # S'assure qu'elle soit éligible au moteur
@@ -2319,6 +2435,7 @@ class DispatchNowReservation(Resource):
             booking.status = BookingStatus.ACCEPTED
 
         db.session.commit()
+        db.session.refresh(booking)  # ✅ Rafraîchir l'objet pour obtenir les valeurs à jour
 
         # Déclencher immédiatement la queue
         if bool(getattr(company, "dispatch_enabled", True)):

@@ -1,6 +1,7 @@
 # backend/services/unified_dispatch/apply.py
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from collections import defaultdict
@@ -30,10 +31,8 @@ def apply_assignments(
         return {"applied": [], "skipped": {}, "conflicts": [], "driver_load": {}}
 
     # ✅ ROLLBACK DÉFENSIF AU DÉBUT
-    try:
+    with contextlib.suppress(Exception):
         db.session.rollback()
-    except Exception:
-        pass
 
     # Log pour tracer la propagation du dispatch_run_id
     if dispatch_run_id:
@@ -203,45 +202,68 @@ def apply_assignments(
                     if cur is None or (hasattr(a0, "created_at") and hasattr(cur, "created_at") and a0.created_at > cur.created_at):
                         by_booking[a0.booking_id] = a0
 
+                # ✅ PERF: Séparer nouveaux vs existants pour bulk operations
+                new_assignments: List[Dict[str, Any]] = []
+                update_assignments: List[Dict[str, Any]] = []
+
                 for b_id, payload in desired_assignments.items():
                     cur = by_booking.get(b_id)
                     if cur is None:
-                        # création
-                        new = Assignment()
-                        a_any = cast(Any, new)
-                        a_any.booking_id = int(payload["booking_id"])
-                        a_any.driver_id = payload["driver_id"]
-                        a_any.status = payload.get("status", AssignmentStatus.SCHEDULED)
+                        # ✅ PERF: Préparer pour bulk_insert_mappings
+                        new_assignment = {
+                            "booking_id": int(payload["booking_id"]),
+                            "driver_id": payload["driver_id"],
+                            "status": payload.get("status", AssignmentStatus.SCHEDULED),
+                            "created_at": now,
+                            "updated_at": now,
+                        }
+
+                        # ETA optionnels
                         eta_pu = payload.get("estimated_pickup_arrival") or payload.get("eta_pickup_at")
                         eta_do = payload.get("estimated_dropoff_arrival") or payload.get("eta_dropoff_at")
                         if eta_pu is not None:
-                            a_any.eta_pickup_at = eta_pu
+                            new_assignment["eta_pickup_at"] = eta_pu
                         if eta_do is not None:
-                            a_any.eta_dropoff_at = eta_do
+                            new_assignment["eta_dropoff_at"] = eta_do
+
+                        # dispatch_run_id
                         drid = payload.get("dispatch_run_id") or dispatch_run_id
                         if drid is not None:
-                            a_any.dispatch_run_id = drid  # ✅ Assignation du dispatch_run_id
-                        if hasattr(new, "created_at"):
-                            a_any.created_at = now
-                        if hasattr(new, "updated_at"):
-                            a_any.updated_at = now
-                        db.session.add(new)
+                            new_assignment["dispatch_run_id"] = drid
+
+                        new_assignments.append(new_assignment)
                     else:
-                        # mise à jour
-                        c_any = cast(Any, cur)
-                        c_any.driver_id = payload["driver_id"]
-                        c_any.status = payload.get("status", AssignmentStatus.SCHEDULED)
+                        # ✅ PERF: Préparer pour bulk_update_mappings
+                        update_assignment = {
+                            "id": cur.id,
+                            "driver_id": payload["driver_id"],
+                            "status": payload.get("status", AssignmentStatus.SCHEDULED),
+                            "updated_at": now,
+                        }
+
+                        # ETA optionnels
                         eta_pu = payload.get("estimated_pickup_arrival") or payload.get("eta_pickup_at")
                         eta_do = payload.get("estimated_dropoff_arrival") or payload.get("eta_dropoff_at")
                         if eta_pu is not None:
-                            c_any.eta_pickup_at = eta_pu
+                            update_assignment["eta_pickup_at"] = eta_pu
                         if eta_do is not None:
-                            c_any.eta_dropoff_at = eta_do
+                            update_assignment["eta_dropoff_at"] = eta_do
+
+                        # dispatch_run_id
                         drid = payload.get("dispatch_run_id")
-                        if drid is not None:  # Only update if we have a valid dispatch_run_id
-                            c_any.dispatch_run_id = payload["dispatch_run_id"]  # ✅ Mise à jour du dispatch_run_id
-                        if hasattr(cur, "updated_at"):
-                            c_any.updated_at = now
+                        if drid is not None:
+                            update_assignment["dispatch_run_id"] = drid
+
+                        update_assignments.append(update_assignment)
+
+                # ✅ PERF: Bulk insert/update au lieu de boucle
+                if new_assignments:
+                    db.session.bulk_insert_mappings(cast(Any, Assignment), new_assignments)
+                    logger.info("[Apply] Bulk inserted %d new assignments", len(new_assignments))
+
+                if update_assignments:
+                    db.session.bulk_update_mappings(cast(Any, Assignment), update_assignments)
+                    logger.info("[Apply] Bulk updated %d existing assignments", len(update_assignments))
             else:
                 logger.info("[Apply] No desired assignments to upsert (company_id=%s)", company_id)
 
@@ -279,13 +301,19 @@ def apply_assignments(
     # 🔔 Notifications Socket.IO vers les chauffeurs pour MAJ en temps réel (mobile)
     try:
         if applied_pairs:
-            # Charger les bookings et notifier chaque driver ciblé
+            # ✅ PERF: Charger tous les bookings en une seule query (évite N+1)
+            notif_booking_ids = [b_id for b_id, _ in applied_pairs]
+            notif_bookings = {
+                b.id: b for b in Booking.query.filter(Booking.id.in_(notif_booking_ids)).all()
+            }
+
+            # Notifier chaque driver avec son booking
+            from services.notification_service import notify_driver_new_booking
             for (b_id, d_id) in applied_pairs:
                 try:
-                    b = Booking.query.get(b_id)
+                    b = notif_bookings.get(b_id)
                     if b is None:
                         continue
-                    from services.notification_service import notify_driver_new_booking
                     notify_driver_new_booking(int(d_id), b)
                 except Exception:
                     logger.exception("[Apply] notify_driver_new_booking failed booking_id=%s driver_id=%s", b_id, d_id)

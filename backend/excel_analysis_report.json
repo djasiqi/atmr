@@ -1,0 +1,106 @@
+{
+  "file_info": {
+    "path": "/app/transport_janvier.xlsx",
+    "rows": 233,
+    "columns": 6,
+    "column_names": [
+      "JANVIER",
+      2025,
+      "Unnamed: 2",
+      "EMMENEZ-MOI Sàrl ",
+      "Unnamed: 4",
+      "Unnamed: 5"
+    ]
+  },
+  "data_quality": {
+    "JANVIER": {
+      "non_null_count": 232,
+      "null_count": 1,
+      "unique_count": 105,
+      "data_type": "object",
+      "sample_values": [
+        "Nom/Prénom",
+        "Madame REYTAN Catherine ",
+        "Monsieur LECOULTRE Denis",
+        "Monsieur BYRNE Thomas",
+        "Madame MENETREY Sylvie "
+      ]
+    },
+    "2025": {
+      "non_null_count": 232,
+      "null_count": 1,
+      "unique_count": 218,
+      "data_type": "object",
+      "sample_values": [
+        "Date / Heure ",
+        "02.01.2025                                                                 09:15                                                                     16:00",
+        "02.01.2025                                                                       10:00                                                                                                                                                                           ",
+        "02.01.2025                                                                       10:00                                                                                                                                                                           ",
+        "02.01.2025                                                                                             11:15                                                                                                                                                                           "
+      ]
+    },
+    "Unnamed: 2": {
+      "non_null_count": 232,
+      "null_count": 1,
+      "unique_count": 4,
+      "data_type": "object",
+      "sample_values": [
+        "Course",
+        "A/R",
+        "A/R",
+        "A/R",
+        "A/R"
+      ]
+    },
+    "EMMENEZ-MOI Sàrl ": {
+      "non_null_count": 232,
+      "null_count": 1,
+      "unique_count": 57,
+      "data_type": "object",
+      "sample_values": [
+        "Départ",
+        "Chemin des Ramiers 9, 1245 Collonge-Bellerive ",
+        " Chemin des Courbes 9, 1247 Anières ",
+        " Chemin des Courbes 9, 1247 Anières ",
+        "Avenue Bois-de-la-Chapelle 69, 1213 Onex"
+      ]
+    },
+    "Unnamed: 4": {
+      "non_null_count": 232,
+      "null_count": 1,
+      "unique_count": 79,
+      "data_type": "object",
+      "sample_values": [
+        "Arivée ",
+        "Route d'Hermance 347, 1247 Anières ",
+        "Rue Gabrielle-Perret-Gentil 4, 1205 Genève ",
+        "Rue Gabrielle-Perret-Gentil 4, 1205 Genève ",
+        "Chemin d l'Echo 3, 1213 Onex "
+      ]
+    },
+    "Unnamed: 5": {
+      "non_null_count": 232,
+      "null_count": 1,
+      "unique_count": 16,
+      "data_type": "object",
+      "sample_values": [
+        "CFT",
+        "D.D",
+        "Y.L",
+        "D.D",
+        "Y.L"
+      ]
+    }
+  },
+  "sample_data": {},
+  "geocoding_needed": [],
+  "issues": [
+    "Colonne 'JANVIER' a 1 valeurs manquantes (0.4%)",
+    "Colonne '2025' a 1 valeurs manquantes (0.4%)",
+    "Colonne 'Unnamed: 2' a 1 valeurs manquantes (0.4%)",
+    "Colonne 'EMMENEZ-MOI Sàrl ' a 1 valeurs manquantes (0.4%)",
+    "Colonne 'Unnamed: 4' a 1 valeurs manquantes (0.4%)",
+    "Colonne 'Unnamed: 5' a 1 valeurs manquantes (0.4%)"
+  ],
+  "critical_columns": []
+}

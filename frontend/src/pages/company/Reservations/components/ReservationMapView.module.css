@@ -1,7 +1,7 @@
 .mapContainer {
   background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   position: relative;
   height: 500px;
@@ -14,34 +14,34 @@
 
 .statusMessage {
   position: absolute;
-  top: 16px;
+  top: var(--spacing-md);
   left: 50%;
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.95);
-  padding: 8px 16px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  font-size: 0.875rem;
-  color: #64748b;
-  z-index: 1000;
-  border: 1px solid #e2e8f0;
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  z-index: var(--z-modal-backdrop);
+  border: 1px solid var(--border-primary);
 }
 
 .mapInfo {
   position: absolute;
-  bottom: 16px;
-  left: 16px;
-  background: linear-gradient(135deg, #00796b 0%, #00695c 100%);
+  bottom: var(--spacing-md);
+  left: var(--spacing-md);
+  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-hover) 100%);
   color: white;
-  padding: 12px 18px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 121, 107, 0.3);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-brand);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  z-index: 1001;
-  font-size: 0.875rem;
-  font-weight: 600;
+  gap: var(--spacing-xs);
+  z-index: var(--z-modal);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
   border: 2px solid rgba(255, 255, 255, 0.2);
   min-width: 220px;
 }
@@ -49,11 +49,11 @@
 .mapInfoRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-sm);
 }
 
 .mapInfoIcon {
-  font-size: 1.2rem;
+  font-size: var(--font-xl);
   line-height: 1;
   flex-shrink: 0;
 }
@@ -65,32 +65,32 @@
 
 .mapLegend {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: var(--spacing-md);
+  right: var(--spacing-md);
   background: white;
-  padding: 12px 16px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  z-index: 1001;
-  border: 2px solid #e2e8f0;
+  gap: var(--spacing-sm);
+  z-index: var(--z-modal);
+  border: 2px solid var(--border-primary);
   min-width: 180px;
 }
 
 .legendItem {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 0.9rem;
-  color: #1e293b;
-  font-weight: 500;
-  padding: 4px 0;
+  gap: var(--spacing-sm);
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+  padding: var(--spacing-xxs) 0;
 }
 
 .legendIcon {
-  font-size: 1.25rem;
+  font-size: var(--font-xl);
   flex-shrink: 0;
 }
 
@@ -108,21 +108,21 @@
 }
 
 .popupContent {
-  padding: 12px;
+  padding: var(--spacing-sm);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 .popupContent h4 {
-  margin: 0 0 8px 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1e293b;
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
 }
 
 .popupContent p {
-  margin: 0 0 4px 0;
-  font-size: 0.875rem;
-  color: #64748b;
+  margin: 0 0 var(--spacing-xxs) 0;
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
 }
 
 .popupContent p:last-child {
@@ -140,6 +140,6 @@
     justify-content: center;
     border-radius: 0;
     box-shadow: none;
-    border-top: 1px solid #e5e7eb;
+    border-top: 1px solid var(--border-primary);
   }
 }

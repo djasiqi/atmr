@@ -1,270 +1,97 @@
-.modalOverlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 2000;
-  padding: 1rem;
-}
-
-.modal {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-  max-width: 500px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modalHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid #dee2e6;
-}
-
-.modalHeader h2 {
-  margin: 0;
-  color: #333;
-  font-size: 1.5rem;
-}
-
-.closeBtn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  color: #6c757d;
-  cursor: pointer;
-  padding: 0.5rem;
-  border-radius: 4px;
-  transition: all 0.2s;
-}
-
-.closeBtn:hover {
-  background-color: #f8f9fa;
-  color: #333;
-}
-
-.modalBody {
-  padding: 1.5rem;
-}
+/* Styles spécifiques pour l'encadré d'information facture et les niveaux de rappel */
 
 .invoiceInfo {
-  background-color: #f8f9fa;
-  padding: 1rem;
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
+  background-color: var(--bg-tertiary);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-lg);
 }
 
 .invoiceInfo h3 {
-  margin: 0 0 0.5rem 0;
-  color: #333;
-  font-size: 1.2rem;
+  margin: 0 0 var(--spacing-sm) 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
 }
 
 .invoiceInfo p {
-  margin: 0.25rem 0;
-  color: #666;
-  font-size: 0.9rem;
+  margin: var(--spacing-xs) 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .invoiceInfo strong {
-  color: #dc3545;
+  color: var(--error-primary);
 }
 
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.formGroup {
-  display: flex;
-  flex-direction: column;
-}
-
-.label {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 0.5rem;
-}
-
+/* Options de niveau de rappel */
 .levelOptions {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-sm);
 }
 
 .levelOption {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1rem;
-  border: 2px solid #e9ecef;
-  border-radius: 8px;
-  transition: all 0.2s;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border: 2px solid var(--border-primary);
+  border-radius: var(--radius-md);
   cursor: pointer;
+  transition: var(--transition-base);
 }
 
 .levelOption:hover {
-  border-color: #007bff;
-  background-color: #f8f9fa;
+  border-color: var(--brand-primary-light);
+  background: var(--bg-tertiary);
 }
 
-.levelOption:has(input:checked) {
-  border-color: #007bff;
-  background-color: #e7f3ff;
+.levelOption input[type='radio']:checked ~ .levelLabel {
+  color: var(--brand-primary);
 }
 
 .radio {
-  margin: 0;
+  margin-top: 2px;
   width: 18px;
   height: 18px;
   cursor: pointer;
+  accent-color: var(--brand-primary);
 }
 
 .levelLabel {
   flex: 1;
   cursor: pointer;
-  margin: 0;
 }
 
 .levelTitle {
-  font-weight: 600;
-  color: #333;
-  font-size: 1rem;
-  margin-bottom: 0.25rem;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
 }
 
 .levelDescription {
-  color: #666;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
+  color: var(--text-tertiary);
 }
 
+/* Info sur les frais */
 .feeInfo {
-  background-color: #fff3cd;
-  border: 1px solid #ffeaa7;
-  border-radius: 8px;
-  padding: 1rem;
-  margin-top: 1rem;
+  background-color: var(--info-bg);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--info-primary);
+  margin-top: var(--spacing-md);
 }
 
 .feeInfo h4 {
-  margin: 0 0 0.5rem 0;
-  color: #856404;
-  font-size: 1rem;
+  margin: 0 0 var(--spacing-xs) 0;
+  color: var(--info-primary);
+  font-size: var(--font-size-base);
 }
 
 .feeInfo p {
   margin: 0;
-  color: #856404;
-  font-size: 0.9rem;
-}
-
-.error {
-  background-color: #f8d7da;
-  color: #721c24;
-  padding: 0.75rem;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  border: 1px solid #f5c6cb;
-}
-
-.formActions {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #dee2e6;
-}
-
-.cancelBtn, .submitBtn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 0.9rem;
-}
-
-.cancelBtn {
-  background-color: #6c757d;
-  color: white;
-}
-
-.cancelBtn:hover:not(:disabled) {
-  background-color: #5a6268;
-}
-
-.submitBtn {
-  background-color: #ffc107;
-  color: #212529;
-}
-
-.submitBtn:hover:not(:disabled) {
-  background-color: #e0a800;
-}
-
-.cancelBtn:disabled, .submitBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .modalOverlay {
-    padding: 0.5rem;
-  }
-  
-  .modal {
-    max-height: 95vh;
-  }
-  
-  .modalHeader, .modalBody {
-    padding: 1rem;
-  }
-  
-  .levelOption {
-    padding: 0.75rem;
-  }
-  
-  .formActions {
-    flex-direction: column;
-  }
-  
-  .cancelBtn, .submitBtn {
-    width: 100%;
-  }
-}
-
-@media (max-width: 480px) {
-  .modalHeader h2 {
-    font-size: 1.25rem;
-  }
-  
-  .invoiceInfo h3 {
-    font-size: 1.1rem;
-  }
-  
-  .levelTitle {
-    font-size: 0.9rem;
-  }
-  
-  .levelDescription {
-    font-size: 0.8rem;
-  }
-  
-  .cancelBtn, .submitBtn {
-    padding: 0.5rem 1rem;
-  }
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
 }

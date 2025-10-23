@@ -9,31 +9,17 @@ from typing import Any, Dict, List, Tuple, cast
 
 from models import Booking, BookingStatus, Driver
 from services.unified_dispatch.settings import Settings
+from shared.geo_utils import haversine_distance
+from shared.geo_utils import haversine_distance_meters as _haversine_distance
 from shared.time_utils import minutes_from_now, now_local, sort_key_utc
 
 DEFAULT_SETTINGS = Settings()
 
 logger = logging.getLogger(__name__)
 
-def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calcule la distance Haversine entre deux points GPS en mètres"""
-    from math import atan2, cos, radians, sin, sqrt
-
-    R = 6371000  # Rayon de la Terre en mètres
-
-    lat1_rad = radians(lat1)
-    lat2_rad = radians(lat2)
-    delta_lat = radians(lat2 - lat1)
-    delta_lon = radians(lon2 - lon1)
-
-    a = sin(delta_lat / 2) ** 2 + cos(lat1_rad) * cos(lat2_rad) * sin(delta_lon / 2) ** 2
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
-
-    return R * c
-
-def _can_be_pooled(b1: Booking, b2: Booking) -> bool:
+def _can_be_pooled(b1: Booking, b2: Booking, settings: Settings) -> bool:
     """Vérifie si deux courses peuvent être regroupées (même pickup, même heure)"""
-    if not POOLING_ENABLED:
+    if not settings.pooling.enabled:
         return False
 
     # Vérifier que les deux courses ont scheduled_time
@@ -42,9 +28,9 @@ def _can_be_pooled(b1: Booking, b2: Booking) -> bool:
     if not t1 or not t2:
         return False
 
-    # Vérifier que les heures sont proches (±5 min)
+    # Vérifier que les heures sont proches (±settings.pooling.time_tolerance_min)
     time_diff_min = abs((t1 - t2).total_seconds() / 60)
-    if time_diff_min > POOLING_TIME_TOLERANCE_MIN:
+    if time_diff_min > settings.pooling.time_tolerance_min:
         return False
 
     # Vérifier que les pickups sont proches (distance GPS)
@@ -58,32 +44,24 @@ def _can_be_pooled(b1: Booking, b2: Booking) -> bool:
         addr1 = getattr(b1, 'pickup_location', '').lower().replace(' ', '')
         addr2 = getattr(b2, 'pickup_location', '').lower().replace(' ', '')
         # Ignorer les différences mineures (majuscules, espaces)
-        if addr1 and addr2 and addr1 == addr2:
-            return True
-        return False
+        return bool(addr1 and addr2 and addr1 == addr2)
 
-    # Calculer la distance GPS
-    distance_m = _haversine_distance(float(lat1), float(lon1), float(lat2), float(lon2))
+    # Calculer la distance GPS (vérifier que ce ne sont pas des None)
+    lat1_safe = float(lat1) if lat1 is not None else 0.0
+    lon1_safe = float(lon1) if lon1 is not None else 0.0
+    lat2_safe = float(lat2) if lat2 is not None else 0.0
+    lon2_safe = float(lon2) if lon2 is not None else 0.0
+    distance_m = _haversine_distance(lat1_safe, lon1_safe, lat2_safe, lon2_safe)
 
-    if distance_m <= POOLING_PICKUP_DISTANCE_M:
+    if distance_m <= settings.pooling.pickup_distance_m:
         logger.info(f"[POOLING] 🚗 Courses #{b1.id} et #{b2.id} peuvent être regroupées (même pickup à {distance_m:.0f}m, même heure)")
         return True
 
     return False
 
-# ⏱️ Temps de service RÉELS (selon utilisateur)
-PICKUP_SERVICE_MIN = 5   # Temps de pickup
-DROPOFF_SERVICE_MIN = 10  # Temps de dropoff
-# Le temps de trajet sera calculé par OSRM pour chaque course (pas de moyenne fixe !)
-
-# ⏱️ Marge de sécurité minimale entre deux courses (temps de transition)
-MIN_TRANSITION_MARGIN_MIN = 15  # 15 minutes minimum entre la fin d'une course et le début de la suivante
-
-# 🚗 Paramètres de regroupement de courses (ride-pooling)
-POOLING_ENABLED = True  # Activer le regroupement de courses
-POOLING_TIME_TOLERANCE_MIN = 5  # Tolérance temporelle pour le pickup (±5min)
-POOLING_PICKUP_DISTANCE_M = 100  # Distance maximale entre pickups (100m)
-POOLING_MAX_DETOUR_MIN = 10  # Détour maximal acceptable pour les dropoffs
+# ⏱️ Temps de service RÉELS (selon utilisateur) - maintenant paramétrables via settings
+# PICKUP_SERVICE_MIN, DROPOFF_SERVICE_MIN, MIN_TRANSITION_MARGIN_MIN, etc.
+# sont maintenant accessibles via settings.service_times.* et settings.pooling.*
 
 # fenêtres travail par chauffeur
 # -------------------------------------------------------------------
@@ -180,21 +158,8 @@ def haversine_minutes(
         # Ultime garde-fou
         avg_kmh = 30.0
 
-    # Haversine (distance en km)
-    R = 6371.0088  # rayon moyen de la Terre en km
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-    # Utilise fsum pour une addition légèrement plus stable numériquement
-    sin_dphi = math.sin(dphi / 2.0)
-    sin_dlam = math.sin(dlambda / 2.0)
-    h = math.fsum([
-        sin_dphi * sin_dphi,
-        math.cos(phi1) * math.cos(phi2) * sin_dlam * sin_dlam
-    ])
-    # Protéger contre les erreurs d'arrondi
-    h = min(1.0, max(0.0, h))
-    dist_km = R * (2.0 * math.atan2(math.sqrt(h), math.sqrt(1.0 - h)))
+    # Haversine (distance en km) - Import centralisé
+    dist_km = haversine_distance(lat1, lon1, lat2, lon2)
 
     # Si quasi le même point, temps minimal
     if dist_km < 1e-3:  # ~1 mètre
@@ -393,11 +358,7 @@ def _score_driver_for_booking(
 
     # Garde "pickup trop tard" : si le chauffeur ne peut pas arriver à temps
     # (on a déjà mins_to_booking calculé ci-dessus)
-    if to_pickup_min > mins_to_booking + buffer_min:
-        # arriverait trop tard -> malus fort
-        lateness_penalty = 0.6
-    else:
-        lateness_penalty = 0.0
+    lateness_penalty = 0.6 if to_pickup_min > mins_to_booking + buffer_min else 0.0
 
     # 2) Équité (driver_load_balance)
     did_safe = int(cast(Any, getattr(d, "id", 0)) or 0)
@@ -500,14 +461,12 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
     unassigned: List[int] = []
 
     # --- 1) Retours urgents (hard priority) ---
-    print(f"\n{'='*80}")
-    print(f"[DISPATCH HEURISTIC] 🚨 {len(urgent)} retours urgents, {len(regular)} courses régulières")
-    print(f"[DISPATCH HEURISTIC] 👥 {len(drivers)} chauffeurs disponibles")
+    logger.info("="*80)
+    logger.info("[DISPATCH HEURISTIC] 🚨 %d retours urgents, %d courses régulières", len(urgent), len(regular))
+    logger.info("[DISPATCH HEURISTIC] 👥 %d chauffeurs disponibles", len(drivers))
     if previous_busy or previous_times or previous_load:
-        print(f"[DISPATCH HEURISTIC] 📥 États récupérés: busy_until={busy_until}, proposed_load={proposed_load}")
-    print(f"{'='*80}\n")
-    logger.error(f"[DISPATCH] 🚨 {len(urgent)} retours urgents, {len(regular)} courses régulières")
-    logger.error(f"[DISPATCH] 👥 {len(drivers)} chauffeurs disponibles")
+        logger.info("[DISPATCH HEURISTIC] 📥 États récupérés: busy_until=%s, proposed_load=%s", busy_until, proposed_load)
+    logger.info("="*80)
 
     for b in urgent:
         best: Tuple[float, HeuristicAssignment] | None = None
@@ -550,22 +509,24 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
             # 🎯 Bonus/malus pour équilibrer la charge
             current_load = proposed_load[did] + fairness_counts.get(did, 0)
 
-            # 📈 Pénalité progressive (même logique que regular)
+            # 📈 Pénalité PROGRESSIVE plus douce
             if current_load <= 2:
-                load_penalty = current_load * 0.10
-            elif current_load <= 4:
-                load_penalty = 0.20 + (current_load - 2) * 0.20
+                load_penalty = current_load * 0.1
+            elif current_load == 3:
+                load_penalty = 0.3
+            elif current_load == 4:
+                load_penalty = 0.6
             else:
-                load_penalty = 0.60 + (current_load - 4) * 0.35
+                load_penalty = 1.0 + (current_load - 5) * 0.5
 
             sc -= load_penalty
 
-            # 🏆 Bonus pour chauffeur moins chargé
+            # 🏆 Bonus FORT pour chauffeur moins chargé
             min_load = min(proposed_load.values()) if proposed_load else 0
             if current_load == min_load:
-                sc += 0.40
+                sc += 0.8
             elif current_load == min_load + 1:
-                sc += 0.20
+                sc += 0.4
 
             # ⚠️ Malus FORT pour chauffeur d'urgence
             if getattr(d, "is_emergency", False):
@@ -682,7 +643,7 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
                     # Chercher la course existante pour vérifier si on peut la grouper avec celle-ci
                     existing_booking = None
                     for assigned in [a for a in assignments if a.driver_id == did]:
-                        assigned_booking = next((bk for bk in bookings if int(bk.id) == assigned.booking_id), None)
+                        assigned_booking = next((bk for bk in bookings if int(cast(Any, bk.id)) == assigned.booking_id), None)
                         if assigned_booking:
                             assigned_time_dt = getattr(assigned_booking, 'scheduled_time', None)
                             if assigned_time_dt:
@@ -692,7 +653,7 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
                                     break
 
                     # Vérifier si regroupement possible
-                    if existing_booking and _can_be_pooled(b, existing_booking):
+                    if existing_booking and _can_be_pooled(b, existing_booking, settings):
                         can_pool = True
                         logger.info(f"[POOLING] 🚗 Course #{b_id} peut être regroupée avec #{existing_booking.id} (chauffeur #{did})")
                         break
@@ -708,7 +669,7 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
 
             # 🚫 Règle 2: Vérifier que le chauffeur sera libre AVANT l'heure de pickup demandée
             # + marge de sécurité pour la transition (15min minimum)
-            required_free_time = busy_until[did] + MIN_TRANSITION_MARGIN_MIN
+            required_free_time = busy_until[did] + settings.service_times.min_transition_margin_min
             if scheduled_min < required_free_time:
                 rejected_reasons.append(f"driver#{did}:busy")
                 if b_id in [106, 109, 113, 115] and did == 3:
@@ -721,25 +682,28 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
             # 🎯 Bonus/malus pour équilibrer la charge entre chauffeurs
             current_load = proposed_load[did] + fairness_counts.get(did, 0)
 
-            # 📈 Pénalité progressive : plus le chauffeur est chargé, plus la pénalité augmente
-            # 1-2 courses : 0.10 par course
-            # 3-4 courses : 0.20 par course
-            # 5+ courses : 0.35 par course (forte pénalité)
+            # 📈 Pénalité PROGRESSIVE plus douce pour assigner TOUTES les courses en favorisant l'équilibre
+            # 0-2 courses : pénalité faible (0.0-0.2)
+            # 3 courses : 0.3 pénalité (acceptable)
+            # 4 courses : 0.6 pénalité (forte mais pas bloquante)
+            # 5+ courses : 1.0+ pénalité (très forte mais permet quand même l'assignation si nécessaire)
             if current_load <= 2:
-                load_penalty = current_load * 0.10
-            elif current_load <= 4:
-                load_penalty = 0.20 + (current_load - 2) * 0.20
+                load_penalty = current_load * 0.1
+            elif current_load == 3:
+                load_penalty = 0.3
+            elif current_load == 4:
+                load_penalty = 0.6
             else:
-                load_penalty = 0.60 + (current_load - 4) * 0.35
+                load_penalty = 1.0 + (current_load - 5) * 0.5
 
             sc -= load_penalty
 
-            # 🏆 Bonus pour chauffeur moins chargé (favoriser l'équilibrage)
+            # 🏆 Bonus FORT pour chauffeur moins chargé (favoriser l'équilibrage)
             min_load = min(proposed_load.values()) if proposed_load else 0
             if current_load == min_load:
-                sc += 0.40  # Bonus augmenté de 0.25 → 0.40
+                sc += 0.8  # Fort bonus pour le chauffeur le moins chargé
             elif current_load == min_load + 1:
-                sc += 0.20  # Bonus partiel si proche du minimum
+                sc += 0.4  # Bonus moyen si proche du minimum
 
             # ⚠️ Malus FORT pour chauffeur d'urgence (dernier recours uniquement)
             if getattr(d, "is_emergency", False):
@@ -808,7 +772,7 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
                 # Chercher la course existante déjà assignée à ce chauffeur
                 existing_booking = None
                 for assigned in [a for a in assignments if a.driver_id == did]:
-                    assigned_booking = next((bk for bk in bookings if int(bk.id) == assigned.booking_id), None)
+                    assigned_booking = next((bk for bk in bookings if int(cast(Any, bk.id)) == assigned.booking_id), None)
                     if assigned_booking:
                         assigned_time_dt = getattr(assigned_booking, 'scheduled_time', None)
                         if assigned_time_dt:
@@ -827,7 +791,7 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
                                 break
 
                 # Vérifier si regroupement possible
-                if existing_booking and _can_be_pooled(b, existing_booking):
+                if existing_booking and _can_be_pooled(b, existing_booking, settings):
                     can_pool = True
                     pooled_with = existing_booking.id
                     logger.warning(f"[POOLING] 🚗 Course #{cand.booking_id} FORCÉE au chauffeur #{did} (regroupement avec #{existing_booking.id}, priorité absolue)")
@@ -835,8 +799,7 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
                     break
                 else:
                     conflict_msg = f"⚠️ CONFLIT: Chauffeur #{did} a course à {existing_time}min, course #{cand.booking_id} à {scheduled_min}min (écart: {abs(scheduled_min - existing_time)}min)"
-                    print(f"[DISPATCH] {conflict_msg} → SKIP")
-                    logger.error(f"[DISPATCH] {conflict_msg} → SKIP")
+                    logger.warning("[DISPATCH] %s → SKIP", conflict_msg)
                     has_conflict = True
                     break
 
@@ -846,9 +809,9 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
         # Vérifier aussi busy_until + marge de transition (utiliser scheduled_min)
         # SAUF si c'est un regroupement (le chauffeur prend les 2 clients au même moment)
         if not can_pool:
-            required_free_time = busy_until[did] + MIN_TRANSITION_MARGIN_MIN
+            required_free_time = busy_until[did] + settings.service_times.min_transition_margin_min
             if scheduled_min < required_free_time:
-                logger.warning(f"[DISPATCH] ⚠️ CONFLIT BUSY: Chauffeur #{did} occupé jusqu'à {busy_until[did]}min (+{MIN_TRANSITION_MARGIN_MIN}min marge = {required_free_time}min), course #{cand.booking_id} démarre à {scheduled_min}min → SKIP")
+                logger.warning(f"[DISPATCH] ⚠️ CONFLIT BUSY: Chauffeur #{did} occupé jusqu'à {busy_until[did]}min (+{settings.service_times.min_transition_margin_min}min marge = {required_free_time}min), course #{cand.booking_id} démarre à {scheduled_min}min → SKIP")
                 continue
 
         # Si déjà pris (par un meilleur match urgent par ex.)
@@ -862,11 +825,11 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
         is_pooled = False
         pooled_with = None
         for existing_time in driver_scheduled_times[did]:
-            if abs(scheduled_min - existing_time) < POOLING_TIME_TOLERANCE_MIN:
+            if abs(scheduled_min - existing_time) < settings.pooling.time_tolerance_min:
                 # Trouver la course existante
                 for assigned in [a for a in assignments if a.driver_id == did and a != cand]:
-                    assigned_booking = next((bk for bk in bookings if int(bk.id) == assigned.booking_id), None)
-                    if assigned_booking and _can_be_pooled(b, assigned_booking):
+                    assigned_booking = next((bk for bk in bookings if int(cast(Any, bk.id)) == assigned.booking_id), None)
+                    if assigned_booking and _can_be_pooled(b, assigned_booking, settings):
                         is_pooled = True
                         pooled_with = assigned.booking_id
                         break
@@ -879,8 +842,8 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
         if is_pooled:
             # 🚗 REGROUPEMENT: Ajouter un détour supplémentaire pour le 2ème dropoff
             # Pickup commun → Dropoff 1 → Dropoff 2 (détour estimé)
-            realistic_finish = scheduled_min + duration_osrm + POOLING_MAX_DETOUR_MIN
-            logger.info(f"[POOLING] 🚗 Course #{cand.booking_id} regroupée avec #{pooled_with} → busy_until += {POOLING_MAX_DETOUR_MIN}min détour")
+            realistic_finish = scheduled_min + duration_osrm + settings.pooling.max_detour_min
+            logger.info(f"[POOLING] 🚗 Course #{cand.booking_id} regroupée avec #{pooled_with} → busy_until += {settings.pooling.max_detour_min}min détour")
         else:
             realistic_finish = scheduled_min + duration_osrm
 
@@ -892,8 +855,7 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
 
         pool_indicator = f" [GROUPÉ avec #{pooled_with}]" if is_pooled else ""
         assign_msg = f"✅ Course #{cand.booking_id} → Chauffeur #{did} (score: {sc:.2f}, start: {scheduled_min}min, busy_until: {busy_until[did]}min){pool_indicator}"
-        print(f"[DISPATCH] {assign_msg}")
-        logger.error(f"[DISPATCH] {assign_msg}")
+        logger.info("[DISPATCH] %s", assign_msg)
 
     debug = {
         "proposed_load": proposed_load,
@@ -1097,7 +1059,7 @@ def closest_feasible(
                                     break
 
                     # Vérifier si regroupement possible
-                    if existing_booking and _can_be_pooled(b, existing_booking):
+                    if existing_booking and _can_be_pooled(b, existing_booking, settings):
                         can_pool = True
                         logger.info(f"[POOLING] 🚗 [FALLBACK] Course #{bid} peut être regroupée avec #{existing_booking.id} (chauffeur #{did})")
                         break
@@ -1112,9 +1074,9 @@ def closest_feasible(
             # 🚫 VÉRIFICATION 2: Chauffeur occupé (busy_until) + marge de transition
             # SAUF si regroupement (le chauffeur prend les 2 clients au même moment)
             if not can_pool:
-                required_free_time = busy_until[did] + MIN_TRANSITION_MARGIN_MIN
+                required_free_time = busy_until[did] + settings.service_times.min_transition_margin_min
                 if scheduled_min < required_free_time:
-                    logger.warning(f"[FALLBACK] ⚠️ BUSY: Chauffeur #{did} occupé jusqu'à {busy_until[did]}min (+{MIN_TRANSITION_MARGIN_MIN}min marge = {required_free_time}min), course #{bid} démarre à {scheduled_min}min → SKIP")
+                    logger.warning(f"[FALLBACK] ⚠️ BUSY: Chauffeur #{did} occupé jusqu'à {busy_until[did]}min (+{settings.service_times.min_transition_margin_min}min marge = {required_free_time}min), course #{bid} démarre à {scheduled_min}min → SKIP")
                     continue
 
             # 🚗 REGROUPEMENT : Si détecté, assigner IMMÉDIATEMENT sans chercher d'autres chauffeurs
@@ -1136,12 +1098,22 @@ def closest_feasible(
 
             # 🎯 Bonus/malus pour équilibrer la charge
             current_load = proposed_load[did] + fairness_counts.get(did, 0)
-            load_penalty = current_load * 0.15
+
+            # Pénalité progressive douce
+            if current_load <= 2:
+                load_penalty = current_load * 0.1
+            elif current_load == 3:
+                load_penalty = 0.3
+            elif current_load == 4:
+                load_penalty = 0.6
+            else:
+                load_penalty = 1.0 + (current_load - 5) * 0.5
+
             sc -= load_penalty
 
             min_load = min(proposed_load.values()) if proposed_load else 0
             if current_load == min_load:
-                sc += 0.25
+                sc += 0.8
 
             # Bonus stabilité si déjà ASSIGNED à ce driver
             if _is_booking_assigned(b) and (_current_driver_id(b) == did):
@@ -1179,11 +1151,11 @@ def closest_feasible(
             is_pooled = False
             pooled_with = None
             for existing_time in driver_scheduled_times[did2]:
-                if abs(scheduled_min - existing_time) < POOLING_TIME_TOLERANCE_MIN:
+                if abs(scheduled_min - existing_time) < settings.pooling.time_tolerance_min:
                     # Trouver la course existante
                     for assigned in [a for a in assignments if a.driver_id == did2 and a != chosen]:
                         assigned_booking = by_id.get(int(assigned.booking_id))
-                        if assigned_booking and _can_be_pooled(b, assigned_booking):
+                        if assigned_booking and _can_be_pooled(b, assigned_booking, settings):
                             is_pooled = True
                             pooled_with = assigned.booking_id
                             break
@@ -1195,8 +1167,8 @@ def closest_feasible(
 
             if is_pooled:
                 # 🚗 REGROUPEMENT: Ajouter détour pour 2ème dropoff
-                realistic_finish = scheduled_min + duration_osrm + POOLING_MAX_DETOUR_MIN
-                logger.info(f"[POOLING] 🚗 [FALLBACK] Course #{chosen.booking_id} regroupée avec #{pooled_with} → +{POOLING_MAX_DETOUR_MIN}min détour")
+                realistic_finish = scheduled_min + duration_osrm + settings.pooling.max_detour_min
+                logger.info(f"[POOLING] 🚗 [FALLBACK] Course #{chosen.booking_id} regroupée avec #{pooled_with} → +{settings.pooling.max_detour_min}min détour")
             else:
                 realistic_finish = scheduled_min + duration_osrm
 

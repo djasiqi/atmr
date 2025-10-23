@@ -1,32 +1,32 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import styles from "./ReservationMapView.module.css";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import styles from './ReservationMapView.module.css';
 
 const ReservationMapView = ({ reservations }) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersLayerRef = useRef(null); // Groupe de marqueurs pour pouvoir les nettoyer
-  const [geocodingStatus, setGeocodingStatus] = useState("idle");
+  const [geocodingStatus, setGeocodingStatus] = useState('idle');
 
   // Déterminer la date affichée (première réservation ou aujourd'hui)
   const displayDate = useMemo(() => {
     if (reservations.length > 0) {
       const firstReservation = reservations[0];
       const date = new Date(firstReservation.scheduled_time || firstReservation.pickup_time);
-      return date.toLocaleDateString("fr-FR", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
+      return date.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
       });
     }
     // Si pas de réservations, afficher aujourd'hui
-    return new Date().toLocaleDateString("fr-FR", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
+    return new Date().toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
     });
   }, [reservations]);
 
@@ -43,7 +43,7 @@ const ReservationMapView = ({ reservations }) => {
         return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
       }
     } catch (error) {
-      console.error("Erreur de géocodification:", error);
+      console.error('Erreur de géocodification:', error);
     }
     return null;
   }, []);
@@ -53,39 +53,28 @@ const ReservationMapView = ({ reservations }) => {
     try {
       // Essayer d'utiliser le backend API qui a accès à OSRM
       const url =
-        `${
-          process.env.REACT_APP_API_URL || "http://localhost:3000/api"
-        }/osrm/route?` +
+        `${process.env.REACT_APP_API_URL || 'http://localhost:3000/api'}/osrm/route?` +
         `pickup_lat=${pickupCoords[0]}&pickup_lon=${pickupCoords[1]}&` +
         `dropoff_lat=${dropoffCoords[0]}&dropoff_lon=${dropoffCoords[1]}`;
-
-      console.log("🚗 Demande itinéraire OSRM:", url);
 
       const response = await fetch(url);
 
       if (response.ok) {
         const data = await response.json();
-        console.log("✅ Réponse OSRM:", data);
 
         if (data.route && data.route.length > 0) {
-          console.log(`📍 Itinéraire reçu avec ${data.route.length} points`);
           return data.route;
-        } else {
-          console.warn("⚠️ Pas de route dans la réponse:", data);
         }
       } else {
-        console.error(
-          "❌ Erreur HTTP:",
-          response.status,
-          await response.text()
-        );
+        // eslint-disable-next-line no-console
+        console.error('❌ Erreur HTTP:', response.status, await response.text());
       }
     } catch (error) {
-      console.error("❌ OSRM erreur:", error);
+      console.error('❌ OSRM erreur:', error);
     }
 
     // Fallback : retourner une ligne droite
-    console.warn("⚠️ Fallback: ligne droite");
+    console.warn('⚠️ Fallback: ligne droite');
     return [pickupCoords, dropoffCoords];
   }, []);
 
@@ -102,8 +91,8 @@ const ReservationMapView = ({ reservations }) => {
     markersLayerRef.current = markersLayer;
 
     // Ajouter les tuiles
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap contributors",
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
     }).addTo(map);
 
     return () => {
@@ -129,7 +118,7 @@ const ReservationMapView = ({ reservations }) => {
     // Ajouter les marqueurs pour chaque réservation
     const addMarkers = async () => {
       if (isCancelled) return;
-      setGeocodingStatus("loading");
+      setGeocodingStatus('loading');
       let markersCount = 0;
 
       for (const reservation of reservations) {
@@ -154,12 +143,7 @@ const ReservationMapView = ({ reservations }) => {
         const dropoffLat = reservation.dropoff_lat || reservation.dropoffLat;
         const dropoffLon = reservation.dropoff_lon || reservation.dropoffLon;
 
-        if (
-          dropoffLat &&
-          dropoffLon &&
-          !isNaN(dropoffLat) &&
-          !isNaN(dropoffLon)
-        ) {
+        if (dropoffLat && dropoffLon && !isNaN(dropoffLat) && !isNaN(dropoffLon)) {
           dropoffCoords = [parseFloat(dropoffLat), parseFloat(dropoffLon)];
         } else if (reservation.dropoff_location) {
           // Géocodification si pas de coordonnées
@@ -172,7 +156,7 @@ const ReservationMapView = ({ reservations }) => {
         // Créer des icônes personnalisées avec emojis
         const pickupIcon = L.divIcon({
           html: '<div style="font-size: 32px; text-align: center; line-height: 1;">📍</div>',
-          className: "custom-marker-icon",
+          className: 'custom-marker-icon',
           iconSize: [32, 32],
           iconAnchor: [16, 32],
           popupAnchor: [0, -32],
@@ -180,7 +164,7 @@ const ReservationMapView = ({ reservations }) => {
 
         const dropoffIcon = L.divIcon({
           html: '<div style="font-size: 32px; text-align: center; line-height: 1;">🎯</div>',
-          className: "custom-marker-icon",
+          className: 'custom-marker-icon',
           iconSize: [32, 32],
           iconAnchor: [16, 32],
           popupAnchor: [0, -32],
@@ -196,14 +180,10 @@ const ReservationMapView = ({ reservations }) => {
             <div class="${styles.popupContent}">
               <h4>🎯 Destination</h4>
               <p><strong>Client:</strong> ${
-                reservation.customer_name ||
-                reservation.client?.full_name ||
-                "N/A"
+                reservation.customer_name || reservation.client?.full_name || 'N/A'
               }</p>
               <p><strong>Adresse:</strong> ${reservation.dropoff_location}</p>
-              <p><strong>Montant:</strong> ${Number(
-                reservation.amount || 0
-              ).toFixed(2)} CHF</p>
+              <p><strong>Montant:</strong> ${Number(reservation.amount || 0).toFixed(2)} CHF</p>
               <p><strong>ID:</strong> #${reservation.id}</p>
             </div>
           `);
@@ -219,14 +199,12 @@ const ReservationMapView = ({ reservations }) => {
               <div class="${styles.popupContent}">
                 <h4>📍 Prise en charge</h4>
                 <p><strong>Client:</strong> ${
-                  reservation.customer_name ||
-                  reservation.client?.full_name ||
-                  "N/A"
+                  reservation.customer_name || reservation.client?.full_name || 'N/A'
                 }</p>
                 <p><strong>Adresse:</strong> ${reservation.pickup_location}</p>
                 <p><strong>Heure:</strong> ${new Date(
                   reservation.scheduled_time
-                ).toLocaleTimeString("fr-FR")}</p>
+                ).toLocaleTimeString('fr-FR')}</p>
                 <p><strong>Statut:</strong> ${reservation.status}</p>
                 <p><strong>ID:</strong> #${reservation.id}</p>
               </div>
@@ -237,7 +215,7 @@ const ReservationMapView = ({ reservations }) => {
             let routePolyline = null;
 
             // Événement lors du clic sur le marqueur de prise en charge
-            pickupMarker.on("click", async () => {
+            pickupMarker.on('click', async () => {
               if (dropoffCoords && dropoffMarker) {
                 // Afficher le marqueur de destination
                 if (!markersLayer.hasLayer(dropoffMarker)) {
@@ -249,26 +227,26 @@ const ReservationMapView = ({ reservations }) => {
                   const route = await getOSRMRoute(pickupCoords, dropoffCoords);
                   if (route && route.length > 0) {
                     // Déterminer la couleur selon le statut
-                    let lineColor = "#00796b";
+                    let lineColor = '#00796b';
                     switch (reservation.status) {
-                      case "pending":
-                        lineColor = "#ff9800";
+                      case 'pending':
+                        lineColor = '#ff9800';
                         break;
-                      case "accepted":
-                      case "assigned":
-                        lineColor = "#2196f3";
+                      case 'accepted':
+                      case 'assigned':
+                        lineColor = '#2196f3';
                         break;
-                      case "in_progress":
-                        lineColor = "#00796b";
+                      case 'in_progress':
+                        lineColor = '#00796b';
                         break;
-                      case "completed":
-                        lineColor = "#4caf50";
+                      case 'completed':
+                        lineColor = '#4caf50';
                         break;
-                      case "canceled":
-                        lineColor = "#f44336";
+                      case 'canceled':
+                        lineColor = '#f44336';
                         break;
                       default:
-                        lineColor = "#00796b";
+                        lineColor = '#00796b';
                     }
 
                     routePolyline = L.polyline(route, {
@@ -278,10 +256,7 @@ const ReservationMapView = ({ reservations }) => {
                     }).addTo(map);
 
                     // Ajuster la vue pour voir tout l'itinéraire
-                    const bounds = L.latLngBounds([
-                      pickupCoords,
-                      dropoffCoords,
-                    ]);
+                    const bounds = L.latLngBounds([pickupCoords, dropoffCoords]);
                     map.fitBounds(bounds, { padding: [50, 50] });
                   }
                 }
@@ -289,7 +264,7 @@ const ReservationMapView = ({ reservations }) => {
             });
 
             // Événement lors de la fermeture du popup
-            pickupMarker.on("popupclose", () => {
+            pickupMarker.on('popupclose', () => {
               // Cacher le marqueur de destination
               if (dropoffMarker && markersLayer.hasLayer(dropoffMarker)) {
                 markersLayer.removeLayer(dropoffMarker);
@@ -301,16 +276,13 @@ const ReservationMapView = ({ reservations }) => {
               }
             });
           } catch (error) {
-            console.error(
-              "Erreur lors de l'ajout du marqueur de prise en charge:",
-              error
-            );
+            console.error("Erreur lors de l'ajout du marqueur de prise en charge:", error);
           }
         }
       }
 
       if (!isCancelled) {
-        setGeocodingStatus(markersCount > 0 ? "success" : "no-data");
+        setGeocodingStatus(markersCount > 0 ? 'success' : 'no-data');
       }
     };
 
@@ -326,19 +298,19 @@ const ReservationMapView = ({ reservations }) => {
       <div ref={mapRef} className={styles.map}></div>
 
       {/* Message d'état */}
-      {geocodingStatus === "loading" && (
+      {geocodingStatus === 'loading' && (
         <div className={styles.statusMessage}>
           <span>🔄 Chargement des positions...</span>
         </div>
       )}
 
-      {geocodingStatus === "no-data" && (
+      {geocodingStatus === 'no-data' && (
         <div className={styles.statusMessage}>
           <span>📍 Aucune réservation pour cette journée</span>
         </div>
       )}
 
-      {reservations.length === 0 && geocodingStatus === "idle" && (
+      {reservations.length === 0 && geocodingStatus === 'idle' && (
         <div className={styles.statusMessage}>
           <span>📭 Aucune réservation à afficher</span>
         </div>

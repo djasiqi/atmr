@@ -128,6 +128,23 @@ export const applySuggestion = async (assignmentId, newDriverId) => {
   }
 };
 
+/**
+ * Rejette une suggestion d'assignation
+ * @param {number} bookingId - ID de la réservation
+ * @returns {Promise} Confirmation du rejet
+ */
+export const rejectSuggestion = async (bookingId) => {
+  try {
+    const response = await apiClient.post('/company_dispatch/reject_suggestion', {
+      booking_id: bookingId,
+    });
+    return response.data;
+  } catch (error) {
+    console.error('[DispatchMonitoring] Error rejecting suggestion:', error);
+    throw error;
+  }
+};
+
 // Export d'un objet de service avec toutes les méthodes
 const dispatchMonitoringService = {
   getDelays,
@@ -137,6 +154,7 @@ const dispatchMonitoringService = {
   getOptimizerStatus,
   getOptimizationOpportunities,
   applySuggestion,
+  rejectSuggestion,
 };
 
 export default dispatchMonitoringService;

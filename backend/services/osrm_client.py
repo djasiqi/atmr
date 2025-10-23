@@ -9,18 +9,23 @@ import os
 import threading
 import time
 from collections.abc import Callable, Iterable
+from datetime import UTC
 from typing import Any, Dict, List, Tuple, cast
 
 import requests
+
+from shared.geo_utils import haversine_tuple as _haversine_km
 
 logger = logging.getLogger(__name__)
 
 # ============================================================
 # Configuration timeout et retry
 # ============================================================
-DEFAULT_TIMEOUT = int(os.getenv("UD_OSRM_TIMEOUT", "30"))
+# ✅ Augmenté pour matrices volumineuses (100+ points)
+DEFAULT_TIMEOUT = int(os.getenv("UD_OSRM_TIMEOUT", "45"))
 DEFAULT_RETRY_COUNT = int(os.getenv("UD_OSRM_RETRY", "2"))
-CACHE_TTL_SECONDS = int(os.getenv("UD_OSRM_CACHE_TTL", "3600"))  # 1h par défaut
+# ✅ Cache plus long pour routes (peu de changements topographiques)
+CACHE_TTL_SECONDS = int(os.getenv("UD_OSRM_CACHE_TTL", "7200"))  # 2h par défaut
 
 # ============================================================
 # Optional Redis import (safe) + alias d'exception
@@ -86,17 +91,6 @@ def _rate_limit(rate_per_sec: float) -> None:
         if wait > 0:
             time.sleep(wait)
         _rl_last_ts = time.time()
-
-def _haversine_km(a: Tuple[float, float], b: Tuple[float, float]) -> float:
-    """Great-circle distance in km for (lat, lon) pairs."""
-    R = 6371.0
-    lat1, lon1 = a
-    lat2, lon2 = b
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlmb = math.radians(lon2 - lon1)
-    h = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlmb / 2) ** 2
-    return 2 * R * math.asin(math.sqrt(h))
 
 def _fallback_matrix(coords: List[Tuple[float, float]], avg_kmh: float = 25.0) -> List[List[float]]:
     """
@@ -255,7 +249,7 @@ def build_distance_matrix_osrm(
     *,
     base_url: str,
     profile: str = "driving",
-    timeout: int = 30,  # ✅ PERF: Augmenté à 30s pour matrices volumineuses
+    timeout: int | None = None,  # ✅ Timeout adaptatif basé sur taille
     max_sources_per_call: int = 60,
     rate_limit_per_sec: int = 8,
     max_retries: int = 2,
@@ -269,6 +263,18 @@ def build_distance_matrix_osrm(
     Retourne une matrice de durées en SECONDES (float), shape NxN, diagonale = 0.0.
     Fallback haversine en cas d'échec.
     """
+    # ✅ Timeout adaptatif basé sur nombre de coordonnées
+    if timeout is None:
+        n = len(coords)
+        if n > 150:
+            timeout = 60
+        elif n > 100:
+            timeout = 45
+        elif n > 50:
+            timeout = 30
+        else:
+            timeout = 15
+
     n = len(coords)
     if n <= 1:
         return [[0.0] * n for _ in range(n)]
@@ -386,7 +392,7 @@ def route_info(
     base_url: str,
     profile: str = "driving",
     waypoints: List[Tuple[float, float]] | None = None,
-    timeout: int = 5,
+    timeout: int = 15,  # ✅ Augmenté pour routes longues multi-points
     redis_client: Any | None = None,
     cache_ttl_s: int = 900,
     coord_precision: int = 5,
@@ -480,7 +486,7 @@ def eta_seconds(
     base_url: str,
     profile: str = "driving",
     waypoints: List[Tuple[float, float]] | None = None,
-    timeout: int = 5,
+    timeout: int = 10,  # ✅ Augmenté pour destinations lointaines
     redis_client: Any | None = None,
     cache_ttl_s: int = 900,
     coord_precision: int = 5,
@@ -526,7 +532,7 @@ class CircuitBreaker:
         self.last_failure_time = None
         self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
         self._lock = threading.Lock()
-    
+
     def call(self, func, *args, **kwargs):
         """Execute function with circuit-breaker protection."""
         with self._lock:
@@ -537,24 +543,24 @@ class CircuitBreaker:
                     self.state = "HALF_OPEN"
                 else:
                     raise Exception(f"CircuitBreaker OPEN (failures: {self.failure_count})")
-        
+
         try:
             result = func(*args, **kwargs)
-            
+
             # Succès -> reset
             with self._lock:
                 if self.state == "HALF_OPEN":
                     logger.info("[CircuitBreaker] HALF_OPEN -> CLOSED (success)")
                     self.state = "CLOSED"
                 self.failure_count = 0
-            
+
             return result
-        
-        except Exception as e:
+
+        except Exception:
             with self._lock:
                 self.failure_count += 1
                 self.last_failure_time = time.time()
-                
+
                 if self.failure_count >= self.failure_threshold:
                     if self.state != "OPEN":
                         logger.warning(
@@ -590,3 +596,144 @@ def build_distance_matrix_osrm_with_cb(
         )
         avg_kmh = kwargs.get('avg_speed_kmh_fallback', 25.0)
         return _fallback_matrix(coords, avg_kmh=avg_kmh)
+# ============================================================
+# Helpers de haut niveau pour distance/temps et matrices
+# ============================================================
+
+def get_distance_time(origin: Tuple[float, float], dest: Tuple[float, float], *, base_url: str | None = None,
+                      profile: str = "driving", redis_client: Any | None = None) -> Dict[str, float]:
+    """Retourne un dict {"distance": m, "duration": s} en utilisant route_info.
+    base_url est requis par les appels existants du module (utiliser OSRM_BASE_URL sinon).
+    """
+    # Résolution de l'URL de base
+    osrm_base = base_url or os.getenv("OSRM_BASE_URL", "http://localhost:5000")
+    info = route_info(origin, dest, base_url=osrm_base, profile=profile, redis_client=redis_client)
+    return {"distance": float(info.get("distance", 0.0)), "duration": float(info.get("duration", 0.0))}
+
+
+def get_matrix(origins: List[Tuple[float, float]], destinations: List[Tuple[float, float]], *,
+               base_url: str | None = None, profile: str = "driving",
+               redis_client: Any | None = None) -> Dict[str, Any]:
+    """Construit une matrice de durées (secondes) entre origines et destinations.
+    Retourne {"durations": List[List[float]]}.
+    """
+    osrm_base = base_url or os.getenv("OSRM_BASE_URL", "http://localhost:5000")
+    # Concaténer pour construire une matrice NxN en référençant toutes les coordonnées
+    # Ici, on construit une matrice complète sur l'ensemble unique des points
+    all_points = list(origins)
+    # Assurer que destinations sont incluses; si ce sont les mêmes, pas de duplication
+    for pt in destinations:
+        if pt not in all_points:
+            all_points.append(pt)
+
+    durations = build_distance_matrix_osrm_with_cb(
+        all_points,
+        base_url=osrm_base,
+        profile=profile,
+        redis_client=redis_client,
+    )
+
+    # Si origins/destinations sont des sous-ensembles/ordres différents, on extrait la sous-matrice correspondante
+    idx = {pt: i for i, pt in enumerate(all_points)}
+    sub = []
+    for o in origins:
+        row = []
+        oi = idx[o]
+        for d in destinations:
+            di = idx[d]
+            row.append(durations[oi][di])
+        sub.append(row)
+    return {"durations": sub}
+
+# ============================================================
+# Cache Redis pour matrices journalières
+# ============================================================
+
+def get_distance_time_cached(origin, dest, date_str=None):
+    """
+    Récupère la distance et le temps entre deux points avec cache Redis.
+    Args:
+        origin: Point d'origine (lat, lon)
+        dest: Point de destination (lat, lon)
+        date_str: Date pour le cache (optionnel, défaut: aujourd'hui)
+    Returns:
+        Dict avec 'distance' et 'duration' en mètres et secondes
+    """
+    if date_str is None:
+        from datetime import datetime
+        date_str = datetime.now(UTC).strftime('%Y-%m-%d')
+
+    # Créer une clé de cache plus robuste
+    origin_hash = hashlib.md5(f"{origin[0]},{origin[1]}".encode()).hexdigest()[:8]
+    dest_hash = hashlib.md5(f"{dest[0]},{dest[1]}".encode()).hexdigest()[:8]
+    cache_key = f"osrm:cache:{date_str}:{origin_hash}:{dest_hash}"
+
+    try:
+        from ext import redis_client
+        raw_any = redis_client.get(cache_key)
+        if raw_any:
+            raw = raw_any
+            if isinstance(raw, (bytes, bytearray)):
+                raw = raw.decode("utf-8", errors="ignore")
+            if not isinstance(raw, str):
+                raw = str(raw)
+            return json.loads(raw)
+    except Exception as e:
+        logger.warning(f"[OSRM] Cache read error: {e}")
+
+    # Calculer la distance et le temps
+    result = get_distance_time(origin, dest)
+
+    try:
+        from ext import redis_client
+        redis_client.setex(cache_key, CACHE_TTL_SECONDS, json.dumps(result))
+    except Exception as e:
+        logger.warning(f"[OSRM] Cache write error: {e}")
+
+    return result
+
+def get_matrix_cached(origins, destinations, date_str=None):
+    """
+    Récupère la matrice de distances/temps avec cache Redis par jour.
+    Args:
+        origins: Liste des points d'origine [(lat, lon), ...]
+        destinations: Liste des points de destination [(lat, lon), ...]
+        date_str: Date pour le cache (optionnel, défaut: aujourd'hui)
+    Returns:
+        Dict avec 'distances' et 'durations' (matrices)
+    """
+    if date_str is None:
+        from datetime import datetime
+        date_str = datetime.now(UTC).strftime('%Y-%m-%d')
+
+    # Créer une clé de cache pour la matrice
+    origins_str = ",".join([f"{o[0]},{o[1]}" for o in origins])
+    dests_str = ",".join([f"{d[0]},{d[1]}" for d in destinations])
+    matrix_hash = hashlib.md5(f"{origins_str}|{dests_str}".encode()).hexdigest()[:16]
+    cache_key = f"osrm:matrix:{date_str}:{matrix_hash}"
+
+    try:
+        from ext import redis_client
+        raw_any = redis_client.get(cache_key)
+        if raw_any:
+            logger.info(f"[OSRM] Matrix cache hit for {len(origins)}x{len(destinations)} points")
+            raw = raw_any
+            if isinstance(raw, (bytes, bytearray)):
+                raw = raw.decode("utf-8", errors="ignore")
+            if not isinstance(raw, str):
+                raw = str(raw)
+            return json.loads(raw)
+    except Exception as e:
+        logger.warning(f"[OSRM] Matrix cache read error: {e}")
+
+    # Calculer la matrice
+    result = get_matrix(origins, destinations)
+
+    try:
+        from ext import redis_client
+        redis_client.setex(cache_key, CACHE_TTL_SECONDS, json.dumps(result))
+        logger.info(f"[OSRM] Matrix cached for {len(origins)}x{len(destinations)} points")
+    except Exception as e:
+        logger.warning(f"[OSRM] Matrix cache write error: {e}")
+
+    return result

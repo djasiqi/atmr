@@ -1,11 +1,8 @@
 // frontend/src/pages/company/Settings/tabs/BillingTab.jsx
-import React, { useState, useEffect } from "react";
-import styles from "../CompanySettings.module.css";
-import ToggleField from "../../../../components/ui/ToggleField";
-import {
-  fetchBillingSettings,
-  updateBillingSettings,
-} from "../../../../services/settingsService";
+import React, { useState, useEffect } from 'react';
+import styles from '../CompanySettings.module.css';
+import ToggleField from '../../../../components/ui/ToggleField';
+import { fetchBillingSettings, updateBillingSettings } from '../../../../services/settingsService';
 
 const BillingTab = () => {
   const [form, setForm] = useState({
@@ -21,24 +18,23 @@ const BillingTab = () => {
     reminder3_fee: 20,
     auto_reminders_enabled: false,
     email_templates_enabled: false,
-    email_sender: "",
-    invoice_number_format: "{PREFIX}-{YYYY}-{MM}-{SEQ4}",
-    invoice_prefix: "EM",
-    invoice_message_template: "",
-    reminder1_template: "",
-    reminder2_template: "",
-    reminder3_template: "",
-    legal_footer: "",
-    pdf_template_variant: "standard",
-    iban: "",
-    qr_iban: "",
-    esr_ref_base: "",
+    email_sender: '',
+    invoice_number_format: '{PREFIX}-{YYYY}-{MM}-{SEQ4}',
+    invoice_prefix: 'EM',
+    invoice_message_template: '',
+    reminder1_template: '',
+    reminder2_template: '',
+    reminder3_template: '',
+    legal_footer: '',
+    pdf_template_variant: 'standard',
+    iban: '',
+    qr_iban: '',
+    esr_ref_base: '',
   });
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -62,26 +58,41 @@ const BillingTab = () => {
           reminder3_fee: data.reminder3_fee || 20,
           auto_reminders_enabled: data.auto_reminders_enabled || false,
           email_templates_enabled: data.email_templates_enabled || false,
-          email_sender: data.email_sender || "",
-          invoice_number_format:
-            data.invoice_number_format || "{PREFIX}-{YYYY}-{MM}-{SEQ4}",
-          invoice_prefix: data.invoice_prefix || "EM",
-          invoice_message_template: data.invoice_message_template || "",
-          reminder1_template: data.reminder1_template || "",
-          reminder2_template: data.reminder2_template || "",
-          reminder3_template: data.reminder3_template || "",
-          legal_footer: data.legal_footer || "",
-          pdf_template_variant: data.pdf_template_variant || "standard",
-          iban: data.iban || "",
-          qr_iban: data.qr_iban || "",
-          esr_ref_base: data.esr_ref_base || "",
+          email_sender: data.email_sender || '',
+          invoice_number_format: data.invoice_number_format || '{PREFIX}-{YYYY}-{MM}-{SEQ4}',
+          invoice_prefix: data.invoice_prefix || 'EM',
+          invoice_message_template: data.invoice_message_template || '',
+          reminder1_template: data.reminder1_template || '',
+          reminder2_template: data.reminder2_template || '',
+          reminder3_template: data.reminder3_template || '',
+          legal_footer: data.legal_footer || '',
+          pdf_template_variant: data.pdf_template_variant || 'standard',
+          iban: data.iban || '',
+          qr_iban: data.qr_iban || '',
+          esr_ref_base: data.esr_ref_base || '',
         });
       }
     } catch (err) {
-      console.error("Erreur lors du chargement des paramètres:", err);
-      setError("Erreur lors du chargement des paramètres");
+      console.error('Erreur lors du chargement des paramètres:', err);
+      setError('Erreur lors du chargement des paramètres');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Sauvegarde automatique
+  const autoSave = async (updatedForm = null) => {
+    setMessage('');
+    setError('');
+
+    try {
+      await updateBillingSettings(updatedForm || form);
+      setMessage('✅ Sauvegardé automatiquement');
+      setTimeout(() => setMessage(''), 2000);
+    } catch (err) {
+      console.error('Auto-save failed:', err);
+      setError('❌ Erreur lors de la sauvegarde');
+      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -93,40 +104,52 @@ const BillingTab = () => {
     }));
   };
 
+  const handleBlur = () => {
+    autoSave();
+  };
+
   const handleToggle = (e) => {
     const { name, checked } = e.target;
-    setForm((prev) => ({
-      ...prev,
+    const updatedForm = {
+      ...form,
       [name]: checked,
-    }));
+    };
+    setForm(updatedForm);
+    // Sauvegarder immédiatement après changement de toggle
+    autoSave(updatedForm);
   };
 
   const handleReminderScheduleChange = (level, value) => {
-    setForm((prev) => ({
-      ...prev,
+    const updatedForm = {
+      ...form,
       reminder_schedule_days: {
-        ...prev.reminder_schedule_days,
+        ...form.reminder_schedule_days,
         [level]: parseInt(value) || 0,
       },
-    }));
+    };
+    setForm(updatedForm);
+  };
+
+  const handleReminderScheduleBlur = () => {
+    autoSave();
   };
 
   const generatePreview = () => {
     const format = form.invoice_number_format;
-    const prefix = form.invoice_prefix || "EM";
+    const prefix = form.invoice_prefix || 'EM';
     const today = new Date();
     const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const seq = String(1).padStart(4, "0");
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const seq = String(1).padStart(4, '0');
 
     return format
-      .replace("{PREFIX}", prefix)
-      .replace("{YYYY}", year)
-      .replace("{MM}", month)
-      .replace("{SEQ4}", seq)
-      .replace("{SEQ5}", String(1).padStart(5, "0"))
-      .replace("{YYYYMM}", `${year}${month}`)
-      .replace("{SEQ3}", String(1).padStart(3, "0"));
+      .replace('{PREFIX}', prefix)
+      .replace('{YYYY}', year)
+      .replace('{MM}', month)
+      .replace('{SEQ4}', seq)
+      .replace('{SEQ5}', String(1).padStart(5, '0'))
+      .replace('{YYYYMM}', `${year}${month}`)
+      .replace('{SEQ3}', String(1).padStart(3, '0'));
   };
 
   const ibanChecksumIsValid = (iban) => {
@@ -134,24 +157,7 @@ const BillingTab = () => {
 
     // Validation basique pour la Suisse
     const swissPattern = /^CH[0-9]{2}[0-9]{5}[0-9A-Z]{12}$/;
-    return swissPattern.test(iban.replace(/\s/g, ""));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    setMessage("");
-    setError("");
-
-    try {
-      await updateBillingSettings(form);
-      setMessage("Paramètres de facturation mis à jour avec succès !");
-    } catch (err) {
-      console.error("Erreur lors de la sauvegarde:", err);
-      setError("Erreur lors de la sauvegarde des paramètres");
-    } finally {
-      setSaving(false);
-    }
+    return swissPattern.test(iban.replace(/\s/g, ''));
   };
 
   if (loading) {
@@ -164,12 +170,24 @@ const BillingTab = () => {
   }
 
   return (
-    <form className={styles.settingsForm} onSubmit={handleSubmit}>
+    <div className={styles.settingsForm} style={{ display: 'block' }}>
       {message && <div className={styles.success}>{message}</div>}
       {error && <div className={styles.error}>{error}</div>}
 
-      {/* Paramètres de paiement et rappels */}
-      <section className={styles.section}>
+      {/* Layout en 2 colonnes */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 'var(--spacing-lg)',
+          alignItems: 'start',
+          width: '100%',
+        }}
+      >
+        {/* COLONNE GAUCHE */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          {/* Paramètres de paiement et rappels */}
+          <section className={styles.section}>
         <h2>💳 Paramètres de paiement</h2>
 
         <div className={styles.formGroup}>
@@ -181,6 +199,7 @@ const BillingTab = () => {
               name="payment_terms_days"
               value={form.payment_terms_days}
               onChange={handleChange}
+              onBlur={handleBlur}
               min="1"
               max="90"
             />
@@ -200,6 +219,7 @@ const BillingTab = () => {
               name="overdue_fee"
               value={form.overdue_fee}
               onChange={handleChange}
+              onBlur={handleBlur}
               step="0.01"
               min="0"
             />
@@ -208,7 +228,7 @@ const BillingTab = () => {
         </div>
 
         {/* Rappels automatiques */}
-        <h2 style={{ marginTop: "24px" }}>📧 Rappels automatiques</h2>
+        <h2 style={{ marginTop: '24px' }}>📧 Rappels automatiques</h2>
 
         <ToggleField
           label="Activer les rappels automatiques"
@@ -228,10 +248,9 @@ const BillingTab = () => {
                   <label>Délai (jours)</label>
                   <input
                     type="number"
-                    value={form.reminder_schedule_days["1"] || 10}
-                    onChange={(e) =>
-                      handleReminderScheduleChange("1", e.target.value)
-                    }
+                    value={form.reminder_schedule_days['1'] || 10}
+                    onChange={(e) => handleReminderScheduleChange('1', e.target.value)}
+                    onBlur={handleReminderScheduleBlur}
                     min="1"
                     max="90"
                   />
@@ -244,6 +263,7 @@ const BillingTab = () => {
                     name="reminder1_fee"
                     value={form.reminder1_fee}
                     onChange={handleChange}
+                    onBlur={handleBlur}
                     step="0.01"
                     min="0"
                   />
@@ -259,10 +279,9 @@ const BillingTab = () => {
                   <label>Délai (jours)</label>
                   <input
                     type="number"
-                    value={form.reminder_schedule_days["2"] || 5}
-                    onChange={(e) =>
-                      handleReminderScheduleChange("2", e.target.value)
-                    }
+                    value={form.reminder_schedule_days['2'] || 5}
+                    onChange={(e) => handleReminderScheduleChange('2', e.target.value)}
+                    onBlur={handleReminderScheduleBlur}
                     min="1"
                     max="90"
                   />
@@ -275,6 +294,7 @@ const BillingTab = () => {
                     name="reminder2_fee"
                     value={form.reminder2_fee}
                     onChange={handleChange}
+                    onBlur={handleBlur}
                     step="0.01"
                     min="0"
                   />
@@ -284,18 +304,15 @@ const BillingTab = () => {
 
             {/* 3e rappel */}
             <div className={styles.reminderRow}>
-              <h4 className={styles.reminderTitle}>
-                3e rappel (Mise en demeure)
-              </h4>
+              <h4 className={styles.reminderTitle}>3e rappel (Mise en demeure)</h4>
               <div className={styles.reminderFields}>
                 <div className={styles.formGroup}>
                   <label>Délai (jours)</label>
                   <input
                     type="number"
-                    value={form.reminder_schedule_days["3"] || 3}
-                    onChange={(e) =>
-                      handleReminderScheduleChange("3", e.target.value)
-                    }
+                    value={form.reminder_schedule_days['3'] || 3}
+                    onChange={(e) => handleReminderScheduleChange('3', e.target.value)}
+                    onBlur={handleReminderScheduleBlur}
                     min="1"
                     max="90"
                   />
@@ -308,6 +325,7 @@ const BillingTab = () => {
                     name="reminder3_fee"
                     value={form.reminder3_fee}
                     onChange={handleChange}
+                    onBlur={handleBlur}
                     step="0.01"
                     min="0"
                   />
@@ -316,80 +334,6 @@ const BillingTab = () => {
             </div>
           </>
         )}
-      </section>
-
-      {/* Format de facturation et pied de page */}
-      <section className={styles.section}>
-        <h2>🧾 Format de facturation</h2>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="invoice_prefix">Préfixe des factures</label>
-          <input
-            id="invoice_prefix"
-            name="invoice_prefix"
-            value={form.invoice_prefix}
-            onChange={handleChange}
-            maxLength={10}
-            placeholder="EM"
-          />
-          <small className={styles.hint}>Ex: EM → {generatePreview()}</small>
-        </div>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="invoice_number_format">Format de numérotation</label>
-          <select
-            id="invoice_number_format"
-            name="invoice_number_format"
-            value={form.invoice_number_format}
-            onChange={handleChange}
-          >
-            <option value="{PREFIX}-{YYYY}-{MM}-{SEQ4}">
-              {form.invoice_prefix}-2025-10-0001
-            </option>
-            <option value="{PREFIX}-{YYYY}-{SEQ5}">
-              {form.invoice_prefix}-2025-00001
-            </option>
-            <option value="{PREFIX}{YYYYMM}{SEQ3}">
-              {form.invoice_prefix}202510001
-            </option>
-          </select>
-        </div>
-
-        <div className={styles.previewBadge}>
-          <strong>Prévisualisation :</strong> {generatePreview()}
-        </div>
-
-        {/* Pied de page légal */}
-        <h2 style={{ marginTop: "24px" }}>📄 Pied de page légal</h2>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="legal_footer">Texte du pied de page</label>
-          <textarea
-            id="legal_footer"
-            name="legal_footer"
-            value={form.legal_footer}
-            onChange={handleChange}
-            rows={3}
-            placeholder="Emmenez Moi Sàrl - CHE-123.456.789 - Genève, Suisse"
-          />
-          <small className={styles.hint}>
-            Affiché sur toutes les factures PDF
-          </small>
-        </div>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="pdf_template_variant">Variante de template PDF</label>
-          <select
-            id="pdf_template_variant"
-            name="pdf_template_variant"
-            value={form.pdf_template_variant}
-            onChange={handleChange}
-          >
-            <option value="standard">Standard</option>
-            <option value="minimal">Minimal</option>
-            <option value="detailed">Détaillé</option>
-          </select>
-        </div>
       </section>
 
       {/* Templates d'emails */}
@@ -403,7 +347,7 @@ const BillingTab = () => {
           onChange={(e) =>
             handleToggle({
               target: {
-                name: "email_templates_enabled",
+                name: 'email_templates_enabled',
                 checked: e.target.checked,
               },
             })
@@ -421,25 +365,24 @@ const BillingTab = () => {
                 name="email_sender"
                 value={form.email_sender}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 placeholder="facturation@emmenezmoi.ch"
               />
             </div>
 
             <div className={styles.formGroup}>
-              <label htmlFor="invoice_message_template">
-                Message envoi de facture
-              </label>
+              <label htmlFor="invoice_message_template">Message envoi de facture</label>
               <textarea
                 id="invoice_message_template"
                 name="invoice_message_template"
                 value={form.invoice_message_template}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 rows={5}
                 placeholder="Bonjour {client_name},&#10;&#10;Veuillez trouver ci-joint la facture {invoice_number} d'un montant de {amount} CHF.&#10;&#10;Merci de procéder au paiement avant le {due_date}."
               />
               <small className={styles.hint}>
-                Variables: {"{client_name}"}, {"{amount}"}, {"{due_date}"},{" "}
-                {"{invoice_number}"}
+                Variables: {'{client_name}'}, {'{amount}'}, {'{due_date}'}, {'{invoice_number}'}
               </small>
             </div>
 
@@ -450,6 +393,7 @@ const BillingTab = () => {
                 name="reminder1_template"
                 value={form.reminder1_template}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 rows={4}
                 placeholder="Rappel: votre facture {invoice_number} n'a pas encore été réglée."
               />
@@ -462,26 +406,103 @@ const BillingTab = () => {
                 name="reminder2_template"
                 value={form.reminder2_template}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 rows={4}
                 placeholder="2e rappel: merci de régler la facture {invoice_number} sous 5 jours."
               />
             </div>
 
             <div className={styles.formGroup}>
-              <label htmlFor="reminder3_template">
-                Message 3e rappel (Mise en demeure)
-              </label>
+              <label htmlFor="reminder3_template">Message 3e rappel (Mise en demeure)</label>
               <textarea
                 id="reminder3_template"
                 name="reminder3_template"
                 value={form.reminder3_template}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 rows={4}
                 placeholder="Mise en demeure: dernier rappel avant procédures légales."
               />
             </div>
           </>
         )}
+      </section>
+    </div>
+
+    {/* COLONNE DROITE */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+      {/* Format de facturation et pied de page */}
+      <section className={styles.section}>
+        <h2>🧾 Format de facturation</h2>
+
+        <div className={styles.formGroup}>
+          <label htmlFor="invoice_prefix">Préfixe des factures</label>
+          <input
+            id="invoice_prefix"
+            name="invoice_prefix"
+            value={form.invoice_prefix}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            maxLength={10}
+            placeholder="EM"
+          />
+          <small className={styles.hint}>Ex: EM → {generatePreview()}</small>
+        </div>
+
+        <div className={styles.formGroup}>
+          <label htmlFor="invoice_number_format">Format de numérotation</label>
+          <select
+            id="invoice_number_format"
+            name="invoice_number_format"
+            value={form.invoice_number_format}
+            onChange={(e) => {
+              handleChange(e);
+              autoSave({ ...form, invoice_number_format: e.target.value });
+            }}
+          >
+            <option value="{PREFIX}-{YYYY}-{MM}-{SEQ4}">{form.invoice_prefix}-2025-10-0001</option>
+            <option value="{PREFIX}-{YYYY}-{SEQ5}">{form.invoice_prefix}-2025-00001</option>
+            <option value="{PREFIX}{YYYYMM}{SEQ3}">{form.invoice_prefix}202510001</option>
+          </select>
+        </div>
+
+        <div className={styles.previewBadge}>
+          <strong>Prévisualisation :</strong> {generatePreview()}
+        </div>
+
+        {/* Pied de page légal */}
+        <h2 style={{ marginTop: '24px' }}>📄 Pied de page légal</h2>
+
+        <div className={styles.formGroup}>
+          <label htmlFor="legal_footer">Texte du pied de page</label>
+          <textarea
+            id="legal_footer"
+            name="legal_footer"
+            value={form.legal_footer}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            rows={3}
+            placeholder="Emmenez Moi Sàrl - CHE-123.456.789 - Genève, Suisse"
+          />
+          <small className={styles.hint}>Affiché sur toutes les factures PDF</small>
+        </div>
+
+        <div className={styles.formGroup}>
+          <label htmlFor="pdf_template_variant">Variante de template PDF</label>
+          <select
+            id="pdf_template_variant"
+            name="pdf_template_variant"
+            value={form.pdf_template_variant}
+            onChange={(e) => {
+              handleChange(e);
+              autoSave({ ...form, pdf_template_variant: e.target.value });
+            }}
+          >
+            <option value="standard">Standard</option>
+            <option value="minimal">Minimal</option>
+            <option value="detailed">Détaillé</option>
+          </select>
+        </div>
       </section>
 
       {/* Informations bancaires */}
@@ -495,19 +516,14 @@ const BillingTab = () => {
             name="iban"
             value={form.iban}
             onChange={handleChange}
+            onBlur={handleBlur}
             placeholder="CH93 0076 2011 6238 5295 7"
             maxLength={34}
           />
           <small className={styles.hint}>
             {form.iban && (
-              <span
-                className={
-                  ibanChecksumIsValid(form.iban) ? styles.valid : styles.invalid
-                }
-              >
-                {ibanChecksumIsValid(form.iban)
-                  ? "✅ IBAN valide"
-                  : "❌ IBAN invalide"}
+              <span className={ibanChecksumIsValid(form.iban) ? styles.valid : styles.invalid}>
+                {ibanChecksumIsValid(form.iban) ? '✅ IBAN valide' : '❌ IBAN invalide'}
               </span>
             )}
           </small>
@@ -520,12 +536,11 @@ const BillingTab = () => {
             name="qr_iban"
             value={form.qr_iban}
             onChange={handleChange}
+            onBlur={handleBlur}
             placeholder="CH93 0076 2011 6238 5295 7"
             maxLength={34}
           />
-          <small className={styles.hint}>
-            Utilisé pour la génération des QR-codes de paiement
-          </small>
+          <small className={styles.hint}>Utilisé pour la génération des QR-codes de paiement</small>
         </div>
 
         <div className={styles.formGroup}>
@@ -535,6 +550,7 @@ const BillingTab = () => {
             name="esr_ref_base"
             value={form.esr_ref_base}
             onChange={handleChange}
+            onBlur={handleBlur}
             placeholder="00000000000000000000"
             maxLength={27}
           />
@@ -543,18 +559,9 @@ const BillingTab = () => {
           </small>
         </div>
       </section>
-
-      {/* Boutons */}
-      <div className={styles.actionsRow}>
-        <button
-          type="submit"
-          className={`${styles.button} ${styles.primary}`}
-          disabled={saving}
-        >
-          {saving ? "💾 Enregistrement…" : "💾 Enregistrer"}
-        </button>
+        </div>
       </div>
-    </form>
+    </div>
   );
 };
 

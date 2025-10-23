@@ -10,16 +10,16 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
   const reminderLevels = [
     { value: 1, label: '1er rappel', description: 'Rappel amiable sans frais' },
     { value: 2, label: '2e rappel', description: 'Rappel avec frais supplémentaires' },
-    { value: 3, label: 'Dernier rappel', description: 'Dernier rappel avant mise en demeure' }
+    { value: 3, label: 'Dernier rappel', description: 'Dernier rappel avant mise en demeure' },
   ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       setLoading(true);
       setError(null);
-      
+
       await onReminder(invoice.id, level);
     } catch (err) {
       setError(err.message || 'Erreur lors de la génération du rappel');
@@ -37,40 +37,48 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
   if (!open || !invoice) return null;
 
   const nextLevel = getNextReminderLevel(invoice);
-  const availableLevels = reminderLevels.filter(rl => rl.value >= nextLevel);
+  const availableLevels = reminderLevels.filter((rl) => rl.value >= nextLevel);
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modal}>
-        <div className={styles.modalHeader}>
-          <h2>Générer un rappel</h2>
-          <button className={styles.closeBtn} onClick={handleClose}>
+    <div className="modal-overlay">
+      <div className="modal-content modal-md">
+        <div className="modal-header">
+          <h2 className="modal-title">Générer un rappel</h2>
+          <button className="modal-close" onClick={handleClose}>
             ✕
           </button>
         </div>
 
-        <div className={styles.modalBody}>
+        <div className="modal-body">
           <div className={styles.invoiceInfo}>
             <h3>Facture {invoice.invoice_number}</h3>
-            <p>Client: {invoice.client ? 
-              `${invoice.client.first_name || ''} ${invoice.client.last_name || ''}`.trim() || invoice.client.username
-              : 'Client inconnu'
-            }</p>
-            <p>Solde dû: <strong>{invoice.balance_due.toFixed(2)} CHF</strong></p>
-            <p>Niveau actuel: {invoice.reminder_level === 0 ? 'Aucun' : `Rappel ${invoice.reminder_level}`}</p>
-            <p>Dernier rappel: {invoice.last_reminder_at ? 
-              new Date(invoice.last_reminder_at).toLocaleDateString('fr-FR')
-              : 'Jamais'
-            }</p>
+            <p>
+              Client:{' '}
+              {invoice.client
+                ? `${invoice.client.first_name || ''} ${invoice.client.last_name || ''}`.trim() ||
+                  invoice.client.username
+                : 'Client inconnu'}
+            </p>
+            <p>
+              Solde dû: <strong>{invoice.balance_due.toFixed(2)} CHF</strong>
+            </p>
+            <p>
+              Niveau actuel:{' '}
+              {invoice.reminder_level === 0 ? 'Aucun' : `Rappel ${invoice.reminder_level}`}
+            </p>
+            <p>
+              Dernier rappel:{' '}
+              {invoice.last_reminder_at
+                ? new Date(invoice.last_reminder_at).toLocaleDateString('fr-FR')
+                : 'Jamais'}
+            </p>
           </div>
 
-          <form onSubmit={handleSubmit} className={styles.form}>
-            <div className={styles.formGroup}>
-              <label className={styles.label}>
-                Niveau du rappel *
-              </label>
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label className="form-label required">Niveau du rappel</label>
               <div className={styles.levelOptions}>
-                {availableLevels.map(reminderLevel => (
+                {availableLevels.map((reminderLevel) => (
                   <div key={reminderLevel.value} className={styles.levelOption}>
                     <input
                       type="radio"
@@ -101,16 +109,12 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
               </div>
             )}
 
-            {error && (
-              <div className={styles.error}>
-                {error}
-              </div>
-            )}
+            {error && <div className="alert alert-error mb-md">{error}</div>}
 
-            <div className={styles.formActions}>
+            <div className="modal-footer">
               <button
                 type="button"
-                className={styles.cancelBtn}
+                className="btn btn-secondary"
                 onClick={handleClose}
                 disabled={loading}
               >
@@ -118,7 +122,7 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
               </button>
               <button
                 type="submit"
-                className={styles.submitBtn}
+                className="btn btn-primary"
                 disabled={loading || availableLevels.length === 0}
               >
                 {loading ? 'Génération...' : `Générer le rappel niveau ${level}`}

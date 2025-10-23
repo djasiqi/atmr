@@ -11,10 +11,13 @@ from flask_restx import Namespace, Resource
 from sqlalchemy import func
 
 from models import FavoritePlace
+from services.google_places import GooglePlacesError, autocomplete_address, geocode_address_google, get_place_details
 
-geocode_ns = Namespace("geocode", description="Autocomplete & géocodage (biais Genève)")
+geocode_ns = Namespace("geocode", description="Autocomplete & géocodage avec Google Places API")
 
-PHOTON = os.getenv("PHOTON_BASE_URL", "https://photon.komoot.io")
+# Configuration
+PHOTON = os.getenv("PHOTON_BASE_URL", "https://photon.komoot.io")  # Fallback si Google API indisponible
+USE_GOOGLE_PLACES = os.getenv("USE_GOOGLE_PLACES", "true").lower() in ("true", "1", "yes")
 
 # Biais géographique Genève (approx)
 GENEVA_CENTER: Tuple[float, float] = (46.2044, 6.1432)   # (lat, lon)
@@ -176,7 +179,7 @@ class GeocodeAutocomplete(Resource):
         if alias:
             results.append({
                 "source": "alias",
-                "label": alias["address"],   # label = adresse pour l’UI
+                "label": alias["address"],   # label = adresse pour l'UI
                 "address": alias["address"],
                 "lat": alias["lat"],
                 "lon": alias["lon"],
@@ -210,24 +213,155 @@ class GeocodeAutocomplete(Resource):
             except Exception as e:
                 current_app.logger.warning(f"Favorites lookup failed: {e}")
 
-        # 3) Photon (biais Genève + hint hôpital)
-        try:
-            ph = photon_query(q, lat=lat, lon=lon, limit=limit, hospital_hint=looks_like_hospital(q))
-            results.extend(normalize_photon(ph))
-        except Exception as e:
-            current_app.logger.warning(f"Photon autocomplete error: {e}")
+        # 3) Google Places API (prioritaire) ou fallback Photon
+        if USE_GOOGLE_PLACES:
+            try:
+                # Appel à Google Places Autocomplete
+                google_results = autocomplete_address(
+                    q,
+                    location={"lat": lat, "lng": lon},
+                    limit=limit
+                )
+
+                for pred in google_results:
+                    # Pour chaque prédiction, on peut optionnellement récupérer les coordonnées
+                    # via Place Details (mais c'est plus coûteux en quota)
+                    # Pour l'autocomplete, on retourne juste les suggestions
+                    results.append({
+                        "source": "google_places",
+                        "label": pred.get("description", ""),
+                        "address": pred.get("description", ""),
+                        "place_id": pred.get("place_id"),
+                        "main_text": pred.get("main_text", ""),
+                        "secondary_text": pred.get("secondary_text", ""),
+                        "types": pred.get("types", []),
+                        # Les coordonnées seront récupérées lors de la sélection finale
+                        "lat": None,
+                        "lon": None,
+                    })
+            except GooglePlacesError as e:
+                current_app.logger.warning(f"⚠️ Google Places API error, falling back to Photon: {e}")
+                # Fallback vers Photon si Google échoue
+                try:
+                    ph = photon_query(q, lat=lat, lon=lon, limit=limit, hospital_hint=looks_like_hospital(q))
+                    results.extend(normalize_photon(ph))
+                except Exception as e2:
+                    current_app.logger.warning(f"Photon autocomplete error: {e2}")
+        else:
+            # 3) Photon (biais Genève + hint hôpital) - mode fallback
+            try:
+                ph = photon_query(q, lat=lat, lon=lon, limit=limit, hospital_hint=looks_like_hospital(q))
+                results.extend(normalize_photon(ph))
+            except Exception as e:
+                current_app.logger.warning(f"Photon autocomplete error: {e}")
 
         # 4) Dédup (adresse + coords arrondies)
         seen: set[Tuple[str, float, float]] = set()
         uniq: List[Dict[str, Any]] = []
         for r in results:
             addr_or_label = (r.get("address") or r.get("label") or "").strip()
-            lat_v = float(r.get("lat") or 0.0)
-            lon_v = float(r.get("lon") or 0.0)
-            key = (addr_or_label, round(lat_v, 5), round(lon_v, 5))
+            lat_v = float(r.get("lat") or 0.0) if r.get("lat") is not None else 0.0
+            lon_v = float(r.get("lon") or 0.0) if r.get("lon") is not None else 0.0
+            # Pour les résultats Google sans coordonnées, utiliser place_id pour dédup
+            place_id = r.get("place_id")
+            if place_id:
+                key = (str(place_id), 0.0, 0.0)
+            else:
+                key = (addr_or_label or "unknown", round(lat_v, 5), round(lon_v, 5))
             if key in seen:
                 continue
             seen.add(key)
             uniq.append(r)
 
         return uniq[:limit], 200
+
+
+@geocode_ns.route("/place-details")
+class PlaceDetails(Resource):
+    @geocode_ns.doc(
+        security=None,
+        params={
+            "place_id": "ID Google Places de l'adresse sélectionnée",
+        },
+    )
+    def get(self):
+        """
+        Récupère les détails complets d'un lieu (coordonnées GPS incluses) via son place_id.
+        Utilisé après qu'un utilisateur a sélectionné une adresse dans l'autocomplete.
+        """
+        place_id = request.args.get("place_id", "").strip()
+
+        if not place_id:
+            return {"error": "place_id est requis"}, 400
+
+        if not USE_GOOGLE_PLACES:
+            return {"error": "Google Places API non activée"}, 503
+
+        try:
+            details = get_place_details(place_id)
+
+            return {
+                "source": "google_places",
+                "place_id": details.get("place_id"),
+                "address": details.get("address"),
+                "lat": details.get("lat"),
+                "lon": details.get("lon"),
+                "name": details.get("name"),
+                "types": details.get("types", []),
+                "address_components": details.get("address_components", []),
+            }, 200
+
+        except GooglePlacesError as e:
+            current_app.logger.error(f"❌ Erreur Place Details: {e}")
+            return {"error": str(e)}, 500
+
+
+@geocode_ns.route("/geocode")
+class GeocodeAddress(Resource):
+    @geocode_ns.doc(
+        security=None,
+        params={
+            "address": "Adresse complète à géocoder",
+            "country": "Code pays (ex: CH) - optionnel",
+        },
+    )
+    def get(self):
+        """
+        Géocode une adresse complète et retourne les coordonnées GPS.
+        Utilisé lorsqu'une adresse est saisie manuellement (sans autocomplete).
+        """
+        address = request.args.get("address", "").strip()
+
+        if not address:
+            return {"error": "address est requis"}, 400
+
+        country = request.args.get("country", "CH")
+
+        try:
+            if USE_GOOGLE_PLACES:
+                result = geocode_address_google(address, country=country)
+            else:
+                # Fallback vers le service existant
+                from services.maps import geocode_address
+                coords = geocode_address(address, country=country)
+                result = {
+                    "address": address,
+                    "lat": coords.get("lat"),
+                    "lon": coords.get("lon"),
+                } if coords else None
+
+            if not result:
+                return {"error": "Aucune coordonnée trouvée pour cette adresse"}, 404
+
+            return {
+                "source": "google_geocoding" if USE_GOOGLE_PLACES else "nominatim",
+                "address": result.get("address"),
+                "lat": result.get("lat"),
+                "lon": result.get("lon"),
+                "place_id": result.get("place_id"),
+                "location_type": result.get("location_type"),
+            }, 200
+
+        except Exception as e:
+            current_app.logger.error(f"❌ Erreur géocodage: {e}")
+            return {"error": "Erreur lors du géocodage"}, 500

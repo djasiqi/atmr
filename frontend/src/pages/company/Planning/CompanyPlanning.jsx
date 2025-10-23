@@ -1,23 +1,23 @@
-import React, { useEffect, useMemo, useState } from "react";
-import styles from "./CompanyPlanning.module.css";
+import React, { useEffect, useMemo, useState } from 'react';
+import styles from './CompanyPlanning.module.css';
 import {
   fetchShifts,
   createShift,
   updateShift,
   deleteShift,
-} from "../../../services/driverPlanningService";
+} from '../../../services/driverPlanningService';
 
-import Scheduler from "./components/Scheduler";
-import KPIs from "./components/KPIs";
-import Filters from "./components/Filters";
-import DriverLegend from "./components/DriverLegend";
-import { fetchCompanyDriver } from "../../../services/driverPlanningService";
-import ShiftModal from "./components/ShiftModal";
-import UnavailabilityModal from "./components/UnavailabilityModal";
-import BreakModal from "./components/BreakModal";
-import TemplateEditor from "./components/TemplateEditor";
-import CompanyHeader from "../../../components/layout/Header/CompanyHeader";
-import CompanySidebar from "../../../components/layout/Sidebar/CompanySidebar/CompanySidebar";
+import Scheduler from './components/Scheduler';
+import KPIs from './components/KPIs';
+import Filters from './components/Filters';
+import DriverLegend from './components/DriverLegend';
+import { fetchCompanyDriver } from '../../../services/driverPlanningService';
+import ShiftModal from './components/ShiftModal';
+import UnavailabilityModal from './components/UnavailabilityModal';
+import BreakModal from './components/BreakModal';
+import TemplateEditor from './components/TemplateEditor';
+import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
+import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -30,7 +30,7 @@ function startOfWeek(d) {
   return dt;
 }
 
-function addDays(iso, n) {
+function _addDays(iso, n) {
   const d = new Date(iso);
   d.setDate(d.getDate() + n);
   return d.toISOString();
@@ -40,35 +40,27 @@ function formatRange(range, view) {
   const from = new Date(range.from);
   const to = new Date(range.to);
   const fmt = (d) =>
-    d.toLocaleDateString("fr-CH", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
+    d.toLocaleDateString('fr-CH', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
     });
-  if (view === "day") return fmt(from);
+  if (view === 'day') return fmt(from);
   return `${fmt(from)} – ${fmt(to)}`;
 }
 
-function computeRange(anchor = new Date(), view = "week") {
+function computeRange(anchor = new Date(), view = 'week') {
   const base = new Date(anchor);
   base.setHours(0, 0, 0, 0);
-  if (view === "day") {
+  if (view === 'day') {
     const from = new Date(base);
     const to = new Date(base);
     to.setHours(23, 59, 59, 999);
     return { from: from.toISOString(), to: to.toISOString() };
   }
-  if (view === "month") {
+  if (view === 'month') {
     const from = new Date(base.getFullYear(), base.getMonth(), 1, 0, 0, 0, 0);
-    const to = new Date(
-      base.getFullYear(),
-      base.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-      999
-    );
+    const to = new Date(base.getFullYear(), base.getMonth() + 1, 0, 23, 59, 59, 999);
     return { from: from.toISOString(), to: to.toISOString() };
   }
   // week
@@ -80,7 +72,7 @@ function computeRange(anchor = new Date(), view = "week") {
 }
 
 function shiftRangeBy(range, view, dir = 1) {
-  const delta = view === "day" ? 1 : view === "month" ? 30 : 7;
+  const delta = view === 'day' ? 1 : view === 'month' ? 30 : 7;
   const anchor = new Date(range.from);
   anchor.setDate(anchor.getDate() + dir * delta);
   return computeRange(anchor, view);
@@ -91,16 +83,14 @@ function HolidayBar({ range }) {
   const holidays = [];
   const y = new Date(range.from).getFullYear();
   // New Year
-  holidays.push({ date: `${y}-01-01`, name: "Nouvel an" });
+  holidays.push({ date: `${y}-01-01`, name: 'Nouvel an' });
   // Swiss National Day
-  holidays.push({ date: `${y}-08-01`, name: "Fête nationale" });
+  holidays.push({ date: `${y}-08-01`, name: 'Fête nationale' });
   // Christmas
-  holidays.push({ date: `${y}-12-25`, name: "Noël" });
+  holidays.push({ date: `${y}-12-25`, name: 'Noël' });
   const inRange = (iso) => {
     const t = new Date(iso).getTime();
-    return (
-      t >= new Date(range.from).getTime() && t <= new Date(range.to).getTime()
-    );
+    return t >= new Date(range.from).getTime() && t <= new Date(range.to).getTime();
   };
   const visible = holidays.filter((h) => inRange(`${h.date}T12:00:00`));
   if (visible.length === 0) return null;
@@ -108,10 +98,10 @@ function HolidayBar({ range }) {
     <div className={styles.holidayBar}>
       {visible.map((h) => (
         <span key={h.date} className={styles.holidayPill}>
-          {new Date(`${h.date}T00:00:00`).toLocaleDateString("fr-CH", {
-            day: "2-digit",
-            month: "short",
-          })}{" "}
+          {new Date(`${h.date}T00:00:00`).toLocaleDateString('fr-CH', {
+            day: '2-digit',
+            month: 'short',
+          })}{' '}
           — {h.name}
         </span>
       ))}
@@ -124,7 +114,7 @@ export default function CompanyPlanning() {
     from: `${todayIso()}T00:00:00`,
     to: `${todayIso()}T23:59:59`,
   });
-  const [view, setView] = useState("week"); // day | week | month
+  const [view, setView] = useState('week'); // day | week | month
   const [driverId, setDriverId] = useState(null);
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -138,10 +128,7 @@ export default function CompanyPlanning() {
     tpl: false,
   });
 
-  const params = useMemo(
-    () => ({ from: range.from, to: range.to, driverId }),
-    [range, driverId]
-  );
+  const params = useMemo(() => ({ from: range.from, to: range.to, driverId }), [range, driverId]);
 
   useEffect(() => {
     fetchCompanyDriver()
@@ -160,7 +147,7 @@ export default function CompanyPlanning() {
         const data = await fetchShifts(params);
         if (!cancelled) setItems(Array.isArray(data?.items) ? data.items : []);
       } catch (e) {
-        if (!cancelled) setError("Erreur de chargement des shifts");
+        if (!cancelled) setError('Erreur de chargement des shifts');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -208,50 +195,33 @@ export default function CompanyPlanning() {
               <div className={styles.left}>
                 <div className={styles.tabs}>
                   <button
-                    className={`${styles.tab} ${
-                      view === "day" ? styles.tabActive : ""
-                    }`}
-                    onClick={() => setView("day")}
+                    className={`${styles.tab} ${view === 'day' ? styles.tabActive : ''}`}
+                    onClick={() => setView('day')}
                   >
                     Jour
                   </button>
                   <button
-                    className={`${styles.tab} ${
-                      view === "week" ? styles.tabActive : ""
-                    }`}
-                    onClick={() => setView("week")}
+                    className={`${styles.tab} ${view === 'week' ? styles.tabActive : ''}`}
+                    onClick={() => setView('week')}
                   >
                     Semaine
                   </button>
                   <button
-                    className={`${styles.tab} ${
-                      view === "month" ? styles.tabActive : ""
-                    }`}
-                    onClick={() => setView("month")}
+                    className={`${styles.tab} ${view === 'month' ? styles.tabActive : ''}`}
+                    onClick={() => setView('month')}
                   >
                     Mois
                   </button>
                 </div>
                 <div className={styles.nav}>
-                  <button
-                    className={styles.navBtn}
-                    onClick={() => shiftRange(-1, view)}
-                  >
+                  <button className={styles.navBtn} onClick={() => shiftRange(-1, view)}>
                     ◀
                   </button>
-                  <div className={styles.dateLabel}>
-                    {formatRange(range, view)}
-                  </div>
-                  <button
-                    className={styles.navBtn}
-                    onClick={() => shiftRange(1, view)}
-                  >
+                  <div className={styles.dateLabel}>{formatRange(range, view)}</div>
+                  <button className={styles.navBtn} onClick={() => shiftRange(1, view)}>
                     ▶
                   </button>
-                  <button
-                    className={styles.navBtn}
-                    onClick={() => goToday(view)}
-                  >
+                  <button className={styles.navBtn} onClick={() => goToday(view)}>
                     Aujourd’hui
                   </button>
                 </div>
@@ -275,43 +245,29 @@ export default function CompanyPlanning() {
                 </div>
                 {loading && <span className={styles.badge}>Chargement…</span>}
                 {error && <span className={styles.error}>{error}</span>}
-                <div style={{ marginLeft: 8, display: "flex", gap: 6 }}>
-                  <button onClick={() => setModals({ ...modals, shift: true })}>
-                    + Shift
-                  </button>
-                  <button onClick={() => setModals({ ...modals, unav: true })}>
-                    + Indispo
-                  </button>
-                  <button onClick={() => setModals({ ...modals, brk: true })}>
-                    + Pause
-                  </button>
-                  <button onClick={() => setModals({ ...modals, tpl: true })}>
-                    Modèle
-                  </button>
+                <div style={{ marginLeft: 8, display: 'flex', gap: 6 }}>
+                  <button onClick={() => setModals({ ...modals, shift: true })}>+ Shift</button>
+                  <button onClick={() => setModals({ ...modals, unav: true })}>+ Indispo</button>
+                  <button onClick={() => setModals({ ...modals, brk: true })}>+ Pause</button>
+                  <button onClick={() => setModals({ ...modals, tpl: true })}>Modèle</button>
                 </div>
               </div>
             </div>
             <HolidayBar range={range} />
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "260px 1fr",
+                display: 'grid',
+                gridTemplateColumns: '260px 1fr',
                 gap: 12,
               }}
             >
               <div>
                 <div style={{ marginBottom: 8 }}>
-                  <label style={{ fontSize: 12, color: "#6b7280" }}>
-                    Chauffeur
-                  </label>
+                  <label style={{ fontSize: 12, color: '#6b7280' }}>Chauffeur</label>
                   <select
-                    value={driverId || ""}
-                    onChange={(e) =>
-                      setDriverId(
-                        e.target.value ? Number(e.target.value) : null
-                      )
-                    }
-                    style={{ width: "100%" }}
+                    value={driverId || ''}
+                    onChange={(e) => setDriverId(e.target.value ? Number(e.target.value) : null)}
+                    style={{ width: '100%' }}
                   >
                     <option value="">Tous</option>
                     {drivers.map((d) => (

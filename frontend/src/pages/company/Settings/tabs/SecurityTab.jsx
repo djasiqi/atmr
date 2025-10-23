@@ -58,40 +58,42 @@ const SecurityTab = () => {
       {/* Logs d'activité */}
       <section className={styles.section}>
         <h2>📝 Activité récente</h2>
-
-        <div className={styles.activityLog}>
-          <table className={styles.activityTable}>
-            <thead>
-              <tr>
-                <th>Date & Heure</th>
-                <th>Utilisateur</th>
-                <th>Action</th>
-                <th>IP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentActivity.map((log) => (
-                <tr key={log.id}>
-                  <td>{log.timestamp}</td>
-                  <td>{log.user}</td>
-                  <td>{log.action}</td>
-                  <td className={styles.ipCell}>{log.ip}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className={styles.actionsRow}>
-          <button
-            type="button"
-            className={`${styles.button} ${styles.secondary}`}
-            onClick={handleExportLogs}
-          >
-            📥 Exporter tous les logs (CSV)
-          </button>
-        </div>
       </section>
+
+      {/* Tableau séparé - comme les autres pages */}
+      <div className={styles.tableContainer}>
+        <table className={styles.activityTable}>
+          <thead>
+            <tr>
+              <th>Date & Heure</th>
+              <th>Utilisateur</th>
+              <th>Action</th>
+              <th>IP</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recentActivity.map((log) => (
+              <tr key={log.id}>
+                <td>{log.timestamp}</td>
+                <td>{log.user}</td>
+                <td>{log.action}</td>
+                <td className={styles.ipCell}>{log.ip}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Actions après le tableau */}
+      <div className={styles.actionsRow} style={{ marginTop: 'var(--spacing-lg)' }}>
+        <button
+          type="button"
+          className={`${styles.button} ${styles.secondary}`}
+          onClick={handleExportLogs}
+        >
+          📥 Exporter tous les logs (CSV)
+        </button>
+      </div>
 
       {/* Informations système */}
       <section className={styles.section}>

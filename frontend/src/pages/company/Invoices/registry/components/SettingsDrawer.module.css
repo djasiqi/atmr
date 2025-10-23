@@ -5,7 +5,7 @@
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.5);
-  z-index: 2000;
+  z-index: var(--z-modal-backdrop);
 }
 
 .drawer {
@@ -15,8 +15,8 @@
   height: 100vh;
   width: 600px;
   max-width: 90vw;
-  background: white;
-  box-shadow: -5px 0 15px rgba(0, 0, 0, 0.2);
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-xl);
   display: flex;
   flex-direction: column;
   animation: slideIn 0.3s ease-out;
@@ -35,26 +35,26 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid #dee2e6;
-  background-color: #f8f9fa;
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--border-primary);
+  background-color: var(--bg-tertiary);
 }
 
 .drawerHeader h2 {
   margin: 0;
-  color: #333;
-  font-size: 1.5rem;
+  color: var(--text-primary);
+  font-size: var(--font-size-2xl);
 }
 
 .closeBtn {
   background: none;
   border: none;
-  font-size: 1.5rem;
-  color: #6c757d;
+  font-size: var(--font-size-2xl);
+  color: var(--text-tertiary);
   cursor: pointer;
-  padding: 0.5rem;
-  border-radius: 4px;
-  transition: all 0.2s;
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-base);
 }
 
 .closeBtn:hover {

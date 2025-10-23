@@ -5,7 +5,7 @@
   display: none;
   background: none;
   border: none;
-  font-size: 2em;
+  font-size: var(--font-3xl);
   cursor: pointer;
 }
 
@@ -14,10 +14,10 @@
   width: 220px;
   margin-top: 100px; /* Décalage pour laisser le header desktop visible */
   min-height: calc(100vh - 100px);
-  padding: 20px;
-  border-right: 1px solid #ddd;
+  padding: var(--spacing-lg);
+  border-right: 1px solid var(--border-secondary);
   box-sizing: border-box;
-  transition: transform 0.3s ease;
+  transition: transform var(--transition-base);
 }
 
 /* Sur mobile, ajustement de l'affichage en fonction de la hauteur du header mobile (ex. 60px) */
@@ -25,9 +25,9 @@
   .hamburger {
     display: block;
     position: fixed;
-    top: 20px;
-    left: 20px;
-    z-index: 1001;
+    top: var(--spacing-lg);
+    left: var(--spacing-lg);
+    z-index: var(--z-modal);
   }
 
   .sidebar {
@@ -37,11 +37,11 @@
     width: 80%;
     max-width: 300px;
     height: calc(100vh - 60px); /* Ajusté pour compenser le header mobile */
-    background: #fff;
+    background: var(--bg-primary);
     transform: translateX(-100%);
-    z-index: 1000;
-    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
-    padding: 20px;
+    z-index: var(--z-modal-backdrop);
+    box-shadow: var(--shadow-lg);
+    padding: var(--spacing-lg);
   }
 
   /* Lorsque la sidebar est ouverte */

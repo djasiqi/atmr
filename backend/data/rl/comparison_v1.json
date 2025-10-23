@@ -1,0 +1,30 @@
+{
+  "baseline": {
+    "mean_reward": -1921.316784559815,
+    "std_reward": 550.3391054578652,
+    "min_reward": -3509.6738488228843,
+    "max_reward": -1259.86744481941,
+    "median_reward": -1830.2523205774537,
+    "mean_assignments": 0.0,
+    "mean_late_pickups": 0.0,
+    "mean_distance": 0.0,
+    "training_episodes": 200
+  },
+  "optimized": {
+    "mean_reward": -696.9301091034029,
+    "std_reward": 394.82691771988317,
+    "min_reward": -1488.975912756158,
+    "max_reward": 175.1665387467297,
+    "median_reward": -700.9858744887262,
+    "mean_assignments": 0.0,
+    "mean_late_pickups": 0.0,
+    "mean_distance": 0.0,
+    "training_episodes": 200
+  },
+  "timestamp": "2025-10-21T00:20:35.562685",
+  "improvement": {
+    "reward_percent": 63.72643414640894,
+    "distance_percent": 0.0,
+    "late_pickups_absolute": 0.0
+  }
+}

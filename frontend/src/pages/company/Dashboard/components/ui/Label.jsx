@@ -1,8 +1,7 @@
-import React from "react";
-import styles from "./Label.module.css";
+import React from 'react';
 
-const Label = ({ children, htmlFor, className = "", ...props }) => (
-  <label htmlFor={htmlFor} className={`${styles.label} ${className}`} {...props}>
+const Label = ({ children, htmlFor, className = '', ...props }) => (
+  <label htmlFor={htmlFor} className={`form-label ${className}`} {...props}>
     {children}
   </label>
 );

@@ -5,78 +5,67 @@
   display: flex;
   flex-direction: row;
   min-height: 100vh;
-  background-color: #f4f7fc;
+  background-color: var(--bg-secondary);
   font-family: "Helvetica Neue", Arial, sans-serif;
   margin-top: 100px;
 }
 
 .mainContent {
   flex: 1;
-  padding: 20px;
-  background-color: #ffffff;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+  padding: var(--spacing-lg);
+  background-color: var(--bg-primary);
+  box-shadow: var(--shadow-sm);
   overflow-y: auto;
 }
 
-/* --- STYLES POUR LE TABLEAU DES CHAUFFEURS (À AJOUTER) --- */
-
-/* Définition des couleurs pour une personnalisation facile */
-:root {
-  --border-color: #e2e8f0;
-  --header-bg: #f8fafc;
-  --row-hover-bg: #f1f5f9;
-  --text-color: #334155;
-  --text-color-light: #64748b;
-  --button-hover-bg: #e5e7eb;
-  
-  --available-bg: #dcfce7;
-  --available-text: #16a34a;
-  
-  --unavailable-bg: #fee2e2;
-  --unavailable-text: #dc2626;
-
-  --emergency-bg: #fef9c3;
-  --emergency-text: #ca8a04;
-}
+/* --- STYLES POUR LE TABLEAU DES CHAUFFEURS --- */
 
 /* --- Structure générale de la table --- */
 .table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 20px; /* Ajoute un peu d'espace au-dessus du tableau */
-  font-size: 0.9rem;
-  color: var(--text-color);
-  background-color: #fff;
-  border-radius: 8px;
+  margin-top: var(--spacing-lg);
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  background-color: var(--bg-primary);
+  border-radius: var(--radius-md);
   overflow: hidden;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 /* --- En-têtes de colonnes --- */
 .table thead tr {
-  background-color: var(--header-bg);
+  background-color: var(--bg-secondary);
   text-align: left;
 }
 
 .table th {
-  padding: 12px 16px;
-  font-weight: 600;
-  color: var(--text-color-light);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-bottom: 2px solid var(--border-color);
+  border-bottom: 2px solid var(--border-primary);
 }
 
 /* --- Cellules et lignes du tableau --- */
 .table td {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-color);
-  vertical-align: middle; /* Aligne le contenu verticalement */
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--border-primary);
+  vertical-align: middle;
+}
+
+/* Colonne nom d'utilisateur - même format que colonnes clients */
+.driverNameCell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Effet de survol sur les lignes */
 .table tbody tr:hover {
-  background-color: var(--row-hover-bg);
+  background-color: var(--bg-hover);
 }
 
 .table tbody tr:last-child td {
@@ -85,28 +74,28 @@
 
 /* --- Styles des indicateurs de statut ("badges") --- */
 .available, .unavailable, .emergency {
-  display: inline-flex; /* Pour aligner l'icône et le texte */
+  display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  font-weight: 500;
-  font-size: 0.8rem;
+  padding: var(--spacing-xxs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-xs);
   line-height: 1.2;
 }
 
 .available {
-  background-color: var(--available-bg);
-  color: var(--available-text);
+  background-color: var(--success-bg);
+  color: var(--success-primary);
 }
 
 .unavailable {
-  background-color: var(--unavailable-bg);
-  color: var(--unavailable-text);
+  background-color: var(--danger-bg);
+  color: var(--danger-primary);
 }
 
 .emergency {
-    background-color: var(--emergency-bg);
-    color: var(--emergency-text);
+    background-color: var(--warning-bg);
+    color: var(--warning-primary);
 }
 
 /* --- Style des boutons d'action --- */
@@ -114,27 +103,27 @@
   background: none;
   border: none;
   cursor: pointer;
-  padding: 8px;
-  margin: 0 4px;
-  border-radius: 50%;
-  color: var(--text-color-light);
-  transition: background-color 0.2s ease, color 0.2s ease;
+  padding: var(--spacing-xs);
+  margin: 0 var(--spacing-xxs);
+  border-radius: var(--radius-full);
+  color: var(--text-tertiary);
+  transition: background-color var(--transition-base), color var(--transition-base);
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
 .actionButton:hover {
-  background-color: var(--button-hover-bg);
-  color: var(--text-color);
+  background-color: var(--gray-200);
+  color: var(--text-secondary);
 }
 
 /* Aligner les actions à gauche */
 .table td:last-child {
   display: flex;
-  justify-content: flex-start; /* Aligne les boutons à gauche */
+  justify-content: flex-start;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-xs);
 }
 
 
@@ -145,6 +134,63 @@
     margin-top: 80px;
   }
   .mainContent {
-    padding: 10px;
+    padding: var(--spacing-sm);
+  }
+  
+  /* Table responsive */
+  .table {
+    width: 100% !important;
+    min-width: 500px; /* Force scroll horizontal */
+    font-size: var(--font-xs);
+    box-sizing: border-box;
+  }
+  
+  .table th,
+  .table td {
+    padding: var(--spacing-xs);
+    font-size: 0.7rem;
+  }
+
+  .table th {
+    position: sticky;
+    top: 0;
+    background-color: var(--bg-secondary);
+    z-index: 10;
+  }
+
+  .driverNameCell {
+    max-width: 140px;
+  }
+  
+  .actionButton {
+    padding: var(--spacing-xxs);
+    margin: 0 2px;
+  }
+}
+
+@media (max-width: 480px) {
+  .table {
+    min-width: 400px;
+    font-size: 0.65rem;
+  }
+  
+  .table th,
+  .table td {
+    padding: 2px var(--spacing-xs);
+    font-size: 0.65rem;
+  }
+
+  .driverNameCell {
+    max-width: 110px;
+  }
+}
+
+@media (max-width: 390px) {
+  .table {
+    min-width: 360px;
+  }
+
+  .driverNameCell {
+    max-width: 100px;
   }
 }

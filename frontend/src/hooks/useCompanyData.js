@@ -1,10 +1,10 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from 'react';
 import {
   fetchCompanyReservations,
   fetchCompanyDriver,
   fetchCompanyInfo,
-} from "../services/companyService";
-import { getAccessToken } from "./useAuthToken";
+} from '../services/companyService';
+import { getAccessToken } from './useAuthToken';
 
 const useCompanyData = ({ day } = {}) => {
   const [reservations, setReservations] = useState([]);
@@ -21,8 +21,6 @@ const useCompanyData = ({ day } = {}) => {
 
       const data = await fetchCompanyInfo();
       setCompany(data);
-      console.log("✅ Company chargée :", data);
-      console.log("🖼️ Logo URL dans les données:", data?.logo_url);
     } catch (err) {
       console.error("❌ Erreur lors du chargement de l'entreprise :", err);
       setError("Erreur lors du chargement de l'entreprise.");
@@ -38,13 +36,11 @@ const useCompanyData = ({ day } = {}) => {
       setError(null); // Réinitialiser l'erreur en cas de succès
     } catch (err) {
       // Gérer spécifiquement les erreurs de timeout
-      if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
-        setError(
-          "La récupération des réservations a pris trop de temps. Veuillez réessayer."
-        );
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        setError('La récupération des réservations a pris trop de temps. Veuillez réessayer.');
       } else {
-        console.error("❌ Erreur lors du chargement des réservations :", err);
-        setError("Erreur lors du chargement des réservations.");
+        console.error('❌ Erreur lors du chargement des réservations :', err);
+        setError('Erreur lors du chargement des réservations.');
       }
     } finally {
       setLoadingReservations(false);
@@ -60,13 +56,11 @@ const useCompanyData = ({ day } = {}) => {
       setError(null); // Réinitialiser l'erreur en cas de succès
     } catch (err) {
       // Gérer spécifiquement les erreurs de timeout
-      if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
-        setError(
-          "La récupération des chauffeurs a pris trop de temps. Veuillez réessayer."
-        );
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        setError('La récupération des chauffeurs a pris trop de temps. Veuillez réessayer.');
       } else {
-        console.error("❌ Erreur lors du chargement des chauffeurs :", err);
-        setError("Erreur lors du chargement des chauffeurs.");
+        console.error('❌ Erreur lors du chargement des chauffeurs :', err);
+        setError('Erreur lors du chargement des chauffeurs.');
       }
     } finally {
       setLoadingDriver(false);
