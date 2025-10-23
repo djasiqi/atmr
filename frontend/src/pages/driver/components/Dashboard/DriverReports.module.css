@@ -1,8 +1,8 @@
 /* src/components/DriverReports.module.css */
 .reports {
-    margin: 20px 0;
-    padding: 15px;
-    background: #ecf0f1;
-    border-radius: 8px;
+    margin: var(--spacing-lg) 0;
+    padding: var(--spacing-md);
+    background: var(--gray-100);
+    border-radius: var(--radius-md);
   }
   

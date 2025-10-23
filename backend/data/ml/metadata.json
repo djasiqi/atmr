@@ -1,0 +1,32 @@
+{
+  "created_at": "2025-10-20T16:40:52.461513",
+  "type": "synthetic",
+  "total_records": 5000,
+  "features": [
+    "time_of_day",
+    "day_of_week",
+    "month",
+    "distance_km",
+    "duration_seconds",
+    "is_medical",
+    "is_urgent",
+    "is_round_trip",
+    "booking_priority",
+    "driver_total_bookings",
+    "traffic_density",
+    "weather_factor",
+    "booking_id",
+    "driver_id",
+    "assignment_id",
+    "company_id",
+    "actual_delay_minutes"
+  ],
+  "statistics": {
+    "mean_delay": 6.278052,
+    "median_delay": 5.78,
+    "std_delay": 4.826796755476631,
+    "min_delay": -6.52,
+    "max_delay": 57.48,
+    "pct_delayed": 57.8
+  }
+}

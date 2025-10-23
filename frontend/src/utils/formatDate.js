@@ -8,26 +8,26 @@
  *  - Date (utilisée telle quelle, sans TZ)
  */
 function formatLocalNaive(dateInput) {
-  if (!dateInput) return "Non spécifié";
+  if (!dateInput) return 'Non spécifié';
   try {
     let dateObj;
 
     if (dateInput instanceof Date) {
       dateObj = dateInput;
-    } else if (typeof dateInput === "string") {
+    } else if (typeof dateInput === 'string') {
       // Parser la chaîne ISO ou autre format
-      const s = dateInput.trim().replace(" ", "T");
+      const s = dateInput.trim().replace(' ', 'T');
       dateObj = new Date(s);
     } else {
-      return "Non spécifié";
+      return 'Non spécifié';
     }
 
     if (isNaN(dateObj.getTime())) {
-      return "Date invalide";
+      return 'Date invalide';
     }
 
     // Format suisse : dd.MM.yyyy • HH:mm
-    const pad = (n) => String(n).padStart(2, "0");
+    const pad = (n) => String(n).padStart(2, '0');
     const day = pad(dateObj.getDate());
     const month = pad(dateObj.getMonth() + 1);
     const year = dateObj.getFullYear();
@@ -36,8 +36,8 @@ function formatLocalNaive(dateInput) {
 
     return `${day}.${month}.${year} • ${hours}:${minutes}`;
   } catch (e) {
-    console.error("Error formatting local naive date:", e);
-    return "Date invalide";
+    console.error('Error formatting local naive date:', e);
+    return 'Date invalide';
   }
 }
 
@@ -48,9 +48,8 @@ function formatLocalNaive(dateInput) {
  * @returns {string}
  */
 export function renderBookingDateTime(booking) {
-  if (!booking) return "Non spécifié";
+  if (!booking) return 'Non spécifié';
 
-  // 🔄 Cas spécial : retour avec heure à confirmer
   const isReturn = booking.is_return;
   const scheduledTime = booking.scheduled_time;
   const timeConfirmed = booking.time_confirmed;
@@ -58,23 +57,37 @@ export function renderBookingDateTime(booking) {
   // Si c'est un retour avec heure non confirmée (time_confirmed = false)
   if (isReturn && scheduledTime && timeConfirmed === false) {
     const date = new Date(scheduledTime);
-    const pad = (n) => String(n).padStart(2, "0");
+    const pad = (n) => String(n).padStart(2, '0');
     const day = pad(date.getDate());
     const month = pad(date.getMonth() + 1);
     const year = date.getFullYear();
     return `${day}.${month}.${year} • Heure à confirmer`;
   }
-  
-  // Si c'est un retour sans scheduled_time du tout (ne devrait pas arriver)
+
+  // Si c'est un retour sans scheduled_time du tout
   if (isReturn && !scheduledTime) {
-    return "Heure à confirmer";
+    return 'Heure à confirmer';
+  }
+
+  // 🔍 Détecter les heures à 00:00 (heure par défaut à confirmer)
+  if (scheduledTime) {
+    const date = new Date(scheduledTime);
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+
+    // Si l'heure est exactement 00:00, c'est probablement une heure à confirmer
+    if (hours === 0 && minutes === 0) {
+      const pad = (n) => String(n).padStart(2, '0');
+      const day = pad(date.getDate());
+      const month = pad(date.getMonth() + 1);
+      const year = date.getFullYear();
+      return `${day}.${month}.${year} • Heure à confirmer`;
+    }
   }
 
   // Priorité aux champs déjà formatés par le backend (qu'on suppose **locaux naïfs**)
   if (booking.date_formatted) {
-    const timeFormatted = booking.time_formatted
-      ? ` • ${booking.time_formatted}`
-      : "";
+    const timeFormatted = booking.time_formatted ? ` • ${booking.time_formatted}` : '';
     return `${booking.date_formatted}${timeFormatted}`;
   }
   // Sinon, on affiche la chaîne naïve telle quelle

@@ -42,11 +42,11 @@ billing_settings_model = settings_ns.model('BillingSettings', {
 })
 
 operational_settings_model = settings_ns.model('OperationalSettings', {
-    'service_area': fields.String(description='Zone de service'),
+    'service_area': fields.String(description='Zone de service', allow_null=True),
     'max_daily_bookings': fields.Integer(description='Limite courses/jour'),
     'dispatch_enabled': fields.Boolean(description='Dispatch automatique activé'),
-    'latitude': fields.Float(description='Latitude du siège'),
-    'longitude': fields.Float(description='Longitude du siège'),
+    'latitude': fields.Float(description='Latitude du siège', allow_null=True),
+    'longitude': fields.Float(description='Longitude du siège', allow_null=True),
 })
 
 # ==================== Routes ====================

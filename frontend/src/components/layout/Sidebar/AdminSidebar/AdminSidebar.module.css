@@ -1,7 +1,6 @@
 /* src/components/layout/Sidebar/AdminSidebar/AdminSidebar.module.css */
 
 /* Sidebar principal */
-/* Sidebar principal */
 .sidebar {
   width: 220px;
   /* On décale la sidebar de 100px vers le bas pour qu'elle soit sous le header */
@@ -11,8 +10,8 @@
   /* Optionnel : ajuster la hauteur pour éviter que la sidebar ne dépasse la fenêtre */
   min-height: calc(100vh - 100px);
 
-  padding: 20px;
-  border-right: 1px solid #ddd;
+  padding: var(--spacing-lg);
+  border-right: 1px solid var(--border-secondary);
   box-sizing: border-box;
 }
 
@@ -25,37 +24,37 @@
 
 /* Chaque élément de la liste */
 .menu li {
-  margin-bottom: 5px;
+  margin-bottom: var(--spacing-xs);
 }
 
 /* Style de base des liens */
 .menu a {
-  color: #333; /* Texte gris foncé */
+  color: var(--text-primary);
   text-decoration: none;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 1em;
-  transition: color 0.2s ease, background-color 0.2s ease;
-  padding: 8px 0;
+  gap: var(--spacing-xs);
+  font-size: var(--font-md);
+  transition: color var(--transition-base), background-color var(--transition-base);
+  padding: var(--spacing-xs) 0;
 }
 
 /* Effet hover */
 .menu a:hover {
-  color: #00796b; /* Texte vert turquoise au survol */
+  color: var(--brand-primary);
 }
 
 /* Lien actif (utilisé par NavLink avec activeClassName) */
 .active {
-  font-weight: bold;
-  border-left: 4px solid #00796b; /* Indicateur visuel à gauche */
-  padding-left: 10px;
-  color: #00796b;
+  font-weight: var(--font-weight-bold);
+  border-left: 4px solid var(--brand-primary);
+  padding-left: var(--spacing-sm);
+  color: var(--brand-primary);
 }
 
 /* Icônes (facultatif) */
 .icon {
-  font-size: 1.2em; /* Ajustez la taille si nécessaire */
+  font-size: var(--font-xl);
 }
 
 /* Responsive : Sidebar en pleine largeur sur écrans étroits */
@@ -63,6 +62,6 @@
   .sidebar {
     width: 100%;
     border-right: none;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--border-secondary);
   }
 }

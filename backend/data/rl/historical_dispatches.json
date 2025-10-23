@@ -1,0 +1,198 @@
+{
+  "company_id": 1,
+  "period": {
+    "start": "2025-10-19",
+    "end": "2025-10-22"
+  },
+  "exported_at": "2025-10-21T20:20:56.460725+00:00",
+  "total_dispatches": 1,
+  "total_bookings": 10,
+  "statistics": {
+    "avg_load_gap": 3.0,
+    "avg_quality_score": 55.0,
+    "avg_total_distance": 0.0,
+    "gap_distribution": {
+      "3": 1
+    }
+  },
+  "dispatches": [
+    {
+      "id": 292,
+      "date": "2025-10-22",
+      "num_bookings": 10,
+      "num_drivers": 3,
+      "driver_loads": {
+        "3": 5,
+        "2": 2,
+        "4": 3
+      },
+      "load_gap": 3,
+      "total_distance_km": 0.0,
+      "avg_distance_per_booking": 0.0,
+      "retards_count": 0,
+      "quality_score": 55.0,
+      "bookings": [
+        {
+          "id": 169,
+          "scheduled_time": "2025-10-22T07:00:00",
+          "pickup_lat": 46.2116288,
+          "pickup_lon": 6.1261269,
+          "dropoff_lat": 46.1919287,
+          "dropoff_lon": 6.1472611,
+          "pickup_location": "Avenue Ernest-Pictet 9, 1203, Genève",
+          "dropoff_location": "Rue Alcide-Jentzer 17, 1205 Genève, Suisse · 1205 · Genève",
+          "distance_km": 0.0,
+          "estimated_duration_minutes": 0,
+          "assigned_driver_id": 3,
+          "actual_delay_minutes": 0
+        },
+        {
+          "id": 151,
+          "scheduled_time": "2025-10-22T08:30:00",
+          "pickup_lat": 46.2800162,
+          "pickup_lon": 6.2297555,
+          "dropoff_lat": 46.2287241,
+          "dropoff_lon": 6.0675608,
+          "pickup_location": "Clinique les Hauts d'Anières (réadaptation musculosquelettique et gériatrique), Chemin des Courbes, Anières, Suisse",
+          "dropoff_location": "Av. J.-D.-Maillard 3, 1217 Meyrin, Suisse · 1217 · Meyrin",
+          "distance_km": 0.0,
+          "estimated_duration_minutes": 0,
+          "assigned_driver_id": 3,
+          "actual_delay_minutes": 0
+        },
+        {
+          "id": 157,
+          "scheduled_time": "2025-10-22T10:00:00",
+          "pickup_lat": 46.2800162,
+          "pickup_lon": 6.2297555,
+          "dropoff_lat": 46.1744443,
+          "dropoff_lon": 6.1388566,
+          "pickup_location": "Clinique les Hauts d'Anières (réadaptation musculosquelettique et gériatrique), Chemin des Courbes, Anières, Suisse",
+          "dropoff_location": "Rte de Troinex 4, 1227 Carouge, Suisse · 1227 · Carouge",
+          "distance_km": 0.0,
+          "estimated_duration_minutes": 0,
+          "assigned_driver_id": 3,
+          "actual_delay_minutes": 0
+        },
+        {
+          "id": 158,
+          "scheduled_time": "2025-10-22T11:00:00",
+          "pickup_lat": 46.2800162,
+          "pickup_lon": 6.2297555,
+          "dropoff_lat": 46.2048453,
+          "dropoff_lon": 6.213478299999999,
+          "pickup_location": "Clinique les Hauts d'Anières (réadaptation musculosquelettique et gériatrique), Chemin des Courbes, Anières, Suisse",
+          "dropoff_location": "Place du Métral 4, 1226 Thônex, Suisse · 1226 · Thônex",
+          "distance_km": 0.0,
+          "estimated_duration_minutes": 0,
+          "assigned_driver_id": 3,
+          "actual_delay_minutes": 0
+        },
+        {
+          "id": 159,
+          "scheduled_time": "2025-10-22T13:00:00",
+          "pickup_lat": 46.1825361,
+          "pickup_lon": 6.1019923,
+          "dropoff_lat": 46.1831975,
+          "dropoff_lon": 6.099489999999999,
+          "pickup_location": "Chemin Gustave-Rochette 14, 1213, Onex",
+          "dropoff_location": "Rte de Chancy 126, 1213 Onex, Suisse · 1213 · Onex",
+          "distance_km": 0.0,
+          "estimated_duration_minutes": 0,
+          "assigned_driver_id": 3,
+          "actual_delay_minutes": 0
+        },
+        {
+          "id": 153,
+          "scheduled_time": "2025-10-22T08:30:00",
+          "pickup_lat": 46.2800162,
+          "pickup_lon": 6.2297555,
+          "dropoff_lat": 46.1844694,
+          "dropoff_lon": 6.1429313,
+          "pickup_location": "Clinique les Hauts d'Anières (réadaptation musculosquelettique et gériatrique), Chemin des Courbes, Anières, Suisse",
+          "dropoff_location": "Rue de Veyrier 7, 1227 Carouge, Suisse · 1227 · Carouge",
+          "distance_km": 0.0,
+          "estimated_duration_minutes": 0,
+          "assigned_driver_id": 2,
+          "actual_delay_minutes": 0
+        },
+        {
+          "id": 155,
+          "scheduled_time": "2025-10-22T09:15:00",
+          "pickup_lat": 46.2612304,
+          "pickup_lon": 6.2117664,
+          "dropoff_lat": 46.2807059,
+          "dropoff_lon": 6.226785599999999,
+          "pickup_location": "Chemin des Ramiers 9, 1245, Collonge-Bellerive",
+          "dropoff_location": "Rte d'Hermance 347, 1247 Anières, Suisse · 1247 · Anières",
+          "distance_km": 0.0,
+          "estimated_duration_minutes": 0,
+          "assigned_driver_id": 4,
+          "actual_delay_minutes": 0
+        },
+        {
+          "id": 163,
+          "scheduled_time": "2025-10-22T13:00:00",
+          "pickup_lat": 46.2347993,
+          "pickup_lon": 6.1972377,
+          "dropoff_lat": 46.2023506,
+          "dropoff_lon": 6.1695036,
+          "pickup_location": "Chemin des Princes 8C, 1222, Vesenaz",
+          "dropoff_location": "Av. de la Gare des Eaux-Vives 28, 1208 Genève, Suisse · 1208 · Genève",
+          "distance_km": 0.0,
+          "estimated_duration_minutes": 0,
+          "assigned_driver_id": 2,
+          "actual_delay_minutes": 0
+        },
+        {
+          "id": 161,
+          "scheduled_time": "2025-10-22T13:15:00",
+          "pickup_lat": 46.194216,
+          "pickup_lon": 6.2074807,
+          "dropoff_lat": 46.1885187,
+          "dropoff_lon": 6.1588777,
+          "pickup_location": "Chemin Etienne-Chennaz 10, 1226, Thônex",
+          "dropoff_location": "Chem. des Clochettes 16, 1206 Genève, Suisse · 1206 · Genève",
+          "distance_km": 0.0,
+          "estimated_duration_minutes": 0,
+          "assigned_driver_id": 4,
+          "actual_delay_minutes": 0
+        },
+        {
+          "id": 156,
+          "scheduled_time": "2025-10-22T16:00:00",
+          "pickup_lat": 46.2807059,
+          "pickup_lon": 6.226785599999999,
+          "dropoff_lat": 46.2612304,
+          "dropoff_lon": 6.2117664,
+          "pickup_location": "Rte d'Hermance 347, 1247 Anières, Suisse · 1247 · Anières",
+          "dropoff_location": "Chemin des Ramiers 9, 1245, Collonge-Bellerive",
+          "distance_km": 0.0,
+          "estimated_duration_minutes": 0,
+          "assigned_driver_id": 4,
+          "actual_delay_minutes": 0
+        }
+      ],
+      "drivers": [
+        {
+          "id": 2,
+          "name": "Yannis Labrot",
+          "is_emergency": false,
+          "num_assignments": 2
+        },
+        {
+          "id": 3,
+          "name": "Giuseppe Bekasy",
+          "is_emergency": false,
+          "num_assignments": 5
+        },
+        {
+          "id": 4,
+          "name": "Dris Daoudi",
+          "is_emergency": false,
+          "num_assignments": 3
+        }
+      ]
+    }
+  ]
+}

@@ -84,6 +84,64 @@ def _build_pagination_links(page: int, per_page: int, total: int, endpoint: str,
 
 
 # =====================================================
+# 🔐 SECURITY: Ownership Check Helper (CWE-284)
+# =====================================================
+def _check_booking_ownership(booking: Booking, user: User, action: str = "access") -> tuple[bool, tuple[dict, int] | None]:
+    """
+    Vérifie si l'utilisateur a le droit d'accéder/modifier ce booking.
+    
+    Args:
+        booking: Le booking à vérifier
+        user: L'utilisateur authentifié  
+        action: Type d'action ("read", "modify", "delete")
+    
+    Returns:
+        (has_access: bool, error_response_tuple_or_none)
+    
+    Exemple:
+        has_access, error = _check_booking_ownership(booking, user, "modify")
+        if not has_access:
+            return error  # ({"error": "..."}, 403)
+    """
+    # Admin a tous les droits
+    if user.role == UserRole.admin:
+        return True, None
+    
+    # Company a accès à tous ses bookings
+    if user.role == UserRole.company:
+        from models import Company
+        company = Company.query.filter_by(user_id=user.id).first()
+        if company and company.id == booking.company_id:
+            return True, None
+    
+    # Client propriétaire
+    if user.role == UserRole.client:
+        client = Client.query.filter_by(user_id=user.id).first()
+        if not client:
+            app_logger.warning(f"⚠️ User {user.public_id} has client role but no Client record")
+            return False, ({"error": f"Accès non autorisé ({action})"}, 403)
+        
+        if client.id == booking.client_id:
+            return True, None
+        
+        # IDOR attempt détecté
+        app_logger.warning(
+            f"🚨 IDOR blocked: user={user.public_id} (client_id={client.id}) "
+            f"tried to {action} booking_id={booking.id} (owner_client_id={booking.client_id})"
+        )
+        return False, ({"error": "Accès non autorisé à cette réservation"}, 403)
+    
+    # Driver assigné (read-only access)
+    if user.role == UserRole.driver and action == "read":
+        driver = Driver.query.filter_by(user_id=user.id).first()
+        if driver and booking.driver_id == driver.id:
+            return True, None
+    
+    # Aucun droit
+    return False, ({"error": f"Accès non autorisé ({action})"}, 403)
+
+
+# =====================================================
 # Création d'une réservation pour un client
 # =====================================================
 @bookings_ns.route("/clients/<string:public_id>/bookings")
@@ -215,28 +273,32 @@ class BookingResource(Resource):
     def get(self, booking_id):
         """Récupère une réservation (contrôle d'accès par rôle)."""
         try:
+            # ✅ FIX N+1: Eager load relations pour éviter lazy loads
             public_id = get_jwt_identity()
             user = User.query.filter_by(public_id=public_id).one_or_none()
             if not user:
                 return {"error": "Utilisateur non authentifié"}, 401
 
-            booking = Booking.query.get(booking_id)
+            # ✅ FIX N+1: Charger driver, client, user relations en une query
+            booking = (
+                Booking.query
+                .filter_by(id=booking_id)
+                .options(
+                    selectinload(Booking.driver).selectinload(Driver.user),
+                    selectinload(Booking.client).selectinload(Client.user),
+                    selectinload(Booking.company),
+                )
+                .first()
+            )
             if not booking:
                 return {"error": "Réservation introuvable"}, 404
 
-            if user.role == UserRole.admin:
-                return cast(Any, booking).serialize, 200
+            # 🔐 SECURITY: Vérification ownership explicite (CWE-284)
+            has_access, error = _check_booking_ownership(booking, user, action="read")
+            if not has_access:
+                return error
 
-            # Client propriétaire (par user_id)
-            client = Client.query.filter_by(user_id=user.id).one_or_none()
-            if client and client.id == booking.client_id:
-                return cast(Any, booking).serialize, 200
-
-            # Chauffeur assigné ?
-            if booking.driver and booking.driver.user.public_id == public_id:
-                return cast(Any, booking).serialize, 200
-
-            return {"error": "Accès non autorisé à cette réservation"}, 403
+            return cast(Any, booking).serialize, 200
 
         except Exception as e:
             app_logger.error(f"❌ ERREUR get_booking: {type(e).__name__} - {e}", exc_info=True)
@@ -255,10 +317,10 @@ class BookingResource(Resource):
             if not booking:
                 return {"error": "Réservation introuvable"}, 404
 
-            # Admin ou client propriétaire (par user_id)
-            client = Client.query.filter_by(user_id=user.id).one_or_none()
-            if not (user.role == UserRole.admin or (client and client.id == booking.client_id)):
-                return {"error": "Accès non autorisé à la modification"}, 403
+            # 🔐 SECURITY: Vérification ownership explicite (CWE-284)
+            has_access, error = _check_booking_ownership(booking, user, action="modify")
+            if not has_access:
+                return error
 
             if booking.status != BookingStatus.PENDING:
                 return {"error": "Seules les réservations en attente peuvent être modifiées"}, 400
@@ -295,9 +357,10 @@ class BookingResource(Resource):
             if not booking:
                 return {"error": "Réservation introuvable"}, 404
 
-            client = Client.query.filter_by(user_id=user.id).one_or_none()
-            if not (user.role == UserRole.admin or (client and client.id == booking.client_id)):
-                return {"error": "Accès non autorisé à l'annulation"}, 403
+            # 🔐 SECURITY: Vérification ownership explicite (CWE-284)
+            has_access, error = _check_booking_ownership(booking, user, action="delete")
+            if not has_access:
+                return error
 
             if booking.status not in {BookingStatus.PENDING, BookingStatus.ASSIGNED}:
                 return {"error": "Seules les réservations en attente ou confirmées peuvent être annulées"}, 400

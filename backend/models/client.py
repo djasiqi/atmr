@@ -83,6 +83,9 @@ class Client(db.Model):
     is_institution = Column(Boolean, nullable=False, server_default="false")
     institution_name = Column(String(200), nullable=True)
 
+    # Établissement de résidence (EMS, Foyer, etc.)
+    residence_facility = Column(String(200), nullable=True)  # Nom de l'établissement (ex: "EMS Maison de Vessy")
+
     # Tarif préférentiel
     preferential_rate = Column(Numeric(10, 2), nullable=True)
 
@@ -112,7 +115,11 @@ class Client(db.Model):
     def validate_billing_address(self, key, value):
         cid = _as_int(getattr(self, "company_id", None), 0)
         if cid > 0 and (not value or not str(value).strip()):
-            raise ValueError("L'adresse de facturation est obligatoire pour les clients liés à une entreprise.")
+            # Si pas d'adresse de facturation, utiliser l'adresse de domicile comme fallback
+            domicile = getattr(self, "domicile_address", None)
+            if domicile and str(domicile).strip():
+                return domicile
+            raise ValueError("L'adresse de facturation (ou de domicile) est obligatoire pour les clients liés à une entreprise.")
         return value
 
     @validates("contact_phone", "gp_phone")
@@ -181,6 +188,7 @@ class Client(db.Model):
             },
             "is_institution": _as_bool(self.is_institution),
             "institution_name": self.institution_name,
+            "residence_facility": self.residence_facility,
             "preferential_rate": float(self.preferential_rate) if self.preferential_rate else None,
             "is_active": _as_bool(self.is_active),
             "created_at": _iso(self.created_at),

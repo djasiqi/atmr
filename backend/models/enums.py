@@ -169,3 +169,14 @@ class BreakType(str, PyEnum):
     MANDATORY = "mandatory"
     OPTIONAL = "optional"
 
+
+class DispatchMode(str, PyEnum):
+    """
+    Modes de fonctionnement du système de dispatch.
+    - MANUAL: Assignations 100% manuelles, aucune automatisation
+    - SEMI_AUTO: Dispatch sur demande ou périodique, validation manuelle des suggestions
+    - FULLY_AUTO: Système 100% autonome avec application automatique des suggestions
+    """
+    MANUAL = "manual"
+    SEMI_AUTO = "semi_auto"
+    FULLY_AUTO = "fully_auto"

@@ -3,6 +3,9 @@
 Système d'optimisation en temps réel pour le dispatch.
 Surveille en continu les assignations et propose des ajustements automatiques.
 """
+# ruff: noqa: DTZ011
+# date.today() utilisé volontairement pour comparaisons de dates locales
+
 from __future__ import annotations
 
 import logging
@@ -11,6 +14,7 @@ import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List
+from typing import cast as tcast
 
 from flask import current_app
 from sqlalchemy import or_
@@ -20,7 +24,7 @@ from models import Assignment, Booking, BookingStatus, Driver
 from services.notification_service import notify_dispatcher_optimization_opportunity
 from services.unified_dispatch.data import calculate_eta
 from services.unified_dispatch.delay_predictor import DelayPredictor
-from services.unified_dispatch.suggestions import Suggestion, SuggestionEngine
+from services.unified_dispatch.reactive_suggestions import Suggestion, SuggestionEngine
 from shared.time_utils import day_local_bounds, now_local
 
 logger = logging.getLogger(__name__)
@@ -73,7 +77,7 @@ class RealtimeOptimizer:
         self._last_check: datetime | None = None
         self._opportunities: List[OptimizationOpportunity] = []
         self._lock = threading.Lock()
-        self._app = app or current_app._get_current_object()  # Sauvegarder l'app Flask
+        self._app = app or current_app._get_current_object()  # type: ignore[attr-defined]
 
     def start_monitoring(self) -> None:
         """Démarre le monitoring en arrière-plan"""
@@ -130,10 +134,10 @@ class RealtimeOptimizer:
     ) -> List[OptimizationOpportunity]:
         """
         Vérifie toutes les assignations actives et détecte les opportunités d'optimisation.
-        
+
         Args:
             for_date: Date à vérifier (format YYYY-MM-DD), par défaut aujourd'hui
-        
+
         Returns:
             Liste d'opportunités d'optimisation détectées
         """
@@ -158,8 +162,8 @@ class RealtimeOptimizer:
                     Booking.scheduled_time >= d0,
                     Booking.scheduled_time < d1,
                     or_(
-                        Booking.status == BookingStatus.ACCEPTED,
-                        Booking.status == BookingStatus.ASSIGNED
+                        Booking.status == BookingStatus.ACCEPTED,  # type: ignore[arg-type]
+                        Booking.status == BookingStatus.ASSIGNED  # type: ignore[arg-type]
                     )
                 )
                 .all()
@@ -204,16 +208,17 @@ class RealtimeOptimizer:
     ) -> OptimizationOpportunity | None:
         """
         Analyse une assignation pour détecter des opportunités d'optimisation.
-        
         Returns:
             OptimizationOpportunity si une optimisation est possible, None sinon
         """
         try:
-            booking = db.session.get(Booking, assignment.booking_id)
+            booking_id_val = int(tcast(Any, assignment.booking_id))
+            booking = db.session.get(Booking, booking_id_val)
             if not booking:
                 return None
 
-            driver = db.session.get(Driver, assignment.driver_id) if assignment.driver_id else None
+            driver_id_val = int(tcast(Any, assignment.driver_id)) if assignment.driver_id else None  # type: ignore[arg-type]
+            driver = db.session.get(Driver, driver_id_val) if driver_id_val else None
             if not driver:
                 return None
 
@@ -241,9 +246,9 @@ class RealtimeOptimizer:
             auto_applicable = all(s.auto_applicable for s in suggestions)
 
             return OptimizationOpportunity(
-                assignment_id=assignment.id,
-                booking_id=booking.id,
-                driver_id=driver.id,
+                assignment_id=int(tcast(Any, assignment.id)),
+                booking_id=int(tcast(Any, booking.id)),
+                driver_id=int(tcast(Any, driver.id)),
                 current_delay_minutes=delay_minutes,
                 severity=severity,
                 suggestions=suggestions,
@@ -266,7 +271,7 @@ class RealtimeOptimizer:
     ) -> int:
         """
         Calcule le retard en temps réel basé sur la position actuelle du chauffeur.
-        
+
         Returns:
             Retard en minutes (positif = retard, négatif = avance)
         """
@@ -293,7 +298,10 @@ class RealtimeOptimizer:
             # ⭐ CAS 1 : GPS disponible → Calcul ETA précis
             if all(driver_pos) and all(pickup_pos):
                 try:
-                    eta_seconds = calculate_eta(driver_pos, pickup_pos)
+                    # Cast pour typage strict (déjà validé par all())
+                    driver_pos_valid = tcast(tuple[float, float], driver_pos)
+                    pickup_pos_valid = tcast(tuple[float, float], pickup_pos)
+                    eta_seconds = calculate_eta(driver_pos_valid, pickup_pos_valid)
                     current_eta = current_time + timedelta(seconds=eta_seconds)
                     delay_seconds = (current_eta - scheduled_time).total_seconds()
                     delay_minutes = int(delay_seconds / 60)
@@ -351,17 +359,30 @@ class RealtimeOptimizer:
         opportunities = []
 
         try:
+            # ✅ PERF: Charger tous les bookings et drivers en une seule query chacun (évite N+1)
+            booking_ids = [int(tcast(Any, a.booking_id)) for a in assignments if a.booking_id]  # type: ignore[arg-type]
+            driver_ids = [int(tcast(Any, a.driver_id)) for a in assignments if a.driver_id]  # type: ignore[arg-type]
+
+            bookings_map = {
+                b.id: b for b in Booking.query.filter(Booking.id.in_(booking_ids)).all()
+            } if booking_ids else {}
+
+            drivers_map = {
+                d.id: d for d in Driver.query.filter(Driver.id.in_(driver_ids)).all()
+            } if driver_ids else {}
+
             # Grouper les assignations par chauffeur
             driver_delays = {}
             for assignment in assignments:
-                if not assignment.driver_id:
+                driver_id_val = int(tcast(Any, assignment.driver_id)) if assignment.driver_id else None  # type: ignore[arg-type]
+                if not driver_id_val:
                     continue
 
-                booking = db.session.get(Booking, assignment.booking_id)
+                booking = bookings_map.get(int(tcast(Any, assignment.booking_id)))
                 if not booking:
                     continue
 
-                driver = db.session.get(Driver, assignment.driver_id)
+                driver = drivers_map.get(driver_id_val)
                 if not driver:
                     continue
 
@@ -370,9 +391,9 @@ class RealtimeOptimizer:
 
                 # Stocker si retard significatif (> 5 min)
                 if delay_minutes > 5:
-                    if assignment.driver_id not in driver_delays:
-                        driver_delays[assignment.driver_id] = []
-                    driver_delays[assignment.driver_id].append({
+                    if driver_id_val not in driver_delays:
+                        driver_delays[driver_id_val] = []
+                    driver_delays[driver_id_val].append({
                         'assignment': assignment,
                         'booking': booking,
                         'delay': delay_minutes
@@ -383,8 +404,8 @@ class RealtimeOptimizer:
                 if len(delayed_trips) >= 2:
                     total_delay = sum(trip['delay'] for trip in delayed_trips)
 
-                    # Créer une opportunité pour répartir les courses
-                    driver = db.session.get(Driver, driver_id)
+                    # Créer une opportunité pour répartir les courses (driver déjà chargé)
+                    driver = drivers_map.get(driver_id)
                     driver_name = f"{driver.user.first_name} {driver.user.last_name}" if driver and driver.user else f"#{driver_id}"
 
                     # Générer suggestion de répartition
@@ -521,12 +542,10 @@ _optimizers_lock = threading.Lock()
 def start_optimizer_for_company(company_id: int, check_interval: int = 120, app=None) -> RealtimeOptimizer:
     """
     Démarre un optimizer pour une entreprise (ou récupère l'existant).
-    
     Args:
         company_id: ID de l'entreprise
         check_interval: Intervalle de vérification en secondes
         app: Instance Flask app (optionnel, récupéré automatiquement si None)
-    
     Returns:
         L'instance RealtimeOptimizer
     """
@@ -562,12 +581,10 @@ def get_optimizer_for_company(company_id: int) -> RealtimeOptimizer | None:
 def check_opportunities_manual(company_id: int, for_date: str | None = None, app=None) -> List[OptimizationOpportunity]:
     """
     Vérifie manuellement les opportunités d'optimisation (sans monitoring continu).
-    
     Args:
         company_id: ID de l'entreprise
         for_date: Date à vérifier (format YYYY-MM-DD)
         app: Instance Flask app (optionnel)
-    
     Returns:
         Liste d'opportunités d'optimisation
     """

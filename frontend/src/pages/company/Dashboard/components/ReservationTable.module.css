@@ -1,34 +1,56 @@
 .tableContainer {
-  margin-top: 20px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   overflow-x: auto;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background-color: #ffffff;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  min-width: 1000px;
 }
 
 .table th {
-  padding: 12px 16px;
-  background-color: #f8fafc;
-  font-weight: 600;
-  color: #64748b;
+  background-color: var(--bg-tertiary);
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-tertiary);
+  border-bottom: 2px solid var(--border-primary);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  font-size: var(--font-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  text-align: left;
-  border-bottom: 2px solid #e2e8f0;
 }
 
 .table td {
-  padding: 12px 16px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--border-primary);
   vertical-align: middle;
-  color: #334155;
+  color: var(--text-secondary);
+}
+
+/* Colonnes Client, Chauffeur et Lieu - même format que page Clients */
+.clientCell,
+.driverCell,
+.locationCell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.driverCell {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
 }
 
 .table tbody tr:last-child td {
@@ -37,11 +59,11 @@
 
 .tableRow {
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color var(--transition-base);
 }
 
 .tableRow:hover {
-  background-color: #f1f5f9;
+  background-color: var(--bg-hover);
 }
 
 .actionsCell {
@@ -53,76 +75,259 @@
   background: none;
   border: none;
   cursor: pointer;
-  padding: 8px;
-  margin: 0 4px;
+  padding: var(--spacing-xs);
+  margin: 0 var(--spacing-xs);
   border-radius: 50%;
-  color: #64748b;
-  transition: all 0.2s ease;
+  color: var(--text-tertiary);
+  transition: all var(--transition-base);
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
 .actionButton:hover {
-  background-color: #e5e7eb;
-  color: #334155;
+  background-color: var(--bg-hover);
+  color: var(--text-secondary);
 }
 
 .acceptButton:hover {
-  background-color: #dcfce7;
-  color: #16a34a;
+  background-color: var(--success-bg);
+  color: var(--success-primary);
 }
 
 .rejectButton:hover,
 .deleteButton:hover {
-  background-color: #fee2e2;
-  color: #dc2626;
+  background-color: var(--danger-bg);
+  color: var(--danger-primary);
 }
 
 /* --- Badges de Statut --- */
 .statusBadge {
   display: inline-block;
-  padding: 4px 10px;
-  border-radius: 16px;
-  font-weight: 500;
-  font-size: 0.8rem;
+  padding: var(--spacing-xxs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-xs);
   text-transform: capitalize;
 }
 
 .pending {
-  background-color: #fef9c3; /* Jaune */
-  color: #ca8a04;
+  background-color: var(--warning-bg);
+  color: var(--warning-primary);
 }
 
 .accepted {
-  background-color: #e0e7ff; /* Indigo */
-  color: #4338ca;
+  background-color: var(--info-bg);
+  color: var(--info-primary);
 }
 
 .assigned {
-  background-color: #dbeafe; /* Bleu */
-  color: #2563eb;
+  background-color: var(--info-bg);
+  color: var(--info-primary);
 }
 
 .en_route,
 .in_progress {
-  background-color: #cffafe; /* Cyan */
-  color: #0891b2;
+  background-color: var(--info-bg);
+  color: var(--brand-primary);
   animation: pulse 2s infinite ease-in-out;
 }
 
 .completed,
 .return_completed {
-  background-color: #dcfce7; /* Vert */
-  color: #16a34a;
+  background-color: var(--success-bg);
+  color: var(--success-primary);
 }
 
 .canceled {
-  background-color: #f1f5f9; /* Gris */
-  color: #64748b;
+  background-color: var(--bg-hover);
+  color: var(--text-tertiary);
 }
 
 @keyframes pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.05); opacity: 0.8; }
+}
+
+/* ================== CARTES MOBILES (comme KPI) ================== */
+
+/* Conteneur des cartes mobiles */
+.mobileCards {
+  display: none; /* Caché par défaut sur desktop */
+}
+
+.mobileCard {
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-primary);
+  margin-bottom: var(--spacing-sm);
+  transition: all var(--transition-base);
+}
+
+.mobileCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--brand-primary);
+}
+
+.mobileCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.mobileCardTitle {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--brand-primary);
+  margin: 0;
+}
+
+.mobileCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.mobileCardRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--font-sm);
+}
+
+.mobileCardLabel {
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-medium);
+}
+
+.mobileCardValue {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-normal);
+  text-align: right;
+}
+
+.mobileCardActions {
+  display: flex;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--border-primary);
+  justify-content: flex-end;
+}
+
+/* Les cartes mobiles ne sont plus utilisées - on garde la table */
+
+/* ================== RESPONSIVE MOBILE ================== */
+
+/* Tablette - Adaptation légère */
+@media (max-width: 1024px) {
+  .tableContainer {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .table {
+    font-size: var(--font-sm);
+  }
+}
+
+/* Mobile - Garder la table visible avec scroll horizontal adapté comme KPI */
+@media (max-width: 768px) {
+  .tableContainer {
+    margin-top: var(--spacing-sm);
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+  }
+  
+  .table {
+    width: 100% !important;
+    min-width: 100%; /* S'adapte à la largeur, pas de min-width fixe */
+    font-size: var(--font-xs);
+    box-sizing: border-box;
+  }
+  
+  .table th,
+  .table td {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-xs);
+    white-space: nowrap; /* Empêche le retour à la ligne */
+  }
+  
+  .table th {
+    position: sticky;
+    top: 0;
+    background-color: var(--bg-secondary);
+    z-index: 10;
+  }
+
+  .clientCell,
+  .driverCell,
+  .locationCell {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .actionButton {
+    padding: var(--spacing-xxs);
+    margin: 0 var(--spacing-xxs);
+    font-size: var(--font-xs);
+  }
+
+  .actionsCell {
+    white-space: nowrap;
+  }
+}
+
+/* Très petit mobile - Encore plus compact comme les KPI */
+@media (max-width: 480px) {
+  .tableContainer {
+    margin-top: var(--spacing-xs);
+  }
+  
+  .table {
+    font-size: var(--font-xs);
+  }
+  
+  .table th,
+  .table td {
+    padding: var(--spacing-xxs) var(--spacing-xs);
+    font-size: var(--font-xs);
+  }
+
+  .clientCell,
+  .driverCell,
+  .locationCell {
+    max-width: 110px;
+  }
+
+  .actionButton {
+    padding: var(--spacing-xxs);
+    margin: 0 var(--spacing-xxs);
+  }
+}
+
+@media (max-width: 390px) {
+  .table th,
+  .table td {
+    padding: var(--spacing-xxs);
+    font-size: var(--font-xs);
+  }
+
+  .clientCell,
+  .driverCell,
+  .locationCell {
+    max-width: 100px;
+  }
 }

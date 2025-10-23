@@ -3,15 +3,6 @@
 :root {
   --hdr-h: 64px;            /* hauteur du header sticky */
   --sidebar-w: 72px;        /* largeur dynamique (modifiée par JS) */
-
-  /* Palette marque */
-  --brand: #0f766e;
-  --brand-dark: #0d5e56;    /* hover / état ouvert */
-  --border: #e5e7eb;
-  --ink: #374151;
-  --ink-strong: #111827;
-  --bg-hover: #f3f4f6;
-  --bg-active: #ecfdf5;     /* léger highlight sur l’item actif */
 }
 
 .sidebar {
@@ -20,28 +11,28 @@
   left: 0;
   bottom: 0;
   width: var(--sidebar-w);
-  background: #ffffff;
-  border-right: 1px solid var(--border);
-  padding: 8px 8px;
+  background: var(--bg-primary);
+  border-right: 1px solid var(--border-primary);
+  padding: var(--spacing-xs);
   box-sizing: border-box;
 
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-xs);
 
-  z-index: 90;
-  transition: width 0.2s ease;
+  z-index: var(--z-sidebar);
+  transition: width var(--transition-base);
 }
 
 /* === TOGGLER (bouton ouvrir/fermer) === */
 .toggler {
   width: 40px;
   height: 40px;
-  margin: 12px;
+  margin: var(--spacing-sm);
 
   border: none;
-  border-radius: 9999px;
-  background: var(--brand);        /* vert principal */
+  border-radius: var(--radius-full);
+  background: var(--brand-primary);
   color: #ffffff;
 
   display: inline-flex;
@@ -49,24 +40,24 @@
   justify-content: center;
   cursor: pointer;
 
-  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.28);
+  box-shadow: var(--shadow-brand);
   transition:
-    background-color .18s ease,
-    box-shadow .18s ease,
-    transform .06s ease;
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 /* Hover (desktop only) */
 @media (hover: hover) {
   .toggler:hover {
-    background: var(--brand-dark);
-    box-shadow: 0 6px 16px rgba(15, 118, 110, 0.35);
+    background: var(--brand-hover);
+    box-shadow: var(--shadow-lg);
   }
 }
 
-/* État OUVERT : plus foncé (pas de “vert clair” résiduel) */
+/* État OUVERT : plus foncé (pas de "vert clair" résiduel) */
 .toggler[aria-expanded="true"] {
-  background: var(--brand-dark);
+  background: var(--brand-hover);
 }
 
 /* Press feedback */
@@ -75,10 +66,7 @@
 /* Focus accessible */
 .toggler:focus-visible {
   outline: none;
-  box-shadow:
-    0 0 0 2px #ffffff,
-    0 0 0 4px rgba(15,118,110,.55),
-    0 6px 16px rgba(15,118,110,.35);
+  box-shadow: var(--focus-ring-brand);
 }
 
 /* Icône chevron dans le bouton */
@@ -90,25 +78,25 @@
 /* === MENU === */
 .menu {
   list-style: none;
-  padding: 8px 0;
+  padding: var(--spacing-xs) 0;
   margin: 0;
 }
 
-.menu li + li { margin-top: 4px; }
+.menu li + li { margin-top: var(--spacing-xxs); }
 
 .menu a {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-md);
 
-  color: var(--ink);
+  color: var(--text-secondary);
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden; /* masque le texte quand réduit */
 
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
 .menu a:hover {
@@ -117,14 +105,14 @@
 
 /* Lien actif */
 .active {
-  background: var(--bg-active);
-  color: var(--brand-dark);
-  font-weight: 600;
+  background: var(--success-bg);
+  color: var(--brand-hover);
+  font-weight: var(--font-weight-semibold);
 }
 
 /* Icône */
 .icon {
-  font-size: 18px;
+  font-size: var(--font-lg);
   flex: 0 0 24px;
   text-align: center;
 }
@@ -132,7 +120,7 @@
 /* Label texte */
 .text {
   opacity: 1;
-  transition: opacity 0.15s ease, width 0.15s ease;
+  transition: opacity var(--transition-fast), width var(--transition-fast);
 }
 
 /* Sidebar réduite : on masque proprement le texte */
@@ -149,15 +137,54 @@
   width: auto;
 }
 
-/* Mobile : bouton un poil plus compact */
-@media (max-width: 640px) {
+/* Tablette : sidebar reste visible mais plus compacte */
+@media (max-width: 1024px) {
   .toggler {
     width: 36px;
     height: 36px;
-    margin: 10px;
+    margin: var(--spacing-sm);
   }
   .toggler svg {
     width: 16px;
     height: 16px;
+  }
+}
+
+/* Mobile : sidebar compacte 60px (toujours réduite) */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 60px !important;
+    padding: var(--spacing-xs);
+  }
+  
+  /* Toujours masquer le texte sur mobile */
+  .text {
+    opacity: 0 !important;
+    width: 0 !important;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  
+  /* Toggler plus petit */
+  .toggler {
+    width: 32px;
+    height: 32px;
+    margin: var(--spacing-xs);
+  }
+  
+  .toggler svg {
+    width: 14px;
+    height: 14px;
+  }
+  
+  /* Icônes plus petites */
+  .icon {
+    font-size: var(--font-md);
+  }
+  
+  /* Liens plus compacts */
+  .menu a {
+    padding: var(--spacing-xs);
+    justify-content: center;
   }
 }

@@ -16,7 +16,7 @@ const getDevHost = (): string => {
     detectedHost === "localhost" ||
     detectedHost === "127.0.0.1"
   ) {
-    return "192.168.1.216"; // ← ton IP locale
+    return "172.20.10.2"; // ← IP locale mise à jour
   }
   return detectedHost;
 };

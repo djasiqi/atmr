@@ -81,6 +81,10 @@ def create_app(config_name: str | None = None):
     app.config.from_object(config[config_name])
     config[config_name].init_app(app)
 
+    # ✅ Force UTF-8 encoding pour JSON et réponses
+    app.config['JSON_AS_ASCII'] = False
+    app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
+
     # 2) Extensions
     db.init_app(app)
     jwt.init_app(app)
@@ -100,6 +104,7 @@ def create_app(config_name: str | None = None):
         app.logger.error(f"Failed to initialize Celery: {e}")
 
     # --- Socket.IO ---
+    app.logger.info("🔧 [INIT] Configuration Socket.IO...")
     allowed_modes: set[str] = {"threading", "eventlet", "gevent", "gevent_uwsgi"}
     env_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet")
     async_mode: AsyncMode = cast(AsyncMode, env_mode if env_mode in allowed_modes else "eventlet")
@@ -134,6 +139,11 @@ def create_app(config_name: str | None = None):
         max_http_buffer_size=10_000_000,  # int
         allow_upgrades=allow_ws_upgrades,
         cors_credentials=True,
+    )
+    app.logger.info(
+        f"✅ Socket.IO initialisé: async_mode={async_mode}, "
+        f"cors={'*' if cors_origins == '*' else 'restricted'}, "
+        f"allow_upgrades={allow_ws_upgrades}"
     )
 
     # Log léger pour les requêtes Socket.IO
@@ -200,13 +210,18 @@ def create_app(config_name: str | None = None):
     talisman = Talisman(content_security_policy=csp, force_https=force_https)
     talisman.init_app(app)
 
-    # Retirer CSP pour les réponses JSON
+    # Retirer CSP pour les réponses JSON et forcer UTF-8
     @app.after_request
     def strip_csp_for_json(resp):
         ct = (resp.headers.get("Content-Type") or "").lower()
         if "application/json" in ct:
             resp.headers.pop("Content-Security-Policy", None)
             resp.headers.pop("Content-Security-Policy-Report-Only", None)
+            # ✅ Force UTF-8 encoding dans Content-Type (toujours)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+        # ✅ Force UTF-8 pour les réponses texte également
+        elif "text/" in ct and "charset" not in ct:
+            resp.headers["Content-Type"] = f"{resp.headers.get('Content-Type')}; charset=utf-8"
         return resp
 
     # 5) CORS
@@ -249,6 +264,7 @@ def create_app(config_name: str | None = None):
     ud_queue.init_app(app)
 
     # 9) Routes / sockets / handlers
+    app.logger.info("🔧 [INIT] Enregistrement des routes et handlers Socket.IO...")
     with app.app_context():
         from sqlalchemy.orm import configure_mappers
 
@@ -261,8 +277,13 @@ def create_app(config_name: str | None = None):
         init_namespaces(app)
 
         # ✅ Enhanced healthcheck with DB/Redis checks
+        from routes.feature_flags_routes import feature_flags_bp
         from routes.healthcheck import healthcheck_bp
+        from routes.ml_monitoring import ml_monitoring_bp
+
         app.register_blueprint(healthcheck_bp)
+        app.register_blueprint(feature_flags_bp)
+        app.register_blueprint(ml_monitoring_bp)
 
         # Réponse générique aux préflights CORS (toutes routes)
         @app.before_request
@@ -352,9 +373,11 @@ def create_app(config_name: str | None = None):
                 return None
             return None
 
+        app.logger.info("🔧 [INIT] Enregistrement des handlers Socket.IO chat...")
         from sockets.chat import init_chat_socket
 
         init_chat_socket(socketio)
+        app.logger.info("✅ Handlers Socket.IO chat enregistrés")
 
         @app.route("/")
         def index():
@@ -487,17 +510,6 @@ def create_app(config_name: str | None = None):
             msg = str(e) if app.config.get("DEBUG") else "Une erreur interne est survenue."
             return jsonify({"error": "server_error", "message": msg}), 500
 
-    # --- Rooms & connexions ---
-    _sid_index: dict[str, dict] = {}
-
-    @socketio.on("disconnect")
-    def handle_disconnect():
-        # 'request.sid' est injecté par Flask-SocketIO → on garde une garde
-        sid_val = getattr(request, "sid", None)
-        if isinstance(sid_val, str):
-            info = _sid_index.pop(sid_val, None)
-            app.logger.debug(f"👋 SIO disconnect sid={sid_val} info={info}")
-        else:
-            app.logger.debug("👋 SIO disconnect (sid non disponible)")
+    # Note: handler disconnect géré dans sockets/chat.py (pas de doublon)
 
     return app

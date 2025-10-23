@@ -48,6 +48,7 @@ services:
       - PYTHONPATH=/app
       - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
       - SOCKETIO_ASYNC_MODE=${SOCKETIO_ASYNC_MODE:-eventlet}
+      - SIO_DISABLE_UPGRADES=false
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
@@ -60,7 +61,7 @@ services:
       - FLASK_ENV=${FLASK_ENV:-development}
       - TZ=Europe/Zurich
       - PDF_BASE_URL=${PDF_BASE_URL:-http://localhost:5000}
-      - UPLOADS_PUBLIC_BASE=${UPLOADS_PUBLIC_BASE:-http://localhost:5000/uploads}
+      - UPLOADS_PUBLIC_BASE=${UPLOADS_PUBLIC_BASE:-/uploads}
     volumes:
       - ./backend:/app
     depends_on:

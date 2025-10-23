@@ -8,14 +8,12 @@ from flask_restx import Api
 
 from routes.admin import admin_ns
 from routes.analytics import analytics_ns  # /analytics
-
-# Existing imports …
 from routes.auth import auth_ns
 from routes.bookings import bookings_ns
 from routes.clients import clients_ns
 from routes.companies import companies_ns
-
-# --- IMPORTANT: mount both dispatch namespaces with different paths
+from routes.company_settings import settings_ns
+from routes.dispatch_health import dispatch_health_ns  # /company_dispatch_health
 from routes.dispatch_routes import dispatch_ns as company_dispatch_ns  # /company_dispatch
 from routes.driver import driver_ns
 from routes.geocode import geocode_ns
@@ -23,8 +21,10 @@ from routes.invoices import invoices_ns
 from routes.medical import medical_ns
 from routes.messages import messages_ns
 from routes.osrm import osrm_ns
+from routes.osrm_metrics import ns_osrm_metrics
 from routes.payments import payments_ns
 from routes.planning import planning_ns
+from routes.shadow_mode_routes import shadow_mode_bp  # Shadow Mode RL
 from routes.utils import utils_ns
 
 authorizations = {
@@ -73,15 +73,14 @@ api.add_namespace(medical_ns, path="/medical")
 api.add_namespace(invoices_ns, path="/invoices")
 api.add_namespace(planning_ns, path="/")
 api.add_namespace(osrm_ns, path="/osrm")
+api.add_namespace(ns_osrm_metrics, path="/osrm-metrics")
 
 # --- Dispatch namespaces
 api.add_namespace(company_dispatch_ns, path="/company_dispatch")  # legacy endpoints
+api.add_namespace(dispatch_health_ns, path="/company_dispatch_health")  # health monitoring
 
 # --- Analytics namespace
 api.add_namespace(analytics_ns, path="/analytics")
-
-# --- Company Settings namespace
-from routes.company_settings import settings_ns
 
 api.add_namespace(settings_ns, path="/company-settings")
 
@@ -89,6 +88,8 @@ api.add_namespace(settings_ns, path="/company-settings")
 
 
 def init_namespaces(app):
+    # Enregistrer le Blueprint Shadow Mode (non-RESTX)
+    app.register_blueprint(shadow_mode_bp)
     app.logger.info(
         "[api] init: prefix=%s docs=%s version=%s",
         API_PREFIX_FULL,

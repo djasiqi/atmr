@@ -207,7 +207,7 @@ class InvoiceLine(db.Model):
     line_total = Column(Numeric(10, 2), nullable=False)
 
     # Optionnel : tracer la source (réservation)
-    reservation_id = Column(Integer, ForeignKey("booking.id"), nullable=True)
+    reservation_id = Column(Integer, ForeignKey("booking.id", name='fk_invoice_line_reservation'), nullable=True)
 
     # Relations
     invoice = relationship("Invoice", back_populates="lines")

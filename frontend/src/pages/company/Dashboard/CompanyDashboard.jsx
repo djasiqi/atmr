@@ -1,15 +1,15 @@
 // src/pages/company/Dashboard/CompanyDashboard.jsx
-import React, { useCallback, useState, useEffect, useMemo } from "react";
-import useCompanySocket from "../../../hooks/useCompanySocket";
-import useDispatchStatus from "../../../hooks/useDispatchStatus";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import CompanySidebar from "../../../components/layout/Sidebar/CompanySidebar/CompanySidebar";
-import OverviewCards from "./components/OverviewCards";
-import ReservationChart from "./components/ReservationChart";
-import ReservationTable from "./components/ReservationTable";
-import DriverTable from "../../driver/components/Dashboard/DriverTable";
-import AssignmentModal from "./AssignmentModal";
-import DriverLiveMap from "./components/DriverLiveMap";
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
+import useCompanySocket from '../../../hooks/useCompanySocket';
+import useDispatchStatus from '../../../hooks/useDispatchStatus';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
+import OverviewCards from './components/OverviewCards';
+import ReservationChart from './components/ReservationChart';
+import ReservationTable from './components/ReservationTable';
+import DriverTable from '../../driver/components/Dashboard/DriverTable';
+import AssignmentModal from './AssignmentModal';
+import DriverLiveMap from './components/DriverLiveMap';
 import {
   acceptReservation,
   rejectReservation,
@@ -22,20 +22,20 @@ import {
   dispatchNowForReservation,
   triggerReturnBooking,
   fetchDispatchDelays,
-} from "../../../services/companyService";
-import useCompanyData from "../../../hooks/useCompanyData";
-import useDispatchDelays from "../../../hooks/useDispatchDelays";
-import styles from "./CompanyDashboard.module.css";
-import ManualBookingForm from "./components/ManualBookingForm";
-import ChatWidget from "../../../components/widgets/ChatWidget";
-import ReturnTimeModal from "./components/ReturnTimeModal";
-import EditDriverForm from "../components/EditDriverForm";
-import Modal from "../../../components/common/Modal";
-import CompanyHeader from "../../../components/layout/Header/CompanyHeader";
+} from '../../../services/companyService';
+import useCompanyData from '../../../hooks/useCompanyData';
+import useDispatchDelays from '../../../hooks/useDispatchDelays';
+import styles from './CompanyDashboard.module.css';
+import ManualBookingForm from './components/ManualBookingForm';
+import ChatWidget from '../../../components/widgets/ChatWidget';
+import ReturnTimeModal from './components/ReturnTimeModal';
+import EditDriverForm from '../components/EditDriverForm';
+import Modal from '../../../components/common/Modal';
+import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 
 function makeToday() {
   const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
+  const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
@@ -58,10 +58,7 @@ const CompanyDashboard = () => {
   useDispatchStatus(socket); // Monitor dispatch status via WebSocket
 
   // 🆕 Hook pour les retards dispatch (refresh toutes les 2 minutes)
-  const { delayCount, hasCriticalDelays, hasDelays } = useDispatchDelays(
-    dispatchDay,
-    120000
-  );
+  const { delayCount, hasCriticalDelays, hasDelays } = useDispatchDelays(dispatchDay, 120000);
 
   // queryClient pour invalidation
   const queryClient = useQueryClient();
@@ -70,7 +67,7 @@ const CompanyDashboard = () => {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showDriversSection, setShowDriversSection] = useState(false);
   const [showChartSection, setShowChartSection] = useState(false);
-  const [reservationTab, setReservationTab] = useState("pending"); // "pending" | "assigned"
+  const [reservationTab, setReservationTab] = useState('pending'); // "pending" | "assigned"
 
   const handleEditDriver = (d) => {
     setDriverToEdit(d);
@@ -86,7 +83,7 @@ const CompanyDashboard = () => {
       await toggleDriverType(driverId);
       reloadDriver();
     } catch (err) {
-      console.error("Erreur lors du changement de type du chauffeur :", err);
+      console.error('Erreur lors du changement de type du chauffeur :', err);
     }
   };
 
@@ -98,14 +95,13 @@ const CompanyDashboard = () => {
       await updateDriverStatus(driverId, { is_available: !d.is_available });
       await reloadDriver();
     } catch (err) {
-      console.error("Erreur mise à jour disponibilité chauffeur :", err);
+      console.error('Erreur mise à jour disponibilité chauffeur :', err);
     }
   };
 
   // Ouvre la modale pour planifier le retour (ou choisir Urgent)
   const [openReturnModal, setOpenReturnModal] = useState(false);
-  const [selectedReturnReservation, setSelectedReturnReservation] =
-    useState(null);
+  const [selectedReturnReservation, setSelectedReturnReservation] = useState(null);
   const handleScheduleReservation = (reservation) => {
     const id = reservation?.id ?? reservation;
     if (!id) return;
@@ -120,10 +116,10 @@ const CompanyDashboard = () => {
     try {
       await dispatchNowForReservation(id, 15);
       await reloadReservations();
-      await queryClient.invalidateQueries(["reservations"]);
+      await queryClient.invalidateQueries(['reservations']);
     } catch (e) {
-      console.error("Dispatch urgent:", e);
-      alert(e?.response?.data?.error || "Erreur lors du dispatch urgent.");
+      console.error('Dispatch urgent:', e);
+      alert(e?.response?.data?.error || 'Erreur lors du dispatch urgent.');
     }
   };
 
@@ -131,13 +127,12 @@ const CompanyDashboard = () => {
   const [selectedReservation, setSelectedReservation] = useState(null);
 
   // Liste des dispatches (assignations/affectations) pour la carte et la table
-  const { data: dispatchedReservations = [], refetch: refetchAssigned } =
-    useQuery({
-      queryKey: ["assigned-reservations", dispatchDay],
-      queryFn: () => fetchAssignedReservations(dispatchDay),
-      staleTime: 30_000,
-      enabled: !!company?.id, // ✅ évite les 403 bruités
-    });
+  const { data: dispatchedReservations = [], refetch: refetchAssigned } = useQuery({
+    queryKey: ['assigned-reservations', dispatchDay],
+    queryFn: () => fetchAssignedReservations(dispatchDay),
+    staleTime: 30_000,
+    enabled: !!company?.id, // ✅ évite les 403 bruités
+  });
 
   // Retards du jour (pour DriverLiveMap)
   const {
@@ -145,7 +140,7 @@ const CompanyDashboard = () => {
     refetch: refetchDelays,
     isFetching: fetchingDelays,
   } = useQuery({
-    queryKey: ["dispatch-delays", dispatchDay],
+    queryKey: ['dispatch-delays', dispatchDay],
     queryFn: () => fetchDispatchDelays(dispatchDay),
     initialData: [],
     staleTime: 20_000,
@@ -153,14 +148,11 @@ const CompanyDashboard = () => {
   });
 
   // WS: nouvelles réservations -> recharger la liste
-  const handleNewReservation = useCallback(
-    () => reloadReservations(),
-    [reloadReservations]
-  );
+  const handleNewReservation = useCallback(() => reloadReservations(), [reloadReservations]);
   useEffect(() => {
     if (!socket) return;
-    socket.on("new_reservation", handleNewReservation);
-    return () => socket.off("new_reservation", handleNewReservation);
+    socket.on('new_reservation', handleNewReservation);
+    return () => socket.off('new_reservation', handleNewReservation);
   }, [socket, handleNewReservation]);
 
   // WS: changements d'assignations & progression du dispatch
@@ -174,33 +166,34 @@ const CompanyDashboard = () => {
     const onAssignCreated = () => refetchAll();
     const onAssignUpdated = () => refetchAll();
     const onAssignDeleted = () => refetchAll();
-    const onDispatchProgress = (p) => {
+    const onDispatchProgress = (_p) => {
       // Optionnel: logger ou afficher un toast/loader granulaire
-      // console.debug("dispatch_progress", p);
+      // console.debug("dispatch_progress", _p);
     };
     const onDispatchError = (err) => {
-      console.error("dispatch_error:", err);
+      console.error('dispatch_error:', err);
       // Optionnel: notifier l’utilisateur
       refetchAll();
     };
     const onDispatchRunCompleted = (data) => {
-      console.log("Dispatch run completed:", data);
+      // eslint-disable-next-line no-console
+      console.log('Dispatch run completed:', data);
       // window.alert(err?.message || "Une erreur est survenue pendant l'optimisation.");
       refetchAll();
     };
-    socket.on("assignment_created", onAssignCreated);
-    socket.on("assignment_updated", onAssignUpdated);
-    socket.on("assignment_deleted", onAssignDeleted);
-    socket.on("dispatch_progress", onDispatchProgress);
-    socket.on("dispatch_error", onDispatchError);
-    socket.on("dispatch_run_completed", onDispatchRunCompleted);
+    socket.on('assignment_created', onAssignCreated);
+    socket.on('assignment_updated', onAssignUpdated);
+    socket.on('assignment_deleted', onAssignDeleted);
+    socket.on('dispatch_progress', onDispatchProgress);
+    socket.on('dispatch_error', onDispatchError);
+    socket.on('dispatch_run_completed', onDispatchRunCompleted);
     return () => {
-      socket.off("assignment_created", onAssignCreated);
-      socket.off("assignment_updated", onAssignUpdated);
-      socket.off("assignment_deleted", onAssignDeleted);
-      socket.off("dispatch_progress", onDispatchProgress);
-      socket.off("dispatch_error", onDispatchError);
-      socket.off("dispatch_run_completed", onDispatchRunCompleted);
+      socket.off('assignment_created', onAssignCreated);
+      socket.off('assignment_updated', onAssignUpdated);
+      socket.off('assignment_deleted', onAssignDeleted);
+      socket.off('dispatch_progress', onDispatchProgress);
+      socket.off('dispatch_error', onDispatchError);
+      socket.off('dispatch_run_completed', onDispatchRunCompleted);
     };
   }, [socket, refetchAssigned, reloadReservations, refetchDelays]);
 
@@ -210,7 +203,7 @@ const CompanyDashboard = () => {
       await acceptReservation(id);
       reloadReservations();
     } catch (err) {
-      console.error("Erreur acceptation :", err);
+      console.error('Erreur acceptation :', err);
     }
   };
   const handleReject = async (id) => {
@@ -218,7 +211,7 @@ const CompanyDashboard = () => {
       await rejectReservation(id);
       reloadReservations();
     } catch (err) {
-      console.error("Erreur rejet :", err);
+      console.error('Erreur rejet :', err);
     }
   };
   const openAssignModal = (res) => setSelectedReservation(res);
@@ -228,7 +221,7 @@ const CompanyDashboard = () => {
       reloadReservations();
       setSelectedReservation(null);
     } catch (err) {
-      console.error("Erreur assignation chauffeur :", err);
+      console.error('Erreur assignation chauffeur :', err);
     }
   };
 
@@ -240,7 +233,7 @@ const CompanyDashboard = () => {
 
   // Transforme en ISO local sans offset ni "Z"
   const toLocalIsoString = (date) => {
-    const pad = (n) => n.toString().padStart(2, "0");
+    const pad = (n) => n.toString().padStart(2, '0');
     const Y = date.getFullYear();
     const M = pad(date.getMonth() + 1);
     const D = pad(date.getDate());
@@ -257,7 +250,7 @@ const CompanyDashboard = () => {
       let payload = {};
       if (data?.urgent) {
         payload = { urgent: true, minutes_offset: data.minutes_offset ?? 15 };
-      } else if (typeof data === "string") {
+      } else if (typeof data === 'string') {
         payload = { return_time: data };
       } else if (data instanceof Date) {
         payload = { return_time: toLocalIsoString(data) };
@@ -267,28 +260,28 @@ const CompanyDashboard = () => {
       await triggerReturnBooking(selectedReturnReservation, payload);
       setSelectedReturnReservation(null);
       await reloadReservations();
-      await queryClient.invalidateQueries(["reservations"]);
+      await queryClient.invalidateQueries(['reservations']);
     } catch (err) {
-      console.error("Retour :", err);
-      alert(err?.response?.data?.error || "Erreur serveur.");
+      console.error('Retour :', err);
+      alert(err?.response?.data?.error || 'Erreur serveur.');
     }
   };
 
   // Après ajout manuel
   const handleManualBookingSuccess = (resp) => {
-    const ymd = String(resp?.reservation?.scheduled_time || "").slice(0, 10);
+    const ymd = String(resp?.reservation?.scheduled_time || '').slice(0, 10);
     if (ymd) setDispatchDay(ymd);
     reloadReservations();
-    queryClient.invalidateQueries(["reservations"]);
+    queryClient.invalidateQueries(['reservations']);
   };
 
   // Filtrage listes
   const pendingReservations = (reservations || []).filter(
-    (r) => r.status?.toLowerCase() === "pending"
+    (r) => r.status?.toLowerCase() === 'pending'
   );
   // Fix: Filter for reservations that are accepted but don't have a driver assigned
   const assignedReservations = (reservations || []).filter(
-    (r) => r.status?.toLowerCase() === "accepted" && !r.driver_id
+    (r) => r.status?.toLowerCase() === 'accepted' && !r.driver_id
   );
 
   // Callbacks chauffeurs (liste)
@@ -297,7 +290,7 @@ const CompanyDashboard = () => {
       await updateDriverStatus(driverId, !current);
       reloadDriver();
     } catch (err) {
-      console.error("Erreur mise à jour chauffeur :", err);
+      console.error('Erreur mise à jour chauffeur :', err);
     }
   };
   const handleDeleteDriver = async (driverId) => {
@@ -305,21 +298,31 @@ const CompanyDashboard = () => {
       await deleteDriver(driverId);
       reloadDriver();
     } catch (err) {
-      console.error("Erreur suppression chauffeur :", err);
+      console.error('Erreur suppression chauffeur :', err);
     }
   };
   const handleDeleteReservation = useCallback(
     async (reservation) => {
       const id = reservation?.id ?? reservation;
-      if (!id) return;
-      if (!window.confirm("Supprimer cette réservation ?")) return;
+      if (!id) {
+        console.error('❌ ID réservation manquant:', reservation);
+        return;
+      }
+
       try {
-        await deleteReservation(id);
+        console.log('🗑️ Suppression en cours de la réservation', id);
+        const result = await deleteReservation(id);
+        console.log('✅ Réservation supprimée:', result);
+
+        // Rafraîchir les données
         await reloadReservations();
-        await queryClient.invalidateQueries(["reservations"]);
+        await queryClient.invalidateQueries(['reservations']);
+
+        alert(`✅ Réservation #${id} supprimée avec succès`);
       } catch (e) {
-        console.error("Suppression réservations :", e);
-        alert(e?.response?.data?.error || "Suppression impossible.");
+        console.error('❌ Erreur suppression réservation:', e);
+        const errorMsg = e?.response?.data?.error || e?.message || 'Suppression impossible.';
+        alert(`❌ Erreur: ${errorMsg}`);
       }
     },
     [reloadReservations, queryClient]
@@ -330,20 +333,15 @@ const CompanyDashboard = () => {
   // Bookings "actifs" du jour (en dehors de completed/cancelled/no_show)
   const activeBookings = useMemo(() => {
     const isActive = (b) =>
-      b &&
-      !["completed", "cancelled", "no_show"].includes(
-        (b.status || "").toLowerCase()
-      );
+      b && !['completed', 'cancelled', 'no_show'].includes((b.status || '').toLowerCase());
     return (reservations || []).filter(isActive).map((r) => ({
       id: r.id,
-      client_name: r.customer_name || r.client?.full_name || "",
+      client_name: r.customer_name || r.client?.full_name || '',
       status: r.status,
       pickup_time: r.scheduled_time || r.pickup_time, // Fallback
       dropoff_time: r.dropoff_time,
-      pickup_location:
-        r.pickup_location_coords || r.pickup_location || r.pickup || null,
-      dropoff_location:
-        r.dropoff_location_coords || r.dropoff_location || r.dropoff || null,
+      pickup_location: r.pickup_location_coords || r.pickup_location || r.pickup || null,
+      dropoff_location: r.dropoff_location_coords || r.dropoff_location || r.dropoff || null,
     }));
   }, [reservations]);
 
@@ -360,16 +358,16 @@ const CompanyDashboard = () => {
         id: a.id ?? row.id,
         driver_id: a.driver_id ?? row.driver?.id ?? row.driver_id,
         is_on_trip: [
-          "assigned",
-          "in_progress",
-          "onboard",
-          "en_route_pickup",
-          "en_route_dropoff",
-        ].includes(String(a.status ?? row.status ?? "").toLowerCase()),
+          'assigned',
+          'in_progress',
+          'onboard',
+          'en_route_pickup',
+          'en_route_dropoff',
+        ].includes(String(a.status ?? row.status ?? '').toLowerCase()),
         route: row.route || a.route || [],
         booking: {
           id: row.id,
-          client_name: row.customer_name || row.client?.full_name || "",
+          client_name: row.customer_name || row.client?.full_name || '',
           status: row.status,
           pickup_time: row.scheduled_time || row.pickup_time,
           dropoff_time: row.dropoff_time || null,
@@ -403,14 +401,10 @@ const CompanyDashboard = () => {
       {hasDelays && (
         <div className={styles.delayAlert}>
           <div className={styles.delayAlertContent}>
-            <span className={styles.delayAlertIcon}>
-              {hasCriticalDelays ? "🚨" : "⚠️"}
-            </span>
+            <span className={styles.delayAlertIcon}>{hasCriticalDelays ? '🚨' : '⚠️'}</span>
             <span className={styles.delayAlertText}>
               {hasCriticalDelays ? (
-                <strong>
-                  {delayCount} retard(s) critique(s) détecté(s) aujourd'hui !
-                </strong>
+                <strong>{delayCount} retard(s) critique(s) détecté(s) aujourd'hui !</strong>
               ) : (
                 <>{delayCount} retard(s) détecté(s) aujourd'hui</>
               )}
@@ -450,11 +444,7 @@ const CompanyDashboard = () => {
                   assignments={assignmentsForMap}
                   delays={delaysByBooking}
                 />
-                {fetchingDelays && (
-                  <small className={styles.hint}>
-                    Mise à jour des retards…
-                  </small>
-                )}
+                {fetchingDelays && <small className={styles.hint}>Mise à jour des retards…</small>}
               </section>
 
               {/* Actions rapides */}
@@ -472,10 +462,7 @@ const CompanyDashboard = () => {
                 </a>
 
                 {/* Créer une réservation */}
-                <button
-                  onClick={() => setShowBookingModal(true)}
-                  className={styles.actionButton}
-                >
+                <button onClick={() => setShowBookingModal(true)} className={styles.actionButton}>
                   <span className={styles.actionIcon}>➕</span>
                   <span className={styles.actionText}>
                     <strong>Nouvelle réservation</strong>
@@ -491,12 +478,10 @@ const CompanyDashboard = () => {
                   onClick={() => setShowChartSection(!showChartSection)}
                 >
                   <h2>📊 Statistiques</h2>
-                  <span className={styles.collapseIcon}>
-                    {showChartSection ? "▼" : "▶"}
-                  </span>
+                  <span className={styles.collapseIcon}>{showChartSection ? '▼' : '▶'}</span>
                 </div>
                 {showChartSection && (
-                  <div style={{ padding: "16px" }}>
+                  <div style={{ padding: '16px' }}>
                     <ReservationChart reservations={reservations} />
                   </div>
                 )}
@@ -509,9 +494,7 @@ const CompanyDashboard = () => {
                   onClick={() => setShowDriversSection(!showDriversSection)}
                 >
                   <h2>👥 Chauffeurs ({(driver || []).length})</h2>
-                  <span className={styles.collapseIcon}>
-                    {showDriversSection ? "▼" : "▶"}
-                  </span>
+                  <span className={styles.collapseIcon}>{showDriversSection ? '▼' : '▶'}</span>
                 </div>
                 {showDriversSection && (
                   <DriverTable
@@ -529,65 +512,54 @@ const CompanyDashboard = () => {
 
             {/* Colonne droite : Réservations avec onglets */}
             <div className={styles.rightColumn}>
-              <section className={styles.reservationsSection}>
-                {/* Onglets */}
-                <div
-                  className={styles.tabsHeader}
-                  data-active-tab={reservationTab}
+              {/* Onglets sans conteneur */}
+              <div className={styles.tabsHeader} data-active-tab={reservationTab}>
+                <button
+                  className={`${styles.tab} ${
+                    reservationTab === 'pending' ? styles.tabActive : ''
+                  }`}
+                  onClick={() => setReservationTab('pending')}
                 >
-                  <button
-                    className={`${styles.tab} ${
-                      reservationTab === "pending" ? styles.tabActive : ""
-                    }`}
-                    onClick={() => setReservationTab("pending")}
-                  >
-                    📋 En attente{" "}
-                    <span className={styles.tabBadge}>
-                      {pendingReservations.length}
-                    </span>
-                  </button>
-                  <button
-                    className={`${styles.tab} ${
-                      reservationTab === "assigned" ? styles.tabActive : ""
-                    }`}
-                    onClick={() => setReservationTab("assigned")}
-                  >
-                    ⏳ Assignation chauffeur{" "}
-                    <span className={styles.tabBadge}>
-                      {assignedReservations.length}
-                    </span>
-                  </button>
-                </div>
+                  📋 En attente{' '}
+                  <span className={styles.tabBadge}>{pendingReservations.length}</span>
+                </button>
+                <button
+                  className={`${styles.tab} ${
+                    reservationTab === 'assigned' ? styles.tabActive : ''
+                  }`}
+                  onClick={() => setReservationTab('assigned')}
+                >
+                  ⏳ Assignation chauffeur{' '}
+                  <span className={styles.tabBadge}>{assignedReservations.length}</span>
+                </button>
+              </div>
 
-                {/* Contenu des onglets */}
-                <div className={styles.tabContent}>
-                  {reservationTab === "pending" && (
-                    <ReservationTable
-                      reservations={pendingReservations}
-                      loading={loadingReservations}
-                      onAccept={handleAccept}
-                      onReject={handleReject}
-                      onAssign={openAssignModal}
-                      onTriggerReturn={handleTriggerReturn}
-                      onDelete={handleDeleteReservation}
-                      onSchedule={handleScheduleReservation}
-                      onDispatchNow={handleDispatchNow}
-                    />
-                  )}
+              {/* Tableaux directement sans conteneur */}
+              {reservationTab === 'pending' && (
+                <ReservationTable
+                  reservations={pendingReservations}
+                  loading={loadingReservations}
+                  onAccept={handleAccept}
+                  onReject={handleReject}
+                  onAssign={openAssignModal}
+                  onTriggerReturn={handleTriggerReturn}
+                  onDelete={handleDeleteReservation}
+                  onSchedule={handleScheduleReservation}
+                  onDispatchNow={handleDispatchNow}
+                />
+              )}
 
-                  {reservationTab === "assigned" && (
-                    <ReservationTable
-                      reservations={assignedReservations}
-                      loading={loadingReservations}
-                      onAssign={openAssignModal}
-                      onTriggerReturn={handleTriggerReturn}
-                      onDelete={handleDeleteReservation}
-                      onSchedule={handleScheduleReservation}
-                      onDispatchNow={handleDispatchNow}
-                    />
-                  )}
-                </div>
-              </section>
+              {reservationTab === 'assigned' && (
+                <ReservationTable
+                  reservations={assignedReservations}
+                  loading={loadingReservations}
+                  onAssign={openAssignModal}
+                  onTriggerReturn={handleTriggerReturn}
+                  onDelete={handleDeleteReservation}
+                  onSchedule={handleScheduleReservation}
+                  onDispatchNow={handleDispatchNow}
+                />
+              )}
             </div>
           </div>
         </main>

@@ -1,12 +1,11 @@
 // frontend/src/pages/company/Settings/tabs/NotificationsTab.jsx
-import React, { useState } from "react";
-import styles from "../CompanySettings.module.css";
-import ToggleField from "../../../../components/ui/ToggleField";
+import React, { useState } from 'react';
+import styles from '../CompanySettings.module.css';
+import ToggleField from '../../../../components/ui/ToggleField';
 
 const NotificationsTab = () => {
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   const [form, setForm] = useState({
     // Notifications email
@@ -18,15 +17,39 @@ const NotificationsTab = () => {
     notify_weekly_analytics: false,
 
     // Destinataires
-    notification_emails: "",
+    notification_emails: '',
   });
+
+  // Sauvegarde automatique
+  const autoSave = async (_updatedForm = null) => {
+    setMessage('');
+    setError('');
+
+    try {
+      // TODO: API call pour sauvegarder les notifications
+      // await updateNotificationSettings(updatedForm || form);
+
+      // Simulation temporaire
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      setMessage('✅ Sauvegardé automatiquement');
+      setTimeout(() => setMessage(''), 2000);
+    } catch (err) {
+      console.error('Auto-save failed:', err);
+      setError('❌ Erreur lors de la sauvegarde');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
 
   const handleToggle = (e) => {
     const { name, checked } = e.target;
-    setForm((prev) => ({
-      ...prev,
+    const updatedForm = {
+      ...form,
       [name]: checked,
-    }));
+    };
+    setForm(updatedForm);
+    // Sauvegarder immédiatement après changement de toggle
+    autoSave(updatedForm);
   };
 
   const handleChange = (e) => {
@@ -37,30 +60,12 @@ const NotificationsTab = () => {
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setMessage("");
-    setError("");
-    setSaving(true);
-
-    try {
-      // TODO: API call pour sauvegarder les notifications
-      // await updateNotificationSettings(form);
-
-      // Simulation temporaire
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      setMessage("✅ Paramètres de notifications enregistrés avec succès.");
-    } catch (err) {
-      console.error("Failed to update notification settings:", err);
-      setError("Erreur lors de la sauvegarde.");
-    } finally {
-      setSaving(false);
-    }
+  const handleBlur = () => {
+    autoSave();
   };
 
   return (
-    <form className={styles.settingsForm} onSubmit={handleSubmit}>
+    <div className={styles.settingsForm}>
       {message && <div className={styles.success}>{message}</div>}
       {error && <div className={styles.error}>{error}</div>}
 
@@ -128,25 +133,13 @@ const NotificationsTab = () => {
             name="notification_emails"
             value={form.notification_emails}
             onChange={handleChange}
+            onBlur={handleBlur}
             placeholder="admin@emmenezmoi.ch, manager@emmenezmoi.ch"
           />
-          <small className={styles.hint}>
-            Séparez plusieurs adresses par des virgules
-          </small>
+          <small className={styles.hint}>Séparez plusieurs adresses par des virgules</small>
         </div>
       </section>
-
-      {/* Boutons */}
-      <div className={styles.actionsRow}>
-        <button
-          type="submit"
-          className={`${styles.button} ${styles.primary}`}
-          disabled={saving}
-        >
-          {saving ? "💾 Enregistrement…" : "💾 Enregistrer"}
-        </button>
-      </div>
-    </form>
+    </div>
   );
 };
 

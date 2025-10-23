@@ -1,0 +1,20 @@
+======================================================================
+RAPPORT A/B TESTING : ML vs HEURISTIQUE
+======================================================================
+
+Total tests : 4
+
+PRÉDICTIONS
+  ML moyen           : 5.72 min
+  Heuristique moyen  : 8.47 min
+  Différence absolue : 2.75 min
+
+PERFORMANCE
+  ML temps moyen        : 904.3 ms
+  Heuristique temps moy : 0.0 ms
+  ML plus rapide        : 0.0%
+
+QUALITÉ ML
+  Confiance moyenne : 0.662
+
+======================================================================

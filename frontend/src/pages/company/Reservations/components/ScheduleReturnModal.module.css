@@ -1,67 +1,26 @@
-.overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  animation: fadeIn 0.2s ease;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.modal {
-  background: white;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 550px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  animation: slideUp 0.3s ease;
-  overflow: hidden;
-}
-
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
+/* Styles spécifiques pour le header avec gradient et l'encadré d'info */
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 24px 28px;
-  background: linear-gradient(135deg, #00796b 0%, #00695c 100%);
+  padding: var(--spacing-lg);
+  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary-dark) 100%);
   color: white;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 
 .title {
   margin: 0;
-  font-size: 1.4rem;
-  font-weight: 600;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
 }
 
 .closeButton {
   background: none;
   border: none;
   color: white;
-  font-size: 1.8rem;
+  font-size: var(--font-size-2xl);
   cursor: pointer;
   padding: 0;
   width: 32px;
@@ -69,11 +28,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  transition: all 0.2s;
+  border-radius: var(--radius-full);
+  transition: var(--transition-base);
 }
 
-.closeButton:hover {
+.closeButton:hover:not(:disabled) {
   background-color: rgba(255, 255, 255, 0.2);
   transform: rotate(90deg);
 }
@@ -84,22 +43,18 @@
   transform: none;
 }
 
-.body {
-  padding: 28px;
-}
-
 .reservationInfo {
-  background: linear-gradient(135deg, #f0fdfa 0%, #e0f2fe 100%);
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 24px;
-  border-left: 4px solid #00796b;
+  background: linear-gradient(135deg, var(--brand-primary-lightest) 0%, #e0f2fe 100%);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  border-left: 4px solid var(--brand-primary);
 }
 
 .infoRow {
   display: flex;
-  margin-bottom: 8px;
-  font-size: 0.95rem;
+  margin-bottom: var(--spacing-sm);
+  font-size: var(--font-size-sm);
 }
 
 .infoRow:last-child {
@@ -108,123 +63,6 @@
 
 .infoRow .label {
   min-width: 120px;
-  color: #64748b;
-  font-weight: 500;
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-medium);
 }
-
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.formGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.formGroup .label {
-  font-weight: 600;
-  color: #334155;
-  font-size: 0.95rem;
-}
-
-.input {
-  padding: 12px 16px;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: all 0.2s;
-  font-family: inherit;
-}
-
-.input:focus {
-  outline: none;
-  border-color: #00796b;
-  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.1);
-}
-
-.input:disabled {
-  background-color: #f1f5f9;
-  cursor: not-allowed;
-}
-
-.hint {
-  font-size: 0.85rem;
-  color: #64748b;
-  font-style: italic;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 28px;
-  justify-content: flex-end;
-}
-
-.cancelButton,
-.confirmButton {
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-}
-
-.cancelButton {
-  background: #f1f5f9;
-  color: #64748b;
-}
-
-.cancelButton:hover:not(:disabled) {
-  background: #e2e8f0;
-}
-
-.confirmButton {
-  background: linear-gradient(135deg, #00796b 0%, #00695c 100%);
-  color: white;
-  box-shadow: 0 4px 12px rgba(0, 121, 107, 0.3);
-}
-
-.confirmButton:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 121, 107, 0.4);
-}
-
-.cancelButton:disabled,
-.confirmButton:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-@media (max-width: 640px) {
-  .modal {
-    width: 95%;
-    margin: 20px;
-  }
-
-  .header {
-    padding: 20px;
-  }
-
-  .body {
-    padding: 20px;
-  }
-
-  .actions {
-    flex-direction: column-reverse;
-  }
-
-  .cancelButton,
-  .confirmButton {
-    width: 100%;
-  }
-}
-

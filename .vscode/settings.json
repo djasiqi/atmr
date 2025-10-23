@@ -48,12 +48,29 @@
   },
 
   "workbench.view.alwaysShowHeaderActions": true,
+  
+  // --- Java/Android ---
   "java.compile.nullAnalysis.mode": "automatic",
   "java.configuration.updateBuildConfiguration": "interactive",
+  "java.import.exclusions": [
+    "**/node_modules/**",
+    "**/mobile/driver-app/node_modules/**",
+    "**/mobile/client-app/node_modules/**"
+  ],
+  
+  // --- Pyright ---
   "cursorpyright.analysis.autoSearchPaths": true,
   "cursorpyright.analysis.extraPaths": [
     "${workspaceFolder}/backend"
   ],
   "cursorpyright.analysis.typeCheckingMode": "basic",
-  "cursorpyright.analysis.useLibraryCodeForTypes": true
+  "cursorpyright.analysis.useLibraryCodeForTypes": true,
+
+  // --- YAML / GitHub Actions ---
+  "yaml.schemas": {
+    "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
+  },
+  "yaml.customTags": [
+    "!reference sequence"
+  ]
 }

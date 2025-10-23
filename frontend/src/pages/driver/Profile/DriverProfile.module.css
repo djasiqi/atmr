@@ -1,39 +1,39 @@
 /* Design moderne avec un fond clair et un style interactif */
 
 .profileCard {
-  background-color: #ffffff;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  padding: 25px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--spacing-xl);
   max-width: 600px;
-  margin: 20px auto;
+  margin: var(--spacing-lg) auto;
   font-family: "Roboto", sans-serif;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
 }
 
 .profileCard:hover {
   transform: translateY(-3px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-md);
 }
 
 .profileHeader {
   display: flex;
   align-items: center;
-  margin-bottom: 20px;
-  border-bottom: 1px solid #f0f0f0;
-  padding-bottom: 15px;
+  margin-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--border-secondary);
+  padding-bottom: var(--spacing-md);
 }
 
 .profilePhoto {
   width: 100px;
   height: 100px;
-  border-radius: 50%;
-  border: 2px solid #007bff;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--brand-primary);
   object-fit: cover;
-  margin-right: 20px;
+  margin-right: var(--spacing-lg);
   cursor: pointer;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--transition-base);
 }
 
 .profilePhoto:hover {
@@ -45,38 +45,38 @@
 }
 
 .profileName {
-  font-size: 1.8em;
+  font-size: var(--font-xl);
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .profileStatus {
-  margin-top: 5px;
-  font-size: 1em;
-  color: #666;
+  margin-top: var(--spacing-xs);
+  font-size: var(--font-md);
+  color: var(--text-tertiary);
 }
 
 .available {
-  color: #4caf50;
-  font-weight: bold;
+  color: var(--success-primary);
+  font-weight: var(--font-weight-bold);
 }
 
 .busy {
-  color: #f44336;
-  font-weight: bold;
+  color: var(--danger-primary);
+  font-weight: var(--font-weight-bold);
 }
 
 .profileDetails {
   display: flex;
   flex-wrap: wrap;
-  gap: 15px;
-  margin-bottom: 20px;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
 }
 
 .detailItem {
   flex: 1 1 250px;
-  font-size: 1em;
-  color: #555;
+  font-size: var(--font-md);
+  color: var(--text-secondary);
 }
 
 .profileActions {
@@ -84,24 +84,24 @@
 }
 
 .editButton {
-  background-color: #007bff;
+  background-color: var(--brand-primary);
   color: #fff;
   border: none;
-  padding: 12px 20px;
-  border-radius: 6px;
-  font-size: 1em;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-md);
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: background-color var(--transition-base);
 }
 
 .editButton:hover {
-  background-color: #0056b3;
+  background-color: var(--brand-hover);
 }
 
 /* Responsive adjustments */
 @media (max-width: 600px) {
   .profileCard {
-    padding: 20px;
+    padding: var(--spacing-lg);
   }
   .profileHeader {
     flex-direction: column;
@@ -110,6 +110,6 @@
   }
   .profilePhoto {
     margin-right: 0;
-    margin-bottom: 15px;
+    margin-bottom: var(--spacing-md);
   }
 }

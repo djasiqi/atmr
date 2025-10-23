@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
-import CompanyHeader from "../../../components/layout/Header/CompanyHeader";
-import CompanySidebar from "../../../components/layout/Sidebar/CompanySidebar/CompanySidebar";
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
+import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 import {
   fetchCompanyReservations,
   deleteReservation,
@@ -8,27 +8,27 @@ import {
   rejectReservation,
   scheduleReservation,
   dispatchNowForReservation,
-} from "../../../services/companyService";
-import ReservationTable from "../Dashboard/components/ReservationTable";
-import ReservationDetailsModal from "../Dashboard/components/ReservationDetailsModal";
-import ConfirmationModal from "../../../components/common/ConfirmationModal";
-import ReservationStats from "./components/ReservationStats";
-import ReservationFilters from "./components/ReservationFilters";
-import ReservationMapView from "./components/ReservationMapView";
-import ReservationAlerts from "./components/ReservationAlerts";
-import TopClients from "./components/TopClients";
-import ScheduleReturnModal from "./components/ScheduleReturnModal";
-import styles from "./CompanyReservations.module.css";
+} from '../../../services/companyService';
+import ReservationTable from '../Dashboard/components/ReservationTable';
+import ReservationDetailsModal from '../Dashboard/components/ReservationDetailsModal';
+import ConfirmationModal from '../../../components/common/ConfirmationModal';
+import ReservationStats from './components/ReservationStats';
+import ReservationFilters from './components/ReservationFilters';
+import ReservationMapView from './components/ReservationMapView';
+import ReservationAlerts from './components/ReservationAlerts';
+import TopClients from './components/TopClients';
+import ScheduleReturnModal from './components/ScheduleReturnModal';
+import styles from './CompanyReservations.module.css';
 
 const CompanyReservations = () => {
   // États existants
   const [reservations, setReservations] = useState([]);
   const [filteredReservations, setFilteredReservations] = useState([]);
-  const [selectedDay, setSelectedDay] = useState("all"); // Par défaut : toutes les dates
+  const [selectedDay, setSelectedDay] = useState('all'); // Par défaut : toutes les dates
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [sortOrder, setSortOrder] = useState("desc"); // Par défaut : ordre décroissant (plus récent d'abord)
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortOrder, setSortOrder] = useState('desc'); // Par défaut : ordre décroissant (plus récent d'abord)
   const [currentPage, setCurrentPage] = useState(1);
   const [reservationsPerPage, setReservationsPerPage] = useState(10); // Nombre de réservations par page
   const [selectedReservation, setSelectedReservation] = useState(null);
@@ -38,8 +38,8 @@ const CompanyReservations = () => {
   const [reservationToSchedule, setReservationToSchedule] = useState(null);
 
   // Nouveaux états pour les améliorations
-  const [activeTab, setActiveTab] = useState("all");
-  const [viewMode, setViewMode] = useState("table"); // "table" ou "map"
+  const [activeTab, setActiveTab] = useState('all');
+  const [viewMode, setViewMode] = useState('table'); // "table" ou "map"
   const [alerts, setAlerts] = useState([]);
   const [stats, setStats] = useState({
     total: 0,
@@ -52,9 +52,9 @@ const CompanyReservations = () => {
 
   // Forcer le mode tableau quand une plage de dates est sélectionnée
   useEffect(() => {
-    const isDateRange = selectedDay && selectedDay.includes(":");
-    if (isDateRange && viewMode === "map") {
-      setViewMode("table");
+    const isDateRange = selectedDay && selectedDay.includes(':');
+    if (isDateRange && viewMode === 'map') {
+      setViewMode('table');
     }
   }, [selectedDay, viewMode]);
 
@@ -63,18 +63,15 @@ const CompanyReservations = () => {
     try {
       setLoading(true);
       // Si "Toutes les dates" ou une plage de dates, charger toutes les réservations
-      const isDateRange = selectedDay && selectedDay.includes(":");
-      const apiParam =
-        selectedDay === "all" || isDateRange ? null : selectedDay;
+      const isDateRange = selectedDay && selectedDay.includes(':');
+      const apiParam = selectedDay === 'all' || isDateRange ? null : selectedDay;
 
       const data = await fetchCompanyReservations(apiParam);
-      let reservationsData = Array.isArray(data)
-        ? data
-        : data.reservations || [];
+      let reservationsData = Array.isArray(data) ? data : data.reservations || [];
 
       // Filtrer côté client si c'est une plage de dates
       if (isDateRange) {
-        const [startDate, endDate] = selectedDay.split(":");
+        const [startDate, endDate] = selectedDay.split(':');
         const start = new Date(startDate);
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999); // Inclure toute la journée de fin
@@ -93,7 +90,7 @@ const CompanyReservations = () => {
       // Générer les alertes
       generateAlerts(reservationsData);
     } catch (err) {
-      console.error("Erreur lors du chargement des réservations :", err);
+      console.error('Erreur lors du chargement des réservations :', err);
     } finally {
       setLoading(false);
     }
@@ -103,15 +100,14 @@ const CompanyReservations = () => {
   const calculateStats = (reservationsData) => {
     const newStats = {
       total: reservationsData.length,
-      pending: reservationsData.filter((r) => r.status === "pending").length,
+      pending: reservationsData.filter((r) => r.status === 'pending').length,
       inProgress: reservationsData.filter((r) =>
-        ["accepted", "assigned", "in_progress"].includes(r.status)
+        ['accepted', 'assigned', 'in_progress'].includes(r.status)
       ).length,
-      completed: reservationsData.filter((r) => r.status === "completed")
-        .length,
-      canceled: reservationsData.filter((r) => r.status === "canceled").length,
+      completed: reservationsData.filter((r) => r.status === 'completed').length,
+      canceled: reservationsData.filter((r) => r.status === 'canceled').length,
       revenue: reservationsData
-        .filter((r) => r.status === "completed")
+        .filter((r) => r.status === 'completed')
         .reduce((sum, r) => sum + (Number(r.amount) || 0), 0),
     };
     setStats(newStats);
@@ -123,7 +119,7 @@ const CompanyReservations = () => {
 
     // Alertes de retard
     reservationsData
-      .filter((r) => r.status === "assigned" || r.status === "in_progress")
+      .filter((r) => r.status === 'assigned' || r.status === 'in_progress')
       .forEach((r) => {
         const scheduledTime = new Date(r.scheduled_time);
         const now = new Date();
@@ -132,8 +128,8 @@ const CompanyReservations = () => {
         if (delayMinutes > 15) {
           newAlerts.push({
             id: `delay-${r.id}`,
-            type: "delay",
-            severity: delayMinutes > 30 ? "high" : "medium",
+            type: 'delay',
+            severity: delayMinutes > 30 ? 'high' : 'medium',
             message: `Course #${r.id} en retard de ${delayMinutes} minutes`,
             reservation: r,
           });
@@ -142,13 +138,13 @@ const CompanyReservations = () => {
 
     // Alertes de chauffeurs non assignés
     const unassignedCount = reservationsData.filter(
-      (r) => r.status === "accepted" && !r.driver_id
+      (r) => r.status === 'accepted' && !r.driver_id
     ).length;
     if (unassignedCount > 0) {
       newAlerts.push({
-        id: "unassigned",
-        type: "unassigned",
-        severity: "medium",
+        id: 'unassigned',
+        type: 'unassigned',
+        severity: 'medium',
         message: `${unassignedCount} course(s) sans chauffeur assigné`,
         count: unassignedCount,
       });
@@ -177,11 +173,9 @@ const CompanyReservations = () => {
     if (!reservationToDelete) return;
     try {
       await deleteReservation(reservationToDelete.id);
-      setReservations((prev) =>
-        prev.filter((r) => r.id !== reservationToDelete.id)
-      );
+      setReservations((prev) => prev.filter((r) => r.id !== reservationToDelete.id));
     } catch (err) {
-      console.error("Erreur lors de la suppression:", err);
+      console.error('Erreur lors de la suppression:', err);
     } finally {
       handleCloseConfirmModal();
     }
@@ -193,9 +187,7 @@ const CompanyReservations = () => {
       await acceptReservation(reservationId);
       // Mettre à jour la réservation dans la liste locale
       setReservations((prev) =>
-        prev.map((r) =>
-          r.id === reservationId ? { ...r, status: "accepted" } : r
-        )
+        prev.map((r) => (r.id === reservationId ? { ...r, status: 'accepted' } : r))
       );
       // Recharger les réservations pour avoir les données fraîches
       loadReservations();
@@ -209,23 +201,21 @@ const CompanyReservations = () => {
       await rejectReservation(reservationId);
       // Mettre à jour localement
       setReservations((prev) =>
-        prev.map((r) =>
-          r.id === reservationId ? { ...r, status: "rejected" } : r
-        )
+        prev.map((r) => (r.id === reservationId ? { ...r, status: 'rejected' } : r))
       );
       loadReservations();
     } catch (err) {
-      console.error("Erreur lors du rejet:", err);
+      console.error('Erreur lors du rejet:', err);
     }
   };
 
-  const handleAssign = async (reservation) => {
+  const handleAssign = async (_reservation) => {
     try {
       // Ouvrir un modal de sélection de chauffeur (à implémenter si nécessaire)
-      console.log("Assignation pour réservation", reservation.id);
       // Pour l'instant, juste recharger
       loadReservations();
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error("Erreur lors de l'assignation:", err);
     }
   };
@@ -244,7 +234,7 @@ const CompanyReservations = () => {
       setShowScheduleModal(false);
       setReservationToSchedule(null);
     } catch (err) {
-      console.error("Erreur lors de la planification:", err);
+      console.error('Erreur lors de la planification:', err);
       throw err; // Laisser le modal afficher l'erreur
     }
   };
@@ -255,8 +245,8 @@ const CompanyReservations = () => {
       await dispatchNowForReservation(reservation.id, 15);
       loadReservations();
     } catch (err) {
-      console.error("Erreur lors du dispatch urgent:", err);
-      alert(err?.response?.data?.error || "Erreur lors du dispatch urgent");
+      console.error('Erreur lors du dispatch urgent:', err);
+      alert(err?.response?.data?.error || 'Erreur lors du dispatch urgent');
     }
   };
 
@@ -265,21 +255,24 @@ const CompanyReservations = () => {
     let filtered = [...reservations];
 
     // Filtre par onglet
-    if (activeTab !== "all") {
+    if (activeTab !== 'all') {
       filtered = filtered.filter((r) => {
         switch (activeTab) {
-          case "pending":
-            return r.status === "pending";
-          case "in_progress":
-            return ["accepted", "assigned", "in_progress"].includes(r.status);
-          case "completed":
-            return r.status === "completed";
-          case "canceled":
-            return r.status === "canceled";
+          case 'pending':
+            return r.status === 'pending';
+          case 'in_progress':
+            return ['accepted', 'assigned', 'in_progress'].includes(r.status);
+          case 'completed':
+            return r.status === 'completed';
+          case 'canceled':
+            return r.status === 'canceled';
           default:
             return true;
         }
       });
+    } else {
+      // ✅ Onglet "Toutes" : Masquer automatiquement les courses annulées
+      filtered = filtered.filter((r) => r.status !== 'canceled' && r.status !== 'CANCELED');
     }
 
     // Filtres de recherche améliorés (ID, Client, Adresse, Email, Téléphone)
@@ -287,7 +280,7 @@ const CompanyReservations = () => {
       const q = searchTerm.toLowerCase().trim();
       filtered = filtered.filter((r) => {
         // Recherche par ID (exact ou partiel)
-        const id = String(r.id || "");
+        const id = String(r.id || '');
         if (id.includes(q)) return true;
 
         // Recherche par nom du client
@@ -295,52 +288,43 @@ const CompanyReservations = () => {
           r.customer_name ||
           r.client?.full_name ||
           r.client?.username ||
-          ""
+          ''
         ).toLowerCase();
         if (name.includes(q)) return true;
 
         // Recherche par email
-        const email = (r.client?.email || r.customer_email || "").toLowerCase();
+        const email = (r.client?.email || r.customer_email || '').toLowerCase();
         if (email.includes(q)) return true;
 
         // Recherche par téléphone
-        const phone = (r.client?.phone || r.customer_phone || "").replace(
-          /\s/g,
-          ""
-        );
-        const qPhone = q.replace(/\s/g, "");
+        const phone = (r.client?.phone || r.customer_phone || '').replace(/\s/g, '');
+        const qPhone = q.replace(/\s/g, '');
         if (phone.includes(qPhone)) return true;
 
         // Recherche par adresse de départ
-        const pickup = (r.pickup_location || "").toLowerCase();
+        const pickup = (r.pickup_location || '').toLowerCase();
         if (pickup.includes(q)) return true;
 
         // Recherche par adresse d'arrivée
-        const dropoff = (r.dropoff_location || "").toLowerCase();
+        const dropoff = (r.dropoff_location || '').toLowerCase();
         if (dropoff.includes(q)) return true;
 
         // Recherche par chauffeur assigné
-        const driverName = (
-          r.driver?.username ||
-          r.driver?.full_name ||
-          ""
-        ).toLowerCase();
+        const driverName = (r.driver?.username || r.driver?.full_name || '').toLowerCase();
         if (driverName.includes(q)) return true;
 
         return false;
       });
     }
 
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(
-        (r) => (r.status || "").toLowerCase() === statusFilter
-      );
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter((r) => (r.status || '').toLowerCase() === statusFilter);
     }
 
     filtered.sort((a, b) => {
       const dateA = new Date(a.scheduled_time);
       const dateB = new Date(b.scheduled_time);
-      return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+      return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
     });
 
     setFilteredReservations(filtered);
@@ -354,106 +338,78 @@ const CompanyReservations = () => {
     return filteredReservations.slice(indexOfFirst, indexOfLast);
   }, [filteredReservations, currentPage, reservationsPerPage]);
 
-  const totalPages = Math.ceil(
-    filteredReservations.length / reservationsPerPage
-  );
+  const totalPages = Math.ceil(filteredReservations.length / reservationsPerPage);
 
   // Gestion des onglets
   const tabs = [
-    { id: "all", label: "Toutes", count: stats.total },
-    { id: "pending", label: "En attente", count: stats.pending },
-    { id: "in_progress", label: "En cours", count: stats.inProgress },
-    { id: "completed", label: "Terminées", count: stats.completed },
-    { id: "canceled", label: "Annulées", count: stats.canceled },
+    { id: 'all', label: 'Toutes', count: stats.total },
+    { id: 'pending', label: 'En attente', count: stats.pending },
+    { id: 'in_progress', label: 'En cours', count: stats.inProgress },
+    { id: 'completed', label: 'Terminées', count: stats.completed },
+    { id: 'canceled', label: 'Annulées', count: stats.canceled },
   ];
 
   // Fonction pour formater l'affichage de la période sélectionnée
-  const getDateDisplay = () => {
-    if (selectedDay === "all") {
-      return "Toutes les dates";
+  const _getDateDisplay = () => {
+    if (selectedDay === 'all') {
+      return 'Toutes les dates';
     }
 
-    if (selectedDay && selectedDay.includes(":")) {
+    if (selectedDay && selectedDay.includes(':')) {
       // Plage de dates
-      const [startDate, endDate] = selectedDay.split(":");
-      const start = new Date(startDate).toLocaleDateString("fr-FR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
+      const [startDate, endDate] = selectedDay.split(':');
+      const start = new Date(startDate).toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
       });
-      const end = new Date(endDate).toLocaleDateString("fr-FR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
+      const end = new Date(endDate).toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
       });
       return `Du ${start} au ${end}`;
     }
 
     // Date unique
-    return new Date(selectedDay).toLocaleDateString("fr-FR", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
+    return new Date(selectedDay).toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     });
   };
 
   // Réservations pour la carte (une seule journée uniquement)
   const mapReservations = useMemo(() => {
-    console.log("🗺️ Calcul mapReservations - selectedDay:", selectedDay);
-    console.log(
-      "🗺️ filteredReservations disponibles:",
-      filteredReservations.length
-    );
-
     // Si "toutes les dates" sélectionné, utiliser aujourd'hui
-    if (selectedDay === "all") {
+    if (selectedDay === 'all') {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
-
-      console.log(
-        "🗺️ Mode: Toutes - Filtre sur aujourd'hui:",
-        today.toLocaleDateString()
-      );
 
       const filtered = filteredReservations.filter((r) => {
         const reservationDate = new Date(r.scheduled_time || r.pickup_time);
         return reservationDate >= today && reservationDate < tomorrow;
       });
 
-      console.log(
-        "🗺️ Réservations trouvées pour aujourd'hui:",
-        filtered.length
-      );
       return filtered;
     }
 
     // Si plage de dates, utiliser la première date uniquement
-    if (selectedDay && selectedDay.includes(":")) {
-      const [startDate] = selectedDay.split(":");
+    if (selectedDay && selectedDay.includes(':')) {
+      const [startDate] = selectedDay.split(':');
       const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
       const end = new Date(start);
       end.setDate(end.getDate() + 1);
-
-      console.log(
-        "🗺️ Mode: Plage - Filtre sur premier jour:",
-        start.toLocaleDateString()
-      );
 
       const filtered = filteredReservations.filter((r) => {
         const reservationDate = new Date(r.scheduled_time || r.pickup_time);
         return reservationDate >= start && reservationDate < end;
       });
 
-      console.log(
-        "🗺️ Réservations trouvées pour le",
-        start.toLocaleDateString(),
-        ":",
-        filtered.length
-      );
       return filtered;
     }
 
@@ -463,22 +419,11 @@ const CompanyReservations = () => {
     const nextDay = new Date(targetDate);
     nextDay.setDate(nextDay.getDate() + 1);
 
-    console.log(
-      "🗺️ Mode: Date unique - Filtre sur:",
-      targetDate.toLocaleDateString()
-    );
-
     const filtered = filteredReservations.filter((r) => {
       const reservationDate = new Date(r.scheduled_time || r.pickup_time);
       return reservationDate >= targetDate && reservationDate < nextDay;
     });
 
-    console.log(
-      "🗺️ Réservations trouvées pour le",
-      targetDate.toLocaleDateString(),
-      ":",
-      filtered.length
-    );
     return filtered;
   }, [filteredReservations, selectedDay]);
 
@@ -488,64 +433,63 @@ const CompanyReservations = () => {
       <div className={styles.dashboard}>
         <CompanySidebar />
         <main className={styles.content}>
-          {/* En-tête avec titre et date */}
-          <div className={styles.pageHeader}>
-            <div className={styles.headerLeft}>
-              <h1>📋 Réservations</h1>
-              <span className={styles.dateDisplay}>{getDateDisplay()}</span>
-            </div>
-            <div className={styles.headerRight}>
-              <button
-                className={`${styles.viewToggle} ${
-                  viewMode === "table" ? styles.active : ""
-                }`}
-                onClick={() => setViewMode("table")}
-              >
-                📋 Tableau
-              </button>
-              <button
-                className={`${styles.viewToggle} ${
-                  viewMode === "map" ? styles.active : ""
-                } ${
-                  selectedDay && selectedDay.includes(":")
-                    ? styles.disabled
-                    : ""
-                }`}
-                onClick={() => {
-                  // Désactiver la carte pour les plages de dates
-                  if (!(selectedDay && selectedDay.includes(":"))) {
-                    setViewMode("map");
+          {/* Section Header + Filtres */}
+          <section className={styles.headerSection}>
+            {/* En-tête avec titre et vue */}
+            <div className={styles.pageHeader}>
+              <div className={styles.headerLeft}>
+                <h1>📋 Réservations</h1>
+                <p className={styles.subtitle}>
+                  Gérez toutes vos réservations et suivez leur statut en temps réel
+                </p>
+              </div>
+              <div className={styles.headerRight}>
+                <button
+                  className={`${styles.viewToggle} ${viewMode === 'table' ? styles.active : ''}`}
+                  onClick={() => setViewMode('table')}
+                >
+                  📋 Tableau
+                </button>
+                <button
+                  className={`${styles.viewToggle} ${viewMode === 'map' ? styles.active : ''} ${
+                    selectedDay && selectedDay.includes(':') ? styles.disabled : ''
+                  }`}
+                  onClick={() => {
+                    // Désactiver la carte pour les plages de dates
+                    if (!(selectedDay && selectedDay.includes(':'))) {
+                      setViewMode('map');
+                    }
+                  }}
+                  disabled={selectedDay && selectedDay.includes(':')}
+                  title={
+                    selectedDay && selectedDay.includes(':')
+                      ? "La carte n'est disponible que pour une seule journée"
+                      : 'Afficher la carte'
                   }
-                }}
-                disabled={selectedDay && selectedDay.includes(":")}
-                title={
-                  selectedDay && selectedDay.includes(":")
-                    ? "La carte n'est disponible que pour une seule journée"
-                    : "Afficher la carte"
-                }
-              >
-                🗺️ Carte
-              </button>
+                >
+                  🗺️ Carte
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* Widgets de statistiques */}
+            {/* Filtres dans le même conteneur */}
+            <ReservationFilters
+              selectedDay={selectedDay}
+              setSelectedDay={setSelectedDay}
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              sortOrder={sortOrder}
+              setSortOrder={setSortOrder}
+            />
+          </section>
+
+          {/* Widgets de statistiques KPI */}
           <ReservationStats stats={stats} />
 
           {/* Alertes */}
           {alerts.length > 0 && <ReservationAlerts alerts={alerts} />}
-
-          {/* Filtres et recherche */}
-          <ReservationFilters
-            selectedDay={selectedDay}
-            setSelectedDay={setSelectedDay}
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            statusFilter={statusFilter}
-            setStatusFilter={setStatusFilter}
-            sortOrder={sortOrder}
-            setSortOrder={setSortOrder}
-          />
 
           {/* Onglets */}
           <div className={styles.tabsContainer}>
@@ -553,9 +497,7 @@ const CompanyReservations = () => {
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  className={`${styles.tab} ${
-                    activeTab === tab.id ? styles.active : ""
-                  }`}
+                  className={`${styles.tab} ${activeTab === tab.id ? styles.active : ''}`}
                   onClick={() => setActiveTab(tab.id)}
                 >
                   <span>{tab.label}</span>
@@ -575,19 +517,15 @@ const CompanyReservations = () => {
             <div className={styles.emptyState}>
               <div className={styles.emptyIcon}>📋</div>
               <h3>Aucune réservation trouvée</h3>
-              <p>
-                Aucune réservation ne correspond à vos critères de recherche.
-              </p>
+              <p>Aucune réservation ne correspond à vos critères de recherche.</p>
             </div>
           ) : (
             <>
-              {viewMode === "table" ? (
+              {viewMode === 'table' ? (
                 <>
                   <ReservationTable
                     reservations={currentReservations}
-                    onRowClick={(reservation) =>
-                      setSelectedReservation(reservation)
-                    }
+                    onRowClick={(reservation) => setSelectedReservation(reservation)}
                     onDelete={handleDeleteRequest}
                     onAccept={handleAccept}
                     onReject={handleReject}
@@ -600,8 +538,8 @@ const CompanyReservations = () => {
                     <div className={styles.paginationInfo}>
                       <span className={styles.resultCount}>
                         {filteredReservations.length} résultat
-                        {filteredReservations.length > 1 ? "s" : ""} trouvé
-                        {filteredReservations.length > 1 ? "s" : ""}
+                        {filteredReservations.length > 1 ? 's' : ''} trouvé
+                        {filteredReservations.length > 1 ? 's' : ''}
                       </span>
                       <div className={styles.perPageSelector}>
                         <label htmlFor="perPage">Afficher:</label>
@@ -677,59 +615,56 @@ const CompanyReservations = () => {
               const status = reservationToDelete.status?.toLowerCase();
 
               // ASSIGNED → Annulation
-              if (status === "assigned") {
+              if (status === 'assigned') {
                 return `Annuler la Réservation n°${reservationToDelete.id}`;
               }
               // PENDING, ACCEPTED → Suppression
               return `Supprimer la Réservation n°${reservationToDelete.id}`;
             })()}
             confirmText={(() => {
-              if (!reservationToDelete) return "Confirmer";
+              if (!reservationToDelete) return 'Confirmer';
 
               const status = reservationToDelete.status?.toLowerCase();
-              return status === "assigned" ? "Oui, annuler" : "Oui, supprimer";
+              return status === 'assigned' ? 'Oui, annuler' : 'Oui, supprimer';
             })()}
           >
             {reservationToDelete &&
               (() => {
                 const status = reservationToDelete.status?.toLowerCase();
-                const isCancel = status === "assigned";
+                const isCancel = status === 'assigned';
 
                 return (
                   <>
                     <p>
                       {isCancel ? (
                         <>
-                          Êtes-vous sûr de vouloir <strong>annuler</strong> la
-                          réservation pour{" "}
+                          Êtes-vous sûr de vouloir <strong>annuler</strong> la réservation pour{' '}
                           <strong>{reservationToDelete.customer_name}</strong> ?
                         </>
                       ) : (
                         <>
-                          Êtes-vous sûr de vouloir <strong>supprimer</strong> la
-                          réservation pour{" "}
+                          Êtes-vous sûr de vouloir <strong>supprimer</strong> la réservation pour{' '}
                           <strong>{reservationToDelete.customer_name}</strong> ?
                         </>
                       )}
                     </p>
                     <p
                       style={{
-                        color: isCancel ? "#f59e0b" : "#ef4444",
-                        fontStyle: "italic",
-                        marginTop: "16px",
+                        color: isCancel ? '#f59e0b' : '#ef4444',
+                        fontStyle: 'italic',
+                        marginTop: '16px',
                       }}
                     >
                       {isCancel ? (
                         <>
-                          🚗 <strong>Course assignée à un chauffeur</strong> :
-                          La réservation sera annulée et conservée dans
-                          l'historique. Le chauffeur sera automatiquement
+                          🚗 <strong>Course assignée à un chauffeur</strong> : La réservation sera
+                          annulée et conservée dans l'historique. Le chauffeur sera automatiquement
                           libéré.
                         </>
                       ) : (
                         <>
-                          ⚠️ Cette action est irréversible. La réservation sera
-                          définitivement supprimée de la base de données.
+                          ⚠️ Cette action est irréversible. La réservation sera définitivement
+                          supprimée de la base de données.
                         </>
                       )}
                     </p>

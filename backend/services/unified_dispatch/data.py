@@ -2,6 +2,7 @@
 # backend/services/unified_dispatch/data.py
 from __future__ import annotations
 
+import contextlib
 import functools
 import json
 import logging
@@ -20,7 +21,7 @@ from sqlalchemy.orm import joinedload
 from models import Booking, BookingStatus, Company, Driver
 from services.dispatch_utils import count_assigned_bookings_for_day
 from services.maps import geocode_address
-from services.osrm_client import build_distance_matrix_osrm
+from services.osrm_client import build_distance_matrix_osrm_with_cb as build_distance_matrix_osrm
 from services.unified_dispatch.heuristics import haversine_minutes
 from services.unified_dispatch.settings import Settings, driver_work_window_from_config
 from shared.time_utils import day_local_bounds, now_local, parse_local_naive
@@ -199,16 +200,16 @@ def _normalize_booking_time_fields(bookings: List[Booking]) -> List[Booking]:
                 b_any.dropoff_time = tz.localize(cast(datetime, dt2))
     return bookings
 
-def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
+def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):  # noqa: N803
     """
     Improved version of get_bookings_for_day that handles both timezone-aware and naive datetimes
-    
+
     Args:
         company_id (int): Company ID
         day_str (str): Date string in YYYY-MM-DD format
-        Booking: SQLAlchemy Booking model (optional)
-        BookingStatus: Booking status enum (optional)
-        
+        booking_model: SQLAlchemy Booking model (optional)
+        booking_status_model: Booking status enum (optional)
+
     Returns:
         list: List of bookings for the specified day
     """
@@ -221,29 +222,29 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
 
     # Use the imported models if not provided
     if Booking is None:
-        from models import Booking
+        from models import Booking  # noqa: N806
     if BookingStatus is None:
-        from models import BookingStatus
+        from models import BookingStatus  # noqa: N806
 
     # Ensure day_str is in the correct format
     if not day_str or not isinstance(day_str, str):
         logger.warning(f"[Dispatch] Invalid day_str: {day_str}, using today's date")
-        day_str = datetime.now().strftime("%Y-%m-%d")
+        day_str = datetime.now().strftime("%Y-%m-%d")  # noqa: DTZ005
 
     # Parse the day string to get year, month, day
     try:
         y, m, d = map(int, day_str.split("-"))
     except (ValueError, AttributeError):
         logger.warning(f"[Dispatch] Failed to parse day_str: {day_str}, using today's date")
-        today = datetime.now()
+        today = datetime.now()  # noqa: DTZ005
         y, m, d = today.year, today.month, today.day
 
     # Create local timezone bounds (Europe/Zurich)
     zurich_tz = pytz.timezone('Europe/Zurich')
 
     # Create start and end datetime objects in Europe/Zurich timezone
-    start_local = datetime(y, m, d, 0, 0, 0)
-    end_local = datetime(y, m, d, 23, 59, 59)
+    start_local = datetime(y, m, d, 0, 0, 0)  # noqa: DTZ001
+    end_local = datetime(y, m, d, 23, 59, 59)  # noqa: DTZ001
 
     # Make them timezone-aware
     start_local_aware = zurich_tz.localize(start_local)
@@ -467,8 +468,9 @@ def _geocode_safe_cached(address: str) -> tuple[float, float] | None:
                 return lat, lon
             return None
         if isinstance(res, (tuple, list)) and len(res) >= 2:
-            lat = _to_float_opt(res[0])
-            lon = _to_float_opt(res[1])
+            # Type: ignore pour satisfaire Pyright (res est bien une tuple/list ici)
+            lat = _to_float_opt(res[0])  # type: ignore[index]
+            lon = _to_float_opt(res[1])  # type: ignore[index]
             if lat is not None and lon is not None:
                 return lat, lon
             return None
@@ -555,11 +557,11 @@ def enrich_driver_coords(drivers: List[Driver], company: Company) -> None:
 
         # cast safe
         try:
-            d.current_lat = float(cast(Any, lat))
-            d.current_lon = float(cast(Any, lon))
+            d.current_lat = float(cast(Any, lat))  # type: ignore[attr-defined]
+            d.current_lon = float(cast(Any, lon))  # type: ignore[attr-defined]
         except Exception:
-            d.current_lat = float(default_latlon[0])
-            d.current_lon = float(default_latlon[1])
+            d.current_lat = float(default_latlon[0])  # type: ignore[attr-defined]
+            d.current_lon = float(default_latlon[1])  # type: ignore[attr-defined]
 
 # ============================================================
 # 3\ufe0f\u20e3 Matrice de temps / distances
@@ -702,13 +704,8 @@ def _build_distance_matrix_haversine(coords: List[Tuple[float,float]], avg_speed
     """
     Fallback Haversine (distances en SECONDES estim\u00e9es, vitesse moyenne ~25 km/h par d\u00e9faut).
     """
-    def haversine(lat1, lon1, lat2, lon2):
-        R = 6371.0
-        phi1, phi2 = math.radians(lat1), math.radians(lat2)
-        dphi = math.radians(lat2 - lat1)
-        dlambda = math.radians(lon2 - lon1)
-        a = math.sin(dphi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda/2)**2
-        return R * (2 * math.atan2(math.sqrt(a), math.sqrt(1-a)))
+    # Import centralisé depuis shared.geo_utils
+    from shared.geo_utils import haversine_distance
 
     n = len(coords)
     if n < 2:
@@ -724,7 +721,7 @@ def _build_distance_matrix_haversine(coords: List[Tuple[float,float]], avg_speed
                 matrix[i][j] = 0.0
                 continue
             try:
-                dist_km = haversine(coords[i][0], coords[i][1], coords[j][0], coords[j][1])
+                dist_km = haversine_distance(coords[i][0], coords[i][1], coords[j][0], coords[j][1])
                 time_hr = dist_km / avg_speed_kmh
                 matrix[i][j] = time_hr * 3600  # sec
             except (IndexError, TypeError, ValueError) as e:
@@ -825,12 +822,10 @@ def build_vrptw_problem(
         pair_min_gaps.append(max(2, min_gap))
 
         # \ud83d\udd0d Debug utile: tracer le gap impos\u00e9 (trajet+buffer) par booking
-        try:
+        with contextlib.suppress(Exception):
             logger.debug("[VRPTW] pair_min_gap booking_id=%s trip=%s buffer=%s -> min_gap=%s",
                          getattr(b, "id", None), int(trip_duration_min),
                          post_buf, int(min_gap))
-        except Exception:
-            pass
 
         # Calcul des fen\u00eatres horaires (Time Windows)
         scheduled_local = parse_local_naive(cast(Any, getattr(b, "scheduled_time", None))) or t0
@@ -942,7 +937,8 @@ def build_problem_data(
     # 3) Garde-fous : si rien \u00e0 traiter, on renvoie un dict vide
     #    Filtrer les bookings termin\u00e9s/annul\u00e9s avant enrichissement
     try:
-        from models import BookingStatus as BS  # type: ignore
+        from models import BookingStatus  # type: ignore  # noqa: N817
+        BS = BookingStatus  # Alias local pour compatibilité
         completed_vals = set()
         for name in ("COMPLETED", "RETURN_COMPLETED", "CANCELLED", "CANCELED", "REJECTED"):
             if hasattr(BS, name):

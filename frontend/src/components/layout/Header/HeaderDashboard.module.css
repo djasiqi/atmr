@@ -4,21 +4,21 @@
   position: fixed;
   top: 0;
   left: 0;
-  right: 0; /* Permet de prendre 100% de largeur */
+  right: 0;
   height: 80px;
-  z-index: 1000;
+  z-index: var(--z-header);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 20px;
-  background-color: #ffffff; /* Couleur de fond du header */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--bg-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .logo {
-  font-size: 1.5em;
-  font-weight: bold;
-  color: #00796b;
+  font-size: var(--font-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--brand-primary);
   text-decoration: none;
   cursor: pointer;
 }
@@ -26,26 +26,26 @@
 .nav {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: var(--spacing-lg);
 }
 
 .navList {
   display: flex;
   list-style: none;
-  gap: 20px;
+  gap: var(--spacing-lg);
   margin: 0;
   padding: 0;
 }
 
 .navLink {
-  color: #333;
+  color: var(--text-primary);
   text-decoration: none;
-  font-size: 0.9em;
-  transition: color 0.3s ease;
+  font-size: var(--font-sm);
+  transition: color var(--transition-base);
 }
 
 .navLink:hover {
-  color: #00796b;
+  color: var(--brand-primary);
 }
 
 .userSection {
@@ -53,85 +53,85 @@
 }
 
 .userButton {
-  background-color: #e0e0e0;
-  color: #333;
-  padding: 8px 15px;
-  border-radius: 20px;
+  background-color: var(--gray-200);
+  color: var(--text-primary);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--radius-full);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  gap: var(--spacing-sm);
+  transition: background-color var(--transition-base), color var(--transition-base);
 }
 
 .userButton:hover {
-  background-color: #d6d6d6;
+  background-color: var(--gray-300);
 }
 
 .arrow {
-  font-size: 0.8em;
-  color: #666;
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
 }
 
 .dropdownMenu {
   position: absolute;
   top: 100%;
   right: 0;
-  background: #fff;
+  background: var(--bg-primary);
   width: 250px;
-  border-radius: 10px;
-  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
-  z-index: 10;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-dropdown);
   overflow: hidden;
 }
 
 .userInfo {
   text-align: center;
-  padding: 15px;
-  border-bottom: 1px solid #ddd;
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--border-secondary);
 }
 
 .userName {
-  font-size: 1.2em;
-  font-weight: bold;
+  font-size: var(--font-xl);
+  font-weight: var(--font-weight-bold);
 }
 
 .menuOptions {
-  padding: 10px;
+  padding: var(--spacing-sm);
 }
 
 .menuLink {
   display: block;
-  padding: 10px;
-  color: #333;
+  padding: var(--spacing-sm);
+  color: var(--text-primary);
   text-decoration: none;
-  font-size: 1em;
-  border-radius: 5px;
-  transition: background 0.2s ease, color 0.2s ease;
+  font-size: var(--font-md);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-base), color var(--transition-base);
 }
 
 .menuLink:hover {
-  background: #f5f5f5;
-  color: #00796b;
+  background: var(--bg-hover);
+  color: var(--brand-primary);
 }
 
 .logout {
-  padding: 10px;
+  padding: var(--spacing-sm);
   text-align: center;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid var(--border-secondary);
 }
 
 .logoutButton {
-  background: #e53935;
+  background: var(--danger-primary);
   color: #fff;
   border: none;
-  border-radius: 5px;
-  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-sm) var(--spacing-lg);
   cursor: pointer;
-  font-size: 1em;
-  transition: background 0.2s ease;
+  font-size: var(--font-md);
+  transition: background var(--transition-base);
 }
 
 .logoutButton:hover {
-  background: #c62828;
+  background: var(--danger-hover);
 }

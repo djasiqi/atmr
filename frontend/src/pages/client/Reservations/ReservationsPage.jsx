@@ -33,7 +33,7 @@ const ReservationsPage = () => {
         .then((data) => {
           setBookings(data);
         })
-        .catch((err) => {
+        .catch((_err) => {
           setError('Erreur lors du chargement des réservations.');
         })
         .finally(() => {

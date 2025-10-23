@@ -1,3 +1,4 @@
+import contextlib
 import random
 import string
 from datetime import UTC, datetime
@@ -282,10 +283,8 @@ class UpdateUserRole(Resource):
                 if comp:
                     db.session.delete(comp)
                     # éviter toute référence pendante
-                    try:
+                    with contextlib.suppress(Exception):
                         cast(Any, user).company = None
-                    except Exception:
-                        pass
 
             elif role_upper == "ADMIN":
                 # on nettoie à minima le driver ; on conserve la company par défaut
@@ -337,3 +336,286 @@ class ResetUserPassword(Resource):
             db.session.rollback()
             app_logger.error(f"❌ ERREUR reset_password: {str(e)}", exc_info=True)
             admin_ns.abort(500, "Une erreur interne est survenue.")
+
+
+# ========== AUDIT TRAIL DES ACTIONS AUTONOMES ==========
+
+@admin_ns.route('/autonomous-actions')
+class AutonomousActionsList(Resource):
+    """Liste et statistiques des actions autonomes"""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    def get(self):
+        """
+        Récupère la liste des actions autonomes avec filtres et pagination.
+
+        Query params:
+        - page: numéro de page (défaut: 1)
+        - per_page: éléments par page (défaut: 50, max: 200)
+        - company_id: filtrer par entreprise
+        - action_type: filtrer par type d'action
+        - success: filtrer par succès (true/false)
+        - reviewed: filtrer par review (true/false)
+        - start_date: date de début (ISO format)
+        - end_date: date de fin (ISO format)
+        """
+        from models.autonomous_action import AutonomousAction
+
+        try:
+            # Pagination
+            page = int(request.args.get('page', 1))
+            per_page = min(int(request.args.get('per_page', 50)), 200)
+
+            # Construire la query
+            query = AutonomousAction.query
+
+            # Filtres
+            company_id = request.args.get('company_id', type=int)
+            if company_id:
+                query = query.filter(AutonomousAction.company_id == company_id)
+
+            action_type = request.args.get('action_type')
+            if action_type:
+                query = query.filter(AutonomousAction.action_type == action_type)
+
+            success = request.args.get('success')
+            if success is not None:
+                success_bool = success.lower() in ['true', '1', 'yes']
+                query = query.filter(AutonomousAction.success == success_bool)
+
+            reviewed = request.args.get('reviewed')
+            if reviewed is not None:
+                reviewed_bool = reviewed.lower() in ['true', '1', 'yes']
+                query = query.filter(AutonomousAction.reviewed_by_admin == reviewed_bool)
+
+            start_date = request.args.get('start_date')
+            if start_date:
+                query = query.filter(AutonomousAction.created_at >= start_date)
+
+            end_date = request.args.get('end_date')
+            if end_date:
+                query = query.filter(AutonomousAction.created_at <= end_date)
+
+            # Tri par date décroissante
+            query = query.order_by(AutonomousAction.created_at.desc())
+
+            # Options de jointure pour éviter N+1
+            query = query.options(
+                joinedload(AutonomousAction.company),  # type: ignore[arg-type]
+                joinedload(AutonomousAction.booking),  # type: ignore[arg-type]
+                joinedload(AutonomousAction.driver)  # type: ignore[arg-type]
+            )
+
+            # Paginer
+            pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+            return {
+                "actions": [action.to_dict() for action in pagination.items],
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total": pagination.total,
+                    "pages": pagination.pages,
+                    "has_next": pagination.has_next,
+                    "has_prev": pagination.has_prev
+                }
+            }, 200
+
+        except Exception as e:
+            app_logger.error(f"❌ ERREUR list_autonomous_actions: {str(e)}", exc_info=True)
+            return {"message": "Erreur lors de la récupération des actions"}, 500
+
+
+@admin_ns.route('/autonomous-actions/stats')
+class AutonomousActionsStats(Resource):
+    """Statistiques globales des actions autonomes"""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    def get(self):
+        """
+        Récupère les statistiques des actions autonomes.
+
+        Query params:
+        - company_id: filtrer par entreprise
+        - period: 'hour', 'day', 'week', 'month' (défaut: day)
+        """
+        from datetime import timedelta
+
+        from models.autonomous_action import AutonomousAction
+
+        try:
+            company_id = request.args.get('company_id', type=int)
+            period = request.args.get('period', 'day')
+
+            # Calculer la période
+            now = datetime.now(UTC)
+            if period == 'hour':
+                start_time = now - timedelta(hours=1)
+            elif period == 'week':
+                start_time = now - timedelta(days=7)
+            elif period == 'month':
+                start_time = now - timedelta(days=30)
+            else:  # day
+                start_time = now - timedelta(days=1)
+
+            # Base query
+            query = AutonomousAction.query.filter(
+                AutonomousAction.created_at >= start_time
+            )
+
+            if company_id:
+                query = query.filter(AutonomousAction.company_id == company_id)
+
+            # Statistiques globales
+            total_actions = query.count()
+            successful_actions = query.filter(AutonomousAction.success == True).count()  # noqa: E712
+            failed_actions = query.filter(AutonomousAction.success == False).count()  # noqa: E712
+            reviewed_actions = query.filter(AutonomousAction.reviewed_by_admin == True).count()  # noqa: E712
+
+            # Stats par type d'action
+            action_type_stats = db.session.query(
+                AutonomousAction.action_type,
+                func.count(AutonomousAction.id).label('count'),
+                func.sum(func.cast(AutonomousAction.success, db.Integer)).label('success_count')
+            ).filter(
+                AutonomousAction.created_at >= start_time
+            )
+
+            if company_id:
+                action_type_stats = action_type_stats.filter(
+                    AutonomousAction.company_id == company_id
+                )
+
+            action_type_stats = action_type_stats.group_by(
+                AutonomousAction.action_type
+            ).all()
+
+            # Stats par entreprise (si pas filtré)
+            company_stats = []
+            if not company_id:
+                company_stats_query = db.session.query(
+                    AutonomousAction.company_id,
+                    func.count(AutonomousAction.id).label('count'),
+                    func.sum(func.cast(AutonomousAction.success, db.Integer)).label('success_count')
+                ).filter(
+                    AutonomousAction.created_at >= start_time
+                ).group_by(
+                    AutonomousAction.company_id
+                ).all()
+
+                company_stats = [
+                    {
+                        "company_id": stat[0],
+                        "total": stat[1],
+                        "successful": stat[2] or 0,
+                        "failed": stat[1] - (stat[2] or 0)
+                    }
+                    for stat in company_stats_query
+                ]
+
+            # Temps d'exécution moyen
+            avg_execution_time = db.session.query(
+                func.avg(AutonomousAction.execution_time_ms)
+            ).filter(
+                AutonomousAction.created_at >= start_time,
+                AutonomousAction.execution_time_ms.isnot(None)
+            )
+
+            if company_id:
+                avg_execution_time = avg_execution_time.filter(
+                    AutonomousAction.company_id == company_id
+                )
+
+            avg_time = avg_execution_time.scalar() or 0
+
+            return {
+                "period": period,
+                "start_time": start_time.isoformat(),
+                "end_time": now.isoformat(),
+                "total_actions": total_actions,
+                "successful_actions": successful_actions,
+                "failed_actions": failed_actions,
+                "reviewed_actions": reviewed_actions,
+                "success_rate": round(successful_actions / total_actions * 100, 2) if total_actions > 0 else 0,
+                "avg_execution_time_ms": round(avg_time, 2),
+                "by_action_type": [
+                    {
+                        "action_type": stat[0],
+                        "total": stat[1],
+                        "successful": stat[2] or 0,
+                        "failed": stat[1] - (stat[2] or 0),
+                        "success_rate": round((stat[2] or 0) / stat[1] * 100, 2) if stat[1] > 0 else 0
+                    }
+                    for stat in action_type_stats
+                ],
+                "by_company": company_stats
+            }, 200
+
+        except Exception as e:
+            app_logger.error(f"❌ ERREUR autonomous_actions_stats: {str(e)}", exc_info=True)
+            return {"message": "Erreur lors du calcul des statistiques"}, 500
+
+
+@admin_ns.route('/autonomous-actions/<int:action_id>')
+class AutonomousActionDetail(Resource):
+    """Détail d'une action autonome spécifique"""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    def get(self, action_id):
+        """Récupère les détails d'une action autonome"""
+        from models.autonomous_action import AutonomousAction
+
+        try:
+            action = AutonomousAction.query.get_or_404(action_id)
+            return action.to_dict(), 200
+
+        except Exception as e:
+            app_logger.error(f"❌ ERREUR get_autonomous_action: {str(e)}", exc_info=True)
+            return {"message": "Action non trouvée"}, 404
+
+
+@admin_ns.route('/autonomous-actions/<int:action_id>/review')
+class AutonomousActionReview(Resource):
+    """Marquer une action comme reviewée"""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    def post(self, action_id):
+        """
+        Marque une action autonome comme reviewée par un admin.
+
+        Body:
+        - notes: notes optionnelles de l'admin
+        """
+        from flask_jwt_extended import get_jwt_identity
+
+        from models.autonomous_action import AutonomousAction
+
+        try:
+            action = AutonomousAction.query.get_or_404(action_id)
+
+            data = request.get_json() or {}
+            notes = data.get('notes', '')
+
+            action.reviewed_by_admin = True
+            action.reviewed_at = datetime.now(UTC)
+            action.admin_notes = notes
+
+            db.session.commit()
+
+            app_logger.info(
+                f"✅ Action {action_id} reviewée par admin {get_jwt_identity()}"
+            )
+
+            return {
+                "message": "Action marquée comme reviewée",
+                "action": action.to_dict()
+            }, 200
+
+        except Exception as e:
+            db.session.rollback()
+            app_logger.error(f"❌ ERREUR review_action: {str(e)}", exc_info=True)
+            return {"message": "Erreur lors de la review"}, 500

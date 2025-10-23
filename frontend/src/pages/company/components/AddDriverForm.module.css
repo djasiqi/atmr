@@ -2,90 +2,112 @@
 
 /* --- Structure générale du formulaire --- */
 .form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 400px;
-  color: #334155;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-2xl);
+  width: 100%;
+  padding: var(--spacing-xl) var(--spacing-2xl) var(--spacing-2xl) var(--spacing-2xl);
+  color: var(--text-secondary);
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  margin: 0;
 }
 
 /* --- Groupe : Label + Input --- */
 .formGroup {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--spacing-sm);
 }
 
 .formGroup label {
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  color: var(--brand-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  letter-spacing: 0.3px;
 }
 
 .formGroup input {
-  padding: 10px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  background-color: #f8fafc;
-  transition: all 0.2s ease;
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 2px solid var(--border-secondary);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-base);
+  box-sizing: border-box;
+}
+
+.formGroup input:hover {
+  border-color: var(--border-hover);
 }
 
 .formGroup input:focus {
-  outline: none;
-  border-color: #4338ca;
-  box-shadow: 0 0 0 3px rgba(67, 56, 202, 0.1);
-  background-color: #ffffff;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.1);
+  background: var(--bg-primary);
+}
+
+.formGroup input::placeholder {
+  color: var(--text-placeholder);
+  font-weight: var(--font-weight-normal);
 }
 
 /* --- Conteneur pour les boutons --- */
 .formActions {
+  grid-column: 1 / -1;
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  margin-top: 10px;
-  border-top: 1px solid #e2e8f0;
-  padding-top: 16px;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: 2px solid var(--border-primary);
 }
 
-/* --- CORRECTION ICI : On utilise un sélecteur groupé --- */
-/* Style de base partagé par les deux boutons */
+/* --- Style de base partagé par les deux boutons --- */
 .submitButton,
 .cancelButton {
-  padding: 10px 20px;
+  padding: var(--spacing-sm) var(--spacing-xl);
   border: none;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 0.9rem;
+  border-radius: var(--radius-lg);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: var(--spacing-xs);
 }
 
 /* Styles spécifiques au bouton de soumission */
 .submitButton {
-  background-color: #4338ca;
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-hover) 100%);
+  color: white;
+  box-shadow: var(--shadow-sm);
 }
 
-.submitButton:hover {
-  background-color: #3730a3;
+.submitButton:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--brand-hover) 0%, var(--brand-primary-dark) 100%);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 /* Styles spécifiques au bouton d'annulation */
 .cancelButton {
-  background-color: #f1f5f9;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 2px solid var(--border-primary);
 }
 
-.cancelButton:hover {
-  background-color: #e2e8f0;
-  border-color: #cbd5e1;
+.cancelButton:hover:not(:disabled) {
+  background-color: var(--bg-hover);
+  border-color: var(--border-hover);
 }
 
 /* --- Styles pour les boutons désactivés (partagé) --- */
@@ -93,11 +115,22 @@
 .cancelButton:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
 }
 
 /* --- Style pour les messages d'erreur --- */
 .error {
-  color: #ef4444;
-  font-size: 0.8rem;
-  margin-top: 2px;
+  color: var(--danger-primary);
+  font-size: var(--font-size-xs);
+  margin-top: var(--spacing-xxs);
+  font-weight: var(--font-weight-medium);
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+  .form {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-lg);
+    padding: var(--spacing-lg);
+  }
 }

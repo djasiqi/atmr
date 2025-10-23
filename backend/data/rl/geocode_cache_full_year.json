@@ -1,0 +1,1762 @@
+{
+  "Maison de La Tour Rue du Couchant 15 1248 Hermance": {
+    "lat": 46.3013606,
+    "lon": 6.2454262
+  },
+  "Maison de l'Autonomie Route du Grand-Lancy 6 1227 Lancy": {
+    "lat": 46.1879995,
+    "lon": 6.1266397
+  },
+  "Clinique Centre JEAN VIOLETTE Rue Jean-Violette 3/5 1205 Genève": {
+    "lat": 46.1941314,
+    "lon": 6.1441893
+  },
+  "Coiffure Vésenaz Route de Thonon 55 1222 Vésenaz": {
+    "lat": 46.2402778,
+    "lon": 6.1986941
+  },
+  "Les Jardins de Mona Chemin Etienne-Chennaz 10 1226 Thônex": {
+    "lat": 46.194216,
+    "lon": 6.2074807
+  },
+  "Gare Cornavin Pl. de Cornavin 1201 Genève": {
+    "lat": 46.2102328,
+    "lon": 6.1429398
+  },
+  "Chemin de la Californie 25 1222 Vésenaz": {
+    "lat": 46.2415146,
+    "lon": 6.2049145
+  },
+  "PALEXPO": {
+    "lat": 46.2352916,
+    "lon": 6.1180137
+  },
+  "Théatre de Carouge": {
+    "lat": 46.1811769,
+    "lon": 6.1420842
+  },
+  "HUG Bellerive Chemin de la Savonnière 11 1245 Collonge-Bellerive": {
+    "lat": 46.2586134,
+    "lon": 6.2059847
+  },
+  "IKEA Vernier": {
+    "lat": 46.2193215,
+    "lon": 6.0946009
+  },
+  "Chemin Sous-Caran 44 1245 Collonge-Bellerive": {
+    "lat": 46.2514091,
+    "lon": 6.196463
+  },
+  "Route de chêne 104 1224 Chêne-Bougeries": {
+    "lat": 46.1987103,
+    "lon": 6.1824489
+  },
+  "Avenue Wendt 60 1203 Genève": {
+    "lat": 46.2132033,
+    "lon": 6.1295847
+  },
+  "Chemin de Beau-Soleil 20 1206 Genève": {
+    "lat": 46.1884814,
+    "lon": 6.1617309
+  },
+  "Pl. de Cornavin 1201 Genève": {
+    "lat": 46.2087828,
+    "lon": 6.1427055
+  },
+  "Rue de Lyon 75 1202 Genève": {
+    "lat": 46.2081877,
+    "lon": 6.1260443
+  },
+  "1204 Genève": {
+    "lat": 46.2022352,
+    "lon": 6.1465783
+  },
+  "Route de Veyrier 136 1227 Carouge": {
+    "lat": 46.1849896,
+    "lon": 6.1461771
+  },
+  "Rle du Couchant 7, 1207 Genève": {
+    "lat": 46.1999805,
+    "lon": 6.156958
+  },
+  "Rue du Rhône 118 1207 Genève": {
+    "lat": 46.2024864,
+    "lon": 6.1547429
+  },
+  "Rue de La Tambourine 13 1227 Carouge": {
+    "lat": 46.1762531,
+    "lon": 6.1390689
+  },
+  "Avenue de Frontenex 6 1207 Genève": {
+    "lat": 46.2017465,
+    "lon": 6.1565791
+  },
+  "Chemin d'Archamps 20 1257 Croix-de-Rozon": {
+    "lat": 46.1435765,
+    "lon": 6.1364016
+  },
+  "Rue De-Beaumont 11 1206 Genève": {
+    "lat": 46.1973772,
+    "lon": 6.1567783
+  },
+  "Rue le Corbusier 19 1208 Genève": {
+    "lat": 46.1931149,
+    "lon": 6.1675411
+  },
+  "1213 Lancy": {
+    "lat": 46.1839156,
+    "lon": 6.1224047
+  },
+  "Chemin des Tulipiers 19 1209 Genève": {
+    "lat": 46.201496,
+    "lon": 6.1728324
+  },
+  "Chemin de Bézaley 23 1247 Anières": {
+    "lat": 46.2775109,
+    "lon": 6.2262042
+  },
+  "Chemin des Champs-de-Chaux 13 1222 Vésenaz": {
+    "lat": 46.2359796,
+    "lon": 6.2002077
+  },
+  "Rue Henri-Mussard 16 1208 Genève": {
+    "lat": 46.1980242,
+    "lon": 6.1621866
+  },
+  "Rue de Contamines 54 1206 Genève": {
+    "lat": 46.1958459,
+    "lon": 6.1558817
+  },
+  "Avenue de Budé 32 1202 Genève": {
+    "lat": 46.2257073,
+    "lon": 6.1309223
+  },
+  "Chemin Cornillons 29 1292 Chambesy": {
+    "lat": 46.2415994,
+    "lon": 6.1465553
+  },
+  "Rue Louis-Curval 5 1206 Genève": {
+    "lat": 46.1903764,
+    "lon": 6.1541092
+  },
+  "Rue de Rive 1 1204 Genève": {
+    "lat": 46.2025406,
+    "lon": 6.1501084
+  },
+  "Rue de la Terrassière 49 1207 Genève": {
+    "lat": 46.2002906,
+    "lon": 6.161083
+  },
+  "1206 Genève": {
+    "lat": 46.1907846,
+    "lon": 6.1555614
+  },
+  "Rue de Lausanne 80 1202 Genève": {
+    "lat": 46.2164289,
+    "lon": 6.1478826
+  },
+  "Route de Chêne 110 1224 Chêne-Bougeries": {
+    "lat": 46.1984775,
+    "lon": 6.1822059
+  },
+  "Avenue Eugène-Pittard 34 1206 Genève": {
+    "lat": 46.1902111,
+    "lon": 6.1643469
+  },
+  "Rue Neuve du Molard 5 1204 Genève": {
+    "lat": 46.2034136,
+    "lon": 6.1486024
+  },
+  "Rue du Rhône 57 1204 Genève": {
+    "lat": 46.2030589,
+    "lon": 6.1531482
+  },
+  "Chemin du Petit Bel-Air 2 1226 Thônex": {
+    "lat": 46.2063268,
+    "lon": 6.2084991
+  },
+  "Rue des Caroubiers 25 1227 Carouge": {
+    "lat": 46.1858629,
+    "lon": 6.1342517
+  },
+  "Rue de la Filature 28 1227 Carouge": {
+    "lat": 46.1859517,
+    "lon": 6.1412358
+  },
+  "Avenue de la Gare des Eaux-vives 28 1208 Genève": {
+    "lat": 46.2023876,
+    "lon": 6.1694921
+  },
+  "Chemin des Rayes 33 1222 Vésenaz /GE": {
+    "lat": 46.2359638,
+    "lon": 6.2040435
+  },
+  "Route de Veyrier 136 1255 Veyrier": {
+    "lat": 46.1766324,
+    "lon": 6.1549956
+  },
+  "Place l'Étrier 4 1224 Chêne-Bougeries": {
+    "lat": 46.2030284,
+    "lon": 6.1856204
+  },
+  "Rue Gilbert 44 1217 Meyrin": {
+    "lat": 46.2303693,
+    "lon": 6.0833485
+  },
+  "Chemin des Failles 9 1232 Confignon": {
+    "lat": 46.1733926,
+    "lon": 6.0762865
+  },
+  "Rue de Chantepoulet 10 1201 Genève": {
+    "lat": 46.2083701,
+    "lon": 6.1434614
+  },
+  "Route de Pré-Bois 6 1214 Vernier": {
+    "lat": 46.2213052,
+    "lon": 6.0973026
+  },
+  "Rue Le-Corbusier 18 1208 Genève": {
+    "lat": 46.1935924,
+    "lon": 6.1670146
+  },
+  "Rue de la Faïencerie 6 1227 Carouge": {
+    "lat": 46.1817173,
+    "lon": 6.1389284
+  },
+  "Avenue Pictet-de-Rochemont 31 1207 Genève": {
+    "lat": 46.2004031,
+    "lon": 6.162643
+  },
+  "Chemin des Semailles 33 1212 Grand-Lancy": {
+    "lat": 46.1758342,
+    "lon": 6.1188261
+  },
+  "Route de Frontenex 78 1208 Genève": {
+    "lat": 46.205387,
+    "lon": 6.1713991
+  },
+  "Chemin du Barbolet 6C 1213 Onex": {
+    "lat": 46.1788357,
+    "lon": 6.1088147
+  },
+  "Avenue de la Gare des Eaux-Vives 3 1207 Genève": {
+    "lat": 46.2005775,
+    "lon": 6.165317
+  },
+  "Chemin de la Rochette 14 1202 Genève": {
+    "lat": 46.2217057,
+    "lon": 6.134698
+  },
+  "Avenue des Grandes-Communes 25 1213 Onex": {
+    "lat": 46.192142,
+    "lon": 6.1046641
+  },
+  "Chemin Edouard-Sarasin 26 1218 Grand-Saconnex": {
+    "lat": 46.231002,
+    "lon": 6.1185756
+  },
+  "Rue de Genève 67 1225 Chêne-Bourg": {
+    "lat": 46.1941379,
+    "lon": 6.1970366
+  },
+  "Route de Florissant 62 1206 Genève": {
+    "lat": 46.1928475,
+    "lon": 6.1618817
+  },
+  "Rue de Montchoisy 72 1207 Genève": {
+    "lat": 46.2048379,
+    "lon": 6.1636595
+  },
+  "Rue Jean-Violette 1 1205 Genève": {
+    "lat": 46.1941153,
+    "lon": 6.1439634
+  },
+  "Avenue Cardinal-Mermillod 1 1227 Carouge": {
+    "lat": 46.1867663,
+    "lon": 6.1425067
+  },
+  "Rte de Loëx 3 1213 Onex": {
+    "lat": 46.1833635,
+    "lon": 6.0991325
+  },
+  "Chemin de la Montagne 126 1224 Chêne-Bougeries": {
+    "lat": 46.2045072,
+    "lon": 6.2008831
+  },
+  "Chemin des Deux Communes 9 1226 Thônex": {
+    "lat": 46.1947613,
+    "lon": 6.2009181
+  },
+  "Plateau de Frontenex 9C 1223 Cologny": {
+    "lat": 46.2047263,
+    "lon": 6.1752091
+  },
+  "Chemin des Crêts-de-Champel 18 1206 Genève": {
+    "lat": 46.1875705,
+    "lon": 6.1547577
+  },
+  "Rue de Carouge 18 1205 Genève": {
+    "lat": 46.1963959,
+    "lon": 6.142956
+  },
+  "Avenue du Grand-Salève 2 1255 Veyrier /GE": {
+    "lat": 46.1675187,
+    "lon": 6.1825024
+  },
+  "Rue du Conseil-Géneral 12 1205 Genève": {
+    "lat": 46.1990847,
+    "lon": 6.1428917
+  },
+  "Rue des Horlogers 15 1227 Carouge /GE": {
+    "lat": 46.1830752,
+    "lon": 6.1439627
+  },
+  "Rue Centrale 41 1247 Anières": {
+    "lat": 46.2762626,
+    "lon": 6.2258004
+  },
+  "Avenue Wendt 36 1203 Genève": {
+    "lat": 46.2113088,
+    "lon": 6.127341
+  },
+  "Chemin de la Chevillarde 9 1224 Chêne-Bougeries": {
+    "lat": 46.1985325,
+    "lon": 6.1748904
+  },
+  "Chemin du Stade 16 1252 Meinier": {
+    "lat": 46.2476541,
+    "lon": 6.2318076
+  },
+  "Rue Le-Corbusier 12 1208 Genève": {
+    "lat": 46.1943484,
+    "lon": 6.1672623
+  },
+  "Chemin de la Gradelle 18 1224 Chêne-Bougeries": {
+    "lat": 46.2045368,
+    "lon": 6.1840123
+  },
+  "1288 Aïre-La-Ville /GE": {
+    "lat": 46.1912085,
+    "lon": 6.0426429
+  },
+  "1227 Carouge": {
+    "lat": 46.1869402,
+    "lon": 6.1369497
+  },
+  "Aéroport de Genève COINTRIN": {
+    "lat": 46.2286612,
+    "lon": 6.104305
+  },
+  "Route de Veigy 127 1247 Anières": {
+    "lat": 46.2627906,
+    "lon": 6.249541
+  },
+  "Clos de la Fonderie 1 1227 Carouge": {
+    "lat": 46.186363,
+    "lon": 6.1433318
+  },
+  "Centre d’imagerie Rive Droite Rue de Chantepoulet 5 1201 Genève": {
+    "lat": 46.2079379,
+    "lon": 6.144923
+  },
+  "1201 Genève": {
+    "lat": 46.2098029,
+    "lon": 6.1451444
+  },
+  "Chemin de Sur-le-Beau 16 1213 Onex": {
+    "lat": 46.1790373,
+    "lon": 6.0971076
+  },
+  "Chemin des Papillons 18 1215 Genève": {
+    "lat": 46.223023,
+    "lon": 6.0949077
+  },
+  "Chemin des Rayes 33 1222 Vésenaz": {
+    "lat": 46.2359638,
+    "lon": 6.2040435
+  },
+  "Rue Pierre-Fatio 10 1204 Genève": {
+    "lat": 46.2022142,
+    "lon": 6.1534494
+  },
+  "Centre commercial Vésenaz": {
+    "lat": 46.2403501,
+    "lon": 6.1987955
+  },
+  "Chemin de Normandie 6 1206 Genève": {
+    "lat": 46.1901604,
+    "lon": 6.1620558
+  },
+  "Route de Gy 46b 1252 Meinier": {
+    "lat": 46.2464443,
+    "lon": 6.2349844
+  },
+  "1202 Genève": {
+    "lat": 46.2170745,
+    "lon": 6.1399621
+  },
+  "Rue Lombard 19 1205 Genève": {
+    "lat": 46.1945934,
+    "lon": 6.1504095
+  },
+  "Avenue Giuseppe-Motta 30 1202 Genève": {
+    "lat": 46.2182016,
+    "lon": 6.1334875
+  },
+  "Rue Ferdinand-Hodler 7 1207 Genève": {
+    "lat": 46.1998413,
+    "lon": 6.1541201
+  },
+  "Gare CORNAVIN": {
+    "lat": 46.2102328,
+    "lon": 6.1429398
+  },
+  "Chemin de Margencel 15 1222 Vésenaz": {
+    "lat": 46.2466881,
+    "lon": 6.1999059
+  },
+  "Rue Ferrier 7 1202 Genève": {
+    "lat": 46.2154385,
+    "lon": 6.1460735
+  },
+  "Rue Charles-Galland 15 1206 Genève": {
+    "lat": 46.1978453,
+    "lon": 6.1544457
+  },
+  "Boulevard des Promenades 20 1227 Carouge": {
+    "lat": 46.1824065,
+    "lon": 6.1374747
+  },
+  "Rue du Lac 12 1207 Genève": {
+    "lat": 46.2040068,
+    "lon": 6.1575447
+  },
+  "Chemin de La Vendée 27 1213 Petit-Lancy": {
+    "lat": 46.1882977,
+    "lon": 6.1202465
+  },
+  "Rue de Genève 67 1225 Chêne-Bougeries": {
+    "lat": 46.1956018,
+    "lon": 6.1922067
+  },
+  "Av. de Bois-Bougy 8 1260 Nyon": {
+    "lat": 46.3734504,
+    "lon": 6.228443
+  },
+  "Route de Thonon 55 1222 Vésenaz": {
+    "lat": 46.2403353,
+    "lon": 6.1986183
+  },
+  "Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.1940416,
+    "lon": 6.1493797
+  },
+  "Rue du Grand-Pré 70C 1202 Genève": {
+    "lat": 46.2162066,
+    "lon": 6.1319393
+  },
+  "Avenue Adrien-Jeandin 34 1226 Thônex": {
+    "lat": 46.190291,
+    "lon": 6.2002926
+  },
+  "Place Natascha-de-Senger 5 1245 Collonge-Bellerive": {
+    "lat": 46.2535532,
+    "lon": 6.2056738
+  },
+  "Rue des Epinettes 4 1227 Carouge": {
+    "lat": 46.1906722,
+    "lon": 6.1351008
+  },
+  "Avenue de la Gare des-Eaux-Vives 28 1207 Genève": {
+    "lat": 46.2023876,
+    "lon": 6.1694921
+  },
+  "Chemin de Mancy 7 1222 Vésenaz": {
+    "lat": 46.243654,
+    "lon": 6.2027353
+  },
+  "Rue de La Gare 11 1260 Nyon": {
+    "lat": 46.382483,
+    "lon": 6.2381812
+  },
+  "Rue de Genève 97/99 1225 Chêne-Bougeries": {
+    "lat": 46.1956018,
+    "lon": 6.1922067
+  },
+  "Rue du Jeu-de-l'Arc 15 1207 Genève": {
+    "lat": 46.2026344,
+    "lon": 6.1582174
+  },
+  "Chemin de Mornex 5 1245 Collonge-Bellerive": {
+    "lat": 46.2572986,
+    "lon": 6.2073178
+  },
+  "Quai Gustave-Ador 75 1207 Genève": {
+    "lat": 46.2060557,
+    "lon": 6.1588017
+  },
+  "Rue de la Chapelle 8 1207 Genève": {
+    "lat": 46.201319,
+    "lon": 6.1574751
+  },
+  "Avenue de Thônex 30 1225 Chêne-Bourg": {
+    "lat": 46.1908627,
+    "lon": 6.198292
+  },
+  "Rue Peillonnex 28 1225 Chêne-Bourg": {
+    "lat": 46.1949194,
+    "lon": 6.1979349
+  },
+  "1205 Genève": {
+    "lat": 46.1966024,
+    "lon": 6.1414723
+  },
+  "Centre Balexert Avenue Louis-Casaï 27 1209 Genève": {
+    "lat": 46.2190824,
+    "lon": 6.1107821
+  },
+  "Place du Métral 1 1226 Thônex": {
+    "lat": 46.2044355,
+    "lon": 6.2131641
+  },
+  "Rue de Lausanne 145 1202 Genève": {
+    "lat": 46.2233007,
+    "lon": 6.1484562
+  },
+  "Rue du nant 4-6 1207 Genève": {
+    "lat": 46.2024157,
+    "lon": 6.1607363
+  },
+  "Route des Franchises 26 1203 Genève": {
+    "lat": 46.2131174,
+    "lon": 6.1197813
+  },
+  "Rue Richard-Wagner 5 1202 Genève": {
+    "lat": 46.2174366,
+    "lon": 6.1418512
+  },
+  "Chemin de la Californie 24 1245 Collonge-Bellerive": {
+    "lat": 46.2403138,
+    "lon": 6.2042947
+  },
+  "Quai de Cologny 1 1223 Cologny": {
+    "lat": 46.2129169,
+    "lon": 6.1729579
+  },
+  "Avenue de Champel 42 1206 Genève": {
+    "lat": 46.18917,
+    "lon": 6.1523777
+  },
+  "Avenue Eugène-Pittard 3A 1206 Genève": {
+    "lat": 46.1927873,
+    "lon": 6.1606289
+  },
+  "Chemin Prudent-Balland 36 1222 Vésenaz": {
+    "lat": 46.2544294,
+    "lon": 6.217271
+  },
+  "Rue Lamartine 27 1203 Genève": {
+    "lat": 46.2125548,
+    "lon": 6.1285556
+  },
+  "Rue de Beaumont 10 1206 Genève": {
+    "lat": 46.1975238,
+    "lon": 6.1557494
+  },
+  "Route de Vandoeuvres 79 1253 Vandoeuvres": {
+    "lat": 46.217138,
+    "lon": 6.1962831
+  },
+  "Rue du Jeu-de-l’Arc 15 1207 Genève": {
+    "lat": 46.2026344,
+    "lon": 6.1582174
+  },
+  "Place de Cornavin 18 1201 Genève": {
+    "lat": 46.2100836,
+    "lon": 6.1438756
+  },
+  "Rue Charles-Giron 14 1203 Genève": {
+    "lat": 46.2062582,
+    "lon": 6.1287819
+  },
+  "Avenue des Cavaliers 17 1224 Chêne-Bougeries": {
+    "lat": 46.2021876,
+    "lon": 6.1836312
+  },
+  "Rue Lamartine 8 1203 Genève": {
+    "lat": 46.209698,
+    "lon": 6.1291185
+  },
+  "Rue des Eaux-vives 69 1207 Genève": {
+    "lat": 46.2056537,
+    "lon": 6.1606269
+  },
+  "Rue de Chantepoulet 25 1201 Genève": {
+    "lat": 46.2082017,
+    "lon": 6.1428914
+  },
+  "Clos de la Fonderie 1A 1227 Carouge": {
+    "lat": 46.186363,
+    "lon": 6.1433318
+  },
+  "EMS Résidence de la Champagne Route du Creux-de-Boisset 44 1286 Soral": {
+    "lat": 46.1429576,
+    "lon": 6.0403518
+  },
+  "Chemin de Vers 8 1228 Plan-les-Ouates": {
+    "lat": 46.1683111,
+    "lon": 6.1211872
+  },
+  "Route de Frontenex 86 1208 Genève": {
+    "lat": 46.2048841,
+    "lon": 6.1713995
+  },
+  "Rue de Candolle 36 1205 Genève": {
+    "lat": 46.1968871,
+    "lon": 6.1466955
+  },
+  "Avenue des Amazones 18 1224 Chêne-Bougeries": {
+    "lat": 46.202186,
+    "lon": 6.1855195
+  },
+  "Avenue du Lignon 22 1219 Le Lignon": {
+    "lat": 46.2016581,
+    "lon": 6.0944279
+  },
+  "Avenue Vibert 32 1227 Carouge": {
+    "lat": 46.1848334,
+    "lon": 6.1339153
+  },
+  "Rue Jacques-Dalphin 29 1227 Carouge": {
+    "lat": 46.1835226,
+    "lon": 6.1396647
+  },
+  "Boulevard de la Cluse 35 1205 Genève": {
+    "lat": 46.1905713,
+    "lon": 6.1454369
+  },
+  "Chemin du Château 25 1246 Corsier": {
+    "lat": 46.2638334,
+    "lon": 6.2247398
+  },
+  "Rue Saint-Ours 2 1205 Genève": {
+    "lat": 46.1975887,
+    "lon": 6.1443507
+  },
+  "Avenue de Champel 24 1206 Genève": {
+    "lat": 46.1912185,
+    "lon": 6.1531949
+  },
+  "Chemin Neuf-de-Vésenaz 8 1222 Vésenaz": {
+    "lat": 46.238101,
+    "lon": 6.1973259
+  },
+  "Chemin de Beau-Soleil 22 1206 Genève": {
+    "lat": 46.1888847,
+    "lon": 6.161703
+  },
+  "Route des Carres 44 1252 Meinier": {
+    "lat": 46.2347522,
+    "lon": 6.223223
+  },
+  "Route d'Hermance 18A 1222 Vésenaz": {
+    "lat": 46.2413594,
+    "lon": 6.1988748
+  },
+  "Route d'Hermance 287 1247 Anières": {
+    "lat": 46.2768892,
+    "lon": 6.2228416
+  },
+  "Avenue de la Gare-des-Eaux-Vives 28 1207 Genève": {
+    "lat": 46.2023876,
+    "lon": 6.1694921
+  },
+  "Rue des Lattes 3 1217 Meyrin": {
+    "lat": 46.2377108,
+    "lon": 6.0823002
+  },
+  "Rue Gabrielle Perret-Gentil 4 1205 Genève": {
+    "lat": 46.1940416,
+    "lon": 6.1493797
+  },
+  "Route du Stand 70 1260 Nyon": {
+    "lat": 46.3817581,
+    "lon": 6.216169
+  },
+  "Rue Pédro-Meylan 1 1208 Genève": {
+    "lat": 46.1956205,
+    "lon": 6.1637918
+  },
+  "Chemin des Sports 8 1203 Genève": {
+    "lat": 46.2061913,
+    "lon": 6.1148968
+  },
+  "Rue de la Terrassière 16/18 1207 Genève": {
+    "lat": 46.2003127,
+    "lon": 6.1599135
+  },
+  "Chemin de la Montagne 74 1224 Chêne-Bougeries": {
+    "lat": 46.2026035,
+    "lon": 6.1977839
+  },
+  "Chemin de Planta 73 1223 Cologny": {
+    "lat": 46.2156111,
+    "lon": 6.1894718
+  },
+  "1224 Chêne-Bougeries": {
+    "lat": 46.2016228,
+    "lon": 6.1896668
+  },
+  "Avenue de Miremont 28 1206 Genève": {
+    "lat": 46.1884383,
+    "lon": 6.1570542
+  },
+  "Rue de l'Athénée 23 1206 Genève": {
+    "lat": 46.1955733,
+    "lon": 6.1533424
+  },
+  "Avenue Trembley 12 1209 Genève": {
+    "lat": 46.2215027,
+    "lon": 6.1228563
+  },
+  "Boulevard Helvétique 15 1207 Genève": {
+    "lat": 46.2004057,
+    "lon": 6.1537158
+  },
+  "Boulevard Carl-Vogt 76 1205 Genève": {
+    "lat": 46.1964466,
+    "lon": 6.1383058
+  },
+  "Centre d'Imagerie Rive-Droite Rue de Chantepoulet 5 1201 Genève": {
+    "lat": 46.2079379,
+    "lon": 6.144923
+  },
+  "Avenue Louis-Casai 53 1216 Cointrin": {
+    "lat": 46.2235124,
+    "lon": 6.1085605
+  },
+  "Route de Loëx 99 1232 Confignon": {
+    "lat": 46.1852353,
+    "lon": 6.0878261
+  },
+  "Rue de Bernex 253 1233 Confignon": {
+    "lat": 46.1774022,
+    "lon": 6.0784073
+  },
+  "Chemin des Deux Communes 4 1226 Thônex": {
+    "lat": 46.1937849,
+    "lon": 6.1998377
+  },
+  "Boulevard de la Cluse 26 1205 Genève": {
+    "lat": 46.1905613,
+    "lon": 6.14633
+  },
+  "Avenue Théodore Weber 36 1208 Genève": {
+    "lat": 46.1971321,
+    "lon": 6.1634943
+  },
+  "Avenue de l'Amandolier 22 1208 Genève": {
+    "lat": 46.1970467,
+    "lon": 6.1662649
+  },
+  "Avenue Pictet de Rochemont 31 1207 Genève": {
+    "lat": 46.2004031,
+    "lon": 6.162643
+  },
+  "Chemin Monplaisir 9 1224 Chêne-Bougeries": {
+    "lat": 46.2003893,
+    "lon": 6.1838403
+  },
+  "Rue Ferdinand-Hodler 21 1207 Genève": {
+    "lat": 46.1990486,
+    "lon": 6.1559396
+  },
+  "Chemin de la Clairière 11 1207 Genève": {
+    "lat": 46.2015025,
+    "lon": 6.1631527
+  },
+  "Avenue Trembley 12 1212 Grand-Saconnex": {
+    "lat": 46.2219277,
+    "lon": 6.1178653
+  },
+  "Rue de Chantepoulet 21 1201 Genève": {
+    "lat": 46.2081528,
+    "lon": 6.1433329
+  },
+  "Chemin de Bonvent 6C 1216 Cointrin": {
+    "lat": 46.2226687,
+    "lon": 6.1117525
+  },
+  "Chemin des Clochettes 6 1206 Genève": {
+    "lat": 46.1874437,
+    "lon": 6.157827
+  },
+  "Route du Petit-Lullier 29 1254 Jussy": {
+    "lat": 46.2309516,
+    "lon": 6.2657324
+  },
+  "Avenue de la Roseraie 76B 1205 Genève": {
+    "lat": 46.1916019,
+    "lon": 6.1491517
+  },
+  "Route de Drize 66 1234 Vessy": {
+    "lat": 46.1700331,
+    "lon": 6.139575
+  },
+  "Route de Frontenex 90 1208 Genève": {
+    "lat": 46.2049119,
+    "lon": 6.1723166
+  },
+  "Avenue du Gros-Chêne 14 1213 Onex": {
+    "lat": 46.187597,
+    "lon": 6.105232
+  },
+  "Chemin des Troènes 3A 1213 Petit-Lancy": {
+    "lat": 46.1920044,
+    "lon": 6.1192226
+  },
+  "Route des Acacias 34 1227 Carouge": {
+    "lat": 46.1905606,
+    "lon": 6.1345372
+  },
+  "1256 Troinex": {
+    "lat": 46.166357,
+    "lon": 6.1482035
+  },
+  "Rue Firmin-Massot 1 1206 Genève": {
+    "lat": 46.1963158,
+    "lon": 6.1507939
+  },
+  "Chemin des Fourches 53 C 1223 Cologny": {
+    "lat": 46.2063397,
+    "lon": 6.1903616
+  },
+  "Rue Benjamin-Franklin 2 1201 Genève": {
+    "lat": 46.2080555,
+    "lon": 6.1372759
+  },
+  "Place des Eaux-Vives 3 1207 Genève": {
+    "lat": 46.2022075,
+    "lon": 6.1566927
+  },
+  "Rue Louis-Favre 29 1201 Genève": {
+    "lat": 46.2117273,
+    "lon": 6.136436
+  },
+  "Route de Malagnou 30 1208 Genève": {
+    "lat": 46.1969693,
+    "lon": 6.1594511
+  },
+  "Quai de l'Ile 17 1204 Genève": {
+    "lat": 46.2052579,
+    "lon": 6.1442953
+  },
+  "Rue Chabrey 27 1202 Genève": {
+    "lat": 46.2161225,
+    "lon": 6.1283602
+  },
+  "Route des Tournettes 13 1255 Veyrier": {
+    "lat": 46.1625455,
+    "lon": 6.1792946
+  },
+  "Route de Chêne 11 1207 Genève": {
+    "lat": 46.2001624,
+    "lon": 6.1659603
+  },
+  "Rue de Lyon 75 1203 Genève": {
+    "lat": 46.2081877,
+    "lon": 6.1260443
+  },
+  "Rue Lamartine 1 1203 Genève": {
+    "lat": 46.2086937,
+    "lon": 6.1285103
+  },
+  "Quai Gustave-Ador 1208 Genève": {
+    "lat": 46.2112192,
+    "lon": 6.1712464
+  },
+  "Rue des Bossons 24 1213 Onex": {
+    "lat": 46.1863833,
+    "lon": 6.1033328
+  },
+  "Avenue Trembley 45 1209 Genève": {
+    "lat": 46.2216544,
+    "lon": 6.1176911
+  },
+  "Avenue de la Roseraie 76A 1205 Genève": {
+    "lat": 46.1914698,
+    "lon": 6.1491358
+  },
+  "Route des Jeunes 10 1212 Lancy": {
+    "lat": 46.1794646,
+    "lon": 6.1277921
+  },
+  "Boulevard des Promenades 22 1227 Carouge": {
+    "lat": 46.1821984,
+    "lon": 6.1375063
+  },
+  "Route de Florissant 182 1231 Conches": {
+    "lat": 46.183804,
+    "lon": 6.1747954
+  },
+  "Chemin du Relai 24 1258 Perly -Certoux": {
+    "lat": 46.1578047,
+    "lon": 6.0912142
+  },
+  "DOMICILE": {
+    "lat": 46.9827625,
+    "lon": 6.8857351
+  },
+  "Chemin Colladon 5 1209 Genève": {
+    "lat": 46.2225987,
+    "lon": 6.1238027
+  },
+  "Route de Chancy 98 1213 Onex": {
+    "lat": 46.1858704,
+    "lon": 6.1048355
+  },
+  "Chemin de Beau-Soleil 12 1206 Genève": {
+    "lat": 46.1882267,
+    "lon": 6.1612255
+  },
+  "Rue de La Mairie 4 1207 Genève": {
+    "lat": 46.2031219,
+    "lon": 6.1577569
+  },
+  "Chemin Château-de-Bellerive 3 1245 Collonge Bellerive": {
+    "lat": 46.2552948,
+    "lon": 6.2004136
+  },
+  "Place Cornavin 18 1201 Genève": {
+    "lat": 46.2100836,
+    "lon": 6.1438756
+  },
+  "Chemin des Curiades 151 1233 Lully": {
+    "lat": 46.1620104,
+    "lon": 6.0641887
+  },
+  "Chemin des Clochettes 16 1206 Genève": {
+    "lat": 46.188542,
+    "lon": 6.1588384
+  },
+  "Avenue de Miremont 35A 1206 Genève": {
+    "lat": 46.1886033,
+    "lon": 6.1579114
+  },
+  "Rue Le-Corbusier 22 1208 Genève": {
+    "lat": 46.1934942,
+    "lon": 6.1655859
+  },
+  "Chemin de la Vendée 27 1213 Petit-Lancy": {
+    "lat": 46.1882977,
+    "lon": 6.1202465
+  },
+  "Route de Chêne 136 1226 Thônex": {
+    "lat": 46.1958198,
+    "lon": 6.2003848
+  },
+  "La Voie-Creuse 16 1202 Genève": {
+    "lat": 46.219768,
+    "lon": 6.1432076
+  },
+  "Rue de Carouge 100 1205 Genève": {
+    "lat": 46.1904507,
+    "lon": 6.1433362
+  },
+  "Rue de Frémis 18 1241 Puplinge": {
+    "lat": 46.2119041,
+    "lon": 6.2310517
+  },
+  "1248 Hermance": {
+    "lat": 46.3007628,
+    "lon": 6.2449217
+  },
+  "Chemin des Grangettes 7 1224 Chêne-Bougeries": {
+    "lat": 46.1998578,
+    "lon": 6.1819624
+  },
+  "Chemin du Château 19 1246 Corsier": {
+    "lat": 46.2633119,
+    "lon": 6.2246231
+  },
+  "Rue de la Navigation 27 1201 Genève": {
+    "lat": 46.2125619,
+    "lon": 6.1458707
+  },
+  "Avenue de Miremont 7B 1206 Genève": {
+    "lat": 46.1912287,
+    "lon": 6.1544935
+  },
+  "Avenue du Vieux-Bourg 20 1225 Chêne-Bourg": {
+    "lat": 46.1946164,
+    "lon": 6.1906747
+  },
+  "Chemin Louis-Valencien 6 1226 Thônex": {
+    "lat": 46.1956081,
+    "lon": 6.2075453
+  },
+  "Rue du Rhône 29 1204 Genève": {
+    "lat": 46.2042212,
+    "lon": 6.1475649
+  },
+  "Chemin de Sous-Caran 13D 1222 Vésenaz": {
+    "lat": 46.2457855,
+    "lon": 6.1949348
+  },
+  "Route de Troinex 65 1256 Troinex": {
+    "lat": 46.162871,
+    "lon": 6.1503817
+  },
+  "Route de Genève 94 1226 Thônex": {
+    "lat": 46.1921318,
+    "lon": 6.2062151
+  },
+  "Rue Pierre-Fatio 15 1207 Genève": {
+    "lat": 46.2023488,
+    "lon": 6.1540667
+  },
+  "Rue de La Terrassière 7 1207 Genève": {
+    "lat": 46.2003127,
+    "lon": 6.1599135
+  },
+  "Route d'Hermance 239C 1246 Corsier /GE": {
+    "lat": 46.2683874,
+    "lon": 6.2168993
+  },
+  "Chemin de la Savonnière 11 1245 Collonge-Bellerive": {
+    "lat": 46.2586134,
+    "lon": 6.2059847
+  },
+  "Chemin des Prés-Courbes 4 1226 Thônex": {
+    "lat": 46.1994229,
+    "lon": 6.2119979
+  },
+  "Rue du Cloître 2 1204 Genève": {
+    "lat": 46.2013595,
+    "lon": 6.1482768
+  },
+  "Route de Saint-Julien 5B 1227 Carouge": {
+    "lat": 46.1781146,
+    "lon": 6.136268
+  },
+  "Avenue des Communes réunies 61 1212 Grand-Lancy": {
+    "lat": 46.1769235,
+    "lon": 6.1227796
+  },
+  "Rue de Bernex 386 1233 Bernex": {
+    "lat": 46.1727622,
+    "lon": 6.0614158
+  },
+  "Route de Chancy 59C 1213 Petit-Lancy": {
+    "lat": 46.192115,
+    "lon": 6.1215228
+  },
+  "Chemin du Genévrier 4 1806 Saint-Légier-La Chiésaz": {
+    "lat": 46.4687358,
+    "lon": 6.8579047
+  },
+  "Chemin de la Tulette 3 1223 Cologny": {
+    "lat": 46.2059967,
+    "lon": 6.1830117
+  },
+  "Route de Bossey 21 1256 Troinex": {
+    "lat": 46.1620571,
+    "lon": 6.1560367
+  },
+  "Route de la Capite 249 1222 Vésenaz": {
+    "lat": 46.2467297,
+    "lon": 6.2150473
+  },
+  "Route de Chêne 26 1207 Genève": {
+    "lat": 46.1998987,
+    "lon": 6.1657653
+  },
+  "Rue des Sources 8 1205 Genève": {
+    "lat": 46.1959222,
+    "lon": 6.1441201
+  },
+  "Rue du 1er Juin 4 1207 Genève": {
+    "lat": 46.2064213,
+    "lon": 6.1609134
+  },
+  "Chemin d'Archamps 5 1257 La Croix-de-Rozon": {
+    "lat": 46.1438255,
+    "lon": 6.1368103
+  },
+  "Rue Le-Corbusier 1 1208 Genève": {
+    "lat": 46.1949794,
+    "lon": 6.1691095
+  },
+  "Rue des Rois 4 1204 Genève": {
+    "lat": 46.2035567,
+    "lon": 6.1374144
+  },
+  "Route de Gy 20 1252 Meinier": {
+    "lat": 46.2446947,
+    "lon": 6.2299419
+  },
+  "Route de Chêne 125 1224 Chêne-Bougeries": {
+    "lat": 46.1988475,
+    "lon": 6.1833389
+  },
+  "Avenue de l'Amandolier 24 1208 Genève": {
+    "lat": 46.1970346,
+    "lon": 6.165739
+  },
+  "Rue de la Prairie 19 1202 Genève": {
+    "lat": 46.2100879,
+    "lon": 6.1348805
+  },
+  "Chemin Armand Dufaux 71 1245 Corsier": {
+    "lat": 46.265056,
+    "lon": 6.209744
+  },
+  "Rte de Florissant 62 1206, Genève": {
+    "lat": 46.1928475,
+    "lon": 6.1618817
+  },
+  "Rue Louis-Curval 3 1206 Genève": {
+    "lat": 46.1905326,
+    "lon": 6.1542574
+  },
+  "Chemin Jules-Dufresne 12 1226 Thônex": {
+    "lat": 46.1883241,
+    "lon": 6.1963986
+  },
+  "Place Cornavin 6 1201 Genève": {
+    "lat": 46.2088678,
+    "lon": 6.1428567
+  },
+  "Chemin du Mont-Blanc 1 1224 Chêne-Bougeries": {
+    "lat": 46.2009245,
+    "lon": 6.1882868
+  },
+  "Chemin des Semailles 51 1212 Grand-Lancy": {
+    "lat": 46.1742805,
+    "lon": 6.117595
+  },
+  "Avenue de Thônex 12 1225 Chêne-Bourg": {
+    "lat": 46.1919802,
+    "lon": 6.1986489
+  },
+  "Rue de la Servette 89 1202 Genève": {
+    "lat": 46.2130859,
+    "lon": 6.1304726
+  },
+  "Rue de Genève 127 1226 Thônex": {
+    "lat": 46.192731,
+    "lon": 6.2045476
+  },
+  "Avenue de Thônex 17 1226 Thônex": {
+    "lat": 46.191131,
+    "lon": 6.1989642
+  },
+  "Place de Pont-Rouge 5 1212 Lancy": {
+    "lat": 46.1864096,
+    "lon": 6.124758
+  },
+  "Rue Charles-Galland 14 1206 Genève": {
+    "lat": 46.1979914,
+    "lon": 6.1535244
+  },
+  "Rue de Genève 97 1226 Thônex": {
+    "lat": 46.1935726,
+    "lon": 6.2001876
+  },
+  "Chemin des Verjus 14 1212 Grand-Lancy": {
+    "lat": 46.1811824,
+    "lon": 6.1176682
+  },
+  "1213 Petit-Lancy": {
+    "lat": 46.1909747,
+    "lon": 6.1200687
+  },
+  "Rue Jean-Louis-Hugon 5 1205 Genève": {
+    "lat": 46.2010224,
+    "lon": 6.1341389
+  },
+  "Chemin de la Gradelle 14 1224 Chêne-Bougeries": {
+    "lat": 46.2048257,
+    "lon": 6.184423
+  },
+  "Rue du Vieux-Four 66 1288 Aire-La-Ville Genève": {
+    "lat": 46.1925467,
+    "lon": 6.0437935
+  },
+  "Route de Saint-Julien 74 1212 Grand-Lancy": {
+    "lat": 46.1733007,
+    "lon": 6.1264747
+  },
+  "Avenue du Petit-Lancy 37 1213 Petit-Lancy": {
+    "lat": 46.194698,
+    "lon": 6.1151449
+  },
+  "Chemin du Pré-de-la-Croix 6 1222 Vésenaz": {
+    "lat": 46.2394603,
+    "lon": 6.1991316
+  },
+  "Rue François-Versonnex 15 1207 Genève": {
+    "lat": 46.2028853,
+    "lon": 6.156156
+  },
+  "Rue Ferdinand-Hodler 7 1204 Genève": {
+    "lat": 46.1998413,
+    "lon": 6.1541201
+  },
+  "Chemin du Vieux-Vésenaz 30 1222 Vésenaz": {
+    "lat": 46.2379402,
+    "lon": 6.1978602
+  },
+  "Route d'Hermance 127A 1245 Collonge-Bellerive": {
+    "lat": 46.2544276,
+    "lon": 6.2046177
+  },
+  "Chemin des Glycines 4 1206 Genève": {
+    "lat": 46.1896254,
+    "lon": 6.164721
+  },
+  "Chemin de la Tour-Carrée 5 1223 Cologny": {
+    "lat": 46.2259186,
+    "lon": 6.1853342
+  },
+  "Avenue des Libellules 20 1214 Châtelaine": {
+    "lat": 46.2059367,
+    "lon": 6.1086452
+  },
+  "Route d'Hermance 113 1245 Collonge-Bellerive": {
+    "lat": 46.2533785,
+    "lon": 6.2038913
+  },
+  "Chemin Beau-Soleil 12 1206 Genève": {
+    "lat": 46.1882267,
+    "lon": 6.1612255
+  },
+  "Chemin de l'Avanchet 28A 1216 Cointrin": {
+    "lat": 46.2228738,
+    "lon": 6.1078866
+  },
+  "Chemin du Progrés 4 1214 Vernier": {
+    "lat": 46.2100025,
+    "lon": 6.0761441
+  },
+  "Ruelle du Couchant 7 1207 Genève": {
+    "lat": 46.1999805,
+    "lon": 6.156958
+  },
+  "Rue Antoine Carteret 38 1202 Genève": {
+    "lat": 46.2136425,
+    "lon": 6.1352918
+  },
+  "Chemin de la Gravière 3 1225 Chêne-Bourg": {
+    "lat": 46.1982851,
+    "lon": 6.2010621
+  },
+  "Boulevard des Tranchées 34 1206 Genève": {
+    "lat": 46.1973039,
+    "lon": 6.1544609
+  },
+  "Rue de la Servette 61 1203 Genève": {
+    "lat": 46.2116253,
+    "lon": 6.1334073
+  },
+  "Cité Vieusseux 8 1203 Genève": {
+    "lat": 46.2130718,
+    "lon": 6.1205204
+  },
+  "Rue de Beaumont 16 1206 Genève": {
+    "lat": 46.1971714,
+    "lon": 6.1564453
+  },
+  "Avenue Tronchet 14 1226 Thônex": {
+    "lat": 46.1939635,
+    "lon": 6.2046536
+  },
+  "Chemin de Mancy 61 1245 Collonge-Bellerive": {
+    "lat": 46.2491699,
+    "lon": 6.2034403
+  },
+  "Route de Malagnou 38A 1208 Genève": {
+    "lat": 46.1966218,
+    "lon": 6.1602548
+  },
+  "Rue de Vermont 9A 1202 Genève": {
+    "lat": 46.2158042,
+    "lon": 6.1336786
+  },
+  "Route de Troinex 4 1227 Carouge": {
+    "lat": 46.1744258,
+    "lon": 6.1388683
+  },
+  "Place du Métral 4 1226 Thônex": {
+    "lat": 46.2044355,
+    "lon": 6.2131641
+  },
+  "Chemin Etienne-Chennaz 10, 1226 Thônex": {
+    "lat": 46.194216,
+    "lon": 6.2074807
+  },
+  "Chemin des Failles 9, 1232 Confignon": {
+    "lat": 46.1733926,
+    "lon": 6.0762865
+  },
+  "Rue de Saint-Jean 26 1203 Genève": {
+    "lat": 46.204583,
+    "lon": 6.1281118
+  },
+  "Place de Pont-Rouge 5 1212 Grand-Lancy": {
+    "lat": 46.1864096,
+    "lon": 6.124758
+  },
+  "HUG CHIR Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Monsieur ROSAS Alain Route de Meyrin 16 1202 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG OPHTALMOLOGIE Rue Alcid Jentzer 22 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Madame ROHNER Catherine Rue Le-Corbusier 19 1208 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "ECPS Avenue de Roseraie 43 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Monsieur BENSEMMANE Noureddine Rue de Montbrillant 83 1202 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Pédiatrie Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Cabinet Dr CHATILLON Rue De-Candolle 18 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Cabinet Dentaire Dr SABEV Christophe Rue François-Versonnex 8 1207 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG 5ème étage Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Madame FELDER Marie-Louise Rue Prévost-Martin 49 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Cabinet Dre CANOVAS Route de Frontenex 6 1207 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG 3ème-CL étage Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Cabinet Dr MOLLET Chemin Beau-Soleil 12 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG URGENCE Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Centre Physiothérapie La Colline Avenue de la Gare des Eaux-Vives 28 1208 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Institut Jacques-Dalcroze Rue de la Terrassière 44 1207 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG 4ème étage Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Cabinet Dr PERTICHETO Serge Rue de la Servette 75 1202 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Cabinet Dr Jelena GRUJIC Rue Le-Corbusier 18 1208 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Cabinet Dr TABIBIAN David Rue Emile-Yung 1 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Madame KAHMI Shella Route de Florissant 86A 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Synagogue BETH YAACOV Place de la Sinagogue 11 1204 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Hôtel InterContinental Chemin du Petit-Saconnex 9 1209 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG - UCAMIG Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG - CHIR Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG - 7ème AL Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Centre de Psychothérapie Jonction CAPPI Rue des Bains 35 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG - 2ème NeuroCHIR Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG - Service 6FL Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG Bât PREVOST Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Radiologie de la Villa Fleuri Chemin Thury 7B 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Madame ROSENTHAL Gisèle Place du Cirque 4 1204 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Madame GUTIERREZ Maria-Pilar Chemin du Champs-d'Anier 15 1209 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Monsieur LONGHI GUIDI Pier Rue Le-Corbusier 7 1208 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Madame DJEMAL Rosette Avenue KRIEG 40 1208 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Clinique La Colline Radiologie Avenue de Beau-Séjour 6 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Centre Mediphy Rive Cours de Rive 1 1204 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Centre de Radio-Oncologie Avenue de la Roseraie 53 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Madame LHOTE Martine Rue des Bains 43 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Eglise NEO-APOSTOLIQUE Rue Liottard 14 1202 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "GREGORC & DE CANDOLLE Notaire Rue Rodolphe-Toepffer 5 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG Pédiatrie Rue Willy-Donzé 6 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG - Service Gynécologie Boulevard de la Cluse 30 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Madame PODA Ida Rue de la Gare des Eaux-Vives 24 1208 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Clinique de la Main Rue des Bains 35 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "EMS Maison de La Tour Rue du Couchant 15 1248 Hermance": {
+    "lat": 46.3007628,
+    "lon": 6.2449217
+  },
+  "HUG 8ème Oncologie Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG Maternité Boulevard de la Cluse 30 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG 4ème Oncologie Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Madame VERNAZ-DUSTOUR Ariane Chemin de Beau-Soleil 36 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "ADENT Clinique Dentaire Route de Frontenex 34 1207 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG URGENCE Psychiatrie Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Monsieur LOCATELLO Antonio Rue Jean-Antoine-Gauttier 16 1201 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Foyer SOUBEYRAN Rue de Bourgogne 27 1203 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG 5ème Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG Unité UCAMIG Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Acoustique Médicale de Plainpalais Rue du Conseil-Général 12 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "AGM Boulevard Hélvetique 27 1207 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Madame BAUER Sonia Rue Du Temple 10 1201 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG 1DL 1er étage Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG PREVOST Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Centre d'Imagerie MEDIMAGE Route de Florissant 1 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Cabinet Dr PAOUNOV Rue François-Versonnex 15 1207 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "5ème étage, N509, 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "EMS - Les Arenières Quai des Arénières 12 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Centre d'Imagerie JEAN VIOLETTE Rue Jean-Violette 3/5 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG Urgence Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Cabinet Dre Annik DUBOC Chemin des Clochettes 16 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG USAR Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Tribunal de Protection de l'adulte et de l'enfant Rue des Glacis-de-Rive 6 1207 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Centre de Radiologie Oncologie Avenue de Roseraie 53 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Cabinet Dr SCHOOFS Fabian Route de Florissant 97 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG 7AL Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Madame KAMHI Seyla Route de Florissant 86A 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Cabinet Dr CHEN Haw-Tzer Avenue Wendt 28 1203 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG JUILLARD 8ème étage Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Clinique de La Colline Centre ASSAL Avenue de Beau-Séjour 6 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Coiffure EDITH Rue Maunoir 46 1207 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "UATR Villereuse Rue de la Terrassière 52 1207 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Centre Médical La Colline Avenue de la Roseraie 76A 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Monsieur AUJOUANNET Laurent Rue La Martine 7C 1203 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Cabinet Dentaire Rue de la Servette 75 1203 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG 5AL Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Monsieur ROHNER Adrien Rue Le-Corbusier 19 1208 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Clinique de La Colline URGENCE Avenue de Beau-Séjour 6 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Hôpital Beau-Séjour Avenue de Beau-Séjour 26 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG CHIR+Oncologie 4ème étage Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Clinique Générale Beaulieu SCANNER Chemin de Beau-Soleil 20 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG 3ème étage Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG CHIR+Radiologie P Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG 8FL Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Madame PARAVICINI Salomé Rue Sautter 29 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG CHIR+1er étage Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG Neurochirurgie Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Rue de Coutances 10 1201 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG 6ème étage Dialyse Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG CHIR+Médecine Nucléaire Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG OPHTALMOLOGIE+Rumathologie Rue Alcid Jentzer 22 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG CHIR+IRM Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG CHIR+Radiologie étage P Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Centre d'Imagerie MEDIMAGE S.A Route de Florissant 1 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Clinique de La Colline Radiologie Avenue de Beau-Séjour 6 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Clinique Générale Beaulieu Chemin de Beau-Soleil 20 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG 5ème étage 5AL Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG Premier Recours Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "UATM Villereuse Rue de la Terrassière 52 1207 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Centre d'Imagerie MEDIMAGE S.A. Route de Florissant 1 1206 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG Oncologie 5ème étage Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "Cabinet Dr GRANDIN Stéphane Rue de la Servette 55 1202 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG Radio-Oncologie Rue Gabrielle-Perret-Gentil 4 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  },
+  "HUG Radio-Oncologie Avenue de la Roseraie 53 1205 Genève": {
+    "lat": 46.3158103,
+    "lon": 6.1745005
+  }
+}

@@ -111,7 +111,7 @@ class Booking(db.Model):
     billed_to_company_id = Column(Integer, ForeignKey('company.id', ondelete="SET NULL"), nullable=True)
     billed_to_contact = Column(String(120))
 
-    invoice_line_id = Column(Integer, ForeignKey('invoice_lines.id', ondelete='SET NULL'), nullable=True, index=True)
+    invoice_line_id = Column(Integer, ForeignKey('invoice_lines.id', ondelete='SET NULL', name='fk_booking_invoice_line'), nullable=True, index=True)
 
     # Relations
     client = relationship('Client', back_populates='bookings', passive_deletes=True)
@@ -234,6 +234,7 @@ class Booking(db.Model):
             "rejected_by": self.rejected_by,
             "is_round_trip": _as_bool(self.is_round_trip),
             "is_return": _as_bool(self.is_return),
+            "parent_booking_id": self.parent_booking_id,
             "time_confirmed": _as_bool(self.time_confirmed),
             "has_return": self.return_trip is not None,
             "boarded_at": iso_utc_z(to_utc_from_db(boarded_dt)) if boarded_dt else None,
@@ -271,7 +272,9 @@ class Booking(db.Model):
     @validates('scheduled_time')
     def validate_scheduled_time(self, _key, scheduled_time):
         st = parse_local_naive(scheduled_time)
-        if st and st < now_local():
+        # Validation désactivée si time_confirmed=False (pour import historique)
+        time_confirmed = getattr(self, 'time_confirmed', True)
+        if st and st < now_local() and time_confirmed:
             raise ValueError("Heure prévue dans le passé.")
         return st
 

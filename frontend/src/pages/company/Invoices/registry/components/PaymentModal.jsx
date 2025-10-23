@@ -74,16 +74,16 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
   if (!open || !invoice) return null;
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modal}>
-        <div className={styles.modalHeader}>
-          <h2>Enregistrer un paiement</h2>
-          <button className={styles.closeBtn} onClick={handleClose}>
+    <div className="modal-overlay">
+      <div className="modal-content modal-md">
+        <div className="modal-header">
+          <h2 className="modal-title">Enregistrer un paiement</h2>
+          <button className="modal-close" onClick={handleClose}>
             ✕
           </button>
         </div>
 
-        <div className={styles.modalBody}>
+        <div className="modal-body">
           <div className={styles.invoiceInfo}>
             <h3>Facture {invoice.invoice_number}</h3>
             <p>Client: {invoice.client ? 
@@ -95,10 +95,10 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
             <p className={styles.balanceDue}>Solde dû: {invoice.balance_due.toFixed(2)} CHF</p>
           </div>
 
-          <form onSubmit={handleSubmit} className={styles.form}>
-            <div className={styles.formGroup}>
-              <label htmlFor="amount" className={styles.label}>
-                Montant du paiement *
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label htmlFor="amount" className="form-label required">
+                Montant du paiement
               </label>
               <input
                 type="number"
@@ -106,7 +106,7 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
                 name="amount"
                 value={formData.amount}
                 onChange={handleInputChange}
-                className={styles.input}
+                className="form-input"
                 step="0.01"
                 min="0.01"
                 max={invoice.balance_due}
@@ -115,9 +115,9 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
               />
             </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="paid_at" className={styles.label}>
-                Date du paiement *
+            <div className="form-group">
+              <label htmlFor="paid_at" className="form-label required">
+                Date du paiement
               </label>
               <input
                 type="date"
@@ -125,21 +125,21 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
                 name="paid_at"
                 value={formData.paid_at}
                 onChange={handleInputChange}
-                className={styles.input}
+                className="form-input"
                 required
               />
             </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="method" className={styles.label}>
-                Mode de paiement *
+            <div className="form-group">
+              <label htmlFor="method" className="form-label required">
+                Mode de paiement
               </label>
               <select
                 id="method"
                 name="method"
                 value={formData.method}
                 onChange={handleInputChange}
-                className={styles.select}
+                className="form-select"
                 required
               >
                 {paymentMethods.map(method => (
@@ -150,8 +150,8 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
               </select>
             </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="reference" className={styles.label}>
+            <div className="form-group">
+              <label htmlFor="reference" className="form-label">
                 Référence (optionnel)
               </label>
               <input
@@ -160,21 +160,21 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
                 name="reference"
                 value={formData.reference}
                 onChange={handleInputChange}
-                className={styles.input}
+                className="form-input"
                 placeholder="Référence bancaire, n° transaction..."
               />
             </div>
 
             {error && (
-              <div className={styles.error}>
+              <div className="alert alert-error mb-md">
                 {error}
               </div>
             )}
 
-            <div className={styles.formActions}>
+            <div className="modal-footer">
               <button
                 type="button"
-                className={styles.cancelBtn}
+                className="btn btn-secondary"
                 onClick={handleClose}
                 disabled={loading}
               >
@@ -182,7 +182,7 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
               </button>
               <button
                 type="submit"
-                className={styles.submitBtn}
+                className="btn btn-primary"
                 disabled={loading}
               >
                 {loading ? 'Enregistrement...' : 'Enregistrer le paiement'}

@@ -1,53 +1,56 @@
 // frontend/src/pages/company/Settings/CompanySettings.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import styles from "./CompanySettings.module.css";
-import CompanyHeader from "../../../components/layout/Header/CompanyHeader";
-import CompanySidebar from "../../../components/layout/Sidebar/CompanySidebar/CompanySidebar";
-import TabNavigation from "../../../components/ui/TabNavigation";
-import GeneralTab from "./tabs/GeneralTab";
-import OperationsTab from "./tabs/OperationsTab";
-import BillingTab from "./tabs/BillingTab";
-import NotificationsTab from "./tabs/NotificationsTab";
-import SecurityTab from "./tabs/SecurityTab";
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import styles from './CompanySettings.module.css';
+import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
+import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
+import GeneralTab from './tabs/GeneralTab';
+import OperationsTab from './tabs/OperationsTab';
+import BillingTab from './tabs/BillingTab';
+import NotificationsTab from './tabs/NotificationsTab';
+import SecurityTab from './tabs/SecurityTab';
 
-import useCompanyData from "../../../hooks/useCompanyData";
-import {
-  updateCompanyInfo,
-  uploadCompanyLogo,
-} from "../../../services/companyService";
+import useCompanyData from '../../../hooks/useCompanyData';
+import { updateCompanyInfo, uploadCompanyLogo } from '../../../services/companyService';
 
 // ======== Helpers globaux ========
-const API_BASE = (process.env.REACT_APP_API_BASE_URL || "").replace(/\/+$/, "");
+const API_BASE = (process.env.REACT_APP_API_BASE_URL || '').replace(/\/+$/, '');
 
 const resolveLogoUrl = (val) => {
   if (!val) return null;
   if (/^(https?:|data:)/i.test(val)) return val;
 
-  if (val.startsWith("/uploads/")) {
-    const baseUrl = (process.env.REACT_APP_API_BASE_URL || "").replace(
-      /\/api.*$/,
-      ""
-    );
-    return `${baseUrl}${val}`;
+  // ✅ En mode dev (localhost:3000), retourner le chemin relatif pour utiliser le proxy
+  const isDevelopment =
+    typeof window !== 'undefined' &&
+    window.location &&
+    /localhost:3000$/i.test(window.location.host);
+
+  if (val.startsWith('/uploads/') || val.startsWith('/')) {
+    // En dev, utiliser le chemin relatif (proxy)
+    if (isDevelopment) {
+      return val;
+    }
+    // En prod, construire l'URL complète
+    const baseUrl = (process.env.REACT_APP_API_BASE_URL || '').replace(/\/api.*$/, '');
+    return baseUrl ? `${baseUrl}${val}` : val;
   }
 
-  const path = val.startsWith("/") ? val : `/${val}`;
+  const path = val.startsWith('/') ? val : `/${val}`;
   return `${API_BASE}${path}`;
 };
 
 // Validations locales
 const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRx = /^\+?[0-9\s\-()]{7,20}$/;
-const uidRx =
-  /^(CHE[- ]?\d{3}\.\d{3}\.\d{3}(\s*TVA)?)$|^(CHE[- ]?\d{9}(\s*TVA)?)$/i;
+const uidRx = /^(CHE[- ]?\d{3}\.\d{3}\.\d{3}(\s*TVA)?)$|^(CHE[- ]?\d{9}(\s*TVA)?)$/i;
 
-function normalizeIban(value = "") {
-  return value.replace(/\s+/g, "").toUpperCase();
+function normalizeIban(value = '') {
+  return value.replace(/\s+/g, '').toUpperCase();
 }
 
-function formatIbanPretty(value = "") {
+function formatIbanPretty(value = '') {
   const v = normalizeIban(value);
-  return v.replace(/(.{4})/g, "$1 ").trim();
+  return v.replace(/(.{4})/g, '$1 ').trim();
 }
 
 function ibanChecksumIsValid(iban) {
@@ -56,9 +59,7 @@ function ibanChecksumIsValid(iban) {
   if (v.length < 15 || v.length > 34) return false;
   if (!/^[A-Z]{2}\d{2}[A-Z0-9]+$/.test(v)) return false;
   const rearranged = v.slice(4) + v.slice(0, 4);
-  const expanded = rearranged.replace(/[A-Z]/g, (ch) =>
-    (ch.charCodeAt(0) - 55).toString()
-  );
+  const expanded = rearranged.replace(/[A-Z]/g, (ch) => (ch.charCodeAt(0) - 55).toString());
   let remainder = 0;
   for (let i = 0; i < expanded.length; i += 7) {
     remainder = parseInt(String(remainder) + expanded.slice(i, i + 7), 10) % 97;
@@ -69,18 +70,36 @@ function ibanChecksumIsValid(iban) {
 export default function CompanySettings() {
   const { company, error: loadError, reloadCompany } = useCompanyData();
 
-  // Onglet actif
-  const [activeTab, setActiveTab] = useState("general");
+  // Onglet actif (détecte le hash dans l'URL)
+  const [activeTab, setActiveTab] = useState(() => {
+    const hash = window.location.hash.replace('#', '');
+    const validTabs = ['general', 'operations', 'billing', 'notifications', 'security'];
+    return validTabs.includes(hash) ? hash : 'general';
+  });
+
+  // Écouter les changements de hash
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      const validTabs = ['general', 'operations', 'billing', 'notifications', 'security'];
+      if (validTabs.includes(hash)) {
+        setActiveTab(hash);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   // -------- Logo --------
   const [logoPreview, setLogoPreview] = useState(null);
   const [logoUrlEditOpen, setLogoUrlEditOpen] = useState(false);
-  const [logoUrlInput, setLogoUrlInput] = useState("");
+  const [logoUrlInput, setLogoUrlInput] = useState('');
   const [logoBusy, setLogoBusy] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -90,54 +109,53 @@ export default function CompanySettings() {
 
   // -------- Form principal (Général) --------
   const [form, setForm] = useState({
-    name: "",
-    address: "",
-    contact_email: "",
-    contact_phone: "",
-    iban: "",
-    uid_ide: "",
-    billing_email: "",
-    billing_notes: "",
-    domicile_address_line1: "",
-    domicile_address_line2: "",
-    domicile_zip: "",
-    domicile_city: "",
-    domicile_country: "CH",
+    name: '',
+    address: '',
+    contact_email: '',
+    contact_phone: '',
+    iban: '',
+    uid_ide: '',
+    billing_email: '',
+    billing_notes: '',
+    domicile_address_line1: '',
+    domicile_address_line2: '',
+    domicile_zip: '',
+    domicile_city: '',
+    domicile_country: 'CH',
   });
 
   useEffect(() => {
     if (!company) return;
     setForm({
-      name: company.name || "",
-      address: company.address || "",
-      contact_email: company.contact_email || company.email || "",
-      contact_phone: company.contact_phone || company.phone || "",
-      iban: company.iban ? formatIbanPretty(company.iban) : "",
-      uid_ide: company.uid_ide || "",
-      billing_email: company.billing_email || "",
-      billing_notes: company.billing_notes || "",
-      domicile_address_line1: company.domicile_address_line1 || "",
-      domicile_address_line2: company.domicile_address_line2 || "",
-      domicile_zip: company.domicile_zip || "",
-      domicile_city: company.domicile_city || "",
-      domicile_country: company.domicile_country || "CH",
+      name: company.name || '',
+      address: company.address || '',
+      contact_email: company.contact_email || company.email || '',
+      contact_phone: company.contact_phone || company.phone || '',
+      iban: company.iban ? formatIbanPretty(company.iban) : '',
+      uid_ide: company.uid_ide || '',
+      billing_email: company.billing_email || '',
+      billing_notes: company.billing_notes || '',
+      domicile_address_line1: company.domicile_address_line1 || '',
+      domicile_address_line2: company.domicile_address_line2 || '',
+      domicile_zip: company.domicile_zip || '',
+      domicile_city: company.domicile_city || '',
+      domicile_country: company.domicile_country || 'CH',
     });
-    setLogoUrlInput(company.logo_url || "");
+    setLogoUrlInput(company.logo_url || '');
   }, [company]);
 
   const fieldErrors = useMemo(() => {
     if (!editMode) return {};
     const errs = {};
     if (form.contact_email && !emailRx.test(form.contact_email))
-      errs.contact_email = "Email invalide.";
+      errs.contact_email = 'Email invalide.';
     if (form.billing_email && !emailRx.test(form.billing_email))
-      errs.billing_email = "Email de facturation invalide.";
+      errs.billing_email = 'Email de facturation invalide.';
     if (form.contact_phone && !phoneRx.test(form.contact_phone))
-      errs.contact_phone = "Téléphone invalide.";
+      errs.contact_phone = 'Téléphone invalide.';
     if (form.uid_ide && !uidRx.test(form.uid_ide.trim()))
-      errs.uid_ide = "IDE/UID invalide (ex: CHE-123.456.789).";
-    if (form.iban && !ibanChecksumIsValid(form.iban))
-      errs.iban = "IBAN invalide (checksum).";
+      errs.uid_ide = 'IDE/UID invalide (ex: CHE-123.456.789).';
+    if (form.iban && !ibanChecksumIsValid(form.iban)) errs.iban = 'IBAN invalide (checksum).';
     if (!form.name?.trim()) errs.name = "Le nom de l'entreprise est requis.";
     return errs;
   }, [form, editMode]);
@@ -147,45 +165,45 @@ export default function CompanySettings() {
     const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
-      [name]: name === "iban" ? formatIbanPretty(value) : value,
+      [name]: name === 'iban' ? formatIbanPretty(value) : value,
     }));
   };
 
   const onClickEdit = () => {
-    setMessage("");
-    setError("");
+    setMessage('');
+    setError('');
     setEditMode(true);
   };
 
   const onClickCancel = () => {
     if (company) {
       setForm({
-        name: company.name || "",
-        address: company.address || "",
-        contact_email: company.contact_email || company.email || "",
-        contact_phone: company.contact_phone || company.phone || "",
-        iban: company.iban ? formatIbanPretty(company.iban) : "",
-        uid_ide: company.uid_ide || "",
-        billing_email: company.billing_email || "",
-        billing_notes: company.billing_notes || "",
-        domicile_address_line1: company.domicile_address_line1 || "",
-        domicile_address_line2: company.domicile_address_line2 || "",
-        domicile_zip: company.domicile_zip || "",
-        domicile_city: company.domicile_city || "",
-        domicile_country: company.domicile_country || "CH",
+        name: company.name || '',
+        address: company.address || '',
+        contact_email: company.contact_email || company.email || '',
+        contact_phone: company.contact_phone || company.phone || '',
+        iban: company.iban ? formatIbanPretty(company.iban) : '',
+        uid_ide: company.uid_ide || '',
+        billing_email: company.billing_email || '',
+        billing_notes: company.billing_notes || '',
+        domicile_address_line1: company.domicile_address_line1 || '',
+        domicile_address_line2: company.domicile_address_line2 || '',
+        domicile_zip: company.domicile_zip || '',
+        domicile_city: company.domicile_city || '',
+        domicile_country: company.domicile_country || 'CH',
       });
     }
     setEditMode(false);
-    setError("");
-    setMessage("");
+    setError('');
+    setMessage('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setMessage("");
-    setError("");
+    setMessage('');
+    setError('');
     if (hasErrors) {
-      setError("Veuillez corriger les erreurs du formulaire.");
+      setError('Veuillez corriger les erreurs du formulaire.');
       return;
     }
     const payload = {
@@ -207,7 +225,7 @@ export default function CompanySettings() {
     setSaving(true);
     try {
       const updated = await updateCompanyInfo(payload);
-      setMessage("Paramètres enregistrés avec succès.");
+      setMessage('Paramètres enregistrés avec succès.');
       setEditMode(false);
       await reloadCompany?.();
       setForm((prev) => ({
@@ -216,11 +234,7 @@ export default function CompanySettings() {
         uid_ide: updated?.uid_ide ?? prev.uid_ide,
       }));
     } catch (err) {
-      setError(
-        err?.response?.data?.error ||
-          err?.message ||
-          "Erreur lors de la sauvegarde."
-      );
+      setError(err?.response?.data?.error || err?.message || 'Erreur lors de la sauvegarde.');
     } finally {
       setSaving(false);
     }
@@ -231,13 +245,13 @@ export default function CompanySettings() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const allowed = ["image/png", "image/jpeg", "image/jpg", "image/svg+xml"];
+    const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
     if (!allowed.includes(file.type)) {
-      setError("Format de logo non supporté (PNG, JPG, SVG).");
+      setError('Format de logo non supporté (PNG, JPG, SVG).');
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      setError("Le fichier est trop volumineux (max 2 Mo).");
+      setError('Le fichier est trop volumineux (max 2 Mo).');
       return;
     }
 
@@ -245,8 +259,8 @@ export default function CompanySettings() {
     setLogoPreview(localUrl);
 
     setLogoBusy(true);
-    setError("");
-    setMessage("");
+    setError('');
+    setMessage('');
     try {
       const result = await uploadCompanyLogo(file);
 
@@ -255,39 +269,33 @@ export default function CompanySettings() {
       }
 
       await reloadCompany?.();
-      setMessage("Logo mis à jour avec succès.");
+      setMessage('Logo mis à jour avec succès.');
       setLogoUrlEditOpen(false);
     } catch (err) {
-      setError(
-        err?.response?.data?.error ||
-          err?.message ||
-          "Échec de l'upload du logo."
-      );
+      setError(err?.response?.data?.error || err?.message || "Échec de l'upload du logo.");
       setLogoPreview(resolveLogoUrl(company?.logo_url));
     } finally {
       setLogoBusy(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const onSaveLogoUrl = async () => {
     if (!logoUrlInput?.trim()) {
-      setError("Veuillez saisir une URL valide.");
+      setError('Veuillez saisir une URL valide.');
       return;
     }
     setLogoBusy(true);
-    setError("");
-    setMessage("");
+    setError('');
+    setMessage('');
     try {
       await updateCompanyInfo({ logo_url: logoUrlInput.trim() });
       await reloadCompany?.();
-      setMessage("Logo mis à jour via URL.");
+      setMessage('Logo mis à jour via URL.');
       setLogoUrlEditOpen(false);
     } catch (err) {
       setError(
-        err?.response?.data?.error ||
-          err?.message ||
-          "Impossible d'enregistrer l'URL du logo."
+        err?.response?.data?.error || err?.message || "Impossible d'enregistrer l'URL du logo."
       );
     } finally {
       setLogoBusy(false);
@@ -295,22 +303,18 @@ export default function CompanySettings() {
   };
 
   const onRemoveLogo = async () => {
-    if (!window.confirm("Supprimer le logo ?")) return;
+    if (!window.confirm('Supprimer le logo ?')) return;
     setLogoBusy(true);
-    setError("");
-    setMessage("");
+    setError('');
+    setMessage('');
     try {
       await updateCompanyInfo({ logo_url: null });
       await reloadCompany?.();
-      setMessage("Logo supprimé.");
-      setLogoUrlInput("");
+      setMessage('Logo supprimé.');
+      setLogoUrlInput('');
       setLogoPreview(null);
     } catch (err) {
-      setError(
-        err?.response?.data?.error ||
-          err?.message ||
-          "Impossible de supprimer le logo."
-      );
+      setError(err?.response?.data?.error || err?.message || 'Impossible de supprimer le logo.');
     } finally {
       setLogoBusy(false);
     }
@@ -318,11 +322,11 @@ export default function CompanySettings() {
 
   // ======== Configuration des onglets ========
   const tabs = [
-    { id: "general", label: "Général", icon: "🏢" },
-    { id: "operations", label: "Opérations", icon: "🚗" },
-    { id: "billing", label: "Facturation", icon: "💰" },
-    { id: "notifications", label: "Notifications", icon: "📧" },
-    { id: "security", label: "Sécurité", icon: "🔐" },
+    { id: 'general', label: 'Général', icon: '🏢' },
+    { id: 'operations', label: 'Opérations', icon: '🚗' },
+    { id: 'billing', label: 'Facturation', icon: '💰' },
+    { id: 'notifications', label: 'Notifications', icon: '📧' },
+    { id: 'security', label: 'Sécurité', icon: '🔐' },
   ];
 
   // ======== RENDER ========
@@ -336,43 +340,42 @@ export default function CompanySettings() {
           <div className={styles.settingsHeader}>
             <div className={styles.headerLeft}>
               <h1>⚙️ Paramètres de l'entreprise</h1>
-              <p className={styles.headerSubtitle}>
-                Gérez tous les aspects de votre entreprise
-              </p>
+              <p className={styles.headerSubtitle}>Gérez tous les aspects de votre entreprise</p>
             </div>
-            {activeTab === "general" && !editMode && (
-              <div className={styles.headerRight}>
-                <button
-                  className={`${styles.submitButton} ${styles.primary}`}
-                  onClick={onClickEdit}
-                >
-                  ✏️ Modifier
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Messages globaux */}
           {!company && !loadError && <p>Chargement…</p>}
           {loadError && <div className={styles.error}>{loadError}</div>}
-          {activeTab === "general" && message && (
-            <div className={styles.success}>{message}</div>
-          )}
-          {activeTab === "general" && error && (
-            <div className={styles.error}>{error}</div>
-          )}
+          {activeTab === 'general' && message && <div className={styles.success}>{message}</div>}
+          {activeTab === 'general' && error && <div className={styles.error}>{error}</div>}
 
-          {/* Navigation par onglets */}
-          <TabNavigation
-            tabs={tabs}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-          />
+          {/* Navigation par onglets avec bouton Modifier */}
+          <div className={styles.tabsContainer}>
+            <div className={styles.tabs}>
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  className={`${styles.tab} ${activeTab === tab.id ? styles.active : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  <span>
+                    {tab.icon} {tab.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {activeTab === 'general' && !editMode && (
+              <button className={`${styles.submitButton} ${styles.primary}`} onClick={onClickEdit}>
+                ✏️ Modifier
+              </button>
+            )}
+          </div>
 
           {/* Contenu de l'onglet actif */}
           {company && (
             <div className={styles.tabContent}>
-              {activeTab === "general" && (
+              {activeTab === 'general' && (
                 <>
                   <GeneralTab
                     company={company}
@@ -407,17 +410,17 @@ export default function CompanySettings() {
                         className={`${styles.button} ${styles.primary}`}
                         disabled={saving || hasErrors}
                       >
-                        {saving ? "💾 Enregistrement…" : "💾 Enregistrer"}
+                        {saving ? '💾 Enregistrement…' : '💾 Enregistrer'}
                       </button>
                     </div>
                   )}
                 </>
               )}
 
-              {activeTab === "operations" && <OperationsTab />}
-              {activeTab === "billing" && <BillingTab />}
-              {activeTab === "notifications" && <NotificationsTab />}
-              {activeTab === "security" && <SecurityTab />}
+              {activeTab === 'operations' && <OperationsTab />}
+              {activeTab === 'billing' && <BillingTab />}
+              {activeTab === 'notifications' && <NotificationsTab />}
+              {activeTab === 'security' && <SecurityTab />}
             </div>
           )}
         </main>

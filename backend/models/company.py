@@ -5,19 +5,24 @@ Extrait depuis models.py (lignes ~420-600).
 """
 from __future__ import annotations
 
+import json
+import logging
 import re
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, relationship, validates
 
 from ext import db
 
 from .base import _as_bool, _as_dt
+from .enums import DispatchMode
 
 if TYPE_CHECKING:
     from .dispatch import DailyStats, DispatchMetrics, DispatchRun
+
+logger = logging.getLogger(__name__)
 
 
 class Company(db.Model):
@@ -57,6 +62,21 @@ class Company(db.Model):
     dispatch_enabled = Column(Boolean, nullable=False, server_default="false")
     is_partner = Column(Boolean, nullable=False, server_default="false")
     logo_url = Column(String(255), nullable=True)
+
+    # 🆕 Configuration du système de dispatch autonome
+    dispatch_mode = Column(
+        Enum(DispatchMode),
+        default=DispatchMode.SEMI_AUTO,
+        nullable=False,
+        server_default="semi_auto",
+        index=True,
+        comment="Mode de fonctionnement du dispatch: manual, semi_auto, fully_auto"
+    )
+    autonomous_config = Column(
+        Text,
+        nullable=True,
+        comment="Configuration JSON pour le dispatch autonome"
+    )
 
     # Relations
     user = relationship("User", back_populates="company", passive_deletes=True)
@@ -132,8 +152,8 @@ class Company(db.Model):
         rearranged = v[4:] + v[:4]
         try:
             converted = "".join(str(int(ch, 36)) for ch in rearranged)
-        except ValueError:
-            raise ValueError("IBAN invalide (caractères non autorisés).")
+        except ValueError as err:
+            raise ValueError("IBAN invalide (caractères non autorisés).") from err
         remainder = 0
         for i in range(0, len(converted), 9):
             remainder = int(str(remainder) + converted[i:i+9]) % 97
@@ -178,6 +198,76 @@ class Company(db.Model):
     def approve(self):
         self.is_approved = True
         self.accepted_at = datetime.now(UTC)
+
+    def get_autonomous_config(self) -> Dict[str, Any]:
+        """
+        Retourne la configuration autonome avec valeurs par défaut.
+        Returns:
+            Configuration complète pour le dispatch autonome
+        """
+        default_config: Dict[str, Any] = {
+            "auto_dispatch": {
+                "enabled": False,
+                "interval_minutes": 5,
+                "trigger_on_urgent_booking": True,
+                "trigger_on_driver_unavailable": True,
+            },
+            "realtime_optimizer": {
+                "enabled": False,
+                "check_interval_minutes": 2,
+                "auto_apply_suggestions": False,
+            },
+            "auto_apply_rules": {
+                "customer_notifications": True,    # Notifications auto (5-20 min retard)
+                "minor_time_adjustments": False,   # Ajustements < 10 min
+                "reassignments": False,            # Toujours manuel par défaut
+                "emergency_notifications": True,   # Alertes urgentes (>30 min)
+            },
+            "safety_limits": {
+                "max_auto_actions_per_hour": 50,
+                "max_auto_reassignments_per_day": 10,
+                "require_approval_delay_minutes": 30,  # >30 min = validation manuelle
+            },
+            "re_optimize_triggers": {
+                "delay_threshold_minutes": 15,
+                "driver_became_unavailable": True,
+                "better_driver_available_gain_minutes": 10,
+            }
+        }
+
+        # Si une config est stockée, la merger avec les valeurs par défaut
+        config_raw = str(self.autonomous_config) if self.autonomous_config is not None else None
+        if config_raw:
+            try:
+                stored_config = json.loads(config_raw)
+                # Deep merge récursif
+                def deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+                    result = base.copy()
+                    for key, value in override.items():
+                        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                            result[key] = deep_merge(result[key], value)
+                        else:
+                            result[key] = value
+                    return result
+
+                return deep_merge(default_config, stored_config)
+            except (json.JSONDecodeError, TypeError, AttributeError) as err:
+                # Si la config est invalide, retourner la config par défaut
+                logger.warning(
+                    "[Company] Invalid autonomous_config for company %s: %s",
+                    self.id, err
+                )
+                return default_config
+
+        return default_config
+
+    def set_autonomous_config(self, config: Dict[str, Any]) -> None:
+        """
+        Définit la configuration autonome.
+        Args:
+            config: Configuration à stocker (sera mergée avec les valeurs par défaut)
+        """
+        self.autonomous_config = json.dumps(config)
 
     def __repr__(self):
         return f"<Company {self.name} | ID: {self.id} | Approved: {self.is_approved}>"

@@ -1,6 +1,6 @@
 // src/components/layout/Sidebar/CompanySidebar/CompanySidebar.js
-import React, { useEffect, useMemo, useState } from "react";
-import { NavLink, useParams, useLocation } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from 'react';
+import { NavLink, useParams, useLocation } from 'react-router-dom';
 import {
   FaHome,
   FaCar,
@@ -12,10 +12,10 @@ import {
   FaChevronLeft,
   FaChartLine,
   FaChartBar,
-} from "react-icons/fa";
-import styles from "./CompanySidebar.module.css";
+} from 'react-icons/fa';
+import styles from './CompanySidebar.module.css';
 
-const CompanySidebar = ({ isOpen, onToggle }) => {
+const CompanySidebar = ({ isOpen: _isOpen, onToggle: _onToggle }) => {
   const params = useParams();
   const location = useLocation();
   const [open, setOpen] = useState(false);
@@ -31,8 +31,8 @@ const CompanySidebar = ({ isOpen, onToggle }) => {
   // Ajuste une variable CSS globale pour pousser le contenu
   useEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty("--sidebar-w", open ? "240px" : "72px");
-    return () => root.style.removeProperty("--sidebar-w");
+    root.style.setProperty('--sidebar-w', open ? '240px' : '72px');
+    return () => root.style.removeProperty('--sidebar-w');
   }, [open]);
 
   // Ne créer les items que si public_id existe
@@ -43,43 +43,43 @@ const CompanySidebar = ({ isOpen, onToggle }) => {
     return [
       {
         to: `/dashboard/company/${public_id}`,
-        label: "Tableau de bord",
+        label: 'Tableau de bord',
         icon: <FaHome className={styles.icon} />,
         end: true,
       },
       {
         to: `/dashboard/company/${public_id}/reservations`,
-        label: "Réservations",
+        label: 'Réservations',
         icon: <FaCar className={styles.icon} />,
       },
       {
         to: `/dashboard/company/${public_id}/drivers`,
-        label: "Chauffeurs",
+        label: 'Chauffeurs',
         icon: <FaUser className={styles.icon} />,
       },
       {
         to: `/dashboard/company/${public_id}/clients`,
-        label: "Gestion Clients",
+        label: 'Gestion Clients',
         icon: <FaUsers className={styles.icon} />,
       },
       {
         to: `/dashboard/company/${public_id}/invoices/clients`,
-        label: "Facturation par Client",
+        label: 'Facturation par Client',
         icon: <FaFileInvoice className={styles.icon} />,
       },
       {
         to: `/dashboard/company/${public_id}/dispatch`,
-        label: "Dispatch & Planification",
+        label: 'Dispatch & Planification',
         icon: <FaChartLine className={styles.icon} />,
       },
       {
         to: `/dashboard/company/${public_id}/analytics`,
-        label: "Analytics",
+        label: 'Analytics',
         icon: <FaChartBar className={styles.icon} />,
       },
       {
         to: `/dashboard/company/${public_id}/settings`,
-        label: "Paramètres",
+        label: 'Paramètres',
         icon: <FaCog className={styles.icon} />,
       },
     ];
@@ -94,7 +94,7 @@ const CompanySidebar = ({ isOpen, onToggle }) => {
         type="button"
         className={styles.toggler}
         aria-expanded={open}
-        aria-label={open ? "Réduire le menu" : "Développer le menu"}
+        aria-label={open ? 'Réduire le menu' : 'Développer le menu'}
         onClick={() => setOpen((v) => !v)}
       >
         {open ? <FaChevronLeft /> : <FaChevronRight />}
@@ -106,9 +106,7 @@ const CompanySidebar = ({ isOpen, onToggle }) => {
             <NavLink
               to={item.to}
               end={!!item.end} // v6
-              className={({ isActive }) =>
-                isActive ? styles.active : undefined
-              } // v6
+              className={({ isActive }) => (isActive ? styles.active : undefined)} // v6
             >
               {item.icon}
               <span className={styles.text}>{item.label}</span>

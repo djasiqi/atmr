@@ -15,9 +15,10 @@ RUN apt-get update && apt-get upgrade -y && \
     gcc g++ libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY requirements.txt requirements-rl.txt ./
 RUN python -m pip install --upgrade pip && \
-    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt && \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-rl.txt
 
 
 ############ Stage 2: runtime (léger, non-root, sécurisé) ######################
@@ -48,9 +49,10 @@ RUN apt-get update && apt-get upgrade -y && \
 
 # Installer les wheels construites au stage builder
 COPY --from=builder /wheels /wheels
-COPY --from=builder /app/requirements.txt ./requirements.txt
+COPY --from=builder /app/requirements.txt /app/requirements-rl.txt ./
 RUN python -m pip install --upgrade pip && \
     pip install --no-index --find-links=/wheels -r requirements.txt && \
+    pip install --no-index --find-links=/wheels -r requirements-rl.txt && \
     rm -rf /wheels
 
 # Créer un utilisateur non-root

@@ -25,12 +25,12 @@ class MetricsCollector:
         """
         Collecte les métriques après un dispatch run.
         Appelé automatiquement à la fin d'un dispatch.
-        
+
         Args:
             dispatch_run_id: ID du dispatch run
             company_id: ID de l'entreprise
             day: Date du dispatch
-            
+
         Returns:
             DispatchMetrics créé ou None en cas d'erreur
         """
@@ -69,7 +69,7 @@ class MetricsCollector:
             total_delay = sum(delays)
 
             # Métriques chauffeurs
-            drivers_in_assignments = set(a.driver_id for a in assignments if a.driver_id)
+            drivers_in_assignments = {a.driver_id for a in assignments if a.driver_id}
             total_drivers = Driver.query.filter_by(
                 company_id=company_id,
                 is_active=True
@@ -161,31 +161,19 @@ class MetricsCollector:
     def _estimate_booking_distance(self, booking: Booking) -> float:
         """Estime la distance d'un booking en km (Haversine)"""
         try:
-            import math
+            # Import centralisé depuis shared.geo_utils
+            from shared.geo_utils import haversine_distance
 
-            if not all([
-                booking.pickup_lat, booking.pickup_lon,
-                booking.dropoff_lat, booking.dropoff_lon
-            ]):
+            # Utiliser getattr pour satisfaire le type checker
+            lat1 = float(getattr(booking, "pickup_lat", 0.0))
+            lon1 = float(getattr(booking, "pickup_lon", 0.0))
+            lat2 = float(getattr(booking, "dropoff_lat", 0.0))
+            lon2 = float(getattr(booking, "dropoff_lon", 0.0))
+
+            if not all([lat1, lon1, lat2, lon2]):
                 return 0.0
 
-            # Calcul Haversine direct
-            R = 6371.0  # Rayon de la Terre en km
-            lat1, lon1 = booking.pickup_lat, booking.pickup_lon
-            lat2, lon2 = booking.dropoff_lat, booking.dropoff_lon
-
-            phi1 = math.radians(lat1)
-            phi2 = math.radians(lat2)
-            dphi = math.radians(lat2 - lat1)
-            dlambda = math.radians(lon2 - lon1)
-
-            a = (
-                math.sin(dphi / 2) ** 2 +
-                math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-            )
-            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-            return R * c
+            return haversine_distance(lat1, lon1, lat2, lon2)
 
         except Exception as e:
             logger.warning(f"[MetricsCollector] Failed to calculate distance for booking {booking.id}: {e}")
@@ -200,18 +188,18 @@ class MetricsCollector:
     ) -> float:
         """
         Calcule un score de qualité global (0-100).
-        
+
         Formule:
         - 50% basé sur le taux de ponctualité
         - 30% basé sur le retard moyen
         - 20% basé sur le taux d'annulation
-        
+
         Args:
             on_time: Nombre de bookings à l'heure
             total: Nombre total de bookings
             avg_delay: Retard moyen en minutes
             cancelled: Nombre de bookings annulés
-            
+
         Returns:
             Score entre 0 et 100
         """
@@ -243,12 +231,12 @@ class MetricsCollector:
         """
         Met à jour le nombre de suggestions générées/appliquées pour un dispatch run.
         Utilisé par le realtime_optimizer.
-        
+
         Args:
             dispatch_run_id: ID du dispatch run
             generated: Nombre de suggestions générées (optionnel)
             applied: Nombre de suggestions appliquées (optionnel)
-            
+
         Returns:
             True si succès, False sinon
         """
@@ -298,7 +286,7 @@ def collect_dispatch_metrics(
 ) -> DispatchMetrics | None:
     """
     Helper function pour collecter les métriques.
-    
+
     Usage:
         metrics = collect_dispatch_metrics(run_id, company_id, date.today())
     """
@@ -312,7 +300,7 @@ def update_suggestions_count(
 ) -> bool:
     """
     Helper function pour mettre à jour le nombre de suggestions.
-    
+
     Usage:
         update_suggestions_count(run_id, generated=5, applied=3)
     """

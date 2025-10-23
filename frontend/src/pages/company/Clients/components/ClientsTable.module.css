@@ -1,7 +1,7 @@
 .tableContainer {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 
@@ -11,27 +11,32 @@
 }
 
 .table thead {
-  background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
+  background: var(--bg-tertiary);
+  border-bottom: 2px solid var(--border-primary);
 }
 
 .table th {
   text-align: left;
-  padding: 16px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #64748b;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--bg-tertiary);
+  border-bottom: 2px solid var(--border-primary);
 }
 
 .table tbody tr {
-  border-bottom: 1px solid #f1f5f9;
-  transition: background 0.2s;
+  border-bottom: 1px solid var(--border-primary);
+  transition: var(--transition-base);
 }
 
 .table tbody tr:hover {
-  background: #f8fafc;
+  background: var(--bg-hover);
 }
 
 .table tbody tr.inactive {
@@ -39,157 +44,166 @@
 }
 
 .table td {
-  padding: 16px;
-  font-size: 14px;
-  color: #1e293b;
-  vertical-align: top;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  vertical-align: middle;
 }
 
 /* Client info */
 .clientInfo {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-xs);
+  max-width: 200px;
 }
 
 .clientName {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
+  gap: var(--spacing-sm);
+  font-weight: var(--font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .institutionBadge {
-  font-size: 18px;
+  font-size: var(--font-size-lg);
+  flex-shrink: 0;
 }
 
 .clientSubInfo {
-  font-size: 12px;
-  color: #64748b;
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Badges */
+/* Badges - Utilise le pattern .badge des styles globaux */
 .typeBadge {
   display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
 }
 
 .typeBadge.institution {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--info-bg);
+  color: var(--info-primary);
 }
 
 .typeBadge.regular {
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .statusBadge {
   display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
 }
 
 .statusBadge.active {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--success-bg);
+  color: var(--success-primary);
 }
 
 .statusBadge.inactive {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--error-bg);
+  color: var(--error-primary);
 }
 
 /* Contact info */
 .contactInfo {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-xs);
+  max-width: 180px;
 }
 
 .email,
 .phone {
-  font-size: 13px;
-  color: #475569;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .noContact {
-  color: #cbd5e1;
+  color: var(--text-disabled);
 }
 
 /* Address */
 .address {
   max-width: 200px;
-  font-size: 13px;
-  color: #475569;
-  line-height: 1.4;
-}
-
-/* Actions */
-.actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.editBtn,
-.deleteBtn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  line-height: var(--line-height-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Actions - Design moderne uniforme */
+.actions {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+/* ✅ Utilise .btn .btn-sm .btn-primary des styles globaux */
 .editBtn {
-  background: #3b82f6;
+  background: var(--brand-primary);
   color: white;
 }
 
 .editBtn:hover {
-  background: #2563eb;
+  background: var(--brand-hover);
   transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
+/* ✅ Utilise .btn .btn-sm avec style danger custom */
 .deleteBtn {
-  background: #fee2e2;
-  color: #991b1b;
-  padding: 8px 12px;
+  background: var(--danger-bg);
+  color: var(--danger-primary);
+  border: 1px solid var(--danger-border);
+  padding: var(--spacing-xs) var(--spacing-sm);
 }
 
 .deleteBtn:hover {
-  background: #fecaca;
+  background: var(--danger-bg-hover);
+  border-color: var(--danger-primary);
   transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Empty state */
 .empty {
   text-align: center;
-  padding: 80px 20px;
-  color: #94a3b8;
+  padding: var(--spacing-3xl) var(--spacing-lg);
+  color: var(--text-disabled);
 }
 
 .emptyIcon {
-  font-size: 64px;
-  margin-bottom: 16px;
+  font-size: var(--font-size-5xl);
+  margin-bottom: var(--spacing-md);
 }
 
 .empty h3 {
-  font-size: 20px;
-  margin: 0 0 8px 0;
-  color: #64748b;
+  font-size: var(--font-size-xl);
+  margin: 0 0 var(--spacing-sm) 0;
+  color: var(--text-tertiary);
 }
 
 .empty p {
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   margin: 0;
 }
 
@@ -197,6 +211,7 @@
 @media (max-width: 1024px) {
   .tableContainer {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .table {
@@ -205,14 +220,161 @@
 }
 
 @media (max-width: 768px) {
+  .tableContainer {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    box-sizing: border-box;
+  }
+
+  .table {
+    min-width: 100%;
+    font-size: var(--font-xs);
+  }
+
   .table th,
   .table td {
-    padding: 12px 8px;
-    font-size: 12px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+  }
+
+  .table th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-tertiary);
+    z-index: 10;
+  }
+
+  .clientInfo {
+    max-width: 140px;
+  }
+
+  .clientName {
+    gap: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .institutionBadge {
+    font-size: var(--font-size-sm);
+    flex-shrink: 0;
+  }
+
+  .clientSubInfo {
+    font-size: var(--font-size-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .typeBadge,
+  .statusBadge {
+    padding: var(--spacing-xxs) var(--spacing-xs);
+    font-size: var(--font-size-xs);
+  }
+
+  .contactInfo {
+    max-width: 120px;
+  }
+
+  .email,
+  .phone {
+    font-size: var(--font-size-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .address {
-    max-width: 150px;
+    max-width: 120px;
+    font-size: var(--font-size-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .actions {
+    gap: var(--spacing-xs);
+  }
+
+  .editBtn,
+  .deleteBtn {
+    padding: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+  }
+}
+
+@media (max-width: 480px) {
+  .table th,
+  .table td {
+    padding: var(--spacing-xxs) var(--spacing-xs);
+    font-size: var(--font-size-xs);
+  }
+
+  .clientInfo {
+    max-width: 110px;
+  }
+
+  .clientName {
+    font-size: var(--font-size-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .institutionBadge {
+    font-size: var(--font-size-xs);
+    flex-shrink: 0;
+  }
+
+  .clientSubInfo {
+    font-size: 0.6rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .typeBadge,
+  .statusBadge {
+    padding: var(--spacing-xxs) var(--spacing-xs);
+    font-size: 0.6rem;
+  }
+
+  .contactInfo {
+    max-width: 100px;
+  }
+
+  .email,
+  .phone {
+    font-size: 0.6rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .address {
+    max-width: 100px;
+    font-size: 0.6rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .editBtn,
+  .deleteBtn {
+    padding: var(--spacing-xs);
+    font-size: 0.6rem;
+  }
+}
+
+@media (max-width: 390px) {
+  .table th,
+  .table td {
+    padding: var(--spacing-xxs) var(--spacing-xs);
+    font-size: 0.6rem;
   }
 }
 

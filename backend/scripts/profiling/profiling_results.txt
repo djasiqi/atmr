@@ -1,0 +1,11 @@
+======================================================================
+PROFILING RESULTS - DISPATCH
+======================================================================
+
+Date: 2025-10-20
+Company ID: 1
+Temps total: 0.08s
+Total queries: 15
+Queries lentes (>50ms): 0
+Assignments créés: 0
+

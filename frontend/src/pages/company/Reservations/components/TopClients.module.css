@@ -1,59 +1,59 @@
 .topClientsContainer {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 20px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
 }
 
 .topClientsHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  font-weight: 600;
-  color: #1e293b;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
 }
 
 .topClientsIcon {
-  font-size: 1.25rem;
+  font-size: var(--font-size-xl);
 }
 
 .topClientsTitle {
-  font-size: 1rem;
+  font-size: var(--font-size-base);
 }
 
 .topClientsList {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-sm);
 }
 
 .clientItem {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  transition: var(--transition-base);
 }
 
 .clientItem:hover {
-  background: #f1f5f9;
+  background: var(--bg-hover);
   transform: translateX(4px);
 }
 
 .clientRank {
-  background: #00796b;
+  background: var(--brand-primary);
   color: white;
   width: 24px;
   height: 24px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
   flex-shrink: 0;
 }
 
@@ -62,20 +62,20 @@
 }
 
 .clientName {
-  font-weight: 600;
-  color: #1e293b;
-  font-size: 0.875rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
   margin-bottom: 2px;
 }
 
 .clientStats {
-  font-size: 0.75rem;
-  color: #64748b;
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
 }
 
 .noData {
   text-align: center;
-  padding: 20px;
-  color: #9ca3af;
+  padding: var(--spacing-lg);
+  color: var(--text-disabled);
   font-style: italic;
 }

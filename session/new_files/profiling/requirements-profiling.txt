@@ -1,0 +1,15 @@
+# Requirements pour outils de profiling et tests de charge
+# Installation: pip install -r requirements-profiling.txt
+
+# Load testing
+locust>=2.15.0
+
+# Analyse de performance
+py-spy>=0.3.14
+
+# Métriques HTTP
+requests>=2.31.0
+
+# Optionnel: Analyse bundle frontend
+# npm install -g source-map-explorer webpack-bundle-analyzer
+

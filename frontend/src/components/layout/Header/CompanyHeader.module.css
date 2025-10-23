@@ -1,32 +1,23 @@
 :root {
   --hdr-h: 64px;             /* hauteur du header */
-  --pad-x: 16px;
-
-  /* Palette */
-  --brand: #0f766e;          /* vert principal */
-  --brand-dark: #0d5e56;     /* vert foncé hover/focus */
-  --hdr-bg: #ffffff;         /* fond du header */
-  --hdr-border: rgba(15, 118, 110, 0.18); /* liseré bas teinté brand */
-  --text-strong: #111827;    /* texte foncé */
-  --text-dim: #6b7280;       /* texte atténué */
-  --brand-gap: 0px;          /* pas d’espace si pas de nom */
+  --brand-gap: 0px;          /* pas d'espace si pas de nom */
   --brand-max-w: 48vw;       /* coupe les logos très longs */
 }
 
 .header {
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: var(--z-header);
   height: var(--hdr-h);
-  background: var(--hdr-bg);
+  background: var(--bg-primary);
   /* liseré bas légèrement teinté brand + ombre douce */
-  border-bottom: 1px solid var(--hdr-border);
-  box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+  border-bottom: 1px solid var(--border-primary);
+  box-shadow: var(--shadow-xs);
 
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--pad-x);
+  padding: 0 var(--spacing-md);
   box-sizing: border-box;
 }
 
@@ -36,13 +27,13 @@
   gap: var(--brand-gap);
   text-decoration: none;
   min-width: 0; /* pour ellipsis éventuels */
-  transition: opacity .15s ease;
+  transition: opacity var(--transition-fast);
 }
 .brand:hover { opacity: .92; }
 
 /* Wrapper du logo (pas de bordure/ombre, fond neutre) */
 .logoWrap {
-  height: calc(var(--hdr-h) - 16px); /* ~48px si header=64px */
+  height: calc(var(--hdr-h) - var(--spacing-md)); /* ~48px si header=64px */
   max-height: 48px;
   display: flex;
   align-items: center;
@@ -70,9 +61,9 @@
   height: 100%;
   display: flex;
   align-items: center;
-  font-weight: 700;
-  font-size: 18px;
-  color: var(--brand);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-lg);
+  color: var(--brand-primary);
   padding: 0;
   margin: 0;
   border: none;
@@ -86,32 +77,32 @@
 .rightZone {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-sm);
   flex: 0 0 auto;
 }
 
-/* Bouton “Déconnexion” en plein brand */
+/* Bouton "Déconnexion" en plein brand */
 .logoutBtn {
   appearance: none;
   border: 1px solid transparent;
-  background: var(--brand);
+  background: var(--brand-primary);
   color: #ffffff;
-  border-radius: 10px;
-  padding: 8px 14px;
-  font-weight: 700;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-weight: var(--font-weight-bold);
   letter-spacing: 0.2px;
   cursor: pointer;
 
-  box-shadow: 0 6px 16px rgba(15, 118, 110, 0.28);
+  box-shadow: var(--shadow-brand);
   transition:
-    background-color .18s ease,
-    box-shadow .18s ease,
-    transform .06s ease;
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .logoutBtn:hover {
-  background: var(--brand-dark);
-  box-shadow: 0 8px 20px rgba(15, 118, 110, 0.35);
+  background: var(--brand-hover);
+  box-shadow: var(--shadow-lg);
 }
 
 .logoutBtn:active {
@@ -120,10 +111,7 @@
 
 .logoutBtn:focus-visible {
   outline: none;
-  box-shadow:
-    0 0 0 2px #ffffff,
-    0 0 0 4px rgba(15,118,110,.55),
-    0 8px 20px rgba(15,118,110,.35);
+  box-shadow: var(--focus-ring-brand);
 }
 
 @media (max-width: 640px) {
@@ -140,46 +128,46 @@
 .delayBadge {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: #ffc107;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--warning-primary);
   color: #000;
   text-decoration: none;
-  border-radius: 20px;
-  font-weight: 600;
-  font-size: 0.9rem;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-sm);
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-warning);
   animation: pulse 2s ease-in-out infinite;
 }
 
 .delayBadge:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.5);
-  background: #ffb300;
+  box-shadow: var(--shadow-md);
+  background: var(--warning-hover);
 }
 
 /* Badge critique (rouge) */
 .delayBadge.critical {
-  background: #dc3545;
+  background: var(--danger-primary);
   color: white;
-  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+  box-shadow: var(--shadow-danger);
 }
 
 .delayBadge.critical:hover {
-  background: #c82333;
-  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.5);
+  background: var(--danger-hover);
+  box-shadow: var(--shadow-md);
 }
 
 .badgeIcon {
-  font-size: 1.2rem;
+  font-size: var(--font-xl);
   line-height: 1;
 }
 
 .badgeCount {
   min-width: 20px;
   text-align: center;
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 
 @keyframes pulse {
@@ -194,11 +182,11 @@
 /* Responsive */
 @media (max-width: 640px) {
   .delayBadge {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
+    padding: var(--spacing-xxs) var(--spacing-sm);
+    font-size: var(--font-xs);
   }
   
   .badgeIcon {
-    font-size: 1rem;
+    font-size: var(--font-md);
   }
 }

@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, cast
@@ -167,7 +168,7 @@ def get_status(company_id: int) -> Dict[str, Any]:
 
 def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Utilisé par POST /company_dispatch/run (async). 
+    Utilisé par POST /company_dispatch/run (async).
     Enfile un job (coalescé) et renvoie un job_id.
     """
     job_id = str(uuid.uuid4())
@@ -218,10 +219,8 @@ def stop_all() -> None:
     with _STATE_LOCK:
         for st in _STATE.values():
             if st.timer is not None:
-                try:
+                with suppress(Exception):
                     st.timer.cancel()
-                except Exception:
-                    pass
             st.timer = None
 
 
@@ -237,10 +236,8 @@ def _schedule_run(st: CompanyDispatchState, mode: str) -> None:
 
     # Si un timer existe déjà, on le remplace pour prolonger la fenêtre de coalescence.
     if st.timer is not None:
-        try:
+        with suppress(Exception):
             st.timer.cancel()
-        except Exception:
-            pass
 
     # Utiliser threading.Timer pour le debounce/coalesce
     timer_cls = __import__('threading').Timer
@@ -260,11 +257,10 @@ def _try_run(st: CompanyDispatchState, mode: str) -> None:
 
     # Vérifier/renouveler le TTL si running
     now = datetime.now(UTC)
-    if st.running and st.last_start:
-        if now - st.last_start > timedelta(seconds=LOCK_TTL_SEC):
-            # On considère le run précédent comme bloqué (TTL expiré)
-            logger.warning("[Queue] TTL expired for company=%s, forcing unlock", st.company_id)
-            st.running = False
+    if st.running and st.last_start and now - st.last_start > timedelta(seconds=LOCK_TTL_SEC):
+        # On considère le run précédent comme bloqué (TTL expiré)
+        logger.warning("[Queue] TTL expired for company=%s, forcing unlock", st.company_id)
+        st.running = False
 
     # Essayer de prendre le lock
     acquired = st.lock.acquire(blocking=False)
@@ -321,6 +317,27 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             run_kwargs["company_id"] = company_id
             # Ajouter mode si absent
             run_kwargs.setdefault("mode", mode)
+
+            # Anti-duplication: vérifier si un run identique est déjà en cours
+            import hashlib
+            import json
+
+            from ext import redis_client
+
+            params_str = json.dumps(run_kwargs, sort_keys=True)
+            params_hash = hashlib.md5(params_str.encode()).hexdigest()
+            dedup_key = f"dispatch:enqueued:{company_id}:{params_hash}"
+
+            if not redis_client.setnx(dedup_key, 1):
+                logger.info("[Queue] Duplicate run ignored for company=%s (same params)", company_id)
+                st.running = False
+                st.last_start = None
+                _RUNNING[company_id] = False
+                _PROGRESS[company_id] = 0
+                return
+
+            # TTL 5 minutes pour éviter les blocages
+            redis_client.expire(dedup_key, 300)
 
             # Log the parameters being used for the run
             logger.info(

@@ -5,8 +5,8 @@ export default function Scheduler({
   items = [],
   onCreate,
   onUpdate,
-  onDelete,
-  overlays = {},
+  onDelete: _onDelete,
+  overlays: _overlays = {},
 }) {
   const [drag, setDrag] = useState(null); // {id, startMs, endMs, mode:"move"|"resize-start"|"resize-end"}
   const containerRef = useRef(null);

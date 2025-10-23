@@ -1,0 +1,76 @@
+{
+  "model": "data/rl/models/dqn_best.pth",
+  "episodes": 100,
+  "dqn": {
+    "episodes": 100,
+    "reward": {
+      "mean": -1291.4266642431546,
+      "std": 594.9357124482217,
+      "min": -3396.7839428377633,
+      "max": -334.3004548810831,
+      "median": -1138.6449179882998
+    },
+    "steps": {
+      "mean": 24.0,
+      "std": 0.0
+    },
+    "assignments": {
+      "mean": 6.28,
+      "std": 2.1821090715177367,
+      "total": 628
+    },
+    "late_pickups": {
+      "mean": 2.32,
+      "std": 1.624068964052943,
+      "total": 232
+    },
+    "cancellations": {
+      "mean": 11.96,
+      "std": 3.1777979797337648,
+      "total": 1196
+    },
+    "distance": {
+      "mean": 59.91977314628767,
+      "total": 5991.977314628767
+    },
+    "completion_rate": {
+      "mean": 34.8241459364733,
+      "std": 12.161900842985377
+    },
+    "late_pickup_rate": 36.94267515923567
+  },
+  "baseline": {
+    "episodes": 100,
+    "reward": {
+      "mean": -939.7311419260499,
+      "std": 449.5551083129167,
+      "min": -2178.0064653519335,
+      "max": 174.6284802022551,
+      "median": -951.4025810782496
+    },
+    "steps": {
+      "mean": 24.0,
+      "std": 0.0
+    },
+    "assignments": {
+      "mean": 7.51,
+      "total": 751
+    },
+    "late_pickups": {
+      "mean": 2.88,
+      "total": 288
+    },
+    "cancellations": {
+      "mean": 9.55,
+      "total": 955
+    },
+    "distance": {
+      "mean": 75.17049356558175,
+      "total": 7517.049356558175
+    },
+    "completion_rate": {
+      "mean": 44.75129108937158
+    },
+    "late_pickup_rate": 38.348868175765645
+  }
+}

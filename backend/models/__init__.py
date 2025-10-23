@@ -7,6 +7,10 @@ Importe tous les models extraits depuis les fichiers individuels.
 # ========== Import db (requis par les routes) ==========
 from ext import db
 
+# ========== ML & Autonomous Systems (après les autres modèles) ==========
+from .ab_test_result import ABTestResult
+from .autonomous_action import AutonomousAction
+
 # ========== ÉTAPE 1 : Import helpers & enums ==========
 from .base import (
     _as_bool,
@@ -39,6 +43,7 @@ from .enums import (
     BookingStatus,
     BreakType,
     ClientType,
+    DispatchMode,
     DispatchStatus,
     DriverState,
     DriverType,
@@ -59,7 +64,10 @@ from .enums import (
 from .invoice import CompanyBillingSettings, Invoice, InvoiceLine, InvoicePayment, InvoiceReminder, InvoiceSequence
 from .medical import FavoritePlace, MedicalEstablishment, MedicalService
 from .message import Message
+from .ml_prediction import MLPrediction
 from .payment import Payment
+from .rl_feedback import RLFeedback
+from .rl_suggestion_metric import RLSuggestionMetric
 
 # ========== ÉTAPE 2 : Import models extraits ==========
 from .user import User
@@ -78,7 +86,7 @@ __all__ = [
     'UserRole', 'BookingStatus', 'PaymentStatus', 'GenderEnum', 'ClientType',
     'InvoiceStatus', 'InvoiceLineType', 'PaymentMethod', 'DriverType', 'DriverState',
     'VacationType', 'SenderRole', 'RealtimeEventType', 'RealtimeEntityType',
-    'AssignmentStatus', 'DispatchStatus',
+    'AssignmentStatus', 'DispatchStatus', 'DispatchMode',
     'ShiftType', 'ShiftStatus', 'UnavailabilityReason', 'BreakType',
 
     # Models principaux
@@ -99,4 +107,7 @@ __all__ = [
     # Models Dispatch & Temps Réel
     'DispatchRun', 'Assignment', 'DriverStatus', 'RealtimeEvent',
     'DispatchMetrics', 'DailyStats',
+
+    # Models ML & Autonomous
+    'MLPrediction', 'AutonomousAction', 'ABTestResult', 'RLSuggestionMetric', 'RLFeedback',
 ]

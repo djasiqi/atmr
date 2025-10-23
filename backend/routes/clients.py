@@ -440,12 +440,16 @@ class ClientsList(Resource):
         "last_name":  fields.String(required=True),
         "email":      fields.String(required=True),
         "phone":      fields.String(),
-        "address":    fields.String(),
+        "address":    fields.String(description="Adresse de domicile (sera géocodée automatiquement)"),
+        "billing_address": fields.String(description="Adresse de facturation (optionnelle, sera géocodée automatiquement)"),
+        "domicile_address": fields.String(description="Adresse de domicile (optionnelle, sera géocodée automatiquement)"),
+        "domicile_zip": fields.String(description="Code postal"),
+        "domicile_city": fields.String(description="Ville"),
     }))
     def post(self):
         """
         POST /clients
-        Crée un nouveau client.
+        Crée un nouveau client avec géocodage automatique des adresses.
         """
         try:
             data = request.get_json() or {}
@@ -454,7 +458,13 @@ class ClientsList(Resource):
                 if not data.get(field):
                     return {"error": f"{field} manquant"}, 400
 
-            # Création utilisateur + client
+            # Obtenir l'utilisateur actuel pour récupérer company_id
+            current_user_id = get_jwt_identity()
+            current_user = User.query.filter_by(public_id=current_user_id).one_or_none()
+            if not current_user:
+                return {"error": "Utilisateur non trouvé"}, 401
+
+            # Créer l'utilisateur
             new_user = cast(Any, User)(
                 first_name=data["first_name"],
                 last_name=data["last_name"],
@@ -464,17 +474,85 @@ class ClientsList(Resource):
             db.session.add(new_user)
             db.session.flush()  # récupère new_user.id
 
+            # Créer le client
             new_client = cast(Any, Client)(
                 user_id=new_user.id,
-                phone=data.get("phone"),
-                address=data.get("address")
+                contact_phone=data.get("phone"),
+                domicile_zip=data.get("domicile_zip"),
+                domicile_city=data.get("domicile_city"),
             )
+
+            # Déterminer l'adresse principale à géocoder
+            # Priorité: domicile_address > address
+            main_address = data.get("domicile_address") or data.get("address")
+
+            # Géocodage de l'adresse de domicile
+            if main_address:
+                try:
+                    from services.maps import geocode_address
+                    coords = geocode_address(main_address.strip(), country="CH")
+                    if coords:
+                        new_client.domicile_address = main_address
+                        new_client.domicile_lat = coords.get("lat")
+                        new_client.domicile_lon = coords.get("lon")
+                        app_logger.info(
+                            f"✅ Adresse de domicile géocodée pour {data['first_name']} {data['last_name']}: "
+                            f"{main_address} -> ({coords.get('lat')}, {coords.get('lon')})"
+                        )
+                    else:
+                        # Sauvegarde l'adresse même sans coordonnées
+                        new_client.domicile_address = main_address
+                        app_logger.warning(
+                            f"⚠️ Impossible de géocoder l'adresse de domicile: {main_address}"
+                        )
+                except Exception as e:
+                    # Sauvegarde l'adresse même en cas d'erreur
+                    new_client.domicile_address = main_address
+                    app_logger.warning(f"⚠️ Erreur lors du géocodage de l'adresse de domicile: {e}")
+
+            # Géocodage de l'adresse de facturation (si différente)
+            billing_address = data.get("billing_address")
+            if billing_address and billing_address.strip():
+                try:
+                    from services.maps import geocode_address
+                    coords = geocode_address(billing_address.strip(), country="CH")
+                    if coords:
+                        new_client.billing_address = billing_address
+                        new_client.billing_lat = coords.get("lat")
+                        new_client.billing_lon = coords.get("lon")
+                        app_logger.info(
+                            f"✅ Adresse de facturation géocodée pour {data['first_name']} {data['last_name']}: "
+                            f"{billing_address} -> ({coords.get('lat')}, {coords.get('lon')})"
+                        )
+                    else:
+                        new_client.billing_address = billing_address
+                        app_logger.warning(
+                            f"⚠️ Impossible de géocoder l'adresse de facturation: {billing_address}"
+                        )
+                except Exception as e:
+                    new_client.billing_address = billing_address
+                    app_logger.warning(f"⚠️ Erreur lors du géocodage de l'adresse de facturation: {e}")
+            elif main_address:
+                # Si pas d'adresse de facturation spécifique, copier depuis domicile
+                new_client.billing_address = new_client.domicile_address
+                new_client.billing_lat = new_client.domicile_lat
+                new_client.billing_lon = new_client.domicile_lon
+
+            # Associer le client à la même compagnie que l'utilisateur actuel
+            if hasattr(current_user, 'company_id') and current_user.company_id:
+                new_client.company_id = current_user.company_id
+
             db.session.add(new_client)
             db.session.commit()
+
+            app_logger.info(
+                f"✅ Client créé avec succès: {data['first_name']} {data['last_name']} (ID: {new_client.id})"
+            )
 
             return cast(Any, new_client).serialize, 201
 
         except Exception as e:
+            db.session.rollback()
             app_logger.error(
                 f"❌ ERREUR clients POST / : {type(e).__name__} - {e}", exc_info=True
             )

@@ -20,6 +20,7 @@ import NotFound from './pages/Error/NotFound';
 // Réduction bundle : 3.2 MB → 2.1 MB (-34%)
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard/AdminDashboard'));
 const AdminUsers = lazy(() => import('./pages/admin/Users/AdminUsers'));
+const ShadowModeDashboard = lazy(() => import('./pages/admin/ShadowMode/ShadowModeDashboard'));
 const ClientDashboard = lazy(() => import('./pages/client/Dashboard/ClientDashboard'));
 const AccountUser = lazy(() => import('./pages/client/Account/AccountUser'));
 const ReservationsPage = lazy(() => import('./pages/client/Reservations/ReservationsPage'));
@@ -37,7 +38,10 @@ const ClientInvoices = lazy(() => import('./pages/company/Invoices/ClientInvoice
 const CompanyPlanning = lazy(() => import('./pages/company/Planning/CompanyPlanning'));
 const CompanySettings = lazy(() => import('./pages/company/Settings/CompanySettings'));
 const CompanyClients = lazy(() => import('./pages/company/Clients/CompanyClients'));
-const UnifiedDispatch = lazy(() => import('./pages/company/Dispatch/UnifiedDispatch'));
+const UnifiedDispatch = lazy(() => import('./pages/company/Dispatch/UnifiedDispatchRefactored'));
+const RLMetricsDashboard = lazy(() =>
+  import('./pages/company/Dispatch/Dashboard/RLMetricsDashboard')
+);
 const AnalyticsDashboard = lazy(() => import('./pages/company/Analytics/AnalyticsDashboard'));
 const Dashboard = lazy(() => import('./pages/Home/Dashboard'));
 
@@ -227,6 +231,14 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/dashboard/admin/:public_id/shadow-mode"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <ShadowModeDashboard />
+                </ProtectedRoute>
+              }
+            />
 
             <Route
               path="/dashboard/client/:id"
@@ -372,6 +384,15 @@ const App = () => {
               element={
                 <ProtectedRoute allowedRoles={['company']}>
                   <UnifiedDispatch />
+                </ProtectedRoute>
+              }
+            />
+            {/* Route Dashboard Métriques RL */}
+            <Route
+              path="/dashboard/company/:public_id/dispatch/rl-metrics"
+              element={
+                <ProtectedRoute allowedRoles={['company']}>
+                  <RLMetricsDashboard />
                 </ProtectedRoute>
               }
             />

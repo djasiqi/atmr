@@ -1,0 +1,200 @@
+/* ============================================================
+   🎨 DESIGN TOKENS - Variables CSS Globales
+   ============================================================
+   
+   Ce fichier contient toutes les variables CSS utilisées dans l'application.
+   Importez ce fichier dans index.css pour l'utiliser partout.
+   
+   Usage: var(--token-name)
+   Exemple: background: var(--bg-primary);
+*/
+
+:root {
+  /* ============ COULEURS BRAND ============ */
+  --brand-primary: #00796b;          /* Vert principal */
+  --brand-primary-dark: #00695c;     /* Hover/Focus */
+  --brand-hover: #00695c;            /* Alias pour hover (cohérence) */
+  --brand-primary-light: #26a69a;    /* Highlights */
+  --brand-primary-lighter: #4db6ac;  /* Backgrounds légers */
+  --brand-primary-lightest: #e0f2f1; /* Badges/Alertes */
+  
+  /* ============ COULEURS FOND ============ */
+  --bg-primary: #ffffff;             /* Fond principal (cartes, panels) */
+  --bg-secondary: #f4f7fc;           /* Fond de page */
+  --bg-tertiary: #f9fafb;            /* Fond alternatif */
+  --bg-hover: #f3f4f6;               /* Hover sur éléments interactifs */
+  --bg-active: #ecfdf5;              /* État actif (légèrement vert) */
+  --bg-disabled: #e5e7eb;            /* État désactivé */
+  
+  /* ============ COULEURS TEXTE ============ */
+  --text-primary: #0f172a;           /* Texte principal */
+  --text-secondary: #374151;         /* Texte secondaire */
+  --text-tertiary: #6b7280;          /* Texte atténué */
+  --text-disabled: #9ca3af;          /* Texte désactivé */
+  --text-inverse: #ffffff;           /* Texte sur fond foncé */
+  
+  /* ============ COULEURS BORDURES ============ */
+  --border-primary: #e5e7eb;         /* Bordure standard */
+  --border-secondary: #d1d5db;       /* Bordure plus marquée */
+  --border-focus: var(--brand-primary); /* Bordure focus */
+  --border-error: var(--error-primary); /* Bordure erreur */
+  
+  /* ============ COULEURS ÉTATS ============ */
+  --success-primary: #16a34a;        /* Succès */
+  --success-hover: #15803d;          /* Succès hover (plus foncé) */
+  --success-bg: #dcfce7;
+  --success-border: #86efac;
+  --success-bg-hover: #bbf7d0;       /* Fond succès hover */
+  
+  --warning-primary: #f59e0b;        /* Avertissement */
+  --warning-hover: #d97706;          /* Warning hover (plus foncé) */
+  --warning-bg: #fef3c7;
+  --warning-border: #fcd34d;
+  
+  --error-primary: #ef4444;          /* Erreur */
+  --error-hover: #dc2626;            /* Erreur hover (plus foncé) */
+  --error-bg: #fee2e2;
+  --error-border: #fca5a5;
+  
+  /* Alias "danger" pour cohérence sémantique (boutons) */
+  --danger-primary: #ef4444;         /* Danger = Error */
+  --danger-hover: #dc2626;           /* Danger hover */
+  --danger-bg: #fee2e2;
+  --danger-border: #fca5a5;
+  --danger-dark: #b91c1c;            /* Danger très foncé */
+  --danger-bg-hover: #fecaca;        /* Fond danger hover */
+  
+  --info-primary: #3b82f6;           /* Information */
+  --info-hover: #2563eb;             /* Info hover (plus foncé) */
+  --info-bg: #dbeafe;
+  --info-border: #93c5fd;
+  
+  /* ============ DISPATCH & MONITORING ============ */
+  --priority-critical: #dc3545;
+  --priority-high: #fd7e14;
+  --priority-medium: #ffc107;
+  --priority-low: #00796b;
+  
+  --status-late: #dc3545;
+  --status-on-time: #00796b;
+  --status-early: #17a2b8;
+  
+  /* ============ OMBRES ============ */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --shadow-brand: 0 4px 16px rgba(0, 121, 107, 0.2);
+  
+  /* Focus ring pour les inputs */
+  --focus-ring: 0 0 0 3px rgba(0, 121, 107, 0.1);
+  
+  /* ============ ESPACEMENTS ============ */
+  --spacing-xxs: 2px;            /* Très petit espacement */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  --spacing-3xl: 64px;
+  
+  /* ============ RAYONS DE BORDURE ============ */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+  
+  /* ============ TYPOGRAPHIE ============ */
+  --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-family-mono: 'Courier New', Courier, monospace;
+  
+  --font-size-xs: 0.75rem;    /* 12px */
+  --font-size-sm: 0.875rem;   /* 14px */
+  --font-size-base: 1rem;     /* 16px */
+  --font-size-lg: 1.125rem;   /* 18px */
+  --font-size-xl: 1.25rem;    /* 20px */
+  --font-size-2xl: 1.5rem;    /* 24px */
+  --font-size-3xl: 1.875rem;  /* 30px */
+  --font-size-4xl: 2.25rem;   /* 36px */
+  --font-size-5xl: 3rem;      /* 48px */
+  
+  /* Alias courts (redirigent vers les versions longues ci-dessus) */
+  --font-xs: var(--font-size-xs);
+  --font-sm: var(--font-size-sm);
+  --font-md: var(--font-size-base);
+  --font-lg: var(--font-size-lg);
+  --font-xl: var(--font-size-xl);
+  --font-2xl: var(--font-size-2xl);
+  --font-3xl: var(--font-size-3xl);
+  --font-4xl: var(--font-size-4xl);
+  --font-5xl: var(--font-size-5xl);
+  
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+  
+  /* ============ LAYOUT ============ */
+  --header-height: 64px;
+  --sidebar-width: 72px;
+  --sidebar-width-expanded: 240px;
+  --container-max-width: 1280px;
+  
+  /* ============ Z-INDEX ============ */
+  --z-base: 1;                  /* Contenu normal de page */
+  --z-dropdown: 1000;
+  --z-sidebar: 1010;
+  --z-header: 1015;             /* Header doit être au-dessus du contenu */
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+  
+  /* ============ TRANSITIONS ============ */
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+  --transition-slow: 350ms ease;
+  
+  /* ============ BREAKPOINTS (pour référence) ============ */
+  /* sm: 640px */
+  /* md: 768px */
+  /* lg: 1024px */
+  /* xl: 1280px */
+  /* 2xl: 1536px */
+}
+
+/* ============================================================
+   📱 RESPONSIVE - Adaptation Mobile
+   ============================================================ */
+
+@media (max-width: 768px) {
+  :root {
+    --header-height: 56px;
+    --sidebar-width: 60px;  /* Sidebar compacte 60px sur mobile */
+    --sidebar-w: 60px;      /* Variable utilisée par le dashboard */
+    --spacing-lg: 20px;
+    --spacing-xl: 28px;
+  }
+}
+
+/* ============================================================
+   🌙 DARK MODE (Optionnel - à activer plus tard)
+   ============================================================ */
+
+/* @media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: #1f2937;
+    --text-primary: #f9fafb;
+  }
+} */
+
