@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import TYPE_CHECKING
 
 from celery import Celery
-from flask import Flask
+
+if TYPE_CHECKING:
+    from flask import Flask
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +38,9 @@ celery.conf.update(
     accept_content=["json"],
     result_serializer="json",
     task_track_started=True,
-    task_time_limit=600,  # 10 minutes max per task
-    task_soft_time_limit=540,  # 9 minutes soft limit (warning before hard kill)
-    worker_max_tasks_per_child=200,  # Restart worker after 200 tasks
+    task_time_limit=0.600,  # 10 minutes max per task
+    task_soft_time_limit=0.540,  # 9 minutes soft limit (warning before hard kill)
+    worker_max_tasks_per_child=0.200,  # Restart worker after 200 tasks
     worker_prefetch_multiplier=1,  # One task at a time
     task_acks_late=True,  # Acknowledge task after execution
     task_reject_on_worker_lost=True,  # Requeue task if worker dies
@@ -85,21 +88,21 @@ celery.conf.beat_schedule = {
 }
 
 # Initialize Flask app for Celery workers
-flask_app = None
+_flask_app = {}
 
 def get_flask_app():
     """Get or create Flask app instance for Celery workers."""
-    global flask_app
-    if flask_app is None:
+    if "app" not in _flask_app:
         from app import create_app
         config_name = os.getenv("FLASK_CONFIG", "production")
-        flask_app = create_app(config_name)
-        logger.info(f"Flask app created for Celery with config: {config_name}")
-    return flask_app
+        _flask_app["app"] = create_app(config_name)
+        logger.info("Flask app created for Celery with config: %s", config_name)
+    return _flask_app["app"]
 
 
 class ContextTask(celery.Task):
     """Custom Celery task that runs within Flask application context."""
+
     def __call__(self, *args, **kwargs):
         app = get_flask_app()
         with app.app_context():
@@ -111,15 +114,13 @@ celery.Task = ContextTask
 
 
 def init_app(app: Flask) -> Celery:
-    """
-    Initialize Celery with Flask app context.
+    """Initialize Celery with Flask app context.
     Call this from create_app().
     """
-    global flask_app
-    flask_app = app
+    _flask_app["app"] = app
 
     logger.info(
-        f"Celery initialized with broker={CELERY_BROKER_URL}, "
-        f"backend={CELERY_RESULT_BACKEND}, timezone={CELERY_TIMEZONE}"
+        "Celery initialized with broker=%s, backend=%s, timezone=%s",
+        CELERY_BROKER_URL, CELERY_RESULT_BACKEND, CELERY_TIMEZONE
     )
     return celery

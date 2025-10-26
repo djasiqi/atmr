@@ -1,5 +1,4 @@
-"""
-Modèle pour tracer toutes les actions automatiques du système.
+"""Modèle pour tracer toutes les actions automatiques du système.
 
 Ce modèle est essentiel pour :
 - Audit trail complet de toutes les actions autonomes
@@ -7,16 +6,17 @@ Ce modèle est essentiel pour :
 - Monitoring et détection d'anomalies
 - Compliance et traçabilité
 """
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import Boolean, Float, Integer, String, Text
+from typing_extensions import override
 
 from ext import db
 
 
 class AutonomousAction(db.Model):
-    """
-    Trace chaque action automatique effectuée par le système.
+    """Trace chaque action automatique effectuée par le système.
 
     Utilisé pour :
     - Audit trail complet
@@ -24,15 +24,28 @@ class AutonomousAction(db.Model):
     - Monitoring des performances
     - Rollback si nécessaire
     """
+
     __tablename__ = "autonomous_action"
 
     # Clé primaire
     id = db.Column(Integer, primary_key=True)
 
     # Identifiants
-    company_id = db.Column(Integer, db.ForeignKey("company.id"), nullable=False, index=True)
-    booking_id = db.Column(Integer, db.ForeignKey("booking.id"), nullable=True, index=True)
-    driver_id = db.Column(Integer, db.ForeignKey("driver.id"), nullable=True, index=True)
+    company_id = db.Column(
+        Integer,
+        db.ForeignKey("company.id"),
+        nullable=False,
+        index=True)
+    booking_id = db.Column(
+        Integer,
+        db.ForeignKey("booking.id"),
+        nullable=True,
+        index=True)
+    driver_id = db.Column(
+        Integer,
+        db.ForeignKey("driver.id"),
+        nullable=True,
+        index=True)
 
     # Type d'action
     action_type = db.Column(String(50), nullable=False, index=True)
@@ -47,7 +60,8 @@ class AutonomousAction(db.Model):
 
     # Détails de l'action
     action_description = db.Column(String(500), nullable=False)
-    action_data = db.Column(Text, nullable=True)  # JSON avec détails (avant/après)
+    # JSON avec détails (avant/après)
+    action_data = db.Column(Text, nullable=True)
 
     # Résultat
     success = db.Column(Boolean, nullable=False, default=True)
@@ -55,8 +69,10 @@ class AutonomousAction(db.Model):
 
     # Métriques
     execution_time_ms = db.Column(Float, nullable=True)  # Temps d'exécution
-    confidence_score = db.Column(Float, nullable=True)  # Confiance ML (0.0-1.0)
-    expected_improvement_minutes = db.Column(Float, nullable=True)  # Gain attendu
+    confidence_score = db.Column(
+        Float, nullable=True)  # Confiance ML (0.0-1.0)
+    expected_improvement_minutes = db.Column(
+        Float, nullable=True)  # Gain attendu
 
     # Contexte
     trigger_source = db.Column(String(100), nullable=True)
@@ -74,14 +90,35 @@ class AutonomousAction(db.Model):
     admin_notes = db.Column(Text, nullable=True)
 
     # Métadonnées
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)  # noqa: DTZ003
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)  # noqa: DTZ003
+    created_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False)
 
     # Relations
-    company = db.relationship("Company", backref=db.backref("autonomous_actions", lazy="dynamic"))
-    booking = db.relationship("Booking", backref=db.backref("autonomous_actions", lazy="dynamic"))
-    driver = db.relationship("Driver", backref=db.backref("autonomous_actions", lazy="dynamic"))
+    company = db.relationship(
+        "Company",
+        backref=db.backref(
+            "autonomous_actions",
+            lazy="dynamic"))
+    booking = db.relationship(
+        "Booking",
+        backref=db.backref(
+            "autonomous_actions",
+            lazy="dynamic"))
+    driver = db.relationship(
+        "Driver",
+        backref=db.backref(
+            "autonomous_actions",
+            lazy="dynamic"))
 
+    @override
     def __repr__(self) -> str:
         return (
             f"<AutonomousAction id={self.id} "
@@ -90,7 +127,7 @@ class AutonomousAction(db.Model):
             f"success={self.success}>"
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convertit en dictionnaire pour API."""
         return {
             "id": self.id,
@@ -114,9 +151,9 @@ class AutonomousAction(db.Model):
         }
 
     @classmethod
-    def count_actions_last_hour(cls, company_id: int, action_type: str | None = None) -> int:
-        """
-        Compte le nombre d'actions dans la dernière heure.
+    def count_actions_last_hour(cls, company_id: int,
+                                action_type: str | None = None) -> int:
+        """Compte le nombre d'actions dans la dernière heure.
 
         Args:
             company_id: ID de l'entreprise
@@ -124,9 +161,10 @@ class AutonomousAction(db.Model):
 
         Returns:
             Nombre d'actions dans la dernière heure
+
         """
         from datetime import timedelta
-        one_hour_ago = datetime.utcnow() - timedelta(hours=1)  # noqa: DTZ003
+        one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
 
         query = cls.query.filter(
             cls.company_id == company_id,
@@ -140,9 +178,9 @@ class AutonomousAction(db.Model):
         return query.count()
 
     @classmethod
-    def count_actions_today(cls, company_id: int, action_type: str | None = None) -> int:
-        """
-        Compte le nombre d'actions aujourd'hui.
+    def count_actions_today(cls, company_id: int,
+                            action_type: str | None = None) -> int:
+        """Compte le nombre d'actions aujourd'hui.
 
         Args:
             company_id: ID de l'entreprise
@@ -150,8 +188,10 @@ class AutonomousAction(db.Model):
 
         Returns:
             Nombre d'actions aujourd'hui
+
         """
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)  # noqa: DTZ003
+        today_start = datetime.now(timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0)
 
         query = cls.query.filter(
             cls.company_id == company_id,
@@ -163,4 +203,3 @@ class AutonomousAction(db.Model):
             query = query.filter(cls.action_type == action_type)
 
         return query.count()
-

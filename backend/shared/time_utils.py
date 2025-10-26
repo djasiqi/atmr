@@ -8,17 +8,16 @@ from zoneinfo import ZoneInfo
 import pytz
 
 # ---------------------------------------------------------------------------
-# MODE NAÏF LOCAL (Europe/Zurich implicite) — AUCUNE CONVERSION UTC
+# MODE NAÏF LOCAL (Europe/Zurich implicite) - AUCUNE CONVERSION UTC
 # ---------------------------------------------------------------------------
 
 # Fuseau business par défaut (surchargeable par variable d'env)
 LOCAL_TZ = ZoneInfo(os.getenv("UD_DEFAULT_TZ", "Europe/Zurich"))
 
 def _normalize_local_string(s: str) -> str:
-    """
-    Normalise quelques variations communes (sans TZ) :
+    """Normalise quelques variations communes (sans TZ) :
     - remplace séparateur espace par 'T' si nécessaire
-    - conserve les fractions de secondes si présentes
+    - conserve les fractions de secondes si présentes.
     """
     s = s.strip()
     if " " in s and "T" not in s:
@@ -40,7 +39,7 @@ def now_local() -> datetime:
     # Get current UTC time
     now_utc = datetime.now(UTC)
     # Convert to Europe/Zurich
-    now_zurich = now_utc.astimezone(pytz.timezone('Europe/Zurich'))
+    now_zurich = now_utc.astimezone(pytz.timezone("Europe/Zurich"))
     # Return as naive datetime
     return now_zurich.replace(tzinfo=None)
 
@@ -73,19 +72,17 @@ def minutes_between_local(a: Union[str, datetime, None], b: Union[str, datetime,
 def sort_key_local(dt: Union[str, datetime, None]) -> datetime:
     """Clé de tri sûre (naïf local). None => +50 ans."""
     if not dt:
-        return now_local() + timedelta(days=365 * 50)
+        return now_local() + timedelta(days=0.365 * 50)
     try:
         parsed = parse_local_naive(dt)
     except Exception:
-        return now_local() + timedelta(days=365 * 50)
+        return now_local() + timedelta(days=0.365 * 50)
     if parsed is None:
-        return now_local() + timedelta(days=365 * 50)
+        return now_local() + timedelta(days=0.365 * 50)
     return parsed
 
 def split_date_time_local(dt: Union[str, datetime, None]) -> Tuple[str | None, str | None]:
-    """
-    Retourne ('YYYY-MM-DD', 'HH:MM') sans conversions — pour l’affichage.
-    """
+    """Retourne ('YYYY-MM-DD', 'HH:MM') sans conversions - pour l'affichage."""
     d = parse_local_naive(dt)
     if not d:
         return None, None
@@ -112,14 +109,14 @@ def coerce_local_day(value: Union[str, date]) -> str:
     return f"{y:04d}-{m:02d}-{d:02d}"
 
 __all__ = [
-    "parse_local_naive",
-    "now_local",
-    "minutes_from_now_local",
+    "coerce_local_day",
+    "day_local_bounds",
     "minutes_between_local",
+    "minutes_from_now_local",
+    "now_local",
+    "parse_local_naive",
     "sort_key_local",
     "split_date_time_local",
-    "day_local_bounds",
-    "coerce_local_day",
 ]
 
 
@@ -131,12 +128,10 @@ def _ensure_dt(obj: Union[str, datetime, None]) -> datetime | None:
     if isinstance(obj, datetime):
         return obj
     # chaîne → essaye ISO, interprété comme local naïf si sans TZ
-    d = parse_local_naive(obj)
-    return d
+    return parse_local_naive(obj)
 
 def to_utc(dt: Union[str, datetime, None]) -> datetime | None:
-    """
-    Normalise en **UTC aware**.
+    """Normalise en **UTC aware**.
     - Si dt est naïf: supposé en LOCAL_TZ → converti en UTC.
     - Si dt est aware: astimezone(UTC).
     """
@@ -148,8 +143,7 @@ def to_utc(dt: Union[str, datetime, None]) -> datetime | None:
     return d.astimezone(UTC)
 
 def to_utc_from_db(dt: Union[str, datetime, None]) -> datetime | None:
-    """
-    Datetime venant de la DB (souvent aware si timezone=True).
+    """Datetime venant de la DB (souvent aware si timezone=True).
     Ramène toujours en **UTC aware**.
     """
     d = _ensure_dt(dt)
@@ -185,7 +179,7 @@ def minutes_between(a: Union[str, datetime, None], b: Union[str, datetime, None]
 def sort_key_utc(dt: Union[str, datetime, None]) -> datetime:
     """Clé de tri sûre en **UTC aware**."""
     d = to_utc(dt)
-    return d if d is not None else (now_utc() + timedelta(days=365 * 50))
+    return d if d is not None else (now_utc() + timedelta(days=0.365 * 50))
 
 def to_geneva_local(dt: Union[str, datetime, None]) -> datetime | None:
     """Retourne un datetime **aware** en fuseau LOCAL_TZ."""
@@ -197,9 +191,7 @@ def to_geneva_local(dt: Union[str, datetime, None]) -> datetime | None:
     return d.astimezone(LOCAL_TZ)
 
 def format_geneva(dt: Union[str, datetime, None]) -> Tuple[str | None, str | None]:
-    """
-    Retourne ('YYYY-MM-DD','HH:MM') en **LOCAL_TZ** (aware), pratique pour l'affichage.
-    """
+    """Retourne ('YYYY-MM-DD','HH:MM') en **LOCAL_TZ** (aware), pratique pour l'affichage."""
     d = to_geneva_local(dt)
     if not d:
         return None, None
@@ -212,14 +204,14 @@ def iso_utc_z(dt: Union[str, datetime, None]) -> str | None:
 
 # Exposer également ces noms pour ne pas casser les imports
 __all__ += [
-    "to_utc",
-    "to_utc_from_db",
     "ensure_aware_utc",
-    "now_utc",
-    "minutes_from_now",
-    "minutes_between",
-    "sort_key_utc",
-    "to_geneva_local",
     "format_geneva",
     "iso_utc_z",
+    "minutes_between",
+    "minutes_from_now",
+    "now_utc",
+    "sort_key_utc",
+    "to_geneva_local",
+    "to_utc",
+    "to_utc_from_db",
 ]

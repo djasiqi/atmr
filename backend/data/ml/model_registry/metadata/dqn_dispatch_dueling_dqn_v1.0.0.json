@@ -1,0 +1,70 @@
+{
+  "model_name": "dqn_dispatch",
+  "model_arch": "dueling_dqn",
+  "version": "v1.0.0",
+  "created_at": "2025-10-23T21:27:24.771036+00:00",
+  "training_config": {
+    "learning_rate": 0.001,
+    "batch_size": 64,
+    "episodes": 1000,
+    "use_per": true,
+    "use_double_dqn": true,
+    "use_n_step": true
+  },
+  "performance_metrics": {
+    "punctuality_rate": 0.88,
+    "avg_distance": 12.5,
+    "avg_delay": 3.2,
+    "driver_utilization": 0.79,
+    "customer_satisfaction": 0.84
+  },
+  "features_config": {
+    "state_features": [
+      "driver_location_lat",
+      "driver_location_lon",
+      "driver_availability",
+      "booking_pickup_lat",
+      "booking_pickup_lon",
+      "booking_dropoff_lat",
+      "booking_dropoff_lon",
+      "booking_time_window_start",
+      "booking_time_window_end",
+      "booking_priority",
+      "current_time",
+      "traffic_level",
+      "weather_condition",
+      "driver_skill_level",
+      "booking_passenger_count"
+    ],
+    "action_features": [
+      "assign_driver",
+      "reject_booking",
+      "delay_assignment"
+    ]
+  },
+  "scalers_config": {
+    "state_scaler": {
+      "type": "StandardScaler",
+      "fitted": true
+    },
+    "reward_scaler": {
+      "type": "MinMaxScaler",
+      "fitted": true
+    }
+  },
+  "optuna_study_id": "study_dqn_dispatch_v1",
+  "hyperparameters": {
+    "learning_rate": 0.001,
+    "batch_size": 64,
+    "gamma": 0.99,
+    "epsilon_start": 1.0,
+    "epsilon_end": 0.01
+  },
+  "dataset_info": {
+    "training_samples": 10000,
+    "validation_samples": 2000,
+    "test_samples": 1000
+  },
+  "model_size_mb": 0.0022935867309570312,
+  "checksum": "45375b5effc95e88eb5e259c3953054b"
+}

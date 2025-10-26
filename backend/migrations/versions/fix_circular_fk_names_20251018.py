@@ -13,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = 'fix_circular_fk_20251018'
-down_revision = 'c8d9e2f3a4b5'
+revision = "fix_circular_fk_20251018"
+down_revision = "c8d9e2f3a4b5"
 branch_labels = None
 depends_on = None
 
@@ -71,5 +71,4 @@ def upgrade():
 def downgrade():
     """Rollback: remettre les noms automatiques (optionnel)"""
     # En pratique, garder les noms est mieux (pas de downgrade nécessaire)
-    pass
 

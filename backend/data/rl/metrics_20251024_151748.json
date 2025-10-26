@@ -1,0 +1,11 @@
+{
+  "timestamp": "20251024_151748",
+  "study_name": "dqn_optimization",
+  "n_trials_total": 0,
+  "n_trials_completed": 0,
+  "n_trials_pruned": 0,
+  "best_value": 100.0,
+  "best_trial_number": 1,
+  "optimization_duration": null,
+  "trials_detailed": []
+}

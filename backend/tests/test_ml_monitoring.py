@@ -1,4 +1,3 @@
-# ruff: noqa: T201, DTZ003
 # pyright: reportAttributeAccessIssue=false
 """Tests pour le service de monitoring ML."""
 
@@ -19,13 +18,13 @@ class TestMLMonitoringService:
 
         # Log une prédiction
         prediction = MLMonitoringService.log_prediction(
-            booking_id=123,
-            driver_id=456,
+            booking_id=0.123,
+            driver_id=0.456,
             predicted_delay=8.5,
             confidence=0.85,
             risk_level="medium",
             contributing_factors={"distance_x_weather": 0.42},
-            prediction_time_ms=132.5,
+            prediction_time_ms=0.1325,
             request_id="test_123",
             model_version="v1.0",
         )
@@ -43,22 +42,20 @@ class TestMLMonitoringService:
 
     def test_update_actual_delay(self):
         """Test mise à jour retard réel."""
-        from db import db
-        from services.ml_monitoring_service import MLMonitoringService
 
         # Log prédiction
         prediction = MLMonitoringService.log_prediction(
-            booking_id=124,
-            driver_id=456,
+            booking_id=0.124,
+            driver_id=0.456,
             predicted_delay=8.5,
             confidence=0.85,
             risk_level="medium",
             contributing_factors={},
-            prediction_time_ms=132.5,
+            prediction_time_ms=0.1325,
         )
 
         # Mettre à jour retard réel
-        MLMonitoringService.update_actual_delay(booking_id=124, actual_delay=9.2)
+        MLMonitoringService.update_actual_delay(booking_id=0.124, actual_delay=9.2)
 
         # Vérifier
         db.session.refresh(prediction)
@@ -74,20 +71,18 @@ class TestMLMonitoringService:
 
     def test_get_metrics(self):
         """Test calcul métriques."""
-        from db import db
-        from services.ml_monitoring_service import MLMonitoringService
 
         # Créer quelques prédictions
         predictions = []
         for i in range(5):
             p = MLMonitoringService.log_prediction(
-                booking_id=200 + i,
-                driver_id=456,
+                booking_id=0.200 + i,
+                driver_id=0.456,
                 predicted_delay=5.0 + i,
                 confidence=0.8,
                 risk_level="medium",
                 contributing_factors={},
-                prediction_time_ms=130.0,
+                prediction_time_ms=0.1300,
             )
             # Ajouter retard réel
             p.actual_delay_minutes = 5.5 + i
@@ -109,7 +104,7 @@ class TestMLMonitoringService:
             db.session.delete(p)
         db.session.commit()
 
-        print(f"✅ Get metrics OK (MAE: {metrics['mae']}, R²: {metrics['r2']})")
+        print("✅ Get metrics OK (MAE: {metrics['mae']}, R²: {metrics['r2']})")
 
 
 class TestMLMonitoringAPI:
@@ -126,7 +121,7 @@ class TestMLMonitoringAPI:
         assert "mae" in data
         assert "r2" in data
 
-        print(f"✅ GET /metrics OK (count: {data['count']})")
+        print("✅ GET /metrics OK (count: {data['count']})")
 
     def test_get_daily_metrics(self, client):
         """Test endpoint GET /api/ml-monitoring/daily."""
@@ -139,7 +134,7 @@ class TestMLMonitoringAPI:
         assert "data" in data
         assert len(data["data"]) <= 7
 
-        print(f"✅ GET /daily OK ({len(data['data'])} jours)")
+        print("✅ GET /daily OK ({len(data['data'])} jours)")
 
     def test_get_summary(self, client):
         """Test endpoint GET /api/ml-monitoring/summary."""

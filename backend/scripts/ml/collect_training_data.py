@@ -1,12 +1,10 @@
-"""
-Script de collecte de données pour l'entraînement du modèle ML de prédiction de retards.
+"""Script de collecte de données pour l'entraînement du modèle ML de prédiction de retards.
 
 Extrait les données historiques des 90 derniers jours et calcule les features nécessaires.
 
 Usage:
     python scripts/ml/collect_training_data.py [--days 90] [--output data/training_data.csv]
 """
-# ruff: noqa: T201, DTZ005, DTZ011
 # print(), datetime sans tz sont intentionnels dans les scripts ML
 
 import argparse
@@ -31,8 +29,7 @@ def extract_features_from_assignment(
     booking: Booking,
     driver: Driver
 ) -> dict[str, Any]:
-    """
-    Extrait les features d'une assignation pour le ML.
+    """Extrait les features d'une assignation pour le ML.
     Features extraites :
     - time_of_day : Heure de la journée (0-23)
     - day_of_week : Jour de la semaine (0-6, 0=Lundi)
@@ -46,7 +43,7 @@ def extract_features_from_assignment(
     - booking_priority : Priorité estimée (0-1)
     - traffic_density : Densité trafic estimée (0-1)
     - weather_factor : Facteur météo (0.5 neutre)
-    - actual_delay_minutes : Retard réel (TARGET pour ML)
+    - actual_delay_minutes : Retard réel (TARGET pour ML).
     """
     scheduled_time = booking.scheduled_time or datetime.now()
 
@@ -57,10 +54,10 @@ def extract_features_from_assignment(
 
     # Distance
     try:
-        pickup_lat_val = getattr(booking, 'pickup_lat', None)
-        pickup_lon_val = getattr(booking, 'pickup_lon', None)
-        dropoff_lat_val = getattr(booking, 'dropoff_lat', None)
-        dropoff_lon_val = getattr(booking, 'dropoff_lon', None)
+        pickup_lat_val = getattr(booking, "pickup_lat", None)
+        pickup_lon_val = getattr(booking, "pickup_lon", None)
+        dropoff_lat_val = getattr(booking, "dropoff_lat", None)
+        dropoff_lon_val = getattr(booking, "dropoff_lon", None)
 
         pickup_lat = float(pickup_lat_val) if pickup_lat_val is not None else 0.0
         pickup_lon = float(pickup_lon_val) if pickup_lon_val is not None else 0.0
@@ -70,25 +67,25 @@ def extract_features_from_assignment(
         if all([pickup_lat, pickup_lon, dropoff_lat, dropoff_lon]):
             distance_km = haversine_distance(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
         else:
-            distance_meters_val = getattr(booking, 'distance_meters', None)
+            distance_meters_val = getattr(booking, "distance_meters", None)
             distance_km = distance_meters_val / 1000.0 if distance_meters_val else 0.0
     except Exception:
         distance_km = 0.0
 
     # Duration
-    duration_seconds_val = getattr(booking, 'duration_seconds', None)
+    duration_seconds_val = getattr(booking, "duration_seconds", None)
     duration_seconds = duration_seconds_val if duration_seconds_val else 0
 
     # Booking characteristics
-    medical_facility_val = getattr(booking, 'medical_facility', None)
+    medical_facility_val = getattr(booking, "medical_facility", None)
     is_medical = 1.0 if medical_facility_val else 0.0
-    is_urgent_val = getattr(booking, 'is_urgent', False)
+    is_urgent_val = getattr(booking, "is_urgent", False)
     is_urgent = 1.0 if is_urgent_val else 0.0
-    is_round_trip_val = getattr(booking, 'is_round_trip', False)
+    is_round_trip_val = getattr(booking, "is_round_trip", False)
     is_round_trip = 1.0 if is_round_trip_val else 0.0
 
     # Driver features (nombre total de bookings comme proxy de l'expérience)
-    driver_total_bookings = len(getattr(driver, 'assignments', [])) if hasattr(driver, 'assignments') else 0
+    driver_total_bookings = len(getattr(driver, "assignments", [])) if hasattr(driver, "assignments") else 0
 
     # Priority
     booking_priority = 0.8 if (is_medical or is_urgent) else 0.5
@@ -109,8 +106,8 @@ def extract_features_from_assignment(
     # Retard = (actual_pickup_at - planned_pickup_at) en minutes
     actual_delay_minutes = 0.0
 
-    planned_pickup_val = getattr(assignment, 'planned_pickup_at', None)
-    actual_pickup_val = getattr(assignment, 'actual_pickup_at', None)
+    planned_pickup_val = getattr(assignment, "planned_pickup_at", None)
+    actual_pickup_val = getattr(assignment, "actual_pickup_at", None)
 
     if planned_pickup_val is not None and actual_pickup_val is not None:
         try:
@@ -119,7 +116,7 @@ def extract_features_from_assignment(
         except Exception:
             actual_delay_minutes = 0.0
     else:
-        delay_seconds_val = getattr(assignment, 'delay_seconds', None)
+        delay_seconds_val = getattr(assignment, "delay_seconds", None)
         if delay_seconds_val:
             # Utiliser le delay_seconds si disponible
             actual_delay_minutes = delay_seconds_val / 60.0
@@ -159,8 +156,7 @@ def extract_features_from_assignment(
 
 
 def collect_training_data(days: int = 90, company_id: int | None = None) -> pd.DataFrame:
-    """
-    Collecte les données d'entraînement des N derniers jours.
+    """Collecte les données d'entraînement des N derniers jours.
 
     Args:
         days: Nombre de jours à extraire (défaut: 90)
@@ -168,19 +164,20 @@ def collect_training_data(days: int = 90, company_id: int | None = None) -> pd.D
 
     Returns:
         DataFrame avec les features et labels
+
     """
-    print(f"\n{'='*70}")
+    print("\n{'='*70}")
     print("COLLECTE DE DONNÉES ML - DÉMARRAGE")
-    print(f"{'='*70}")
-    print(f"Période : {days} derniers jours")
-    print(f"Company ID : {company_id or 'Toutes'}")
-    print(f"{'='*70}\n")
+    print("{'='*70}")
+    print("Période : {days} derniers jours")
+    print("Company ID : {company_id or 'Toutes'}")
+    print("{'='*70}\n")
 
     # Calculer la période
     end_date = date.today()
     start_date = end_date - timedelta(days=days)
 
-    print(f"📅 Extraction du {start_date} au {end_date}")
+    print("📅 Extraction du {start_date} au {end_date}")
 
     # Query pour récupérer les assignments avec bookings et drivers
     query = (
@@ -202,7 +199,7 @@ def collect_training_data(days: int = 90, company_id: int | None = None) -> pd.D
     # Eager loading pour éviter N+1 queries
     results = query.all()
 
-    print(f"✅ {len(results)} assignments trouvées avec pickup réel")
+    print("✅ {len(results)} assignments trouvées avec pickup réel")
 
     if len(results) == 0:
         print("⚠️ ATTENTION: Aucune donnée trouvée!")
@@ -216,39 +213,39 @@ def collect_training_data(days: int = 90, company_id: int | None = None) -> pd.D
 
     for i, (assignment, booking, driver) in enumerate(results, 1):
         if i % 100 == 0:
-            print(f"   Traité {i}/{len(results)} assignments...")
+            print("   Traité {i}/{len(results)} assignments...")
 
         try:
             features = extract_features_from_assignment(assignment, booking, driver)
             data_records.append(features)
-        except Exception as e:
-            print(f"⚠️ Erreur assignment {assignment.id}: {e}")
+        except Exception:
+            print("⚠️ Erreur assignment {assignment.id}: {e}")
             continue
 
-    print(f"✅ {len(data_records)} enregistrements créés")
+    print("✅ {len(data_records)} enregistrements créés")
 
     # Créer DataFrame
     df = pd.DataFrame(data_records)
 
     # Statistiques rapides
-    print(f"\n{'='*70}")
+    print("\n{'='*70}")
     print("STATISTIQUES DU DATASET")
-    print(f"{'='*70}")
-    print(f"Taille : {len(df)} lignes x {len(df.columns)} colonnes")
-    print(f"\nColonnes : {', '.join(df.columns)}")
-    print(f"\nRetard moyen : {df['actual_delay_minutes'].mean():.2f} minutes")
-    print(f"Retard médian : {df['actual_delay_minutes'].median():.2f} minutes")
-    print(f"Retard max : {df['actual_delay_minutes'].max():.2f} minutes")
-    print(f"Retard min : {df['actual_delay_minutes'].min():.2f} minutes")
-    print(f"\n% courses avec retard (>5min) : {(df['actual_delay_minutes'] > 5).sum() / len(df) * 100:.1f}%")
-    print(f"% courses en avance (<0min) : {(df['actual_delay_minutes'] < 0).sum() / len(df) * 100:.1f}%")
-    print(f"{'='*70}\n")
+    print("{'='*70}")
+    print("Taille : {len(df)} lignes x {len(df.columns)} colonnes")
+    print("\nColonnes : {', '.join(df.columns)}")
+    print("\nRetard moyen : {df['actual_delay_minutes'].mean()")
+    print("Retard médian : {df['actual_delay_minutes'].median()")
+    print("Retard max : {df['actual_delay_minutes'].max()")
+    print("Retard min : {df['actual_delay_minutes'].min()")
+    print("\n% courses avec retard (>5min) : {(df['actual_delay_minutes'] > 5).sum() / len(df) * 100")
+    print("% courses en avance (<0min) : {(df['actual_delay_minutes'] < 0).sum() / len(df) * 100")
+    print("{'='*70}\n")
 
     return df
 
 
 def main():
-    """Point d'entrée principal"""
+    """Point d'entrée principal."""
     parser = argparse.ArgumentParser(description="Collecte de données pour entraînement ML")
     parser.add_argument("--days", type=int, default=90, help="Nombre de jours à extraire (défaut: 90)")
     parser.add_argument("--company-id", type=int, default=None, help="ID de la company (défaut: toutes)")
@@ -273,12 +270,12 @@ def main():
 
         # Sauvegarder en CSV
         df.to_csv(output_path, index=False)
-        print(f"✅ CSV sauvegardé : {output_path}")
+        print("✅ CSV sauvegardé : {output_path}")
 
         # Sauvegarder aussi en JSON pour flexibilité
-        json_path = output_path.with_suffix('.json')
-        df.to_json(json_path, orient='records', indent=2)
-        print(f"✅ JSON sauvegardé : {json_path}")
+        json_path = output_path.with_suffix(".json")
+        df.to_json(json_path, orient="records", indent=2)
+        print("✅ JSON sauvegardé : {json_path}")
 
         # Créer un fichier de métadonnées
         metadata = {
@@ -286,35 +283,35 @@ def main():
             "days_extracted": args.days,
             "company_id": args.company_id,
             "total_records": len(df),
-            "start_date": df['booking_id'].min() if not df.empty else None,
-            "end_date": df['booking_id'].max() if not df.empty else None,
+            "start_date": df["booking_id"].min() if not df.empty else None,
+            "end_date": df["booking_id"].max() if not df.empty else None,
             "features": list(df.columns),
             "statistics": {
-                "mean_delay": float(df['actual_delay_minutes'].mean()),
-                "median_delay": float(df['actual_delay_minutes'].median()),
-                "std_delay": float(df['actual_delay_minutes'].std()),
-                "min_delay": float(df['actual_delay_minutes'].min()),
-                "max_delay": float(df['actual_delay_minutes'].max()),
-                "pct_delayed": float((df['actual_delay_minutes'] > 5).sum() / len(df) * 100),
+                "mean_delay": float(df["actual_delay_minutes"].mean()),
+                "median_delay": float(df["actual_delay_minutes"].median()),
+                "std_delay": float(df["actual_delay_minutes"].std()),
+                "min_delay": float(df["actual_delay_minutes"].min()),
+                "max_delay": float(df["actual_delay_minutes"].max()),
+                "pct_delayed": float((df["actual_delay_minutes"] > 5).sum() / len(df) * 100),
             }
         }
 
-        metadata_path = output_path.parent / 'metadata.json'
-        with open(metadata_path, 'w') as f:
+        metadata_path = output_path.parent / "metadata.json"
+        with Path(metadata_path, "w").open() as f:
             json.dump(metadata, f, indent=2)
 
-        print(f"✅ Métadonnées sauvegardées : {metadata_path}")
+        print("✅ Métadonnées sauvegardées : {metadata_path}")
 
-        print(f"\n{'='*70}")
+        print("\n{'='*70}")
         print("✅ COLLECTE TERMINÉE AVEC SUCCÈS !")
-        print(f"{'='*70}")
+        print("{'='*70}")
         print("\nFichiers créés :")
-        print(f"  - {output_path}")
-        print(f"  - {json_path}")
-        print(f"  - {metadata_path}")
+        print("  - {output_path}")
+        print("  - {json_path}")
+        print("  - {metadata_path}")
         print("\nProchaine étape : Analyse exploratoire (EDA)")
         print("  → python scripts/ml/analyze_data.py")
-        print(f"{'='*70}\n")
+        print("{'='*70}\n")
 
 
 if __name__ == "__main__":

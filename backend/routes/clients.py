@@ -1,6 +1,8 @@
 import logging
 import re
 from datetime import UTC, datetime
+
+# Constantes pour éviter les valeurs magiques
 from typing import Any, cast
 from urllib.parse import urlencode
 
@@ -14,167 +16,225 @@ from app import sentry_sdk
 from ext import mail, role_required
 from models import Booking, BookingStatus, Client, GenderEnum, User, UserRole, db
 
-app_logger = logging.getLogger('app')
+TOTAL_AMOUNT_ZERO = 0
 
-clients_ns = Namespace('clients', description="Opérations liées aux profils clients et à leurs réservations")
+app_logger = logging.getLogger("app")
+
+clients_ns = Namespace(
+    "clients",
+    description="Opérations liées aux profils clients et à leurs réservations")
 
 # Modèle pour la mise à jour du profil client
-client_profile_model = clients_ns.model('ClientProfile', {
-    'first_name': fields.String(description="Prénom"),
-    'last_name': fields.String(description="Nom"),
-    'phone': fields.String(description="Téléphone"),
-    'address': fields.String(description="Adresse"),
-    'birth_date': fields.String(description="Date de naissance (YYYY-MM-DD)"),
-    'gender': fields.String(description="Genre")
+client_profile_model = clients_ns.model("ClientProfile", {
+    "first_name": fields.String(description="Prénom"),
+    "last_name": fields.String(description="Nom"),
+    "phone": fields.String(description="Téléphone"),
+    "address": fields.String(description="Adresse"),
+    "birth_date": fields.String(description="Date de naissance (YYYY-MM-DD)"),
+    "gender": fields.String(description="Genre")
 })
 
 # Modèle pour la création d'une réservation
-booking_create_model = clients_ns.model('BookingCreate', {
-    'dropoff_location': fields.String(required=True, description="Lieu de dépose"),
-    'scheduled_time': fields.String(required=True, description="Date et heure prévue (format ISO 8601)"),
-    'amount': fields.Float(description="Montant de la réservation", default=10),
+booking_create_model = clients_ns.model("BookingCreate", {
+    "dropoff_location": fields.String(required=True, description="Lieu de dépose"),
+    "scheduled_time": fields.String(required=True, description="Date et heure prévue (format ISO 8601)"),
+    "amount": fields.Float(description="Montant de la réservation", default=10),
 })
 
 # -------------------------------------------------------------------
 # Gestion du profil client
 # -------------------------------------------------------------------
-@clients_ns.route('/<string:public_id>')
+
+
+@clients_ns.route("/<string:public_id>")
 class ManageClientProfile(Resource):
     @jwt_required()
     @role_required(UserRole.client)
     def get(self, public_id):
         try:
             current_user_public_id = get_jwt_identity()
-            current_user = User.query.filter_by(public_id=current_user_public_id).one_or_none()
+            current_user = User.query.filter_by(
+                public_id=current_user_public_id).one_or_none()
             if not current_user:
                 return {"error": "User not found or invalid token"}, 401
             if current_user.public_id != public_id and current_user.role != UserRole.admin:
                 return {"error": "Unauthorized access"}, 403
-            client = Client.query.options(joinedload(Client.user)).join(User).filter(User.public_id == public_id).one_or_none()
+            client = Client.query.options(joinedload(Client.user)).join(
+                User).filter(User.public_id == public_id).one_or_none()
             if not client:
                 return {"error": "Client profile not found"}, 404
-            return cast(Any, client).serialize, 200
+            return cast("Any", client).serialize, 200
         except Exception as e:
-            app_logger.error(f"❌ ERREUR manage_client_profile GET: {type(e).__name__} - {str(e)}", exc_info=True)
+
+            app_logger.error(
+                "❌ ERREUR manage_client_profile GET: %s - %s",
+                type(e).__name__,
+                str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
     @jwt_required()
     @role_required(UserRole.client)
     @clients_ns.expect(client_profile_model)
-    def put(self, public_id):
+    def put(self, public_id):  # noqa: PLR0911
         try:
+            # Validation initiale combinée
             current_user_public_id = get_jwt_identity()
-            current_user = User.query.filter_by(public_id=current_user_public_id).one_or_none()
+            current_user = User.query.filter_by(
+                public_id=current_user_public_id).one_or_none()
+            
             if not current_user:
                 return {"error": "User not found or invalid token"}, 401
+            
             if current_user.public_id != public_id and current_user.role != UserRole.admin:
                 return {"error": "Unauthorized access"}, 403
-            client = Client.query.options(joinedload(Client.user)).join(User).filter(User.public_id == public_id).one_or_none()
+            
+            client = Client.query.options(joinedload(Client.user)).join(
+                User).filter(User.public_id == public_id).one_or_none()
+            
             if not client:
                 return {"error": "Client profile not found"}, 404
+            
             data = request.get_json()
             if not data:
                 return {"error": "No data provided"}, 400
 
-            if 'first_name' in data and data['first_name']:
-                if not data['first_name'].strip():
-                    return {"error": "First name cannot be empty"}, 400
-                client.user.first_name = data['first_name']
-            if 'last_name' in data and data['last_name']:
-                if not data['last_name'].strip():
-                    return {"error": "Last name cannot be empty"}, 400
-                client.user.last_name = data['last_name']
-            if 'phone' in data:
-                if data['phone'] and not re.match(r"^\+?[0-9]{7,15}$", data['phone']):
-                    return {"error": "Invalid phone number format"}, 400
-                client.phone = data['phone']
-            if 'address' in data:
-                if data['address'] and not data['address'].strip():
-                    return {"error": "Address cannot be empty"}, 400
-                client.address = data['address']
-            if 'birth_date' in data and data['birth_date']:
+            # Validation des champs combinée
+            error_message = None
+            
+            if data.get("first_name") and not data["first_name"].strip():
+                error_message = "First name cannot be empty"
+            elif data.get("last_name") and not data["last_name"].strip():
+                error_message = "Last name cannot be empty"
+            elif "phone" in data and data["phone"] and not re.match(r"^\+?[0-9]{7,15}$", data["phone"]):
+                error_message = "Invalid phone number format"
+            elif "address" in data and data["address"] and not data["address"].strip():
+                error_message = "Address cannot be empty"
+            elif data.get("birth_date"):
                 try:
-                    client.user.birth_date = datetime.strptime(data['birth_date'], '%Y-%m-%d').date()
+                    datetime.strptime(data["birth_date"], "%Y-%m-%d").date()
                 except ValueError:
-                    return {"error": "Invalid birth_date format"}, 400
-            if 'gender' in data:
-                gender_value = data['gender']
-                if gender_value in [g.value for g in GenderEnum]:
-                    client.user.gender = GenderEnum(gender_value)
-                else:
-                    return {"error": "Invalid gender value"}, 400
+                    error_message = "Invalid birth_date format"
+            elif "gender" in data and data["gender"] not in [g.value for g in GenderEnum]:
+                error_message = "Invalid gender value"
+            
+            if error_message:
+                return {"error": error_message}, 400
+
+            # Mise à jour des champs
+            if data.get("first_name"):
+                client.user.first_name = data["first_name"]
+            if data.get("last_name"):
+                client.user.last_name = data["last_name"]
+            if "phone" in data:
+                client.phone = data["phone"]
+            if "address" in data:
+                client.address = data["address"]
+            if data.get("birth_date"):
+                client.user.birth_date = datetime.strptime(data["birth_date"], "%Y-%m-%d").date()
+            if "gender" in data:
+                client.user.gender = GenderEnum(data["gender"])
 
             db.session.commit()
             return {"message": "Profile updated successfully"}, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR manage_client_profile PUT: {type(e).__name__} - {str(e)}", exc_info=True)
+            app_logger.error(
+                "❌ ERREUR manage_client_profile PUT: %s - %s",
+                type(e).__name__,
+                str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
 # -------------------------------------------------------------------
 # Récupération des réservations récentes du client
 # -------------------------------------------------------------------
-@clients_ns.route('/<string:public_id>/recent-bookings')
+
+
+@clients_ns.route("/<string:public_id>/recent-bookings")
 class RecentBookings(Resource):
     @jwt_required()
     @role_required(UserRole.client)
     def get(self, public_id):
         try:
-            client = Client.query.options(joinedload(Client.user)).join(User).filter(User.public_id == public_id).one_or_none()
+            client = Client.query.options(joinedload(Client.user)).join(
+                User).filter(User.public_id == public_id).one_or_none()
             if not client:
                 return {"error": "Client not found"}, 404
             bookings = (Booking.query.filter_by(client_id=client.id)
-                                   .order_by(Booking.scheduled_time.desc())
-                                   .limit(4)
-                                   .all())
-            return [cast(Any, booking).serialize for booking in bookings], 200
+                        .order_by(Booking.scheduled_time.desc())
+                        .limit(4)
+                        .all())
+            return [
+                cast(
+                    "Any", booking).serialize for booking in bookings], 200
         except Exception as e:
-            app_logger.error(f"❌ ERREUR recent_bookings: {type(e).__name__} - {str(e)}", exc_info=True)
+
+            app_logger.error(
+                "❌ ERREUR recent_bookings: %s - %s",
+                type(e).__name__,
+                str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
 # -------------------------------------------------------------------
 # Liste et création de réservations pour le client
 # -------------------------------------------------------------------
-@clients_ns.route('/<string:public_id>/bookings')
+
+
+@clients_ns.route("/<string:public_id>/bookings")
 class ClientBookings(Resource):
     @jwt_required()
     @role_required(UserRole.client)
     def get(self, public_id):
         try:
-            client = Client.query.options(joinedload(Client.user)).join(User).filter(User.public_id == public_id).one_or_none()
+            client = Client.query.options(joinedload(Client.user)).join(
+                User).filter(User.public_id == public_id).one_or_none()
             if not client:
                 return {"error": "Client profile not found"}, 404
             bookings = (Booking.query.filter_by(client_id=client.id)
-                                    .order_by(Booking.scheduled_time.desc())
-                                    .all())
-            return [cast(Any, booking).serialize for booking in bookings], 200
+                        .order_by(Booking.scheduled_time.desc())
+                        .all())
+            return [
+                cast(
+                    "Any", booking).serialize for booking in bookings], 200
         except Exception as e:
-            app_logger.error(f"❌ ERREUR list_client_bookings: {type(e).__name__} - {str(e)}", exc_info=True)
+
+            app_logger.error(
+                "❌ ERREUR list_client_bookings: %s - %s",
+                type(e).__name__,
+                str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
     @jwt_required()
     @role_required(UserRole.client)
     @clients_ns.expect(booking_create_model)
-    def post(self, public_id):
+    def post(self, _public_id):  # noqa: PLR0911
         try:
+            # Validation initiale combinée
             current_user_id = get_jwt_identity()
-            current_user = User.query.filter_by(public_id=current_user_id).one_or_none()
+            current_user = User.query.filter_by(
+                public_id=current_user_id).one_or_none()
+            
             if not current_user:
                 return {"error": "User not found"}, 404
-            client = Client.query.filter_by(user_id=current_user.id).one_or_none()
+            
+            client = Client.query.filter_by(
+                user_id=current_user.id).one_or_none()
+            
             if not client:
                 return {"error": "Client profile not found"}, 404
 
             data = request.get_json()
-            # Vérifier que les champs requis sont présents (ajoutez pickup_location ici)
-            required_fields = ['pickup_location', 'dropoff_location', 'scheduled_time']
+            required_fields = [
+                "pickup_location",
+                "dropoff_location",
+                "scheduled_time"]
+            
             if not data or any(field not in data for field in required_fields):
                 return {"error": "Missing required fields"}, 400
 
-            # Parse ISO 8601 en préservant un éventuel fuseau, sinon UTC
+            # Validation du format de date et de l'heure future
             try:
-                dt = datetime.fromisoformat(data['scheduled_time'])
+                dt = datetime.fromisoformat(data["scheduled_time"])
                 scheduled_time = dt if dt.tzinfo else dt.replace(tzinfo=UTC)
                 if dt.tzinfo:
                     scheduled_time = dt.astimezone(UTC)
@@ -184,89 +244,101 @@ class ClientBookings(Resource):
             if scheduled_time <= datetime.now(UTC):
                 return {"error": "Scheduled time must be in the future"}, 400
 
-            new_booking = cast(Any, Booking)(
+            # Création de la réservation
+            new_booking = cast("Any", Booking)(
                 customer_name=f"{client.user.first_name} {client.user.last_name}",
                 pickup_location=data.get("pickup_location"),
-                dropoff_location=data['dropoff_location'],
+                dropoff_location=data["dropoff_location"],
                 scheduled_time=scheduled_time,
-                amount=data.get('amount', 10),
+                amount=data.get("amount", 10),
                 user_id=current_user.id,
                 client_id=client.id,
                 status=BookingStatus.PENDING
             )
+            
             db.session.add(new_booking)
             db.session.commit()
-            return {"message": "Booking created successfully", "booking": cast(Any, new_booking).serialize}, 201
+            return {"message": "Booking created successfully",
+                    "booking": new_booking.serialize}, 201
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR create_booking: {type(e).__name__} - {str(e)}", exc_info=True)
+            app_logger.error("❌ ERREUR create_booking: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
 # -------------------------------------------------------------------
 # Génération de QR bill pour le client
 # -------------------------------------------------------------------
-@clients_ns.route('/me/generate-qr-bill')
+
+
+@clients_ns.route("/me/generate-qr-bill")
 class GenerateQRBill(Resource):
     @jwt_required()
     @role_required(UserRole.client)
     def post(self):
         try:
             current_user_id = get_jwt_identity()
-            from typing import Any, cast
+            from typing import cast
             user = (
                 User.query
-                .options(joinedload(cast(Any, User).client))  # 👈 évite l’alerte "unknown attribute"
+                # 👈 évite l'alerte "unknown attribute"
+                .options(joinedload(cast("Any", User).client))
                 .filter_by(public_id=current_user_id)
                 .one_or_none()
             )
             if not user:
                 return {"error": "User not found"}, 404
-            from typing import Any, cast
-            # Supporte user.client (1–1) et user.clients (1–N)
-            client = getattr(cast(Any, user), "client", None)
+            # Supporte user.client (1-1) et user.clients (1-N)
+            client = getattr(cast("Any", user), "client", None)
             if client is None:
-                clients_rel = getattr(cast(Any, user), "clients", None)
+                clients_rel = getattr(cast("Any", user), "clients", None)
                 if clients_rel and len(clients_rel) > 0:
                     client = clients_rel[0]
             if not client:
                 return {"error": "Client profile not found"}, 403
-            payments = getattr(cast(Any, client), "payments", []) or []
+            payments = getattr(client, "payments", []) or []
             total_amount = sum(
                 (getattr(p, "amount", 0) or 0) for p in payments
                 if getattr(p, "status", None) == "pending"
             )
-            if total_amount <= 0:
-                return {"error": "No pending payments to generate a QR bill"}, 400
-            upid = getattr(cast(Any, user), "public_id", None) or ""
+            if total_amount <= TOTAL_AMOUNT_ZERO:
+                return {
+                    "error": "No pending payments to generate a QR bill"}, 400
+            upid = getattr(cast("Any", user), "public_id", None) or ""
             params = urlencode({"amount": total_amount, "client": upid})
             qr_code_url = f"https://example.com/qr-payment?{params}"
             return {"qr_code_url": qr_code_url}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR generate_qr_bill: {type(e).__name__} - {str(e)}", exc_info=True)
+            app_logger.error(
+                "❌ ERREUR generate_qr_bill: %s - %s",
+                type(e).__name__,
+                str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
 # -------------------------------------------------------------------
 # Suppression du compte client
 # -------------------------------------------------------------------
-@clients_ns.route('/me')
+
+
+@clients_ns.route("/me")
 class DeleteAccount(Resource):
     @jwt_required()
     @role_required(UserRole.client)
     def delete(self):
         try:
             current_user_id = get_jwt_identity()
-            from typing import Any, cast
             user = (
                 User.query
-                .options(joinedload(cast(Any, User).client))  # 👈 évite l’alerte "unknown attribute"
+                # 👈 évite l'alerte "unknown attribute"
+                .options(joinedload(cast("Any", User).client))
                 .filter_by(public_id=current_user_id)
                 .one_or_none()
             )
             if not user:
                 return {"error": "Client profile not found"}, 403
-            # Supporte les 2 relations possibles: user.client (1–1) ou user.clients (1–N)
+            # Supporte les 2 relations possibles: user.client (1-1) ou
+            # user.clients (1-N)
             client = getattr(user, "client", None)
             if client is None:
                 clients_rel = getattr(user, "clients", None)
@@ -283,34 +355,41 @@ class DeleteAccount(Resource):
             return {"message": "Account deactivated successfully"}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR delete_account: {type(e).__name__} - {str(e)}", exc_info=True)
+            app_logger.error("❌ ERREUR delete_account: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
 # -------------------------------------------------------------------
 # Liste des paiements du client
 # -------------------------------------------------------------------
-@clients_ns.route('/<string:public_id>/payments')
+
+
+@clients_ns.route("/<string:public_id>/payments")
 class ListPayments(Resource):
     @jwt_required()
     @role_required(UserRole.client)
     def get(self, public_id):
         try:
-            client = Client.query.options(joinedload(Client.payments)).join(User).filter(User.public_id==public_id).one_or_none()
+            client = Client.query.options(joinedload(Client.payments)).join(
+                User).filter(User.public_id == public_id).one_or_none()
             if not client:
                 return {"error": "Client profile not found"}, 404
             payments = client.payments
             if not payments:
                 return {"message": "No payments found"}, 404
-            return [cast(Any, payment).serialize for payment in payments], 200
+            return [
+                cast(
+                    "Any", payment).serialize for payment in payments], 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR list_payments: {type(e).__name__} - {str(e)}", exc_info=True)
+            app_logger.error("❌ ERREUR list_payments: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
 # -------------------------------------------------------------------
 # Annulation d'une réservation (client)
 # -------------------------------------------------------------------
-@clients_ns.route('/me/bookings/<int:booking_id>')
+
+
+@clients_ns.route("/me/bookings/<int:booking_id>")
 class CancelBooking(Resource):
     @jwt_required()
     @role_required(UserRole.client)
@@ -318,13 +397,18 @@ class CancelBooking(Resource):
         try:
             # 🔒 get user (public_id) → user.id, puis récupérer le client
             current_user_pub_id = get_jwt_identity()
-            user = User.query.filter_by(public_id=current_user_pub_id).one_or_none()
+            user = User.query.filter_by(
+                public_id=current_user_pub_id).one_or_none()
             if not user:
                 return {"error": "User not found"}, 404
-            client = Client.query.options(joinedload(Client.bookings)).filter_by(user_id=user.id).one_or_none()
+            client = Client.query.options(
+                joinedload(
+                    Client.bookings)).filter_by(
+                user_id=user.id).one_or_none()
             if not client:
                 return {"error": "Client profile not found"}, 403
-            booking = Booking.query.filter_by(id=booking_id, client_id=client.id).one_or_none()
+            booking = Booking.query.filter_by(
+                id=booking_id, client_id=client.id).one_or_none()
             if not booking:
                 return {"error": "Booking not found"}, 404
             if booking.status != BookingStatus.PENDING:
@@ -334,22 +418,27 @@ class CancelBooking(Resource):
             return {"message": "Booking canceled successfully"}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR cancel_booking: {type(e).__name__} - {str(e)}", exc_info=True)
+            app_logger.error("❌ ERREUR cancel_booking: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
 # -------------------------------------------------------------------
 # Réinitialisation du mot de passe client
 # -------------------------------------------------------------------
-@clients_ns.route('/<string:public_id>/reset-password')
+
+
+@clients_ns.route("/<string:public_id>/reset-password")
 class ResetPassword(Resource):
     @jwt_required()
     @role_required(UserRole.client)
     def post(self, public_id):
         try:
+            # Validation initiale
             current_user_id = get_jwt_identity()
-            current_user = User.query.filter_by(public_id=current_user_id).one_or_none()
+            current_user = User.query.filter_by(
+                public_id=current_user_id).one_or_none()
             if not current_user:
                 return {"error": "User not found"}, 404
+            
             if current_user.public_id != public_id:
                 return {"error": "Unauthorized access"}, 403
 
@@ -357,41 +446,51 @@ class ResetPassword(Resource):
             if not data:
                 return {"error": "No data provided"}, 400
 
-            old_password = data.get('old_password', '').strip()
-            new_password = data.get('new_password', '').strip()
-            confirm_password = data.get('confirm_password', '').strip()
+            old_password = data.get("old_password", "").strip()
+            new_password = data.get("new_password", "").strip()
+            confirm_password = data.get("confirm_password", "").strip()
 
+            # Validation des champs
+            error_message = None
+            
             if not old_password or not new_password or not confirm_password:
-                return {"error": "All fields are required"}, 400
+                error_message = "All fields are required"
+            elif not current_user.check_password(old_password):
+                error_message = "Incorrect old password"
+            elif new_password != confirm_password:
+                error_message = "New passwords do not match"
+            else:
+                PASSWORD_REGEX = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]{8,}$"
+                if not re.match(PASSWORD_REGEX, new_password):
+                    error_message = "Password must contain at least 8 characters, including uppercase, lowercase, and a number"
+            
+            if error_message:
+                return {"error": error_message}, 400
 
-            if not current_user.check_password(old_password):
-                return {"error": "Incorrect old password"}, 400
-
-            if new_password != confirm_password:
-                return {"error": "New passwords do not match"}, 400
-
-            PASSWORD_REGEX = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]{8,}$'
-            if not re.match(PASSWORD_REGEX, new_password):
-                return {"error": "Password must contain at least 8 characters, including uppercase, lowercase, and a number"}, 400
-
+            # Mise à jour du mot de passe
             current_user.set_password(new_password)
             db.session.commit()
 
+            # Envoi de l'email de confirmation
             msg = Message(
                 subject="Confirmation de changement de mot de passe",
-                sender='support@votreapp.com',
+                sender="support@votreapp.com",
                 recipients=[current_user.email],
-                body=f"Bonjour {current_user.first_name},\n\n"
+                body=(f"Bonjour {current_user.first_name},\n\n"
                      "Votre mot de passe a été modifié avec succès. "
-                     "Si vous n'êtes pas à l'origine de cette modification, veuillez contacter immédiatement notre support."
+                     "Si vous n'êtes pas à l'origine de cette modification, veuillez contacter immédiatement notre support.")
             )
             mail.send(msg)
-            app_logger.info(f"✅ Mot de passe réinitialisé avec succès pour l'utilisateur {current_user.email}")
-            return {"message": "Password reset successfully and confirmation email sent."}, 200
+            app_logger.info(
+                "✅ Mot de passe réinitialisé avec succès pour l'utilisateur %s",
+                current_user.email)
+            
+            return {
+                "message": "Password reset successfully and confirmation email sent."}, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR reset_password: {type(e).__name__} - {str(e)}", exc_info=True)
+            app_logger.error("❌ ERREUR reset_password: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -403,8 +502,7 @@ class ClientsList(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        """
-        GET /clients?search=<query>
+        """GET /clients?search=<query>
         Retourne les clients dont le prénom ou le nom contient <query>.
         """
         try:
@@ -425,30 +523,29 @@ class ClientsList(Resource):
             )
 
             # Sérialisation
-            return [cast(Any, c).serialize for c in clients], 200
+            return [cast("Any", c).serialize for c in clients], 200
 
         except Exception as e:
-            app_logger.error(
-                f"❌ ERREUR clients GET / : {type(e).__name__} - {e}", exc_info=True
-            )
+            app_logger.exception(
+                "❌ ERREUR clients GET / : %s - %s",
+                type(e).__name__, str(e))
             return {"error": "Une erreur serveur est survenue."}, 500
 
     @jwt_required()
     @role_required(UserRole.company)
     @clients_ns.expect(clients_ns.model("ClientCreate", {
         "first_name": fields.String(required=True),
-        "last_name":  fields.String(required=True),
-        "email":      fields.String(required=True),
-        "phone":      fields.String(),
-        "address":    fields.String(description="Adresse de domicile (sera géocodée automatiquement)"),
+        "last_name": fields.String(required=True),
+        "email": fields.String(required=True),
+        "phone": fields.String(),
+        "address": fields.String(description="Adresse de domicile (sera géocodée automatiquement)"),
         "billing_address": fields.String(description="Adresse de facturation (optionnelle, sera géocodée automatiquement)"),
         "domicile_address": fields.String(description="Adresse de domicile (optionnelle, sera géocodée automatiquement)"),
         "domicile_zip": fields.String(description="Code postal"),
         "domicile_city": fields.String(description="Ville"),
     }))
     def post(self):
-        """
-        POST /clients
+        """POST /clients
         Crée un nouveau client avec géocodage automatique des adresses.
         """
         try:
@@ -460,12 +557,13 @@ class ClientsList(Resource):
 
             # Obtenir l'utilisateur actuel pour récupérer company_id
             current_user_id = get_jwt_identity()
-            current_user = User.query.filter_by(public_id=current_user_id).one_or_none()
+            current_user = User.query.filter_by(
+                public_id=current_user_id).one_or_none()
             if not current_user:
                 return {"error": "Utilisateur non trouvé"}, 401
 
             # Créer l'utilisateur
-            new_user = cast(Any, User)(
+            new_user = cast("Any", User)(
                 first_name=data["first_name"],
                 last_name=data["last_name"],
                 email=data["email"],
@@ -475,7 +573,7 @@ class ClientsList(Resource):
             db.session.flush()  # récupère new_user.id
 
             # Créer le client
-            new_client = cast(Any, Client)(
+            new_client = cast("Any", Client)(
                 user_id=new_user.id,
                 contact_phone=data.get("phone"),
                 domicile_zip=data.get("domicile_zip"),
@@ -490,70 +588,76 @@ class ClientsList(Resource):
             if main_address:
                 try:
                     from services.maps import geocode_address
-                    coords = geocode_address(main_address.strip(), country="CH")
+                    coords = geocode_address(
+                        main_address.strip(), country="CH")
                     if coords:
                         new_client.domicile_address = main_address
                         new_client.domicile_lat = coords.get("lat")
                         new_client.domicile_lon = coords.get("lon")
                         app_logger.info(
-                            f"✅ Adresse de domicile géocodée pour {data['first_name']} {data['last_name']}: "
-                            f"{main_address} -> ({coords.get('lat')}, {coords.get('lon')})"
-                        )
+                            "✅ Adresse de domicile géocodée pour %s %s: %s -> (%s, %s)",
+                            data["first_name"], data["last_name"], main_address,
+                            coords.get("lat"), coords.get("lon"))
                     else:
                         # Sauvegarde l'adresse même sans coordonnées
                         new_client.domicile_address = main_address
                         app_logger.warning(
-                            f"⚠️ Impossible de géocoder l'adresse de domicile: {main_address}"
+                            "⚠️ Impossible de géocoder l'adresse de domicile: %s", main_address
                         )
                 except Exception as e:
                     # Sauvegarde l'adresse même en cas d'erreur
                     new_client.domicile_address = main_address
-                    app_logger.warning(f"⚠️ Erreur lors du géocodage de l'adresse de domicile: {e}")
+                    app_logger.warning(
+                        "⚠️ Erreur lors du géocodage de l'adresse de domicile: %s", e)
 
             # Géocodage de l'adresse de facturation (si différente)
             billing_address = data.get("billing_address")
             if billing_address and billing_address.strip():
                 try:
                     from services.maps import geocode_address
-                    coords = geocode_address(billing_address.strip(), country="CH")
+                    coords = geocode_address(
+                        billing_address.strip(), country="CH")
                     if coords:
                         new_client.billing_address = billing_address
                         new_client.billing_lat = coords.get("lat")
                         new_client.billing_lon = coords.get("lon")
                         app_logger.info(
-                            f"✅ Adresse de facturation géocodée pour {data['first_name']} {data['last_name']}: "
-                            f"{billing_address} -> ({coords.get('lat')}, {coords.get('lon')})"
-                        )
+                            "✅ Adresse de facturation géocodée pour %s %s: %s -> (%s, %s)",
+                            data["first_name"], data["last_name"], billing_address,
+                            coords.get("lat"), coords.get("lon"))
                     else:
                         new_client.billing_address = billing_address
                         app_logger.warning(
-                            f"⚠️ Impossible de géocoder l'adresse de facturation: {billing_address}"
+                            "⚠️ Impossible de géocoder l'adresse de facturation: %s", billing_address
                         )
                 except Exception as e:
                     new_client.billing_address = billing_address
-                    app_logger.warning(f"⚠️ Erreur lors du géocodage de l'adresse de facturation: {e}")
+                    app_logger.warning(
+                        "⚠️ Erreur lors du géocodage de l'adresse de facturation: %s", e)
             elif main_address:
-                # Si pas d'adresse de facturation spécifique, copier depuis domicile
+                # Si pas d'adresse de facturation spécifique, copier depuis
+                # domicile
                 new_client.billing_address = new_client.domicile_address
                 new_client.billing_lat = new_client.domicile_lat
                 new_client.billing_lon = new_client.domicile_lon
 
             # Associer le client à la même compagnie que l'utilisateur actuel
-            if hasattr(current_user, 'company_id') and current_user.company_id:
+            if hasattr(current_user, "company_id") and current_user.company_id:
                 new_client.company_id = current_user.company_id
 
             db.session.add(new_client)
             db.session.commit()
 
             app_logger.info(
-                f"✅ Client créé avec succès: {data['first_name']} {data['last_name']} (ID: {new_client.id})"
+                "✅ Client créé avec succès: %s %s (ID: %s)",
+                data["first_name"], data["last_name"], new_client.id
             )
 
-            return cast(Any, new_client).serialize, 201
+            return new_client.serialize, 201
 
         except Exception as e:
             db.session.rollback()
-            app_logger.error(
-                f"❌ ERREUR clients POST / : {type(e).__name__} - {e}", exc_info=True
-            )
+            app_logger.exception(
+                "❌ ERREUR clients POST / : %s - %s",
+                type(e).__name__, str(e))
             return {"error": "Impossible de créer le client."}, 500

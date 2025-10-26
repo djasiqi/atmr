@@ -1,0 +1,104 @@
+# ===== Python - Ignorer les fichiers inutiles =====
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+backend/htmlcov/
+
+# ===== Bases de données locales =====
+*.db
+*.sqlite
+*.sqlite3
+backend/development.db
+backend/instance/*.db
+devdb/
+*.sql
+
+# ===== Virtual Environments =====
+.venv/
+venv/
+backend/venv/
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+mobile/**/node_modules/
+
+# ===== Builds et caches =====
+frontend/build/
+backend/static/qrcodes/
+dist/
+build/
+.cache/
+.eslintcache
+.parcel-cache
+.npm/
+.yarn/
+
+# ===== Data & ML Models (très volumineux) =====
+backend/data/ml/
+backend/data/rl/
+backend/temp_*_registry/
+backend/uploads/
+
+# ===== OSRM / Cartes géographiques =====
+osrm/data/
+*.osrm
+*.osrm.*
+*.pbf
+
+# ===== Redis (si local) =====
+Redis/
+
+# ===== Logs =====
+*.log
+*.txt
+session/
+
+# ===== Backup files =====
+backup_*.sql
+*.bak
+*.backup
+*.swp
+*~
+
+# ===== Documentation temporaire =====
+*_AUDIT*.md
+*_CHECKLIST*.md
+*_RAPPORT*.md
+*_RESUME*.md
+*_NOTES.md
+AMELIORATION*.md
+amelioration*.md
+ANALYSE*.md
+ARCHITECTURE*.md
+OPTIMIZATION*.md
+ROLLBACK.md
+
+# ===== Celery schedules =====
+celerybeat-schedule*
+backend/celerybeat-schedule*
+
+# ===== IDE / OS =====
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ===== Docker =====
+*.tar
+*.tar.gz
+
+# ===== Coverage reports =====
+.coverage
+coverage/
+htmlcov/
+
+# ===== Testing artifacts =====
+**/cypress/videos/
+**/cypress/screenshots/
+

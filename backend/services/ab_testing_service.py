@@ -1,11 +1,9 @@
-# ruff: noqa: DTZ003, DTZ005, W293
 # pyright: reportAttributeAccessIssue=false
-"""
-Service A/B Testing pour comparer ML vs Heuristique.
-"""
+
+"""Service A/B Testing pour comparer ML vs Heuristique."""
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from shared.geo_utils import haversine_distance
@@ -22,8 +20,7 @@ class ABTestingService:
         driver: Any,
         current_time: datetime | None = None
     ) -> dict[str, Any]:
-        """
-        Exécute test A/B : ML vs Heuristique.
+        """Exécute test A/B : ML vs Heuristique.
         
         Args:
             booking: Booking à tester
@@ -32,11 +29,12 @@ class ABTestingService:
             
         Returns:
             dict avec résultats comparatifs
+
         """
         if current_time is None:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
 
-        logger.info(f"[AB Test] Running for booking {booking.id}, driver {driver.id}")
+        logger.info("[AB Test] Running for booking %s, driver %s", booking.id, driver.id)
 
         # 1. Prédiction ML
         ml_start = time.time()
@@ -56,7 +54,7 @@ class ABTestingService:
 
             # ML
             "ml_delay_minutes": ml_prediction["delay_minutes"],
-            "ml_confidence": ml_prediction.get("confidence", 0.0),
+            "ml_confidence": ml_prediction.get("confidence", 0),
             "ml_risk_level": ml_prediction.get("risk_level", "unknown"),
             "ml_prediction_time_ms": ml_time,
             "ml_weather_factor": ml_prediction.get("weather_factor", 0.5),
@@ -72,9 +70,10 @@ class ABTestingService:
         }
 
         logger.info(
-            f"[AB Test] Booking {booking.id}: "
-            f"ML={ml_prediction['delay_minutes']:.2f}min ({ml_time:.1f}ms), "
-            f"Heuristic={heuristic_prediction['delay_minutes']:.2f}min ({heuristic_time:.1f}ms)"
+            "[AB Test] Booking %s: ML=%s, Heuristic=%s",
+            booking.id,
+            ml_prediction["delay_minutes"],
+            heuristic_prediction["delay_minutes"]
         )
 
         return result
@@ -99,18 +98,18 @@ class ABTestingService:
                 "weather_factor": prediction.contributing_factors.get("weather_factor", 0.5),
             }
         except Exception as e:
-            logger.error(f"[AB Test] ML prediction failed: {e}", exc_info=True)
+
+            logger.error("[AB Test] ML prediction failed: %s", e)
             return {
-                "delay_minutes": 5.0,
-                "confidence": 0.0,
+                "delay_minutes": 5,
+                "confidence": 0,
                 "risk_level": "error",
                 "weather_factor": 0.5,
             }
 
     @staticmethod
-    def _run_heuristic_prediction(booking: Any, driver: Any) -> dict[str, Any]:
-        """
-        Exécute prédiction heuristique simple.
+    def _run_heuristic_prediction(booking: Any, _driver: Any) -> dict[str, Any]:
+        """Exécute prédiction heuristique simple.
         
         Basé sur distance Haversine : 0.5 min/km (30 km/h moyen).
         """
@@ -121,28 +120,29 @@ class ABTestingService:
             dropoff_lon = float(getattr(booking, "dropoff_lon", 0) or 0)
 
             if not all([pickup_lat, pickup_lon, dropoff_lat, dropoff_lon]):
-                return {"delay_minutes": 5.0}
+                return {"delay_minutes": 5}
 
             distance_km = haversine_distance(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
 
             # Heuristique simple : 0.5 min/km + buffer 3 min
-            delay_minutes = (distance_km * 0.5) + 3.0
+            delay_minutes = (distance_km * 0.5) + 3
 
             return {"delay_minutes": delay_minutes}
         except Exception as e:
-            logger.error(f"[AB Test] Heuristic prediction failed: {e}", exc_info=True)
-            return {"delay_minutes": 5.0}
+
+            logger.error("[AB Test] Heuristic prediction failed: %s", e)
+            return {"delay_minutes": 5}
 
     @staticmethod
     def calculate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
-        """
-        Calcule métriques agrégées des tests A/B.
+        """Calcule métriques agrégées des tests A/B.
         
         Args:
             results: Liste des résultats A/B
             
         Returns:
             dict avec métriques agrégées
+
         """
         if not results:
             return {}
@@ -180,17 +180,16 @@ class ABTestingService:
             "avg_speed_advantage_ms": sum(r["speed_advantage_ms"] for r in results) / n,
         }
 
-        logger.info(f"[AB Test] Metrics calculated for {n} tests")
-        logger.info(f"  ML avg: {metrics['ml_avg_delay']:.2f} min ({metrics['ml_avg_time_ms']:.1f}ms)")
-        logger.info(f"  Heuristic avg: {metrics['heuristic_avg_delay']:.2f} min ({metrics['heuristic_avg_time_ms']:.1f}ms)")
-        logger.info(f"  ML faster: {metrics['ml_faster_percentage']:.1f}%")
+        logger.info("[AB Test] Metrics calculated for %s tests", n)
+        logger.info("  ML avg: %s min (%sms)", metrics["ml_avg_delay"], metrics["ml_avg_time_ms"])
+        logger.info("  Heuristic avg: %s min (%sms)", metrics["heuristic_avg_delay"], metrics["heuristic_avg_time_ms"])
+        logger.info("  ML faster: %s%%", metrics["ml_faster_percentage"])
 
         return metrics
 
 
 def run_batch_ab_tests(booking_ids: list[int], driver_ids: list[int]) -> dict[str, Any]:
-    """
-    Exécute tests A/B en batch.
+    """Exécute tests A/B en batch.
     
     Args:
         booking_ids: Liste IDs bookings
@@ -198,17 +197,19 @@ def run_batch_ab_tests(booking_ids: list[int], driver_ids: list[int]) -> dict[st
         
     Returns:
         dict avec résultats et métriques
+
     """
     from models.booking import Booking
     from models.driver import Driver
 
     if len(booking_ids) != len(driver_ids):
-        raise ValueError("booking_ids et driver_ids doivent avoir même longueur")
+        msg = "booking_ids et driver_ids doivent avoir même longueur"
+        raise ValueError(msg)
 
     results = []
-    current_time = datetime.utcnow()
+    current_time = datetime.now(timezone.utc)
 
-    logger.info(f"[AB Test] Starting batch of {len(booking_ids)} tests")
+    logger.info("[AB Test] Starting batch of %s tests", len(booking_ids))
 
     for booking_id, driver_id in zip(booking_ids, driver_ids, strict=False):
         try:
@@ -216,13 +217,13 @@ def run_batch_ab_tests(booking_ids: list[int], driver_ids: list[int]) -> dict[st
             driver = Driver.query.get(driver_id)
 
             if not booking or not driver:
-                logger.warning(f"[AB Test] Skipping: booking {booking_id} or driver {driver_id} not found")
+                logger.warning("[AB Test] Skipping: booking %s or driver %s not found", booking_id, driver_id)
                 continue
 
             result = ABTestingService.run_ab_test(booking, driver, current_time)
             results.append(result)
         except Exception as e:
-            logger.error(f"[AB Test] Failed for booking {booking_id}, driver {driver_id}: {e}")
+            logger.error("[AB Test] Failed for booking %s, driver %s: %s", booking_id, driver_id, e)
 
     metrics = ABTestingService.calculate_metrics(results)
 

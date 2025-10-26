@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-# ruff: noqa: T201, DTZ001
-"""
-Script de test de l'optimiseur RL sur le dispatch du 22 octobre.
+"""Script de test de l'optimiseur RL sur le dispatch du 22 octobre.
 
 Compare les résultats :
 - Avant : Assignations heuristiques
@@ -44,12 +42,12 @@ with app.app_context():
         print("❌ Aucune course assignée trouvée pour le 22 octobre")
         sys.exit(1)
 
-    print(f"📦 {len(bookings)} courses chargées")
+    print("📦 {len(bookings)} courses chargées")
 
     # Récupérer les drivers impliqués
     driver_ids = {b.driver_id for b in bookings}
     drivers = Driver.query.filter(Driver.id.in_(driver_ids)).all()
-    print(f"👥 {len(drivers)} chauffeurs impliqués")
+    print("👥 {len(drivers)} chauffeurs impliqués")
     print()
 
     # Construire les assignations initiales (heuristique)
@@ -72,13 +70,13 @@ with app.app_context():
     ):
         driver_name = driver_names.get(driver_id, f"Driver {driver_id}")
         bar = "█" * count
-        print(f"  {driver_name:20} : {count:2d} courses {bar}")
+        print("  {driver_name:20} : {count:2d} courses {bar}")
 
     max_load_initial = max(driver_loads_initial.values())
     min_load_initial = min(driver_loads_initial.values())
     gap_initial = max_load_initial - min_load_initial
     print()
-    print(f"  ÉCART : {gap_initial} courses (max={max_load_initial}, min={min_load_initial})")
+    print("  ÉCART : {gap_initial} courses (max={max_load_initial}, min={min_load_initial})")
     print()
 
     # Créer l'optimiseur RL
@@ -120,7 +118,7 @@ with app.app_context():
         old_count = driver_loads_initial.get(driver_id, 0)
         delta = count - old_count
         delta_str = f"({delta:+d})" if delta != 0 else ""
-        print(f"  {driver_name:20} : {count:2d} courses {bar} {delta_str}")
+        print("  {driver_name:20} : {count:2d} courses {bar} {delta_str}")
 
     max_load_optimized = max(driver_loads_optimized.values())
     min_load_optimized = min(driver_loads_optimized.values())
@@ -138,15 +136,15 @@ with app.app_context():
     improvement = gap_initial - gap_optimized
     improvement_pct = (improvement / gap_initial * 100) if gap_initial > 0 else 0
 
-    print(f"  Écart initial    : {gap_initial} courses")
-    print(f"  Écart optimisé   : {gap_optimized} courses")
-    print(f"  Amélioration     : {improvement} courses ({improvement_pct:.1f}%)")
+    print("  Écart initial    : {gap_initial} courses")
+    print("  Écart optimisé   : {gap_optimized} courses")
+    print("  Amélioration     : {improvement} courses ({improvement_pct")
     print()
 
     if gap_optimized <= 1:
         print("  🎯 OBJECTIF ATTEINT : Écart ≤ 1 course !")
     elif improvement > 0:
-        print(f"  ✅ AMÉLIORATION : Écart réduit de {improvement_pct:.0f}% !")
+        print("  ✅ AMÉLIORATION : Écart réduit de {improvement_pct")
     else:
         print("  ⚠️  Pas d'amélioration possible avec le modèle actuel")
 

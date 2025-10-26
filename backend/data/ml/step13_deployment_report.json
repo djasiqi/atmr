@@ -1,0 +1,54 @@
+{
+  "timestamp": "2025-10-23T21:27:24.926610+00:00",
+  "step": "Étape 13 - MLOps : registre modèles & promotion contrôlée",
+  "status": "DÉPLOYÉ",
+  "deployment_results": {
+    "model_registry": {
+      "success": true,
+      "path": "data/ml/model_registry"
+    },
+    "training_metadata_schema": {
+      "success": true,
+      "path": "data/ml/training_metadata"
+    },
+    "training_scripts": {
+      "success": true,
+      "path": "data/ml/training_scripts"
+    },
+    "evaluation_system": {
+      "success": true,
+      "path": "data/ml/evaluations"
+    }
+  },
+  "files_created": [
+    "services/ml/model_registry.py",
+    "services/ml/training_metadata_schema.py",
+    "scripts/ml/train_model.py",
+    "scripts/rl/rl_train_offline.py",
+    "tests/ml/test_model_registry.py",
+    "scripts/validate_step13_mlops.py"
+  ],
+  "features": [
+    "Registre de modèles avec versioning strict",
+    "Promotion contrôlée avec validation KPI",
+    "Système de rollback simple et sécurisé",
+    "Schéma de métadonnées étendu",
+    "Scripts de training avec intégration MLOps",
+    "Mise à jour automatique evaluation_optimized_final.json",
+    "Lien symbolique dqn_final.pth",
+    "Traçabilité complète training → déploiement"
+  ],
+  "kpi_thresholds": {
+    "punctuality_rate": 0.85,
+    "avg_distance": 15.0,
+    "avg_delay": 5.0,
+    "driver_utilization": 0.75,
+    "customer_satisfaction": 0.8
+  },
+  "deployment_paths": {
+    "registry": "data/ml/model_registry/",
+    "metadata": "data/ml/training_metadata/",
+    "scripts": "data/ml/training_scripts/",
+    "evaluations": "data/ml/evaluations/"
+  }
+}

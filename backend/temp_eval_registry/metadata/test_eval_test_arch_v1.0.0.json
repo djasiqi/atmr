@@ -1,0 +1,23 @@
+{
+  "model_name": "test_eval",
+  "model_arch": "test_arch",
+  "version": "v1.0.0",
+  "created_at": "2025-10-23T21:40:10.312082+00:00",
+  "training_config": {
+    "learning_rate": 0.001
+  },
+  "performance_metrics": {
+    "punctuality_rate": 0.9
+  },
+  "features_config": {
+    "state_features": 10
+  },
+  "scalers_config": {
+    "state_scaler": "StandardScaler"
+  },
+  "optuna_study_id": null,
+  "hyperparameters": {},
+  "dataset_info": {},
+  "model_size_mb": 0.0020723342895507812,
+  "checksum": "a3a39ad600342108b00607d24a014d00"
+}

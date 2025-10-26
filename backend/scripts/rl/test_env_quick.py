@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-# ruff: noqa: T201
-"""
-Script de test rapide de l'environnement Gym.
+"""Script de test rapide de l'environnement Gym.
 
 Usage:
     python scripts/rl/test_env_quick.py
@@ -35,16 +33,16 @@ def test_basic_functionality():
     print("\n2️⃣  Reset de l'environnement...")
     obs, info = env.reset(seed=42)
     print("   ✅ État initial:")
-    print(f"      Observation shape: {obs.shape}")
-    print(f"      Drivers disponibles: {info['available_drivers']}")
-    print(f"      Bookings actifs: {info['active_bookings']}")
+    print("      Observation shape: {obs.shape}")
+    print("      Drivers disponibles: {info['available_drivers']}")
+    print("      Bookings actifs: {info['active_bookings']}")
 
     # Quelques steps
     print("\n3️⃣  Exécution de 10 steps...")
-    for i in range(10):
+    for _i in range(10):
         action = env.action_space.sample()
-        obs, reward, terminated, truncated, info = env.step(action)
-        print(f"   Step {i+1}: reward={reward:.2f}, bookings={info['active_bookings']}")
+        _obs, _reward, terminated, _truncated, _info = env.step(action)
+        print("   Step {i+1}: reward={reward")
 
         if terminated:
             print("   ⚠️  Episode terminé prématurément")
@@ -55,8 +53,8 @@ def test_basic_functionality():
     env.render()
 
     print("\n✅ TEST RÉUSSI!")
-    print(f"   Assignments: {info['episode_stats']['assignments']}")
-    print(f"   Reward total: {info['episode_stats']['total_reward']:.2f}")
+    print("   Assignments: {info['episode_stats']['assignments']}")
+    print("   Reward total: {info['episode_stats']['total_reward']")
     print("="*60)
 
 
@@ -73,7 +71,7 @@ def test_full_episode():
         render_mode="human"
     )
 
-    obs, info = env.reset(seed=123)
+    _obs, info = env.reset(seed=0.123)
     total_reward = 0.0
     steps = 0
     terminated = False
@@ -81,22 +79,22 @@ def test_full_episode():
     while not terminated:
         # Politique aléatoire
         action = env.action_space.sample()
-        obs, reward, terminated, truncated, info = env.step(action)
+        _obs, reward, terminated, _truncated, info = env.step(action)
         total_reward += reward
         steps += 1
 
         # Render tous les 10 steps
         if steps % 10 == 0:
-            print(f"\n⏱️  Step {steps}:")
+            print("\n⏱️  Step {steps}:")
             env.render()
 
     print("\n🏁 ÉPISODE TERMINÉ!")
-    print(f"   Steps totaux: {steps}")
-    print(f"   Reward total: {total_reward:.2f}")
-    print(f"   Reward moyen: {total_reward/steps:.2f}")
+    print("   Steps totaux: {steps}")
+    print("   Reward total: {total_reward")
+    print("   Reward moyen: {total_reward/steps")
     print("\n📊 Statistiques finales:")
-    for key, value in info['episode_stats'].items():
-        print(f"   {key}: {value}")
+    for _key, _value in info["episode_stats"].items():
+        print("   {key}: {value}")
     print("="*60)
 
 
@@ -105,8 +103,8 @@ if __name__ == "__main__":
         test_basic_functionality()
         test_full_episode()
         print("\n✅ TOUS LES TESTS ONT RÉUSSI!")
-    except Exception as e:
-        print(f"\n❌ ERREUR: {e}")
+    except Exception:
+        print("\n❌ ERREUR: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

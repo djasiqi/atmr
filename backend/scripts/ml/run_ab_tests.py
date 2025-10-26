@@ -1,8 +1,5 @@
-# ruff: noqa: T201, W293
 # pyright: reportAttributeAccessIssue=false
-"""
-Script pour exécuter tests A/B : ML vs Heuristique.
-"""
+"""Script pour exécuter tests A/B : ML vs Heuristique."""
 import sys
 from pathlib import Path
 
@@ -13,14 +10,14 @@ if backend_path not in sys.path:
 
 
 def run_ab_tests_from_db(limit: int = 50) -> dict:
-    """
-    Exécute tests A/B sur bookings existants en DB.
+    """Exécute tests A/B sur bookings existants en DB.
     
     Args:
         limit: Nombre de tests à exécuter
         
     Returns:
         dict avec résultats et métriques
+
     """
     from app import create_app
     from db import db
@@ -35,7 +32,7 @@ def run_ab_tests_from_db(limit: int = 50) -> dict:
         print("\n" + "="*70)
         print("A/B TESTING : ML vs HEURISTIQUE")
         print("="*70)
-        print(f"Limite : {limit} tests")
+        print("Limite : {limit} tests")
         print()
         
         # Récupérer des bookings et drivers
@@ -58,15 +55,15 @@ def run_ab_tests_from_db(limit: int = 50) -> dict:
             print("❌ Aucun driver actif trouvé")
             return {}
         
-        print(f"✅ {len(bookings)} bookings trouvés")
-        print(f"✅ {len(drivers)} drivers actifs trouvés")
+        print("✅ {len(bookings)} bookings trouvés")
+        print("✅ {len(drivers)} drivers actifs trouvés")
         print()
         
         # Exécuter tests A/B
         results = []
         tests_to_run = min(len(bookings), len(drivers))
         
-        print(f"🧪 Exécution de {tests_to_run} tests A/B...")
+        print("🧪 Exécution de {tests_to_run} tests A/B...")
         print()
         
         for i, (booking, driver) in enumerate(zip(bookings[:tests_to_run], drivers[:tests_to_run], strict=False), 1):
@@ -93,14 +90,14 @@ def run_ab_tests_from_db(limit: int = 50) -> dict:
                 db.session.add(ab_test)
                 
                 if i % 10 == 0:
-                    print(f"  {i}/{tests_to_run} tests complétés...")
+                    print("  {i}/{tests_to_run} tests complétés...")
                     db.session.commit()
             except Exception as e:
-                print(f"  ❌ Erreur test {i}: {e}")
+                print("  ❌ Erreur test {i}: {e}")
         
         db.session.commit()
         
-        print(f"\n✅ {len(results)} tests A/B complétés")
+        print("\n✅ {len(results)} tests A/B complétés")
         print()
         
         # Calculer métriques
@@ -113,26 +110,26 @@ def run_ab_tests_from_db(limit: int = 50) -> dict:
             print()
             
             print("📊 PRÉDICTIONS")
-            print(f"  ML moyen           : {metrics['ml_avg_delay']:.2f} min")
-            print(f"  Heuristique moyen  : {metrics['heuristic_avg_delay']:.2f} min")
-            print(f"  Différence absolue : {metrics['avg_difference_minutes']:.2f} min")
+            print("  ML moyen           : {metrics['ml_avg_delay']")
+            print("  Heuristique moyen  : {metrics['heuristic_avg_delay']")
+            print("  Différence absolue : {metrics['avg_difference_minutes']")
             print()
             
             print("⚡ PERFORMANCE")
-            print(f"  ML temps moyen        : {metrics['ml_avg_time_ms']:.1f} ms")
-            print(f"  Heuristique temps moy : {metrics['heuristic_avg_time_ms']:.1f} ms")
-            print(f"  ML plus rapide        : {metrics['ml_faster_percentage']:.1f}%")
+            print("  ML temps moyen        : {metrics['ml_avg_time_ms']")
+            print("  Heuristique temps moy : {metrics['heuristic_avg_time_ms']")
+            print("  ML plus rapide        : {metrics['ml_faster_percentage']")
             print()
             
             print("🎯 QUALITÉ ML")
-            print(f"  Confiance moyenne : {metrics['ml_avg_confidence']:.3f}")
+            print("  Confiance moyenne : {metrics['ml_avg_confidence']")
             print()
             
             # Sauvegarder rapport
             report_path = Path("data/ml/ab_test_report.txt")
             report_path.parent.mkdir(parents=True, exist_ok=True)
             
-            with open(report_path, 'w', encoding='utf-8') as f:
+            with Path(report_path, "w", encoding="utf-8").open() as f:
                 f.write("="*70 + "\n")
                 f.write("RAPPORT A/B TESTING : ML vs HEURISTIQUE\n")
                 f.write("="*70 + "\n\n")
@@ -140,30 +137,29 @@ def run_ab_tests_from_db(limit: int = 50) -> dict:
                 f.write(f"Total tests : {metrics['total_tests']}\n\n")
                 
                 f.write("PRÉDICTIONS\n")
-                f.write(f"  ML moyen           : {metrics['ml_avg_delay']:.2f} min\n")
-                f.write(f"  Heuristique moyen  : {metrics['heuristic_avg_delay']:.2f} min\n")
-                f.write(f"  Différence absolue : {metrics['avg_difference_minutes']:.2f} min\n\n")
+                f.write(f"  ML moyen           : {metrics['ml_avg_delay']")
+                f.write(f"  Heuristique moyen  : {metrics['heuristic_avg_delay']")
+                f.write(f"  Différence absolue : {metrics['avg_difference_minutes']")
                 
                 f.write("PERFORMANCE\n")
-                f.write(f"  ML temps moyen        : {metrics['ml_avg_time_ms']:.1f} ms\n")
-                f.write(f"  Heuristique temps moy : {metrics['heuristic_avg_time_ms']:.1f} ms\n")
-                f.write(f"  ML plus rapide        : {metrics['ml_faster_percentage']:.1f}%\n\n")
+                f.write(f"  ML temps moyen        : {metrics['ml_avg_time_ms']")
+                f.write(f"  Heuristique temps moy : {metrics['heuristic_avg_time_ms']")
+                f.write(f"  ML plus rapide        : {metrics['ml_faster_percentage']")
                 
                 f.write("QUALITÉ ML\n")
-                f.write(f"  Confiance moyenne : {metrics['ml_avg_confidence']:.3f}\n\n")
+                f.write(f"  Confiance moyenne : {metrics['ml_avg_confidence']")
                 
                 f.write("="*70 + "\n")
             
-            print(f"📄 Rapport sauvegardé : {report_path}")
+            print("📄 Rapport sauvegardé : {report_path}")
             print()
             
             return {
                 "results": results,
                 "metrics": metrics,
             }
-        else:
-            print("❌ Aucun résultat à analyser")
-            return {}
+        print("❌ Aucun résultat à analyser")
+        return {}
 
 
 if __name__ == "__main__":
@@ -185,7 +181,7 @@ if __name__ == "__main__":
             print("⚠️  Aucun résultat produit")
             sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Erreur : {e}")
+        print("\n❌ Erreur : {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

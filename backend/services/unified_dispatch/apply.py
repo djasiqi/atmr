@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 _Assignment = Any
 
+
 def apply_assignments(
     company_id: int,
     assignments: List[_Assignment],
@@ -28,7 +29,8 @@ def apply_assignments(
     return_pairs: bool = False,
 ) -> Dict[str, Any]:
     if not assignments:
-        return {"applied": [], "skipped": {}, "conflicts": [], "driver_load": {}}
+        return {"applied": [], "skipped": {},
+                "conflicts": [], "driver_load": {}}
 
     # ✅ ROLLBACK DÉFENSIF AU DÉBUT
     with contextlib.suppress(Exception):
@@ -36,7 +38,9 @@ def apply_assignments(
 
     # Log pour tracer la propagation du dispatch_run_id
     if dispatch_run_id:
-        logger.info("[Apply] Using dispatch_run_id=%s for assignments", dispatch_run_id)
+        logger.info(
+            "[Apply] Using dispatch_run_id=%s for assignments",
+            dispatch_run_id)
 
     # Helper: attr ou clé dict
     def _aget(obj: Any, name: str, default: Any = None) -> Any:
@@ -88,10 +92,15 @@ def apply_assignments(
     supports_for_update = dialect_name not in ("sqlite",)
 
     if supports_for_update:
-        # Optionnel: SKIP LOCKED (Postgres) pour éviter le blocage si autre transaction tient un lock
-        use_skip_locked = os.getenv("UD_APPLY_SKIP_LOCKED", "false").lower() == "true"
-        bookings_q = bookings_q.with_for_update(nowait=False, of=Booking, skip_locked=use_skip_locked)
-        drivers_q = drivers_q.with_for_update(nowait=False, of=Driver,   skip_locked=use_skip_locked)
+        # Optionnel: SKIP LOCKED (Postgres) pour éviter le blocage si autre
+        # transaction tient un lock
+        use_skip_locked = os.getenv(
+            "UD_APPLY_SKIP_LOCKED",
+            "false").lower() == "true"
+        bookings_q = bookings_q.with_for_update(
+            nowait=False, of=Booking, skip_locked=use_skip_locked)
+        drivers_q = drivers_q.with_for_update(
+            nowait=False, of=Driver, skip_locked=use_skip_locked)
 
     bookings = bookings_q.all()
     drivers = drivers_q.all()
@@ -108,7 +117,8 @@ def apply_assignments(
     now = now_utc()  # ⟵ centralisé
 
     updates: List[Dict[str, Any]] = []
-    applied_pairs: List[Tuple[int, int]] = []  # (booking_id, driver_id) - utile si besoin
+    # (booking_id, driver_id) - utile si besoin
+    applied_pairs: List[Tuple[int, int]] = []
     # Candidats à l'upsert dans Assignment (même si Booking inchangé)
     desired_assignments: Dict[int, Dict[str, Any]] = {}
 
@@ -118,7 +128,8 @@ def apply_assignments(
             skipped[b_id] = "booking_not_found_or_wrong_company"
             continue
 
-        if b.status not in (BookingStatus.PENDING, BookingStatus.ACCEPTED, BookingStatus.ASSIGNED):
+        if b.status not in (BookingStatus.PENDING,
+                            BookingStatus.ACCEPTED, BookingStatus.ASSIGNED):
             skipped[b_id] = f"status_is_{b.status}"
             continue
 
@@ -127,7 +138,7 @@ def apply_assignments(
         if d is None:
             skipped[b_id] = "driver_not_found_or_wrong_company"
             continue
-        d_any = cast(Any, d)
+        d_any = cast("Any", d)
         is_active = bool(getattr(d_any, "is_active", False))
         is_available = bool(getattr(d_any, "is_available", False))
         if enforce_driver_checks and (not is_active or not is_available):
@@ -141,15 +152,19 @@ def apply_assignments(
             "status": AssignmentStatus.SCHEDULED,
             "estimated_pickup_arrival": _aget(a, "estimated_pickup_arrival"),
             "estimated_dropoff_arrival": _aget(a, "estimated_dropoff_arrival"),
-            "dispatch_run_id": dispatch_run_id if dispatch_run_id is not None else _aget(a, "dispatch_run_id"),  # Priorité au dispatch_run_id passé en param
+            # Priorité au dispatch_run_id passé en param
+            "dispatch_run_id": dispatch_run_id if dispatch_run_id is not None else _aget(a, "dispatch_run_id"),
         }
 
-        b_any = cast(Any, b)
-        b_status: BookingStatus = cast(BookingStatus, getattr(b_any, "status", None))
+        b_any = cast("Any", b)
+        b_status: BookingStatus = cast(
+            "BookingStatus", getattr(
+                b_any, "status", None))
 
         cur_driver_id_raw = getattr(b_any, "driver_id", None)
         try:
-            cur_driver_id: int | None = int(cur_driver_id_raw) if cur_driver_id_raw is not None else None
+            cur_driver_id: int | None = int(
+                cur_driver_id_raw) if cur_driver_id_raw is not None else None
         except Exception:
             cur_driver_id = None
 
@@ -160,11 +175,11 @@ def apply_assignments(
             skipped[b_id] = "already_assigned_same_driver"
             continue
 
-        if is_assigned and (cur_driver_id is not None) and (cur_driver_id != d_id) and (not allow_reassign):
+        if is_assigned and (cur_driver_id is not None) and (
+                cur_driver_id != d_id) and (not allow_reassign):
             conflicts.append(b_id)
             skipped[b_id] = "reassign_blocked"
             continue
-
 
         payload = {
             "id": b.id,
@@ -174,7 +189,8 @@ def apply_assignments(
         # timestamps optionnels suivant le modèle
         if hasattr(b, "assigned_at"):
             payload["assigned_at"] = now
-        if hasattr(b, "updated_at"):          # ⟵ ajoute updated_at uniquement si présent
+        if hasattr(
+                b, "updated_at"):          # ⟵ ajoute updated_at uniquement si présent
             payload["updated_at"] = now
 
         updates.append(payload)
@@ -182,11 +198,12 @@ def apply_assignments(
         applied_pairs.append((b_id, d_id))
         driver_load[d_id] += 1
 
-    # 4) Write back Bookings + upsert Assignments (une seule transaction si possible)
+    # 4) Write back Bookings + upsert Assignments (une seule transaction si
+    # possible)
     try:
         with db.session.begin_nested():  # ✅ Utilisation de begin_nested pour savepoint
             if updates:
-                db.session.bulk_update_mappings(cast(Any, Booking), updates)
+                db.session.bulk_update_mappings(cast("Any", Booking), updates)
 
             # Upsert côté Assignment (y compris ETA si fournies)
             if desired_assignments:
@@ -199,7 +216,8 @@ def apply_assignments(
                 by_booking: Dict[int, Assignment] = {}
                 for a0 in existing:
                     cur = by_booking.get(a0.booking_id)
-                    if cur is None or (hasattr(a0, "created_at") and hasattr(cur, "created_at") and a0.created_at > cur.created_at):
+                    if cur is None or (hasattr(a0, "created_at") and hasattr(
+                            cur, "created_at") and a0.created_at > cur.created_at):
                         by_booking[a0.booking_id] = a0
 
                 # ✅ PERF: Séparer nouveaux vs existants pour bulk operations
@@ -219,15 +237,18 @@ def apply_assignments(
                         }
 
                         # ETA optionnels
-                        eta_pu = payload.get("estimated_pickup_arrival") or payload.get("eta_pickup_at")
-                        eta_do = payload.get("estimated_dropoff_arrival") or payload.get("eta_dropoff_at")
+                        eta_pu = payload.get(
+                            "estimated_pickup_arrival") or payload.get("eta_pickup_at")
+                        eta_do = payload.get(
+                            "estimated_dropoff_arrival") or payload.get("eta_dropoff_at")
                         if eta_pu is not None:
                             new_assignment["eta_pickup_at"] = eta_pu
                         if eta_do is not None:
                             new_assignment["eta_dropoff_at"] = eta_do
 
                         # dispatch_run_id
-                        drid = payload.get("dispatch_run_id") or dispatch_run_id
+                        drid = payload.get(
+                            "dispatch_run_id") or dispatch_run_id
                         if drid is not None:
                             new_assignment["dispatch_run_id"] = drid
 
@@ -242,8 +263,10 @@ def apply_assignments(
                         }
 
                         # ETA optionnels
-                        eta_pu = payload.get("estimated_pickup_arrival") or payload.get("eta_pickup_at")
-                        eta_do = payload.get("estimated_dropoff_arrival") or payload.get("eta_dropoff_at")
+                        eta_pu = payload.get(
+                            "estimated_pickup_arrival") or payload.get("eta_pickup_at")
+                        eta_do = payload.get(
+                            "estimated_dropoff_arrival") or payload.get("eta_dropoff_at")
                         if eta_pu is not None:
                             update_assignment["eta_pickup_at"] = eta_pu
                         if eta_do is not None:
@@ -258,31 +281,44 @@ def apply_assignments(
 
                 # ✅ PERF: Bulk insert/update au lieu de boucle
                 if new_assignments:
-                    db.session.bulk_insert_mappings(cast(Any, Assignment), new_assignments)
-                    logger.info("[Apply] Bulk inserted %d new assignments", len(new_assignments))
+                    db.session.bulk_insert_mappings(
+                        cast("Any", Assignment), new_assignments)
+                    logger.info(
+                        "[Apply] Bulk inserted %d new assignments",
+                        len(new_assignments))
 
                 if update_assignments:
-                    db.session.bulk_update_mappings(cast(Any, Assignment), update_assignments)
-                    logger.info("[Apply] Bulk updated %d existing assignments", len(update_assignments))
+                    db.session.bulk_update_mappings(
+                        cast("Any", Assignment), update_assignments)
+                    logger.info(
+                        "[Apply] Bulk updated %d existing assignments",
+                        len(update_assignments))
             else:
-                logger.info("[Apply] No desired assignments to upsert (company_id=%s)", company_id)
+                logger.info(
+                    "[Apply] No desired assignments to upsert (company_id=%s)",
+                    company_id)
 
         db.session.commit()  # ✅ Commit après le savepoint
 
     except Exception as e:
-        logger.exception("[Apply] DB error while applying assignments (company_id=%s)", company_id)
+        logger.exception(
+            "[Apply] DB error while applying assignments (company_id=%s)",
+            company_id)
         db.session.rollback()  # ✅ Rollback sur erreur
         return {
             "applied": [], "skipped": dict.fromkeys(applied_ids, "db_error"),
             "conflicts": [], "driver_load": {}, "error": str(e),
         }
     if dispatch_run_id:
-        logger.info("[Apply] Linked %d assignments to dispatch_run_id=%s", len(desired_assignments), dispatch_run_id)
-
+        logger.info(
+            "[Apply] Linked %d assignments to dispatch_run_id=%s",
+            len(desired_assignments),
+            dispatch_run_id)
 
     if not updates:
-        logger.info("[Apply] No booking updates (company_id=%s) — assignments/ETA refreshed only.", company_id)
-
+        logger.info(
+            "[Apply] No booking updates (company_id=%s) - assignments/ETA refreshed only.",
+            company_id)
 
     result = {
         "applied": applied_ids,
@@ -296,7 +332,7 @@ def apply_assignments(
 
     logger.info(
         "[Apply] company=%s applied=%d skipped=%d conflicts=%d (reasons=%s)",
-        company_id, len(applied_ids), len(skipped), len(conflicts), dict(skipped)    )
+        company_id, len(applied_ids), len(skipped), len(conflicts), dict(skipped))
 
     # 🔔 Notifications Socket.IO vers les chauffeurs pour MAJ en temps réel (mobile)
     try:
@@ -316,7 +352,12 @@ def apply_assignments(
                         continue
                     notify_driver_new_booking(int(d_id), b)
                 except Exception:
-                    logger.exception("[Apply] notify_driver_new_booking failed booking_id=%s driver_id=%s", b_id, d_id)
+                    logger.exception(
+                        "[Apply] notify_driver_new_booking failed booking_id=%s driver_id=%s",
+                        b_id,
+                        d_id)
     except Exception:
-        logger.exception("[Apply] driver notifications failed (company_id=%s)", company_id)
+        logger.exception(
+            "[Apply] driver notifications failed (company_id=%s)",
+            company_id)
     return result

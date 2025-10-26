@@ -1,31 +1,36 @@
 # backend/services/analytics/report_generator.py
-"""
-Service de génération de rapports automatiques.
-Génère des rapports PDF/Email pour les analytics.
-"""
 
+# Constantes pour éviter les valeurs magiques
 import logging
 from datetime import date, timedelta
 from typing import Any, Dict
+
+QUALITY_THRESHOLD = 85
+ON_TIME_RATE_THRESHOLD = 70
+
+"""Service de génération de rapports automatiques.
+Génère des rapports PDF/Email pour les analytics.
+"""
+
 
 logger = logging.getLogger(__name__)
 
 
 class ReportGenerator:
-    """Générateur de rapports analytics"""
+    """Générateur de rapports analytics."""
 
-    def generate_daily_report(self, company_id: int, day: date) -> Dict[str, Any]:
-        """
-        Génère un rapport quotidien.
-        
+    def generate_daily_report(self, company_id: int,
+                              day: date) -> Dict[str, Any]:
+        """Génère un rapport quotidien.
+
         Args:
             company_id: ID de l'entreprise
             day: Date du rapport
-            
+
         Returns:
             Dict avec le contenu du rapport
-        """
 
+        """
         from models import Company
         from services.analytics.aggregator import get_period_analytics
         from services.analytics.insights import generate_insights
@@ -44,7 +49,7 @@ class ReportGenerator:
         insights = generate_insights(company_id, analytics)
 
         # Générer le contenu
-        report = {
+        return {
             "company_name": company.name,
             "date": day.isoformat(),
             "metrics": {
@@ -57,20 +62,18 @@ class ReportGenerator:
             "summary": self._generate_daily_summary(daily_data)
         }
 
-        return report
+    def generate_weekly_report(
+            self, company_id: int, week_start: date) -> Dict[str, Any]:
+        """Génère un rapport hebdomadaire.
 
-    def generate_weekly_report(self, company_id: int, week_start: date) -> Dict[str, Any]:
-        """
-        Génère un rapport hebdomadaire.
-        
         Args:
             company_id: ID de l'entreprise
             week_start: Date de début de semaine (lundi)
-            
+
         Returns:
             Dict avec le contenu du rapport
-        """
 
+        """
         from models import Company
         from services.analytics.aggregator import get_weekly_summary
         from services.analytics.insights import generate_insights
@@ -91,7 +94,7 @@ class ReportGenerator:
         week_end = week_start + timedelta(days=6)
         summary = analytics.get("summary", {})
 
-        report = {
+        return {
             "company_name": company.name,
             "week_start": week_start.isoformat(),
             "week_end": week_end.isoformat(),
@@ -106,22 +109,19 @@ class ReportGenerator:
             "recommendations": self._generate_weekly_recommendations(analytics, insights)
         }
 
-        return report
-
     def _generate_daily_summary(self, daily_data: Dict[str, Any]) -> str:
-        """Génère un résumé texte du jour"""
-
+        """Génère un résumé texte du jour."""
         bookings = daily_data.get("bookings", 0)
         on_time_rate = daily_data.get("on_time_rate", 0)
         quality = daily_data.get("quality_score", 0)
 
-        if quality >= 85:
+        if quality >= QUALITY_THRESHOLD:
             performance = "excellente"
             emoji = "🎉"
-        elif quality >= 70:
+        elif quality >= QUALITY_THRESHOLD:
             performance = "bonne"
             emoji = "✅"
-        elif quality >= 50:
+        elif quality >= QUALITY_THRESHOLD:
             performance = "moyenne"
             emoji = "⚠️"
         else:
@@ -130,34 +130,33 @@ class ReportGenerator:
 
         return (
             f"{emoji} Journée {performance} avec {bookings} courses effectuées. "
-            f"Taux de ponctualité : {on_time_rate:.1f}% "
-            f"(Score qualité : {quality:.0f}/100)"
+            f"Taux de ponctualité : {on_time_rate:.1f}%. "
+            f"(Score qualité : {quality:.0f})"
         )
 
     def _generate_weekly_recommendations(
         self,
         analytics: Dict[str, Any],
-        insights: list
-    ) -> list:
-        """Génère des recommandations hebdomadaires"""
-
+        insights: list[Dict[str, Any]]
+    ) -> list[Dict[str, Any]]:
+        """Génère des recommandations hebdomadaires."""
         recommendations = []
 
         summary = analytics.get("summary", {})
         on_time_rate = summary.get("avg_on_time_rate", 0)
 
         # Recommandation sur la ponctualité
-        if on_time_rate < 70:
+        if on_time_rate < ON_TIME_RATE_THRESHOLD:
             recommendations.append({
                 "priority": "high",
                 "title": "Améliorer la ponctualité",
-                "description": "Le taux de ponctualité est faible. "
-                              "Analysez les causes récurrentes de retards."
+                "description": "Le taux de ponctualité est faible. Analysez les causes récurrentes de retards."
             })
 
         # Recommandations des insights
         for insight in insights:
-            if insight.get("priority") == "critical" or insight.get("priority") == "high":
+            if insight.get("priority") == "critical" or insight.get(
+                    "priority") == "high":
                 recommendations.append({
                     "priority": insight.get("priority"),
                     "title": insight.get("title"),
@@ -173,26 +172,24 @@ class ReportGenerator:
 
         return recommendations
 
-    def generate_email_content(self, report: Dict[str, Any], report_type: str = "daily") -> Dict[str, str]:
-        """
-        Génère le contenu d'un email à partir d'un rapport.
-        
+    def generate_email_content(
+            self, report: Dict[str, Any], report_type: str = "daily") -> Dict[str, str]:
+        """Génère le contenu d'un email à partir d'un rapport.
+
         Args:
             report: Données du rapport
             report_type: "daily" ou "weekly"
-            
+
         Returns:
             Dict avec subject et body
-        """
 
+        """
         if report_type == "daily":
             return self._generate_daily_email(report)
-        else:
-            return self._generate_weekly_email(report)
+        return self._generate_weekly_email(report)
 
     def _generate_daily_email(self, report: Dict[str, Any]) -> Dict[str, str]:
-        """Génère l'email quotidien"""
-
+        """Génère l'email quotidien."""
         company_name = report.get("company_name", "")
         date = report.get("date", "")
         metrics = report.get("metrics", {})
@@ -205,12 +202,12 @@ class ReportGenerator:
         <body style="font-family: Arial, sans-serif; color: #333;">
             <h2 style="color: #0f766e;">Rapport Quotidien - {company_name}</h2>
             <p><strong>Date :</strong> {date}</p>
-            
+
             <div style="background: #f0fdfa; padding: 15px; border-radius: 8px; margin: 20px 0;">
                 <h3 style="color: #0f766e; margin-top: 0;">Résumé</h3>
                 <p>{summary}</p>
             </div>
-            
+
             <h3>Métriques Clés</h3>
             <table style="width: 100%; border-collapse: collapse;">
                 <tr>
@@ -246,7 +243,7 @@ class ReportGenerator:
                     </td>
                 </tr>
             </table>
-            
+
             <p style="margin-top: 30px; color: #666; font-size: 12px;">
                 Ce rapport est généré automatiquement par le système ATMR Analytics.
             </p>
@@ -257,8 +254,7 @@ class ReportGenerator:
         return {"subject": subject, "body": body}
 
     def _generate_weekly_email(self, report: Dict[str, Any]) -> Dict[str, str]:
-        """Génère l'email hebdomadaire"""
-
+        """Génère l'email hebdomadaire."""
         company_name = report.get("company_name", "")
         week_start = report.get("week_start", "")
         week_end = report.get("week_end", "")
@@ -284,7 +280,7 @@ class ReportGenerator:
         <body style="font-family: Arial, sans-serif; color: #333;">
             <h2 style="color: #0f766e;">Rapport Hebdomadaire - {company_name}</h2>
             <p><strong>Période :</strong> {week_start} au {week_end}</p>
-            
+
             <h3>Résumé de la Semaine</h3>
             <table style="width: 100%; border-collapse: collapse;">
                 <tr>
@@ -320,12 +316,12 @@ class ReportGenerator:
                     </td>
                 </tr>
             </table>
-            
+
             <h3 style="margin-top: 30px;">Recommandations</h3>
             <ul style="list-style: none; padding: 0;">
                 {reco_html}
             </ul>
-            
+
             <p style="margin-top: 30px; color: #666; font-size: 12px;">
                 Ce rapport est généré automatiquement par le système ATMR Analytics.
             </p>
@@ -341,16 +337,17 @@ _report_generator = ReportGenerator()
 
 
 def generate_daily_report(company_id: int, day: date) -> Dict[str, Any]:
-    """Helper function"""
+    """Helper function."""
     return _report_generator.generate_daily_report(company_id, day)
 
 
-def generate_weekly_report(company_id: int, week_start: date) -> Dict[str, Any]:
-    """Helper function"""
+def generate_weekly_report(
+        company_id: int, week_start: date) -> Dict[str, Any]:
+    """Helper function."""
     return _report_generator.generate_weekly_report(company_id, week_start)
 
 
-def generate_email_content(report: Dict[str, Any], report_type: str = "daily") -> Dict[str, str]:
-    """Helper function"""
+def generate_email_content(
+        report: Dict[str, Any], report_type: str = "daily") -> Dict[str, str]:
+    """Helper function."""
     return _report_generator.generate_email_content(report, report_type)
-

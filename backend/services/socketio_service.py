@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import json
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from ext import app_logger, socketio
-from models import Booking
+
+if TYPE_CHECKING:
+    from models import Booking
 
 # ---------------------------------------------------------------------------
 # Constantes simples
@@ -55,12 +57,11 @@ def _safe_emit(
     room: str | None = None,
     namespace: str = DEFAULT_NAMESPACE,
 ) -> None:
-    """
-    Émet un événement Socket.IO de façon sûre:
-      - exige une room (sinon log d'erreur), 
-      - vérifie la sérialisabilité JSON,
-      - gère la compatibilité Flask-SocketIO v4/v5,
-      - ne remonte pas d'exception aux appelants.
+    """Émet un événement Socket.IO de façon sûre:
+    - exige une room (sinon log d'erreur),
+    - vérifie la sérialisabilité JSON,
+    - gère la compatibilité Flask-SocketIO v4/v5,
+    - ne remonte pas d'exception aux appelants.
     """
     if room is None:
         app_logger.error("[socketio] _safe_emit sans room: event=%s", event)
@@ -73,17 +74,13 @@ def _safe_emit(
     try:
         # Flask-SocketIO >= 5 utilise 'to=' ; on passe par **kwargs pour éviter
         # l'analyse statique de Pylance sur des kwargs non déclarés dans les stubs.
-        kwargs: dict[str, Any] = {"namespace": namespace}
-        if room is not None:
-            kwargs["to"] = room
-        cast(Any, socketio).emit(event, payload, **kwargs)
+        kwargs: dict[str, Any] = {"namespace": namespace, "to": room}
+        cast("Any", socketio).emit(event, payload, **kwargs)
     except TypeError:
         # Compat < 5.x : fallback avec 'room='
         try:
-            kwargs = {"namespace": namespace}
-            if room is not None:
-                kwargs["room"] = room
-            cast(Any, socketio).emit(event, payload, **kwargs)
+            kwargs = {"namespace": namespace, "room": room}
+            cast("Any", socketio).emit(event, payload, **kwargs)
         except Exception as e:
             app_logger.error(
                 "[socketio] emit failed (compat) event=%s room=%s err=%s", event, room, e
@@ -97,9 +94,7 @@ def _safe_emit(
 def notify_driver_new_booking(
     driver_id: int, booking: Booking, *, namespace: str = DEFAULT_NAMESPACE
 ) -> None:
-    """
-    Émet 'new_booking' vers la room du chauffeur correspondant.
-    """
+    """Émet 'new_booking' vers la room du chauffeur correspondant."""
     try:
         data = booking.to_dict() if hasattr(booking, "to_dict") else {
             "id": getattr(booking, "id", None)
@@ -129,10 +124,9 @@ def emit_company_event(
     *,
     namespace: str = DEFAULT_NAMESPACE,
 ) -> None:
-    """
-    Émet un événement SocketIO dans la room de l’entreprise (thread-safe).
+    """Émet un événement SocketIO dans la room de l'entreprise (thread-safe).
     Utilise 'to=' si dispo, sinon 'room=' (compat v4/v5).
-    Ne lève pas d’exception : log l’erreur si l’envoi échoue.
+    Ne lève pas d'exception : log l'erreur si l'envoi échoue.
     """
     _safe_emit(event, payload, room=get_company_room(company_id), namespace=namespace)
 
@@ -214,11 +208,10 @@ def emit_assignment_created(
     *,
     namespace: str = DEFAULT_NAMESPACE,
 ) -> None:
-    """
-    Notifie la création d'une assignation :
-      - room entreprise (tableau de bord),
-      - room chauffeur (réception tâche),
-      - (optionnel) room booking si vous la gérez côté front.
+    """Notifie la création d'une assignation :
+    - room entreprise (tableau de bord),
+    - room chauffeur (réception tâche),
+    - (optionnel) room booking si vous la gérez côté front.
     """
     company_payload = {
         "assignment_id": assignment_id,
@@ -316,9 +309,9 @@ def emit_delay_detected(
 # Helpers pour joindre/quitter des rooms côté serveur (utilisable hors handler)
 # ---------------------------------------------------------------------------
 def join_company_room(sid: str, company_id: int, namespace: str = DEFAULT_NAMESPACE) -> None:
-    """Ajoute un client (sid) à la room d’entreprise — utilisable hors contexte handler."""
+    """Ajoute un client (sid) à la room d'entreprise - utilisable hors contexte handler."""
     try:
-        cast(Any, socketio).enter_room(sid, get_company_room(company_id), namespace=namespace)
+        cast("Any", socketio).enter_room(sid, get_company_room(company_id), namespace=namespace)
     except Exception as e:
         app_logger.error(
             "[socketio] enter_room failed sid=%s company=%s err=%s", sid, company_id, e
@@ -326,9 +319,9 @@ def join_company_room(sid: str, company_id: int, namespace: str = DEFAULT_NAMESP
 
 
 def leave_company_room(sid: str, company_id: int, namespace: str = DEFAULT_NAMESPACE) -> None:
-    """Retire un client (sid) de la room d’entreprise — utilisable hors contexte handler."""
+    """Retire un client (sid) de la room d'entreprise - utilisable hors contexte handler."""
     try:
-        cast(Any, socketio).leave_room(sid, get_company_room(company_id), namespace=namespace)
+        cast("Any", socketio).leave_room(sid, get_company_room(company_id), namespace=namespace)
     except Exception as e:
         app_logger.error(
             "[socketio] leave_room failed sid=%s company=%s err=%s", sid, company_id, e
@@ -338,7 +331,7 @@ def leave_company_room(sid: str, company_id: int, namespace: str = DEFAULT_NAMES
 def join_date_room(sid: str, date_str: str, namespace: str = DEFAULT_NAMESPACE) -> None:
     """Ajoute un client (sid) à la room de date (YYYY-MM-DD)."""
     try:
-        cast(Any, socketio).enter_room(sid, get_date_room(date_str), namespace=namespace)
+        cast("Any", socketio).enter_room(sid, get_date_room(date_str), namespace=namespace)
     except Exception as e:
         app_logger.error(
             "[socketio] enter_room(date) failed sid=%s date=%s err=%s", sid, date_str, e
@@ -348,7 +341,7 @@ def join_date_room(sid: str, date_str: str, namespace: str = DEFAULT_NAMESPACE) 
 def leave_date_room(sid: str, date_str: str, namespace: str = DEFAULT_NAMESPACE) -> None:
     """Retire un client (sid) de la room de date (YYYY-MM-DD)."""
     try:
-        cast(Any, socketio).leave_room(sid, get_date_room(date_str), namespace=namespace)
+        cast("Any", socketio).leave_room(sid, get_date_room(date_str), namespace=namespace)
     except Exception as e:
         app_logger.error(
             "[socketio] leave_room(date) failed sid=%s date=%s err=%s", sid, date_str, e
@@ -360,23 +353,23 @@ def leave_date_room(sid: str, date_str: str, namespace: str = DEFAULT_NAMESPACE)
 # ---------------------------------------------------------------------------
 __all__ = [
     "DEFAULT_NAMESPACE",
-    "get_company_room",
-    "get_driver_room",
-    "get_date_room",
     "_safe_emit",
-    "emit_company_event",
-    "emit_driver_event",
-    "emit_date_event",
-    "notify_driver_new_booking",
-    "emit_dispatch_run_started",
-    "emit_dispatch_run_completed",
-    "emit_dispatch_run_failed",
+    "emit_assignment_cancelled",
     "emit_assignment_created",
     "emit_assignment_updated",
-    "emit_assignment_cancelled",
+    "emit_company_event",
+    "emit_date_event",
     "emit_delay_detected",
+    "emit_dispatch_run_completed",
+    "emit_dispatch_run_failed",
+    "emit_dispatch_run_started",
+    "emit_driver_event",
+    "get_company_room",
+    "get_date_room",
+    "get_driver_room",
     "join_company_room",
-    "leave_company_room",
     "join_date_room",
+    "leave_company_room",
     "leave_date_room",
+    "notify_driver_new_booking",
 ]

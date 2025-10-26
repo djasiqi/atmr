@@ -1,9 +1,11 @@
 # backend/sockets/chat.py
+"""Socket.IO handlers pour le chat et la localisation.
+Les fonctions de handlers sont enregistrées via @socketio.on() et appelées par le framework.
+"""
 import logging
-from collections.abc import Mapping
 from contextlib import suppress
 from datetime import UTC, datetime
-from typing import Any, Dict, cast
+from typing import TYPE_CHECKING, Any, Dict, cast
 from typing import cast as tcast
 
 from flask import request, session
@@ -13,10 +15,21 @@ from flask_socketio import SocketIO, emit, join_room
 from ext import db, redis_client
 from models import Company, Driver, Message, User, UserRole
 
+# Constantes pour éviter les valeurs magiques
+RECEIVER_ID_ZERO = 0
+LAT_THRESHOLD = 90
+LON_THRESHOLD = 180
+MAX_MESSAGE_LENGTH = 1000
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
 logger = logging.getLogger("socketio")
 
 # Petit index en mémoire pour le debug/nettoyage : sid -> infos
 _SID_INDEX: Dict[str, Dict[str, Any]] = {}
+
+# Les handlers Socket.IO sont enregistrés par @socketio.on()
 
 
 def _get_sid(fallback_request=None) -> str:
@@ -29,7 +42,7 @@ def _get_sid(fallback_request=None) -> str:
 
 
 def _extract_token(auth) -> str | None:
-    """Récupère le token JWT depuis Authorization, auth.token ou ?token="""
+    """Récupère le token JWT depuis Authorization, auth.token ou ?token=."""
     # 1) Header Authorization: Bearer ...
     authz = request.headers.get("Authorization") or request.headers.get("AUTHORIZATION")
     if authz and authz.lower().startswith("bearer "):
@@ -50,11 +63,11 @@ def init_chat_socket(socketio: SocketIO):
     logger.info("🔧 [INIT] Initialisation des handlers Socket.IO chat")
 
     @socketio.on("connect", namespace="/")
-    def handle_connect(auth):
-        logger.info(f"🔌 [CONNECT] HANDLER APPELÉ ! auth={auth}")
+    def handle_connect(auth: dict[str, Any] | None) -> bool:  # noqa: PLR0911
+        logger.info("🔌 [CONNECT] HANDLER APPELÉ ! auth=%s", auth)
         client_ip = request.environ.get("REMOTE_ADDR")
         ua = request.headers.get("User-Agent", "Unknown")
-        logger.info(f"🔌 SIO connect from {client_ip} UA={ua}")
+        logger.info("🔌 SIO connect from %s UA=%s", client_ip, ua)
 
         try:
             token = _extract_token(auth)
@@ -69,11 +82,11 @@ def init_chat_socket(socketio: SocketIO):
             if not public_id:
                 emit("unauthorized", {"error": "Token sans 'sub'"})
                 return False
-            logger.info(f"🧾 Token validé pour user {public_id}")
+            logger.info("🧾 Token validé pour user %s", public_id)
 
             user = User.query.filter_by(public_id=public_id).first()
             if not user:
-                logger.info(f"⛔ user not found: {public_id}")
+                logger.info("⛔ user not found: %s", public_id)
                 emit("unauthorized", {"error": "Utilisateur non trouvé"})
                 return False
 
@@ -85,7 +98,8 @@ def init_chat_socket(socketio: SocketIO):
             if user.role == UserRole.driver:
                 driver = Driver.query.filter_by(user_id=user.id).first()
                 if not driver or not driver.company_id:
-                    raise Exception("Chauffeur ou entreprise associée introuvable")
+                    msg = "Chauffeur ou entreprise associée introuvable"
+                    raise Exception(msg)
 
                 company_room = f"company_{driver.company_id}"
                 driver_room = f"driver_{driver.id}"
@@ -93,7 +107,7 @@ def init_chat_socket(socketio: SocketIO):
                 join_room(driver_room)
 
                 emit("connected", {"message": "✅ Chauffeur connecté"})
-                logger.info(f"🔌 Driver {driver.id} -> rooms: {company_room}, {driver_room}")
+                logger.info("🔌 Driver %s -> rooms: %s, %s", driver.id, company_room, driver_room)
 
                 _SID_INDEX[_get_sid()] = {
                     "user_public_id": public_id,
@@ -113,7 +127,7 @@ def init_chat_socket(socketio: SocketIO):
                 room = f"company_{company.id}"
                 join_room(room)
                 emit("connected", {"message": f"✅ Entreprise connectée à {room}"})
-                logger.info(f"🏢 Company {company.id} -> room: {room}")
+                logger.info("🏢 Company %s -> room: %s", company.id, room)
 
                 _SID_INDEX[_get_sid()] = {
                     "user_public_id": public_id,
@@ -128,12 +142,12 @@ def init_chat_socket(socketio: SocketIO):
             return True
 
         except Exception as e:
-            logger.exception(f"❌ Erreur de connexion WebSocket : {e}")
+            logger.exception("❌ Erreur de connexion WebSocket : %s", e)
             emit("unauthorized", {"error": str(e)})
             return False
 
     @socketio.on("team_chat_message")
-    def handle_team_chat(data):
+    def handle_team_chat(data):  # noqa: PLR0911
         local_id = data.get("_localId")
         try:
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX au lieu de session Flask
@@ -153,8 +167,8 @@ def init_chat_socket(socketio: SocketIO):
             content = (data.get("content") or "").strip()
 
             # ✅ Validation longueur message
-            if len(content) > 1000:
-                emit("error", {"error": "Message trop long (max 1000 caractères)."})
+            if len(content) > MAX_MESSAGE_LENGTH:
+                emit("error", {"error": f"Message trop long (max {MAX_MESSAGE_LENGTH} caractères)."})
                 return
 
             receiver_id = data.get("receiver_id")
@@ -167,8 +181,8 @@ def init_chat_socket(socketio: SocketIO):
             if receiver_id is not None:
                 try:
                     receiver_id = int(receiver_id)
-                    if receiver_id <= 0:
-                        raise ValueError()
+                    if receiver_id <= RECEIVER_ID_ZERO:
+                        raise ValueError
                 except (TypeError, ValueError):
                     emit("error", {"error": "receiver_id invalide."})
                     return
@@ -183,7 +197,7 @@ def init_chat_socket(socketio: SocketIO):
                 sender_role = "DRIVER"
                 sender_id = user.id
                 company_obj = None
-                logger.info(f"📨 Chat driver: user_id={user.id}, driver_id={driver.id}, company_id={company_id}")
+                logger.info("📨 Chat driver: user_id=%s, driver_id=%s, company_id=%s", user.id, driver.id, company_id)
             elif user.role == UserRole.company:
                 company_obj = Company.query.filter_by(user_id=user.id).first()
                 if not company_obj:
@@ -194,18 +208,18 @@ def init_chat_socket(socketio: SocketIO):
                 sender_role = "COMPANY"
                 # ✅ FIX: Ne jamais mettre sender_id=None pour l'entreprise
                 sender_id = user.id
-                logger.info(f"📨 Chat company: user_id={user.id}, company_id={company_id}")
+                logger.info("📨 Chat company: user_id=%s, company_id=%s", user.id, company_id)
             else:
                 emit("error", {"error": "Rôle non autorisé pour le chat."})
                 return
 
-            MessageCtor = cast(Any, Message)
+            MessageCtor = cast("Any", Message)
             message = MessageCtor(
                 sender_id=sender_id,
                 receiver_id=receiver_id,
                 company_id=company_id,
                 sender_role=sender_role,
-                content=content,
+                content="",
                 timestamp=timestamp,
             )
             db.session.add(message)
@@ -229,21 +243,21 @@ def init_chat_socket(socketio: SocketIO):
 
             room = f"company_{company_id}"
             # Pylance ne déclare pas kwarg 'room' sur emit -> cast en Any
-            cast(Any, emit)("team_chat_message", payload, room=room)
-            logger.info(f"📨 Message émis dans {room} par {sender_role} : {content}")
+            cast("Any", emit)("team_chat_message", payload, room=room)
+            logger.info("📨 Message émis dans %s par %s : %s", room, sender_role, content)
 
             # ✅ Si un receiver_id (driver) est fourni, notifier aussi sa room dédiée
             if receiver_id:
                 driver_room = f"driver_{receiver_id}"
-                cast(Any, emit)("team_chat_message", payload, room=driver_room)
-                logger.info(f"📨 Message relayé vers {driver_room}")
+                cast("Any", emit)("team_chat_message", payload, room=driver_room)
+                logger.info("📨 Message relayé vers %s", driver_room)
 
         except Exception as e:
-            logger.exception(f"❌ Erreur team_chat_message : {e}")
+            logger.exception("❌ Erreur team_chat_message : %s", e)
             emit("error", {"error": "Erreur d'envoi de message."})
 
     @socketio.on("join_driver_room")
-    def handle_join_driver_room(data=None):
+    def handle_join_driver_room(data=None):  # noqa: ARG001
         try:
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
             sid = _get_sid()
@@ -268,23 +282,22 @@ def init_chat_socket(socketio: SocketIO):
             join_room(driver_room)
             company_room = f"company_{driver.company_id}"
             join_room(company_room)
-            logger.info(f"✅ Driver {driver.id} joined rooms [{driver_room}, {company_room}]")
+            logger.info("✅ Driver %s joined rooms [%s, %s]", driver.id, driver_room, company_room)
             emit("joined_room", {"rooms": [driver_room, company_room]})
 
         except Exception as e:
-            logger.exception(f"❌ Erreur join_driver_room : {e}")
+            logger.exception("❌ Erreur join_driver_room : %s", e)
             emit("error", {"error": str(e)})
 
     @socketio.on("driver_location")
     def handle_driver_location(data):
-        """
-        Handler pour la réception de la localisation du chauffeur.
-        ✅ FIX: Accepte driver_id dans payload + fallback robuste par user_id
+        """Handler pour la réception de la localisation du chauffeur.
+        ✅ FIX: Accepte driver_id dans payload + fallback robuste par user_id.
         """
         try:
             # 1. Récupération du SID pour le debug
             current_sid = _get_sid()
-            logger.info(f"📍 driver_location reçu, SID={current_sid}, data={data}")
+            logger.info("📍 driver_location reçu, SID=%s, data=%s", current_sid, data)
 
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX uniquement
             sid_info = _SID_INDEX.get(current_sid, {})
@@ -292,7 +305,7 @@ def init_chat_socket(socketio: SocketIO):
             user_role = sid_info.get("role")
 
             if not user_public_id:
-                logger.warning(f"⛔ driver_location sans JWT public_id pour SID={current_sid}")
+                logger.warning("⛔ driver_location sans JWT public_id pour SID=%s", current_sid)
                 emit("error", {"error": "Session JWT introuvable"})
                 return
 
@@ -315,25 +328,26 @@ def init_chat_socket(socketio: SocketIO):
                     candidate_id = int(payload_driver_id)
                     driver = Driver.query.get(candidate_id)
                     if driver:
-                        logger.info(f"✅ Driver trouvé via payload: {driver.id}")
+                        logger.info("✅ Driver trouvé via payload: %s", driver.id)
                     else:
-                        logger.warning(f"⚠️ Driver introuvable via payload_driver_id={candidate_id}")
+                        logger.warning("⚠️ Driver introuvable via payload_driver_id=%s", candidate_id)
                 except (ValueError, TypeError):
-                    logger.warning(f"⚠️ driver_id non convertible: {payload_driver_id}")
+                    logger.warning("⚠️ driver_id non convertible: %s", payload_driver_id)
 
             if not driver and user_id and user_role == "driver":
                 # Fallback: recherche via user_id
                 driver = Driver.query.filter_by(user_id=user_id).first()
                 if driver:
-                    logger.info(f"✅ Driver trouvé via user_id: {driver.id}")
+                    logger.info("✅ Driver trouvé via user_id: %s", driver.id)
                 else:
-                    logger.warning(f"⚠️ Aucun driver associé à user_id={user_id}")
+                    logger.warning("⚠️ Aucun driver associé à user_id=%s", user_id)
 
             # Évite l'évaluation booléenne d'une colonne SQLA : on récupère un int ou None
-            company_id_val = tcast(int | None, getattr(driver, "company_id", None))
+            company_id_val = tcast("int | None", getattr(driver, "company_id", None))
             if (driver is None) or (company_id_val is None):
                 logger.error(
-                    f"❌ Driver introuvable: payload_driver_id={payload_driver_id}, user_id={user_id}"
+                    "❌ Driver introuvable: payload_driver_id=%s, user_id=%s",
+                    payload_driver_id, user_id
                 )
                 emit("error", {"error": "Chauffeur introuvable ou non lié à une entreprise."})
                 return
@@ -350,18 +364,18 @@ def init_chat_socket(socketio: SocketIO):
                 return
 
             # ✅ Validation bornes géographiques
-            if not (-90 <= lat <= 90):
+            if not (-LAT_THRESHOLD <= lat <= LAT_THRESHOLD):
                 emit("error", {"error": "Latitude invalide (doit être entre -90 et 90)."})
                 return
 
-            if not (-180 <= lon <= 180):
+            if not (-LON_THRESHOLD <= lon <= LON_THRESHOLD):
                 emit("error", {"error": "Longitude invalide (doit être entre -180 et 180)."})
                 return
 
             latitude, longitude = lat, lon
 
             company_room = f"company_{company_id_val}"
-            cast(Any, emit)(
+            cast("Any", emit)(
                 "driver_location_update",
                 {
                     "driver_id": driver.id,
@@ -372,16 +386,16 @@ def init_chat_socket(socketio: SocketIO):
                 },
                 room=company_room,
             )
-            logger.info(f"📡 Loc -> {company_room} (driver {driver.id}) {latitude},{longitude}")
+            logger.info("📡 Loc -> %s (driver %s) %s,%s", company_room, driver.id, latitude, longitude)
 
         except Exception as e:
-            logger.exception(f"❌ Erreur driver_location : {e}")
+            logger.exception("❌ Erreur driver_location : %s", e)
             emit("error", {"error": str(e)})
 
 
 
     @socketio.on("join_company")
-    def handle_join_company(data=None):
+    def handle_join_company(data=None):  # noqa: ARG001
            try:
                # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
                sid = _get_sid()
@@ -408,7 +422,7 @@ def init_chat_socket(socketio: SocketIO):
                    room = f"company_{company.id}"
                    join_room(room)
                    emit("joined_company", {"company_id": company.id, "room": room})
-                   logger.info(f"🏢 Company {company.id} joined room: {room}")
+                   logger.info("🏢 Company %s joined room: %s", company.id, room)
                elif user_role == "driver":
                    driver = Driver.query.filter_by(user_id=user.id).first()
                    if not driver or not driver.company_id:
@@ -418,11 +432,11 @@ def init_chat_socket(socketio: SocketIO):
                    room = f"company_{driver.company_id}"
                    join_room(room)
                    emit("joined_company", {"company_id": driver.company_id, "room": room})
-                   logger.info(f"🚗 Driver {driver.id} joined company room: {room}")
+                   logger.info("🚗 Driver %s joined company room: %s", driver.id, room)
                else:
                    emit("error", {"error": "Rôle non autorisé pour rejoindre une room entreprise."})
            except Exception as e:
-               logger.exception(f"❌ Error in join_company: {e}")
+               logger.exception("❌ Error in join_company: %s", e)
                emit("error", {"error": str(e)})
 
 
@@ -454,7 +468,7 @@ def init_chat_socket(socketio: SocketIO):
                        key = f"driver:{driver.id}:loc"
                        h_raw = redis_client.hgetall(key)
                        # Calme Pylance: redis-py retourne un dict[bytes, bytes]
-                       h: Mapping[bytes, Any] = cast(Mapping[bytes, Any], h_raw)
+                       h: Mapping[bytes, Any] = cast("Mapping[bytes, Any]", h_raw)
 
                        if h:
                            # Redis returns bytes -> decode
@@ -465,7 +479,7 @@ def init_chat_socket(socketio: SocketIO):
                                    return v
 
                            loc_data = {
-                               (k.decode() if isinstance(k, (bytes, bytearray)) else str(k)): _dec(v)
+                               k.decode(): _dec(v)
                                for k, v in h.items()
                            }
 
@@ -476,7 +490,7 @@ def init_chat_socket(socketio: SocketIO):
                                        loc_data[kf] = float(loc_data[kf])
 
                            # Emit location to the company room
-                           cast(Any, emit)("driver_location_update", {
+                           cast("Any", emit)("driver_location_update", {
                                "driver_id": driver.id,
                                "first_name": getattr(getattr(driver, "user", None), "first_name", None),
                                "latitude": loc_data.get("lat"),
@@ -485,7 +499,7 @@ def init_chat_socket(socketio: SocketIO):
                            })
                        elif (driver.latitude is not None) and (driver.longitude is not None):
                            # Fallback to DB if Redis doesnt have data
-                           cast(Any, emit)("driver_location_update", {
+                           cast("Any", emit)("driver_location_update", {
                                "driver_id": driver.id,
                                "first_name": getattr(getattr(driver, "user", None), "first_name", None),
                                "latitude": driver.latitude,
@@ -495,16 +509,24 @@ def init_chat_socket(socketio: SocketIO):
                    except Exception as e:
                        # driver vient du for → devrait exister, mais on défend le log quand même
                        safe_id = getattr(driver, "id", None)
-                       logger.exception(f"❌ Error sending driver location for driver {safe_id}: {e}")
+                       logger.exception("❌ Error sending driver location for driver %s: %s", safe_id, e)
 
-               logger.info(f"📡 Sent locations for {len(drivers)} drivers to company {company_id}")
+               logger.info("📡 Sent locations for %s drivers to company %s", len(drivers), company_id)
 
            except Exception as e:
-               logger.exception(f"❌ Error in get_driver_locations: {e}")
+               logger.exception("❌ Error in get_driver_locations: %s", e)
                emit("error", {"error": str(e)})
 
     @socketio.on("disconnect")
     def handle_disconnect():
         sid = _get_sid()
         info = _SID_INDEX.pop(sid, None)
-        logger.info(f"👋 SIO disconnect sid={sid} info={info}")
+        logger.info("👋 SIO disconnect sid=%s info=%s", sid, info)
+
+    # Référencer les handlers pour indiquer qu'ils sont utilisés par Socket.IO
+    _registered_handlers = (
+        handle_connect, handle_team_chat, handle_join_driver_room, 
+        handle_driver_location, handle_join_company, 
+        handle_get_driver_locations, handle_disconnect
+    )
+    # Les handlers sont enregistrés via @socketio.on() ci-dessus

@@ -1,20 +1,22 @@
 # backend/config.py
 import os
 from datetime import timedelta
+from pathlib import Path
+from typing import ClassVar
 
 # Il est préférable de ne charger les variables d'environnement que si nécessaire
 # from dotenv import load_dotenv
 # load_dotenv()
 
-base_dir = os.path.abspath(os.path.dirname(__file__))
+base_dir = Path(__file__).resolve().parent
 
 class Config:
-    """
-    Configuration de base partagée.
+    """Configuration de base partagée.
     Ne contient AUCUNE clé secrète pour être sûr en toute circonstance.
     """
+
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool]] = {
         "pool_pre_ping": True,
         "pool_recycle": 1800,
         "pool_size": 10,        # ✅ PERF: Connection pooling
@@ -30,7 +32,7 @@ class Config:
     )
 
     # --- Redis / Socket.IO ---
-    REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+    REDIS_URL = os.getenv("REDIS_URL", "redis://127.00.1:6379/0")
     # Liste d'origines autorisées pour Socket.IO (séparées par des virgules).
     # Exemple: SOCKETIO_CORS_ORIGINS="https://app.example.com,https://admin.example.com,http://localhost:3000"
     SOCKETIO_CORS_ORIGINS = os.getenv("SOCKETIO_CORS_ORIGINS", "")
@@ -39,8 +41,8 @@ class Config:
     RATELIMIT_ENABLED = True
 
     # ✅ URLs dynamiques pour PDFs/uploads
-    PDF_BASE_URL = os.getenv('PDF_BASE_URL', 'http://localhost:5000')
-    UPLOADS_PUBLIC_BASE = os.getenv('UPLOADS_PUBLIC_BASE', '/uploads')
+    PDF_BASE_URL = os.getenv("PDF_BASE_URL", "http://localhost:5000")
+    UPLOADS_PUBLIC_BASE = os.getenv("UPLOADS_PUBLIC_BASE", "/uploads")
 
     # Logique d'initialisation commune (optionnel)
     @staticmethod
@@ -49,16 +51,17 @@ class Config:
 
 class DevelopmentConfig(Config):
     """Configuration pour le développement local (PostgreSQL via Docker)."""
+
     DEBUG = True
     # Les clés sont chargées depuis .env pour le développement
-    SECRET_KEY = os.getenv('SECRET_KEY')
-    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
-    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
+    SECRET_KEY = os.getenv("SECRET_KEY")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
     # PostgreSQL via Docker (DATABASE_URL doit être défini)
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL') or os.getenv('DATABASE_URI')
+    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL") or os.getenv("DATABASE_URI")
 
     # ✅ PostgreSQL-specific options pour développement
-    SQLALCHEMY_ENGINE_OPTIONS = {
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {  # pyright: ignore[reportIncompatibleVariableOverride]
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
         "connect_args": {"client_encoding": "utf8"}
     }
@@ -72,53 +75,54 @@ class DevelopmentConfig(Config):
     REMEMBER_COOKIE_SAMESITE = "Lax"
 
     # Dev: PDFs accessibles en local
-    PDF_BASE_URL = os.getenv('PDF_BASE_URL', 'http://localhost:5000')
-    UPLOADS_PUBLIC_BASE = '/uploads'
+    PDF_BASE_URL = os.getenv("PDF_BASE_URL", "http://localhost:5000")
+    UPLOADS_PUBLIC_BASE = "/uploads"
 
 
 class ProductionConfig(Config):
     """Configuration pour la production (PostgreSQL)."""
+
     DEBUG = False
     # En production, ces variables DOIVENT être fournies par l'environnement du serveur
-    SECRET_KEY = os.getenv('SECRET_KEY')
-    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
-    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')  # PostgreSQL uniquement
+    SECRET_KEY = os.getenv("SECRET_KEY")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
+    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")  # PostgreSQL uniquement
 
     # ✅ PostgreSQL-specific options
-    SQLALCHEMY_ENGINE_OPTIONS = {
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {  # pyright: ignore[reportIncompatibleVariableOverride]
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
         "connect_args": {"client_encoding": "utf8"}
     }
     # Cookies plus stricts en prod (peuvent être ajustés via env si reverse proxy HTTP)
-    SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'true').lower() == 'true'
+    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "true").lower() == "true"
     SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = os.getenv('SESSION_COOKIE_SAMESITE', 'Lax')
-    REMEMBER_COOKIE_SECURE = os.getenv('REMEMBER_COOKIE_SECURE', 'true').lower() == 'true'
+    SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
+    REMEMBER_COOKIE_SECURE = os.getenv("REMEMBER_COOKIE_SECURE", "true").lower() == "true"
     REMEMBER_COOKIE_HTTPONLY = True
-    REMEMBER_COOKIE_SAMESITE = os.getenv('REMEMBER_COOKIE_SAMESITE', 'Lax')
+    REMEMBER_COOKIE_SAMESITE = os.getenv("REMEMBER_COOKIE_SAMESITE", "Lax")
 
     # ✅ Prod: URL backend publique (depuis env)
-    PDF_BASE_URL = os.getenv('PDF_BASE_URL')
+    PDF_BASE_URL = os.getenv("PDF_BASE_URL")
     if not PDF_BASE_URL:
         pass  # PDF_BASE_URL sera validé au runtime si nécessaire
 
 class TestingConfig(Config):
     TESTING = True
-    SECRET_KEY = 'test-secret-key'
-    JWT_SECRET_KEY = 'test-jwt-key'
-    MAIL_PASSWORD = 'test-mail-password'
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    SECRET_KEY = "test-secret-key"
+    JWT_SECRET_KEY = "test-jwt-key"
+    MAIL_PASSWORD = "test-mail-password"
+    SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     WTF_CSRF_ENABLED = False
     RATELIMIT_ENABLED = False
-    PDF_BASE_URL = 'http://testserver'
-    UPLOADS_PUBLIC_BASE = '/uploads'
+    PDF_BASE_URL = "http://testserver"
+    UPLOADS_PUBLIC_BASE = "/uploads"
 
 
 # C'est ce que votre "Application Factory" utilisera
 config = {
-    'development': DevelopmentConfig,
-    'testing': TestingConfig,
-    'production': ProductionConfig,
-    'default': DevelopmentConfig
+    "development": DevelopmentConfig,
+    "testing": TestingConfig,
+    "production": ProductionConfig,
+    "default": DevelopmentConfig
 }

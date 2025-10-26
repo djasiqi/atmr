@@ -1,0 +1,39 @@
+{
+  "models": {
+    "dqn_dispatch_dueling_dqn": [
+      {
+        "version": "v1.0.0",
+        "created_at": "2025-10-23T21:27:24.771036+00:00",
+        "model_path": "data/ml/model_registry/models/dqn_dispatch_dueling_dqn_v1.0.0.pth",
+        "metadata_path": "data/ml/model_registry/metadata/dqn_dispatch_dueling_dqn_v1.0.0.json",
+        "performance_metrics": {
+          "punctuality_rate": 0.88,
+          "avg_distance": 12.5,
+          "avg_delay": 3.2,
+          "driver_utilization": 0.79,
+          "customer_satisfaction": 0.84
+        },
+        "model_size_mb": 0.0022935867309570312,
+        "checksum": "45375b5effc95e88eb5e259c3953054b"
+      },
+      {
+        "version": "v1.0.0",
+        "created_at": "2025-10-23T21:27:24.488234+00:00",
+        "model_path": "data/ml/model_registry/models/dqn_dispatch_dueling_dqn_v1.0.0.pth",
+        "metadata_path": "data/ml/model_registry/metadata/dqn_dispatch_dueling_dqn_v1.0.0.json",
+        "performance_metrics": {
+          "punctuality_rate": 0.88,
+          "avg_distance": 12.5,
+          "avg_delay": 3.2,
+          "driver_utilization": 0.79,
+          "customer_satisfaction": 0.84
+        },
+        "model_size_mb": 0.0022935867309570312,
+        "checksum": "246ceea9144b905e22579534bd043d9d"
+      }
+    ]
+  },
+  "current_models": {},
+  "promotion_history": [],
+  "last_updated": "2025-10-23T21:27:24.794120+00:00"
+}

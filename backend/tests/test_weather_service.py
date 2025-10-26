@@ -1,4 +1,3 @@
-# ruff: noqa: T201
 """Tests pour le service météo."""
 
 import pytest
@@ -21,7 +20,6 @@ class TestWeatherService:
 
     def test_calculate_weather_factor_ideal(self):
         """Test calcul facteur météo - conditions idéales."""
-        from services.weather_service import WeatherService
 
         # Conditions idéales
         weather_data = {
@@ -37,11 +35,10 @@ class TestWeatherService:
 
         assert factor < 0.2  # Presque idéal
 
-        print(f"✅ Weather factor (idéal) = {factor:.2f}")
+        print("✅ Weather factor (idéal) = {factor")
 
     def test_calculate_weather_factor_rain(self):
         """Test calcul facteur météo - pluie."""
-        from services.weather_service import WeatherService
 
         # Pluie modérée
         weather_data = {
@@ -59,11 +56,10 @@ class TestWeatherService:
         assert factor > 0.1  # Au moins un peu défavorable
         assert factor <= 1.0  # Max 1.0
 
-        print(f"✅ Weather factor (pluie) = {factor:.2f}")
+        print("✅ Weather factor (pluie) = {factor")
 
     def test_calculate_weather_factor_snow(self):
         """Test calcul facteur météo - neige."""
-        from services.weather_service import WeatherService
 
         # Neige
         weather_data = {
@@ -81,17 +77,16 @@ class TestWeatherService:
         assert factor > 0.3  # Défavorable
         assert factor <= 1.0  # Max 1.0
 
-        print(f"✅ Weather factor (neige) = {factor:.2f}")
+        print("✅ Weather factor (neige) = {factor")
 
     def test_cache_mechanism(self):
         """Test mécanisme de cache."""
-        from services.weather_service import WeatherService
 
         # Clear cache
         WeatherService.clear_cache()
 
         # Première récupération (sans API key = default, pas de cache)
-        weather1 = WeatherService.get_weather(46.2044, 6.1432)
+        WeatherService.get_weather(46.2044, 6.1432)
 
         # Sans API key, pas de cache (retourne default direct)
         # Mais le mécanisme de cache fonctionne quand API activée
@@ -115,7 +110,7 @@ class TestWeatherService:
 
         assert 0.0 <= factor <= 1.0
 
-        print(f"✅ get_weather_factor OK ({factor:.2f})")
+        print("✅ get_weather_factor OK ({factor")
 
 
 if __name__ == "__main__":
@@ -132,8 +127,8 @@ if __name__ == "__main__":
         test.test_calculate_weather_factor_snow()
         test.test_cache_mechanism()
         test.test_get_weather_factor_helper()
-    except Exception as e:
-        print(f"❌ Erreur: {e}")
+    except Exception:
+        print("❌ Erreur: {e}")
         import traceback
         traceback.print_exc()
         import sys

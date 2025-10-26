@@ -1,5 +1,4 @@
-"""
-Routes de monitoring pour l'état du client OSRM.
+"""Routes de monitoring pour l'état du client OSRM.
 Exposé uniquement pour les admins système (ou en interne).
 """
 import logging
@@ -22,8 +21,7 @@ ns_osrm_metrics = Namespace(
 class OsrmStatus(Resource):
     @jwt_required()
     def get(self):
-        """
-        Retourne l'état actuel du circuit-breaker OSRM.
+        """Retourne l'état actuel du circuit-breaker OSRM.
 
         Utile pour:
         - Diagnostiquer les timeouts OSRM
@@ -32,19 +30,19 @@ class OsrmStatus(Resource):
         """
         cb = _osrm_circuit_breaker
         state = "closed"
-        if cb.is_open():  # type: ignore[attr-defined]
+        if cb.is_open():
             state = "open"
-        elif getattr(cb, '_failure_count', 0) > 0:
+        elif getattr(cb, "_failure_count", 0) > 0:
             state = "half_open"
 
         return jsonify({
             "status": "ok",
             "circuit_breaker": {
                 "state": state,
-                "failure_count": getattr(cb, '_failure_count', 0),
-                "last_failure_time": getattr(cb, '_last_failure_time', 0),
-                "threshold": cb.failure_threshold,  # type: ignore[attr-defined]
-                "timeout_seconds": getattr(cb, 'timeout', 60),
+                "failure_count": getattr(cb, "_failure_count", 0),
+                "last_failure_time": getattr(cb, "_last_failure_time", 0),
+                "threshold": cb.failure_threshold,
+                "timeout_seconds": getattr(cb, "timeout", 60),
             },
             "message": (
                 "Circuit is OPEN - OSRM requests blocked temporarily"
@@ -58,16 +56,16 @@ class OsrmStatus(Resource):
 class OsrmReset(Resource):
     @jwt_required()
     def post(self):
-        """
-        Réinitialise manuellement le circuit-breaker (force CLOSED).
+        """Réinitialise manuellement le circuit-breaker (force CLOSED).
 
         ⚠️ À utiliser uniquement pour forcer la réouverture après
         vérification manuelle que l'OSRM backend est opérationnel.
         """
         cb = _osrm_circuit_breaker
-        cb._failure_count = 0  # type: ignore[attr-defined]
-        cb._last_failure_time = 0  # type: ignore[attr-defined]
-        logger.warning("[OSRM] Circuit-breaker réinitialisé manuellement via API")
+        cb._failure_count = 0
+        cb._last_failure_time = 0
+        logger.warning(
+            "[OSRM] Circuit-breaker réinitialisé manuellement via API")
         return jsonify({
             "status": "ok",
             "message": "Circuit-breaker reset to CLOSED state"

@@ -1,5 +1,17 @@
-"""
-Modèle pour stocker les prédictions ML et leurs résultats réels.
+
+# Constantes pour éviter les valeurs magiques
+from datetime import datetime, timezone
+from typing import Any
+
+from sqlalchemy import Float, Integer, String, Text
+from typing_extensions import override
+
+from ext import db
+
+ERROR_THRESHOLD = 3
+PREDICTION_ERROR_THRESHOLD = 3
+
+"""Modèle pour stocker les prédictions ML et leurs résultats réels.
 
 Permet de :
 - Tracker toutes les prédictions ML
@@ -7,27 +19,30 @@ Permet de :
 - Calculer métriques (MAE, R²)
 - Détecter drift
 """
-from datetime import datetime
-
-from sqlalchemy import Float, Integer, String, Text
-
-from ext import db
 
 
 class MLPrediction(db.Model):
-    """
-    Prédiction ML avec résultat réel pour monitoring.
+    """Prédiction ML avec résultat réel pour monitoring.
     Stocke chaque prédiction ML et permet de la comparer
     avec le retard réel une fois la course terminée.
     """
+
     __tablename__ = "ml_prediction"
 
     # Clé primaire
     id = db.Column(Integer, primary_key=True)
 
     # Identifiants
-    booking_id = db.Column(Integer, db.ForeignKey("booking.id"), nullable=False, index=True)
-    driver_id = db.Column(Integer, db.ForeignKey("driver.id"), nullable=True, index=True)
+    booking_id = db.Column(
+        Integer,
+        db.ForeignKey("booking.id"),
+        nullable=False,
+        index=True)
+    driver_id = db.Column(
+        Integer,
+        db.ForeignKey("driver.id"),
+        nullable=True,
+        index=True)
     request_id = db.Column(String(100), nullable=True, index=True)
 
     # Prédiction ML
@@ -49,34 +64,51 @@ class MLPrediction(db.Model):
 
     # Métriques calculées
     prediction_error = db.Column(Float, nullable=True)  # |predicted - actual|
-    is_accurate = db.Column(db.Boolean, nullable=True)  # error < 3 min
+    # error < ERROR_THRESHOLD min
+    is_accurate = db.Column(db.Boolean, nullable=True)
 
     # Métadonnées
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)  # noqa: DTZ003
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)  # noqa: DTZ003
+    created_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False)
 
     # Relations
-    booking = db.relationship("Booking", backref=db.backref("ml_predictions", lazy="dynamic"))
-    driver = db.relationship("Driver", backref=db.backref("ml_predictions", lazy="dynamic"))
+    booking = db.relationship(
+        "Booking", backref=db.backref(
+            "ml_predictions", lazy="dynamic"))
+    driver = db.relationship(
+        "Driver", backref=db.backref(
+            "ml_predictions", lazy="dynamic"))
 
+    @override
     def __repr__(self) -> str:
         return (
             f"<MLPrediction booking_id={self.booking_id} "
-            f"predicted={self.predicted_delay_minutes:.2f}min "
+            f"predicted={self.predicted_delay_minutes} "
             f"actual={self.actual_delay_minutes or 'N/A'}>"
         )
 
     def update_actual_delay(self, actual_delay: float) -> None:
-        """
-        Met à jour le retard réel et calcule les métriques.
+        """Met à jour le retard réel et calcule les métriques.
+
         Args:
             actual_delay: Retard réel en minutes
+
         """
         self.actual_delay_minutes = actual_delay
-        self.prediction_error = abs(self.predicted_delay_minutes - actual_delay)
-        self.is_accurate = self.prediction_error < 3.0  # Seuil: 3 min
+        self.prediction_error = abs(
+            self.predicted_delay_minutes - actual_delay)
+        # Seuil: PREDICTION_ERROR_THRESHOLD min
+        self.is_accurate = self.prediction_error < PREDICTION_ERROR_THRESHOLD
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convertit en dictionnaire pour API."""
         return {
             "id": self.id,
@@ -95,4 +127,3 @@ class MLPrediction(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
-

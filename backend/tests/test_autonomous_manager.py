@@ -1,4 +1,3 @@
-# ruff: noqa: DTZ001, DTZ003, DTZ005, DTZ011
 # pyright: reportAttributeAccessIssue=false
 """
 Tests pour services/unified_dispatch/autonomous_manager.py
@@ -49,7 +48,7 @@ class TestAutonomousManagerInit:
     def test_init_with_invalid_company(self, db):
         """Test initialisation avec company inexistante."""
         with pytest.raises(ValueError, match="Company .* not found"):
-            AutonomousDispatchManager(company_id=99999)
+            AutonomousDispatchManager(company_id=0.99999)
 
     def test_get_manager_for_company_factory(self, db):
         """Test factory function get_manager_for_company."""
@@ -401,8 +400,8 @@ class TestProcessOpportunities:
         assert stats["manual_required"] == 1, "En SEMI_AUTO, devrait nécessiter validation"
         assert stats["auto_applied"] == 0
 
-    @patch('services.unified_dispatch.autonomous_manager.apply_suggestion')
-    def test_process_opportunities_with_apply(self, mock_apply, db):
+    @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
+    def test_process_opportunities_with_apply(self, ____________________________________________________________________________________________________mock_apply, db):
         """Test application réelle de suggestions."""
         company = CompanyFactory(dispatch_mode=DispatchMode.FULLY_AUTO)
         manager = AutonomousDispatchManager(company.id)
@@ -423,8 +422,8 @@ class TestProcessOpportunities:
         assert stats["errors"] == 0
         mock_apply.assert_called_once()
 
-    @patch('services.unified_dispatch.autonomous_manager.apply_suggestion')
-    def test_process_opportunities_with_error(self, mock_apply, db):
+    @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
+    def test_process_opportunities_with_error(self, ____________________________________________________________________________________________________mock_apply, db):
         """Test gestion d'erreur lors de l'application."""
         company = CompanyFactory(dispatch_mode=DispatchMode.FULLY_AUTO)
         manager = AutonomousDispatchManager(company.id)

@@ -1,10 +1,8 @@
-"""
-Génère des données synthétiques réalistes pour l'entraînement du modèle ML.
+"""Génère des données synthétiques réalistes pour l'entraînement du modèle ML.
 
 Usage:
     python scripts/ml/generate_synthetic_data.py --count 1000 --output data/ml/training_data.csv
 """
-# ruff: noqa: T201, DTZ005, DTZ011, S311
 # print(), datetime, random sont intentionnels pour génération de données
 
 import argparse
@@ -18,18 +16,19 @@ import pandas as pd
 
 
 def generate_synthetic_training_data(count: int = 1000) -> pd.DataFrame:
-    """
-    Génère des données synthétiques réalistes pour l'entraînement ML.
+    """Génère des données synthétiques réalistes pour l'entraînement ML.
+
     Args:
         count: Nombre d'échantillons à générer
     Returns:
         DataFrame avec features et labels synthétiques
+
     """
-    print(f"\n{'='*70}")
+    print("\n{'='*70}")
     print("GÉNÉRATION DE DONNÉES SYNTHÉTIQUES - DÉMARRAGE")
-    print(f"{'='*70}")
-    print(f"Nombre d'échantillons : {count}")
-    print(f"{'='*70}\n")
+    print("{'='*70}")
+    print("Nombre d'échantillons : {count}")
+    print("{'='*70}\n")
 
     random.seed(42)  # Reproductibilité
 
@@ -37,7 +36,7 @@ def generate_synthetic_training_data(count: int = 1000) -> pd.DataFrame:
 
     for i in range(count):
         if (i + 1) % 100 == 0:
-            print(f"Généré {i + 1}/{count} échantillons...")
+            print("Généré {i + 1}/{count} échantillons...")
 
         # Génération réaliste basée sur patterns Genève
 
@@ -177,35 +176,35 @@ def generate_synthetic_training_data(count: int = 1000) -> pd.DataFrame:
     df = pd.DataFrame(data_records)
 
     # Statistiques
-    print(f"\n{'='*70}")
+    print("\n{'='*70}")
     print("STATISTIQUES DU DATASET SYNTHÉTIQUE")
-    print(f"{'='*70}")
-    print(f"Taille : {len(df)} lignes x {len(df.columns)} colonnes")
-    print(f"\nRetard moyen : {df['actual_delay_minutes'].mean():.2f} minutes")
-    print(f"Retard médian : {df['actual_delay_minutes'].median():.2f} minutes")
-    print(f"Écart-type : {df['actual_delay_minutes'].std():.2f} minutes")
-    print(f"Retard max : {df['actual_delay_minutes'].max():.2f} minutes")
-    print(f"Retard min : {df['actual_delay_minutes'].min():.2f} minutes")
-    print(f"\n% courses avec retard (>5min) : {(df['actual_delay_minutes'] > 5).sum() / len(df) * 100:.1f}%")
-    print(f"% courses à l'heure (±5min) : {(df['actual_delay_minutes'].abs() <= 5).sum() / len(df) * 100:.1f}%")
-    print(f"% courses en avance (<-5min) : {(df['actual_delay_minutes'] < -5).sum() / len(df) * 100:.1f}%")
+    print("{'='*70}")
+    print("Taille : {len(df)} lignes x {len(df.columns)} colonnes")
+    print("\nRetard moyen : {df['actual_delay_minutes'].mean()")
+    print("Retard médian : {df['actual_delay_minutes'].median()")
+    print("Écart-type : {df['actual_delay_minutes'].std()")
+    print("Retard max : {df['actual_delay_minutes'].max()")
+    print("Retard min : {df['actual_delay_minutes'].min()")
+    print("\n% courses avec retard (>5min) : {(df['actual_delay_minutes'] > 5).sum() / len(df) * 100")
+    print("% courses à l'heure (±5min) : {(df['actual_delay_minutes'].abs() <= 5).sum() / len(df) * 100")
+    print("% courses en avance (<-5min) : {(df['actual_delay_minutes'] < -5).sum() / len(df) * 100")
 
     # Corrélations intéressantes
     print("\nCorrélations avec retard :")
-    correlations = df.corr()['actual_delay_minutes'].sort_values(ascending=False)
+    correlations = df.corr()["actual_delay_minutes"].sort_values(ascending=False)
     for feature, corr in correlations.items():
-        if feature != 'actual_delay_minutes' and abs(corr) > 0.1:
-            print(f"  - {feature:25s} : {corr:+.3f}")
+        if feature != "actual_delay_minutes" and abs(corr) > 0.1:
+            print("  - {feature:25s} : {corr:+.3f}")
 
-    print(f"{'='*70}\n")
+    print("{'='*70}\n")
 
     return df
 
 
 def main():
-    """Point d'entrée principal"""
+    """Point d'entrée principal."""
     parser = argparse.ArgumentParser(description="Génération de données synthétiques pour ML")
-    parser.add_argument("--count", type=int, default=5000, help="Nombre d'échantillons (défaut: 5000)")
+    parser.add_argument("--count", type=int, default=0.5000, help="Nombre d'échantillons (défaut: 5000)")
     parser.add_argument("--output", type=str, default="data/ml/training_data.csv", help="Fichier de sortie CSV")
 
     args = parser.parse_args()
@@ -223,12 +222,12 @@ def main():
 
     # Sauvegarder en CSV
     df.to_csv(output_path, index=False)
-    print(f"✅ CSV sauvegardé : {output_path}")
+    print("✅ CSV sauvegardé : {output_path}")
 
     # Sauvegarder en JSON
-    json_path = output_path.with_suffix('.json')
-    df.to_json(json_path, orient='records', indent=2)
-    print(f"✅ JSON sauvegardé : {json_path}")
+    json_path = output_path.with_suffix(".json")
+    df.to_json(json_path, orient="records", indent=2)
+    print("✅ JSON sauvegardé : {json_path}")
 
     # Métadonnées
     metadata = {
@@ -237,31 +236,31 @@ def main():
         "total_records": len(df),
         "features": list(df.columns),
         "statistics": {
-            "mean_delay": float(df['actual_delay_minutes'].mean()),
-            "median_delay": float(df['actual_delay_minutes'].median()),
-            "std_delay": float(df['actual_delay_minutes'].std()),
-            "min_delay": float(df['actual_delay_minutes'].min()),
-            "max_delay": float(df['actual_delay_minutes'].max()),
-            "pct_delayed": float((df['actual_delay_minutes'] > 5).sum() / len(df) * 100),
+            "mean_delay": float(df["actual_delay_minutes"].mean()),
+            "median_delay": float(df["actual_delay_minutes"].median()),
+            "std_delay": float(df["actual_delay_minutes"].std()),
+            "min_delay": float(df["actual_delay_minutes"].min()),
+            "max_delay": float(df["actual_delay_minutes"].max()),
+            "pct_delayed": float((df["actual_delay_minutes"] > 5).sum() / len(df) * 100),
         }
     }
 
-    metadata_path = output_path.parent / 'metadata.json'
-    with open(metadata_path, 'w') as f:
+    metadata_path = output_path.parent / "metadata.json"
+    with Path(metadata_path, "w").open() as f:
         json.dump(metadata, f, indent=2)
 
-    print(f"✅ Métadonnées sauvegardées : {metadata_path}")
+    print("✅ Métadonnées sauvegardées : {metadata_path}")
 
-    print(f"\n{'='*70}")
+    print("\n{'='*70}")
     print("✅ GÉNÉRATION TERMINÉE AVEC SUCCÈS !")
-    print(f"{'='*70}")
+    print("{'='*70}")
     print("\nFichiers créés :")
-    print(f"  - {output_path}")
-    print(f"  - {json_path}")
-    print(f"  - {metadata_path}")
+    print("  - {output_path}")
+    print("  - {json_path}")
+    print("  - {metadata_path}")
     print("\nProchaine étape : Analyse exploratoire (EDA)")
-    print(f"  → python scripts/ml/analyze_data.py {output_path}")
-    print(f"{'='*70}\n")
+    print("  → python scripts/ml/analyze_data.py {output_path}")
+    print("{'='*70}\n")
 
 
 if __name__ == "__main__":

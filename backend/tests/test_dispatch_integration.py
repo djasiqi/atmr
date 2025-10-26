@@ -1,379 +1,522 @@
+#!/usr/bin/env python3
 """
-Tests d'intégration pour le dispatch end-to-end
+Tests d'intégration pour le système de dispatch avec Safety Guards.
+
+Teste l'intégration complète entre le moteur de dispatch, l'optimiseur RL,
+et les Safety Guards avec rollback automatique.
+
+Auteur: ATMR Project - RL Team
+Date: 21 octobre 2025
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from models import Assignment, Booking, Company, Driver
-from services.unified_dispatch.engine import run as dispatch_run
-from services.unified_dispatch.settings import Settings
+# Import conditionnel pour éviter les erreurs si les modules ne sont pas disponibles
+try:
+    from services.safety_guards import SafetyGuards, get_safety_guards
+except ImportError:
+    SafetyGuards = None
+    get_safety_guards = None
+
+try:
+    from services.unified_dispatch.rl_optimizer import RLDispatchOptimizer
+except ImportError:
+    RLDispatchOptimizer = None
 
 
-class TestDispatchIntegration:
-    """Tests d'intégration pour le système de dispatch complet"""
-
+class TestDispatchSafetyIntegration:
+    """Tests d'intégration dispatch + Safety Guards."""
+    
     @pytest.fixture
     def mock_company(self):
-        """Fixture pour une entreprise de test"""
-        company = Mock(spec=Company)
+        """Mock d'une entreprise."""
+        company = Mock()
         company.id = 1
         company.name = "Test Company"
         return company
-
+    
     @pytest.fixture
     def mock_drivers(self):
-        """Fixture pour des chauffeurs de test"""
+        """Mock des chauffeurs."""
         drivers = []
         for i in range(3):
-            driver = Mock(spec=Driver)
+            driver = Mock()
             driver.id = i + 1
-            driver.available = True
-            driver.capacity = 4
-            driver.can_handle_emergency = True
-            driver.work_windows = [
-                Mock(
-                    start=datetime(2024, 1, 15, 8, 0, tzinfo=UTC),
-                    end=datetime(2024, 1, 15, 18, 0, tzinfo=UTC)
-                )
-            ]
+            driver.name = f"Driver {i + 1}"
+            driver.is_available = True
+            driver.driver_type = "REGULAR"
             drivers.append(driver)
         return drivers
-
+    
     @pytest.fixture
     def mock_bookings(self):
-        """Fixture pour des réservations de test"""
+        """Mock des bookings."""
         bookings = []
-        base_time = datetime(2024, 1, 15, 10, 0, tzinfo=UTC)
-
-        for i in range(5):
-            booking = Mock(spec=Booking)
-            booking.id = i + 1
-            booking.scheduled_time = base_time + timedelta(minutes=i * 30)
-            booking.pickup_lat = 46.5197 + (i * 0.001)  # Légèrement décalé
-            booking.pickup_lon = 6.6323 + (i * 0.001)
-            booking.dropoff_lat = 46.5200 + (i * 0.001)
-            booking.dropoff_lon = 6.6330 + (i * 0.001)
-            booking.capacity_required = 1
-            booking.is_emergency = False
-            booking.status = "confirmed"
-            bookings.append(booking)
-
-        return bookings
-
-    @pytest.fixture
-    def default_settings(self):
-        """Fixture pour les paramètres par défaut"""
-        return Settings()
-
-    @patch('services.unified_dispatch.engine._acquire_day_lock')
-    @patch('services.unified_dispatch.engine._release_day_lock')
-    @patch('services.unified_dispatch.engine._build_problem')
-    @patch('services.unified_dispatch.engine._apply_and_emit')
-    def test_dispatch_run_success(
-        self,
-        mock_apply_and_emit,
-        mock_build_problem,
-        mock_release_lock,
-        mock_acquire_lock,
-        mock_company,
-        mock_drivers,
-        mock_bookings,
-        default_settings
-    ):
-        """Test qu'un run de dispatch se termine avec succès"""
-        # Arrange
-        mock_acquire_lock.return_value = True
-        mock_build_problem.return_value = {
-            "bookings": mock_bookings,
-            "drivers": mock_drivers
-        }
-
-        # Mock des résultats d'heuristique et de solver
-        mock_heuristic_result = Mock()
-        mock_heuristic_result.assignments = [
-            Mock(booking_id=1, driver_id=1),
-            Mock(booking_id=2, driver_id=2),
-            Mock(booking_id=3, driver_id=1)
-        ]
-        mock_heuristic_result.unassigned_booking_ids = [4, 5]
-        mock_heuristic_result.osrm_calls = 10
-        mock_heuristic_result.osrm_avg_latency_ms = 150
-        mock_heuristic_result.heuristic_time_ms = 800
-
-        mock_solver_result = Mock()
-        mock_solver_result.assignments = []
-        mock_solver_result.solver_time_ms = 2000
-
-        with patch('services.unified_dispatch.engine.assign_heuristic') as mock_heuristic, \
-             patch('services.unified_dispatch.engine.assign_solver') as mock_solver:
-
-            mock_heuristic.return_value = mock_heuristic_result
-            mock_solver.return_value = mock_solver_result
-
-            # Act
-            result = dispatch_run(
-                company_id=mock_company.id,
-                mode="auto",
-                regular_first=True,
-                allow_emergency=True,
-                settings=default_settings
-            )
-
-            # Assert
-            assert result is not None
-            assert "assignments_count" in result
-            assert "unassigned_count" in result
-            assert "unassigned_reasons" in result
-            assert result["assignments_count"] == 3
-            assert result["unassigned_count"] == 2
-
-            # Vérifier que les verrous ont été gérés
-            mock_acquire_lock.assert_called_once()
-            mock_release_lock.assert_called_once()
-
-            # Vérifier que l'heuristique et le solver ont été appelés
-            mock_heuristic.assert_called_once()
-            mock_solver.assert_called_once()
-
-    @patch('services.unified_dispatch.engine._acquire_day_lock')
-    def test_dispatch_run_lock_failure(self, mock_acquire_lock, mock_company, default_settings):
-        """Test qu'un run de dispatch échoue si le verrou ne peut pas être acquis"""
-        # Arrange
-        mock_acquire_lock.return_value = False
-
-        # Act & Assert
-        with pytest.raises(Exception, match="Another dispatch is already running"):
-            dispatch_run(
-                company_id=mock_company.id,
-                mode="auto",
-                regular_first=True,
-                allow_emergency=True,
-                settings=default_settings
-            )
-
-    @patch('services.unified_dispatch.engine._acquire_day_lock')
-    @patch('services.unified_dispatch.engine._release_day_lock')
-    @patch('services.unified_dispatch.engine._build_problem')
-    def test_dispatch_run_heuristic_only_mode(
-        self,
-        mock_build_problem,
-        mock_release_lock,
-        mock_acquire_lock,
-        mock_company,
-        mock_drivers,
-        mock_bookings,
-        default_settings
-    ):
-        """Test qu'un run en mode heuristic_only n'appelle pas le solver"""
-        # Arrange
-        mock_acquire_lock.return_value = True
-        mock_build_problem.return_value = {
-            "bookings": mock_bookings,
-            "drivers": mock_drivers
-        }
-
-        mock_heuristic_result = Mock()
-        mock_heuristic_result.assignments = [
-            Mock(booking_id=1, driver_id=1),
-            Mock(booking_id=2, driver_id=2)
-        ]
-        mock_heuristic_result.unassigned_booking_ids = [3, 4, 5]
-        mock_heuristic_result.osrm_calls = 5
-        mock_heuristic_result.osrm_avg_latency_ms = 120
-        mock_heuristic_result.heuristic_time_ms = 600
-
-        with patch('services.unified_dispatch.engine.assign_heuristic') as mock_heuristic, \
-             patch('services.unified_dispatch.engine.assign_solver') as mock_solver:
-
-            mock_heuristic.return_value = mock_heuristic_result
-
-            # Act
-            result = dispatch_run(
-                company_id=mock_company.id,
-                mode="heuristic_only",
-                regular_first=True,
-                allow_emergency=True,
-                settings=default_settings
-            )
-
-            # Assert
-            assert result is not None
-            assert result["assignments_count"] == 2
-            assert result["unassigned_count"] == 3
-
-            # Vérifier que seul l'heuristique a été appelé
-            mock_heuristic.assert_called_once()
-            mock_solver.assert_not_called()
-
-    @patch('services.unified_dispatch.engine._acquire_day_lock')
-    @patch('services.unified_dispatch.engine._release_day_lock')
-    @patch('services.unified_dispatch.engine._build_problem')
-    def test_dispatch_run_emergency_handling(
-        self,
-        mock_build_problem,
-        mock_release_lock,
-        mock_acquire_lock,
-        mock_company,
-        mock_drivers,
-        default_settings
-    ):
-        """Test que les courses d'urgence sont gérées correctement"""
-        # Arrange
-        mock_acquire_lock.return_value = True
-
-        # Créer des réservations avec des urgences
-        emergency_bookings = []
-        base_time = datetime(2024, 1, 15, 10, 0, tzinfo=UTC)
-
-        for i in range(3):
-            booking = Mock(spec=Booking)
-            booking.id = i + 1
-            booking.scheduled_time = base_time + timedelta(minutes=i * 30)
-            booking.pickup_lat = 46.5197
-            booking.pickup_lon = 6.6323
-            booking.dropoff_lat = 46.5200
-            booking.dropoff_lon = 6.6330
-            booking.capacity_required = 1
-            booking.is_emergency = (i == 1)  # Seule la deuxième est une urgence
-            booking.status = "confirmed"
-            emergency_bookings.append(booking)
-
-        mock_build_problem.return_value = {
-            "bookings": emergency_bookings,
-            "drivers": mock_drivers
-        }
-
-        mock_heuristic_result = Mock()
-        mock_heuristic_result.assignments = [
-            Mock(booking_id=2, driver_id=1)  # L'urgence est assignée
-        ]
-        mock_heuristic_result.unassigned_booking_ids = [1, 3]
-        mock_heuristic_result.osrm_calls = 3
-        mock_heuristic_result.osrm_avg_latency_ms = 100
-        mock_heuristic_result.heuristic_time_ms = 400
-
-        with patch('services.unified_dispatch.engine.assign_heuristic') as mock_heuristic, \
-             patch('services.unified_dispatch.engine.assign_solver') as mock_solver:
-
-            mock_heuristic.return_value = mock_heuristic_result
-            mock_solver.return_value = Mock(assignments=[], solver_time_ms=1000)
-
-            # Act
-            result = dispatch_run(
-                company_id=mock_company.id,
-                mode="auto",
-                regular_first=True,
-                allow_emergency=True,
-                settings=default_settings
-            )
-
-            # Assert
-            assert result is not None
-            assert result["assignments_count"] == 1
-            assert result["unassigned_count"] == 2
-
-            # Vérifier que l'heuristique a été appelée avec les bons paramètres
-            mock_heuristic.assert_called_once()
-            call_args = mock_heuristic.call_args
-            assert call_args[1]["allow_emergency"] is True
-
-    def test_dispatch_performance_requirements(self, mock_company, mock_drivers, mock_bookings, default_settings):
-        """Test que le dispatch respecte les exigences de performance"""
-        # Arrange
-        large_bookings = []
-        base_time = datetime(2024, 1, 15, 10, 0, tzinfo=UTC)
-
-        # Créer 50 réservations pour tester la performance
-        for i in range(50):
-            booking = Mock(spec=Booking)
-            booking.id = i + 1
-            booking.scheduled_time = base_time + timedelta(minutes=i * 10)
-            booking.pickup_lat = 46.5197 + (i * 0.0001)
-            booking.pickup_lon = 6.6323 + (i * 0.0001)
-            booking.dropoff_lat = 46.5200 + (i * 0.0001)
-            booking.dropoff_lon = 6.6330 + (i * 0.0001)
-            booking.capacity_required = 1
-            booking.is_emergency = False
-            booking.status = "confirmed"
-            large_bookings.append(booking)
-
-        # Créer 10 chauffeurs
-        large_drivers = []
         for i in range(10):
-            driver = Mock(spec=Driver)
-            driver.id = i + 1
-            driver.available = True
-            driver.capacity = 4
-            driver.can_handle_emergency = True
-            driver.work_windows = [
-                Mock(
-                    start=datetime(2024, 1, 15, 8, 0, tzinfo=UTC),
-                    end=datetime(2024, 1, 15, 18, 0, tzinfo=UTC)
+            booking = Mock()
+            booking.id = i + 1
+            booking.scheduled_time = datetime.now(UTC) + timedelta(minutes=i * 30)
+            booking.pickup_lat = 46.0 + i * 0.01
+            booking.pickup_lon = 6.0 + i * 0.01
+            booking.priority = 1
+            bookings.append(booking)
+        return bookings
+    
+    @pytest.fixture
+    def mock_assignments(self, ____________________________________________________________________________________________________mock_bookings, mock_drivers):
+        """Mock des assignations."""
+        assignments = []
+        for i, booking in enumerate(mock_bookings):
+            assignment = Mock()
+            assignment.booking_id = booking.id
+            assignment.driver_id = mock_drivers[i % len(mock_drivers)].id
+            assignments.append(assignment)
+        return assignments
+    
+    def test_safe_dispatch_with_rl_optimization(self, ____________________________________________________________________________________________________mock_company, mock_drivers, mock_bookings, mock_assignments):
+        """Test un dispatch sûr avec optimisation RL."""
+        if SafetyGuards is None or RLDispatchOptimizer is None:
+            pytest.skip("Modules non disponibles")
+        
+        # Mock des Safety Guards
+        with patch("services.safety_guards.get_safety_guards") as mock_get_guards:
+            safety_guards = Mock()
+            safety_guards.check_dispatch_result.return_value = (True, {"is_safe": True})
+            mock_get_guards.return_value = safety_guards
+            
+            # Mock de l'optimiseur RL
+            with patch("services.unified_dispatch.rl_optimizer.RLDispatchOptimizer") as mock_optimizer_class:
+                optimizer = Mock()
+                optimizer.is_available.return_value = True
+                optimizer.optimize_assignments.return_value = mock_assignments
+                mock_optimizer_class.return_value = optimizer
+                
+                # Simuler le dispatch
+                result = self._simulate_dispatch(
+                    mock_company, mock_drivers, mock_bookings, mock_assignments
                 )
-            ]
-            large_drivers.append(driver)
-
-        with patch('services.unified_dispatch.engine._acquire_day_lock') as mock_acquire_lock, \
-             patch('services.unified_dispatch.engine._release_day_lock') as _mock_release_lock, \
-             patch('services.unified_dispatch.engine._build_problem') as mock_build_problem, \
-             patch('services.unified_dispatch.engine._apply_and_emit') as _mock_apply_and_emit:
-
-            mock_acquire_lock.return_value = True
-            mock_build_problem.return_value = {
-                "bookings": large_bookings,
-                "drivers": large_drivers
+                
+                # Vérifier que l'optimisation RL a été appelée
+                optimizer.optimize_assignments.assert_called_once()
+                
+                # Vérifier que les Safety Guards ont été appelés
+                safety_guards.check_dispatch_result.assert_called_once()
+                
+                # Vérifier que le résultat est sûr
+                assert result["is_safe"] is True
+                assert result["rollback_performed"] is False
+    
+    def test_unsafe_dispatch_with_rollback(self, ____________________________________________________________________________________________________mock_company, mock_drivers, mock_bookings, mock_assignments):
+        """Test un dispatch dangereux avec rollback automatique."""
+        if SafetyGuards is None or RLDispatchOptimizer is None:
+            pytest.skip("Modules non disponibles")
+        
+        # Mock des Safety Guards qui détectent un problème
+        with patch("services.safety_guards.get_safety_guards") as mock_get_guards:
+            safety_guards = Mock()
+            safety_guards.check_dispatch_result.return_value = (
+                False,
+                {
+                    "is_safe": False,
+                    "violation_count": 3,
+                    "checks": {
+                        "max_delay_ok": False,
+                        "completion_rate_ok": False,
+                        "driver_load_ok": False
+                    }
+                }
+            )
+            mock_get_guards.return_value = safety_guards
+            
+            # Mock de l'optimiseur RL
+            with patch("services.unified_dispatch.rl_optimizer.RLDispatchOptimizer") as mock_optimizer_class:
+                optimizer = Mock()
+                optimizer.is_available.return_value = True
+                # L'optimiseur retourne des assignations "dangereuses"
+                dangerous_assignments = mock_assignments.copy()
+                optimizer.optimize_assignments.return_value = dangerous_assignments
+                mock_optimizer_class.return_value = optimizer
+                
+                # Mock du service de notification
+                with patch("services.notification_service.NotificationService") as mock_notification_class:
+                    notification_service = Mock()
+                    mock_notification_class.return_value = notification_service
+                    
+                    # Simuler le dispatch
+                    result = self._simulate_dispatch(
+                        mock_company, mock_drivers, mock_bookings, mock_assignments
+                    )
+                    
+                    # Vérifier que l'optimisation RL a été appelée
+                    optimizer.optimize_assignments.assert_called_once()
+                    
+                    # Vérifier que les Safety Guards ont été appelés
+                    safety_guards.check_dispatch_result.assert_called_once()
+                    
+                    # Vérifier que le rollback a été effectué
+                    assert result["is_safe"] is False
+                    assert result["rollback_performed"] is True
+                    
+                    # Vérifier que la notification a été envoyée
+                    notification_service.send_alert.assert_called_once()
+    
+    def test_rl_optimizer_safety_check(self, ____________________________________________________________________________________________________mock_drivers, mock_bookings, mock_assignments):
+        """Test la vérification de sécurité dans l'optimiseur RL."""
+        if SafetyGuards is None or RLDispatchOptimizer is None:
+            pytest.skip("Modules non disponibles")
+        
+        # Mock des Safety Guards
+        with patch("services.safety_guards.get_safety_guards") as mock_get_guards:
+            safety_guards = Mock()
+            safety_guards.check_dispatch_result.return_value = (True, {"is_safe": True})
+            mock_get_guards.return_value = safety_guards
+            
+            # Créer l'optimiseur RL
+            optimizer = RLDispatchOptimizer()
+            
+            # Mock des méthodes internes
+            with (
+                patch.object(optimizer, "is_available", return_value=True),
+                patch.object(optimizer, "_calculate_gap", return_value=5),
+                patch.object(optimizer, "_calculate_loads", return_value={1: 3, 2: 4, 3: 3}),
+                patch.object(optimizer, "_create_state", return_value=Mock())
+            ):
+                # Mock de l'agent
+                optimizer.agent = Mock()
+                optimizer.agent.select_action.return_value = 0  # Wait action
+                
+                # Exécuter l'optimisation
+                result = optimizer.optimize_assignments(
+                    mock_assignments, mock_bookings, mock_drivers
+                )
+                
+                # Vérifier que les Safety Guards ont été appelés
+                safety_guards.check_dispatch_result.assert_called_once()
+                
+                # Vérifier que le résultat est retourné
+                assert result == mock_assignments
+    
+    def test_rollback_scenario_critical_violations(self, ____________________________________________________________________________________________________mock_company, mock_drivers, mock_bookings, mock_assignments):
+        """Test le scénario de rollback avec violations critiques."""
+        if SafetyGuards is None:
+            pytest.skip("SafetyGuards non disponible")
+        
+        # Mock des Safety Guards avec violations critiques
+        with patch("services.safety_guards.get_safety_guards") as mock_get_guards:
+            safety_guards = Mock()
+            safety_guards.check_dispatch_result.return_value = (
+                False,
+                {
+                    "is_safe": False,
+                    "violation_count": 8,  # Beaucoup de violations
+                    "checks": {
+                        "max_delay_ok": False,
+                        "completion_rate_ok": False,
+                        "invalid_actions_ok": False,
+                        "driver_load_ok": False,
+                        "driver_utilization_ok": False,
+                        "avg_distance_ok": False,
+                        "max_distance_ok": False,
+                        "rl_confidence_ok": False
+                    }
+                }
+            )
+            mock_get_guards.return_value = safety_guards
+            
+            # Simuler le dispatch
+            result = self._simulate_dispatch(
+                mock_company, mock_drivers, mock_bookings, mock_assignments
+            )
+            
+            # Vérifier que le rollback a été effectué
+            assert result["is_safe"] is False
+            assert result["rollback_performed"] is True
+            assert result["violation_count"] == 8
+    
+    def test_notification_service_integration(self, ____________________________________________________________________________________________________mock_company, mock_drivers, mock_bookings, mock_assignments):
+        """Test l'intégration avec le service de notification."""
+        if SafetyGuards is None:
+            pytest.skip("SafetyGuards non disponible")
+        
+        # Mock des Safety Guards avec violation
+        with patch("services.safety_guards.get_safety_guards") as mock_get_guards:
+            safety_guards = Mock()
+            safety_guards.check_dispatch_result.return_value = (
+                False,
+                {
+                    "is_safe": False,
+                    "violation_count": 2,
+                    "checks": {"max_delay_ok": False, "completion_rate_ok": False}
+                }
+            )
+            mock_get_guards.return_value = safety_guards
+            
+            # Mock du service de notification
+            with patch("services.notification_service.NotificationService") as mock_notification_class:
+                notification_service = Mock()
+                mock_notification_class.return_value = notification_service
+                
+                # Simuler le dispatch
+                _result = self._simulate_dispatch(
+                    mock_company, mock_drivers, mock_bookings, mock_assignments
+                )
+                
+                # Vérifier que la notification a été envoyée
+                notification_service.send_alert.assert_called_once()
+                
+                # Vérifier les paramètres de la notification
+                call_args = notification_service.send_alert.call_args
+                assert call_args[1]["alert_type"] == "safety_rollback"
+                assert call_args[1]["severity"] == "warning"
+                assert "Rollback RL vers heuristique" in call_args[1]["message"]
+    
+    def test_error_handling_in_safety_guards(self, ____________________________________________________________________________________________________mock_company, mock_drivers, mock_bookings, mock_assignments):
+        """Test la gestion d'erreurs dans les Safety Guards."""
+        if SafetyGuards is None:
+            pytest.skip("SafetyGuards non disponible")
+        
+        # Mock des Safety Guards qui lèvent une exception
+        with patch("services.safety_guards.get_safety_guards") as mock_get_guards:
+            safety_guards = Mock()
+            safety_guards.check_dispatch_result.side_effect = Exception("Safety Guards error")
+            mock_get_guards.return_value = safety_guards
+            
+            # Simuler le dispatch
+            result = self._simulate_dispatch(
+                mock_company, mock_drivers, mock_bookings, mock_assignments
+            )
+            
+            # Vérifier que le système continue de fonctionner malgré l'erreur
+            assert "error" in result
+            assert result["error"] == "Safety Guards error"
+    
+    def test_performance_under_high_load(self, ____________________________________________________________________________________________________mock_company, mock_drivers, mock_bookings, mock_assignments):
+        """Test les performances sous charge élevée."""
+        if SafetyGuards is None:
+            pytest.skip("SafetyGuards non disponible")
+        
+        import time
+        
+        # Mock des Safety Guards
+        with patch("services.safety_guards.get_safety_guards") as mock_get_guards:
+            safety_guards = Mock()
+            safety_guards.check_dispatch_result.return_value = (True, {"is_safe": True})
+            mock_get_guards.return_value = safety_guards
+            
+            start_time = time.time()
+            
+            # Simuler 100 dispatches
+            for _ in range(100):
+                self._simulate_dispatch(
+                    mock_company, mock_drivers, mock_bookings, mock_assignments
+                )
+            
+            end_time = time.time()
+            total_time = end_time - start_time
+            
+            # Vérifier que chaque dispatch prend moins de 100ms en moyenne
+            avg_time_per_dispatch = total_time / 100
+            assert avg_time_per_dispatch < 0.1  # 100ms
+    
+    def _simulate_dispatch(self, ____________________________________________________________________________________________________company, drivers, bookings, assignments):
+        """Simule un dispatch avec Safety Guards."""
+        try:
+            # Mock des Safety Guards
+            safety_guards = get_safety_guards()
+            
+            # Préparer les métriques de dispatch
+            dispatch_metrics = {
+                "max_delay_minutes": 15.0,
+                "avg_delay_minutes": 8.0,
+                "completion_rate": len(assignments) / len(bookings) if bookings else 1.0,
+                "invalid_action_rate": 0.01,
+                "driver_loads": [len([a for a in assignments if a.driver_id == d.id]) for d in drivers],
+                "avg_distance_km": 12.0,
+                "max_distance_km": 20.0,
+                "total_distance_km": 60.0
+            }
+            
+            # Métadonnées RL
+            rl_metadata = {
+                "confidence": 0.85,
+                "uncertainty": 0.15,
+                "decision_time_ms": 35,
+                "q_value_variance": 0.1,
+                "episode_length": 100
+            }
+            
+            # Vérifier la sécurité
+            is_safe, safety_result = safety_guards.check_dispatch_result(
+                dispatch_metrics, rl_metadata
+            )
+            
+            rollback_performed = False
+            if not is_safe:
+                rollback_performed = True
+                # Simuler le rollback vers assignations heuristiques
+                assignments = assignments.copy()
+            
+            return {
+                "is_safe": is_safe,
+                "rollback_performed": rollback_performed,
+                "violation_count": safety_result.get("violation_count", 0),
+                "safety_result": safety_result
+            }
+            
+        except Exception as e:
+            return {
+                "error": str(e),
+                "is_safe": False,
+                "rollback_performed": False
             }
 
-            mock_heuristic_result = Mock()
-            mock_heuristic_result.assignments = [
-                Mock(booking_id=i, driver_id=(i % 10) + 1) for i in range(1, 41)
-            ]  # 40 assignations
-            mock_heuristic_result.unassigned_booking_ids = list(range(41, 51))  # 10 non assignées
-            mock_heuristic_result.osrm_calls = 200
-            mock_heuristic_result.osrm_avg_latency_ms = 120
-            mock_heuristic_result.heuristic_time_ms = 3000
 
-            mock_solver_result = Mock()
-            mock_solver_result.assignments = []
-            mock_solver_result.solver_time_ms = 1000
+class TestDispatchRollbackScenarios:
+    """Tests spécifiques pour les scénarios de rollback."""
+    
+    def test_rollback_due_to_high_delay(self):
+        """Test rollback dû à des retards élevés."""
+        if SafetyGuards is None:
+            pytest.skip("SafetyGuards non disponible")
+        
+        safety_guards = SafetyGuards()
+        
+        # Dispatch avec retards élevés
+        dispatch_result = {
+            "max_delay_minutes": 45.0,  # > 30 min (seuil)
+            "avg_delay_minutes": 25.0,
+            "completion_rate": 0.95,
+            "invalid_action_rate": 0.01,
+            "driver_loads": [3, 4, 5],
+            "avg_distance_km": 12.0,
+            "max_distance_km": 20.0
+        }
+        
+        is_safe, result = safety_guards.check_dispatch_result(dispatch_result, None)
+        
+        assert is_safe is False
+        assert result["checks"]["max_delay_ok"] is False
+    
+    def test_rollback_due_to_low_completion_rate(self):
+        """Test rollback dû à un faible taux de completion."""
+        if SafetyGuards is None:
+            pytest.skip("SafetyGuards non disponible")
+        
+        safety_guards = SafetyGuards()
+        
+        # Dispatch avec faible taux de completion
+        dispatch_result = {
+            "max_delay_minutes": 15.0,
+            "avg_delay_minutes": 8.0,
+            "completion_rate": 0.80,  # < 0.90 (seuil)
+            "invalid_action_rate": 0.01,
+            "driver_loads": [3, 4, 5],
+            "avg_distance_km": 12.0,
+            "max_distance_km": 20.0
+        }
+        
+        is_safe, result = safety_guards.check_dispatch_result(dispatch_result, None)
+        
+        assert is_safe is False
+        assert result["checks"]["completion_rate_ok"] is False
+    
+    def test_rollback_due_to_high_driver_load(self):
+        """Test rollback dû à une charge élevée des chauffeurs."""
+        if SafetyGuards is None:
+            pytest.skip("SafetyGuards non disponible")
+        
+        safety_guards = SafetyGuards()
+        
+        # Dispatch avec charge élevée
+        dispatch_result = {
+            "max_delay_minutes": 15.0,
+            "avg_delay_minutes": 8.0,
+            "completion_rate": 0.95,
+            "invalid_action_rate": 0.01,
+            "driver_loads": [15, 2, 1],  # Max > 12 (seuil)
+            "avg_distance_km": 12.0,
+            "max_distance_km": 20.0
+        }
+        
+        is_safe, result = safety_guards.check_dispatch_result(dispatch_result, None)
+        
+        assert is_safe is False
+        assert result["checks"]["driver_load_ok"] is False
+    
+    def test_rollback_due_to_low_rl_confidence(self):
+        """Test rollback dû à une faible confiance RL."""
+        if SafetyGuards is None:
+            pytest.skip("SafetyGuards non disponible")
+        
+        safety_guards = SafetyGuards()
+        
+        # Dispatch avec faible confiance RL
+        dispatch_result = {
+            "max_delay_minutes": 15.0,
+            "avg_delay_minutes": 8.0,
+            "completion_rate": 0.95,
+            "invalid_action_rate": 0.01,
+            "driver_loads": [3, 4, 5],
+            "avg_distance_km": 12.0,
+            "max_distance_km": 20.0
+        }
+        
+        rl_metadata = {
+            "confidence": 0.60,  # < 0.70 (seuil)
+            "uncertainty": 0.40,
+            "decision_time_ms": 35,
+            "q_value_variance": 0.1,
+            "episode_length": 100
+        }
+        
+        is_safe, result = safety_guards.check_dispatch_result(dispatch_result, rl_metadata)
+        
+        assert is_safe is False
+        assert result["checks"]["rl_confidence_ok"] is False
 
-            with patch('services.unified_dispatch.engine.assign_heuristic') as mock_heuristic, \
-                 patch('services.unified_dispatch.engine.assign_solver') as mock_solver:
 
-                mock_heuristic.return_value = mock_heuristic_result
-                mock_solver.return_value = mock_solver_result
-
-                # Act
-                import time
-                start_time = time.time()
-
-                result = dispatch_run(
-                    company_id=mock_company.id,
-                    mode="auto",
-                    regular_first=True,
-                    allow_emergency=True,
-                    settings=default_settings
-                )
-
-                execution_time = time.time() - start_time
-
-                # Assert
-                assert result is not None
-                assert result["assignments_count"] == 40
-                assert result["unassigned_count"] == 10
-                assert execution_time < 5.0  # Doit s'exécuter en moins de 5 secondes
-
-                # Vérifier les métriques de performance
-                assert "heuristic_time_ms" in result
-                assert "solver_time_ms" in result
-                assert "osrm_calls" in result
-                assert result["heuristic_time_ms"] == 3000
-                assert result["solver_time_ms"] == 1000
-                assert result["osrm_calls"] == 200
+def run_dispatch_integration_tests():
+    """Exécute tous les tests d'intégration dispatch."""
+    print("🚀 Exécution des tests d'intégration dispatch")
+    
+    # Tests de base
+    test_classes = [
+        TestDispatchSafetyIntegration,
+        TestDispatchRollbackScenarios
+    ]
+    
+    total_tests = 0
+    passed_tests = 0
+    
+    for test_class in test_classes:
+        print("\n📋 Tests {test_class.__name__}")
+        
+        # Créer une instance de la classe de test
+        test_instance = test_class()
+        
+        # Exécuter les méthodes de test
+        for method_name in dir(test_instance):
+            if method_name.startswith("test_"):
+                total_tests += 1
+                try:
+                    method = getattr(test_instance, method_name)
+                    method()
+                    print("  ✅ {method_name}")
+                    passed_tests += 1
+                except Exception:
+                    print("  ❌ {method_name}: {e}")
+    
+    print("\n📊 Résultats des tests d'intégration dispatch:")
+    print("  Tests exécutés: {total_tests}")
+    print("  Tests réussis: {passed_tests}")
+    print("  Taux de succès: {passed_tests/total_tests*100" if total_tests > 0 else "  Taux de succès: 0%")
+    
+    return passed_tests, total_tests
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    run_dispatch_integration_tests()

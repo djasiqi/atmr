@@ -33,13 +33,13 @@ def test_iso_utc_z():
     iso_str = iso_utc_z(dt)
 
     assert isinstance(iso_str, str)
-    assert iso_str.endswith('Z')
-    assert '2025-10-15' in iso_str
+    assert iso_str.endswith("Z")
+    assert "2025-10-15" in iso_str
 
 
 def test_logging_utils_import():
     """Logging utils module s'importe correctement."""
-    import shared.logging_utils as logging_utils
+    from shared import logging_utils
 
     # Vérifier que le module existe
     assert logging_utils is not None

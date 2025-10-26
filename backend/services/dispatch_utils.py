@@ -3,7 +3,7 @@ from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from typing import Dict, List
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 
 from ext import db
 from models import Booking, BookingStatus
@@ -15,7 +15,7 @@ DEFAULT_STATUSES_FOR_COUNT = (
 )
 
 def _to_utc(dt: datetime) -> datetime:
-    # utilitaire de secours si routes.utils.to_utc n’existe pas / crash
+    # utilitaire de secours si routes.utils.to_utc n'existe pas / crash
     if dt.tzinfo is None:
         return dt.replace(tzinfo=UTC)
     return dt.astimezone(UTC)
@@ -26,12 +26,11 @@ def count_assigned_bookings_for_day(
     day: datetime | None = None,
     statuses: Iterable[BookingStatus] = DEFAULT_STATUSES_FOR_COUNT,
 ) -> Dict[int, int]:
-    """
-    Compte, pour chaque chauffeur, le nombre de réservations 'actives' du jour.
+    """Compte, pour chaque chauffeur, le nombre de réservations 'actives' du jour.
     - company_id : filtre par entreprise
     - driver_ids : liste d'IDs chauffeur
     - day        : jour de référence (UTC si non tz-aware). Défaut = maintenant.
-    - statuses   : statuts considérés (ASSIGNED/EN_ROUTE/IN_PROGRESS par défaut)
+    - statuses   : statuts considérés (ASSIGNED/EN_ROUTE/IN_PROGRESS par défaut).
     """
     if not driver_ids:
         return {}
@@ -45,26 +44,18 @@ def count_assigned_bookings_for_day(
     day_start_utc = _to_utc(local_day_start)
     next_day_start_utc = _to_utc(next_day_start)
 
-    # Pylance voit parfois les attributs ORM comme des types natifs -> on passe par getattr
-    B = Booking
-    driver_id_col = B.driver_id
-    company_id_col = B.company_id
-    status_col = B.status
-    scheduled_col = B.scheduled_time
-    id_col = B.id
-
-    stmt = (
-        select(driver_id_col, func.count(id_col))
-        .where(
-            company_id_col == company_id,
-            driver_id_col.in_(driver_ids),
-            status_col.in_(tuple(statuses)),
-            scheduled_col.isnot(None),
-            scheduled_col >= day_start_utc,
-            scheduled_col < next_day_start_utc,
+    stmt = select(Booking.driver_id, func.count())  # type: ignore[arg-type]
+    stmt = stmt.where(
+        and_(
+            Booking.company_id == company_id,
+            Booking.driver_id.in_(driver_ids),
+            Booking.status.in_(statuses),
+            Booking.scheduled_time.isnot(None),
+            Booking.scheduled_time >= day_start_utc,
+            Booking.scheduled_time < next_day_start_utc,
         )
-        .group_by(driver_id_col)
     )
+    stmt = stmt.group_by(Booking.driver_id)
 
     # SQLAlchemy 2.0 style
     rows = db.session.execute(stmt).all()

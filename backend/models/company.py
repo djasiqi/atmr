@@ -1,23 +1,34 @@
 # models/company.py
-"""
-Model Company - Gestion des entreprises de transport.
-Extrait depuis models.py (lignes ~420-600).
-"""
+
+# Constantes pour éviter les valeurs magiques
 from __future__ import annotations
 
 import json
 import logging
 import re
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from sqlalchemy import Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
-from sqlalchemy.orm import Mapped, relationship, validates
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
+from typing_extensions import override
 
 from ext import db
 
 from .base import _as_bool, _as_dt
 from .enums import DispatchMode
+
+REMAINDER_ONE = 1
+VALUE_ZERO = 0
+AJUSTEMENTS_THRESHOLD = 10
+IBAN_MIN_LENGTH = 15
+IBAN_MAX_LENGTH = 34
+COMPANY_NAME_MAX_LENGTH = 100
+
+"""Model Company - Gestion des entreprises de transport.
+Extrait depuis models.py (lignes ~420-600).
+"""
+
 
 if TYPE_CHECKING:
     from .dispatch import DailyStats, DispatchMetrics, DispatchRun
@@ -28,40 +39,51 @@ logger = logging.getLogger(__name__)
 class Company(db.Model):
     __tablename__ = "company"
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
 
     # Adresse opérationnelle
-    address = Column(String(200), nullable=True)
-    latitude = Column(Float, nullable=True)
-    longitude = Column(Float, nullable=True)
+    address: Mapped[str] = mapped_column(String(200), nullable=True)
+    latitude: Mapped[float] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float] = mapped_column(Float, nullable=True)
 
     # Adresse de domiciliation
-    domicile_address_line1 = Column(String(200), nullable=True)
-    domicile_address_line2 = Column(String(200), nullable=True)
-    domicile_zip = Column(String(10), nullable=True)
-    domicile_city = Column(String(100), nullable=True)
+    domicile_address_line1: Mapped[str] = mapped_column(String(200), nullable=True)
+    domicile_address_line2: Mapped[str] = mapped_column(String(200), nullable=True)
+    domicile_zip: Mapped[str] = mapped_column(String(10), nullable=True)
+    domicile_city: Mapped[str] = mapped_column(String(100), nullable=True)
     domicile_country = Column(String(2), nullable=True, server_default="CH")
 
     # Contact
-    contact_email = Column(String(100), nullable=True)
-    contact_phone = Column(String(20), nullable=True)
+    contact_email: Mapped[str] = mapped_column(String(100), nullable=True)
+    contact_phone: Mapped[str] = mapped_column(String(20), nullable=True)
 
     # Légal & Facturation
-    iban = Column(String(34), nullable=True, index=True)
-    uid_ide = Column(String(20), nullable=True, index=True)
-    billing_email = Column(String(100), nullable=True)
-    billing_notes = Column(Text, nullable=True)
+    iban: Mapped[str] = mapped_column(String(34), nullable=True, index=True)
+    uid_ide: Mapped[str] = mapped_column(String(20), nullable=True, index=True)
+    billing_email: Mapped[str] = mapped_column(String(100), nullable=True)
+    billing_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE", name="fk_company_user"), nullable=False, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey(
+            "user.id",
+            ondelete="CASCADE",
+            name="fk_company_user"),
+        nullable=False,
+        index=True)
     is_approved = Column(Boolean, nullable=False, server_default="false")
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    service_area = Column(String(200), nullable=True)
-    max_daily_bookings = Column(Integer, nullable=True, server_default="50")
-    accepted_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(
+            timezone=True),
+        server_default=func.now(),
+        nullable=False)
+    service_area: Mapped[str] = mapped_column(String(200), nullable=True)
+    max_daily_bookings: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, server_default="50")
+    accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     dispatch_enabled = Column(Boolean, nullable=False, server_default="false")
     is_partner = Column(Boolean, nullable=False, server_default="false")
-    logo_url = Column(String(255), nullable=True)
+    logo_url: Mapped[str] = mapped_column(String(255), nullable=True)
 
     # 🆕 Configuration du système de dispatch autonome
     dispatch_mode = Column(
@@ -80,14 +102,38 @@ class Company(db.Model):
 
     # Relations
     user = relationship("User", back_populates="company", passive_deletes=True)
-    clients = relationship("Client", back_populates="company", cascade="all, delete-orphan", passive_deletes=True, foreign_keys="Client.company_id", primaryjoin="Company.id == Client.company_id")
-    billed_clients = relationship("Client", back_populates="default_billed_to_company", foreign_keys="Client.default_billed_to_company_id", primaryjoin="Company.id == Client.default_billed_to_company_id")
-    drivers = relationship("Driver", back_populates="company", passive_deletes=True)
-    dispatch_runs: Mapped[List[DispatchRun]] = relationship("DispatchRun", back_populates="company", cascade="all, delete-orphan", passive_deletes=True)
-    dispatch_metrics: Mapped[List[DispatchMetrics]] = relationship("DispatchMetrics", back_populates="company", cascade="all, delete-orphan", passive_deletes=True)
-    daily_stats: Mapped[List[DailyStats]] = relationship("DailyStats", back_populates="company", cascade="all, delete-orphan", passive_deletes=True)
-    bookings = relationship("Booking", back_populates="company", foreign_keys="Booking.company_id", passive_deletes=True)
-    vehicles = relationship("Vehicle", back_populates="company", cascade="all, delete-orphan", passive_deletes=True)
+    clients = relationship(
+        "Client",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        foreign_keys="Client.company_id",
+        primaryjoin="Company.id == Client.company_id")
+    billed_clients = relationship(
+        "Client",
+        back_populates="default_billed_to_company",
+        foreign_keys="Client.default_billed_to_company_id",
+        primaryjoin="Company.id == Client.default_billed_to_company_id")
+    drivers = relationship(
+        "Driver",
+        back_populates="company",
+        passive_deletes=True)
+    dispatch_runs: Mapped[List[DispatchRun]] = relationship(
+        "DispatchRun", back_populates="company", cascade="all, delete-orphan", passive_deletes=True)
+    dispatch_metrics: Mapped[List[DispatchMetrics]] = relationship(
+        "DispatchMetrics", back_populates="company", cascade="all, delete-orphan", passive_deletes=True)
+    daily_stats: Mapped[List[DailyStats]] = relationship(
+        "DailyStats", back_populates="company", cascade="all, delete-orphan", passive_deletes=True)
+    bookings = relationship(
+        "Booking",
+        back_populates="company",
+        foreign_keys="Booking.company_id",
+        passive_deletes=True)
+    vehicles = relationship(
+        "Vehicle",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        passive_deletes=True)
 
     @property
     def serialize(self):
@@ -130,44 +176,51 @@ class Company(db.Model):
             return value
         v = value.strip()
         if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", v):
-            raise ValueError(f"Format d'email invalide pour {key}.")
+            msg = f"Format d'email invalide pour {key}."
+            raise ValueError(msg)
         return v
 
     @validates("contact_phone")
-    def validate_contact_phone(self, key, value):
+    def validate_contact_phone(self, _key, value):
         if not value:
             return value
         v = value.strip()
         if not re.match(r"^\+?[0-9\s\-\(\)]{7,20}$", v):
-            raise ValueError("Numéro de téléphone invalide.")
+            msg = "Numéro de téléphone invalide."
+            raise ValueError(msg)
         return v
 
     @validates("iban")
-    def validate_iban(self, key, value):
+    def validate_iban(self, _key, value):
         if not value:
             return value
         v = value.replace(" ", "").upper()
-        if len(v) < 15 or len(v) > 34 or not v[:2].isalpha() or not v[2:4].isdigit():
-            raise ValueError("IBAN invalide (format).")
+        if len(v) < IBAN_MIN_LENGTH or len(v) > IBAN_MAX_LENGTH or not v[:2].isalpha() or not v[2:4].isdigit():
+            msg = "IBAN invalide (format)."
+            raise ValueError(msg)
         rearranged = v[4:] + v[:4]
         try:
             converted = "".join(str(int(ch, 36)) for ch in rearranged)
         except ValueError as err:
-            raise ValueError("IBAN invalide (caractères non autorisés).") from err
+            msg = "IBAN invalide (caractères non autorisés)."
+            raise ValueError(msg) from err
         remainder = 0
         for i in range(0, len(converted), 9):
-            remainder = int(str(remainder) + converted[i:i+9]) % 97
-        if remainder != 1:
-            raise ValueError("IBAN invalide (checksum).")
+            remainder = int(str(remainder) + converted[i:i + 9]) % 97
+        if remainder != REMAINDER_ONE:
+            msg = "IBAN invalide (checksum)."
+            raise ValueError(msg)
         return v
 
     @validates("uid_ide")
-    def validate_uid_ide(self, key, value):
+    def validate_uid_ide(self, _key, value):
         if not value:
             return value
         v = value.strip().upper()
-        if not re.match(r"^CHE[- ]?\d{3}\.\d{3}\.\d{3}(\s*TVA)?$|^CHE[- ]?\d{9}(\s*TVA)?$", v, flags=re.IGNORECASE):
-            raise ValueError("IDE/UID suisse invalide (ex: CHE-123.456.789).")
+        if not re.match(
+                r"^CHE[- ]?\d{3}\.\d{3}\.\d{3}(\s*TVA)?$|^CHE[- ]?\d{9}(\s*TVA)?$", v, flags=re.IGNORECASE):
+            msg = "IDE/UID suisse invalide (ex: CHE-123.456789)."
+            raise ValueError(msg)
         digits = re.sub(r"\D", "", v)[:9]
         v_norm = f"CHE-{digits[0:3]}.{digits[3:6]}.{digits[6:9]}"
         if "TVA" in v:
@@ -175,17 +228,20 @@ class Company(db.Model):
         return v_norm
 
     @validates("name")
-    def validate_name(self, key, value):
+    def validate_name(self, _key, value):
         if not value or len(value.strip()) == 0:
-            raise ValueError("Le nom de l'entreprise ne peut pas être vide.")
-        if len(value) > 100:
-            raise ValueError("Le nom de l'entreprise ne peut pas dépasser 100 caractères.")
+            msg = "Le nom de l'entreprise ne peut pas être vide."
+            raise ValueError(msg)
+        if len(value) > COMPANY_NAME_MAX_LENGTH:
+            msg = f"Le nom de l'entreprise ne peut pas dépasser {COMPANY_NAME_MAX_LENGTH} caractères."
+            raise ValueError(msg)
         return value.strip()
 
     @validates("user_id")
-    def validate_user_id(self, key, value):
-        if not isinstance(value, int) or value <= 0:
-            raise ValueError("ID utilisateur invalide.")
+    def validate_user_id(self, _key, value):
+        if not isinstance(value, int) or value <= VALUE_ZERO:
+            msg = "ID utilisateur invalide."
+            raise ValueError(msg)
         return value
 
     def toggle_approval(self) -> bool:
@@ -200,10 +256,11 @@ class Company(db.Model):
         self.accepted_at = datetime.now(UTC)
 
     def get_autonomous_config(self) -> Dict[str, Any]:
-        """
-        Retourne la configuration autonome avec valeurs par défaut.
+        """Retourne la configuration autonome avec valeurs par défaut.
+
         Returns:
             Configuration complète pour le dispatch autonome
+
         """
         default_config: Dict[str, Any] = {
             "auto_dispatch": {
@@ -218,8 +275,9 @@ class Company(db.Model):
                 "auto_apply_suggestions": False,
             },
             "auto_apply_rules": {
-                "customer_notifications": True,    # Notifications auto (5-20 min retard)
-                "minor_time_adjustments": False,   # Ajustements < 10 min
+                # Notifications auto (5-20 min retard)
+                "customer_notifications": True,
+                "minor_time_adjustments": False,   # Ajustements < AJUSTEMENTS_THRESHOLD min
                 "reassignments": False,            # Toujours manuel par défaut
                 "emergency_notifications": True,   # Alertes urgentes (>30 min)
             },
@@ -236,15 +294,18 @@ class Company(db.Model):
         }
 
         # Si une config est stockée, la merger avec les valeurs par défaut
-        config_raw = str(self.autonomous_config) if self.autonomous_config is not None else None
-        if config_raw:
+        config_value = getattr(self, "autonomous_config", None)
+        if config_value and isinstance(config_value, str) and config_value.strip():
             try:
-                stored_config = json.loads(config_raw)
+                stored_config = json.loads(config_value)
                 # Deep merge récursif
-                def deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+
+                def deep_merge(
+                        base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
                     result = base.copy()
                     for key, value in override.items():
-                        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                        if key in result and isinstance(
+                                result[key], dict) and isinstance(value, dict):
                             result[key] = deep_merge(result[key], value)
                         else:
                             result[key] = value
@@ -262,16 +323,17 @@ class Company(db.Model):
         return default_config
 
     def set_autonomous_config(self, config: Dict[str, Any]) -> None:
-        """
-        Définit la configuration autonome.
+        """Définit la configuration autonome.
+
         Args:
             config: Configuration à stocker (sera mergée avec les valeurs par défaut)
+
         """
         self.autonomous_config = json.dumps(config)
 
+    @override
     def __repr__(self):
         return f"<Company {self.name} | ID: {self.id} | Approved: {self.is_approved}>"
 
     def to_dict(self):
         return self.serialize.copy()
-

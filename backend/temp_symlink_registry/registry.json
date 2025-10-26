@@ -1,0 +1,43 @@
+{
+  "models": {
+    "test_symlink_test_arch": [
+      {
+        "version": "v1.0.0",
+        "created_at": "2025-10-23T21:40:10.382586+00:00",
+        "model_path": "temp_symlink_registry/models/test_symlink_test_arch_v1.0.0.pth",
+        "metadata_path": "temp_symlink_registry/metadata/test_symlink_test_arch_v1.0.0.json",
+        "performance_metrics": {
+          "punctuality_rate": 0.9
+        },
+        "model_size_mb": 0.0020952224731445312,
+        "checksum": "0e9ed85f0767549b55c8ff761013222a"
+      }
+    ]
+  },
+  "current_models": {
+    "test_symlink_test_arch": {
+      "version": "v1.0.0",
+      "promoted_at": "2025-10-23T21:40:10.436214+00:00",
+      "model_path": "temp_symlink_registry/current/test_symlink_test_arch.pth",
+      "metadata_path": "temp_symlink_registry/metadata/test_symlink_test_arch_v1.0.0.json",
+      "performance_metrics": {
+        "punctuality_rate": 0.9
+      },
+      "kpi_thresholds": {}
+    }
+  },
+  "promotion_history": [
+    {
+      "model_name": "test_symlink",
+      "model_arch": "test_arch",
+      "version": "v1.0.0",
+      "promoted_at": "2025-10-23T21:40:10.436245+00:00",
+      "performance_metrics": {
+        "punctuality_rate": 0.9
+      },
+      "kpi_thresholds": {},
+      "forced": true
+    }
+  ],
+  "last_updated": "2025-10-23T21:40:10.436250+00:00"
+}

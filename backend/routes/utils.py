@@ -6,13 +6,21 @@ from datetime import datetime
 import qrcode
 from flask import jsonify, request
 from flask_restx import Namespace, Resource
-from qrcode.constants import ERROR_CORRECT_L  # ✅ évite "constants is not a known attribute"
 
-utils_ns = Namespace('utils', description="Endpoints utilitaires")
+# ✅ évite "constants is not a known attribute"
+from qrcode.constants import ERROR_CORRECT_L
+
+utils_ns = Namespace("utils", description="Endpoints utilitaires")
+
+# Constantes pour éviter les valeurs magiques
+MIN_PASSWORD_LENGTH = 8
+MAX_QR_DATA_LENGTH = 4096
 
 # -------------------------
 # Helpers internes
 # -------------------------
+
+
 def _qr_png_bytes(data: str) -> bytes:
     qr = qrcode.QRCode(
         version=1,
@@ -28,21 +36,27 @@ def _qr_png_bytes(data: str) -> bytes:
         img.save(buf, "PNG")
         return buf.getvalue()
 
+
 def generate_qr_code(data: str) -> str:
     """Retourne une image PNG encodée base64 (data URL-ready sans préfixe)."""
     return base64.b64encode(_qr_png_bytes(data)).decode("utf-8")
 
+
 def is_valid_email(email: str) -> bool:
     return re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email or "") is not None
+
 
 def is_valid_phone(phone: str) -> bool:
     return re.match(r"^\+?[0-9]+$", phone or "") is not None
 
+
 def validate_password(password: str) -> bool:
-    return isinstance(password, str) and len(password) >= 8
+    return len(password) >= MIN_PASSWORD_LENGTH
+
 
 def format_datetime(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%d %H:%M:%S")
+
 
 def handle_error(e: Exception):
     return jsonify({"error": str(e)}), 500
@@ -50,19 +64,21 @@ def handle_error(e: Exception):
 # -------------------------
 # API
 # -------------------------
-@utils_ns.route('/generate_qr')
+
+
+@utils_ns.route("/generate_qr")
 class GenerateQR(Resource):
     def post(self):
-        """
-        Génère un QR code PNG (base64) à partir des données fournies.
-        Attendu JSON : { "data": "votre texte ici" }
+        """Génère un QR code PNG (base64) à partir des données fournies.
+        Attendu JSON : { "data": "votre texte ici" }.
         """
         payload = request.get_json(silent=True) or {}
         data = (payload.get("data") or "").strip()
         if not data:
             return {"error": "Aucune donnée fournie."}, 400
-        if len(data) > 4096:
-            return {"error": "Données trop volumineuses (max 4096 caractères)."}, 413
+        if len(data) > MAX_QR_DATA_LENGTH:
+            return {
+                "error": f"Données trop volumineuses (max {MAX_QR_DATA_LENGTH} caractères)."}, 413
 
         try:
             b64_png = generate_qr_code(data)

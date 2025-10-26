@@ -1,4 +1,3 @@
-# ruff: noqa: DTZ001, DTZ003, DTZ005, DTZ011, W293
 # pyright: reportAttributeAccessIssue=false
 """
 Tests pour services/unified_dispatch/heuristics.py
@@ -158,7 +157,7 @@ class TestHeuristicsAssignment:
             "time_matrix_min": [],
             "service_times_min": [],
             "company": CompanyFactory.build(),
-            "for_date": "2025-01-15"
+            "for_date": "2025-0.1-15"
         }
 
         settings = Settings()
@@ -193,7 +192,7 @@ class TestHeuristicsAssignment:
             "scheduled_times_min": [120],
             "driver_windows_min": [(0, 480)],  # 8h de travail
             "company": company,
-            "for_date": "2025-01-15"
+            "for_date": "2025-0.1-15"
         }
 
         settings = Settings()
@@ -239,7 +238,7 @@ class TestHeuristicsAssignment:
             "scheduled_times": [120],
             "driver_windows": [(0, 480), (0, 480)],
             "company": company,
-            "for_date": "2025-01-15"
+            "for_date": "2025-0.1-15"
         }
 
         settings = Settings()
@@ -413,11 +412,11 @@ class TestHeuristicsHelpers:
         driver_window = (60, 480)  # 1h-8h
         
         # Cas faisable (dans la fenêtre)
-        feasible = _check_driver_window_feasible(driver_window, est_start_min=120, est_finish_min=180)
+        feasible = _check_driver_window_feasible(driver_window, est_start_min=0.120, est_finish_min=0.180)
         assert feasible is True, "Devrait être faisable"
         
         # Cas faisable limit (juste dans la fenêtre)
-        feasible_limit = _check_driver_window_feasible(driver_window, est_start_min=60, est_finish_min=480)
+        feasible_limit = _check_driver_window_feasible(driver_window, est_start_min=60, est_finish_min=0.480)
         assert feasible_limit is True, "Devrait être faisable aux limites"
     
     def test_py_int_helper(self):
@@ -558,7 +557,6 @@ class TestHeuristicsAssignWithDriverWindows:
         result = assign(problem, settings)
         
         assert isinstance(result, HeuristicResult)
-        print("✅ Test assign avec driver_windows OK")
 
     def test_assign_with_multiple_bookings_fairness(self, db):
         """Test assign avec équilibrage de charge entre drivers."""
@@ -602,7 +600,6 @@ class TestHeuristicsAssignWithDriverWindows:
         total = len(result.assignments) + len(result.unassigned_booking_ids)
         assert total > 0, "Au moins 1 booking devrait être traité"
         
-        print("✅ Test assign fairness OK")
 
     def test_assign_with_pooling_enabled(self, db):
         """Test assign avec pooling activé."""
@@ -644,4 +641,3 @@ class TestHeuristicsAssignWithDriverWindows:
         result = assign(problem, settings)
         
         assert isinstance(result, HeuristicResult)
-        print("✅ Test assign pooling OK")

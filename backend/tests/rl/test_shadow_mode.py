@@ -1,4 +1,3 @@
-# ruff: noqa: DTZ001, DTZ003, N803
 """
 Tests pour le Shadow Mode Manager.
 
@@ -18,7 +17,7 @@ from services.rl.shadow_mode_manager import ShadowModeManager
 class TestShadowModeManagerCreation:
     """Tests de création du Shadow Mode Manager."""
 
-    @patch('services.rl.shadow_mode_manager.DQNAgent')
+    @patch("services.rl.shadow_mode_manager.DQNAgent")
     def test_shadow_manager_creation(self, MockDQNAgent):
         """Test création basique du shadow manager."""
         # Mock l'agent
@@ -37,11 +36,11 @@ class TestShadowModeManagerCreation:
             assert manager.comparisons_count == 0
             assert manager.agreements_count == 0
 
-    @patch('services.rl.shadow_mode_manager.DQNAgent')
+    @patch("services.rl.shadow_mode_manager.DQNAgent")
     def test_shadow_manager_creates_log_dir(self, MockDQNAgent):
         """Test que le manager crée le répertoire de logs."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            log_dir = os.path.join(tmpdir, "shadow_logs")
+            log_dir = Path(tmpdir, "shadow_logs")
 
             ShadowModeManager(
                 model_path="dummy_model.pth",
@@ -49,14 +48,14 @@ class TestShadowModeManagerCreation:
                 enable_logging=True
             )
 
-            assert os.path.exists(log_dir)
-            assert os.path.isdir(log_dir)
+            assert Path(log_dir).exists()
+            assert Path(log_dir).is_dir()
 
 
 class TestShadowModePredictions:
     """Tests des prédictions shadow."""
 
-    @patch('services.rl.shadow_mode_manager.DQNAgent')
+    @patch("services.rl.shadow_mode_manager.DQNAgent")
     def test_predict_driver_assignment(self, MockDQNAgent):
         """Test prédiction d'assignation."""
         # Mock agent qui retourne une action
@@ -91,13 +90,13 @@ class TestShadowModePredictions:
             )
 
             assert prediction is not None
-            assert prediction['booking_id'] == 123
-            assert prediction['predicted_driver_id'] == 1
-            assert prediction['action_type'] == 'assign'
-            assert 'confidence' in prediction
+            assert prediction["booking_id"] == 123
+            assert prediction["predicted_driver_id"] == 1
+            assert prediction["action_type"] == "assign"
+            assert "confidence" in prediction
             assert manager.predictions_count == 1
 
-    @patch('services.rl.shadow_mode_manager.DQNAgent')
+    @patch("services.rl.shadow_mode_manager.DQNAgent")
     def test_predict_wait_action(self, MockDQNAgent):
         """Test prédiction d'action 'wait'."""
         mock_agent = MagicMock()
@@ -126,15 +125,15 @@ class TestShadowModePredictions:
             )
 
             assert prediction is not None
-            assert prediction['booking_id'] == 456
-            assert prediction['predicted_driver_id'] is None
-            assert prediction['action_type'] == 'wait'
+            assert prediction["booking_id"] == 456
+            assert prediction["predicted_driver_id"] is None
+            assert prediction["action_type"] == "wait"
 
 
 class TestShadowModeComparisons:
     """Tests des comparaisons avec décisions réelles."""
 
-    @patch('services.rl.shadow_mode_manager.DQNAgent')
+    @patch("services.rl.shadow_mode_manager.DQNAgent")
     def test_compare_agreement(self, MockDQNAgent):
         """Test comparaison avec accord."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -156,14 +155,14 @@ class TestShadowModeComparisons:
                 outcome_metrics={"distance_km": 5.2}
             )
 
-            assert comparison['agreement'] is True
-            assert comparison['booking_id'] == 123
-            assert comparison['predicted_driver_id'] == 1
-            assert comparison['actual_driver_id'] == 1
+            assert comparison["agreement"] is True
+            assert comparison["booking_id"] == 123
+            assert comparison["predicted_driver_id"] == 1
+            assert comparison["actual_driver_id"] == 1
             assert manager.comparisons_count == 1
             assert manager.agreements_count == 1
 
-    @patch('services.rl.shadow_mode_manager.DQNAgent')
+    @patch("services.rl.shadow_mode_manager.DQNAgent")
     def test_compare_disagreement(self, MockDQNAgent):
         """Test comparaison avec désaccord."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -185,7 +184,7 @@ class TestShadowModeComparisons:
                 outcome_metrics={"distance_km": 3.8}
             )
 
-            assert comparison['agreement'] is False
+            assert comparison["agreement"] is False
             assert manager.comparisons_count == 1
             assert manager.agreements_count == 0
 
@@ -193,7 +192,7 @@ class TestShadowModeComparisons:
 class TestShadowModeStats:
     """Tests des statistiques."""
 
-    @patch('services.rl.shadow_mode_manager.DQNAgent')
+    @patch("services.rl.shadow_mode_manager.DQNAgent")
     def test_get_stats(self, MockDQNAgent):
         """Test récupération des stats."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -210,12 +209,12 @@ class TestShadowModeStats:
 
             stats = manager.get_stats()
 
-            assert stats['predictions_count'] == 100
-            assert stats['comparisons_count'] == 95
-            assert stats['agreements_count'] == 80
-            assert abs(stats['agreement_rate'] - 80/95) < 0.01
+            assert stats["predictions_count"] == 100
+            assert stats["comparisons_count"] == 95
+            assert stats["agreements_count"] == 80
+            assert abs(stats["agreement_rate"] - 80/95) < 0.01
 
-    @patch('services.rl.shadow_mode_manager.DQNAgent')
+    @patch("services.rl.shadow_mode_manager.DQNAgent")
     def test_agreement_rate_zero_comparisons(self, MockDQNAgent):
         """Test agreement rate quand aucune comparaison."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -226,13 +225,13 @@ class TestShadowModeStats:
             )
 
             stats = manager.get_stats()
-            assert stats['agreement_rate'] == 0.0
+            assert stats["agreement_rate"] == 0.0
 
 
 class TestShadowModeLogging:
     """Tests du logging."""
 
-    @patch('services.rl.shadow_mode_manager.DQNAgent')
+    @patch("services.rl.shadow_mode_manager.DQNAgent")
     def test_logging_predictions(self, MockDQNAgent):
         """Test que les prédictions sont loggées."""
         mock_agent = MagicMock()
@@ -263,18 +262,18 @@ class TestShadowModeLogging:
             # Vérifier que le fichier de log existe
             from datetime import datetime
             log_file = f"predictions_{datetime.utcnow().strftime('%Y%m%d')}.jsonl"
-            log_path = os.path.join(tmpdir, log_file)
+            log_path = Path(tmpdir, log_file)
 
-            assert os.path.exists(log_path)
+            assert Path(log_path).exists()
 
             # Vérifier le contenu
-            with open(log_path, encoding='utf-8') as f:
+            with Path(log_path, encoding="utf-8").open() as f:
                 line = f.readline()
                 prediction = json.loads(line)
-                assert prediction['booking_id'] == 789
-                assert prediction['predicted_driver_id'] == 5
+                assert prediction["booking_id"] == 789
+                assert prediction["predicted_driver_id"] == 5
 
-    @patch('services.rl.shadow_mode_manager.DQNAgent')
+    @patch("services.rl.shadow_mode_manager.DQNAgent")
     def test_logging_comparisons(self, MockDQNAgent):
         """Test que les comparaisons sont loggées."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -297,23 +296,22 @@ class TestShadowModeLogging:
             )
 
             # Vérifier le fichier
-            from datetime import datetime
             log_file = f"comparisons_{datetime.utcnow().strftime('%Y%m%d')}.jsonl"
-            log_path = os.path.join(tmpdir, log_file)
+            log_path = Path(tmpdir, log_file)
 
-            assert os.path.exists(log_path)
+            assert Path(log_path).exists()
 
-            with open(log_path, encoding='utf-8') as f:
+            with Path(log_path, encoding="utf-8").open() as f:
                 line = f.readline()
                 comparison = json.loads(line)
-                assert comparison['booking_id'] == 999
-                assert comparison['agreement'] is True
+                assert comparison["booking_id"] == 999
+                assert comparison["agreement"] is True
 
 
 class TestShadowModeDailyReport:
     """Tests des rapports quotidiens."""
 
-    @patch('services.rl.shadow_mode_manager.DQNAgent')
+    @patch("services.rl.shadow_mode_manager.DQNAgent")
     def test_generate_daily_report_empty(self, MockDQNAgent):
         """Test génération rapport sans données."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -326,12 +324,12 @@ class TestShadowModeDailyReport:
             report = manager.generate_daily_report()
 
             assert report is not None
-            assert 'summary' in report
-            assert report['summary']['total_predictions'] == 0
-            assert report['summary']['total_comparisons'] == 0
-            assert report['summary']['agreement_rate'] == 0.0
+            assert "summary" in report
+            assert report["summary"]["total_predictions"] == 0
+            assert report["summary"]["total_comparisons"] == 0
+            assert report["summary"]["agreement_rate"] == 0.0
 
-    @patch('services.rl.shadow_mode_manager.DQNAgent')
+    @patch("services.rl.shadow_mode_manager.DQNAgent")
     def test_daily_report_saves_to_file(self, MockDQNAgent):
         """Test que le rapport est sauvegardé."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -344,14 +342,13 @@ class TestShadowModeDailyReport:
             report = manager.generate_daily_report()
 
             # Vérifier le fichier
-            from datetime import datetime
             report_file = f"daily_report_{datetime.utcnow().strftime('%Y%m%d')}.json"
-            report_path = os.path.join(tmpdir, report_file)
+            report_path = Path(tmpdir, report_file)
 
-            assert os.path.exists(report_path)
+            assert Path(report_path).exists()
 
             # Vérifier le contenu
-            with open(report_path, encoding='utf-8') as f:
+            with Path(report_path, encoding="utf-8").open() as f:
                 saved_report = json.load(f)
                 assert saved_report == report
 

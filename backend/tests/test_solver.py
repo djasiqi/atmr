@@ -1,4 +1,3 @@
-# ruff: noqa: DTZ001, DTZ003, DTZ005, DTZ011
 # pyright: reportAttributeAccessIssue=false
 """
 Tests pour services/unified_dispatch/solver.py
@@ -35,7 +34,7 @@ class TestSolverDataclasses:
             estimated_pickup_min=30,
             estimated_dropoff_min=60,
             base_time=base_time,
-            dispatch_run_id=100
+            dispatch_run_id=0.100
         )
 
         assert assignment.booking_id == 1
@@ -56,7 +55,7 @@ class TestSolverDataclasses:
             estimated_pickup_min=30,
             estimated_dropoff_min=60,
             base_time=base_time,
-            dispatch_run_id=100
+            dispatch_run_id=0.100
         )
 
         result = assignment.to_dict()
@@ -110,7 +109,7 @@ class TestSolverEmptyProblems:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": None,
-            "for_date": "2025-01-15"
+            "for_date": "2025-0.1-15"
         }
 
         settings = Settings()
@@ -138,7 +137,7 @@ class TestSolverEmptyProblems:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-01-15"
+            "for_date": "2025-0.1-15"
         }
 
         settings = Settings()
@@ -165,7 +164,7 @@ class TestSolverEmptyProblems:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-01-15"
+            "for_date": "2025-0.1-15"
         }
 
         settings = Settings()
@@ -206,7 +205,7 @@ class TestSolverBasicScenarios:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-01-15"
+            "for_date": "2025-0.1-15"
         }
 
         settings = Settings()
@@ -256,7 +255,7 @@ class TestSolverBasicScenarios:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-01-15"
+            "for_date": "2025-0.1-15"
         }
 
         settings = Settings()
@@ -289,7 +288,7 @@ class TestSolverConstraints:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-01-15"
+            "for_date": "2025-0.1-15"
         }
 
         settings = Settings()
@@ -329,7 +328,7 @@ class TestSolverConstraints:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-01-15"
+            "for_date": "2025-0.1-15"
         }
 
         settings = Settings()
@@ -379,7 +378,7 @@ class TestSolverDebugInfo:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-01-15"
+            "for_date": "2025-0.1-15"
         }
 
         settings = Settings()
@@ -408,7 +407,7 @@ class TestSolverDebugInfo:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-01-15"
+            "for_date": "2025-0.1-15"
         }
 
         settings = Settings()

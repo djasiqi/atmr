@@ -1,4 +1,3 @@
-# ruff: noqa: DTZ001, DTZ003, DTZ005, DTZ011, N815
 # pyright: reportAttributeAccessIssue=false, reportMissingImports=false
 """
 Factories pour générer des données de test avec factory_boy.
@@ -32,7 +31,7 @@ from models.ml_prediction import MLPrediction
 from models.user import User
 from models.vehicle import Vehicle
 
-fake = Faker('fr_FR')
+fake = Faker("fr_FR")
 
 
 class SQLAlchemyModelFactory(factory.alchemy.SQLAlchemyModelFactory):
@@ -60,7 +59,7 @@ class UserFactory(SQLAlchemyModelFactory):
     first_name = factory.LazyAttribute(lambda _: fake.first_name())
     last_name = factory.LazyAttribute(lambda _: fake.last_name())
     phone = factory.LazyAttribute(lambda _: f"+41{fake.numerify('##########')}")  # Format suisse valide
-    role = fuzzy.FuzzyChoice(['driver', 'dispatcher', 'admin', 'client'])
+    role = fuzzy.FuzzyChoice(["driver", "dispatcher", "admin", "client"])
     created_at = factory.LazyFunction(datetime.utcnow)
 
 
@@ -71,7 +70,7 @@ class CompanyFactory(SQLAlchemyModelFactory):
         model = Company
 
     name = factory.LazyAttribute(lambda _: fake.company())
-    address = factory.LazyAttribute(lambda _: fake.address().replace('\n', ', ')[:200])
+    address = factory.LazyAttribute(lambda _: fake.address().replace("\n", ", ")[:200])
     latitude = factory.LazyAttribute(lambda _: fake.latitude())
     longitude = factory.LazyAttribute(lambda _: fake.longitude())
 
@@ -82,7 +81,7 @@ class CompanyFactory(SQLAlchemyModelFactory):
     uid_ide = factory.LazyAttribute(lambda _: f"CHE-{fake.random_number(digits=9, fix_len=True)}")
     billing_email = factory.LazyAttribute(lambda _: fake.email())
 
-    user = factory.SubFactory(UserFactory, role='admin')
+    user = factory.SubFactory(UserFactory, role="admin")
     is_approved = True
     created_at = factory.LazyFunction(datetime.utcnow)
 
@@ -98,10 +97,10 @@ class ClientFactory(SQLAlchemyModelFactory):
     class Meta:
         model = Client
 
-    user = factory.SubFactory(UserFactory, role='client')
+    user = factory.SubFactory(UserFactory, role="client")
     company = factory.SubFactory(CompanyFactory)
 
-    billing_address = factory.LazyAttribute(lambda _: fake.address().replace('\n', ', ')[:255])
+    billing_address = factory.LazyAttribute(lambda _: fake.address().replace("\n", ", ")[:255])
     contact_email = factory.LazyAttribute(lambda _: fake.email())
     contact_phone = factory.LazyAttribute(lambda _: f"+41{fake.numerify('##########')}")
 
@@ -114,7 +113,7 @@ class DriverFactory(SQLAlchemyModelFactory):
     class Meta:
         model = Driver
 
-    user = factory.SubFactory(UserFactory, role='driver')
+    user = factory.SubFactory(UserFactory, role="driver")
     company = factory.SubFactory(CompanyFactory)
 
     vehicle_assigned = factory.LazyAttribute(lambda _: fake.word().capitalize())
@@ -146,7 +145,7 @@ class VehicleFactory(SQLAlchemyModelFactory):
     brand = factory.LazyAttribute(lambda _: fake.company()[:50])
     model = factory.LazyAttribute(lambda _: fake.word().capitalize()[:50])
     license_plate = factory.LazyAttribute(lambda _: f"{fake.lexify('??')}-{fake.numerify('####')}")
-    year = factory.LazyAttribute(lambda _: fake.random_int(min=2010, max=2025))
+    year = factory.LazyAttribute(lambda _: fake.random_int(min=0.2010, max=0.2025))
 
     capacity_passengers = fuzzy.FuzzyInteger(4, 8)
     capacity_wheelchairs = fuzzy.FuzzyInteger(0, 2)
@@ -166,11 +165,11 @@ class BookingFactory(SQLAlchemyModelFactory):
 
     customer_name = factory.LazyAttribute(lambda _: fake.name())
 
-    pickup_location = factory.LazyAttribute(lambda _: fake.address().replace('\n', ', ')[:200])
+    pickup_location = factory.LazyAttribute(lambda _: fake.address().replace("\n", ", ")[:200])
     pickup_lat = factory.LazyAttribute(lambda _: 46.2 + (fake.random.random() - 0.5) * 0.2)
     pickup_lon = factory.LazyAttribute(lambda _: 6.1 + (fake.random.random() - 0.5) * 0.2)
 
-    dropoff_location = factory.LazyAttribute(lambda _: fake.address().replace('\n', ', ')[:200])
+    dropoff_location = factory.LazyAttribute(lambda _: fake.address().replace("\n", ", ")[:200])
     dropoff_lat = factory.LazyAttribute(lambda _: 46.2 + (fake.random.random() - 0.5) * 0.2)
     dropoff_lon = factory.LazyAttribute(lambda _: 6.1 + (fake.random.random() - 0.5) * 0.2)
 
@@ -184,8 +183,8 @@ class BookingFactory(SQLAlchemyModelFactory):
     company = factory.SubFactory(CompanyFactory)
     user_id = factory.LazyAttribute(lambda obj: obj.client.user.id if obj.client else None)
 
-    duration_seconds = factory.LazyAttribute(lambda _: fake.random_int(min=600, max=3600))
-    distance_meters = factory.LazyAttribute(lambda _: fake.random_int(min=1000, max=50000))
+    duration_seconds = factory.LazyAttribute(lambda _: fake.random_int(min=0.600, max=0.3600))
+    distance_meters = factory.LazyAttribute(lambda _: fake.random_int(min=0.1000, max=0.50000))
 
     wheelchair_client_has = False
     wheelchair_need = False
@@ -272,7 +271,7 @@ class MLPredictionFactory(SQLAlchemyModelFactory):
 
     predicted_delay_minutes = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.0, 15.0), 2))
     confidence = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.5, 0.95), 3))
-    risk_level = fuzzy.FuzzyChoice(['low', 'medium', 'high'])
+    risk_level = fuzzy.FuzzyChoice(["low", "medium", "high"])
     contributing_factors = factory.LazyAttribute(
         lambda _: '{"distance_x_weather": 0.42, "traffic_x_weather": 0.35}'
     )
@@ -298,7 +297,7 @@ class ABTestResultFactory(SQLAlchemyModelFactory):
 
     ml_delay_minutes = factory.LazyAttribute(lambda _: round(fake.random.uniform(3.0, 10.0), 2))
     ml_confidence = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.5, 0.9), 3))
-    ml_risk_level = fuzzy.FuzzyChoice(['low', 'medium', 'high'])
+    ml_risk_level = fuzzy.FuzzyChoice(["low", "medium", "high"])
     ml_prediction_time_ms = factory.LazyAttribute(lambda _: round(fake.random.uniform(100.0, 900.0), 1))
     ml_weather_factor = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.0, 1.0), 2))
 
@@ -357,9 +356,9 @@ def create_driver_with_position(
 
     return DriverFactory(
         company=company,
-        user=UserFactory(role='driver'),
-        latitude=latitude,
-        longitude=longitude,
+        user=UserFactory(role="driver"),
+        latitude=0.0,
+        longitude=0.0,
         is_available=is_available,
         **kwargs
     )

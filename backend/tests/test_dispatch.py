@@ -14,10 +14,10 @@ def mock_osrm(monkeypatch):
     def fake_table(*args, **kwargs):
         # Retourne une matrice 3x3 factice (durées en secondes)
         return {
-            'code': 'Ok',
-            'durations': [[0, 600, 1200], [600, 0, 800], [1200, 800, 0]]
+            "code": "Ok",
+            "durations": [[0, 600, 1200], [600, 0, 800], [1200, 800, 0]]
         }
-    monkeypatch.setattr('services.osrm_client._table', fake_table)
+    monkeypatch.setattr("services.osrm_client._table", fake_table)
     return fake_table
 
 
@@ -26,13 +26,13 @@ def sample_driver(db, sample_company):
     """Crée un chauffeur de test."""
     from ext import bcrypt
     user = User(
-        username='driver1',
-        email='driver@example.com',
+        username="driver1",
+        email="driver@example.com",
         role=UserRole.driver,
         first_name="John",
         last_name="Driver"
     )
-    user.password = bcrypt.generate_password_hash('password123').decode('utf-8')
+    user.password = bcrypt.generate_password_hash("password123").decode("utf-8")
     db.session.add(user)
     db.session.flush()
 
@@ -64,14 +64,14 @@ def sample_vehicle(db, sample_company, sample_driver):
 
 def test_dispatch_endpoint_exists(client, auth_headers):
     """GET /api/company_dispatch/ retourne une réponse."""
-    response = client.get('/api/company_dispatch/', headers=auth_headers)
+    response = client.get("/api/company_dispatch/", headers=auth_headers)
     # Peut être 200 (données) ou 404 (route non trouvée selon config)
     assert response.status_code in [200, 404, 405]
 
 
 def test_dispatch_requires_auth(client):
     """GET /api/company_dispatch/ sans auth renvoie 401."""
-    response = client.get('/api/company_dispatch/')
+    response = client.get("/api/company_dispatch/")
     assert response.status_code == 401
 
 
@@ -89,8 +89,8 @@ def test_create_booking_for_dispatch(client, auth_headers, db, sample_user, samp
             scheduled_time=datetime.now(UTC) + timedelta(hours=i+1),
             status=BookingStatus.PENDING,
             amount=50.0,
-            distance_meters=5000,
-            duration_seconds=900
+            distance_meters=0.5000,
+            duration_seconds=0.900
         )
         db.session.add(booking)
     db.session.commit()

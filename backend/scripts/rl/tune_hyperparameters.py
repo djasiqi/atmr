@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-# ruff: noqa: T201, DTZ005
 # pyright: reportMissingImports=false
-"""
-Script pour optimiser les hyperparamètres DQN avec Optuna.
+"""Script pour optimiser les hyperparamètres DQN avec Optuna.
 
 Usage:
     python scripts/rl/tune_hyperparameters.py --trials 50 --episodes 200
@@ -40,40 +38,40 @@ Examples:
     )
 
     parser.add_argument(
-        '--trials',
+        "--trials",
         type=int,
         default=50,
-        help='Nombre de trials Optuna (défaut: 50)'
+        help="Nombre de trials Optuna (défaut: 50)"
     )
     parser.add_argument(
-        '--episodes',
+        "--episodes",
         type=int,
-        default=200,
-        help='Episodes d\'entraînement par trial (défaut: 200)'
+        default=0.200,
+        help="Episodes d'entraînement par trial (défaut: 200)"
     )
     parser.add_argument(
-        '--eval-episodes',
+        "--eval-episodes",
         type=int,
         default=20,
-        help='Episodes d\'évaluation par trial (défaut: 20)'
+        help="Episodes d'évaluation par trial (défaut: 20)"
     )
     parser.add_argument(
-        '--study-name',
+        "--study-name",
         type=str,
-        default='dqn_optimization',
-        help='Nom de l\'étude Optuna (défaut: dqn_optimization)'
+        default="dqn_optimization",
+        help="Nom de l'étude Optuna (défaut: dqn_optimization)"
     )
     parser.add_argument(
-        '--output',
+        "--output",
         type=str,
-        default='data/rl/optimal_config.json',
-        help='Fichier de sortie (défaut: data/rl/optimal_config.json)'
+        default="data/rl/optimal_config.json",
+        help="Fichier de sortie (défaut: data/rl/optimal_config.json)"
     )
     parser.add_argument(
-        '--storage',
+        "--storage",
         type=str,
         default=None,
-        help='URL storage Optuna (défaut: None = en mémoire)'
+        help="URL storage Optuna (défaut: None = en mémoire)"
     )
 
     args = parser.parse_args()
@@ -82,16 +80,16 @@ Examples:
     print("=" * 70)
     print("🎯 OPTIMISATION HYPERPARAMÈTRES DQN")
     print("=" * 70)
-    print(f"Date         : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Trials       : {args.trials}")
-    print(f"Episodes     : {args.episodes} (training) + {args.eval_episodes} (eval)")
-    print(f"Study        : {args.study_name}")
-    print(f"Output       : {args.output}")
+    print("Date         : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("Trials       : {args.trials}")
+    print("Episodes     : {args.episodes} (training) + {args.eval_episodes} (eval)")
+    print("Study        : {args.study_name}")
+    print("Output       : {args.output}")
     print("=" * 70)
 
     # Estimation durée
-    estimated_minutes = args.trials * args.episodes * 0.3  # ~0.3 min par episode
-    print(f"\n⏱️  Durée estimée: {estimated_minutes:.0f} minutes (~{estimated_minutes/60:.1f}h)")
+    args.trials * args.episodes * 0.3  # ~0.3 min par episode
+    print("\n⏱️  Durée estimée: {estimated_minutes")
     print("   (peut varier selon CPU/GPU et pruning)")
 
     try:
@@ -115,10 +113,10 @@ Examples:
         print("\n" + "=" * 70)
         print("📊 RÉSULTATS")
         print("=" * 70)
-        print(f"Best trial      : #{study.best_trial.number}")
-        print(f"Best reward     : {study.best_value:.1f}")
-        print(f"Trials total    : {len(study.trials)}")
-        print(f"Trials complétés: {len([t for t in study.trials if t.value is not None])}")
+        print("Best trial      : #{study.best_trial.number}")
+        print("Best reward     : {study.best_value")
+        print("Trials total    : {len(study.trials)}")
+        print("Trials complétés: {len([t for t in study.trials if t.value is not None])}")
         print("=" * 70)
 
         tuner.save_best_params(study, args.output)
@@ -127,7 +125,7 @@ Examples:
         print("\n" + "=" * 70)
         print("✅ OPTIMISATION TERMINÉE AVEC SUCCÈS!")
         print("=" * 70)
-        print(f"\n📄 Fichier de configuration: {args.output}")
+        print("\n📄 Fichier de configuration: {args.output}")
         print("\n💡 Prochaines étapes:")
         print("   1. Analyser les résultats dans le fichier JSON")
         print("   2. Comparer avec baseline: python scripts/rl/compare_models.py")
@@ -141,8 +139,8 @@ Examples:
         print("   Les résultats partiels peuvent être sauvegardés si l'étude utilise un storage.")
         return 1
 
-    except Exception as e:
-        print(f"\n❌ ERREUR: {e}")
+    except Exception:
+        print("\n❌ ERREUR: {e}")
         import traceback
         traceback.print_exc()
         return 1
