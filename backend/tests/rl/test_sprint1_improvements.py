@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# pyright: reportMissingImports=false
 """
 Tests unitaires pour les améliorations RL du Sprint 1.
 
@@ -41,7 +41,7 @@ class TestPrioritizedReplayBuffer:
         # Échantillonner plusieurs fois
         high_priority_count = 0
         for _ in range(100):
-            batch, indices, weights = buffer.sample(1)
+            _batch, indices, _weights = buffer.sample(1)
             if indices[0] == 0:  # Première transition (haute priorité)
                 high_priority_count += 1
 
@@ -57,7 +57,7 @@ class TestPrioritizedReplayBuffer:
         buffer.add(state, 1, 5.0, state, False, priority=5.0)
 
         # Échantillonner
-        batch, indices, weights = buffer.sample(1)
+        _batch, indices, _weights = buffer.sample(1)
 
         # Mettre à jour priorité
         new_priorities = [10.0]  # Priorité plus élevée
@@ -76,7 +76,7 @@ class TestPrioritizedReplayBuffer:
             buffer.add(state, i, float(i), state, False, priority=float(i + 1))
 
         # Échantillonner et vérifier les poids
-        batch, indices, weights = buffer.sample(5)
+        _batch, _indices, weights = buffer.sample(5)
 
         # Les poids doivent être des valeurs positives
         assert all(w > 0 for w in weights)
@@ -107,7 +107,7 @@ class TestActionMasking:
         valid_mask = env._get_valid_actions_mask()
 
         # Vérifier que seules les actions valides sont True
-        assert valid_mask[0] == True  # Action wait toujours valide
+        assert valid_mask[0]  # Action wait toujours valide
 
         # Vérifier que les actions invalides sont False
         invalid_actions = np.where(~valid_mask)[0]
@@ -118,7 +118,7 @@ class TestActionMasking:
 
     def test_masked_action_selection(self):
         """Test sélection d'action avec masquage."""
-        agent = ImprovedDQNAgent(state_dim=100, action_dim=100)
+        agent = ImprovedDQNAgent(state_dim=0.100, action_dim=0.100)
         state = np.random.randn(100)
         valid_actions = [0, 5, 10, 15]  # Actions valides
 
@@ -150,11 +150,11 @@ class TestActionMasking:
         }
 
         # Vérifier contrainte valide
-        assert env._check_time_window_constraint(driver, booking) == True
+        assert env._check_time_window_constraint(driver, booking)
 
         # Modifier booking pour rendre impossible
         booking["time_window_end"] = 0.0  # Fenêtre fermée
-        assert env._check_time_window_constraint(driver, booking) == False
+        assert not env._check_time_window_constraint(driver, booking)
 
     def test_driver_capacity_constraint(self):
         """Test contraintes de capacité chauffeur."""
@@ -178,7 +178,7 @@ class TestActionMasking:
         }
 
         # Vérifier que la contrainte est respectée
-        assert env._check_time_window_constraint(driver, booking) == False
+        assert not env._check_time_window_constraint(driver, booking)
 
     def test_get_valid_actions(self):
         """Test méthode get_valid_actions."""
@@ -233,27 +233,27 @@ class TestRewardInvariants:
 
         # Test ponctualité parfaite
         info_perfect = {
-            'is_late': False,
-            'lateness_minutes': 0,
-            'is_outbound': True
+            "is_late": False,
+            "lateness_minutes": 0,
+            "is_outbound": True
         }
         reward_perfect = reward_shaping._calculate_punctuality_reward(info_perfect)
         assert reward_perfect > 0
 
         # Test retard ALLER (0 tolérance)
         info_late_aller = {
-            'is_late': True,
-            'lateness_minutes': 10,
-            'is_outbound': True
+            "is_late": True,
+            "lateness_minutes": 10,
+            "is_outbound": True
         }
         reward_late_aller = reward_shaping._calculate_punctuality_reward(info_late_aller)
         assert reward_late_aller < 0
 
         # Test retard RETOUR (tolérance progressive)
         info_late_retour = {
-            'is_late': True,
-            'lateness_minutes': 10,  # Dans tolérance douce
-            'is_outbound': False
+            "is_late": True,
+            "lateness_minutes": 10,  # Dans tolérance douce
+            "is_outbound": False
         }
         reward_late_retour = reward_shaping._calculate_punctuality_reward(info_late_retour)
         assert reward_late_retour == 0.0  # Neutre dans tolérance
@@ -263,12 +263,12 @@ class TestRewardInvariants:
         reward_shaping = AdvancedRewardShaping()
 
         # Test distance courte (bonus)
-        info_short = {'distance_km': 2.0}
+        info_short = {"distance_km": 2.0}
         reward_short = reward_shaping._calculate_distance_reward(info_short)
         assert reward_short > 0
 
         # Test distance longue (pénalité)
-        info_long = {'distance_km': 20.0}
+        info_long = {"distance_km": 20.0}
         reward_long = reward_shaping._calculate_distance_reward(info_long)
         assert reward_long < 0
 
@@ -277,12 +277,12 @@ class TestRewardInvariants:
         reward_shaping = AdvancedRewardShaping()
 
         # Test équilibre parfait
-        info_balanced = {'driver_loads': [2, 2, 2]}
+        info_balanced = {"driver_loads": [2, 2, 2]}
         reward_balanced = reward_shaping._calculate_equity_reward(info_balanced)
         assert reward_balanced > 0
 
         # Test déséquilibre
-        info_unbalanced = {'driver_loads': [0, 5, 10]}
+        info_unbalanced = {"driver_loads": [0, 5, 10]}
         reward_unbalanced = reward_shaping._calculate_equity_reward(info_unbalanced)
         assert reward_unbalanced < 0
 
@@ -293,27 +293,27 @@ class TestRewardShapingConfig:
     def test_default_config(self):
         """Test configuration par défaut."""
         config = RewardShapingConfig.get_profile("DEFAULT")
-        assert config['punctuality_weight'] == 1.0
-        assert config['distance_weight'] == 0.5
-        assert config['equity_weight'] == 0.3
+        assert config["punctuality_weight"] == 1.0
+        assert config["distance_weight"] == 0.5
+        assert config["equity_weight"] == 0.3
 
     def test_punctuality_focused_config(self):
         """Test configuration focalisée ponctualité."""
         config = RewardShapingConfig.get_profile("PUNCTUALITY_FOCUSED")
-        assert config['punctuality_weight'] == 1.5
-        assert config['punctuality_weight'] > config['distance_weight']
+        assert config["punctuality_weight"] == 1.5
+        assert config["punctuality_weight"] > config["distance_weight"]
 
     def test_equity_focused_config(self):
         """Test configuration focalisée équité."""
         config = RewardShapingConfig.get_profile("EQUITY_FOCUSED")
-        assert config['equity_weight'] == 0.6
-        assert config['equity_weight'] > config['punctuality_weight']
+        assert config["equity_weight"] == 0.6
+        assert config["equity_weight"] > config["punctuality_weight"]
 
     def test_efficiency_focused_config(self):
         """Test configuration focalisée efficacité."""
         config = RewardShapingConfig.get_profile("EFFICIENCY_FOCUSED")
-        assert config['distance_weight'] == 1.0
-        assert config['distance_weight'] > config['punctuality_weight']
+        assert config["distance_weight"] == 1.0
+        assert config["distance_weight"] > config["punctuality_weight"]
 
     def test_invalid_profile(self):
         """Test profil invalide."""
@@ -327,8 +327,7 @@ class TestBaselineMetrics:
 
     def test_performance_baseline(self):
         """Test métriques de performance baseline."""
-        env = DispatchEnv(num_drivers=3, max_bookings=5)
-        agent = ImprovedDQNAgent(state_dim=100, action_dim=100)
+        agent = ImprovedDQNAgent(state_dim=0.100, action_dim=0.100)
 
         # Test latence d'inférence
         state = np.random.randn(100)
@@ -336,7 +335,7 @@ class TestBaselineMetrics:
 
         start_time = time.time()
         for _ in range(100):
-            action = agent.select_action(state, training=False)
+            agent.select_action(state, training=False)
         end_time = time.time()
 
         avg_latency = (end_time - start_time) / 100 * 1000  # ms
@@ -353,12 +352,12 @@ class TestBaselineMetrics:
 
         # Vérifier que le buffer fonctionne correctement
         assert len(buffer.buffer) == 5000
-        batch, indices, weights = buffer.sample(32)
+        batch, _indices, _weights = buffer.sample(32)
         assert len(batch) == 32
 
     def test_convergence_stability(self):
         """Test stabilité de convergence."""
-        agent = ImprovedDQNAgent(state_dim=100, action_dim=100)
+        agent = ImprovedDQNAgent(state_dim=0.100, action_dim=0.100)
 
         # Simuler plusieurs étapes d'apprentissage
         losses = []
@@ -367,11 +366,11 @@ class TestBaselineMetrics:
             for _ in range(10):
                 state = np.random.randn(100)
                 action = np.random.randint(100)
-                reward = np.random.randn()
+                reward = float(np.random.randn())
                 next_state = np.random.randn(100)
                 done = np.random.choice([True, False])
 
-                agent.store_transition(state, action, next_state, reward, done)
+                agent.store_transition(state, action, reward, next_state, done)
 
             # Apprendre
             if len(agent.memory) >= agent.batch_size:

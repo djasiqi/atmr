@@ -1,32 +1,32 @@
 #!/usr/bin/env python3
-# ruff: noqa: T201
-"""Monitoring de la conversion XLSB 1 année"""
+"""Monitoring de la conversion XLSB 1 année."""
 import re
+import sys
 from pathlib import Path
 
 log_file = Path("data/rl/conversion_full_year.log")
 
 if not log_file.exists():
     print("❌ Fichier de log non trouvé.")
-    exit(1)
+    sys.exit(1)
 
 print("=" * 80)
 print("📊 MONITORING CONVERSION 1 ANNÉE COMPLÈTE")
 print("=" * 80)
 print()
 
-with open(log_file, encoding="utf-8") as f:
+with Path(log_file, encoding="utf-8").open() as f:
     content = f.read()
 
 # Feuilles traitées
 sheets_done = len(re.findall(r"Traitement feuille", content))
-print(f"📄 Feuilles traitées : {sheets_done}/12")
+print("📄 Feuilles traitées : {sheets_done}/12")
 
 # Courses traitées
 courses = re.findall(r"(\d+) courses traitées au total", content)
 if courses:
     total_courses = courses[-1]
-    print(f"📦 Courses traitées  : {total_courses}")
+    print("📦 Courses traitées  : {total_courses}")
 
 # Géocodage
 geocoding_success = len(re.findall(r"✅ Géocodage réussi", content))
@@ -34,7 +34,7 @@ geocoding_failed = len(re.findall(r"⚠️  Géocodage échoué", content))
 
 if geocoding_success + geocoding_failed > 0:
     success_rate = (geocoding_success / (geocoding_success + geocoding_failed)) * 100
-    print(f"🗺️  Géocodage        : {geocoding_success} réussis, {geocoding_failed} échoués ({success_rate:.1f}%)")
+    print("🗺️  Géocodage        : {geocoding_success} réussis, {geocoding_failed} échoués ({success_rate")
 
 # Terminé ?
 if "STATISTIQUES FINALES" in content:
@@ -48,11 +48,11 @@ if "STATISTIQUES FINALES" in content:
 
     if dispatches:
         print("📊 Résultats :")
-        print(f"  - Dispatches créés : {dispatches.group(1)}")
+        print("  - Dispatches créés : {dispatches.group(1)}")
     if bookings:
-        print(f"  - Total courses    : {bookings.group(1)}")
+        print("  - Total courses    : {bookings.group(1)}")
     if avg_gap:
-        print(f"  - Écart moyen      : {avg_gap.group(1)} courses")
+        print("  - Écart moyen      : {avg_gap.group(1)} courses")
     print()
     print("🚀 Prêt pour réentraînement v3 (15,000 épisodes) !")
 else:

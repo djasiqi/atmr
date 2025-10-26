@@ -1,24 +1,27 @@
 # backend/services/notification_service.py
 from __future__ import annotations
 
-from typing import Any, Dict, cast  # <-- ajout de cast
+from typing import TYPE_CHECKING, Any, Dict, cast  # <-- ajout de cast
 
 import requests
 
 from ext import app_logger, socketio
-from models import Booking
+from services.socketio_service import emit_company_event, emit_date_event
+
+if TYPE_CHECKING:
+    from models import Booking
 
 
 # ---------- Helper d'émission compatible v4/v5 ----------
 def _emit_room(event: str, payload: Dict[str, Any], room: str, *, namespace: str = "/") -> None:
-    """Émet un event vers une room en essayant d’abord `to=`, puis fallback `room=`."""
+    """Émet un event vers une room en essayant d'abord `to=`, puis fallback `room=`."""
     try:
         socketio.emit(event, payload, to=room, namespace=namespace)  # Flask-SocketIO >= 5
     except TypeError:
         try:
-            sio_any = cast(Any, socketio)  # <-- cast pour calmer Pylance
+            sio_any = cast("Any", socketio)  # <-- cast pour calmer Pylance
             sio_any.emit(event, payload, room=room, namespace=namespace)  # compat v4
-            # (alternativement: socketio.emit(..., room=..., namespace=...)  # type: ignore[call-arg])
+            # (alternativement: socketio.emit(..., room=..., namespace=...)
         except Exception as e:
             app_logger.error("[notify] emit (compat) failed event=%s room=%s err=%s", event, room, e)
     except Exception as e:
@@ -36,41 +39,33 @@ def send_push_message(token: str, title: str, body: str, *, timeout: int = 5) ->
     try:
         resp = requests.post("https://exp.host/--/api/v2/push/send", json=message, timeout=timeout)
         resp.raise_for_status()
-        return resp.json()  # type: ignore[no-any-return]
+        return resp.json()
     except Exception as e:
         app_logger.warning("[notify] Expo push failed: %s", e)
         return {"ok": False, "error": str(e)}
 
 
-# ---------- 2) WebSocket – nouvelle course ----------
+# ---------- 2) WebSocket - nouvelle course ----------
 def notify_driver_new_booking(driver_id: int, booking: Booking) -> None:
     room = f"driver_{driver_id}"
     try:
-        payload: Dict[str, Any]
-        if hasattr(booking, "to_dict"):
-            payload = booking.to_dict()  # type: ignore[assignment]
-        else:
-            payload = {"id": getattr(booking, "id", None)}
+        payload: Dict[str, Any] = booking.to_dict() if hasattr(booking, "to_dict") else {"id": getattr(booking, "id", None)}
         _emit_room("new_booking", payload, room)
     except Exception as e:
         app_logger.error("[notify_driver_new_booking] failed: %s", e)
 
 
-# ---------- 3) WebSocket – mise à jour de mission ----------
+# ---------- 3) WebSocket - mise à jour de mission ----------
 def notify_booking_update(driver_id: int, booking: Booking) -> None:
     room = f"driver_{driver_id}"
     try:
-        payload: Dict[str, Any]
-        if hasattr(booking, "to_dict"):
-            payload = booking.to_dict()  # type: ignore[assignment]
-        else:
-            payload = {"id": getattr(booking, "id", None)}
+        payload: Dict[str, Any] = booking.to_dict() if hasattr(booking, "to_dict") else {"id": getattr(booking, "id", None)}
         _emit_room("booking_updated", payload, room)
     except Exception as e:
         app_logger.error("[notify_booking_update] failed: %s", e)
 
 
-# ---------- 4) WebSocket – annulation de mission ----------
+# ---------- 4) WebSocket - annulation de mission ----------
 def notify_booking_cancelled(driver_id: int, booking_id: int) -> None:
     room = f"driver_{driver_id}"
     try:
@@ -80,12 +75,10 @@ def notify_booking_cancelled(driver_id: int, booking_id: int) -> None:
 
 
 def notify_booking_assigned(booking: Booking) -> None:
-    """
-    Notification unifiée quand une réservation est assignée.
-    - Émet un événement SocketIO côté entreprise
+    """Notification unifiée quand une réservation est assignée.
+    - Émet un événement SocketIO côté entreprise.
     """
     try:
-        from services.socketio_service import emit_company_event
         payload = {
             "booking_id": getattr(booking, "id", None),
             "driver_id": getattr(booking, "driver_id", None),
@@ -102,17 +95,13 @@ def notify_dispatch_run_completed(
     assignments_count: int,
     date_str: str | None = None,
 ) -> None:
-    """
-    Notification unifiée quand un run de dispatch est terminé.
-    """
+    """Notification unifiée quand un run de dispatch est terminé."""
     try:
-        from services.socketio_service import emit_company_event, emit_date_event
-
-        # Si la date n’est pas fournie, on tente de la récupérer depuis la DB
+        # Si la date n'est pas fournie, on tente de la récupérer depuis la DB
         if not date_str:
             try:
                 from models import DispatchRun
-                dr = DispatchRun.query.get(dispatch_run_id)  # type: ignore[arg-type]
+                dr = DispatchRun.query.get(dispatch_run_id)
                 if dr and getattr(dr, "day", None):
                     d = dr.day
                     date_str = d.isoformat() if hasattr(d, "isoformat") else str(d)
@@ -140,9 +129,8 @@ def notify_dispatch_run_completed(
 
 
 def notify_dispatcher_optimization_opportunity(opportunity_data: Dict[str, Any]) -> None:
-    """
-    Notifie le dispatcher d'une opportunité d'optimisation détectée.
-    
+    """Notifie le dispatcher d'une opportunité d'optimisation détectée.
+
     Args:
         opportunity_data: Dict contenant les détails de l'opportunité
             {
@@ -155,9 +143,9 @@ def notify_dispatcher_optimization_opportunity(opportunity_data: Dict[str, Any])
                 "suggestions": List[Dict],
                 "auto_apply": bool
             }
+
     """
     try:
-        from services.socketio_service import emit_company_event
 
         company_id = opportunity_data.get("company_id")
         if not company_id:

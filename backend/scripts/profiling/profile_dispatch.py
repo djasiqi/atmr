@@ -1,10 +1,8 @@
-"""
-Script de profiling pour mesurer les performances du dispatch.
+"""Script de profiling pour mesurer les performances du dispatch.
 
 Usage:
     python scripts/profiling/profile_dispatch.py
 """
-# ruff: noqa: T201, DTZ011
 # print() et date.today() sont intentionnels dans les scripts de profiling
 
 import sys
@@ -36,15 +34,14 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
     # Logger queries > 50ms (lentes)
     if total_time > 0.050:
         queries_log.append({
-            'query': statement[:300],  # Limiter taille
-            'time': total_time,
-            'params': str(parameters)[:150] if parameters else ''
+            "query": statement[:300],  # Limiter taille
+            "time": total_time,
+            "params": str(parameters)[:150] if parameters else ""
         })
 
 
 def profile_dispatch(company_id=1, for_date=None):
-    """
-    Profile un dispatch complet.
+    """Profile un dispatch complet.
 
     Args:
         company_id: ID de l'entreprise
@@ -52,6 +49,7 @@ def profile_dispatch(company_id=1, for_date=None):
 
     Returns:
         Dict avec métriques de performance
+
     """
     # Import après event listeners
     from app import create_app
@@ -65,14 +63,14 @@ def profile_dispatch(company_id=1, for_date=None):
         query_count = 0
 
         if for_date is None:
-            for_date = date.today().isoformat()  # noqa: DTZ011
+            for_date = date.today().isoformat()
 
         print("\n" + "="*70)
         print("PROFILING DISPATCH - DEMARRAGE")
         print("="*70)
-        print(f"Company ID  : {company_id}")
-        print(f"Date        : {for_date}")
-        print(f"Database    : {app.config.get('SQLALCHEMY_DATABASE_URI', 'N/A')[:50]}...")
+        print("Company ID  : {company_id}")
+        print("Date        : {for_date}")
+        print("Database    : {app.config.get('SQLALCHEMY_DATABASE_URI', 'N/A')[:50]}...")
         print("="*70)
 
         # Mesurer temps total
@@ -89,13 +87,13 @@ def profile_dispatch(company_id=1, for_date=None):
             print("\n" + "="*70)
             print("RESULTATS PROFILING")
             print("="*70)
-            print(f"\nTemps total          : {total_time:.2f}s")
-            print(f"Assignments crees    : {len(result.get('assignments', []))}")
-            print(f"Total queries SQL    : {query_count}")
-            print(f"Queries lentes (>50ms) : {len(queries_log)}")
+            print("\nTemps total          : {total_time")
+            print("Assignments crees    : {len(result.get('assignments', []))}")
+            print("Total queries SQL    : {query_count}")
+            print("Queries lentes (>50ms) : {len(queries_log)}")
 
             # Trier les queries lentes pour affichage et rapport
-            sorted_queries = sorted(queries_log, key=lambda x: x['time'], reverse=True) if queries_log else []
+            sorted_queries = sorted(queries_log, key=lambda x: x["time"], reverse=True) if queries_log else []
 
             if sorted_queries:
                 print("\n" + "="*70)
@@ -103,20 +101,20 @@ def profile_dispatch(company_id=1, for_date=None):
                 print("="*70)
 
                 for i, q in enumerate(sorted_queries[:10], 1):
-                    print(f"\n{i}. Temps: {q['time']*1000:.1f}ms")
-                    print(f"   Query: {q['query'][:200]}")
-                    if q['params']:
-                        print(f"   Params: {q['params'][:100]}")
+                    print("\n{i}. Temps: {q['time']*1000")
+                    print("   Query: {q['query'][:200]}")
+                    if q["params"]:
+                        print("   Params: {q['params'][:100]}")
 
             # Sauvegarder rapport détaillé
-            report_path = 'scripts/profiling/profiling_results.txt'
-            with open(report_path, 'w', encoding='utf-8') as f:
+            report_path = "scripts/profiling/profiling_results.txt"
+            with Path(report_path, "w", encoding="utf-8").open() as f:
                 f.write("="*70 + "\n")
                 f.write("PROFILING RESULTS - DISPATCH\n")
                 f.write("="*70 + "\n\n")
                 f.write(f"Date: {for_date}\n")
                 f.write(f"Company ID: {company_id}\n")
-                f.write(f"Temps total: {total_time:.2f}s\n")
+                f.write(f"Temps total: {total_time")
                 f.write(f"Total queries: {query_count}\n")
                 f.write(f"Queries lentes (>50ms): {len(queries_log)}\n")
                 f.write(f"Assignments créés: {len(result.get('assignments', []))}\n\n")
@@ -127,25 +125,25 @@ def profile_dispatch(company_id=1, for_date=None):
                     f.write("="*70 + "\n\n")
 
                     for i, q in enumerate(sorted_queries, 1):
-                        f.write(f"{i}. Temps: {q['time']*1000:.1f}ms\n")
+                        f.write(f"{i}. Temps: {q['time']*1000")
                         f.write(f"   Query: {q['query']}\n")
-                        if q['params']:
+                        if q["params"]:
                             f.write(f"   Params: {q['params']}\n")
                         f.write("\n")
 
-            print(f"\nRapport sauvegarde dans {report_path}")
+            print("\nRapport sauvegarde dans {report_path}")
             print("="*70)
 
             return {
-                'total_time': total_time,
-                'query_count': query_count,
-                'slow_queries': len(queries_log),
-                'queries': sorted_queries,
-                'assignments': len(result.get('assignments', []))
+                "total_time": total_time,
+                "query_count": query_count,
+                "slow_queries": len(queries_log),
+                "queries": sorted_queries,
+                "assignments": len(result.get("assignments", []))
             }
 
         except Exception as e:
-            print(f"\nERREUR: {e}")
+            print("\nERREUR: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -158,9 +156,9 @@ if __name__ == "__main__":
     if results:
         print("\n>> Profiling termine avec succes !")
         print("\n>> Resume:")
-        print(f"   - Temps: {results['total_time']:.2f}s")
-        print(f"   - Queries: {results['query_count']}")
-        print(f"   - Lentes: {results['slow_queries']}")
+        print("   - Temps: {results['total_time']")
+        print("   - Queries: {results['query_count']}")
+        print("   - Lentes: {results['slow_queries']}")
     else:
         print("\n>> Profiling echoue")
         sys.exit(1)

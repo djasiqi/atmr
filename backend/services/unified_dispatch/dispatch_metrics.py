@@ -1,7 +1,5 @@
-"""
-Système de métriques de qualité pour le dispatch.
-Collecte, calcule et expose les indicateurs de performance.
-"""
+
+# Constantes pour éviter les valeurs magiques
 from __future__ import annotations
 
 import logging
@@ -13,12 +11,22 @@ from ext import db
 from models import Assignment, Booking, BookingStatus, DispatchRun, Driver
 from shared.time_utils import day_local_bounds, now_local
 
+DELAY_MINUTES_THRESHOLD = 5
+DELAYED_ZERO = 0
+AVG_ZERO = 0
+POOLING_WINDOW_SECONDS = 600  # 10 minutes en secondes
+
+"""Système de métriques de qualité pour le dispatch.
+Collecte, calcule et expose les indicateurs de performance.
+"""
+
+
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class DispatchQualityMetrics:
-    """Métriques de qualité d'un dispatch"""
+    """Métriques de qualité d'un dispatch."""
 
     # Identifiants
     dispatch_run_id: int | None
@@ -65,58 +73,61 @@ class DispatchQualityMetrics:
     quality_score: float
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convertit en dictionnaire pour JSON"""
+        """Convertit en dictionnaire pour JSON."""
         d = asdict(self)
-        d['date'] = self.date.isoformat()
-        d['calculated_at'] = self.calculated_at.isoformat()
+        d["date"] = self.date.isoformat()
+        d["calculated_at"] = self.calculated_at.isoformat()
         return d
 
     def to_summary(self) -> Dict[str, Any]:
-        """Résumé compact pour dashboard"""
+        """Résumé compact pour dashboard."""
         return {
-            'quality_score': round(self.quality_score, 1),
-            'assignment_rate': round(self.assignment_rate, 1),
-            'on_time_rate': round((self.on_time_bookings / max(1, self.total_bookings)) * 100, 1),
-            'pooling_rate': round(self.pooling_rate, 1),
-            'fairness': round(self.fairness_coefficient * 100, 1),
-            'avg_delay': round(self.average_delay_minutes, 1),
+            "quality_score": round(self.quality_score, 1),
+            "assignment_rate": round(self.assignment_rate, 1),
+            "on_time_rate": round((self.on_time_bookings / max(1, self.total_bookings)) * 100, 1),
+            "pooling_rate": round(self.pooling_rate, 1),
+            "fairness": round(self.fairness_coefficient * 100, 1),
+            "avg_delay": round(self.average_delay_minutes, 1),
         }
 
 
 class DispatchMetricsCollector:
-    """Collecteur de métriques pour un dispatch"""
+    """Collecteur de métriques pour un dispatch."""
 
-    def __init__(self, company_id: int):
+    def __init__(self, company_id: int):  # pyright: ignore[reportMissingSuperCall]
         self.company_id = company_id
 
     def collect_for_run(self, dispatch_run_id: int) -> DispatchQualityMetrics:
-        """
-        Collecte les métriques pour un DispatchRun spécifique.
+        """Collecte les métriques pour un DispatchRun spécifique.
+
         Args:
             dispatch_run_id: ID du DispatchRun à analyser
         Returns:
             DispatchQualityMetrics avec toutes les métriques calculées
+
         """
         try:
             # Récupérer le DispatchRun
             run = db.session.get(DispatchRun, dispatch_run_id)
             if not run or run.company_id != self.company_id:
-                raise ValueError(f"DispatchRun {dispatch_run_id} not found or access denied")
+                msg = f"DispatchRun {dispatch_run_id} not found or access denied"
+                raise ValueError(msg)
 
             run_date = run.day
 
             # Récupérer toutes les assignations de ce run
-            assignments = Assignment.query.filter_by(dispatch_run_id=dispatch_run_id).all()
+            assignments = Assignment.query.filter_by(
+                dispatch_run_id=dispatch_run_id).all()
 
-            # Récupérer tous les bookings du jour (pour calculer le taux d'assignation)
-            from typing import Any as TAny
-            from typing import cast as tcast
+            # Récupérer tous les bookings du jour (pour calculer le taux
+            # d'assignation)
             d0, d1 = day_local_bounds(run_date.strftime("%Y-%m-%d"))
             all_bookings = Booking.query.filter(
                 Booking.company_id == self.company_id,
                 Booking.scheduled_time >= d0,
                 Booking.scheduled_time < d1,
-                tcast(TAny, Booking.status).in_([BookingStatus.ACCEPTED, BookingStatus.ASSIGNED])
+                Booking.status.in_(
+                    [BookingStatus.ACCEPTED, BookingStatus.ASSIGNED])
             ).all()
 
             # Calculer les métriques
@@ -129,18 +140,22 @@ class DispatchMetricsCollector:
             )
 
         except Exception as e:
-            logger.exception("[DispatchMetrics] Failed to collect metrics for run %s: %s", dispatch_run_id, e)
+            logger.exception(
+                "[DispatchMetrics] Failed to collect metrics for run %s: %s",
+                dispatch_run_id,
+                e)
             raise
 
-    def collect_for_date(self, target_date: date | str) -> DispatchQualityMetrics:
-        """
-        Collecte les métriques pour une date donnée (dernier run de la journée).
+    def collect_for_date(self, target_date: date |
+                         str) -> DispatchQualityMetrics:
+        """Collecte les métriques pour une date donnée (dernier run de la journée).
 
         Args:
             target_date: Date à analyser (date object ou string YYYY-MM-DD)
 
         Returns:
             DispatchQualityMetrics
+
         """
         if isinstance(target_date, str):
             target_date = date.fromisoformat(target_date)
@@ -154,7 +169,8 @@ class DispatchMetricsCollector:
         )
 
         if not run:
-            raise ValueError(f"No DispatchRun found for company {self.company_id} on {target_date}")
+            msg = f"No DispatchRun found for company {self.company_id} on {target_date}"
+            raise ValueError(msg)
 
         return self.collect_for_run(run.id)
 
@@ -166,8 +182,7 @@ class DispatchMetricsCollector:
         all_bookings: List[Booking],
         run_metadata: Dict[str, Any]
     ) -> DispatchQualityMetrics:
-        """Calcule toutes les métriques à partir des données collectées"""
-
+        """Calcule toutes les métriques à partir des données collectées."""
         # 1. Métriques d'assignation
         total_bookings = len(all_bookings)
         assigned_bookings = len(assignments)
@@ -179,13 +194,15 @@ class DispatchMetricsCollector:
         pooling_rate = (pooled_bookings / max(1, assigned_bookings)) * 100
 
         # 3. Métriques de retard
-        on_time, delayed, avg_delay, max_delay = self._calculate_delay_metrics(assignments)
+        on_time, delayed, avg_delay, max_delay = self._calculate_delay_metrics(
+            assignments)
 
         # 4. Métriques d'équité
         driver_stats = self._calculate_driver_fairness(assignments)
 
         # 5. Métriques de coût
-        distance_stats = self._calculate_distance_metrics(assignments, all_bookings)
+        distance_stats = self._calculate_distance_metrics(
+            assignments, all_bookings)
 
         # 6. Performance algorithmique
         algo_stats = self._extract_algorithm_stats(run_metadata)
@@ -195,7 +212,7 @@ class DispatchMetricsCollector:
             assignment_rate=assignment_rate,
             on_time_rate=(on_time / max(1, assigned_bookings)) * 100,
             pooling_rate=pooling_rate,
-            fairness=driver_stats['fairness_coefficient'],
+            fairness=driver_stats["fairness_coefficient"],
             avg_delay=avg_delay
         )
 
@@ -218,38 +235,33 @@ class DispatchMetricsCollector:
             average_delay_minutes=avg_delay,
             max_delay_minutes=max_delay,
 
-            drivers_used=driver_stats['drivers_used'],
-            avg_bookings_per_driver=driver_stats['avg_bookings_per_driver'],
-            max_bookings_per_driver=driver_stats['max_bookings_per_driver'],
-            min_bookings_per_driver=driver_stats['min_bookings_per_driver'],
-            fairness_coefficient=driver_stats['fairness_coefficient'],
+            drivers_used=driver_stats["drivers_used"],
+            avg_bookings_per_driver=driver_stats["avg_bookings_per_driver"],
+            max_bookings_per_driver=driver_stats["max_bookings_per_driver"],
+            min_bookings_per_driver=driver_stats["min_bookings_per_driver"],
+            fairness_coefficient=driver_stats["fairness_coefficient"],
 
-            total_distance_km=distance_stats['total_distance_km'],
-            avg_distance_per_booking=distance_stats['avg_distance_per_booking'],
-            emergency_drivers_used=distance_stats['emergency_drivers_used'],
-            emergency_bookings=distance_stats['emergency_bookings'],
+            total_distance_km=distance_stats["total_distance_km"],
+            avg_distance_per_booking=distance_stats["avg_distance_per_booking"],
+            emergency_drivers_used=distance_stats["emergency_drivers_used"],
+            emergency_bookings=distance_stats["emergency_bookings"],
 
-            solver_used=algo_stats['solver_used'],
-            heuristic_used=algo_stats['heuristic_used'],
-            fallback_used=algo_stats['fallback_used'],
-            execution_time_sec=algo_stats['execution_time_sec'],
+            solver_used=algo_stats["solver_used"],
+            heuristic_used=algo_stats["heuristic_used"],
+            fallback_used=algo_stats["fallback_used"],
+            execution_time_sec=algo_stats["execution_time_sec"],
 
             quality_score=quality_score
         )
 
     def _count_pooled_bookings(self, assignments: List[Assignment]) -> int:
-        """Compte les bookings regroupés (même chauffeur, même heure ±10min)"""
-        from typing import Any as TAny
-        from typing import cast as tcast
+        """Compte les bookings regroupés (même chauffeur, même heure ±10min)."""
         pooled = 0
         driver_times: Dict[int, List[datetime]] = {}
 
         for assignment in assignments:
-            # Cast explicite pour éviter erreurs de type
-            driver_id_raw = assignment.driver_id
-            driver_id = int(tcast(TAny, driver_id_raw)) if driver_id_raw is not None else None
-            if not driver_id:
-                continue
+            # Récupérer l'ID du chauffeur
+            driver_id = assignment.driver_id
 
             booking = db.session.get(Booking, assignment.booking_id)
             if not booking:
@@ -260,30 +272,35 @@ class DispatchMetricsCollector:
                 continue
 
             # Cast pour éviter Column[datetime]
-            scheduled_time = tcast(datetime, scheduled_time_raw)
+            scheduled_time = scheduled_time_raw
 
+            # Utiliser driver_id directement (SQLAlchemy gère les types)
+  
             if driver_id not in driver_times:
-                driver_times[driver_id] = []
+                driver_times[driver_id] = []  # type: ignore
 
-            # Vérifier si un autre booking du même chauffeur est à moins de 10min
-            for existing_time in driver_times[driver_id]:
-                if abs((scheduled_time - existing_time).total_seconds()) <= 600:  # 10min
+            # Vérifier si un autre booking du même chauffeur est à moins de
+            # 10min
+            for existing_time in driver_times[driver_id]:  # type: ignore
+                if abs((scheduled_time - existing_time).total_seconds()
+                       ) <= POOLING_WINDOW_SECONDS:  # 10min
                     pooled += 1
                     break
 
-            driver_times[driver_id].append(scheduled_time)
+            driver_times[driver_id].append(scheduled_time)  # type: ignore
 
         return pooled
 
-    def _calculate_delay_metrics(self, assignments: List[Assignment]) -> tuple[int, int, float, int]:
-        """Calcule les métriques de retard"""
+    def _calculate_delay_metrics(
+            self, assignments: List[Assignment]) -> tuple[int, int, float, int]:
+        """Calcule les métriques de retard."""
         on_time = 0
         delayed = 0
         total_delay = 0
         max_delay = 0
 
         # ✅ PERF: Charger tous les bookings en une seule query (évite N+1)
-        booking_ids = [a.booking_id for a in assignments if a.booking_id]
+        booking_ids = [a.booking_id for a in assignments]
         bookings_map = {
             b.id: b for b in Booking.query.filter(Booking.id.in_(booking_ids)).all()
         } if booking_ids else {}
@@ -300,9 +317,10 @@ class DispatchMetricsCollector:
             # Calculer le retard
             eta_pickup = assignment.eta_pickup_at
             if eta_pickup is not None and scheduled_time is not None:
-                delay_minutes = int((eta_pickup - scheduled_time).total_seconds() / 60)
+                delay_minutes = int(
+                    (eta_pickup - scheduled_time).total_seconds() / 60)
 
-                if delay_minutes <= 5:
+                if delay_minutes <= DELAY_MINUTES_THRESHOLD:
                     on_time += 1
                 else:
                     delayed += 1
@@ -312,29 +330,27 @@ class DispatchMetricsCollector:
                 # Pas d'ETA → considéré comme à l'heure par défaut
                 on_time += 1
 
-        avg_delay = total_delay / max(1, delayed) if delayed > 0 else 0
+        avg_delay = total_delay / \
+            max(1, delayed) if delayed > DELAYED_ZERO else DELAYED_ZERO
 
         return on_time, delayed, avg_delay, max_delay
 
-    def _calculate_driver_fairness(self, assignments: List[Assignment]) -> Dict[str, Any]:
-        """Calcule les métriques d'équité entre chauffeurs"""
-        from typing import Any as TAny
-        from typing import cast as tcast
+    def _calculate_driver_fairness(
+            self, assignments: List[Assignment]) -> Dict[str, Any]:
+        """Calcule les métriques d'équité entre chauffeurs."""
         driver_counts: Dict[int, int] = {}
 
         for assignment in assignments:
-            driver_id_raw = assignment.driver_id
-            driver_id = int(tcast(TAny, driver_id_raw)) if driver_id_raw is not None else None
-            if driver_id:
-                driver_counts[driver_id] = driver_counts.get(driver_id, 0) + 1
+            driver_id = assignment.driver_id
+            driver_counts[driver_id] = driver_counts.get(driver_id, 0) + 1  # type: ignore
 
         if not driver_counts:
             return {
-                'drivers_used': 0,
-                'avg_bookings_per_driver': 0,
-                'max_bookings_per_driver': 0,
-                'min_bookings_per_driver': 0,
-                'fairness_coefficient': 1.0
+                "drivers_used": 0,
+                "avg_bookings_per_driver": 0,
+                "max_bookings_per_driver": 0,
+                "min_bookings_per_driver": 0,
+                "fairness_coefficient": 1.0
             }
 
         counts = list(driver_counts.values())
@@ -344,7 +360,7 @@ class DispatchMetricsCollector:
 
         # Coefficient d'équité : 1 - (écart-type / moyenne)
         # 1.0 = parfaitement équitable, 0.0 = très inéquitable
-        if avg > 0:
+        if avg > AVG_ZERO:
             variance = sum((c - avg) ** 2 for c in counts) / len(counts)
             std_dev = variance ** 0.5
             fairness = max(0, 1 - (std_dev / avg))
@@ -352,17 +368,16 @@ class DispatchMetricsCollector:
             fairness = 1.0
 
         return {
-            'drivers_used': len(driver_counts),
-            'avg_bookings_per_driver': avg,
-            'max_bookings_per_driver': max_count,
-            'min_bookings_per_driver': min_count,
-            'fairness_coefficient': fairness
+            "drivers_used": len(driver_counts),
+            "avg_bookings_per_driver": avg,
+            "max_bookings_per_driver": max_count,
+            "min_bookings_per_driver": min_count,
+            "fairness_coefficient": fairness
         }
 
-    def _calculate_distance_metrics(self, assignments: List[Assignment], all_bookings: List[Booking]) -> Dict[str, Any]:
-        """Calcule les métriques de distance"""
-        from typing import Any as TAny
-        from typing import cast as tcast
+    def _calculate_distance_metrics(
+            self, assignments: List[Assignment], all_bookings: List[Booking]) -> Dict[str, Any]:
+        """Calcule les métriques de distance."""
         total_distance = 0
         emergency_drivers = set()
         emergency_bookings_count = 0
@@ -371,37 +386,36 @@ class DispatchMetricsCollector:
         bookings_map = {b.id: b for b in all_bookings}
 
         for assignment in assignments:
-            booking = bookings_map.get(assignment.booking_id)
+            booking = bookings_map.get(assignment.booking_id)  # type: ignore
             if booking:
                 # Distance en km
-                distance_m = getattr(booking, 'distance_meters', 0) or 0
+                distance_m = getattr(booking, "distance_meters", 0) or 0
                 total_distance += distance_m / 1000
 
                 # Chauffeurs d'urgence
-                driver_id_raw = assignment.driver_id
-                driver_id = int(tcast(TAny, driver_id_raw)) if driver_id_raw is not None else None
-                if driver_id:
-                    driver = db.session.get(Driver, driver_id)
-                    if driver and getattr(driver, 'is_emergency', False):
-                        emergency_drivers.add(driver_id)
-                        emergency_bookings_count += 1
+                driver_id = assignment.driver_id
+                driver = db.session.get(Driver, driver_id)
+                if driver and getattr(driver, "is_emergency", False):
+                    emergency_drivers.add(driver_id)
+                    emergency_bookings_count += 1
 
         avg_distance = total_distance / max(1, len(assignments))
 
         return {
-            'total_distance_km': total_distance,
-            'avg_distance_per_booking': avg_distance,
-            'emergency_drivers_used': len(emergency_drivers),
-            'emergency_bookings': emergency_bookings_count
+            "total_distance_km": total_distance,
+            "avg_distance_per_booking": avg_distance,
+            "emergency_drivers_used": len(emergency_drivers),
+            "emergency_bookings": emergency_bookings_count
         }
 
-    def _extract_algorithm_stats(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Extrait les stats algorithmiques du metadata"""
+    def _extract_algorithm_stats(
+            self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Extrait les stats algorithmiques du metadata."""
         return {
-            'solver_used': metadata.get('used_solver', False),
-            'heuristic_used': metadata.get('used_heuristic', True),
-            'fallback_used': metadata.get('used_fallback', False),
-            'execution_time_sec': metadata.get('execution_time', 0)
+            "solver_used": metadata.get("used_solver", False),
+            "heuristic_used": metadata.get("used_heuristic", True),
+            "fallback_used": metadata.get("used_fallback", False),
+            "execution_time_sec": metadata.get("execution_time", 0)
         }
 
     def _calculate_quality_score(
@@ -412,8 +426,7 @@ class DispatchMetricsCollector:
         fairness: float,
         avg_delay: float
     ) -> float:
-        """
-        Calcule un score global de qualité (0-100).
+        """Calcule un score global de qualité (0-100).
 
         Pondération :
         - 30% : Taux d'assignation
@@ -444,9 +457,9 @@ class DispatchMetricsCollector:
         return round(min(100, max(0, score)), 2)
 
 
-def collect_dispatch_metrics(dispatch_run_id: int, company_id: int, day: date) -> DispatchQualityMetrics:
-    """
-    Fonction helper pour collecter les métriques d'un dispatch.
+def collect_dispatch_metrics(
+        dispatch_run_id: int, company_id: int, day: date) -> DispatchQualityMetrics:
+    """Fonction helper pour collecter les métriques d'un dispatch.
     Utilisée par engine.py après chaque dispatch.
 
     Args:
@@ -456,7 +469,8 @@ def collect_dispatch_metrics(dispatch_run_id: int, company_id: int, day: date) -
 
     Returns:
         DispatchQualityMetrics calculées
+
     """
     collector = DispatchMetricsCollector(company_id)
+    _ = day  # Supprimer l'avertissement du paramètre non utilisé
     return collector.collect_for_run(dispatch_run_id)
-

@@ -1,4 +1,3 @@
-# ruff: noqa: DTZ001, DTZ003, DTZ005, DTZ011
 # pyright: reportAttributeAccessIssue=false
 """
 Tests pour le système de safety limits et rate limiting.
@@ -49,24 +48,23 @@ def company_fully_auto(db):
         }
     }
 
-    company = CompanyFactory.create(
+    return CompanyFactory.create(
         dispatch_mode=DispatchMode.FULLY_AUTO,
         autonomous_config=json.dumps(config)  # Convertir en JSON string
     )
-    return company
 
 
 class TestAutonomousActionModel:
     """Tests du modèle AutonomousAction."""
 
-    def test_create_autonomous_action(self, db, company_fully_auto):
+    def test_create_autonomous_action(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test création d'une action autonome."""
         action = AutonomousAction(
             company_id=company_fully_auto.id,
             action_type="reassign",
             action_description="Test reassignment",
             success=True,
-            execution_time_ms=123.45
+            execution_time_ms=0.12345
         )
         db.session.add(action)
         db.session.commit()
@@ -77,7 +75,7 @@ class TestAutonomousActionModel:
         assert action.success is True
         assert action.reviewed_by_admin is False
 
-    def test_count_actions_last_hour(self, db, company_fully_auto):
+    def test_count_actions_last_hour(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test comptage des actions dans la dernière heure."""
         now = datetime.utcnow()
 
@@ -107,7 +105,7 @@ class TestAutonomousActionModel:
         count = AutonomousAction.count_actions_last_hour(company_fully_auto.id)
         assert count == 3
 
-    def test_count_actions_today(self, db, company_fully_auto):
+    def test_count_actions_today(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test comptage des actions aujourd'hui."""
         today = datetime.utcnow()
         yesterday = today - timedelta(days=1)
@@ -139,7 +137,7 @@ class TestAutonomousActionModel:
         count = AutonomousAction.count_actions_today(company_fully_auto.id)
         assert count == 5
 
-    def test_count_actions_by_type(self, db, company_fully_auto):
+    def test_count_actions_by_type(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test comptage des actions par type."""
         # Créer actions de différents types
         for action_type in ["reassign", "reassign", "notify_customer"]:
@@ -163,14 +161,14 @@ class TestAutonomousActionModel:
         assert reassign_count == 2
         assert notify_count == 1
 
-    def test_to_dict(self, db, company_fully_auto):
+    def test_to_dict(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test sérialisation en dictionnaire."""
         action = AutonomousAction(
             company_id=company_fully_auto.id,
             action_type="reassign",
             action_description="Test action",
             success=True,
-            execution_time_ms=100.5,
+            execution_time_ms=0.1005,
             confidence_score=0.95
         )
         db.add(action)
@@ -187,7 +185,7 @@ class TestAutonomousActionModel:
 class TestSafetyLimits:
     """Tests du système de safety limits."""
 
-    def test_check_safety_limits_ok(self, db, company_fully_auto):
+    def test_check_safety_limits_ok(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test check_safety_limits quand tout est OK."""
         manager = AutonomousDispatchManager(company_fully_auto.id)
 
@@ -196,7 +194,7 @@ class TestSafetyLimits:
         assert can_proceed is True
         assert reason == "OK"
 
-    def test_hourly_limit_reached(self, db, company_fully_auto):
+    def test_hourly_limit_reached(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test limite horaire atteinte."""
         # Créer 5 actions (limite configurée)
         for i in range(5):
@@ -216,7 +214,7 @@ class TestSafetyLimits:
         assert "Limite horaire globale atteinte" in reason
         assert "5/5 actions/h" in reason
 
-    def test_daily_limit_reached(self, db, company_fully_auto):
+    def test_daily_limit_reached(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test limite journalière atteinte."""
         # Créer 20 actions (limite configurée)
         for i in range(20):
@@ -237,7 +235,7 @@ class TestSafetyLimits:
         assert "Limite journalière globale atteinte" in reason
         assert "20/20 actions/jour" in reason
 
-    def test_action_type_hourly_limit(self, db, company_fully_auto):
+    def test_action_type_hourly_limit(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test limite horaire par type d'action."""
         # Créer 2 actions "reassign" (limite configurée pour ce type)
         for i in range(2):
@@ -257,7 +255,7 @@ class TestSafetyLimits:
         assert "Limite horaire pour 'reassign' atteinte" in reason
         assert "2/2 actions/h" in reason
 
-    def test_action_type_daily_limit(self, db, company_fully_auto):
+    def test_action_type_daily_limit(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test limite journalière par type d'action."""
         # Créer 10 actions "reassign" sur la journée
         for i in range(10):
@@ -278,7 +276,7 @@ class TestSafetyLimits:
         assert "Limite journalière pour 'reassign' atteinte" in reason
         assert "10/10 actions/jour" in reason
 
-    def test_failed_actions_not_counted(self, db, company_fully_auto):
+    def test_failed_actions_not_counted(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test que les actions échouées ne comptent pas dans les limites."""
         # Créer 5 actions échouées
         for i in range(5):
@@ -299,7 +297,7 @@ class TestSafetyLimits:
         assert can_proceed is True
         assert reason == "OK"
 
-    def test_different_companies_isolated(self, db, company_fully_auto):
+    def test_different_companies_isolated(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test que les limites sont isolées par entreprise."""
         # Créer une autre entreprise
         other_company = CompanyFactory.create(dispatch_mode=DispatchMode.FULLY_AUTO)
@@ -326,7 +324,7 @@ class TestSafetyLimits:
 class TestSafetyLimitsIntegration:
     """Tests d'intégration pour le rate limiting."""
 
-    def test_multiple_action_types_independent_limits(self, db, company_fully_auto):
+    def test_multiple_action_types_independent_limits(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test que différents types d'actions ont des limites indépendantes."""
         # Atteindre la limite pour "reassign"
         for i in range(2):
@@ -350,7 +348,7 @@ class TestSafetyLimitsIntegration:
         assert can_proceed_notify is True
         assert reason == "OK"
 
-    def test_hourly_limit_resets_after_hour(self, db, company_fully_auto):
+    def test_hourly_limit_resets_after_hour(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test que la limite horaire se réinitialise après une heure."""
         two_hours_ago = datetime.utcnow() - timedelta(hours=2)
 
@@ -373,7 +371,7 @@ class TestSafetyLimitsIntegration:
         assert can_proceed is True
         assert reason == "OK"
 
-    def test_action_logging_updates_limits(self, db, company_fully_auto):
+    def test_action_logging_updates_limits(self, ____________________________________________________________________________________________________db, company_fully_auto):
         """Test que le logging des actions met à jour les limites en temps réel."""
         manager = AutonomousDispatchManager(company_fully_auto.id)
 
@@ -414,8 +412,8 @@ class TestSafetyLimitsIntegration:
 class TestActionLogging:
     """Tests du logging automatique des actions."""
 
-    @patch('services.unified_dispatch.autonomous_manager.apply_suggestion')
-    def test_successful_action_logged(self, mock_apply, db, company_fully_auto):
+    @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
+    def test_successful_action_logged(self, ____________________________________________________________________________________________________mock_apply, db, company_fully_auto):
         """Test qu'une action réussie est loggée."""
         from services.unified_dispatch.reactive_suggestions import Suggestion
 
@@ -426,8 +424,8 @@ class TestActionLogging:
         suggestion = Suggestion(
             action="reassign",
             message="Test reassignment",
-            booking_id=123,
-            driver_id=456,
+            booking_id=0.123,
+            driver_id=0.456,
             auto_applicable=True
         )
 
@@ -452,10 +450,9 @@ class TestActionLogging:
         assert actions[0].success is True
         assert actions[0].execution_time_ms is not None
 
-    @patch('services.unified_dispatch.autonomous_manager.apply_suggestion')
-    def test_failed_action_logged(self, mock_apply, db, company_fully_auto):
+    @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
+    def test_failed_action_logged(self, ____________________________________________________________________________________________________mock_apply, db, company_fully_auto):
         """Test qu'une action échouée est loggée."""
-        from services.unified_dispatch.reactive_suggestions import Suggestion
 
         # Mock apply_suggestion pour retourner échec
         mock_apply.return_value = {
@@ -466,8 +463,8 @@ class TestActionLogging:
         suggestion = Suggestion(
             action="reassign",
             message="Test failed reassignment",
-            booking_id=123,
-            driver_id=456,
+            booking_id=0.123,
+            driver_id=0.456,
             auto_applicable=True
         )
 
@@ -490,10 +487,9 @@ class TestActionLogging:
         assert len(actions) == 1
         assert actions[0].error_message == "Test error message"
 
-    @patch('services.unified_dispatch.autonomous_manager.apply_suggestion')
-    def test_action_blocked_by_limits_not_logged(self, mock_apply, db, company_fully_auto):
+    @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
+    def test_action_blocked_by_limits_not_logged(self, ____________________________________________________________________________________________________mock_apply, db, company_fully_auto):
         """Test qu'une action bloquée par les limites n'est pas loggée."""
-        from services.unified_dispatch.reactive_suggestions import Suggestion
 
         # Atteindre la limite
         for i in range(2):
@@ -512,8 +508,8 @@ class TestActionLogging:
         suggestion = Suggestion(
             action="reassign",
             message="Should be blocked",
-            booking_id=123,
-            driver_id=456,
+            booking_id=0.123,
+            driver_id=0.456,
             auto_applicable=True
         )
 

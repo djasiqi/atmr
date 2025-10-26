@@ -13,16 +13,16 @@ import pytest
 from flask import Flask
 
 # Forcer environnement de test avant d'importer l'app
-os.environ['FLASK_ENV'] = 'testing'
-os.environ['PDF_BASE_URL'] = 'http://localhost:5000'  # Valeur factice pour tests
-os.environ.setdefault('TEST_DATABASE_URL', 'postgresql://atmr:atmr@localhost:5432/atmr_test')
+os.environ["FLASK_ENV"] = "testing"
+os.environ["PDF_BASE_URL"] = "http://localhost:5000"  # Valeur factice pour tests
+os.environ.setdefault("TEST_DATABASE_URL", "postgresql://atmr:atmr@localhost:5432/atmr_test")
 
 from app import create_app
 from ext import db as _db
 from models import Company, User, UserRole
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def app() -> Flask:
     """Crée une instance Flask en mode test."""
 
@@ -32,22 +32,22 @@ def app() -> Flask:
     # Évite les problèmes d'enums, contraintes nommées, et JSONB
     # Les tests utilisent des savepoints (transactions nested) donc pas de risque pour les données
     database_url = os.getenv(
-        'DATABASE_URL',
-        'postgresql+psycopg://atmr:atmr@postgres:5432/atmr'
+        "DATABASE_URL",
+        "postgresql+psycopg://atmr:atmr@postgres:5432/atmr"
     )
 
     app.config.update({
-        'TESTING': True,
-        'SQLALCHEMY_DATABASE_URI': database_url,
-        'WTF_CSRF_ENABLED': False,
-        'JWT_SECRET_KEY': 'test-secret-key',
-        'SECRET_KEY': 'test-secret-key',
-        'SQLALCHEMY_ECHO': False,  # Pas de logs SQL verbeux en tests
+        "TESTING": True,
+        "SQLALCHEMY_DATABASE_URI": database_url,
+        "WTF_CSRF_ENABLED": False,
+        "JWT_SECRET_KEY": "test-secret-key",
+        "SECRET_KEY": "test-secret-key",
+        "SQLALCHEMY_ECHO": False,  # Pas de logs SQL verbeux en tests
     })
     return app
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture
 def db(app):
     """Crée une DB propre pour chaque test en utilisant des savepoints."""
     with app.app_context():
@@ -85,7 +85,7 @@ def sample_company(db, sample_user):
     return company
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture
 def sample_user(db):
     """Crée un utilisateur de test (rôle company)."""
     import uuid
@@ -96,19 +96,19 @@ def sample_user(db):
     unique_suffix = str(uuid.uuid4())[:8]
 
     # ✅ FIX: Vérifier si l'utilisateur existe déjà, sinon créer
-    existing = User.query.filter_by(username='testuser').first()
+    existing = User.query.filter_by(username="testuser").first()
     if existing:
         return existing
 
     user = User(
-        username='testuser',  # Utiliser un username fixe mais vérifier d'abord
-        email=f'test-{unique_suffix}@example.com',
+        username="testuser",  # Utiliser un username fixe mais vérifier d'abord
+        email=f"test-{unique_suffix}@example.com",
         role=UserRole.company
     )
     # ✅ FIX: Générer le hash correctement avec bcrypt
-    password_hash = bcrypt.generate_password_hash('password123')
+    password_hash = bcrypt.generate_password_hash("password123")
     if isinstance(password_hash, bytes):
-        user.password = password_hash.decode('utf-8')
+        user.password = password_hash.decode("utf-8")
     else:
         user.password = password_hash
 
@@ -121,16 +121,16 @@ def sample_user(db):
 @pytest.fixture
 def auth_headers(client, sample_user):
     """Génère un token JWT valide pour l'utilisateur test."""
-    response = client.post('/api/auth/login', json={
-        'email': 'test@example.com',
-        'password': 'password123'
+    response = client.post("/api/auth/login", json={
+        "email": "test@example.com",
+        "password": "password123"
     })
     data = response.get_json()
-    if not data or 'token' not in data:
+    if not data or "token" not in data:
         pytest.fail(f"Login failed: {response.get_json()}")
 
-    token = data['token']
-    return {'Authorization': f'Bearer {token}'}
+    token = data["token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 # ========== FIXTURES AVANCÉES AVEC FACTORIES ==========
@@ -237,8 +237,8 @@ def mock_osrm_client(monkeypatch):
     def mock_get_matrix(origins, destinations, **kwargs):
         n, m = len(origins), len(destinations)
         return {
-            'durations': [[1800.0] * m for _ in range(n)],
-            'distances': [[15000.0] * m for _ in range(n)]
+            "durations": [[1800.0] * m for _ in range(n)],
+            "distances": [[15000.0] * m for _ in range(n)]
         }
 
     def mock_eta_seconds(origin, dest, **kwargs):
@@ -246,16 +246,16 @@ def mock_osrm_client(monkeypatch):
 
     def mock_route_info(origin, dest, **kwargs):
         return {
-            'duration_s': 1800.0,
-            'distance_m': 15000.0,
-            'geometry': 'mock_geometry'
+            "duration_s": 1800.0,
+            "distance_m": 15000.0,
+            "geometry": "mock_geometry"
         }
 
     from services import osrm_client
-    monkeypatch.setattr(osrm_client, 'get_distance_time', mock_get_distance_time)
-    monkeypatch.setattr(osrm_client, 'get_matrix', mock_get_matrix)
-    monkeypatch.setattr(osrm_client, 'eta_seconds', mock_eta_seconds)
-    monkeypatch.setattr(osrm_client, 'route_info', mock_route_info)
+    monkeypatch.setattr(osrm_client, "get_distance_time", mock_get_distance_time)
+    monkeypatch.setattr(osrm_client, "get_matrix", mock_get_matrix)
+    monkeypatch.setattr(osrm_client, "eta_seconds", mock_eta_seconds)
+    monkeypatch.setattr(osrm_client, "route_info", mock_route_info)
     return True
 
 
@@ -266,18 +266,18 @@ def mock_ml_predictor(monkeypatch):
         def __init__(self, *args, **kwargs):
             self.is_trained = True
 
-        def predict_delay(self, booking, driver, current_time=None):
+        def predict_delay(self, ____________________________________________________________________________________________________booking, driver, current_time=None):
             from services.unified_dispatch.ml_predictor import DelayPrediction
             return DelayPrediction(
                 booking_id=booking.id,
                 predicted_delay_minutes=5.0,
                 confidence=0.85,
-                risk_level='medium',
-                contributing_factors={'distance_x_weather': 0.42}
+                risk_level="medium",
+                contributing_factors={"distance_x_weather": 0.42}
             )
 
     from services.unified_dispatch import ml_predictor
-    monkeypatch.setattr(ml_predictor, 'DelayMLPredictor', MockMLPredictor)
+    monkeypatch.setattr(ml_predictor, "DelayMLPredictor", MockMLPredictor)
     return MockMLPredictor()
 
 
@@ -288,9 +288,9 @@ def mock_weather_service(monkeypatch):
         @staticmethod
         def get_weather(lat, lon):
             return {
-                'temperature': 20.0,
-                'weather_factor': 0.5,
-                'is_default': False
+                "temperature": 20.0,
+                "weather_factor": 0.5,
+                "is_default": False
             }
 
         @staticmethod
@@ -298,7 +298,7 @@ def mock_weather_service(monkeypatch):
             return 0.5
 
     from services import weather_service
-    monkeypatch.setattr(weather_service, 'WeatherService', MockWeatherService)
+    monkeypatch.setattr(weather_service, "WeatherService", MockWeatherService)
     return MockWeatherService
 
 

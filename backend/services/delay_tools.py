@@ -1,6 +1,5 @@
 # backend/services/delay_tools.py
-"""
-Delay tools for PMR transport (standalone).
+"""Delay tools for PMR transport (standalone).
 
 Features:
 - delay_minutes: ETA - scheduled (in minutes, float, negative if early)
@@ -23,8 +22,7 @@ from typing import Dict, Tuple
 # -----------------------------
 
 def delay_minutes(current_eta: datetime, scheduled_time: datetime) -> float:
-    """
-    Returns ETA - scheduled in minutes (negative if early).
+    """Returns ETA - scheduled in minutes (negative if early).
     Works with naive or tz-aware datetimes as long as they are comparable.
     """
     delta = current_eta - scheduled_time
@@ -36,16 +34,13 @@ def is_delayed(
     scheduled_time: datetime,
     buffer_minutes: int = 5,
 ) -> bool:
-    """
-    True if ETA is strictly after scheduled + buffer.
-    """
+    """True if ETA is strictly after scheduled + buffer."""
     return current_eta > (scheduled_time + timedelta(minutes=buffer_minutes))
 
 
 @dataclass(frozen=True)
 class SeverityThresholds:
-    """
-    Inclusive upper-bounds in minutes for each severity band.
+    """Inclusive upper-bounds in minutes for each severity band.
 
     Example (defaults):
         low      : 0..5
@@ -53,15 +48,17 @@ class SeverityThresholds:
         high     : 10..20
         critical : >20
     """
+
     low_max: float = 5.0
     med_max: float = 10.0
     high_max: float = 20.0
 
-def severity_label(delay_min: float, thresholds: SeverityThresholds = SeverityThresholds()) -> str:
-    """
-    Map a delay in minutes to a severity bucket.
+def severity_label(delay_min: float, thresholds: SeverityThresholds | None = None) -> str:
+    """Map a delay in minutes to a severity bucket.
     Negative (early) returns 'low' by convention.
     """
+    if thresholds is None:
+        thresholds = SeverityThresholds()
     if delay_min <= thresholds.low_max:
         return "low"
     if delay_min <= thresholds.med_max:
@@ -77,18 +74,17 @@ def severity_label(delay_min: float, thresholds: SeverityThresholds = SeverityTh
 
 @dataclass
 class AntiFlapConfig:
-    """
-    Require 'confirm_hits' consecutive TRUE detections inside 'window_sec'
+    """Require 'confirm_hits' consecutive TRUE detections inside 'window_sec'
     to confirm a delay. Resets when a FALSE is observed or when the window is exceeded.
     """
+
     confirm_hits: int = 3          # how many consecutive hits required
     window_sec: int = 90           # time budget for those hits
     max_idle_sec: int = 600        # auto-gc entries idle longer than this
 
 
 class AntiFlapDelayChecker:
-    """
-    Thread-safe anti-flap confirmation per (assignment_id, phase) key.
+    """Thread-safe anti-flap confirmation per (assignment_id, phase) key.
 
     Typical usage:
         checker = AntiFlapDelayChecker()
@@ -99,6 +95,7 @@ class AntiFlapDelayChecker:
     """
 
     def __init__(self, config: AntiFlapConfig | None = None) -> None:
+        super().__init__()
         self.config = config or AntiFlapConfig()
         # store: key -> (count, first_ts, last_ts, last_state)
         self._store: Dict[Tuple[str, str], Tuple[int, float, float, bool]] = {}
@@ -109,8 +106,7 @@ class AntiFlapDelayChecker:
         return datetime.now().timestamp()
 
     def observe(self, assignment_id: str, phase: str, is_hit: bool) -> bool:
-        """
-        Observe one detection for a given (assignment_id, phase).
+        """Observe one detection for a given (assignment_id, phase).
 
         Returns True only when the number of *consecutive* TRUE observations
         reaches 'confirm_hits' within 'window_sec'. Otherwise returns False.
@@ -136,28 +132,21 @@ class AntiFlapDelayChecker:
                 count = 0
                 first_ts = now
 
-            if is_hit:
-                # If previous state was false, start a fresh positive streak
-                count = count + 1 if last_state else 1
-            else:
-                # a single FALSE breaks the streak
-                count = 0
+            # If previous state was false, start a fresh positive streak
+            # a single FALSE breaks the streak
+            count = (count + 1 if last_state else 1) if is_hit else 0
 
             self._store[key] = (count, first_ts, now, is_hit)
             return is_hit and (count >= self.config.confirm_hits)
 
     def reset(self, assignment_id: str, phase: str) -> None:
-        """
-        Manually clear the streak for a given (assignment_id, phase).
-        """
+        """Manually clear the streak for a given (assignment_id, phase)."""
         key = (str(assignment_id), str(phase))
         with self._lock:
             self._store.pop(key, None)
 
     def _gc(self, now: float) -> None:
-        """
-        Garbage collect idle entries.
-        """
+        """Garbage collect idle entries."""
         idle = self.config.max_idle_sec
         if idle <= 0:
             return
@@ -174,8 +163,7 @@ class AntiFlapDelayChecker:
 # -----------------------------
 
 class DelayDecider:
-    """
-    Small facade to combine the helpers:
+    """Small facade to combine the helpers:
 
     - compute delay_min
     - check delayed with buffer
@@ -189,12 +177,13 @@ class DelayDecider:
         self,
         pickup_buffer_min: int = 5,
         dropoff_buffer_min: int = 5,
-        thresholds: SeverityThresholds = SeverityThresholds(),
+        thresholds: SeverityThresholds | None = None,
         anti_flap: AntiFlapDelayChecker | None = None,
     ) -> None:
+        super().__init__()
         self.pickup_buffer_min = pickup_buffer_min
         self.dropoff_buffer_min = dropoff_buffer_min
-        self.thresholds = thresholds
+        self.thresholds = thresholds or SeverityThresholds()
         self.anti_flap = anti_flap or AntiFlapDelayChecker()
 
     def evaluate(
@@ -205,14 +194,13 @@ class DelayDecider:
         eta: datetime,
         scheduled: datetime,
     ) -> Dict[str, object]:
-        """
-        Returns a dict like:
+        """Returns a dict like:
         {
           "delayed": True/False,          # raw (with buffer)
           "confirmed": True/False,        # after anti-flap
           "delay_min": 7.3,
           "severity": "medium"
-        }
+        }.
         """
         buffer_min = self.pickup_buffer_min if phase == "pickup" else self.dropoff_buffer_min
         dmin = delay_minutes(eta, scheduled)

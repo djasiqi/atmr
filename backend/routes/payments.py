@@ -12,31 +12,36 @@ from app import sentry_sdk
 from ext import role_required
 from models import Booking, Client, Payment, PaymentStatus, User, UserRole, db
 
-app_logger = logging.getLogger('app')
+app_logger = logging.getLogger("app")
 
-payments_ns = Namespace('payments', description="Opérations liées aux paiements")
+payments_ns = Namespace(
+    "payments",
+     description="Opérations liées aux paiements")
 
 # Modèle Swagger pour la mise à jour du statut d'un paiement (admin uniquement)
-payment_status_model = payments_ns.model('PaymentStatus', {
-    'status': fields.String(required=True, description="Nouveau statut (pending, completed, failed)")
+payment_status_model = payments_ns.model("PaymentStatus", {
+    "status": fields.String(required=True, description="Nouveau statut (pending, completed, failed)")
 })
 
 # Modèle Swagger pour la création d'un paiement
-payment_create_model = payments_ns.model('PaymentCreate', {
-    'amount': fields.Float(required=True, description="Montant du paiement"),
-    'method': fields.String(required=True, description="Méthode de paiement (ex: credit_card, paypal, etc.)")
+payment_create_model = payments_ns.model("PaymentCreate", {
+    "amount": fields.Float(required=True, description="Montant du paiement"),
+    "method": fields.String(required=True, description="Méthode de paiement (ex: credit_card, paypal, etc.)")
 })
 
 # ====================================================
 # Récupération des paiements du client
 # ====================================================
-@payments_ns.route('/me')
+
+
+@payments_ns.route("/me")
 class ClientPayments(Resource):
     @jwt_required()
     def get(self):
         try:
             current_user_id = get_jwt_identity()
-            client = Client.query.filter_by(user_id=current_user_id).one_or_none()
+            client = Client.query.filter_by(
+    user_id=current_user_id).one_or_none()
             if not client:
                 return {"error": "Unauthorized: Client not found"}, 403
 
@@ -48,14 +53,16 @@ class ClientPayments(Resource):
             return result, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR get_my_payments: {type(e).__name__} - {str(e)}", exc_info=True)
+
+
+            app_logger.error("❌ ERREUR get_my_payments: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
 
 # ====================================================
 # Gestion d'un paiement spécifique (GET et PUT)
 # ====================================================
-@payments_ns.route('/<int:payment_id>')
+@payments_ns.route("/<int:payment_id>")
 class PaymentResource(Resource):
     @jwt_required()
     def get(self, payment_id: int):
@@ -71,9 +78,15 @@ class PaymentResource(Resource):
                 return {"error": "User not found"}, 401
 
             # Trouver le client lié à l'utilisateur (si existant)
-            client = Client.query.filter_by(user_id=current_user.id).one_or_none()
+            client = Client.query.filter_by(
+    user_id=current_user.id).one_or_none()
 
-            is_admin = getattr(current_user, "role", None) in (UserRole.admin, "admin")
+            is_admin = getattr(
+    current_user,
+    "role",
+    None) in (
+        UserRole.admin,
+         "admin")
             owns_payment = client is not None and payment.client_id == client.id
 
             if not (is_admin or owns_payment):
@@ -90,7 +103,9 @@ class PaymentResource(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR get_payment_details: {type(e).__name__} - {str(e)}", exc_info=True)
+
+
+            app_logger.error("❌ ERREUR get_payment_details: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
     @jwt_required()
@@ -103,7 +118,7 @@ class PaymentResource(Resource):
                 return {"error": "Payment not found"}, 404
 
             data = request.get_json(silent=True) or {}
-            new_status_raw = str(data.get('status', '')).strip().lower()
+            new_status_raw = str(data.get("status", "")).strip().lower()
 
             status_map = {
                 "pending": PaymentStatus.PENDING,
@@ -118,14 +133,14 @@ class PaymentResource(Resource):
             return {"message": f"Payment status updated to {new_status_raw}"}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR update_payment_status: {type(e).__name__} - {str(e)}", exc_info=True)
+            app_logger.error("❌ ERREUR update_payment_status: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
 
 # ====================================================
 # Création d'un paiement pour une réservation
 # ====================================================
-@payments_ns.route('/booking/<int:booking_id>')
+@payments_ns.route("/booking/<int:booking_id>")
 class CreatePayment(Resource):
     @jwt_required()
     @payments_ns.expect(payment_create_model)
@@ -142,8 +157,8 @@ class CreatePayment(Resource):
 
             data = request.get_json(silent=True) or {}
             try:
-                amount = float(data['amount'])
-                method = str(data['method'])
+                amount = float(data["amount"])
+                method = str(data["method"])
             except (KeyError, ValueError, TypeError):
                 return {"error": "Invalid payload (amount, method required)."}, 400
 
@@ -156,12 +171,12 @@ class CreatePayment(Resource):
                 "booking_id": booking_id,
             }
             # Cast pour taire Pylance sur les kwargs du modèle SQLAlchemy
-            payment = cast(Any, Payment)(**payload)
+            payment = cast("Any", Payment)(**payload)
 
             db.session.add(payment)
             db.session.commit()
             return {"message": "Payment created successfully", "payment_id": payment.id}, 201
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR create_payment: {type(e).__name__} - {str(e)}", exc_info=True)
+            app_logger.error("❌ ERREUR create_payment: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500

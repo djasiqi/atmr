@@ -1,5 +1,4 @@
-"""
-Schémas de sérialisation pour les modèles de dispatch.
+"""Schémas de sérialisation pour les modèles de dispatch.
 
 Utilise Marshmallow pour une sérialisation cohérente et typée.
 Remplace les méthodes .serialize() et .to_dict() dispersées dans les modèles.
@@ -29,7 +28,7 @@ class DriverSchema(Schema):
     current_lat = fields.Float(allow_none=True)
     current_lon = fields.Float(allow_none=True)
 
-    class Meta:
+    class Meta:  # type: ignore
         ordered = True
 
 
@@ -39,9 +38,9 @@ class BookingSchema(Schema):
     id = fields.Int(dump_only=True)
 
     # Timestamps
-    scheduled_time = fields.DateTime(format='iso', allow_none=True)
-    created_at = fields.DateTime(format='iso', dump_only=True)
-    completed_at = fields.DateTime(format='iso', allow_none=True)
+    scheduled_time = fields.DateTime(format="iso", allow_none=True)
+    created_at = fields.DateTime(format="iso", dump_only=True)
+    completed_at = fields.DateTime(format="iso", allow_none=True)
 
     # Adresses
     pickup_address = fields.Str(allow_none=True)
@@ -77,7 +76,7 @@ class BookingSchema(Schema):
     distance_km = fields.Float(allow_none=True)
     duration_minutes = fields.Float(allow_none=True)
 
-    class Meta:
+    class Meta:  # type: ignore
         ordered = True
 
 
@@ -92,10 +91,10 @@ class AssignmentSchema(Schema):
     dispatch_run_id = fields.Int(allow_none=True)
 
     # Timestamps
-    created_at = fields.DateTime(format='iso', dump_only=True)
-    updated_at = fields.DateTime(format='iso', allow_none=True)
-    actual_pickup_at = fields.DateTime(format='iso', allow_none=True)
-    actual_dropoff_at = fields.DateTime(format='iso', allow_none=True)
+    created_at = fields.DateTime(format="iso", dump_only=True)
+    updated_at = fields.DateTime(format="iso", allow_none=True)
+    actual_pickup_at = fields.DateTime(format="iso", allow_none=True)
+    actual_dropoff_at = fields.DateTime(format="iso", allow_none=True)
 
     # Status
     status = fields.Str()
@@ -110,7 +109,7 @@ class AssignmentSchema(Schema):
     booking = fields.Nested(BookingSchema, allow_none=True)
     driver = fields.Nested(DriverSchema, allow_none=True)
 
-    class Meta:
+    class Meta:  # type: ignore
         ordered = True
 
 
@@ -121,7 +120,7 @@ class DispatchRunSchema(Schema):
     company_id = fields.Int(required=True)
 
     # Timestamps
-    created_at = fields.DateTime(format='iso', dump_only=True)
+    created_at = fields.DateTime(format="iso", dump_only=True)
     for_date = fields.Date()
 
     # Configuration
@@ -139,9 +138,9 @@ class DispatchRunSchema(Schema):
     total_time_seconds = fields.Float(allow_none=True)
 
     # Assignments (si demandés)
-    assignments = fields.Nested(AssignmentSchema, many=True, exclude=('dispatch_run',), allow_none=True)
+    assignments = fields.Nested(AssignmentSchema, many=True, exclude=("dispatch_run",), allow_none=True)
 
-    class Meta:
+    class Meta:  # type: ignore
         ordered = True
 
 
@@ -166,7 +165,7 @@ class DispatchSuggestionSchema(Schema):
     gain_minutes = fields.Float(allow_none=True)
     confidence = fields.Float(allow_none=True)
 
-    class Meta:
+    class Meta:  # type: ignore
         ordered = True
 
 
@@ -186,7 +185,7 @@ class DispatchProblemSchema(Schema):
     total_bookings = fields.Int()
     total_drivers = fields.Int()
 
-    class Meta:
+    class Meta:  # type: ignore
         ordered = True
 
 
@@ -214,7 +213,7 @@ class DispatchResultSchema(Schema):
     # Suggestions (si mode semi_auto ou fully_auto)
     suggestions = fields.Nested(DispatchSuggestionSchema, many=True, allow_none=True)
 
-    class Meta:
+    class Meta:  # type: ignore
         ordered = True
 
 

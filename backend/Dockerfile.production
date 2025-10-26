@@ -1,0 +1,247 @@
+# backend/Dockerfile
+# Multi-stage Dockerfile optimisé pour la production ATMR
+# Sécurité, performance et robustesse maximisées
+
+########## Stage 1: Builder (compilation des wheels et dépendances) ##########
+FROM python:3.11-slim-bookworm AS builder
+
+# Variables d'environnement pour optimiser la compilation
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_WHEEL_DIR=/wheels \
+    PIP_FIND_LINKS=/wheels
+
+WORKDIR /app
+
+# Installation des outils de build uniquement
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    libpq-dev \
+    libffi-dev \
+    libssl-dev \
+    libxml2-dev \
+    libxslt1-dev \
+    zlib1g-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libfreetype6-dev \
+    liblcms2-dev \
+    libwebp-dev \
+    libtiff5-dev \
+    libopenblas-dev \
+    liblapack-dev \
+    gfortran \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copier et installer les dépendances Python
+COPY requirements.txt requirements-rl.txt requirements-dev.txt ./
+RUN python -m pip install --upgrade pip setuptools wheel && \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt && \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-rl.txt
+
+# Stage intermédiaire pour les tests de sécurité
+FROM builder AS security-scanner
+
+# Installation des outils de scan de sécurité
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Scan des vulnérabilités avec grype (si disponible)
+RUN if command -v grype >/dev/null 2>&1; then \
+    grype dir:/wheels --fail-on high,critical || true; \
+    fi
+
+########## Stage 2: Runtime optimisé (léger, sécurisé, performant) ##########
+FROM python:3.11-slim-bookworm AS runtime
+
+# Variables d'environnement pour la production
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app \
+    # Optimisations PyTorch pour CPU
+    OMP_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    NUMEXPR_NUM_THREADS=1 \
+    # Optimisations générales
+    PYTHONHASHSEED=random \
+    PYTHONIOENCODING=utf-8
+
+WORKDIR /app
+
+# Arguments de build pour la flexibilité
+ARG WITH_POSTGRES=true
+ARG WITH_GPU=false
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION
+
+# Labels pour la traçabilité
+LABEL maintainer="ATMR Team" \
+    org.opencontainers.image.title="ATMR Backend" \
+    org.opencontainers.image.description="Backend API pour système de dispatch médical" \
+    org.opencontainers.image.version="${VERSION:-latest}" \
+    org.opencontainers.image.created="${BUILD_DATE}" \
+    org.opencontainers.image.revision="${VCS_REF}" \
+    org.opencontainers.image.vendor="ATMR" \
+    org.opencontainers.image.licenses="Proprietary"
+
+# Installation des dépendances runtime avec optimisations sécurité
+RUN apt-get update && apt-get upgrade -y && \
+    # Paquets de base
+    apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libpq5 \
+    libgomp1 \
+    libgfortran5 \
+    libopenblas0 \
+    liblapack3 \
+    libjpeg62-turbo \
+    libpng16-16 \
+    libfreetype6 \
+    liblcms2-2 \
+    libwebp7 \
+    libtiff5 \
+    libxml2 \
+    libxslt1.1 \
+    libffi8 \
+    libssl3 \
+    libexpat1 \
+    libsqlite3-0 \
+    libgnutls30 \
+    tar \
+    gzip \
+    curl \
+    dumb-init \
+    && \
+    # Mise à jour sécuritaire des paquets critiques
+    apt-get install -y --no-install-recommends \
+    --only-upgrade \
+    openssl \
+    libssl3 \
+    ca-certificates \
+    libexpat1 \
+    libsqlite3-0 \
+    libgnutls30 \
+    tar \
+    gzip \
+    && \
+    # Nettoyage complet
+    apt-get autoremove -y && \
+    apt-get autoclean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Installation des wheels depuis le stage builder
+COPY --from=builder /wheels /wheels
+COPY --from=builder /app/requirements*.txt ./
+RUN python -m pip install --upgrade pip && \
+    pip install --no-index --find-links=/wheels -r requirements.txt && \
+    pip install --no-index --find-links=/wheels -r requirements-rl.txt && \
+    rm -rf /wheels /root/.cache/pip
+
+# Création d'un utilisateur non-root sécurisé
+RUN groupadd -r appgroup && \
+    useradd -r -g appgroup -u 10001 -d /app -s /bin/bash -c "ATMR App User" appuser && \
+    mkdir -p /app/logs /app/data /app/cache && \
+    chown -R appuser:appgroup /app
+
+# Copie du code source (après installation des dépendances pour optimiser le cache)
+COPY --chown=appuser:appgroup . /app
+
+# Configuration des permissions sécurisées
+RUN chmod -R 755 /app && \
+    chmod -R 700 /app/logs /app/data /app/cache && \
+    find /app -name "*.py" -exec chmod 644 {} \; && \
+    find /app -name "*.sh" -exec chmod 755 {} \;
+
+# Passage à l'utilisateur non-root
+USER appuser
+
+# Exposition du port
+EXPOSE 5000
+
+# Configuration des limites de ressources
+# (sera surchargé par docker-compose ou kubernetes)
+ENV MEMORY_LIMIT=2G \
+    CPU_LIMIT=2
+
+# Healthcheck avancé avec vérification des modèles ML
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "\
+    import sys, urllib.request, json; \
+    try: \
+    r = urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=5); \
+    if r.status == 200: \
+    data = json.loads(r.read().decode()); \
+    if data.get('status') == 'healthy' and data.get('models_loaded', False): \
+    sys.exit(0); \
+    else: \
+    sys.exit(1); \
+    else: \
+    sys.exit(1); \
+    except Exception: \
+    sys.exit(1)"
+
+# Script de démarrage avec warmup des modèles
+COPY --chown=appuser:appgroup docker-entrypoint.sh /app/
+RUN chmod +x /app/docker-entrypoint.sh
+
+# Utilisation de dumb-init pour une gestion propre des signaux
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["/app/docker-entrypoint.sh"]
+
+########## Stage 3: Development (pour les tests et développement) ##########
+FROM runtime AS development
+
+USER root
+
+# Installation des outils de développement
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    vim \
+    htop \
+    strace \
+    tcpdump \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Installation des dépendances de développement
+COPY --from=builder /wheels /wheels
+RUN pip install --no-index --find-links=/wheels -r requirements-dev.txt && \
+    rm -rf /wheels
+
+USER appuser
+
+# Override du CMD pour le développement
+CMD ["python", "app.py"]
+
+########## Stage 4: Testing (pour les tests automatisés) ##########
+FROM runtime AS testing
+
+USER root
+
+# Installation des outils de test
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-client \
+    redis-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# Installation des dépendances de test
+COPY --from=builder /wheels /wheels
+RUN pip install --no-index --find-links=/wheels -r requirements-dev.txt && \
+    rm -rf /wheels
+
+USER appuser
+
+# Configuration pour les tests
+ENV FLASK_ENV=testing \
+    TESTING=true
+
+CMD ["python", "-m", "pytest", "tests/", "-v", "--tb=short"]

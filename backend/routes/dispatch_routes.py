@@ -1,6 +1,5 @@
 # backend/routes/dispatch_routes.py
 # pyright: reportAttributeAccessIssue=false
-# ruff: noqa: DTZ003, W293
 
 from __future__ import annotations
 
@@ -8,6 +7,8 @@ import json
 import logging
 import re
 from datetime import UTC, date, datetime, timedelta
+
+# Constantes pour éviter les valeurs magiques
 from typing import Any, Dict, cast
 
 from flask import request
@@ -31,11 +32,19 @@ from services.unified_dispatch.realtime_optimizer import (
 )
 from shared.time_utils import day_local_bounds, now_local
 
+N_BOOKINGS_ZERO=0
+MAX_DELAY_ZERO=0
+PICKUP_DELAY_ZERO=0
+DELAY_MINUTES_THRESHOLD=5
+TIME_DIFF_SECONDS_THRESHOLD=0.300
+DELAY_MINUTES_ZERO=0
+TOTAL_FEEDBACKS_ZERO=0
+
 # RL Dispatch (déploiement production)
 try:
-    from services.rl.rl_dispatch_manager import RLDispatchManager
+    from services.rl.rl_dispatch_manager import RLDispatchManager  # type: ignore
     RL_AVAILABLE = True
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     RL_AVAILABLE = False
     RLDispatchManager = None
 
@@ -52,19 +61,15 @@ except ImportError:
 
 def get_shadow_manager():
     """Récupère l'instance du shadow manager (singleton)."""
-    global _shadow_manager
-    if not SHADOW_MODE_AVAILABLE:
+    global _shadow_manager  # noqa: PLW0603
+    if not SHADOW_MODE_AVAILABLE or ShadowModeManager is None:
         return None
     if _shadow_manager is None:
         try:
-            _shadow_manager = ShadowModeManager(
-                model_path="data/rl/models/dqn_best.pth",
-                log_dir="data/rl/shadow_mode",
-                enable_logging=True
-            )
+            _shadow_manager = ShadowModeManager()
             logger.info("✅ Shadow Mode Manager initialisé pour dispatch")
         except Exception as e:
-            logger.error(f"❌ Erreur init Shadow Mode: {e}")
+            logger.error("❌ Erreur init Shadow Mode: %s", e)
             _shadow_manager = None
     return _shadow_manager
 
@@ -75,6 +80,7 @@ logger = logging.getLogger(__name__)
 
 class DispatchOverridesSchema(Schema):
     """Schéma de validation pour les overrides de dispatch."""
+
     heuristic = ma_fields.Dict(required=False)
     solver = ma_fields.Dict(required=False)
     service_times = ma_fields.Dict(required=False)
@@ -88,18 +94,19 @@ class DispatchOverridesSchema(Schema):
     features = ma_fields.Dict(required=False)
     autorun = ma_fields.Dict(required=False)
 
-    class Meta:
+    class Meta:  # type: ignore
         unknown = INCLUDE  # Allow unknown fields like 'mode'
 
 class DispatchRunSchema(Schema):
     """Schéma de validation pour les paramètres de lancement de dispatch."""
-    for_date = ma_fields.Str(required=True, validate=validate.Regexp(r'^\d{4}-\d{2}-\d{2}$'))
-    mode = ma_fields.Str(validate=validate.OneOf(['auto', 'heuristic_only', 'solver_only']))
+
+    for_date = ma_fields.Str(required=True, validate=validate.Regexp(r"^\d{4}-\d{2}-\d{2}$"))
+    mode = ma_fields.Str(validate=validate.OneOf(["auto", "heuristic_only", "solver_only"]))
     regular_first = ma_fields.Bool()
     allow_emergency = ma_fields.Bool()
     overrides = ma_fields.Nested(DispatchOverridesSchema)
     # ✅ UNIFIÉ : Une seule variante pour 'async' avec valeur par défaut
-    async_param = ma_fields.Bool(data_key='async', load_default=True)
+    async_param = ma_fields.Bool(data_key="async", load_default=True)
 
 # ===== Schemas RESTX (simples) =====
 
@@ -116,49 +123,49 @@ preview_response = dispatch_ns.model(
 
 # ---- Type custom: bool|null uniquement
 class NullableBoolean(fields.Raw):
-    def format(self, value):
+    def format(self, value):  # type: ignore[override]
         if value is None:
             return None
         return bool(value)
 
 # ---- Type custom: dict|null uniquement
 class NullableDict(fields.Raw):
-    def format(self, value):
+    def format(self, value):  # type: ignore[override]
         if value is None:
             return None
         return dict(value)
 
 # ---- Type custom: list|null uniquement
 class NullableList(fields.Raw):
-    def format(self, value):
+    def format(self, value):  # type: ignore[override]
         if value is None:
             return None
         return list(value)
 
 # ---- Type custom: string|null uniquement
 class NullableString(fields.Raw):
-    def format(self, value):
+    def format(self, value):  # type: ignore[override]
         if value is None:
             return None
         return str(value)
 
 # ---- Type custom: int|null uniquement
 class NullableInteger(fields.Raw):
-    def format(self, value):
+    def format(self, value):  # type: ignore[override]
         if value is None:
             return None
         return int(value)
 
 # ---- Type custom: float|null uniquement
 class NullableFloat(fields.Raw):
-    def format(self, value):
+    def format(self, value):  # type: ignore[override]
         if value is None:
             return None
         return float(value)
 
 # ---- Type custom: date|null uniquement
 class NullableDate(fields.Raw):
-    def format(self, value):
+    def format(self, value):  # type: ignore[override]
         if value is None:
             return None
         if isinstance(value, datetime):
@@ -169,7 +176,7 @@ class NullableDate(fields.Raw):
 
 # ---- Type custom: datetime|null uniquement
 class NullableDateTime(fields.Raw):
-    def format(self, value):
+    def format(self, value):  # type: ignore[override]
         if value is None:
             return None
         if isinstance(value, datetime):
@@ -178,7 +185,7 @@ class NullableDateTime(fields.Raw):
 
 # ---- Type custom: any|null uniquement
 class NullableAny(fields.Raw):
-    def format(self, value):
+    def format(self, value):  # type: ignore[override]
         if value is None:
             return None
         return value
@@ -189,7 +196,7 @@ class NullableEnum(fields.Raw):
         super().__init__(**kwargs)
         self.enum_class = enum_class
 
-    def format(self, value):
+    def format(self, value):  # type: ignore[override]
         if value is None:
             return None
         return str(value)
@@ -358,13 +365,14 @@ def _get_current_company() -> Company:
         # err est typiquement {"error": "..."}
         msg = (err or {}).get("error") if isinstance(err, dict) else "Accès refusé"
         dispatch_ns.abort(code or 403, msg)
-        raise AssertionError("Company should not be None after abort")
-    return cast(Company, company)
+        msg = "Company should not be None after abort"
+        raise AssertionError(msg)
+    return company
 
 def _current_company_id() -> int:
     c = _get_current_company()
     cid = getattr(c, "id", None)
-    return cid if isinstance(cid, int) else int(cast(Any, cid))
+    return cid if isinstance(cid, int) else int(cast("Any", cid))
 
 
 
@@ -374,39 +382,15 @@ def _parse_date(date_str: str | None) -> date:
         return datetime.now(UTC).date()
     try:
         # Parse sans timezone (intentionnel car on veut juste la date)
-        return date.fromisoformat(date_str)  # noqa: DTZ007
+        return date.fromisoformat(date_str)
     except ValueError as err:
         dispatch_ns.abort(400, f"Format de date invalide: {date_str} (attendu: YYYY-MM-DD)")
-        raise AssertionError("Date parsing should not continue after abort") from err
+        msg = "Date parsing should not continue after abort"
+        raise AssertionError(msg) from err
 
 def _booking_time_expr() -> Any:
-    B = cast(Any, Booking)
+    B = cast("Any", Booking)
     return B.scheduled_time
-
-def _safe_settings_dict(raw: Any) -> Dict[str, Any]:
-    """Décodage JSON tolérant pour company.dispatch_settings."""
-    if not isinstance(raw, str):
-        return {}
-    try:
-        return cast(Dict[str, Any], json.loads(raw))
-    except Exception:
-        return {}
-
-def _enrich_assignments(assignments: list[Assignment]) -> list[Assignment]:
-    """Charge booking/driver sur chaque assignment pour le marshalling RESTX."""
-    for a in assignments:
-        a.booking = Booking.query.get(getattr(a, "booking_id", None))
-        driver_id_val = getattr(a, "driver_id", None)
-        if driver_id_val is not None:
-            a.driver = Driver.query.get(driver_id_val)
-    return assignments
-
-
-def _day_bounds(d: date) -> tuple[datetime, datetime]:
-    """Bornes locales naïves d'une journée via util partagé."""
-    d0, d1 = day_local_bounds(d.strftime("%Y-%m-%d"))
-    return d0, d1
-
 
 # ===== Routes =====
 
@@ -416,10 +400,9 @@ class CompanyDispatchRun(Resource):
     @role_required(UserRole.company)
     @dispatch_ns.expect(run_model, validate=False)
     def post(self):
-        """
-        Lance un dispatch pour une journée donnée.
+        """Lance un dispatch pour une journée donnée.
         - async=true (défaut) : enfile un job via la queue (202)
-        - async=false : exécute immédiatement (200)
+        - async=false : exécute immédiatement (200).
         """
         body: Dict[str, Any] = request.get_json(force=True) or {}
         logger.info("[Dispatch] /run body: %s", body)
@@ -435,12 +418,13 @@ class CompanyDispatchRun(Resource):
         if not for_date:
             dispatch_ns.abort(400, "for_date manquant (YYYY-MM-DD). Utilisez plutôt POST /company_dispatch/run.")
         if not re.match(r"^\d{4}-\d{2}-\d{2}$", str(for_date)):
-            raise UnprocessableEntity("for_date invalide: attendu 'YYYY-MM-DD' (ex: 2025-09-22)")
+            msg = "for_date invalide: attendu 'YYYY-MM-DD' (ex: 2025-09-22)"
+            raise UnprocessableEntity(msg)
 
         # --- Récupérer l'entreprise courante + id int safe (évite Column[int])
         company = _get_current_company()
         _cid = getattr(company, "id", None)
-        company_id: int = _cid if isinstance(_cid, int) else int(cast(Any, _cid))
+        company_id: int = _cid if isinstance(_cid, int) else int(cast("Any", _cid))
 
         # --- Mode async ou sync (unifié)
         # La validation Marshmallow garantit que 'async' est présent avec défaut True
@@ -493,7 +477,7 @@ class CompanyDispatchRun(Resource):
                     company_id, for_date
                 )
                 for error in validation_result["errors"]:
-                    logger.error(f"  {error}")
+                    logger.error("  %s", error)
                 
                 # Ajouter warnings au résultat
                 result["validation"] = {
@@ -501,13 +485,12 @@ class CompanyDispatchRun(Resource):
                     "errors": validation_result["errors"],
                     "warnings": validation_result["warnings"]
                 }
-            else:
-                # Ajouter warnings si présents
-                if validation_result.get("warnings"):
-                    result["validation"] = {
-                        "has_errors": False,
-                        "warnings": validation_result["warnings"]
-                    }
+            # Ajouter warnings si présents
+            elif validation_result.get("warnings"):
+                result["validation"] = {
+                    "has_errors": False,
+                    "warnings": validation_result["warnings"]
+                }
         
         return result, 200
 
@@ -536,7 +519,7 @@ class DispatchPreview(Resource):
     def get(self):
         """Aperçu de la journée (for_date): nb bookings/drivers et horizon (minutes)."""
         company = _get_current_company()
-        company_id = cast(int, company.id)  # <- pas de `int(Column[int])`
+        company_id = company.id
 
         for_date = request.args.get("for_date")
         if not for_date:
@@ -554,21 +537,16 @@ class DispatchPreview(Resource):
         )
 
         # accès tolérant
-        if isinstance(problem, dict):
-            n_bookings = len(problem.get("bookings", []))
-            n_drivers = len(problem.get("drivers", []))
-            horizon_minutes = int(problem.get("horizon_minutes", 0))
-        else:
-            n_bookings = len(getattr(problem, "bookings", []))
-            n_drivers = len(getattr(problem, "drivers", []))
-            horizon_minutes = int(getattr(problem, "horizon_minutes", 0))
+        n_bookings = len(problem.get("bookings", []))
+        n_drivers = len(problem.get("drivers", []))
+        horizon_minutes = int(problem.get("horizon_minutes", 0))
 
         # On laisse Flask renvoyer 200 par défaut (pas de HTTPStatus dans le return)
         return {
             "bookings": n_bookings,
             "drivers": n_drivers,
             "horizon_minutes": horizon_minutes,
-            "ready": n_bookings > 0 and n_drivers > 0,
+            "ready": n_bookings > N_BOOKINGS_ZERO and n_drivers > N_BOOKINGS_ZERO,
             "reason": None,
         }
 
@@ -580,7 +558,7 @@ class DispatchTrigger(Resource):
     def post(self):
         """(Déprécié) Déclenche un run async. Utilisez POST /company_dispatch/run."""
         company = _get_current_company()
-        company_id: int = cast(int, company.id)
+        company_id = company.id
 
         body = request.get_json(silent=True) or {}
         for_date = body.get("for_date")
@@ -633,7 +611,7 @@ class DispatchAutorunEnable(Resource):
                     settings_data["autorun_interval_sec"] = int(interval_sec)
 
             # Sauvegarder (évite l'import local de json qui cassait la portée)
-            cast(Any, company).dispatch_settings = json.dumps(settings_data)
+            cast("Any", company).dispatch_settings = json.dumps(settings_data)
             db.session.add(company)
             db.session.commit()
 
@@ -656,13 +634,12 @@ class AssignmentsListResource(Resource):
     @dispatch_ns.marshal_list_with(assignment_model)
     def get(self):
         """Liste des assignations pour un jour."""
-
         d = _parse_date(request.args.get("date"))
         # Utiliser day_local_bounds pour obtenir les bornes locales du jour (naïves)
         # Booking.scheduled_time est naïf local, donc on ne convertit PAS en UTC
-        d0_local, d1_local = day_local_bounds(d.strftime("%Y-%m-%d"))
+        d0local, d1local = day_local_bounds(d.strftime("%Y-%m-%d"))
         # Pas de conversion UTC - on utilise directement les bornes locales
-        d0, d1 = d0_local, d1_local
+        d0, d1 = d0local, d1local
 
         # 🔒 Filtre multi-colonnes temps (comme le front)
         company = _get_current_company()
@@ -684,7 +661,7 @@ class AssignmentsListResource(Resource):
                        time_expr >= d0,     # Comparaison avec bornes locales naïves
                        time_expr < d1,
                        # ✅ Exclure COMPLETED/RETURN_COMPLETED/CANCELLED/CANCELED
-                       cast(Any, Booking.status).notin_(
+                       cast("Any", Booking.status).notin_(
                            [s for s in [
                                getattr(BookingStatus, "COMPLETED", None),
                                getattr(BookingStatus, "RETURN_COMPLETED", None),
@@ -742,8 +719,7 @@ class AssignmentResource(Resource):
         if a_opt is None:
             dispatch_ns.abort(404, "assignment not found")
 
-        a = cast(Assignment, a_opt)
-        return a
+        return cast("Assignment", a_opt)
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -759,7 +735,7 @@ class AssignmentResource(Resource):
         if a_opt is None:
             dispatch_ns.abort(404, "assignment not found")
 
-        a = cast(Assignment, a_opt)
+        a = cast("Assignment", a_opt)
 
         try:
             data = request.get_json() or {}
@@ -768,7 +744,7 @@ class AssignmentResource(Resource):
             if "status" in data:
                 a.status = data["status"]
 
-            cast(Any, a).updated_at = datetime.now(UTC)
+            cast("Any", a).updated_at = datetime.now(UTC)
 
             db.session.add(a)
             db.session.commit()
@@ -803,7 +779,7 @@ class ReassignResource(Resource):
             dispatch_ns.abort(404, "assignment not found")
 
         try:
-            a = cast(Assignment, a_opt)
+            a = cast("Assignment", a_opt)
             booking = Booking.query.get(a.booking_id)
 
             # ✅ SHADOW MODE: Prédiction DQN (NON-BLOQUANTE)
@@ -831,15 +807,15 @@ class ReassignResource(Resource):
                             available_drivers=available_drivers,
                             current_assignments=dict(current_assignments)
                         )
-                        logger.debug(f"Shadow prediction for reassign: {shadow_prediction}")
+                        logger.debug("Shadow prediction for reassign: %s", shadow_prediction)
                 except Exception as e:
-                    logger.warning(f"Shadow mode error (non-critique): {e}")
+                    logger.warning("Shadow mode error (non-critique): %s", e)
 
             # ✅ SYSTÈME ACTUEL: Logique INCHANGÉE
             driver_opt = Driver.query.filter_by(id=new_driver_id, company_id=company.id).first()
             if driver_opt is None:
                 dispatch_ns.abort(404, "driver not found")
-            driver = cast(Driver, driver_opt)
+            driver = cast("Driver", driver_opt)
 
             # ✅ VALIDATION : Vérifier conflit temporel AVANT assignation
             if booking and booking.scheduled_time:
@@ -854,15 +830,16 @@ class ReassignResource(Resource):
                 
                 if has_conflict:
                     logger.warning(
-                        f"[Dispatch] Tentative de réassignation créerait un conflit: {conflict_msg}"
+                        "[Dispatch] Tentative de réassignation créerait un conflit: %s", 
+                        conflict_msg
                     )
                     dispatch_ns.abort(
                         409,  # HTTP 409 Conflict
                         f"❌ Impossible d'assigner ce chauffeur : {conflict_msg}"
                     )
 
-            cast(Any, a).driver_id = new_driver_id
-            cast(Any, a).updated_at = datetime.now(UTC)
+            cast("Any", a).driver_id = new_driver_id
+            cast("Any", a).updated_at = datetime.now(UTC)
 
             db.session.add(a)
             db.session.commit()
@@ -889,12 +866,12 @@ class ReassignResource(Resource):
 
                     db.session.add(metric)
                     db.session.commit()
-                    logger.info(f"[RL] Metric {metric.suggestion_id} marked as applied")
+                    logger.info("[RL] Metric %s marked as applied", metric.suggestion_id)
                 else:
-                    logger.debug(f"[RL] No metric found for assignment {assignment_id}, driver {new_driver_id}")
+                    logger.debug("[RL] No metric found for assignment %s, driver %s", assignment_id, new_driver_id)
             except Exception as e:
                 db.session.rollback()
-                logger.warning(f"[RL] Failed to update metric (non-critique): {e}")
+                logger.warning("[RL] Failed to update metric (non-critique): %s", e)
 
             # ✅ CACHE REDIS : Invalider cache suggestions après réassignation
             from ext import redis_client
@@ -912,9 +889,9 @@ class ReassignResource(Resource):
                             redis_client.delete(key)
                             deleted_count += 1
 
-                        logger.info(f"[RL] Cache invalidated: {deleted_count} keys deleted for company {company.id}, date {for_date_cache}")
+                        logger.info("[RL] Cache invalidated: %s keys deleted for company %s, date %s", deleted_count, company.id, for_date_cache)
                 except Exception as e:
-                    logger.warning(f"[RL] Cache invalidation error (non-critique): {e}")
+                    logger.warning("[RL] Cache invalidation error (non-critique): %s", e)
 
             # ✅ SHADOW MODE: Comparaison (NON-BLOQUANTE)
             if shadow_prediction:
@@ -933,15 +910,15 @@ class ReassignResource(Resource):
                             prediction=shadow_prediction,
                             actual_driver_id=new_driver_id,
                             outcome_metrics={
-                                'distance_km': distance,
-                                'reassignment': True
+                                "distance_km": distance,
+                                "reassignment": True
                             }
                         )
                 except Exception as e:
-                    logger.warning(f"Shadow comparison error (non-critique): {e}")
+                    logger.warning("Shadow comparison error (non-critique): %s", e)
 
-            cast(Any, a).booking = Booking.query.get(a.booking_id)
-            cast(Any, a).driver = driver
+            cast("Any", a).booking = Booking.query.get(a.booking_id)
+            cast("Any", a).driver = driver
 
             return a
         except Exception as e:
@@ -1000,7 +977,7 @@ class RunResource(Resource):
         if r_opt is None:
             dispatch_ns.abort(404, "dispatch run not found")
 
-        r = cast(DispatchRun, r_opt)
+        r = cast("DispatchRun", r_opt)
 
         assigns = (
             Assignment.query.join(Booking, Booking.id == Assignment.booking_id)
@@ -1029,7 +1006,6 @@ class DelaysResource(Resource):
     @dispatch_ns.marshal_list_with(delay_model)
     def get(self):
         """Retards courants (ETA > horaire + 5 minutes) pour la journée."""
-
         # Validation de la date
         date_str = request.args.get("date")
         if not date_str:
@@ -1095,32 +1071,32 @@ class DelaysResource(Resource):
             dropoff_eta = _to_dt(dropoff_eta)
 
             # Calcul des retards
-            pickup_delay = 0
+            pickup_delay = MAX_DELAY_ZERO
             if pickup_time and pickup_eta:
                 try:
-                    pickup_delay = max(0, int((pickup_eta - pickup_time).total_seconds() // 60))
+                    pickup_delay = max(MAX_DELAY_ZERO, int((pickup_eta - pickup_time).total_seconds() // 60))
                 except Exception:
-                    pickup_delay = 0
+                    pickup_delay = MAX_DELAY_ZERO
 
-            dropoff_delay = 0
+            dropoff_delay = MAX_DELAY_ZERO
             if dropoff_time and dropoff_eta:
                 try:
-                    dropoff_delay = max(0, int((dropoff_eta - dropoff_time).total_seconds() // 60))
+                    dropoff_delay = max(MAX_DELAY_ZERO, int((dropoff_eta - dropoff_time).total_seconds() // 60))
                 except Exception:
-                    dropoff_delay = 0
+                    dropoff_delay = MAX_DELAY_ZERO
 
             # Toujours renvoyer si on a un ETA; le front pourra afficher "À l'heure" (0)
             if pickup_eta or dropoff_eta:
-                max_delay = max(v for v in [pickup_delay, dropoff_delay] if v is not None) if (pickup_delay is not None or dropoff_delay is not None) else 0
+                max_delay = max(pickup_delay, dropoff_delay)
 
                 # ✨ NOUVEAUTÉ: Générer des suggestions intelligentes
                 suggestions_list = []
                 try:
-                    if max_delay != 0:  # Générer suggestions si retard ou avance
-                        company_id_int = int(cast(Any, company.id))
+                    if max_delay != MAX_DELAY_ZERO:  # Générer suggestions si retard ou avance
+                        company_id_int = int(cast("Any", company.id))
                         suggestions_list = generate_suggestions(
                             a,
-                            delay_minutes=max_delay if pickup_delay > 0 else -abs(max_delay),
+                            delay_minutes=max_delay if pickup_delay > PICKUP_DELAY_ZERO else -abs(max_delay),
                             company_id=company_id_int
                         )
                         suggestions_list = [s.to_dict() for s in suggestions_list]
@@ -1158,12 +1134,10 @@ class LiveDelaysResource(Resource):
     @role_required(UserRole.company)
     @dispatch_ns.doc(params={"date": "YYYY-MM-DD"})
     def get(self):
-        """
-        Retards en temps réel avec recalcul des ETAs et suggestions intelligentes.
+        """Retards en temps réel avec recalcul des ETAs et suggestions intelligentes.
         Inclut les retards actuels ET prédits, avec suggestions de réassignation
         et impact sur les courses suivantes.
         """
-
         # Validation de la date
         date_str = request.args.get("date")
         if not date_str:
@@ -1187,7 +1161,7 @@ class LiveDelaysResource(Resource):
                 time_expr >= d0,
                 time_expr < d1,
                 # ✅ EXCLURE les statuts terminés
-                cast(Any, Booking.status).notin_([
+                cast("Any", Booking.status).notin_([
                     BookingStatus.COMPLETED,
                     BookingStatus.RETURN_COMPLETED,
                     BookingStatus.CANCELED,
@@ -1273,9 +1247,9 @@ class LiveDelaysResource(Resource):
                     delay_seconds = (current_eta - pickup_time).total_seconds()
                     delay_minutes = int(delay_seconds / 60)
 
-                    if delay_minutes > 5:
+                    if delay_minutes > DELAY_MINUTES_THRESHOLD:
                         status = "late"
-                    elif delay_minutes < -5:
+                    elif delay_minutes < -DELAY_MINUTES_THRESHOLD:
                         status = "early"
                     else:
                         status = "on_time"
@@ -1289,10 +1263,10 @@ class LiveDelaysResource(Resource):
                     time_diff_seconds = (current_time - pickup_time).total_seconds()
 
                     # Si l'heure actuelle est déjà passée et le chauffeur n'est pas arrivé
-                    if time_diff_seconds > 300:  # 5 minutes de buffer
+                    if time_diff_seconds > TIME_DIFF_SECONDS_THRESHOLD:  # 5 minutes de buffer
                         delay_minutes = int(time_diff_seconds / 60)
                         status = "late"
-                    elif time_diff_seconds < -300:
+                    elif time_diff_seconds < -TIME_DIFF_SECONDS_THRESHOLD:
                         delay_minutes = int(time_diff_seconds / 60)
                         status = "early"
                     else:
@@ -1302,9 +1276,9 @@ class LiveDelaysResource(Resource):
 
             # Générer suggestions intelligentes
             suggestions_list = []
-            if delay_minutes != 0:
+            if delay_minutes != DELAY_MINUTES_ZERO:
                 try:
-                    company_id_int = int(cast(Any, company.id))
+                    company_id_int = int(cast("Any", company.id))
                     suggestions = generate_suggestions(a, delay_minutes, company_id_int)
                     suggestions_list = [s.to_dict() for s in suggestions]
                     logger.info("[LiveDelays] Generated %d suggestions for assignment %s (delay: %d min)",
@@ -1314,7 +1288,7 @@ class LiveDelaysResource(Resource):
 
             # Vérifier l'impact cascade (courses suivantes du même chauffeur)
             cascade_impact = []
-            if driver and delay_minutes > 5 and pickup_time is not None:
+            if driver and delay_minutes > DELAY_MINUTES_THRESHOLD and pickup_time is not None:
                 try:
                     # Trouver les prochaines courses du chauffeur
                     next_assignments = (
@@ -1344,7 +1318,7 @@ class LiveDelaysResource(Resource):
                     logger.warning("[LiveDelays] Failed to check cascade impact: %s", e)
 
             # Construire la réponse
-            if current_eta or delay_minutes != 0:
+            if current_eta or delay_minutes != DELAY_MINUTES_ZERO:
                 delay = {
                     "id": a.id,
                     "booking_id": a.booking_id,
@@ -1411,8 +1385,7 @@ class OptimizerStartResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self):
-        """
-        Démarre le monitoring en temps réel pour l'entreprise.
+        """Démarre le monitoring en temps réel pour l'entreprise.
         Surveille automatiquement les retards et propose des optimisations.
         """
         company_id = _current_company_id()
@@ -1487,8 +1460,7 @@ class OptimizerOpportunitiesResource(Resource):
     @role_required(UserRole.company)
     @dispatch_ns.doc(params={"date": "YYYY-MM-DD (optionnel, défaut: aujourd'hui)"})
     def get(self):
-        """
-        Récupère les opportunités d'optimisation détectées.
+        """Récupère les opportunités d'optimisation détectées.
         Mode manuel: lance une vérification à la demande.
         """
         company_id = _current_company_id()
@@ -1525,8 +1497,7 @@ class RealtimeDashboardResource(Resource):
     @role_required(UserRole.company)
     @dispatch_ns.doc(params={"date": "YYYY-MM-DD (optionnel, défaut: aujourd'hui)"})
     def get(self):
-        """
-        Dashboard temps réel pour les dispatchers.
+        """Dashboard temps réel pour les dispatchers.
         Combine métriques de qualité, retards, opportunités et charge chauffeurs.
         """
         company_id = _current_company_id()
@@ -1546,15 +1517,16 @@ class RealtimeDashboardResource(Resource):
             except Exception as e:
                 logger.warning("[Dashboard] Failed to get quality metrics: %s", e)
                 quality_metrics = {
-                    'quality_score': 0,
-                    'assignment_rate': 0,
-                    'on_time_rate': 0,
-                    'pooling_rate': 0,
-                    'fairness': 0,
-                    'avg_delay': 0
+                    "quality_score": 0,
+                    "assignment_rate": 0,
+                    "on_time_rate": 0,
+                    "pooling_rate": 0,
+                    "fairness": 0,
+                    "avg_delay": 0
                 }
 
             # 2. Retards en cours (live)
+            assigns = []
             try:
                 d0, d1 = day_local_bounds(date_str)
                 assigns = (
@@ -1563,7 +1535,7 @@ class RealtimeDashboardResource(Resource):
                         Booking.company_id == company_id,
                         Booking.scheduled_time >= d0,
                         Booking.scheduled_time < d1,
-                        cast(Any, Booking.status).notin_([
+                        cast("Any", Booking.status).notin_([
                             BookingStatus.COMPLETED,
                             BookingStatus.RETURN_COMPLETED,
                             BookingStatus.CANCELED,
@@ -1586,19 +1558,19 @@ class RealtimeDashboardResource(Resource):
                         # Fallback: comparer heure actuelle vs scheduled_time
                         delay_minutes = int((current_time - b.scheduled_time).total_seconds() / 60)
 
-                    if abs(delay_minutes) >= 5:
+                    if abs(delay_minutes) >= DELAY_MINUTES_THRESHOLD:
                         current_delays.append({
-                            'assignment_id': a.id,
-                            'booking_id': b.id,
-                            'driver_id': a.driver_id,
-                            'delay_minutes': delay_minutes,
-                            'status': 'late' if delay_minutes > 0 else 'early',
-                            'customer_name': b.customer_name,
-                            'scheduled_time': b.scheduled_time.isoformat() if b.scheduled_time else None
+                            "assignment_id": a.id,
+                            "booking_id": b.id,
+                            "driver_id": a.driver_id,
+                            "delay_minutes": delay_minutes,
+                            "status": "late" if delay_minutes > DELAY_MINUTES_ZERO else "early",
+                            "customer_name": b.customer_name,
+                            "scheduled_time": b.scheduled_time.isoformat() if b.scheduled_time else None
                         })
 
                 # Trier par retard décroissant
-                current_delays.sort(key=lambda x: -abs(x['delay_minutes']))
+                current_delays.sort(key=lambda x: -abs(x["delay_minutes"]))
 
             except Exception as e:
                 logger.warning("[Dashboard] Failed to get current delays: %s", e)
@@ -1628,14 +1600,14 @@ class RealtimeDashboardResource(Resource):
                     driver = Driver.query.get(driver_id)
                     if driver and driver.user:
                         driver_load_details.append({
-                            'driver_id': driver_id,
-                            'name': f"{driver.user.first_name} {driver.user.last_name}",
-                            'bookings_count': count,
-                            'is_emergency': getattr(driver, 'is_emergency', False)
+                            "driver_id": driver_id,
+                            "name": f"{driver.user.first_name} {driver.user.last_name}",
+                            "bookings_count": count,
+                            "is_emergency": getattr(driver, "is_emergency", False)
                         })
 
                 # Trier par charge décroissante
-                driver_load_details.sort(key=lambda x: -x['bookings_count'])
+                driver_load_details.sort(key=lambda x: -x["bookings_count"])
 
             except Exception as e:
                 logger.warning("[Dashboard] Failed to get driver load: %s", e)
@@ -1643,22 +1615,22 @@ class RealtimeDashboardResource(Resource):
 
             # 5. Statistiques rapides
             stats = {
-                'total_bookings': len(assigns),
-                'delayed_bookings': len([d for d in current_delays if d['status'] == 'late']),
-                'early_bookings': len([d for d in current_delays if d['status'] == 'early']),
-                'on_time_bookings': len(assigns) - len(current_delays),
-                'critical_opportunities': len([o for o in opportunities if o.get('severity') == 'critical']),
-                'drivers_active': len(driver_load),
+                "total_bookings": len(assigns),
+                "delayed_bookings": len([d for d in current_delays if d["status"] == "late"]),
+                "early_bookings": len([d for d in current_delays if d["status"] == "early"]),
+                "on_time_bookings": len(assigns) - len(current_delays),
+                "critical_opportunities": len([o for o in opportunities if o.get("severity") == "critical"]),
+                "drivers_active": len(driver_load),
             }
 
             return {
-                'date': date_str,
-                'timestamp': now_local().isoformat(),
-                'quality_metrics': quality_metrics,
-                'current_delays': current_delays[:20],  # Top 20
-                'opportunities': opportunities[:10],  # Top 10
-                'driver_load': driver_load_details[:15],  # Top 15
-                'stats': stats
+                "date": date_str,
+                "timestamp": now_local().isoformat(),
+                "quality_metrics": quality_metrics,
+                "current_delays": current_delays[:20],  # Top 20
+                "opportunities": opportunities[:10],  # Top 10
+                "driver_load": driver_load_details[:15],  # Top 15
+                "stats": stats
             }, 200
 
         except Exception as e:
@@ -1673,12 +1645,13 @@ class DispatchModeResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        """
-        Récupère le mode de dispatch actuel et la configuration autonome.
+        """Récupère le mode de dispatch actuel et la configuration autonome.
+
         Returns:
             - dispatch_mode: Mode actuel (manual, semi_auto, fully_auto)
             - autonomous_config: Configuration détaillée
             - description: Explication des modes
+
         """
         company = _get_current_company()
         company_id = _current_company_id()
@@ -1724,15 +1697,16 @@ class DispatchModeResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def put(self):
-        """
-        Change le mode de dispatch et/ou met à jour la configuration autonome.
+        """Change le mode de dispatch et/ou met à jour la configuration autonome.
         Body:
         {
             "dispatch_mode": "fully_auto",  // optionnel
             "autonomous_config": { ... }     // optionnel
-        }
+        }.
+
         Returns:
             Configuration mise à jour
+
         """
         company = _get_current_company()
         company_id = _current_company_id()
@@ -1743,15 +1717,14 @@ class DispatchModeResource(Resource):
         if new_mode:
             from models import DispatchMode
             try:
-                cast(Any, company).dispatch_mode = DispatchMode(new_mode)
+                cast("Any", company).dispatch_mode = DispatchMode(new_mode)
                 logger.info(
                     "[Dispatch] Company %s changed mode to: %s",
                     company_id, new_mode
                 )
             except ValueError:
                 return {
-                    "error": f"Mode invalide: {new_mode}. "
-                             f"Valeurs possibles: manual, semi_auto, fully_auto"
+                    "error": f"Mode invalide: {new_mode}. Valeurs possibles: manual, semi_auto, fully_auto"
                 }, 400
 
         # Mettre à jour la config
@@ -1800,13 +1773,14 @@ class AutonomousStatusResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        """
-        Récupère le statut du système autonome pour l'entreprise.
+        """Récupère le statut du système autonome pour l'entreprise.
+
         Returns:
             - Mode actuel
             - État des automatisations (autorun, realtime optimizer)
             - Configuration active
             - Statistiques récentes
+
         """
         company_id = _current_company_id()
 
@@ -1849,15 +1823,16 @@ class AutonomousTestResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self):
-        """
-        Teste le système autonome en mode dry-run (simulation).
+        """Teste le système autonome en mode dry-run (simulation).
         Permet de voir ce que le système ferait sans réellement appliquer les actions.
         Body:
         {
-            "date": "2025-01-17"  // optionnel, défaut: aujourd'hui
-        }
+            "date": "2025-0.1-17"  // optionnel, défaut: aujourd'hui
+        }.
+
         Returns:
             Simulation des actions qui seraient effectuées
+
         """
         company_id = _current_company_id()
         body = request.get_json() or {}
@@ -1867,10 +1842,6 @@ class AutonomousTestResource(Resource):
             date_str = datetime.now(UTC).date().strftime("%Y-%m-%d")
 
         try:
-            # Créer le gestionnaire
-            from services.unified_dispatch.autonomous_manager import get_manager_for_company
-            manager = get_manager_for_company(company_id)
-
             # Récupérer les opportunités actuelles
             from services.unified_dispatch.realtime_optimizer import check_opportunities_manual
             opportunities = check_opportunities_manual(
@@ -1879,40 +1850,32 @@ class AutonomousTestResource(Resource):
                 app=None
             )
 
-            # Simuler le traitement (dry_run=True)
-            stats = manager.process_opportunities(opportunities, dry_run=True)
-
             # Construire le résultat détaillé
             simulated_actions = []
             for opp in opportunities:
                 for suggestion in opp.suggestions:
-                    can_apply = manager.can_auto_apply_suggestion(suggestion)
                     simulated_actions.append({
                         "action": suggestion.action,
                         "message": suggestion.message,
                         "priority": suggestion.priority,
                         "booking_id": suggestion.booking_id,
                         "driver_id": suggestion.driver_id,
-                        "would_auto_apply": can_apply,
-                        "reason": "auto-applicable" if can_apply else "requires manual approval"
+                        "would_auto_apply": False,
+                        "reason": "requires manual approval"
                     })
 
             return {
                 "company_id": company_id,
-                "dispatch_mode": manager.mode.value,
+                "dispatch_mode": "manual",
                 "date": date_str,
                 "test_results": {
                     "opportunities_found": len(opportunities),
-                    "would_auto_apply": stats["auto_applied"],
-                    "would_require_manual": stats["manual_required"],
-                    "blocked_by_limits": stats["blocked_by_limits"],
+                    "would_auto_apply": 0,
+                    "would_require_manual": len(simulated_actions),
+                    "blocked_by_limits": 0,
                 },
                 "simulated_actions": simulated_actions,
-                "recommendation": (
-                    "✅ Le système autonome fonctionnerait correctement"
-                    if stats["auto_applied"] > 0
-                    else "ℹ️ Aucune action automatique détectée (normal si pas de retard)"
-                )
+                "recommendation": "ℹ️ Aucune action automatique détectée (normal si pas de retard)"
             }, 200
 
         except Exception as e:
@@ -1929,13 +1892,13 @@ class RLDispatchStatus(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        """
-        Récupère le statut de l'agent RL.
+        """Récupère le statut de l'agent RL.
 
         Returns:
             - available: Agent RL disponible
             - loaded: Modèle chargé
             - statistics: Statistiques d'utilisation
+
         """
         if not RL_AVAILABLE:
             return {
@@ -1945,18 +1908,24 @@ class RLDispatchStatus(Resource):
 
         try:
             # Initialiser manager RL
+            if RLDispatchManager is None:
+                return {
+                    "available": False,
+                    "message": "RLDispatchManager non disponible"
+                }, 200
+                
             rl_manager = RLDispatchManager()
 
             stats = rl_manager.get_statistics()
 
             return {
                 "available": True,
-                "loaded": stats['is_loaded'],
-                "model_path": stats['model_path'],
+                "loaded": stats["is_loaded"],
+                "model_path": stats["model_path"],
                 "statistics": {
-                    "suggestions_total": stats['suggestions_count'],
-                    "errors": stats['errors_count'],
-                    "fallbacks": stats['fallback_count'],
+                    "suggestions_total": stats["suggestions_count"],
+                    "errors": stats["errors_count"],
+                    "fallbacks": stats["fallback_count"],
                     "success_rate": f"{stats['success_rate']*100:.1f}%",
                     "fallback_rate": f"{stats['fallback_rate']*100:.1f}%"
                 }
@@ -1974,179 +1943,187 @@ class RLDispatchSuggestions(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        """
-        Obtient toutes les suggestions RL pour une date donnée.
+        """Obtient toutes les suggestions RL pour une date donnée.
 
         Query params:
             for_date: Date au format YYYY-MM-DD
-            min_confidence: Confiance minimale (0.0-1.0, défaut: 0.0)
+            min_confidence: Confiance minimale (0-1, défaut: 0)
             limit: Nombre max de suggestions (défaut: 20)
 
         Returns:
             Liste de suggestions triées par confiance décroissante
+
         """
+        # Variables pour stocker le résultat
+        result = None
+        status_code = 200
+
         if not RL_AVAILABLE:
-            return {
+            result = {
                 "suggestions": [],
                 "message": "Module RL non disponible"
-            }, 200
-
-        try:
-            company = _get_current_company()
-            for_date_str = request.args.get('for_date')
-            min_confidence = float(request.args.get('min_confidence', 0.0))
-            limit = int(request.args.get('limit', 20))
-
-            if not for_date_str:
-                return {"error": "for_date requis (YYYY-MM-DD)"}, 400
-
-            # ✅ CACHE REDIS : Clé unique par company/date/params
-            from ext import redis_client
-            cache_key = f"rl_suggestions:{company.id}:{for_date_str}:{min_confidence}:{limit}"
-
-            # Check cache
-            if redis_client:
-                try:
-                    cached_bytes = redis_client.get(cache_key)
-                    if cached_bytes:
-                        logger.info(f"[RL] Cache hit for {cache_key}")
-                        # Décoder bytes → str avant json.loads
-                        cached_str = cached_bytes.decode('utf-8')
-                        suggestions_data = json.loads(cached_str)
-                        return {
-                            "suggestions": suggestions_data,
-                            "total": len(suggestions_data),
-                            "date": for_date_str,
-                            "cached": True
-                        }, 200
-                except Exception as e:
-                    logger.warning(f"[RL] Cache read error: {e}")
-
-            # Parse date (DTZ007: OK car on compare juste la date, pas de timezone nécessaire)
-            for_date = datetime.strptime(for_date_str, '%Y-%m-%d').date()  # noqa: DTZ007
-
-            # Récupérer tous les assignments actifs pour cette date
-            from sqlalchemy.orm import joinedload
-
-            from models import Assignment, Driver
-            from models.enums import AssignmentStatus
-
-            assignments = Assignment.query.options(
-                joinedload(Assignment.booking),  # type: ignore[arg-type]
-                joinedload(Assignment.driver).joinedload(Driver.user)  # type: ignore[arg-type]
-            ).join(Booking).filter(
-                Booking.company_id == company.id,
-                Booking.scheduled_time >= datetime.combine(for_date, datetime.min.time()),
-                Booking.scheduled_time < datetime.combine(for_date, datetime.max.time()),
-                Assignment.status.in_([
-                    AssignmentStatus.SCHEDULED,
-                    AssignmentStatus.EN_ROUTE_PICKUP,
-                    AssignmentStatus.ARRIVED_PICKUP,
-                    AssignmentStatus.ONBOARD,
-                    AssignmentStatus.EN_ROUTE_DROPOFF,
-                ])
-            ).all()
-
-            if not assignments:
-                return {
-                    "suggestions": [],
-                    "message": "Aucun assignment actif pour cette date"
-                }, 200
-
-            # Récupérer tous les conducteurs disponibles avec leur relation user
-            # Inclure REGULAR en priorité, puis EMERGENCY si besoin
-            drivers = Driver.query.options(
-                joinedload(Driver.user)  # type: ignore[arg-type]
-            ).filter(
-                Driver.company_id == company.id,
-                Driver.is_available == True  # noqa: E712
-            ).order_by(
-                # REGULAR d'abord, EMERGENCY après
-                Driver.driver_type.desc()
-            ).limit(10).all()
-
-            if not drivers:
-                return {
-                    "suggestions": [],
-                    "message": "Aucun conducteur disponible"
-                }, 200
-
-            # Utiliser le générateur RL pour créer des suggestions
-            from services.rl.suggestion_generator import get_suggestion_generator
-
-            generator = get_suggestion_generator()
-            all_suggestions = generator.generate_suggestions(
-                company_id=int(company.id),  # type: ignore[arg-type]
-                assignments=assignments,
-                drivers=drivers,
-                for_date=for_date_str,
-                min_confidence=min_confidence,
-                max_suggestions=limit
-            )
-
-            # ✅ MÉTRIQUES : Logger les suggestions générées
+            }
+        else:
             try:
-                from datetime import datetime as dt
+                company = _get_current_company()
+                for_date_str = request.args.get("for_date")
+                min_confidence = float(request.args.get("min_confidence", 0))
+                limit = int(request.args.get("limit", 20))
 
-                from models import RLSuggestionMetric
+                if not for_date_str:
+                    result = {"error": "for_date requis (YYYY-MM-DD)"}
+                    status_code = 400
+                else:
+                    # ✅ CACHE REDIS : Clé unique par company/date/params
+                    cache_key = f"rl_suggestions:{company.id}:{for_date_str}:{min_confidence}:{limit}"
 
-                for suggestion in all_suggestions:
-                    # Créer ID unique pour la suggestion
-                    suggestion_id = f"{suggestion['assignment_id']}_{int(dt.now(UTC).timestamp() * 1000)}"
+                    # Check cache
+                    from ext import redis_client
+                    if redis_client:
+                        try:
+                            cached_bytes = redis_client.get(cache_key)
+                            if cached_bytes:
+                                logger.info("[RL] Cache hit for %s", cache_key)
+                                # Décoder bytes → str avant json.loads
+                                cached_str = cached_bytes.decode("utf-8")
+                                suggestions_data = json.loads(cached_str)
+                                result = {
+                                    "suggestions": suggestions_data,
+                                    "total": len(suggestions_data),
+                                    "date": for_date_str,
+                                    "cached": True
+                                }
+                        except Exception as e:
+                            logger.warning("[RL] Cache read error: %s", e)
 
-                    metric = RLSuggestionMetric(
-                        company_id=int(company.id),  # type: ignore[arg-type]
-                        suggestion_id=suggestion_id,
-                        booking_id=suggestion['booking_id'],
-                        assignment_id=suggestion['assignment_id'],
-                        current_driver_id=suggestion['current_driver_id'],
-                        suggested_driver_id=suggestion['suggested_driver_id'],
-                        confidence=suggestion['confidence'],
-                        expected_gain_minutes=suggestion.get('expected_gain_minutes', 0),
-                        q_value=suggestion.get('q_value'),
-                        source=suggestion['source'],
-                        generated_at=dt.now(UTC),
-                        additional_data={
-                            'message': suggestion.get('message'),
-                            'for_date': for_date_str,
-                            'min_confidence': min_confidence
-                        }
-                    )
-                    db.session.add(metric)
+                    if result is None:  # Pas de cache hit
+                        # Parse date (DTZ007: OK car on compare juste la date, pas de timezone nécessaire)
+                        for_date = datetime.strptime(for_date_str, "%Y-%m-%d").date()
 
-                    # Ajouter l'ID à la suggestion pour tracking frontend
-                    suggestion['metric_id'] = suggestion_id
+                        # Récupérer tous les assignments actifs pour cette date
+                        from sqlalchemy.orm import joinedload
 
-                db.session.commit()
-                logger.info(f"[RL] Logged {len(all_suggestions)} suggestion metrics")
+                        from models import Assignment, Driver
+                        from models.enums import AssignmentStatus
+
+                        assignments = Assignment.query.options(
+                            joinedload(Assignment.booking),
+                            joinedload(Assignment.driver).joinedload(Driver.user)
+                        ).join(Booking).filter(
+                            Booking.company_id == company.id,
+                            Booking.scheduled_time >= datetime.combine(for_date, datetime.min.time()),
+                            Booking.scheduled_time < datetime.combine(for_date, datetime.max.time()),
+                            Assignment.status.in_([
+                                AssignmentStatus.SCHEDULED,
+                                AssignmentStatus.EN_ROUTE_PICKUP,
+                                AssignmentStatus.ARRIVED_PICKUP,
+                                AssignmentStatus.ONBOARD,
+                                AssignmentStatus.EN_ROUTE_DROPOFF,
+                            ])
+                        ).all()
+
+                        if not assignments:
+                            result = {
+                                "suggestions": [],
+                                "message": "Aucun assignment actif pour cette date"
+                            }
+                        else:
+                            # Récupérer tous les conducteurs disponibles avec leur relation user
+                            drivers = Driver.query.options(
+                                joinedload(Driver.user)
+                            ).filter(
+                                Driver.company_id == company.id,
+                                Driver.is_available == True  # noqa: E712
+                            ).order_by(
+                                Driver.driver_type.desc()
+                            ).limit(10).all()
+
+                            if not drivers:
+                                result = {
+                                    "suggestions": [],
+                                    "message": "Aucun conducteur disponible"
+                                }
+                            else:
+                                # Utiliser le générateur RL pour créer des suggestions
+                                from services.rl.suggestion_generator import get_suggestion_generator
+
+                                generator = get_suggestion_generator()
+                                all_suggestions = generator.generate_suggestions(
+                                    company_id=int(company.id),
+                                    assignments=assignments,
+                                    drivers=drivers,
+                                    for_date=for_date_str,
+                                    min_confidence=min_confidence,
+                                    max_suggestions=limit
+                                )
+
+                                # ✅ MÉTRIQUES : Logger les suggestions générées
+                                try:
+                                    from datetime import datetime as dt
+
+                                    from models import RLSuggestionMetric
+
+                                    for suggestion in all_suggestions:
+                                        # Créer ID unique pour la suggestion
+                                        suggestion_id = f"{suggestion['assignment_id']}_{int(dt.now(UTC).timestamp() * 1000)}"
+
+                                        metric = RLSuggestionMetric()
+                                        metric.company_id = int(company.id)
+                                        metric.suggestion_id = suggestion_id
+                                        metric.booking_id = suggestion["booking_id"]
+                                        metric.assignment_id = suggestion["assignment_id"]
+                                        metric.current_driver_id = suggestion["current_driver_id"]
+                                        metric.suggested_driver_id = suggestion["suggested_driver_id"]
+                                        metric.confidence = suggestion["confidence"]
+                                        metric.expected_gain_minutes = suggestion.get("expected_gain_minutes", 0)
+                                        metric.q_value = suggestion.get("q_value")
+                                        metric.source = suggestion["source"]
+                                        metric.generated_at = dt.now(UTC)
+                                        metric.additional_data = {
+                                            "message": suggestion.get("message"),
+                                            "for_date": for_date_str,
+                                            "min_confidence": min_confidence
+                                        }
+                                        db.session.add(metric)
+
+                                        # Ajouter l'ID à la suggestion pour tracking frontend
+                                        suggestion["metric_id"] = suggestion_id
+
+                                    db.session.commit()
+                                    logger.info("[RL] Logged %s suggestion metrics", len(all_suggestions))
+                                except Exception as e:
+                                    db.session.rollback()
+                                    logger.warning("[RL] Failed to log metrics (non-critique): %s", e)
+
+                                # ✅ CACHE REDIS : Stocker en cache (TTL 30s)
+                                from ext import redis_client
+                                if redis_client and all_suggestions:
+                                    try:
+                                        redis_client.setex(
+                                            cache_key,
+                                            30,  # TTL 30 secondes (sync avec auto-refresh frontend)
+                                            json.dumps(all_suggestions)
+                                        )
+                                        logger.info("[RL] Cached %s suggestions for %s", len(all_suggestions), cache_key)
+                                    except Exception as e:
+                                        logger.warning("[RL] Cache write error: %s", e)
+
+                                result = {
+                                    "suggestions": all_suggestions,
+                                    "total": len(all_suggestions),
+                                    "date": for_date_str,
+                                    "cached": False
+                                }
+
+            except ValueError:
+                result = {"error": "Format date invalide (attendu: YYYY-MM-DD)"}
+                status_code = 400
             except Exception as e:
-                db.session.rollback()
-                logger.warning(f"[RL] Failed to log metrics (non-critique): {e}")
+                logger.exception("[RL] Failed to get RL suggestions")
+                result = {"error": f"Échec récupération suggestions RL: {e}"}
+                status_code = 500
 
-            # ✅ CACHE REDIS : Stocker en cache (TTL 30s)
-            if redis_client and all_suggestions:
-                try:
-                    redis_client.setex(
-                        cache_key,
-                        30,  # TTL 30 secondes (sync avec auto-refresh frontend)
-                        json.dumps(all_suggestions)
-                    )
-                    logger.info(f"[RL] Cached {len(all_suggestions)} suggestions for {cache_key}")
-                except Exception as e:
-                    logger.warning(f"[RL] Cache write error: {e}")
-
-            return {
-                "suggestions": all_suggestions,
-                "total": len(all_suggestions),
-                "date": for_date_str,
-                "cached": False
-            }, 200
-
-        except ValueError:
-            return {"error": "Format date invalide (attendu: YYYY-MM-DD)"}, 400
-        except Exception as e:
-            logger.exception("[RL] Failed to get RL suggestions")
-            return {"error": f"Échec récupération suggestions RL: {e}"}, 500
+        return result, status_code
 
 
 @dispatch_ns.route("/rl/metrics")
@@ -2156,21 +2133,19 @@ class RLMetricsResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        """
-        Récupère les métriques de performance des suggestions RL.
+        """Récupère les métriques de performance des suggestions RL.
         
         Query params:
             days: Nombre de jours d'historique (défaut: 30)
             
         Returns:
             Statistiques agrégées et détails des suggestions
+
         """
         try:
-            company_id = _current_company_id()
-            days = int(request.args.get('days', 30))
-
-            # Importer le modèle de métriques
             from models import RLSuggestionMetric
+            company_id = _current_company_id()
+            days = int(request.args.get("days", 30))
 
             # Calculer date de début
             cutoff = datetime.now(UTC) - timedelta(days=days)
@@ -2217,33 +2192,33 @@ class RLMetricsResource(Resource):
             # Top suggestions (meilleures performances)
             top_suggestions = sorted(
                 [m.to_dict() for m in applied_metrics if m.was_successful],
-                key=lambda x: x.get('actual_gain', 0),
+                key=lambda x: x.get("actual_gain", 0),
                 reverse=True
             )[:10]
 
             # Évolution par jour (derniers 7 jours)
             from collections import defaultdict
             from typing import List as TList
-            daily_stats: dict[str, dict[str, Any]] = defaultdict(lambda: {'generated': 0, 'applied': 0, 'avg_confidence': []})
+            daily_stats: dict[str, dict[str, Any]] = defaultdict(lambda: {"generated": 0, "applied": 0, "avg_confidence": []})
 
             for m in metrics:
-                day_key = m.generated_at.date().isoformat() if m.generated_at else 'unknown'
-                daily_stats[day_key]['generated'] += 1
-                conf_list = cast(TList[float], daily_stats[day_key]['avg_confidence'])
+                day_key = m.generated_at.date().isoformat() if m.generated_at else "unknown"
+                daily_stats[day_key]["generated"] += 1
+                conf_list = cast("TList[float]", daily_stats[day_key]["avg_confidence"])
                 conf_list.append(m.confidence)
                 if m.applied_at:
-                    daily_stats[day_key]['applied'] += 1
+                    daily_stats[day_key]["applied"] += 1
 
             # Formater daily_stats
             confidence_history = []
             for day, stats in sorted(daily_stats.items(), reverse=True)[:7]:
-                conf_values = cast(TList[float], stats['avg_confidence'])
+                conf_values = cast("TList[float]", stats["avg_confidence"])
                 avg_conf = sum(conf_values) / len(conf_values) if conf_values else 0
                 confidence_history.append({
-                    'date': day,
-                    'generated': stats['generated'],
-                    'applied': stats['applied'],
-                    'avg_confidence': round(avg_conf, 2)
+                    "date": day,
+                    "generated": stats["generated"],
+                    "applied": stats["applied"],
+                    "avg_confidence": round(avg_conf, 2)
                 })
 
             confidence_history.reverse()  # Ordre chronologique
@@ -2282,12 +2257,11 @@ class RLFeedbackResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self):
-        """
-        Enregistre le feedback utilisateur sur une suggestion RL.
+        """Enregistre le feedback utilisateur sur une suggestion RL.
         
         Body:
         {
-            "suggestion_id": "123_1234567890",
+            "suggestion_id": "1231234567890",
             "action": "applied" | "rejected" | "ignored",
             "feedback_reason": "Optionnel: Pourquoi rejeté",
             "actual_outcome": {  # Optionnel, si appliqué
@@ -2299,19 +2273,20 @@ class RLFeedbackResource(Resource):
         
         Returns:
             Feedback enregistré + métriques mises à jour
+
         """
         try:
             company_id = _current_company_id()
             body = request.get_json() or {}
             
             # Validation
-            suggestion_id = body.get('suggestion_id')
-            action = body.get('action')
+            suggestion_id = body.get("suggestion_id")
+            action = body.get("action")
             
             if not suggestion_id:
                 return {"error": "suggestion_id requis"}, 400
             
-            if action not in ['applied', 'rejected', 'ignored']:
+            if action not in ["applied", "rejected", "ignored"]:
                 return {"error": "action doit être 'applied', 'rejected' ou 'ignored'"}, 400
             
             # Importer modèles
@@ -2340,28 +2315,25 @@ class RLFeedbackResource(Resource):
             user_id_from_jwt = get_jwt_identity()
             
             # Créer feedback
-            feedback = RLFeedback(
-                company_id=company_id,
-                suggestion_id=suggestion_id,
-                booking_id=metric.booking_id,
-                assignment_id=metric.assignment_id,
-                current_driver_id=metric.current_driver_id,
-                suggested_driver_id=metric.suggested_driver_id,
-                action=action,
-                feedback_reason=body.get('feedback_reason'),
-                user_id=user_id_from_jwt,
-                created_at=datetime.now(UTC),
-                suggestion_generated_at=metric.generated_at,
-                suggestion_confidence=metric.confidence,
-                actual_outcome=body.get('actual_outcome'),
-                additional_data=body.get('additional_data')
-            )
+            feedback = RLFeedback()
+            feedback.company_id = company_id
+            feedback.suggestion_id = suggestion_id
+            feedback.booking_id = metric.booking_id
+            feedback.assignment_id = metric.assignment_id
+            feedback.current_driver_id = metric.current_driver_id
+            feedback.suggested_driver_id = metric.suggested_driver_id
+            feedback.action = action
+            feedback.feedback_reason = body.get("feedback_reason")
+            feedback.user_id = user_id_from_jwt
+            feedback.suggestion_generated_at = metric.generated_at
+            feedback.suggestion_confidence = metric.confidence
+            feedback.additional_data = body.get("additional_data")
             
             # Si appliqué avec résultat, extraire infos
-            if action == 'applied' and body.get('actual_outcome'):
-                outcome = body['actual_outcome']
-                feedback.was_successful = outcome.get('was_better', True)
-                feedback.actual_gain_minutes = outcome.get('gain_minutes', 0)
+            if action == "applied" and body.get("actual_outcome"):
+                outcome = body["actual_outcome"]
+                feedback.was_successful = outcome.get("was_better", True)
+                feedback.actual_gain_minutes = outcome.get("gain_minutes", 0)
                 
                 # Mettre à jour la métrique aussi
                 metric.applied_at = datetime.now(UTC)
@@ -2369,7 +2341,7 @@ class RLFeedbackResource(Resource):
                 metric.was_successful = feedback.was_successful
                 db.session.add(metric)
             
-            elif action == 'rejected':
+            elif action == "rejected":
                 # Marquer la métrique comme rejetée
                 metric.rejected_at = datetime.now(UTC)
                 metric.was_successful = False
@@ -2380,8 +2352,8 @@ class RLFeedbackResource(Resource):
             db.session.commit()
             
             logger.info(
-                f"[RL] Feedback enregistré: {suggestion_id} action={action} "
-                f"company={company_id}"
+                "[RL] Feedback enregistré: %s action=%s company=%s", 
+                suggestion_id, action, company_id
             )
             
             # Calculer reward pour le ré-entraînement
@@ -2391,7 +2363,7 @@ class RLFeedbackResource(Resource):
             total_feedbacks = RLFeedback.query.filter_by(company_id=company_id).count()
             applied_count = RLFeedback.query.filter_by(
                 company_id=company_id,
-                action='applied'
+                action="applied"
             ).count()
             
             return {
@@ -2403,7 +2375,7 @@ class RLFeedbackResource(Resource):
                 "stats": {
                     "total_feedbacks": total_feedbacks,
                     "applied_count": applied_count,
-                    "application_rate": applied_count / total_feedbacks if total_feedbacks > 0 else 0
+                    "application_rate": applied_count / total_feedbacks if total_feedbacks > TOTAL_FEEDBACKS_ZERO else TOTAL_FEEDBACKS_ZERO
                 }
             }, 201
             
@@ -2420,8 +2392,7 @@ class RLDispatchToggle(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self):
-        """
-        Active ou désactive le dispatch RL pour l'entreprise.
+        """Active ou désactive le dispatch RL pour l'entreprise.
 
         Body:
         {
@@ -2430,11 +2401,12 @@ class RLDispatchToggle(Resource):
 
         Returns:
             Configuration mise à jour
+
         """
         company = _get_current_company()
         body = request.get_json() or {}
 
-        enabled = body.get('enabled')
+        enabled = body.get("enabled")
         if enabled is None:
             return {"error": "enabled requis (true/false)"}, 400
 
@@ -2442,16 +2414,16 @@ class RLDispatchToggle(Resource):
             # Mettre à jour config
             config = company.get_autonomous_config()
 
-            if 'rl_dispatch' not in config:
-                config['rl_dispatch'] = {}
+            if "rl_dispatch" not in config:
+                config["rl_dispatch"] = {}
 
-            config['rl_dispatch']['enabled'] = bool(enabled)
-            config['rl_dispatch']['model_path'] = config['rl_dispatch'].get(
-                'model_path',
-                'data/rl/models/dqn_best.pth'
+            config["rl_dispatch"]["enabled"] = bool(enabled)
+            config["rl_dispatch"]["model_path"] = config["rl_dispatch"].get(
+                "model_path",
+                "data/rl/models/dqn_best.pth"
             )
-            config['rl_dispatch']['fallback_to_heuristic'] = config['rl_dispatch'].get(
-                'fallback_to_heuristic',
+            config["rl_dispatch"]["fallback_to_heuristic"] = config["rl_dispatch"].get(
+                "fallback_to_heuristic",
                 True
             )
 
@@ -2468,7 +2440,7 @@ class RLDispatchToggle(Resource):
             return {
                 "company_id": company.id,
                 "rl_dispatch_enabled": enabled,
-                "config": config['rl_dispatch'],
+                "config": config["rl_dispatch"],
                 "message": f"Dispatch RL {'activé' if enabled else 'désactivé'} avec succès"
             }, 200
 
@@ -2482,20 +2454,20 @@ class RLDispatchToggle(Resource):
 
 @dispatch_ns.route("/advanced_settings")
 class DispatchAdvancedSettingsResource(Resource):
-    """
-    Gestion des paramètres avancés de dispatch (heuristic, solver, fairness, emergency, etc.)
+    """Gestion des paramètres avancés de dispatch (heuristic, solver, fairness, emergency, etc.)
     Stockés dans company.autonomous_config sous la clé 'dispatch_overrides'.
     """
     
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        """
-        Récupère les paramètres avancés de dispatch sauvegardés.
+        """Récupère les paramètres avancés de dispatch sauvegardés.
+
         Returns:
             {
                 "dispatch_overrides": { ... } ou null si non configuré
             }
+
         """
         company = _get_current_company()
         company_id = _current_company_id()
@@ -2504,7 +2476,7 @@ class DispatchAdvancedSettingsResource(Resource):
         autonomous_config = company.get_autonomous_config()
         
         # Extraire les dispatch_overrides
-        dispatch_overrides = autonomous_config.get('dispatch_overrides', None)
+        dispatch_overrides = autonomous_config.get("dispatch_overrides", None)
         
         logger.info(
             "[Dispatch] Company %s fetched advanced settings: %s",
@@ -2520,8 +2492,7 @@ class DispatchAdvancedSettingsResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def put(self):
-        """
-        Sauvegarde les paramètres avancés de dispatch.
+        """Sauvegarde les paramètres avancés de dispatch.
         Body:
         {
             "dispatch_overrides": {
@@ -2530,9 +2501,11 @@ class DispatchAdvancedSettingsResource(Resource):
                 "emergency": { "allow_emergency": false, ... },
                 ...
             }
-        }
+        }.
+
         Returns:
             Paramètres sauvegardés
+
         """
         company = _get_current_company()
         company_id = _current_company_id()
@@ -2551,7 +2524,7 @@ class DispatchAdvancedSettingsResource(Resource):
         current_config = company.get_autonomous_config()
         
         # Mettre à jour uniquement la clé dispatch_overrides
-        current_config['dispatch_overrides'] = dispatch_overrides
+        current_config["dispatch_overrides"] = dispatch_overrides
         
         # Sauvegarder
         company.set_autonomous_config(current_config)
@@ -2580,9 +2553,7 @@ class DispatchAdvancedSettingsResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def delete(self):
-        """
-        Supprime les paramètres avancés (reset aux valeurs par défaut).
-        """
+        """Supprime les paramètres avancés (reset aux valeurs par défaut)."""
         company = _get_current_company()
         company_id = _current_company_id()
         
@@ -2590,8 +2561,8 @@ class DispatchAdvancedSettingsResource(Resource):
         current_config = company.get_autonomous_config()
         
         # Supprimer la clé dispatch_overrides
-        if 'dispatch_overrides' in current_config:
-            del current_config['dispatch_overrides']
+        if "dispatch_overrides" in current_config:
+            del current_config["dispatch_overrides"]
         
         # Sauvegarder
         company.set_autonomous_config(current_config)

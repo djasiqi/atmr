@@ -1,6 +1,4 @@
-# ruff: noqa: T201
-"""
-Script pour configurer l'API OpenWeatherMap.
+"""Script pour configurer l'API OpenWeatherMap.
 
 Usage:
     python scripts/setup_weather_api.py
@@ -30,9 +28,9 @@ def setup_weather_api():
 
     # Vérifier longueur (généralement 32 caractères)
     if len(api_key) < 20:
-        print(f"\n⚠️  Clé suspicieusement courte ({len(api_key)} caractères)")
+        print("\n⚠️  Clé suspicieusement courte ({len(api_key)} caractères)")
         confirm = input("   Continuer quand même? (o/N): ").strip().lower()
-        if confirm != 'o':
+        if confirm != "o":
             sys.exit(1)
 
     # Créer/mettre à jour backend/.env
@@ -48,11 +46,11 @@ FALLBACK_ON_ERROR=true
 """
 
     # Sauvegarder
-    with open(env_path, 'w') as f:
+    with Path(env_path, "w").open() as f:
         f.write(env_content)
 
     print("\n✅ Fichier .env créé avec succès!")
-    print(f"   Path: {env_path}")
+    print("   Path: {env_path}")
     print()
     print("📋 Prochaines étapes:")
     print("   1. Redémarrer le container:")
@@ -73,7 +71,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\n⚠️  Configuration annulée")
         sys.exit(1)
-    except Exception as e:
-        print(f"\n❌ Erreur: {e}")
+    except Exception:
+        print("\n❌ Erreur: {e}")
         sys.exit(1)
 

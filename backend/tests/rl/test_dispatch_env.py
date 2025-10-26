@@ -1,4 +1,3 @@
-# ruff: noqa: DTZ001, DTZ003, T201
 # pyright: reportAttributeAccessIssue=false
 """
 Tests pour l'environnement Gym de dispatch.
@@ -111,14 +110,14 @@ class TestDispatchEnvActions:
     def test_step_valid_assignment(self):
         """Test assignment valide d'un booking à un driver."""
         env = DispatchEnv(num_drivers=5, max_bookings=10)
-        obs, info = env.reset(seed=42)
+        _obs, info = env.reset(seed=42)
 
         # S'assurer qu'il y a au moins un booking
         initial_bookings = info["active_bookings"]
         assert initial_bookings > 0
 
         # Action 1 = assigner booking 0 à driver 0
-        next_obs, reward, terminated, truncated, info = env.step(1)
+        _next_obs, reward, _terminated, _truncated, info = env.step(1)
 
         # Une assignation valide devrait donner une récompense positive (généralement)
         # (peut être négative si très mauvais assignment, mais c'est ok)
@@ -135,7 +134,7 @@ class TestDispatchEnvActions:
 
         # Action hors limites
         invalid_action = env.action_space.n + 10
-        next_obs, reward, terminated, truncated, info = env.step(invalid_action)
+        _next_obs, reward, _terminated, _truncated, _info = env.step(invalid_action)
 
         # Devrait donner une pénalité
         assert reward == -10.0
@@ -149,7 +148,7 @@ class TestDispatchEnvActions:
         env.step(1)  # Assigner booking 0 à driver 0
 
         # Essayer de réassigner le même booking
-        next_obs, reward, terminated, truncated, info = env.step(1)
+        _next_obs, reward, _terminated, _truncated, _info = env.step(1)
 
         # Devrait donner une pénalité pour action invalide
         assert reward <= 0
@@ -252,7 +251,7 @@ class TestDispatchEnvEpisode:
 
         while not terminated and steps < 100:
             action = env.action_space.sample()
-            obs, reward, terminated, truncated, info = env.step(action)
+            _obs, reward, terminated, _truncated, info = env.step(action)
             total_reward += reward
             steps += 1
 
@@ -261,10 +260,10 @@ class TestDispatchEnvEpisode:
         assert "episode_stats" in info
 
         print("\n📊 Random Episode Results:")
-        print(f"  Steps: {steps}")
-        print(f"  Total reward: {total_reward:.2f}")
-        print(f"  Assignments: {info['episode_stats']['assignments']}")
-        print(f"  Cancellations: {info['episode_stats']['cancellations']}")
+        print("  Steps: {steps}")
+        print("  Total reward: {total_reward")
+        print("  Assignments: {info['episode_stats']['assignments']}")
+        print("  Cancellations: {info['episode_stats']['cancellations']}")
 
     def test_full_episode_greedy(self):
         """Test épisode avec stratégie greedy (toujours assigner)."""
@@ -278,15 +277,15 @@ class TestDispatchEnvEpisode:
         while not terminated and steps < 100:
             # Stratégie simple: toujours prendre action 1 (premier assignment possible)
             action = 1
-            obs, reward, terminated, truncated, info = env.step(action)
+            _obs, reward, terminated, _truncated, _info = env.step(action)
             total_reward += reward
             steps += 1
 
         assert steps > 0
         print("\n📊 Greedy Episode Results:")
-        print(f"  Steps: {steps}")
-        print(f"  Total reward: {total_reward:.2f}")
-        print(f"  Assignments: {info['episode_stats']['assignments']}")
+        print("  Steps: {steps}")
+        print("  Total reward: {total_reward")
+        print("  Assignments: {info['episode_stats']['assignments']}")
 
     def test_episode_terminates_correctly(self):
         """Test que l'épisode se termine au bon moment."""
@@ -298,7 +297,7 @@ class TestDispatchEnvEpisode:
 
         while not terminated and steps < 200:
             action = env.action_space.sample()
-            obs, reward, terminated, truncated, info = env.step(action)
+            _obs, _reward, terminated, _truncated, info = env.step(action)
             steps += 1
 
         # L'épisode devrait se terminer autour de 60 minutes / 5 min par step = 12 steps
@@ -329,7 +328,7 @@ class TestDispatchEnvHelpers:
             46.2044, 6.1432,
             46.2044, 6.1432
         )
-        assert distance_zero < 0.001
+        assert distance_zero < 0.0001
 
     def test_traffic_density_peaks(self):
         """Test que le trafic a des pics aux bonnes heures."""
@@ -382,7 +381,7 @@ class TestDispatchEnvHelpers:
         # Devrait être positif avec de bonnes stats
         assert bonus > 0
 
-        print(f"\n🎁 Episode bonus: {bonus:.2f}")
+        print("\n🎁 Episode bonus: {bonus")
 
 
 class TestDispatchEnvRender:
@@ -426,10 +425,10 @@ def test_realistic_scenario():
         render_mode="human"
     )
 
-    obs, info = env.reset(seed=123)
+    obs, info = env.reset(seed=0.123)
     print("\n✅ Environnement initialisé")
-    print(f"  Drivers: {info['available_drivers']}")
-    print(f"  Bookings: {info['active_bookings']}")
+    print("  Drivers: {info['available_drivers']}")
+    print("  Bookings: {info['active_bookings']}")
 
     env.render()
 
@@ -442,7 +441,7 @@ def test_realistic_scenario():
         # Action aléatoire (à remplacer par une vraie politique plus tard)
         action = env.action_space.sample()
 
-        obs, reward, terminated, truncated, info = env.step(action)
+        _obs, reward, terminated, _truncated, info = env.step(action)
         total_reward += reward
         steps += 1
 
@@ -453,20 +452,20 @@ def test_realistic_scenario():
     env.render()  # Final state
 
     print("\n📊 RÉSULTATS FINAUX:")
-    print(f"  Steps: {steps}")
-    print(f"  Reward total: {total_reward:.2f}")
-    print(f"  Reward moyen/step: {total_reward/steps:.2f}")
-    print(f"  Assignments: {info['episode_stats']['assignments']}")
-    print(f"  Retards: {info['episode_stats']['late_pickups']}")
-    print(f"  Annulations: {info['episode_stats']['cancellations']}")
-    print(f"  Distance totale: {info['episode_stats']['total_distance']:.1f} km")
+    print("  Steps: {steps}")
+    print("  Reward total: {total_reward")
+    print("  Reward moyen/step: {total_reward/steps")
+    print("  Assignments: {info['episode_stats']['assignments']}")
+    print("  Retards: {info['episode_stats']['late_pickups']}")
+    print("  Annulations: {info['episode_stats']['cancellations']}")
+    print("  Distance totale: {info['episode_stats']['total_distance']")
 
-    if info['episode_stats']['assignments'] > 0:
-        avg_distance = (
-            info['episode_stats']['total_distance'] /
-            info['episode_stats']['assignments']
+    if info["episode_stats"]["assignments"] > 0:
+        (
+            info["episode_stats"]["total_distance"] /
+            info["episode_stats"]["assignments"]
         )
-        print(f"  Distance moyenne: {avg_distance:.1f} km/course")
+        print("  Distance moyenne: {avg_distance")
 
     print("="*60)
 

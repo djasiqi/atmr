@@ -1,70 +1,66 @@
-"""
-Utilitaires pour masquer les données sensibles (PII) dans les logs
-Conformité GDPR-like
+"""Utilitaires pour masquer les données sensibles (PII) dans les logs
+Conformité GDPR-like.
 """
 import logging
 import re
 from typing import Any
 
 # Patterns à masquer (renforcés pour RGPD/OWASP)
-EMAIL_PATTERN = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
-PHONE_PATTERN = re.compile(r'\+?\d[\d\s\-\(\)]{6,20}\d')
+EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
+PHONE_PATTERN = re.compile(r"\+?\d[\d\s\-\(\)]{6,20}\d")
 # ✅ Pattern IBAN Suisse spécifique (CHxx xxxx xxxx xxxx xxxx x)
-IBAN_PATTERN = re.compile(r'\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b')
-IBAN_CH_PATTERN = re.compile(r'\bCH\d{2}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{1}\b')
+IBAN_PATTERN = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b")
+IBAN_CH_PATTERN = re.compile(r"\bCH\d{2}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{1}\b")
 # ✅ Pattern carte bancaire (16 chiffres avec espaces/tirets optionnels)
-CARD_PATTERN = re.compile(r'\b\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b')
+CARD_PATTERN = re.compile(r"\b\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b")
 # ✅ Pattern téléphone suisse (079... 10 chiffres)
-PHONE_CH_PATTERN = re.compile(r'\b0\d{9}\b')
+PHONE_CH_PATTERN = re.compile(r"\b0\d{9}\b")
 # ✅ Pattern GPS haute précision (6+ décimales) - RGPD Art. 32
-GPS_PATTERN = re.compile(r'\b(\d+\.\d{6,}),\s*(\d+\.\d{6,})\b')
+GPS_PATTERN = re.compile(r"\b(\d+\.\d{6,}),\s*(\d+\.\d{6,})\b")
+
+# Constantes pour éviter les valeurs magiques
+MIN_PHONE_LENGTH = 4
+MIN_IBAN_LENGTH = 8
 
 def mask_email(email: str) -> str:
-    """
-    Masque email: john.doe@example.com → j***@e***.com
-    """
-    if not email or '@' not in email:
+    """Masque email: john.doe@example.com → j***@e***.com."""
+    if not email or "@" not in email:
         return email
 
-    local, domain = email.rsplit('@', 1)
-    domain_parts = domain.split('.')
+    local, domain = email.rsplit("@", 1)
+    domain_parts = domain.split(".")
 
-    masked_local = local[0] + '***' if len(local) > 0 else '***'
-    masked_domain_name = domain_parts[0][0] + '***' if len(domain_parts[0]) > 0 else '***'
-    masked_domain = masked_domain_name + '.' + '.'.join(domain_parts[1:])
+    masked_local = local[0] + "***" if len(local) > 0 else "***"
+    masked_domain_name = domain_parts[0][0] + "***" if len(domain_parts[0]) > 0 else "***"
+    masked_domain = masked_domain_name + "." + ".".join(domain_parts[1:])
 
     return f"{masked_local}@{masked_domain}"
 
 def mask_phone(phone: str) -> str:
-    """
-    Masque téléphone: +41 22 123 45 67 → +41 ** *** ** 67
-    """
+    """Masque téléphone: +41 22 123 45 67 → +41 ** *** ** 67."""
     if not phone:
         return phone
 
-    digits = re.sub(r'\D', '', phone)
-    if len(digits) < 4:
-        return '***'
+    digits = re.sub(r"\D", "", phone)
+    if len(digits) < MIN_PHONE_LENGTH:
+        return "***"
 
     # Garder préfixe pays + 2 derniers chiffres
     return f"{phone[:3]} ** *** ** {digits[-2:]}"
 
 def mask_iban(iban: str) -> str:
-    """
-    Masque IBAN: CH65 0900 0000 1234 5678 9 → CH** **** **** **** **89
-    """
-    if not iban or len(iban) < 8:
+    """Masque IBAN: CH65 0900 0000 1234 5678 9 → CH** **** **** **** **89."""
+    if not iban or len(iban) < MIN_IBAN_LENGTH:
         return iban
 
     return f"{iban[:2]}** **** **** **** **{iban[-2:]}"
 
 def mask_gps_coords(lat: str, lon: str) -> str:
-    """
-    Réduit précision GPS de 6+ décimales à 4 décimales.
+    """Réduit précision GPS de 6+ décimales à 4 décimales.
     Précision GPS:
     - 6 décimales: ~0.11m (identification individu)
     - 4 décimales: ~11m (conformité RGPD)
-    Exemple: "46.519654, 6.632273" → "46.5197, 6.6323 [GPS_APPROX]"
+    Exemple: "46.519654, 6.632273" → "46.5197, 6.6323 [GPS_APPROX]".
     """
     try:
         lat_float = float(lat)
@@ -75,9 +71,7 @@ def mask_gps_coords(lat: str, lon: str) -> str:
         return f"{lat}, {lon} [GPS_REDACTED]"
 
 def sanitize_log_data(data: Any) -> Any:
-    """
-    Nettoie récursivement les données sensibles dans dict/str
-    """
+    """Nettoie récursivement les données sensibles dans dict/str."""
     if isinstance(data, dict):
         return {k: sanitize_log_data(v) for k, v in data.items()}
 
@@ -89,31 +83,30 @@ def sanitize_log_data(data: Any) -> Any:
         # pour éviter conflits (ex: 0791234567 masqué par PHONE_PATTERN avant PHONE_CH_PATTERN)
 
         # 1. Patterns spécifiques (prioritaires)
-        sanitized = IBAN_CH_PATTERN.sub('[IBAN_REDACTED]', data)
-        sanitized = CARD_PATTERN.sub('[CARD_REDACTED]', sanitized)
-        sanitized = PHONE_CH_PATTERN.sub('[PHONE_REDACTED]', sanitized)
+        sanitized = IBAN_CH_PATTERN.sub("[IBAN_REDACTED]", data)
+        sanitized = CARD_PATTERN.sub("[CARD_REDACTED]", sanitized)
+        sanitized = PHONE_CH_PATTERN.sub("[PHONE_REDACTED]", sanitized)
         # ✅ SECURITY CWE-778: Masquer coordonnées GPS précises (RGPD Art. 32)
         sanitized = GPS_PATTERN.sub(lambda m: mask_gps_coords(m.group(1), m.group(2)), sanitized)
 
         # 2. Patterns génériques (fallback)
         sanitized = EMAIL_PATTERN.sub(lambda m: mask_email(m.group(0)), sanitized)
         sanitized = PHONE_PATTERN.sub(lambda m: mask_phone(m.group(0)), sanitized)
-        sanitized = IBAN_PATTERN.sub(lambda m: mask_iban(m.group(0)), sanitized)
+        return IBAN_PATTERN.sub(lambda m: mask_iban(m.group(0)), sanitized)
 
-        return sanitized
 
     return data
 
 class PIIFilter(logging.Filter):
-    """Filtre logging pour masquer PII automatiquement"""
+    """Filtre logging pour masquer PII automatiquement."""
 
-    def filter(self, record: logging.LogRecord) -> bool:
+    def filter(self, record: logging.LogRecord) -> bool:  # type: ignore[override]
         # Masquer dans le message
-        if hasattr(record, 'msg') and isinstance(record.msg, str):
+        if hasattr(record, "msg") and isinstance(record.msg, str):
             record.msg = sanitize_log_data(record.msg)
 
         # Masquer dans args
-        if hasattr(record, 'args') and record.args:
+        if hasattr(record, "args") and record.args:
             record.args = tuple(sanitize_log_data(arg) for arg in record.args)
 
         return True

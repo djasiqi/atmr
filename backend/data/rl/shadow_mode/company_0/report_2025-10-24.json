@@ -1,0 +1,49 @@
+{
+  "company_id": "company_0",
+  "date": "2025-10-24",
+  "total_decisions": 3,
+  "statistics": {
+    "eta_delta": {
+      "mean": 0.0,
+      "median": 0,
+      "min": 0,
+      "max": 0,
+      "std": 0.0
+    },
+    "delay_delta": {
+      "mean": 0.0,
+      "median": 0,
+      "min": 0,
+      "max": 0,
+      "std": 0.0
+    },
+    "rl_confidence": {
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "agreement_rate": 0.0
+  },
+  "kpis_summary": {
+    "eta_improvement_rate": 0.0,
+    "total_violations": 0,
+    "violation_rate": 0.0,
+    "top_reasons": [
+      [
+        "Respecte la fenêtre horaire",
+        3
+      ],
+      [
+        "Chauffeur disponible",
+        3
+      ]
+    ]
+  },
+  "top_insights": [
+    "Taux d'accord faible: 0.0%",
+    "Confiance RL faible: 0.0%"
+  ],
+  "recommendations": [
+    "Taux d'accord faible - Analyser les différences de logique"
+  ]
+}

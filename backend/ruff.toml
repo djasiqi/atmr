@@ -5,18 +5,25 @@ target-version = "py311"
 line-length = 120
 
 [lint]
+# Configuration optimisée pour Docker - règles critiques uniquement
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "N",   # pep8-naming
-    "UP",  # pyupgrade
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "DTZ", # flake8-datetimez (timezone aware)
-    "T20", # flake8-print
-    "SIM", # flake8-simplify
+    "E4",    # pycodestyle errors critiques (E401, E402, E403, E404)
+    "E7",    # pycodestyle errors critiques (E701, E702, E703, E704, E711, E712, E713, E714, E721, E722, E731, E741, E742, E743, E744, E745, E746, E747, E748, E749)
+    "E9",    # pycodestyle errors critiques (E901, E902, E903, E904, E905, E906, E907, E908, E909, E910, E911, E912, E913, E914, E915, E916, E917, E918, E919, E920, E921, E922, E923, E924, E925, E926, E927, E928, E929, E930, E931, E932, E933, E934, E935, E936, E937, E938, E939, E940, E941, E942, E943, E944, E945, E946, E947, E948, E949, E950, E951, E952, E953, E954, E955, E956, E957, E958, E959, E960, E961, E962, E963, E964, E965, E966, E967, E968, E969, E970, E971, E972, E973, E974, E975, E976, E977, E978, E979, E980, E981, E982, E983, E984, E985, E986, E987, E988, E989, E990, E991, E992, E993, E994, E995, E996, E997, E998, E999)
+    "F",     # pyflakes (erreurs importantes)
+    "I",     # isort (imports)
+    "B",     # flake8-bugbear (bugs potentiels)
+    "C4",    # flake8-comprehensions (optimisations)
+    "SIM",   # flake8-simplify (simplifications)
+    "A",     # flake8-builtins (conflits builtins)
+    "G",     # flake8-logging-format (logging)
+    "ARG",   # flake8-unused-arguments (arguments inutilisés)
+    "PTH",   # flake8-use-pathlib (pathlib)
+    "PL",    # pylint (règles importantes)
+    "PT",    # flake8-pytest-style (tests)
+    "Q",     # flake8-quotes (guillemets)
+    "RET",   # flake8-return (returns)
+    "RUF",   # ruff-specific rules
 ]
 
 ignore = [
@@ -28,15 +35,72 @@ ignore = [
     "UP035",  # typing.Dict/List/Tuple deprecated (migration progressive)
     "N806",   # Variables en majuscules (conventions mathématiques: R, M)
     "B023",   # Function uses loop variable (closures intentionnelles)
+    "D100",   # Missing docstring in public module
+    "D101",   # Missing docstring in public class
+    "D102",   # Missing docstring in public method
+    "D103",   # Missing docstring in public function
+    "D104",   # Missing docstring in public package
+    "D105",   # Missing docstring in magic method
+    "PLR0913", # Too many arguments
+    "PLR0912", # Too many branches
+    "PLR0915", # Too many statements
+    "COM812", # Missing trailing comma
+    "ISC001", # Implicitly concatenated string literals
+    "EXE002", # Executable file without shebang (Docker scripts)
+    "T201",   # Print statements (scripts de formation)
+    "DTZ005", # datetime.now() without tz (scripts de formation)
+    "SLF001", # Private member access (tests intentionnels)
+    "PLC0415", # Import not at top level (tests avec mocks)
+    "PT009",  # unittest-style assertions (migration progressive)
+    "RUF001", # Ambiguous unicode characters (emojis dans logs)
 ]
 
 [lint.per-file-ignores]
-"__init__.py" = ["F401"]  # Imports inutilisés OK dans __init__
-"migrations/**/*.py" = ["E501", "F401", "N999"]  # Alembic auto-generated
-"tests/**/*.py" = ["S101", "F401", "E402"]  # Assert OK, imports hors top OK (mocks)
+"__init__.py" = ["F401", "D104"]  # Imports inutilisés OK dans __init__
+"migrations/**/*.py" = ["E501", "F401", "N999", "D"]  # Alembic auto-generated
+"scripts/**/*.py" = [
+    "T201",     # Print statements OK dans scripts
+    "DTZ005",   # datetime.now() sans tz OK dans scripts
+    "D",        # Docstrings optionnelles dans scripts
+    "PLR2004",  # Magic values OK dans scripts
+    "F401",     # Imports inutilisés OK dans scripts
+]
+"train_*.py" = [
+    "T201",     # Print statements OK dans scripts de formation
+    "DTZ005",   # datetime.now() sans tz OK dans scripts de formation
+    "D",        # Docstrings optionnelles dans scripts de formation
+    "PLR2004",  # Magic values OK dans scripts de formation
+    "F401",     # Imports inutilisés OK dans scripts de formation
+    "PLC0415",  # Imports dans fonctions OK dans scripts de formation
+]
+"tests/**/*.py" = [
+    "S101",     # Assert OK
+    "F401",     # Imports hors top OK (mocks)
+    "E402",     # Imports hors top OK (mocks)
+    "D",        # Docstrings optionnelles dans tests
+    "PLR2004",  # Magic values OK dans tests
+    "S101",     # Assert OK dans tests
+    "ARG001",   # Unused function arguments OK dans tests
+    "ARG002",   # Unused method arguments OK dans tests
+    "ARG003",   # Unused class method arguments OK dans tests
+    "ARG004",   # Unused static method arguments OK dans tests
+    "ARG005",   # Unused lambda arguments OK dans tests
+    "SLF001",   # Private member access OK dans tests
+    "PLC0415",  # Import not at top level OK dans tests
+    "PT009",    # unittest-style assertions OK dans tests
+    "EXE002",   # Executable files OK dans tests
+]
+
+[lint.isort]
+known-first-party = ["services", "models", "routes", "shared"]
+force-single-line = false
+
+[lint.mccabe]
+max-complexity = 10
 
 [format]
 quote-style = "double"
 indent-style = "space"
 line-ending = "auto"
+skip-magic-trailing-comma = false
 

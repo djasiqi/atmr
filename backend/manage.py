@@ -18,7 +18,7 @@ from flask_migrate import upgrade as _upgrade
 from app import create_app
 
 # Crée une instance de l'application pour le contexte
-config_name = os.getenv('FLASK_ENV') or 'development'
+config_name = os.getenv("FLASK_ENV") or "development"
 app = create_app(config_name)
 
 
@@ -27,12 +27,10 @@ app = create_app(config_name)
 @click.group()
 def cli():
     """Point d'entrée principal pour les commandes de gestion."""
-    pass
 
 @cli.group(name="db")
 def dbcli():
     """Commandes pour les migrations de base de données."""
-    pass
 
 # ...
 @dbcli.command()
@@ -43,7 +41,7 @@ def init():
     click.echo("Dossier des migrations initialisé.")
 
 @dbcli.command()
-@click.option('-m', '--message', required=True, help="Message de description pour la migration.")
+@click.option("-m", "--message", required=True, help="Message de description pour la migration.")
 def migrate(message):
     """Génère une nouvelle migration."""
     with app.app_context():
@@ -58,7 +56,7 @@ def upgrade():
     click.echo("Migrations appliquées à la base de données.")
 
 @dbcli.command()
-@click.argument('revision', default='head')
+@click.argument("revision", default="head")
 def stamp(revision):
     """'Tamponne' la base de données avec une révision, sans exécuter la migration."""
     with app.app_context():

@@ -1,29 +1,37 @@
 # backend/services/unified_dispatch/solver.py
 from __future__ import annotations
 
+import contextlib
 import logging
 import math
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
-from models import Booking, Driver
 from services.unified_dispatch.settings import Settings
+
+if TYPE_CHECKING:
+    from models import Booking, Driver
 
 DEFAULT_SETTINGS = Settings()
 
-SAFE_MAX_NODES = int(os.getenv("UD_SOLVER_MAX_NODES", "800"))           # total nodes = drivers + 2*bookings
-SAFE_MAX_TASKS = int(os.getenv("UD_SOLVER_MAX_TASKS", "250"))           # bookings
-SAFE_MAX_VEH   = int(os.getenv("UD_SOLVER_MAX_VEHICLES", "120"))        # drivers
+# total nodes = drivers + 2*bookings
+SAFE_MAX_NODES = int(os.getenv("UD_SOLVER_MAX_NODES", "800"))
+SAFE_MAX_TASKS = int(
+    os.getenv(
+        "UD_SOLVER_MAX_TASKS",
+        "250"))           # bookings
+SAFE_MAX_VEH = int(os.getenv("UD_SOLVER_MAX_VEHICLES", "120"))        # drivers
 
 logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------
 # Types de sortie
 # -------------------------------------------------------------------
+
 
 @dataclass
 class SolverAssignment:
@@ -39,15 +47,16 @@ class SolverAssignment:
     dispatch_run_id: int | None = None  # Ensure this field is included
 
     def to_dict(self) -> Dict[str, Any]:
-        """
-        Sérialisation compatible API:
+        """Sérialisation compatible API:
         - convertit les minutes relatives en datetimes ISO (local naïf) basés sur base_time.
-        - inclut dispatch_run_id pour persistance
+        - inclut dispatch_run_id pour persistance.
         """
         bt = self.base_time or datetime.now()
         try:
-            est_pickup_dt = bt + timedelta(minutes=int(self.estimated_pickup_min))
-            est_drop_dt = bt + timedelta(minutes=int(self.estimated_dropoff_min))
+            est_pickup_dt = bt + \
+                timedelta(minutes=int(self.estimated_pickup_min))
+            est_drop_dt = bt + \
+                timedelta(minutes=int(self.estimated_dropoff_min))
         except Exception:
             est_pickup_dt = bt
             est_drop_dt = bt
@@ -62,6 +71,7 @@ class SolverAssignment:
             "dispatch_run_id": self.dispatch_run_id,  # Include dispatch_run_id in the dict
         }
 
+
 @dataclass
 class SolverResult:
     assignments: List[SolverAssignment]
@@ -73,13 +83,15 @@ class SolverResult:
 # Solveur OR-Tools
 # -------------------------------------------------------------------
 
-def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> SolverResult:
-    """
-    Solve VRPTW.
+def solve(problem: Dict[str, Any],
+          settings: Settings = DEFAULT_SETTINGS) -> SolverResult:
+    """Solve VRPTW.
     time_matrix/service_times/time_windows/driver_windows en MINUTES, horizon en MINUTES.
     """
-    if not problem or not problem.get("bookings") or not problem.get("drivers"):
-        return SolverResult(assignments=[], unassigned_booking_ids=[], debug={"reason": "empty_problem"})
+    if not problem or not problem.get(
+            "bookings") or not problem.get("drivers"):
+        return SolverResult(assignments=[], unassigned_booking_ids=[
+        ], debug={"reason": "empty_problem"})
 
     bookings: List[Booking] = problem["bookings"]
     drivers: List[Driver] = problem["drivers"]
@@ -91,13 +103,19 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
     service_times: List[int] = problem["service_times"]
     driver_windows: List[Tuple[int, int]] = problem.get("driver_windows", [])
     pair_min_gaps: List[int] = problem.get("pair_min_gaps", [])
-    # Capacités véhicules (optionnel) – défaut: 1 place / chauffeur
+    # Capacités véhicules (optionnel) - défaut: 1 place / chauffeur
     vehicle_capacities: List[int] | None = problem.get("vehicle_capacities")
     # horizon minutes depuis settings, avec fallback robuste
     horizon: int = int(
         problem.get(
             "horizon",
-            getattr(getattr(settings, "time", None), "horizon_minutes", 12 * 60),
+            getattr(
+                getattr(
+                    settings,
+                    "time",
+                    None),
+                "horizon_minutes",
+                12 * 60),
         )
     )
     base_time: datetime | None = problem.get("base_time")
@@ -108,23 +126,29 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
     if n_nodes == 0:
         return SolverResult(
             assignments=[],
-            unassigned_booking_ids=[int(getattr(b, "id", 0) or 0) for b in bookings],
+            unassigned_booking_ids=[
+                int(getattr(b, "id", 0) or 0) for b in bookings],
             debug={"reason": "empty_matrix"},
         )
 
     # Matrice carrée
     for r in time_matrix:
         if len(r) != n_nodes:
-            raise ValueError(f"time_matrix must be square, got {n_nodes}x{len(r)}")
+            msg = f"time_matrix must be square, got {n_nodes}x{len(r)}"
+            raise ValueError(msg)
     expected_nodes = num_vehicles + 2 * len(bookings)
     if expected_nodes != n_nodes:
-        raise ValueError(f"time_matrix size mismatch: expected {expected_nodes}, got {n_nodes}")
+        msg = f"time_matrix size mismatch: expected {expected_nodes}, got {n_nodes}"
+        raise ValueError(msg)
     if len(tw) != 2 * len(bookings):
-        raise ValueError(f"time_windows size mismatch: expected {2*len(bookings)}, got {len(tw)}")
+        msg = f"time_windows size mismatch: expected {2*len(bookings)}, got {len(tw)}"
+        raise ValueError(msg)
     if len(service_times) != 2 * len(bookings):
-        raise ValueError(f"service_times size mismatch: expected {2*len(bookings)}, got {len(service_times)}")
+        msg = f"service_times size mismatch: expected {2*len(bookings)}, got {len(service_times)}"
+        raise ValueError(msg)
     if len(starts) != num_vehicles or len(ends) != num_vehicles:
-        raise ValueError("starts/ends must have length = num_vehicles")
+        msg = "starts/ends must have length = num_vehicles"
+        raise ValueError(msg)
 
     # -------- Indexation des tasks
     depot_count = num_vehicles
@@ -148,7 +172,8 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
         booking_id_to_p_node[b_id] = p_node
 
     # --- Pré-traitement pour identifier les paires Aller/Retour ---
-    booking_map: Dict[int, Any] = {int(getattr(b, "id", 0) or 0): b for b in bookings}
+    booking_map: Dict[int, Any] = {
+        int(getattr(b, "id", 0) or 0): b for b in bookings}
     return_to_outbound_map = {}
     for b in bookings:
         parent_id = getattr(b, "parent_booking_id", None)
@@ -162,15 +187,21 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
     # ---- Safety guard: cap problem size to avoid native crashes
     if (len(bookings) > SAFE_MAX_TASKS or
         num_vehicles > SAFE_MAX_VEH or
-        n_nodes > SAFE_MAX_NODES):
+            n_nodes > SAFE_MAX_NODES):
         logger.warning("[Solver] Problem too large -> fallback (veh=%d, tasks=%d, nodes=%d; caps=%d/%d/%d)",
                        num_vehicles, len(bookings), n_nodes,
                        SAFE_MAX_VEH, SAFE_MAX_TASKS, SAFE_MAX_NODES)
-        # Ne pas tenter OR-Tools -> on rend tout "non assigné" => engine fera le fallback heuristique
+        # Ne pas tenter OR-Tools -> on rend tout "non assigné" => engine fera
+        # le fallback heuristique
         return SolverResult(
             assignments=[],
-            unassigned_booking_ids=[int(getattr(b, "id", 0) or 0) for b in bookings],
-            debug={"status": "too_large", "veh": num_vehicles, "tasks": len(bookings), "nodes": n_nodes},
+            unassigned_booking_ids=[
+                int(getattr(b, "id", 0) or 0) for b in bookings],
+            debug={
+                "status": "too_large",
+                "veh": num_vehicles,
+                "tasks": len(bookings),
+                "nodes": n_nodes},
         )
 
     # -------- OR-Tools
@@ -186,17 +217,29 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
     except Exception:
         DriverType = None
 
-    emergency_mult = float(getattr(getattr(settings, "emergency", None), "emergency_distance_multiplier", 1.0))
-    emergency_per_stop = int(getattr(getattr(settings, "emergency", None), "emergency_per_stop_penalty", 0))
+    emergency_mult = float(
+        getattr(
+            getattr(
+                settings,
+                "emergency",
+                None),
+            "emergency_distance_multiplier",
+            1.0))
+    emergency_per_stop = int(
+        getattr(
+            getattr(
+                settings,
+                "emergency",
+                None),
+            "emergency_per_stop_penalty",
+            0))
 
     veh_is_emergency: List[bool] = []
     for d in drivers:
         is_emg = False
         t = getattr(d, "driver_type", None)
-        if DriverType is not None:
-            is_emg = (t == DriverType.EMERGENCY)
-        else:
-            is_emg = bool(t) and str(t).endswith("EMERGENCY")
+        is_emg = t == DriverType.EMERGENCY if DriverType is not None else bool(
+            t) and str(t).endswith("EMERGENCY")
         veh_is_emergency.append(is_emg)
 
     def _service_time_for_from_node(from_node: int) -> int:
@@ -217,7 +260,6 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
 
     time_cb_index = routing.RegisterTransitCallback(_time_callback)
 
-
     transit_cb_per_vehicle: List[int] = []
     for vid in range(num_vehicles):
         def _make_cb(v_is_emg: bool):
@@ -226,27 +268,40 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
                 to_node = manager.IndexToNode(to_index)
                 travel = int(time_matrix[from_node][to_node])
                 if v_is_emg and emergency_mult > 1.0:
-                    travel = int(math.ceil(travel * emergency_mult))
+                    travel = math.ceil(travel * emergency_mult)
                 service = _service_time_for_from_node(from_node)
-                add_stop_pen = emergency_per_stop if (v_is_emg and to_node >= task_nodes_start) else 0
+                add_stop_pen = emergency_per_stop if (
+                    v_is_emg and to_node >= task_nodes_start) else 0
                 return travel + service + add_stop_pen
             return _cb
-        cb_idx = routing.RegisterTransitCallback(_make_cb(veh_is_emergency[vid]))
+        cb_idx = routing.RegisterTransitCallback(
+            _make_cb(veh_is_emergency[vid]))
         transit_cb_per_vehicle.append(cb_idx)
         routing.SetArcCostEvaluatorOfVehicle(cb_idx, vid)
 
-
     for vid, d in enumerate(drivers):
-        base_cost = int(getattr(getattr(settings, "solver", None), "vehicle_fixed_cost", 0))
-        emg_fixed = int(getattr(getattr(settings, "emergency", None), "emergency_vehicle_fixed_cost", 0))
+        base_cost = int(
+            getattr(
+                getattr(
+                    settings,
+                    "solver",
+                    None),
+                "vehicle_fixed_cost",
+                0))
+        emg_fixed = int(
+            getattr(
+                getattr(
+                    settings,
+                    "emergency",
+                    None),
+                "emergency_vehicle_fixed_cost",
+                0))
         if (DriverType is not None and getattr(d, "driver_type", None) == DriverType.EMERGENCY) or \
            (DriverType is None and getattr(d, "driver_type", None) and str(d.driver_type).endswith("EMERGENCY")):
             base_cost += emg_fixed
         if base_cost:
-            try:
+            with contextlib.suppress(Exception):
                 routing.SetFixedCostOfVehicle(int(base_cost), vid)
-            except Exception:
-                pass
 
     # Dimension temps (positionnel pour compat SWIG)
     routing.AddDimension(
@@ -267,10 +322,14 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
 
     # TW chauffeurs (départs/arrivées véhicules) si activé dans les settings
     if getattr(settings.solver, "add_driver_work_windows", True):
-        strict_end = bool(getattr(settings.solver, "strict_driver_end_window", True))
+        strict_end = bool(
+            getattr(
+                settings.solver,
+                "strict_driver_end_window",
+                True))
         for v in range(num_vehicles):
             start_index = routing.Start(v)
-            end_index   = routing.End(v)
+            end_index = routing.End(v)
             if v < len(driver_windows):
                 s, e = driver_windows[v]
             else:
@@ -283,13 +342,14 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
                 # borne de fin souple : autorise un retour un peu plus tard
                 time_dim.CumulVar(end_index).SetRange(0, e)
     else:
-        # Comportement historique: aucune contrainte spécifique -> bornes larges
+        # Comportement historique: aucune contrainte spécifique -> bornes
+        # larges
         for v in range(num_vehicles):
             time_dim.CumulVar(routing.Start(v)).SetRange(0, horizon)
             time_dim.CumulVar(routing.End(v)).SetRange(0, horizon)
 
     # TW pickups/dropoffs
-    for i, b in enumerate(bookings):
+    for i, _ in enumerate(bookings):
         p_node = pickup_nodes[i]
         d_node = dropoff_nodes[i]
         p_index = manager.NodeToIndex(p_node)
@@ -318,7 +378,8 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
         if i < len(pair_min_gaps) and pair_min_gaps[i] > 0:
             min_gap = int(pair_min_gaps[i]) + 1
             routing.solver().Add(
-                time_dim.CumulVar(d_index) >= time_dim.CumulVar(p_index) + min_gap
+                time_dim.CumulVar(d_index) >= time_dim.CumulVar(
+                    p_index) + min_gap
             )
 
     # -------------------------------------------------------------------
@@ -330,7 +391,7 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
         demands[pickup_nodes[i]] = 1
         demands[dropoff_nodes[i]] = -1
 
-    # Capacité véhicules – par défaut = 1 si non fourni
+    # Capacité véhicules - par défaut = 1 si non fourni
     if not vehicle_capacities or len(vehicle_capacities) != num_vehicles:
         vehicle_capacities = [1 for _ in range(num_vehicles)]
 
@@ -357,26 +418,29 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
         disable_span = os.getenv("UD_SOLVER_DISABLE_SPAN_COST", "0") == "1"
         coeff = int(getattr(settings.solver, "global_span_cost", 0))
         if coeff > 0 and not disable_span:
-            # Préfère par véhicule si disponible ; évite le chemin d'abort sous Windows
+            # Préfère par véhicule si disponible ; évite le chemin d'abort sous
+            # Windows
             if hasattr(time_dim, "SetSpanCostCoefficientForVehicle"):
                 for v in range(num_vehicles):
                     time_dim.SetSpanCostCoefficientForVehicle(coeff, v)
-            else:
-                # Global : seulement hors Windows
-                if os.name != "nt":
-                    time_dim.SetGlobalSpanCostCoefficient(coeff)
+            # Global : seulement hors Windows
+            elif os.name != "nt":
+                time_dim.SetGlobalSpanCostCoefficient(coeff)
     except Exception:
         pass
 
-    # Finalizers : Start par défaut (End désactivé pour contourner un autre chemin de crash)
+    # Finalizers : Start par défaut (End désactivé pour contourner un autre
+    # chemin de crash)
     for v in range(num_vehicles):
-        routing.AddVariableMinimizedByFinalizer(time_dim.CumulVar(routing.Start(v)))
+        routing.AddVariableMinimizedByFinalizer(
+            time_dim.CumulVar(routing.Start(v)))
     if os.getenv("UD_SOLVER_FINALIZE_END", "0") == "1":
         for v in range(num_vehicles):
-            routing.AddVariableMinimizedByFinalizer(time_dim.CumulVar(routing.End(v)))
+            routing.AddVariableMinimizedByFinalizer(
+                time_dim.CumulVar(routing.End(v)))
 
     # Dimension "Visits" (cap de stops / véhicule)
-    def visits_callback(from_index: int, to_index: int) -> int:
+    def visits_callback(_from_index: int, to_index: int) -> int:
         to_node = manager.IndexToNode(to_index)
         return 1 if to_node >= task_nodes_start else 0
 
@@ -384,20 +448,29 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
     routing.AddDimension(
         visits_cb_idx,                             # transit
         0,                                         # slack_max
-        int(2 * settings.solver.max_bookings_per_driver),  # capacity (pickup+dropoff)
+        # capacity (pickup+dropoff)
+        int(2 * settings.solver.max_bookings_per_driver),
         True,                                      # fix_start_cumul_to_zero
         "Visits",
     )
 
     # Disjunctions: GROUPÉES par PAIRE (pickup+dropoff) avec grosse pénalité si non servi
-    # NB: une seule disjonction par paire => on paie la pénalité au plus une fois par course complète.
-    base_penalty_raw = getattr(getattr(settings, "solver", None), "unassigned_penalty_base", 10000)
+    # NB: une seule disjonction par paire => on paie la pénalité au plus une
+    # fois par course complète.
+    base_penalty_raw = getattr(
+        getattr(
+            settings,
+            "solver",
+            None),
+        "unassigned_penalty_base",
+        10000)
     try:
         base_penalty = int(base_penalty_raw)
     except Exception:
         base_penalty = 10000
 
-    # On surestime par rapport aux coûts de trajet (en minutes) pour éviter le non-service "facile"
+    # On surestime par rapport aux coûts de trajet (en minutes) pour éviter le
+    # non-service "facile"
     penalty = max(base_penalty, 20 * int(horizon))
     for i in range(len(bookings)):
         p_idx = manager.NodeToIndex(pickup_nodes[i])
@@ -406,12 +479,15 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
         # (et on évite des états "pickup absent / dropoff présent" même si ActiveVar égalise déjà).
         routing.AddDisjunction([p_idx, d_idx], int(penalty))
 
-
     # --- NOUVEAU: Pénalité "soft" pour encourager le MÊME chauffeur sur les Aller/Retour ---
     # On ajoute une pénalité au coût total si les chauffeurs sont différents.
     # Cela incite le solveur à préférer l'attente sur place.
     solver = routing.solver()
-    round_trip_penalty_cost = int(getattr(settings.solver, "round_trip_driver_penalty_min", 120))
+    round_trip_penalty_cost = int(
+        getattr(
+            settings.solver,
+            "round_trip_driver_penalty_min",
+            120))
 
     for return_id, outbound_id in return_to_outbound_map.items():
         outbound_p_node = booking_id_to_p_node.get(outbound_id)
@@ -421,37 +497,52 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
             outbound_p_index = manager.NodeToIndex(outbound_p_node)
             return_p_index = manager.NodeToIndex(return_p_node)
 
-            # Crée une variable qui vaut 1 si les chauffeurs sont différents, 0 sinon.
-            are_drivers_different = solver.BoolVar(f"are_drivers_different_{return_id}")
-            solver.Add(are_drivers_different == (routing.VehicleVar(outbound_p_index) != routing.VehicleVar(return_p_index)))
+            # Crée une variable qui vaut 1 si les chauffeurs sont différents, 0
+            # sinon.
+            are_drivers_different = solver.BoolVar(
+                f"are_drivers_different_{return_id}")
+            solver.Add(are_drivers_different == (routing.VehicleVar(
+                outbound_p_index) != routing.VehicleVar(return_p_index)))
             # Ajoute la pénalité au coût global si la variable est à 1.
-            routing.AddVariableMinimizedByFinalizer(are_drivers_different * round_trip_penalty_cost)
+            routing.AddVariableMinimizedByFinalizer(
+                are_drivers_different * round_trip_penalty_cost)
 
     # Paramètres de recherche
     search_params = pywrapcp.DefaultRoutingSearchParameters()
     search_params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
     search_params.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
     search_params.time_limit.FromSeconds(int(settings.solver.time_limit_sec))
-    # Bornes conservatrices pour maîtriser l’espace de recherche/mémoire:
+    # Bornes conservatrices pour maîtriser l'espace de recherche/mémoire:
     search_params.solution_limit = 1
     search_params.log_search = False
 
     # Résolution
-    try:
+    with contextlib.suppress(Exception):
         search_params.number_of_threads = 1
-    except Exception:
-        pass
     solution = routing.SolveWithParameters(search_params)
     if solution is None:
-        _limit_sec = int(getattr(getattr(settings, "solver", None), "time_limit_sec", 0))
+        _limit_sec = int(
+            getattr(
+                getattr(
+                    settings,
+                    "solver",
+                    None),
+                "time_limit_sec",
+                0))
         logger.warning(
             "[Solver] No solution (limit=%ss, vehicles=%d, tasks=%d, nodes=%d, penalty=%d)",
             _limit_sec, num_vehicles, len(bookings), n_nodes, int(penalty),
         )
         return SolverResult(
             assignments=[],
-            unassigned_booking_ids=[int(getattr(b, "id", 0) or 0) for b in bookings],
-            debug={"status": "no_solution", "veh": num_vehicles, "tasks": len(bookings), "nodes": n_nodes, "penalty": int(penalty)},
+            unassigned_booking_ids=[
+                int(getattr(b, "id", 0) or 0) for b in bookings],
+            debug={
+                "status": "no_solution",
+                "veh": num_vehicles,
+                "tasks": len(bookings),
+                "nodes": n_nodes,
+                "penalty": int(penalty)},
         )
 
     # Extraction solution
@@ -478,14 +569,18 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
             if node >= task_nodes_start:
                 b_id = int(node_to_booking[node])
                 if node_is_pickup[node]:
-                    assigned_booking_to_driver[b_id] = int(getattr(drivers[v], "id", 0) or 0)
+                    assigned_booking_to_driver[b_id] = int(
+                        getattr(drivers[v], "id", 0) or 0)
                     assigned_pickup_rank[b_id] = order
                     # temps accumulé au pickup
-                    pickup_time_min[b_id] = int(solution.Value(time_dim.CumulVar(index)))
+                    pickup_time_min[b_id] = int(
+                        solution.Value(time_dim.CumulVar(index)))
                 else:
                     # temps accumulé au dropoff
-                    dropoff_time_min[b_id] = int(solution.Value(time_dim.CumulVar(index)))
-                # comptage "stops" urgences (pickup + dropoff) : on compte le to_node
+                    dropoff_time_min[b_id] = int(
+                        solution.Value(time_dim.CumulVar(index)))
+                # comptage "stops" urgences (pickup + dropoff) : on compte le
+                # to_node
                 if veh_is_emergency[v]:
                     emergency_stops += 1
             # accumuler travel min par véhicule d'urgence
@@ -513,7 +608,10 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
                     driver_id=int(assigned_booking_to_driver[b_id]),
                     route_index=int(assigned_pickup_rank.get(b_id, 0)),
                     estimated_pickup_min=int(pickup_time_min.get(b_id, 0)),
-                    estimated_dropoff_min=int(dropoff_time_min.get(b_id, pickup_time_min.get(b_id, 0))),
+                    estimated_dropoff_min=int(
+                        dropoff_time_min.get(
+                            b_id, pickup_time_min.get(
+                                b_id, 0))),
                     base_time=base_time,
                     dispatch_run_id=dispatch_run_id,
                 )
@@ -530,10 +628,18 @@ def solve(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> Sol
     }
     # km estimés pour les urgences (temps de trajet * vitesse moyenne / 60)
     try:
-        avg_kmh = float(getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25.0))
+        avg_kmh = float(
+            getattr(
+                getattr(
+                    settings,
+                    "matrix",
+                    None),
+                "avg_speed_kmh",
+                25.0))
         emergency_km_est = (emergency_travel_min * avg_kmh) / 60.0
         debug["emergency_km_est"] = round(emergency_km_est, 2)
     except Exception:
         pass
 
-    return SolverResult(assignments=assignments, unassigned_booking_ids=unassigned_ids, debug=debug)
+    return SolverResult(assignments=assignments,
+                        unassigned_booking_ids=unassigned_ids, debug=debug)

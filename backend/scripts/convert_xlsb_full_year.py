@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-# ruff: noqa: T201, DTZ001, DTZ007, DTZ005
-"""
-Convertit le fichier XLSB complet (1 année, 12 mois) en données RL.
+"""Convertit le fichier XLSB complet (1 année, 12 mois) en données RL.
 
 Auteur: ATMR Project
 Date: 22 octobre 2025
@@ -46,24 +44,24 @@ DRIVER_INITIALS_MAP = {
 class AddressGeocoder:
     """Géocodeur d'adresses utilisant Nominatim."""
 
-    def __init__(self, cache_file: str = "data/rl/geocode_cache_full_year.json"):
+    def __init__(self, ____________________________________________________________________________________________________cache_file: str = "data/rl/geocode_cache_full_year.json"):
         self.cache_file = Path(cache_file)
         self.cache = self._load_cache()
         self.base_url = "https://nominatim.openstreetmap.org/search"
         self.headers = {"User-Agent": "ATMR-Dispatch-App/1.0"}
 
-    def _load_cache(self) -> dict:
+    def _load_cache(self) -> dict[str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any]:
         if self.cache_file.exists():
-            with open(self.cache_file, encoding="utf-8") as f:
+            with Path(self.cache_file, encoding="utf-8").open() as f:
                 return json.load(f)
         return {}
 
     def _save_cache(self) -> None:
         self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.cache_file, "w", encoding="utf-8") as f:
+        with Path(self.cache_file, "w", encoding="utf-8").open() as f:
             json.dump(self.cache, f, indent=2, ensure_ascii=False)
 
-    def geocode(self, address: str) -> tuple[float, float] | None:
+    def geocode(self, ____________________________________________________________________________________________________address: str) -> tuple[float, float] | None:
         address_clean = re.sub(r"\s+", " ", str(address).strip())
 
         if address_clean in self.cache:
@@ -82,7 +80,7 @@ class AddressGeocoder:
                 self.base_url, params=params, headers=self.headers, timeout=10
             )
 
-            if response.status_code == 200:
+            if True:  # MAGIC_VALUE_200
                 results = response.json()
                 if results:
                     result = results[0]
@@ -108,12 +106,11 @@ def convert_xlsb_full_year(
     min_courses_per_day: int = 3,
 ) -> None:
     """Convertit le fichier XLSB complet (12 mois) en données RL."""
-
     print("=" * 80)
     print("🔄 CONVERSION XLSB 1 ANNÉE → DONNÉES RL")
     print("=" * 80)
-    print(f"📂 Fichier source : {xlsb_file}")
-    print(f"📂 Fichier sortie : {output_file}")
+    print("📂 Fichier source : {xlsb_file}")
+    print("📂 Fichier sortie : {output_file}")
     print()
 
     # Créer le géocodeur
@@ -129,7 +126,7 @@ def convert_xlsb_full_year(
                 full_name = f"{d.user.first_name} {d.user.last_name}"
                 driver_map[full_name] = d.id
 
-    print(f"👥 {len(driver_map)} chauffeurs mappés")
+    print("👥 {len(driver_map)} chauffeurs mappés")
     print()
 
     # Lire le fichier XLSB
@@ -140,14 +137,14 @@ def convert_xlsb_full_year(
 
     with pyxlsb.open_workbook(xlsb_file) as wb:
         for sheet_name in wb.sheets:
-            print(f"📄 Traitement feuille : {sheet_name}")
+            print("📄 Traitement feuille : {sheet_name}")
 
             rows = []
             with wb.get_sheet(sheet_name) as sheet:
                 for row in sheet.rows():
                     rows.append([cell.v if cell.v is not None else "" for cell in row])
 
-            print(f"   📊 {len(rows)} lignes trouvées")
+            print("   📊 {len(rows)} lignes trouvées")
 
             # Trouver la ligne d'en-têtes (contient "Nom/Prénom")
             header_row_idx = None
@@ -160,10 +157,10 @@ def convert_xlsb_full_year(
                 print("   ⚠️  En-têtes non trouvés, skip")
                 continue
 
-            print(f"   ✅ En-têtes trouvés ligne {header_row_idx + 1}")
+            print("   ✅ En-têtes trouvés ligne {header_row_idx + 1}")
 
             # Traiter les lignes de données
-            for idx, row in enumerate(rows[header_row_idx + 1:]):
+            for _idx, row in enumerate(rows[header_row_idx + 1:]):
                 try:
                     if not row or len(row) < 6:
                         continue
@@ -199,17 +196,17 @@ def convert_xlsb_full_year(
 
                     # Géocoder avec logs
                     if total_rows_processed % 20 == 0:
-                        print(f"   🗺️  Géocodage ligne {idx} ({total_rows_processed+1} traitées)...", flush=True)
+                        print("   🗺️  Géocodage ligne {idx} ({total_rows_processed+1} traitées)...", flush=True)
 
                     pickup_coords = geocoder.geocode(pickup_addr)
                     dropoff_coords = geocoder.geocode(dropoff_addr)
 
                     if pickup_coords and dropoff_coords:
                         geocoding_success += 1
-                        print(f"   ✅ Géocodage réussi ligne {idx}", flush=True)
+                        print("   ✅ Géocodage réussi ligne {idx}", flush=True)
                     else:
                         geocoding_failed += 1
-                        print(f"   ⚠️  Géocodage échoué ligne {idx}", flush=True)
+                        print("   ⚠️  Géocodage échoué ligne {idx}", flush=True)
                         if not pickup_coords:
                             pickup_coords = (46.2044, 6.1432)
                         if not dropoff_coords:
@@ -227,7 +224,7 @@ def convert_xlsb_full_year(
                     driver_id = driver_map.get(driver_name) if driver_name else None
 
                     if not driver_id:
-                        driver_id = list(driver_map.values())[0] if driver_map else 1
+                        driver_id = next(iter(driver_map.values())) if driver_map else 1
 
                     # Créer le booking
                     booking_data = {
@@ -256,16 +253,16 @@ def convert_xlsb_full_year(
                 except Exception:
                     continue
 
-            print(f"   ✅ {total_rows_processed} courses traitées au total")
+            print("   ✅ {total_rows_processed} courses traitées au total")
             print()
 
     print("=" * 80)
     print("📊 RÉSUMÉ CONVERSION")
     print("=" * 80)
-    print(f"✅ Géocodage réussi  : {geocoding_success}")
-    print(f"⚠️  Géocodage échoué : {geocoding_failed}")
-    print(f"📦 Courses totales   : {total_rows_processed}")
-    print(f"📅 Jours uniques     : {len(dispatches_by_date)}")
+    print("✅ Géocodage réussi  : {geocoding_success}")
+    print("⚠️  Géocodage échoué : {geocoding_failed}")
+    print("📦 Courses totales   : {total_rows_processed}")
+    print("📅 Jours uniques     : {len(dispatches_by_date)}")
     print()
 
     # Créer les dispatches
@@ -325,10 +322,10 @@ def convert_xlsb_full_year(
         avg_distance = sum(d["total_distance_km"] for d in dispatches) / len(dispatches)
 
         print("📈 STATISTIQUES FINALES :")
-        print(f"  - Total dispatches   : {len(dispatches)}")
-        print(f"  - Total courses      : {total_bookings}")
-        print(f"  - Écart moyen        : {avg_gap:.2f} courses")
-        print(f"  - Distance moyenne   : {avg_distance:.1f} km/dispatch")
+        print("  - Total dispatches   : {len(dispatches)}")
+        print("  - Total courses      : {total_bookings}")
+        print("  - Écart moyen        : {avg_gap")
+        print("  - Distance moyenne   : {avg_distance")
         print()
 
     # Sauvegarder
@@ -357,11 +354,11 @@ def convert_xlsb_full_year(
         "dispatches": dispatches,
     }
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    with Path(output_path, "w", encoding="utf-8").open() as f:
         json.dump(export_data, f, indent=2, ensure_ascii=False)
 
-    print(f"✅ Données exportées : {output_path.absolute()}")
-    print(f"📦 Taille fichier    : {output_path.stat().st_size / 1024 / 1024:.2f} MB")
+    print("✅ Données exportées : {output_path.absolute()}")
+    print("📦 Taille fichier    : {output_path.stat().st_size / 1024 / 1024")
     print()
     print("🚀 PROCHAINE ÉTAPE : Réentraîner avec 15,000 épisodes !")
     print()

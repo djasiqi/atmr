@@ -1,0 +1,274 @@
+{
+  "model_info": {
+    "model_name": "dqn_dispatch",
+    "model_arch": "dueling_dqn",
+    "version": "v1.0.0",
+    "created_at": "2025-10-23T21:27:24.818973+00:00",
+    "framework": "pytorch",
+    "framework_version": "2.0.0"
+  },
+  "architecture_config": {
+    "network_type": "dueling",
+    "hidden_sizes": [
+      512,
+      256,
+      128
+    ],
+    "activation": "relu",
+    "dropout_rate": 0.2,
+    "use_batch_norm": true,
+    "use_per": true,
+    "use_double_dqn": true,
+    "use_n_step": true,
+    "n_step": 3,
+    "use_noisy_networks": false,
+    "use_distributional": false,
+    "distributional_config": {
+      "method": "c51",
+      "num_atoms": 51,
+      "num_quantiles": 200,
+      "v_min": -10.0,
+      "v_max": 10.0
+    }
+  },
+  "training_config": {
+    "learning_rate": 0.001,
+    "batch_size": 64,
+    "buffer_size": 100000,
+    "target_update_frequency": 1000,
+    "epsilon_start": 1.0,
+    "epsilon_end": 0.01,
+    "epsilon_decay": 0.995,
+    "gamma": 0.99,
+    "tau": 0.005,
+    "gradient_clipping": 1.0,
+    "optimizer": "adam",
+    "optimizer_params": {
+      "betas": [
+        0.9,
+        0.999
+      ],
+      "eps": 1e-08,
+      "weight_decay": 0.0001
+    }
+  },
+  "features_config": {
+    "state_features": [
+      "driver_location_lat",
+      "driver_location_lon",
+      "driver_availability",
+      "driver_skill_level",
+      "booking_pickup_lat",
+      "booking_pickup_lon",
+      "booking_dropoff_lat",
+      "booking_dropoff_lon",
+      "booking_time_window_start",
+      "booking_time_window_end",
+      "booking_priority",
+      "booking_passenger_count",
+      "current_time",
+      "traffic_level",
+      "weather_condition"
+    ],
+    "action_features": [
+      "assign_driver",
+      "reject_booking",
+      "delay_assignment"
+    ],
+    "feature_scaling": {
+      "method": "standard",
+      "fit_on": "training_data",
+      "handle_outliers": true,
+      "outlier_threshold": 3.0
+    },
+    "feature_engineering": {
+      "distance_features": true,
+      "time_features": true,
+      "interaction_features": false,
+      "polynomial_features": false,
+      "degree": 2
+    }
+  },
+  "scalers_config": {
+    "state_scaler": {
+      "type": "StandardScaler",
+      "fitted": true,
+      "mean": [],
+      "scale": [],
+      "feature_names": []
+    },
+    "reward_scaler": {
+      "type": "MinMaxScaler",
+      "fitted": true,
+      "min": 0.0,
+      "scale": 1.0
+    },
+    "action_scaler": {
+      "type": "None",
+      "fitted": false
+    }
+  },
+  "dataset_info": {
+    "training_data": {
+      "file_path": "data/training/training_data_cleaned_final.json",
+      "num_samples": 0,
+      "date_range": {
+        "start": "2024-01-01",
+        "end": "2024-12-31"
+      },
+      "data_quality": {
+        "missing_values": 0.0,
+        "outliers": 0.0,
+        "duplicates": 0.0
+      }
+    },
+    "validation_data": {
+      "file_path": "data/validation/validation_data.json",
+      "num_samples": 0,
+      "date_range": {
+        "start": "2024-01-01",
+        "end": "2024-12-31"
+      }
+    },
+    "test_data": {
+      "file_path": "data/test/test_data.json",
+      "num_samples": 0,
+      "date_range": {
+        "start": "2024-01-01",
+        "end": "2024-12-31"
+      }
+    }
+  },
+  "hyperparameter_tuning": {
+    "use_optuna": true,
+    "optuna_study_id": "study_dqn_dispatch_v1",
+    "optuna_study_name": "DQN Dispatch Optimization",
+    "n_trials": 100,
+    "optimization_direction": "maximize",
+    "pruner": "median",
+    "sampler": "tpe",
+    "hyperparameter_space": {
+      "learning_rate": {
+        "type": "float",
+        "low": 1e-05,
+        "high": 0.01,
+        "log": true
+      },
+      "batch_size": {
+        "type": "categorical",
+        "choices": [
+          32,
+          64,
+          128,
+          256
+        ]
+      },
+      "hidden_sizes": {
+        "type": "categorical",
+        "choices": [
+          [
+            256,
+            128
+          ],
+          [
+            512,
+            256
+          ],
+          [
+            512,
+            256,
+            128
+          ],
+          [
+            1024,
+            512,
+            256
+          ]
+        ]
+      },
+      "gamma": {
+        "type": "float",
+        "low": 0.9,
+        "high": 0.999,
+        "log": false
+      }
+    },
+    "best_trial": {
+      "trial_number": 0,
+      "value": 0.0,
+      "params": {}
+    }
+  },
+  "performance_metrics": {
+    "training_metrics": {
+      "final_loss": 0.0,
+      "final_reward": 0.0,
+      "convergence_episode": 0,
+      "training_time_hours": 0.0,
+      "samples_per_second": 0.0
+    },
+    "validation_metrics": {
+      "avg_reward": 0.0,
+      "std_reward": 0.0,
+      "success_rate": 0.0,
+      "avg_episode_length": 0.0
+    },
+    "test_metrics": {
+      "punctuality_rate": 0.0,
+      "avg_distance": 0.0,
+      "avg_delay": 0.0,
+      "driver_utilization": 0.0,
+      "customer_satisfaction": 0.0,
+      "cost_efficiency": 0.0
+    },
+    "business_metrics": {
+      "revenue_impact": 0.0,
+      "cost_reduction": 0.0,
+      "time_savings": 0.0,
+      "quality_score": 0.0
+    }
+  },
+  "model_artifacts": {
+    "model_file": "models/dqn_dispatch_dueling_dqn_v1.0.0.pth",
+    "model_size_mb": 0.0,
+    "checksum": "",
+    "config_file": "configs/dqn_dispatch_v1.0.0.json",
+    "logs_file": "logs/training_dqn_dispatch_v1.0.0.log",
+    "tensorboard_logs": "logs/tensorboard/dqn_dispatch_v1.0.0"
+  },
+  "deployment_info": {
+    "deployment_status": "not_deployed",
+    "deployment_date": null,
+    "deployment_version": null,
+    "rollback_version": null,
+    "canary_percentage": 0.0,
+    "health_checks": {
+      "model_loading_time": 0.0,
+      "inference_latency": 0.0,
+      "memory_usage": 0.0,
+      "cpu_usage": 0.0
+    }
+  },
+  "kpi_thresholds": {
+    "punctuality_rate": 0.85,
+    "avg_distance": 15.0,
+    "avg_delay": 5.0,
+    "driver_utilization": 0.75,
+    "customer_satisfaction": 0.8,
+    "cost_efficiency": 0.7
+  },
+  "experiment_info": {
+    "experiment_id": "exp_dqn_dispatch_v1",
+    "experiment_name": "DQN Dispatch Optimization v1",
+    "tags": [
+      "dqn",
+      "dispatch",
+      "optimization",
+      "v1"
+    ],
+    "description": "Optimisation du dispatch avec DQN et améliorations avancées",
+    "researcher": "ML Team",
+    "baseline_model": "heuristic_dispatch",
+    "improvement_over_baseline": 0.0
+  }
+}

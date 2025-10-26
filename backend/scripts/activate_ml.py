@@ -1,6 +1,4 @@
-# ruff: noqa: T201
-"""
-Script pour activer/désactiver le ML en production.
+"""Script pour activer/désactiver le ML en production.
 
 Usage:
     # Activer ML à 10%
@@ -21,27 +19,28 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def activate_ml(percentage: int, dry_run: bool = False) -> None:
-    """
-    Active le ML avec un pourcentage de trafic donné.
+    """Active le ML avec un pourcentage de trafic donné.
+
     Args:
         percentage: Pourcentage de trafic (0-100)
         dry_run: Si True, simule sans appliquer
+
     """
     from feature_flags import FeatureFlags
 
     if not 0 <= percentage <= 100:
-        print(f"❌ Erreur: Le pourcentage doit être entre 0 et 100 (fourni: {percentage})")
+        print("❌ Erreur: Le pourcentage doit être entre 0 et 100 (fourni: {percentage})")
         sys.exit(1)
 
-    print(f"\n{'[DRY RUN] ' if dry_run else ''}🚀 Activation ML à {percentage}%")
+    print("\n{'[DRY RUN] ' if dry_run else ''}🚀 Activation ML à {percentage}%")
     print("=" * 60)
 
     if not dry_run:
         FeatureFlags.set_ml_enabled(True)
         FeatureFlags.set_ml_traffic_percentage(percentage)
 
-    print(f"✅ ML activé à {percentage}% du trafic")
-    print(f"✅ Fallback automatique: {'Activé' if FeatureFlags.should_fallback_on_error() else 'Désactivé'}")
+    print("✅ ML activé à {percentage}% du trafic")
+    print("✅ Fallback automatique: {'Activé' if FeatureFlags.should_fallback_on_error() else 'Désactivé'}")
 
     # Recommandations
     print("\n📋 Recommandations:")
@@ -68,21 +67,21 @@ def activate_ml(percentage: int, dry_run: bool = False) -> None:
     print("   3. Dashboard: http://localhost:3000/ml-monitoring")
 
     if percentage < 100:
-        next_percentage = min(percentage * 2, 100) if percentage < 50 else 100
-        print(f"   4. Augmenter: python scripts/activate_ml.py --percentage {next_percentage}")
+        min(percentage * 2, 100) if percentage < 50 else 100
+        print("   4. Augmenter: python scripts/activate_ml.py --percentage {next_percentage}")
 
     print("=" * 60)
 
 
 def deactivate_ml(dry_run: bool = False) -> None:
-    """
-    Désactive complètement le ML.
+    """Désactive complètement le ML.
+
     Args:
         dry_run: Si True, simule sans appliquer
-    """
-    from feature_flags import FeatureFlags
 
-    print(f"\n{'[DRY RUN] ' if dry_run else ''}🛑 Désactivation ML")
+    """
+
+    print("\n{'[DRY RUN] ' if dry_run else ''}🛑 Désactivation ML")
     print("=" * 60)
 
     if not dry_run:
@@ -114,33 +113,33 @@ def show_status() -> None:
 
     # Configuration
     print("\n⚙️ Configuration:")
-    config = status["config"]
-    print(f"   ML Activé : {'✅ Oui' if config['ML_ENABLED'] else '❌ Non'}")
-    print(f"   Trafic ML : {config['ML_TRAFFIC_PERCENTAGE']}%")
-    print(f"   Fallback  : {'✅ Activé' if config['FALLBACK_ON_ERROR'] else '❌ Désactivé'}")
+    status["config"]
+    print("   ML Activé : {'✅ Oui' if config['ML_ENABLED'] else '❌ Non'}")
+    print("   Trafic ML : {config['ML_TRAFFIC_PERCENTAGE']}%")
+    print("   Fallback  : {'✅ Activé' if config['FALLBACK_ON_ERROR'] else '❌ Désactivé'}")
 
     # Statistiques
     print("\n📈 Statistiques:")
     stats = status["stats"]
-    print(f"   Total requêtes    : {stats['total_requests']}")
-    print(f"   Requêtes ML       : {stats['ml_requests']} ({stats['ml_usage_rate']:.1%})")
-    print(f"   Succès ML         : {stats['ml_successes']}")
-    print(f"   Erreurs ML        : {stats['ml_failures']}")
-    print(f"   Taux succès       : {stats['ml_success_rate']:.1%}")
-    print(f"   Requêtes fallback : {stats['fallback_requests']}")
+    print("   Total requêtes    : {stats['total_requests']}")
+    print("   Requêtes ML       : {stats['ml_requests']} ({stats['ml_usage_rate']")
+    print("   Succès ML         : {stats['ml_successes']}")
+    print("   Erreurs ML        : {stats['ml_failures']}")
+    print("   Taux succès       : {stats['ml_success_rate']")
+    print("   Requêtes fallback : {stats['fallback_requests']}")
 
     # Santé
     print("\n🏥 Santé:")
     health = status["health"]
-    health_icon = "✅" if health["status"] == "healthy" else "⚠️"
-    print(f"   Statut       : {health_icon} {health['status'].upper()}")
-    print(f"   Taux succès  : {health['success_rate']}")
-    print(f"   Taux erreur  : {health['error_rate']}")
+    "✅" if health["status"] == "healthy" else "⚠️"
+    print("   Statut       : {health_icon} {health['status'].upper()}")
+    print("   Taux succès  : {health['success_rate']}")
+    print("   Taux erreur  : {health['error_rate']}")
 
     # Alertes
-    if stats['ml_success_rate'] < 0.95 and stats['ml_requests'] > 10:
+    if stats["ml_success_rate"] < 0.95 and stats["ml_requests"] > 10:
         print("\n⚠️ ALERTES:")
-        print(f"   Taux de succès bas ({stats['ml_success_rate']:.1%})")
+        print("   Taux de succès bas ({stats['ml_success_rate']")
         print("   Action recommandée: Vérifier logs et considérer rollback")
 
     print("=" * 60)
@@ -224,8 +223,8 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\n⚠️ Opération annulée par l'utilisateur")
         sys.exit(1)
-    except Exception as e:
-        print(f"\n❌ Erreur: {e}")
+    except Exception:
+        print("\n❌ Erreur: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

@@ -8,7 +8,7 @@ from flask import Flask
 from models import MedicalEstablishment, MedicalService, db
 
 # Ajuste le path pour "import app, models" quand lancé directement
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BASE_DIR = os.path.abspath(Path(Path(__file__).parent, ".."))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
@@ -17,19 +17,19 @@ def get_app() -> Flask:
     # Essayez d'abord la factory create_app()
     try:
         from app import create_app  # type: ignore[attr-defined]
-        return cast(Flask, create_app())
+        return cast("Flask", create_app())
     except Exception:
         # Fallback: un objet `app` global dans app.py
         try:
             from app import app as flask_app  # type: ignore[attr-defined]
-            return cast(Flask, flask_app)
+            return cast("Flask", flask_app)
         except Exception as e:
-            raise RuntimeError("Impossible de charger l'application Flask") from e
+            msg = "Impossible de charger l'application Flask"
+            raise RuntimeError(msg) from e
 
 
 def _assign_if_present(obj: Any, **fields: Any) -> None:
-    """
-    Assigne dynamiquement des champs seulement s'ils existent sur le modèle.
+    """Assigne dynamiquement des champs seulement s'ils existent sur le modèle.
     Évite les erreurs si la migration n'a pas encore ajouté une colonne.
     """
     for k, v in fields.items():
@@ -46,10 +46,9 @@ def upsert_estab(
     est_type: str = "hospital",
     aliases: str = "",
 ) -> MedicalEstablishment:
-    """
-    Crée ou met à jour un établissement.
+    """Crée ou met à jour un établissement.
     (On évite d'appeler le constructeur SQLAlchemy avec des kwargs non typés
-    pour ne pas déclencher Pylance `No parameter named "..."`.)
+    pour ne pas déclencher Pylance `No parameter named "..."`.).
     """
     e: MedicalEstablishment | None = MedicalEstablishment.query.filter_by(name=name).first()
     if not e:
@@ -59,8 +58,8 @@ def upsert_estab(
             name=name,
             display_name=display_name,
             address=address,
-            lat=lat,
-            lon=lon,
+            lat=0.0,
+            lon=0.0,
             type=est_type,
             aliases=aliases,
         )
@@ -70,8 +69,8 @@ def upsert_estab(
             e,
             display_name=display_name,
             address=address,
-            lat=lat,
-            lon=lon,
+            lat=0.0,
+            lon=0.0,
             type=est_type,
             aliases=aliases,
         )
@@ -80,8 +79,7 @@ def upsert_estab(
 
 
 def add_services(estab: MedicalEstablishment, items: List[Any]) -> None:
-    """
-    Ajoute (ou met à jour) des services pour un établissement.
+    """Ajoute (ou met à jour) des services pour un établissement.
 
     items peut contenir :
       - des 2-tuples/lists:    (category, name)
@@ -135,7 +133,6 @@ def add_services(estab: MedicalEstablishment, items: List[Any]) -> None:
             updated += 1
 
     db.session.commit()
-    print(f"   → services: +{created} créés, ~{updated} mis à jour pour {estab.display_name}.")
 
 
 def main() -> None:
@@ -152,10 +149,10 @@ def main() -> None:
             aliases="hug;hôpital cantonal;hopital geneve;hopital cantonal geneve",
         )
 
-        # --- Liste “riche” : tu peux mettre ici tous les services détaillés que tu m’as fournis. ---
+        # --- Liste "riche" : tu peux mettre ici tous les services détaillés que tu m'as fournis. ---
         # Exemple demandé : Radiologie → Consultation ambulatoire de radiologie, avec Bât/étage & adresse auto.
         hug_services = [
-            # Addictologie — PEPS
+            # Addictologie - PEPS
             {
                 "category": "Service",
                 "name": "Programme expérimental de prescription de stupéfiants (PEPS)",
@@ -163,7 +160,7 @@ def main() -> None:
                 "postcode": "1227",
                 "city": "Genève",
             },
-            # Addictologie — CAAP (Grand-Pré)
+            # Addictologie - CAAP (Grand-Pré)
             {
                 "category": "Service",
                 "name": "Consultation du Centre ambulatoire d'addictologie psychiatrique (CAAP)",
@@ -172,7 +169,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Allergologie — Consultation ambulatoire
+            # Allergologie - Consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'allergologie",
@@ -181,7 +178,7 @@ def main() -> None:
                 "city": "Genève",
                 "building": "Bâtiment Jean-Louis Prévost",
             },
-            # Immunologie clinique — Consultation ambulatoire
+            # Immunologie clinique - Consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'immunologie clinique",
@@ -200,7 +197,7 @@ def main() -> None:
                 "city": "Genève 4",
             },
 
-            # Angiologie — Consultation ambulatoire
+            # Angiologie - Consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'angiologie",
@@ -210,7 +207,7 @@ def main() -> None:
                 "building": "Bâtiment Prévost",
                 "floor": "5e étage",
             },
-            # Hémostase — Consultation ambulatoire
+            # Hémostase - Consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'hémostase",
@@ -221,7 +218,7 @@ def main() -> None:
                 "floor": "5e étage",
             },
 
-            # Biologie médicale — BATLab
+            # Biologie médicale - BATLab
             {
                 "category": "Laboratoire",
                 "name": "BATLab",
@@ -230,7 +227,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Cardiologie — Consultation ambulatoire
+            # Cardiologie - Consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de cardiologie",
@@ -241,7 +238,7 @@ def main() -> None:
                 "floor": "6e étage",
             },
 
-            # Chirurgie cardiovasculaire — Consultation ambulatoire chirurgie cardiaque pédiatrique
+            # Chirurgie cardiovasculaire - Consultation ambulatoire chirurgie cardiaque pédiatrique
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de chirurgie cardiaque pédiatrique",
@@ -250,7 +247,7 @@ def main() -> None:
                 "city": "Genève",
                 "building": "Hôpital des enfants",
             },
-            # Chirurgie vasculaire périphérique — Consultation ambulatoire
+            # Chirurgie vasculaire périphérique - Consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de chirurgie vasculaire périphérique",
@@ -258,7 +255,7 @@ def main() -> None:
                 "postcode": "1205",
                 "city": "Genève",
             },
-            # Chirurgie vasculaire périphérique — Consultation varices
+            # Chirurgie vasculaire périphérique - Consultation varices
             {
                 "category": "Service",
                 "name": "Consultation varices de l'unité de chirurgie vasculaire périphérique",
@@ -267,17 +264,17 @@ def main() -> None:
                 "city": "Genève",
             },
 
-                # ORL — Oto-neurologie (troubles de l’équilibre, vertiges)
+                # ORL - Oto-neurologie (troubles de l'équilibre, vertiges)
             {
                 "category": "Service",
-                "name": "Consultation ambulatoire de l'unité d'oto-neurologie (troubles de l’équilibre, vertiges)",
+                "name": "Consultation ambulatoire de l'unité d'oto-neurologie (troubles de l'équilibre, vertiges)",
                 "address_line": "Rue Gabrielle-Perret-Gentil 4",
                 "postcode": "1205",
                 "city": "Genève",
                 "building": "Bât Prévost",
                 "floor": "3e étage",
             },
-            # ORL — Consultation du service (général)
+            # ORL - Consultation du service (général)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service ORL et chirurgie cervico-faciale",
@@ -287,7 +284,7 @@ def main() -> None:
                 "building": "Bât. Prévost",
                 "floor": "3e étage",
             },
-            # ORL — Otologie
+            # ORL - Otologie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'otologie",
@@ -297,7 +294,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "3e étage",
             },
-            # ORL — Pédiatrique
+            # ORL - Pédiatrique
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire ORL pédiatrique",
@@ -307,7 +304,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "3e étage",
             },
-            # ORL — Phoniatrie
+            # ORL - Phoniatrie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de phoniatrie",
@@ -317,7 +314,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "3e étage",
             },
-            # ORL — Chirurgie cervico-faciale
+            # ORL - Chirurgie cervico-faciale
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de chirurgie cervico-faciale",
@@ -327,7 +324,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "3e étage",
             },
-            # ORL — Rhinologie / Olfactologie
+            # ORL - Rhinologie / Olfactologie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de rhinologie - olfactologie",
@@ -338,10 +335,10 @@ def main() -> None:
                 "floor": "3e étage",
             },
 
-            # Chirurgie orthopédique & traumatologie de l’appareil moteur — Consultation ambulatoire
+            # Chirurgie orthopédique & traumatologie de l'appareil moteur - Consultation ambulatoire
             {
                 "category": "Service",
-                "name": "Consultation ambulatoire du service de chirurgie orthopédique et traumatologie de l’appareil moteur",
+                "name": "Consultation ambulatoire du service de chirurgie orthopédique et traumatologie de l'appareil moteur",
                 "address_line": "Rue Gabrielle-Perret-Gentil 4",
                 "postcode": "1205",
                 "city": "Genève",
@@ -349,7 +346,7 @@ def main() -> None:
                 "floor": "étage 0",
             },
 
-            # Chirurgie plastique, reconstructive et esthétique — Consultation ambulatoire
+            # Chirurgie plastique, reconstructive et esthétique - Consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de chirurgie plastique, reconstructive et esthétique",
@@ -360,7 +357,7 @@ def main() -> None:
                 "floor": "3e étage",
             },
 
-            # Chirurgie thoracique et endocrinienne — Consultation ambulatoire (service de chirurgie thoracique)
+            # Chirurgie thoracique et endocrinienne - Consultation ambulatoire (service de chirurgie thoracique)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de chirurgie thoracique",
@@ -369,7 +366,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Chirurgie viscérale — Proctologique
+            # Chirurgie viscérale - Proctologique
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de chirurgie viscérale (équipe de chirurgie proctologique)",
@@ -377,7 +374,7 @@ def main() -> None:
                 "postcode": "1205",
                 "city": "Genève",
             },
-            # Chirurgie viscérale — Oesophage-estomac (Oeso-gastrique)
+            # Chirurgie viscérale - Oesophage-estomac (Oeso-gastrique)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de chirurgie oesophage-estomac du service de chirurgie viscérale",
@@ -385,7 +382,7 @@ def main() -> None:
                 "postcode": "1205",
                 "city": "Genève",
             },
-            # Chirurgie viscérale — Colorectale
+            # Chirurgie viscérale - Colorectale
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de chirurgie viscérale (équipe de chirurgie colorectale)",
@@ -393,7 +390,7 @@ def main() -> None:
                 "postcode": "1205",
                 "city": "Genève",
             },
-            # Chirurgie viscérale — Hépato-biliaire
+            # Chirurgie viscérale - Hépato-biliaire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de chirurgie viscérale (équipe de chirurgie hépato-biliaire)",
@@ -401,15 +398,15 @@ def main() -> None:
                 "postcode": "1205",
                 "city": "Genève",
             },
-            # Chirurgie viscérale — Bariatrique et obésité
+            # Chirurgie viscérale - Bariatrique et obésité
             {
                 "category": "Service",
-                "name": "Consultation ambulatoire de chirurgie bariatrique et de l’obésité du service de chirurgie viscérale",
+                "name": "Consultation ambulatoire de chirurgie bariatrique et de l'obésité du service de chirurgie viscérale",
                 "address_line": "Rue Gabrielle-Perret-Gentil 4",
                 "postcode": "1205",
                 "city": "Genève",
             },
-            # Chirurgie viscérale — Générale (sans sous-équipe)
+            # Chirurgie viscérale - Générale (sans sous-équipe)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de chirurgie viscérale",
@@ -418,7 +415,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-                # Clinique de Crans-Montana – Médecine interne de réhabilitation
+                # Clinique de Crans-Montana - Médecine interne de réhabilitation
             {
                 "category": "Service",
                 "name": "Clinique de Crans-Montana - Médecine interne de réhabilitation",
@@ -438,7 +435,7 @@ def main() -> None:
                 "floor": "2e étage",
             },
 
-            # Département de réadaptation et gériatrie — UGC (Thônex)
+            # Département de réadaptation et gériatrie - UGC (Thônex)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de gériatrie communautaire",
@@ -447,7 +444,7 @@ def main() -> None:
                 "city": "Thônex",
             },
 
-            # Dermatologie et vénéréologie — Consultation ambulatoire
+            # Dermatologie et vénéréologie - Consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de dermatologie et vénéréologie",
@@ -458,7 +455,7 @@ def main() -> None:
                 "floor": "4e étage",
             },
 
-            # Endocrinologie — Consultation ambulatoire (de l'unité d'endocrinologie)
+            # Endocrinologie - Consultation ambulatoire (de l'unité d'endocrinologie)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'endocrinologie",
@@ -469,7 +466,7 @@ def main() -> None:
                 "floor": "4e étage / 1er étage",
             },
 
-            # Diabétologie — Consultation ambulatoire (de l'unité de diabétologie)
+            # Diabétologie - Consultation ambulatoire (de l'unité de diabétologie)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de diabétologie",
@@ -480,7 +477,7 @@ def main() -> None:
                 "floor": "4e étage / 1er étage",
             },
 
-            # Diabétologie (lipidologie) — Consultation commune diabétologie et cardiologie
+            # Diabétologie (lipidologie) - Consultation commune diabétologie et cardiologie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de diabétologie (lipidologie)",
@@ -489,7 +486,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-                # Département de réadaptation et gériatrie — UGC (Thônex)
+                # Département de réadaptation et gériatrie - UGC (Thônex)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de gériatrie communautaire",
@@ -498,7 +495,7 @@ def main() -> None:
                 "city": "Thônex",
             },
 
-            # Dermatologie et vénéréologie — Consultation ambulatoire
+            # Dermatologie et vénéréologie - Consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de dermatologie et vénéréologie",
@@ -509,7 +506,7 @@ def main() -> None:
                 "floor": "4e étage",
             },
 
-            # Endocrinologie — Consultation ambulatoire (de l'unité d'endocrinologie)
+            # Endocrinologie - Consultation ambulatoire (de l'unité d'endocrinologie)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'endocrinologie",
@@ -520,7 +517,7 @@ def main() -> None:
                 "floor": "4e étage / 1er étage",
             },
 
-            # Diabétologie — Consultation ambulatoire (de l'unité de diabétologie)
+            # Diabétologie - Consultation ambulatoire (de l'unité de diabétologie)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de diabétologie",
@@ -531,7 +528,7 @@ def main() -> None:
                 "floor": "4e étage / 1er étage",
             },
 
-            # Diabétologie (lipidologie) — Consultation commune diabétologie et cardiologie
+            # Diabétologie (lipidologie) - Consultation commune diabétologie et cardiologie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de diabétologie (lipidologie)",
@@ -549,7 +546,7 @@ def main() -> None:
                 "building": "Bât Morier / Bât Klein",
                 "floor": "4e étage / 1er étage",
             },
-            # Diabétologie — consultation ambulatoire
+            # Diabétologie - consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de diabétologie",
@@ -559,7 +556,7 @@ def main() -> None:
                 "building": "Bât Morier / Bât Klein",
                 "floor": "4e étage / 1er étage",
             },
-            # Diabétologie (lipidologie) — consultation commune
+            # Diabétologie (lipidologie) - consultation commune
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de diabétologie (lipidologie)",
@@ -568,7 +565,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Nutrition — consultation ambulatoire
+            # Nutrition - consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de nutrition",
@@ -576,7 +573,7 @@ def main() -> None:
                 "postcode": "1205",
                 "city": "Genève",
             },
-            # Gastro-entérologie & hépatologie — consultation ambulatoire
+            # Gastro-entérologie & hépatologie - consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de gastro-entérologie et hépatologie",
@@ -587,7 +584,7 @@ def main() -> None:
                 "floor": "étage P",
             },
 
-            # Gynécologie — Sénologie chirurgicale
+            # Gynécologie - Sénologie chirurgicale
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de sénologie chirurgicale",
@@ -596,7 +593,7 @@ def main() -> None:
                 "city": "Genève",
                 "building": "Maternité",
             },
-            # Gynécologie — Médecine de la reproduction & endocrinologie gynécologique
+            # Gynécologie - Médecine de la reproduction & endocrinologie gynécologique
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de médecine de la reproduction et d'endocrinologie gynécologique",
@@ -605,7 +602,7 @@ def main() -> None:
                 "city": "Genève",
                 "building": "Maternité",
             },
-            # Gynécologie — Périnéologie
+            # Gynécologie - Périnéologie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de périnéologie",
@@ -614,7 +611,7 @@ def main() -> None:
                 "city": "Genève",
                 "building": "Maternité",
             },
-            # Gynécologie — Consultation du service (général)
+            # Gynécologie - Consultation du service (général)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de gynécologie",
@@ -623,7 +620,7 @@ def main() -> None:
                 "city": "Genève",
                 "building": "Maternité",
             },
-            # Gynécologie — Onco-gynécologie chirurgicale
+            # Gynécologie - Onco-gynécologie chirurgicale
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'onco-gynécologie chirurgicale",
@@ -633,7 +630,7 @@ def main() -> None:
                 "building": "Maternité",
             },
 
-             # Hématologie — Unité d'hématologie clinique
+             # Hématologie - Unité d'hématologie clinique
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'hématologie clinique",
@@ -643,7 +640,7 @@ def main() -> None:
                 "building": "Bâtiment Klein",
                 "floor": "4e étage",
             },
-            # Hématologie — Unité d'hématologie-oncologie
+            # Hématologie - Unité d'hématologie-oncologie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'hématologie-oncologie",
@@ -654,7 +651,7 @@ def main() -> None:
                 "floor": "4e étage",
             },
 
-            # Immunologie & allergologie — Unité d'allergologie
+            # Immunologie & allergologie - Unité d'allergologie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'allergologie",
@@ -663,7 +660,7 @@ def main() -> None:
                 "city": "Genève",
                 "building": "Bâtiment Jean-Louis Prévost",
             },
-            # Immunologie & allergologie — Unité d'immunologie clinique
+            # Immunologie & allergologie - Unité d'immunologie clinique
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'immunologie clinique",
@@ -713,7 +710,7 @@ def main() -> None:
                 "floor": "2e étage",
             },
 
-            # Maladies infectieuses, VIH / Sida — Consultation ambulatoire
+            # Maladies infectieuses, VIH / Sida - Consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service des maladies infectieuses",
@@ -723,7 +720,7 @@ def main() -> None:
                 "floor": "2e étage",
             },
 
-            # Maladies osseuses — Adresse générale (Boulevard de la Cluse)
+            # Maladies osseuses - Adresse générale (Boulevard de la Cluse)
             {
                 "category": "Service",
                 "name": "Maladies osseuses",
@@ -732,7 +729,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Maladies osseuses — Consultation ambulatoire (Prévost 8e)
+            # Maladies osseuses - Consultation ambulatoire (Prévost 8e)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service des maladies osseuses",
@@ -772,7 +769,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Médecine de premiers recours — Site Cluse Roseraie
+            # Médecine de premiers recours - Site Cluse Roseraie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de médecine de premiers recours (Site Cluse Roseraie)",
@@ -780,7 +777,7 @@ def main() -> None:
                 "postcode": "1211",
                 "city": "Genève 14",
             },
-            # Médecine de premiers recours — Site Nations (Centre Archimed)
+            # Médecine de premiers recours - Site Nations (Centre Archimed)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de médecine de premiers recours (Site Nations)",
@@ -827,7 +824,7 @@ def main() -> None:
                 "floor": "4e étage",
             },
 
-            # UMSCOM — Unité de médecine et soins dans la communauté
+            # UMSCOM - Unité de médecine et soins dans la communauté
             {
                 "category": "Service",
                 "name": "Unité de médecine et soins dans la communauté (UMSCOM)",
@@ -836,7 +833,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # UDMPR — Tabac, alcool et autres substances
+            # UDMPR - Tabac, alcool et autres substances
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire tabac, alcool et autres substances",
@@ -845,7 +842,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Médecine génétique — Consultation (Morier 3e, local 8D-3-856)
+            # Médecine génétique - Consultation (Morier 3e, local 8D-3-856)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de médecine génétique",
@@ -856,7 +853,7 @@ def main() -> None:
                 "floor": "3e étage",
                 "site_note": "Local 8D-3-856",
             },
-            # Médecine génétique — Consultation (Morier 3e, bureau 8D-3-857)
+            # Médecine génétique - Consultation (Morier 3e, bureau 8D-3-857)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de médecine génétique",
@@ -868,7 +865,7 @@ def main() -> None:
                 "site_note": "Bureau 8D-3-857",
             },
 
-            # Médecine interne générale — adresse générale
+            # Médecine interne générale - adresse générale
             {
                 "category": "Service",
                 "name": "Médecine interne générale",
@@ -877,7 +874,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Médecine nucléaire et imagerie moléculaire — J.-L. Prévost 1er
+            # Médecine nucléaire et imagerie moléculaire - J.-L. Prévost 1er
             {
                 "category": "Service",
                 "name": "Médecine nucléaire et imagerie moléculaire",
@@ -888,7 +885,7 @@ def main() -> None:
                 "floor": "1er étage",
             },
 
-            # Médecine palliative — Hôpital de Bellerive
+            # Médecine palliative - Hôpital de Bellerive
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de médecine palliative",
@@ -898,7 +895,7 @@ def main() -> None:
                 "building": "Hôpital de Bellerive",
             },
 
-            # Médecine pénitentiaire — Petit-Bel-Air (Thônex)
+            # Médecine pénitentiaire - Petit-Bel-Air (Thônex)
             {
                 "category": "Service",
                 "name": "Médecine pénitentiaire",
@@ -907,7 +904,7 @@ def main() -> None:
                 "city": "Thônex",
             },
 
-            # Médecine tropicale et humanitaire — RGP-G 6, 3e étage
+            # Médecine tropicale et humanitaire - RGP-G 6, 3e étage
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de médecine tropicale et humanitaire",
@@ -918,7 +915,7 @@ def main() -> None:
             },
 
 
-            # Néphrologie et hypertension — Unité d'hypertension artérielle
+            # Néphrologie et hypertension - Unité d'hypertension artérielle
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'hypertension artérielle",
@@ -926,7 +923,7 @@ def main() -> None:
                 "postcode": "1205",
                 "city": "Genève",
             },
-            # Néphrologie — Consultation (Klein 3e)
+            # Néphrologie - Consultation (Klein 3e)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de néphrologie",
@@ -937,10 +934,10 @@ def main() -> None:
                 "floor": "3e étage",
             },
 
-            # Neurochirurgie — réception neurologie/neurochirurgie
+            # Neurochirurgie - réception neurologie/neurochirurgie
             {
                 "category": "Service",
-                "name": "Service de neurochirurgie — Réception de neurologie/neurochirurgie",
+                "name": "Service de neurochirurgie - Réception de neurologie/neurochirurgie",
                 "address_line": "Rue Gabrielle-Perret-Gentil 4",
                 "postcode": "1205",
                 "city": "Genève",
@@ -948,7 +945,7 @@ def main() -> None:
                 "floor": "2e étage",
             },
 
-            # Neurologie — SLA
+            # Neurologie - SLA
             {
                 "category": "Service",
                 "name": "Consultation de la sclérose latérale amyotrophique (SLA)",
@@ -956,7 +953,7 @@ def main() -> None:
                 "postcode": "1211",
                 "city": "Genève 14",
             },
-            # Neurologie — consultation générale
+            # Neurologie - consultation générale
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de neurologie",
@@ -966,7 +963,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "2e étage",
             },
-            # Neurologie — Parkinson / troubles du mouvement
+            # Neurologie - Parkinson / troubles du mouvement
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité des troubles du mouvement - Parkinson",
@@ -976,7 +973,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "2e étage",
             },
-            # Neurologie — Neuropsychologie
+            # Neurologie - Neuropsychologie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de neuropsychologie",
@@ -986,7 +983,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "2e étage",
             },
-            # Neurologie — Neuroimmunologie & SEP
+            # Neurologie - Neuroimmunologie & SEP
             {
                 "category": "Service",
                 "name": "Consultations ambulatoires de l'unité de neuroimmunologie et sclérose en plaques",
@@ -996,7 +993,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "2e étage",
             },
-            # Neurologie — EEG / Épilepsie
+            # Neurologie - EEG / Épilepsie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'électro-encéphalographie (EEG) et d'exploration de l'épilepsie",
@@ -1006,7 +1003,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "2e étage",
             },
-            # Neurologie — Vasculaire
+            # Neurologie - Vasculaire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de neurologie vasculaire",
@@ -1016,7 +1013,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "2e étage",
             },
-            # Neurologie — ENMG / affections neuromusculaires
+            # Neurologie - ENMG / affections neuromusculaires
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'électroneuromyographie et des affections neuromusculaires (ENMG)",
@@ -1034,7 +1031,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Neurorééducation — consultation ambulatoire
+            # Neurorééducation - consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de neuro-rééducation",
@@ -1043,7 +1040,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Obstétrique — consultation du service
+            # Obstétrique - consultation du service
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service d'obstétrique",
@@ -1052,7 +1049,7 @@ def main() -> None:
                 "city": "Genève",
                 "building": "Maternité",
             },
-            # Obstétrique — haut risque
+            # Obstétrique - haut risque
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'obstétrique à haut risque",
@@ -1061,7 +1058,7 @@ def main() -> None:
                 "city": "Genève",
                 "building": "Maternité",
             },
-            # Obstétrique — médecine fœtale et échographie
+            # Obstétrique - médecine fœtale et échographie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de médecine fœtale et d'échographie",
@@ -1071,7 +1068,7 @@ def main() -> None:
                 "building": "Maternité",
             },
 
-            # Oncologie — consultation du service (Prévost 5e)
+            # Oncologie - consultation du service (Prévost 5e)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du Service d'oncologie",
@@ -1081,7 +1078,7 @@ def main() -> None:
                 "building": "Bâtiment Prévost",
                 "floor": "5e étage",
             },
-            # Oncologie — onco-gynécologie médicale (Centre du sein, Maternité 1er)
+            # Oncologie - onco-gynécologie médicale (Centre du sein, Maternité 1er)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'onco-gynécologie médicale",
@@ -1091,7 +1088,7 @@ def main() -> None:
                 "building": "Maternité",
                 "floor": "1er étage",
             },
-            # Oncologie — oncogénétique (au sein de la Maternité)
+            # Oncologie - oncogénétique (au sein de la Maternité)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'oncogénétique",
@@ -1119,17 +1116,17 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # ORL — Oto-neurologie
+            # ORL - Oto-neurologie
             {
                 "category": "Service",
-                "name": "Consultation ambulatoire de l'unité d'oto-neurologie (troubles de l’équilibre, vertiges)",
+                "name": "Consultation ambulatoire de l'unité d'oto-neurologie (troubles de l'équilibre, vertiges)",
                 "address_line": "Rue Gabrielle-Perret-Gentil 4",
                 "postcode": "1205",
                 "city": "Genève",
                 "building": "Bât Prévost",
                 "floor": "3e étage",
             },
-            # ORL — Consultation du service
+            # ORL - Consultation du service
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service ORL et chirurgie cervico-faciale",
@@ -1139,7 +1136,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "3e étage",
             },
-            # ORL — Otologie
+            # ORL - Otologie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité d'otologie",
@@ -1149,7 +1146,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "3e étage",
             },
-            # ORL — Pédiatrique
+            # ORL - Pédiatrique
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire ORL pédiatrique",
@@ -1159,7 +1156,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "3e étage",
             },
-            # ORL — Phoniatrie
+            # ORL - Phoniatrie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de phoniatrie",
@@ -1169,7 +1166,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "3e étage",
             },
-            # ORL — Chirurgie cervico-faciale
+            # ORL - Chirurgie cervico-faciale
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de chirurgie cervico-faciale",
@@ -1179,7 +1176,7 @@ def main() -> None:
                 "building": "Bât Prévost",
                 "floor": "3e étage",
             },
-            # ORL — Rhinologie / Olfactologie
+            # ORL - Rhinologie / Olfactologie
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de rhinologie - olfactologie",
@@ -1190,10 +1187,10 @@ def main() -> None:
                 "floor": "3e étage",
             },
 
-            # Pathologie clinique — C.M.U.
+            # Pathologie clinique - C.M.U.
             {
                 "category": "Service",
-                "name": "Pathologie clinique — C.M.U.",
+                "name": "Pathologie clinique - C.M.U.",
                 "address_line": "Rue Michel-Servet 1",
                 "postcode": "1206",
                 "city": "Genève",
@@ -1201,7 +1198,7 @@ def main() -> None:
                 "floor": "5e étage",
             },
 
-            # Pharmacologie & toxicologie cliniques — CIT & Pharmacovigilance
+            # Pharmacologie & toxicologie cliniques - CIT & Pharmacovigilance
             {
                 "category": "Service",
                 "name": "Centre d'informations thérapeutiques et de pharmacovigilance (consultation ambulatoire)",
@@ -1209,7 +1206,7 @@ def main() -> None:
                 "postcode": "1205",
                 "city": "Genève",
             },
-            # Pharmacologie & toxicologie cliniques — Centre multidisciplinaire de la douleur
+            # Pharmacologie & toxicologie cliniques - Centre multidisciplinaire de la douleur
             {
                 "category": "Service",
                 "name": "Centre multidisciplinaire de la douleur : consultation ambulatoire",
@@ -1220,7 +1217,7 @@ def main() -> None:
                 "floor": "niveau 0",
             },
 
-            # Pneumologie — consultation du service
+            # Pneumologie - consultation du service
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de pneumologie",
@@ -1230,7 +1227,7 @@ def main() -> None:
                 "building": "Bât Morier",
                 "floor": "1er étage",
             },
-            # Pneumologie — transplantation pulmonaire
+            # Pneumologie - transplantation pulmonaire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de transplantation pulmonaire",
@@ -1240,7 +1237,7 @@ def main() -> None:
                 "building": "Bât Morier",
                 "floor": "1er étage",
             },
-            # Pneumologie — mycobactéries non tuberculeuses
+            # Pneumologie - mycobactéries non tuberculeuses
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de mycobactéries non tuberculeuses",
@@ -1250,7 +1247,7 @@ def main() -> None:
                 "building": "Bât Morier",
                 "floor": "1er étage",
             },
-            # Pneumologie — interventionnelle / nodules pulmonaires
+            # Pneumologie - interventionnelle / nodules pulmonaires
             {
                 "category": "Service",
                 "name": "Pneumologie interventionnelle / nodules pulmonaires",
@@ -1260,7 +1257,7 @@ def main() -> None:
                 "building": "Bât Morier",
                 "floor": "1er étage",
             },
-            # Pneumologie — Centre de médecine du sommeil (Belle-Idée)
+            # Pneumologie - Centre de médecine du sommeil (Belle-Idée)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du Centre de médecine du sommeil",
@@ -1268,7 +1265,7 @@ def main() -> None:
                 "postcode": "1224",
                 "city": "Thônex",
             },
-            # Pneumologie — mucoviscidose adulte
+            # Pneumologie - mucoviscidose adulte
             {
                 "category": "Service",
                 "name": "Consultation de mucoviscidose adulte",
@@ -1279,7 +1276,7 @@ def main() -> None:
                 "floor": "1er étage",
             },
 
-             # Psychiatrie (spécialités psychiatriques) — troubles anxieux
+             # Psychiatrie (spécialités psychiatriques) - troubles anxieux
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du programme troubles anxieux",
@@ -1287,7 +1284,7 @@ def main() -> None:
                 "postcode": "1201",
                 "city": "Genève",
             },
-            # Psychiatrie (spécialités) — Sexologie
+            # Psychiatrie (spécialités) - Sexologie
             {
                 "category": "Service",
                 "name": "Consultation de Sexologie",
@@ -1295,7 +1292,7 @@ def main() -> None:
                 "postcode": "1201",
                 "city": "Genève",
             },
-            # Psychiatrie (spécialités) — troubles de l’humeur
+            # Psychiatrie (spécialités) - troubles de l'humeur
             {
                 "category": "Service",
                 "name": "Programme des troubles de l'humeur",
@@ -1303,7 +1300,7 @@ def main() -> None:
                 "postcode": "1201",
                 "city": "Genève",
             },
-            # Psychiatrie (spécialités) — régulation émotionnelle
+            # Psychiatrie (spécialités) - régulation émotionnelle
             {
                 "category": "Service",
                 "name": "Consultation trouble de la régulation émotionnelle",
@@ -1311,7 +1308,7 @@ def main() -> None:
                 "postcode": "1201",
                 "city": "Genève",
             },
-            # Psychiatrie (spécialités) — familles & couples
+            # Psychiatrie (spécialités) - familles & couples
             {
                 "category": "Service",
                 "name": "Consultation psychothérapeutique pour familles et couples",
@@ -1319,7 +1316,7 @@ def main() -> None:
                 "postcode": "1226",
                 "city": "Thônex",
             },
-            # Psychiatrie (spécialités) — développement mental
+            # Psychiatrie (spécialités) - développement mental
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de l'unité de psychiatrie du développement mental",
@@ -1328,7 +1325,7 @@ def main() -> None:
                 "city": "Chêne-Bourg",
             },
 
-            # Psychiatrie adulte — CAPPI Eaux-Vives
+            # Psychiatrie adulte - CAPPI Eaux-Vives
             {
                 "category": "Service",
                 "name": "CAPPI Eaux-Vives (Centre ambulatoire de psychiatrie et psychothérapie intégrées)",
@@ -1336,7 +1333,7 @@ def main() -> None:
                 "postcode": "1207",
                 "city": "Genève",
             },
-            # Psychiatrie adulte — CAPPI Jonction
+            # Psychiatrie adulte - CAPPI Jonction
             {
                 "category": "Service",
                 "name": "CAPPI Jonction (Centre ambulatoire de psychiatrie et psychothérapie intégrées)",
@@ -1344,7 +1341,7 @@ def main() -> None:
                 "postcode": "1205",
                 "city": "Genève",
             },
-            # Psychiatrie adulte — CAPPI Servette
+            # Psychiatrie adulte - CAPPI Servette
             {
                 "category": "Service",
                 "name": "CAPPI Servette (Centre ambulatoire de psychiatrie et psychothérapie intégrées)",
@@ -1352,7 +1349,7 @@ def main() -> None:
                 "postcode": "1203",
                 "city": "Genève",
             },
-            # Psychiatrie adulte — JADE jeunes adultes
+            # Psychiatrie adulte - JADE jeunes adultes
             {
                 "category": "Service",
                 "name": "JADE (Programme ambulatoire Jeunes adultes avec troubles débutants)",
@@ -1361,7 +1358,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Psychiatrie de liaison & crise — psychotraumatologie
+            # Psychiatrie de liaison & crise - psychotraumatologie
             {
                 "category": "Service",
                 "name": "Consultation de psychotraumatologie",
@@ -1369,7 +1366,7 @@ def main() -> None:
                 "postcode": "1205",
                 "city": "Genève",
             },
-            # Psychiatrie de liaison & crise — consultation ambulatoire
+            # Psychiatrie de liaison & crise - consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de psychiatrie de liaison et d'intervention de crise",
@@ -1377,7 +1374,7 @@ def main() -> None:
                 "postcode": "1205",
                 "city": "Genève",
             },
-            # Psychiatrie de liaison & crise — troubles du comportement alimentaire
+            # Psychiatrie de liaison & crise - troubles du comportement alimentaire
             {
                 "category": "Service",
                 "name": "Programme ambulatoire pour les troubles du comportement alimentaire",
@@ -1389,7 +1386,7 @@ def main() -> None:
             # Psychiatrie gériatrique
             {
                 "category": "Service",
-                "name": "Psychiatrie gériatrique — Secrétariat du médecin-chef de service",
+                "name": "Psychiatrie gériatrique - Secrétariat du médecin-chef de service",
                 "address_line": "Chemin du Petit-Bel-Air 2",
                 "postcode": "1226",
                 "city": "Thônex",
@@ -1413,7 +1410,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Radiologie — consultation ambulatoire
+            # Radiologie - consultation ambulatoire
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire de radiologie",
@@ -1424,7 +1421,7 @@ def main() -> None:
                 "floor": "étage P",
             },
 
-            # Rhumatologie — consultation multidisciplinaire du dos
+            # Rhumatologie - consultation multidisciplinaire du dos
             {
                 "category": "Service",
                 "name": "Consultation multidisciplinaire du dos",
@@ -1432,7 +1429,7 @@ def main() -> None:
                 "postcode": "1205",
                 "city": "Genève",
             },
-            # Rhumatologie — consultation du service
+            # Rhumatologie - consultation du service
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service de rhumatologie",
@@ -1441,10 +1438,10 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Sciences de l’information médicale
+            # Sciences de l'information médicale
             {
                 "category": "Service",
-                "name": "Sciences de l’information médicale",
+                "name": "Sciences de l'information médicale",
                 "address_line": "Bd de la Tour 8",
                 "postcode": "1205",
                 "city": "Genève",
@@ -1478,18 +1475,18 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Service prévention et contrôle de l'infection — Secrétariat
+            # Service prévention et contrôle de l'infection - Secrétariat
             {
                 "category": "Service",
-                "name": "Service prévention et contrôle de l'infection — Secrétariat",
+                "name": "Service prévention et contrôle de l'infection - Secrétariat",
                 "address_line": "Rue Gabrielle-Perret-Gentil 4",
                 "postcode": "1205",
                 "city": "Genève",
-                "building": "Bâtiment d’appui (Jean-Louis Prévost)",
+                "building": "Bâtiment d'appui (Jean-Louis Prévost)",
                 "floor": "9e étage",
             },
 
-             # Spécialités psychiatriques — Rue de Lausanne 20bis
+             # Spécialités psychiatriques - Rue de Lausanne 20bis
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du programme troubles anxieux",
@@ -1533,7 +1530,7 @@ def main() -> None:
                 "city": "Chêne-Bourg",
             },
 
-            # Transplantation — adresse générale
+            # Transplantation - adresse générale
             {
                 "category": "Service",
                 "name": "Transplantation",
@@ -1542,7 +1539,7 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Unité d'éducation thérapeutique du patient — Obésité & diabète (Villa Soleillane)
+            # Unité d'éducation thérapeutique du patient - Obésité & diabète (Villa Soleillane)
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire obésité et diabète",
@@ -1560,23 +1557,23 @@ def main() -> None:
                 "city": "Genève",
             },
 
-            # Urgences de gynécologie et d’obstétrique (entrée Maternité)
+            # Urgences de gynécologie et d'obstétrique (entrée Maternité)
             {
                 "category": "Service",
-                "name": "Urgences de gynécologie et d’obstétrique",
+                "name": "Urgences de gynécologie et d'obstétrique",
                 "address_line": "Boulevard de la Cluse 30",
                 "postcode": "1205",
                 "city": "Genève",
                 "building": "Maternité",
             },
 
-            # Urgences gériatriques non vitales (pas d’adresse précisée)
+            # Urgences gériatriques non vitales (pas d'adresse précisée)
             ("Service", "Urgences gériatriques non vitales"),
 
-            # Urgences psychiatriques (pas d’adresse précisée)
+            # Urgences psychiatriques (pas d'adresse précisée)
             ("Service", "Urgences psychiatriques"),
 
-            # Urologie — consultation ambulatoire du service
+            # Urologie - consultation ambulatoire du service
             {
                 "category": "Service",
                 "name": "Consultation ambulatoire du service d'urologie",
@@ -1632,7 +1629,6 @@ def main() -> None:
             ("Service", "Radiologie"),
         ])
 
-        print("✅ Seed établissements + services OK.")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,126 @@
+{
+  "timestamp": "20251024_141859",
+  "study_name": "dqn_optimization",
+  "comparison_summary": {
+    "best_score": 100.0,
+    "target_score": 544.3,
+    "improvement_over_target": -444.29999999999995,
+    "improvement_percentage": -81.62777879845673,
+    "triplet_gagnant_analysis": {
+      "per_enabled": 0,
+      "n_step_enabled": 0,
+      "dueling_enabled": 0,
+      "all_three_enabled": 0,
+      "top_10_per_enabled": 0,
+      "top_10_n_step_enabled": 0,
+      "top_10_dueling_enabled": 0,
+      "top_10_all_three_enabled": 0
+    }
+  },
+  "top_10_trials": [],
+  "feature_analysis": {
+    "double_dqn": {
+      "enabled_avg": 0,
+      "disabled_avg": 0,
+      "improvement": 0,
+      "enabled_count": 0,
+      "disabled_count": 0
+    },
+    "prioritized_replay": {
+      "enabled_avg": 0,
+      "disabled_avg": 0,
+      "improvement": 0,
+      "enabled_count": 0,
+      "disabled_count": 0
+    },
+    "n_step": {
+      "enabled_avg": 0,
+      "disabled_avg": 0,
+      "improvement": 0,
+      "enabled_count": 0,
+      "disabled_count": 0
+    },
+    "dueling": {
+      "enabled_avg": 0,
+      "disabled_avg": 0,
+      "improvement": 0,
+      "enabled_count": 0,
+      "disabled_count": 0
+    }
+  },
+  "hyperparameter_ranges": {
+    "learning_rate": {
+      "min": 1e-05,
+      "max": 0.01,
+      "log": true
+    },
+    "gamma": {
+      "min": 0.9,
+      "max": 0.999
+    },
+    "batch_size": {
+      "choices": [
+        32,
+        64,
+        128,
+        256
+      ]
+    },
+    "epsilon_start": {
+      "min": 0.7,
+      "max": 1.0
+    },
+    "epsilon_end": {
+      "min": 0.01,
+      "max": 0.1
+    },
+    "epsilon_decay": {
+      "min": 0.99,
+      "max": 0.999
+    },
+    "buffer_size": {
+      "choices": [
+        50000,
+        100000,
+        200000,
+        500000
+      ]
+    },
+    "target_update_freq": {
+      "min": 5,
+      "max": 50
+    },
+    "alpha": {
+      "min": 0.4,
+      "max": 0.8
+    },
+    "beta_start": {
+      "min": 0.3,
+      "max": 0.6
+    },
+    "beta_end": {
+      "min": 0.8,
+      "max": 1.0
+    },
+    "n_step": {
+      "min": 2,
+      "max": 5
+    },
+    "n_step_gamma": {
+      "min": 0.95,
+      "max": 0.999
+    },
+    "tau": {
+      "min": 0.001,
+      "max": 0.01
+    },
+    "num_drivers": {
+      "min": 5,
+      "max": 20
+    },
+    "max_bookings": {
+      "min": 10,
+      "max": 50
+    }
+  }
+}

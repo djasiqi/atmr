@@ -51,7 +51,7 @@ api = Api(
     version="1.0",
     description="API pour la gestion des transports de personnes",
     prefix=API_PREFIX_FULL,
-    doc=_doc_param,                   # bool (False) ou str, accepté à l’exécution
+    doc=_doc_param,                   # bool (False) ou str, accepté à l'exécution
     authorizations=authorizations,
     security="BearerAuth",
     validate=True,
@@ -90,6 +90,12 @@ api.add_namespace(settings_ns, path="/company-settings")
 def init_namespaces(app):
     # Enregistrer le Blueprint Shadow Mode (non-RESTX)
     app.register_blueprint(shadow_mode_bp)
+
+    # ✅ Enregistrer les handlers Socket.IO pour alertes proactives
+    from ext import socketio
+    from sockets.proactive_alerts import register_proactive_alerts_sockets
+    register_proactive_alerts_sockets(socketio)
+
     app.logger.info(
         "[api] init: prefix=%s docs=%s version=%s",
         API_PREFIX_FULL,

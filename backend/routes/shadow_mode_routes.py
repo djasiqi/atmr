@@ -1,261 +1,406 @@
-# ruff: noqa: T201, W293, DTZ003, DTZ007
-"""
-Routes API pour le Shadow Mode du DQN Dispatch.
+#!/usr/bin/env python3
+"""Routes pour l'affichage et la gestion du Shadow Mode.
 
-Ces routes permettent de monitorer et contrôler le mode shadow.
+Fournit des endpoints REST pour consulter les rapports,
+KPIs et métriques du mode shadow.
 """
-from datetime import datetime
+
+from datetime import UTC, datetime, timedelta
+from typing import Any, Dict, List
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required
+from flask_restx import Api, Namespace, Resource, fields
 
-from ext import role_required
-from models.enums import UserRole
 from services.rl.shadow_mode_manager import ShadowModeManager
 
-shadow_mode_bp = Blueprint('shadow_mode', __name__, url_prefix='/api/shadow-mode')
+# Créer le blueprint
+shadow_mode_bp = Blueprint(
+    "shadow_mode",
+    __name__,
+    url_prefix="/api/shadow-mode")
 
-# Instance globale du shadow mode manager
-# En production, utiliser un singleton ou dependency injection
-shadow_manager: ShadowModeManager | None = None
+# Créer l'API RESTX
+api = Api(shadow_mode_bp, doc="/docs/", title="Shadow Mode API")
+
+# Namespace pour les rapports
+reports_ns = Namespace("reports", description="Rapports Shadow Mode")
+api.add_namespace(reports_ns)
+
+# Namespace pour les KPIs
+kpis_ns = Namespace("kpis", description="KPIs Shadow Mode")
+api.add_namespace(kpis_ns)
+
+# Modèles de données pour la documentation API
+decision_model = api.model("Decision", {
+    "company_id": fields.String(required=True, description="ID de l'entreprise"),
+    "booking_id": fields.String(required=True, description="ID de la réservation"),
+    "human_decision": fields.Raw(required=True, description="Décision humaine"),
+    "rl_decision": fields.Raw(required=True, description="Décision RL"),
+    "context": fields.Raw(description="Contexte de la décision")
+})
+
+daily_report_model = api.model("DailyReport", {
+    "company_id": fields.String(description="ID de l'entreprise"),
+    "date": fields.String(description="Date du rapport"),
+    "total_decisions": fields.Integer(description="Nombre total de décisions"),
+    "statistics": fields.Raw(description="Statistiques quotidiennes"),
+    "kpis_summary": fields.Raw(description="Résumé des KPIs"),
+    "top_insights": fields.List(fields.String, description="Insights principaux"),
+    "recommendations": fields.List(fields.String, description="Recommandations")
+})
+
+company_summary_model = api.model("CompanySummary", {
+    "company_id": fields.String(description="ID de l'entreprise"),
+    "period_days": fields.Integer(description="Période analysée (jours)"),
+    "total_decisions": fields.Integer(description="Total des décisions"),
+    "avg_decisions_per_day": fields.Float(description="Moyenne décisions/jour"),
+    "avg_agreement_rate": fields.Float(description="Taux d'accord moyen"),
+    "avg_eta_improvement": fields.Float(description="Amélioration ETA moyenne"),
+    "trend_analysis": fields.Raw(description="Analyse des tendances")
+})
+
+# Initialiser le gestionnaire shadow mode
+shadow_manager = ShadowModeManager()
 
 
-def get_shadow_manager() -> ShadowModeManager:
-    """Récupère ou crée l'instance du shadow manager."""
-    global shadow_manager
-    if shadow_manager is None:
-        shadow_manager = ShadowModeManager(
-            model_path="data/rl/models/dqn_best.pth",
-            log_dir="data/rl/shadow_mode",
-            enable_logging=True
-        )
-    return shadow_manager
+@reports_ns.route("/daily/<string:company_id>")
+class DailyReport(Resource):
+    """Endpoint pour les rapports quotidiens."""
+
+    @reports_ns.doc("get_daily_report")
+    @reports_ns.marshal_with(daily_report_model)
+    def get(self, company_id: str):
+        """Récupère le rapport quotidien pour une entreprise.
+
+        Query Parameters:
+            date: Date du rapport (format YYYY-MM-DD, par défaut aujourd'hui)
+        """
+        try:
+            # Récupérer la date depuis les paramètres
+            date_str = request.args.get("date")
+            date = datetime.strptime(date_str, "%Y-%m-%d").replace(
+                tzinfo=UTC).date() if date_str else datetime.now(UTC).date()
+
+            # Générer le rapport
+            report = shadow_manager.generate_daily_report(company_id, date)
+
+            return report, 200
+
+        except ValueError as e:
+            return {"error": f"Format de date invalide: {e}"}, 400
+        except Exception as e:
+            return {"error": f"Erreur lors de la génération du rapport: {e}"}, 500
+
+    @reports_ns.doc("log_decision")
+    @reports_ns.expect(decision_model)
+    def post(self, company_id: str):
+        """Enregistre une nouvelle décision pour comparaison."""
+        try:
+            data = request.get_json()
+
+            # Valider les données requises
+            required_fields = ["booking_id", "human_decision", "rl_decision"]
+            for field in required_fields:
+                if field not in data:
+                    return {"error": f"Champ requis manquant: {field}"}, 400
+
+            # Enregistrer la décision
+            kpis = shadow_manager.log_decision_comparison(
+                company_id=company_id,
+                booking_id=data["booking_id"],
+                human_decision=data["human_decision"],
+                rl_decision=data["rl_decision"],
+                context=data.get("context", {})
+            )
+
+            return {
+                "message": "Décision enregistrée avec succès",
+                "kpis": kpis
+            }, 201
+
+        except Exception as e:
+            return {"error": f"Erreur lors de l'enregistrement: {e}"}, 500
 
 
-@shadow_mode_bp.route('/status', methods=['GET'])
-@jwt_required()
-@role_required(UserRole.admin)
-def get_status():
-    """
-    Retourne le statut actuel du shadow mode.
-    
-    Returns:
-        JSON avec statistiques et état du shadow mode
-    """
+@reports_ns.route("/summary/<string:company_id>")
+class CompanySummary(Resource):
+    """Endpoint pour les résumés d'entreprise."""
+
+    @reports_ns.doc("get_company_summary")
+    @reports_ns.marshal_with(company_summary_model)
+    def get(self, company_id: str):
+        """Récupère un résumé multi-jours pour une entreprise.
+
+        Query Parameters:
+            days: Nombre de jours à analyser (défaut: 7)
+        """
+        try:
+            # Récupérer le nombre de jours
+            days = int(request.args.get("days", 7))
+
+            # Générer le résumé
+            summary = shadow_manager.get_company_summary(company_id, days)
+
+            return summary, 200
+
+        except ValueError as e:
+            return {"error": f"Paramètre invalide: {e}"}, 400
+        except Exception as e:
+            return {"error": f"Erreur lors de la génération du résumé: {e}"}, 500
+
+
+@kpis_ns.route("/metrics/<string:company_id>")
+class KPIMetrics(Resource):
+    """Endpoint pour les métriques KPIs."""
+
+    @kpis_ns.doc("get_kpi_metrics")
+    def get(self, company_id: str):
+        """Récupère les métriques KPIs détaillées pour une entreprise.
+
+        Query Parameters:
+            days: Nombre de jours à analyser (défaut: 7)
+            metric: Métrique spécifique à récupérer
+        """
+        try:
+            days = int(request.args.get("days", 7))
+            metric = request.args.get("metric")
+
+            # Générer le résumé pour obtenir les données
+            summary = shadow_manager.get_company_summary(company_id, days)
+
+            if summary.get("total_decisions", 0) == 0:
+                return {
+                    "company_id": company_id,
+                    "message": "Aucune donnée disponible pour cette période"
+                }, 200
+
+            # Filtrer par métrique si spécifiée
+            if metric:
+                # Récupérer les données brutes pour cette métrique
+                end_date = datetime.now(UTC).date()
+                start_date = end_date - timedelta(days=days - 1)
+
+                metric_data = []
+                for i in range(days):
+                    date = start_date + timedelta(days=i)
+                    company_data = shadow_manager._filter_data_by_company_and_date(
+                        company_id, date)
+
+                    for kpi in company_data["kpis"]:
+                        if metric in kpi:
+                            metric_data.append({
+                                "date": date.isoformat(),
+                                "value": kpi[metric]
+                            })
+
+                return {
+                    "company_id": company_id,
+                    "metric": metric,
+                    "period_days": days,
+                    "data": metric_data
+                }, 200
+
+            # Retourner toutes les métriques
+            return {
+                "company_id": company_id,
+                "period_days": days,
+                "summary": summary,
+                "available_metrics": list(shadow_manager.kpi_metrics.keys())
+            }, 200
+
+        except ValueError as e:
+            return {"error": f"Paramètre invalide: {e}"}, 400
+        except Exception as e:
+            return {
+                "error": f"Erreur lors de la récupération des métriques: {e}"}, 500
+
+
+@kpis_ns.route("/export/<string:company_id>")
+class ExportData(Resource):
+    """Endpoint pour l'export des données."""
+
+    @kpis_ns.doc("export_company_data")
+    def get(self, company_id: str):
+        """Exporte les données d'une entreprise en CSV/JSON.
+
+        Query Parameters:
+            format: Format d'export (csv, json, both) - défaut: json
+            days: Nombre de jours à exporter (défaut: 7)
+        """
+        try:
+            export_format = request.args.get("format", "json")
+            days = int(request.args.get("days", 7))
+
+            # Générer les rapports pour la période
+            end_date = datetime.now(UTC).date()
+            start_date = end_date - timedelta(days=days - 1)
+
+            reports = []
+            for i in range(days):
+                date = start_date + timedelta(days=i)
+                report = shadow_manager.generate_daily_report(company_id, date)
+                if report.get("total_decisions", 0) > 0:
+                    reports.append(report)
+
+            if not reports:
+                return {
+                    "message": "Aucune donnée à exporter pour cette période"
+                }, 200
+
+            # Préparer la réponse selon le format
+            if export_format == "csv":
+                # Convertir en format CSV-friendly
+                csv_data = []
+                for report in reports:
+                    csv_data.append(
+                        {
+                            "company_id": report["company_id"],
+                            "date": report["date"],
+                            "total_decisions": report["total_decisions"],
+                            "agreement_rate": report.get(
+                                "statistics",
+                                {}).get(
+                                "agreement_rate",
+                                0),
+                            "avg_eta_delta": report.get(
+                                "statistics",
+                                {}).get(
+                                "eta_delta",
+                                {}).get(
+                                "mean",
+                                0),
+                            "avg_delay_delta": report.get(
+                                "statistics",
+                                {}).get(
+                                    "delay_delta",
+                                    {}).get(
+                                        "mean",
+                                        0),
+                            "rl_confidence": report.get(
+                                "statistics",
+                                {}).get(
+                                "rl_confidence",
+                                {}).get(
+                                "mean",
+                                0)})
+
+                return {
+                    "format": "csv",
+                    "data": csv_data,
+                    "message": "Données prêtes pour conversion CSV"
+                }, 200
+
+            if export_format == "both":
+                return {
+                    "format": "both",
+                    "reports": reports,
+                    "csv_data": self._prepare_csv_data(reports),
+                    "message": "Données exportées en JSON et CSV"
+                }, 200
+
+            # json
+            return {
+                "format": "json",
+                "reports": reports,
+                "total_reports": len(reports),
+                "message": "Données exportées en JSON"
+            }, 200
+
+        except ValueError as e:
+            return {"error": f"Paramètre invalide: {e}"}, 400
+        except Exception as e:
+            return {"error": f"Erreur lors de l'export: {e}"}, 500
+
+    def _prepare_csv_data(
+            self, reports: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Prépare les données pour l'export CSV."""
+        csv_data = []
+        for report in reports:
+            csv_data.append(
+                {
+                    "company_id": report["company_id"],
+                    "date": report["date"],
+                    "total_decisions": report["total_decisions"],
+                    "agreement_rate": report.get(
+                        "statistics",
+                        {}).get(
+                        "agreement_rate",
+                        0),
+                    "avg_eta_delta": report.get(
+                        "statistics",
+                        {}).get(
+                        "eta_delta",
+                        {}).get(
+                            "mean",
+                            0),
+                    "avg_delay_delta": report.get(
+                        "statistics",
+                        {}).get(
+                        "delay_delta",
+                        {}).get(
+                        "mean",
+                        0),
+                    "rl_confidence": report.get(
+                        "statistics",
+                        {}).get(
+                        "rl_confidence",
+                        {}).get(
+                        "mean",
+                        0),
+                    "eta_improvement_rate": report.get(
+                        "kpis_summary",
+                        {}).get(
+                        "eta_improvement_rate",
+                        0),
+                    "violation_rate": report.get(
+                        "kpis_summary",
+                        {}).get(
+                        "violation_rate",
+                        0)})
+        return csv_data
+
+
+@shadow_mode_bp.route("/health")
+def health_check():
+    """Endpoint de santé pour le shadow mode."""
+    return jsonify({
+        "status": "healthy",
+        "service": "shadow_mode",
+        "timestamp": datetime.now(UTC).isoformat(),
+        "data_dir": str(shadow_manager.data_dir),
+        "total_decisions": len(shadow_manager.decision_metadata["timestamp"])
+    })
+
+
+@shadow_mode_bp.route("/companies")
+def list_companies():
+    """Liste toutes les entreprises avec des données shadow mode."""
     try:
-        manager = get_shadow_manager()
-        stats = manager.get_stats()
+        # Récupérer toutes les entreprises depuis les métadonnées
+        companies = list(set(shadow_manager.decision_metadata["company_id"]))
+
+        # Ajouter des statistiques pour chaque entreprise
+        company_stats = []
+        for company_id in companies:
+            summary = shadow_manager.get_company_summary(company_id, 7)
+            company_stats.append({
+                "company_id": company_id,
+                "total_decisions_7d": summary.get("total_decisions", 0),
+                "avg_agreement_rate": summary.get("avg_agreement_rate", 0),
+                "avg_eta_improvement": summary.get("avg_eta_improvement", 0)
+            })
 
         return jsonify({
-            "status": "active",
-            "model_loaded": manager.agent is not None,
-            "stats": stats
+            "companies": company_stats,
+            "total_companies": len(companies)
         }), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify(
+            {"error": f"Erreur lors de la récupération des entreprises: {e}"}), 500
 
 
-@shadow_mode_bp.route('/stats', methods=['GET'])
-@jwt_required()
-@role_required(UserRole.admin)
-def get_stats():
-    """
-    Retourne les statistiques détaillées du shadow mode.
-    
-    Query params:
-        - period: "today" | "week" | "month" (défaut: today)
-    
-    Returns:
-        JSON avec métriques détaillées
-    """
-    try:
-        manager = get_shadow_manager()
-        period = request.args.get('period', 'today')
-
-        # Stats de session courante
-        session_stats = manager.get_stats()
-
-        # Rapport quotidien
-        daily_report = manager.generate_daily_report()
-
-        return jsonify({
-            "period": period,
-            "session_stats": session_stats,
-            "daily_report": daily_report
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@shadow_mode_bp.route('/report/<date>', methods=['GET'])
-@jwt_required()
-@role_required(UserRole.admin)
-def get_daily_report(date: str):
-    """
-    Retourne le rapport quotidien pour une date donnée.
-    
-    Args:
-        date: Date au format YYYYMMDD
-    
-    Returns:
-        JSON avec le rapport détaillé
-    """
-    try:
-        manager = get_shadow_manager()
-
-        # Valider le format de date
-        datetime.strptime(date, '%Y%m%d')
-
-        report = manager.generate_daily_report(date)
-
-        return jsonify(report), 200
-
-    except ValueError:
-        return jsonify({"error": "Format de date invalide (attendu: YYYYMMDD)"}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@shadow_mode_bp.route('/predictions', methods=['GET'])
-@jwt_required()
-@role_required(UserRole.admin)
-def get_recent_predictions():
-    """
-    Retourne les prédictions récentes du shadow mode.
-    
-    Query params:
-        - limit: Nombre de prédictions à retourner (défaut: 50)
-        - date: Date au format YYYYMMDD (défaut: aujourd'hui)
-    
-    Returns:
-        JSON avec liste des prédictions récentes
-    """
-    try:
-        manager = get_shadow_manager()
-        limit = int(request.args.get('limit', 50))
-        date = request.args.get('date', datetime.utcnow().strftime('%Y%m%d'))
-
-        predictions_file = manager.log_dir / f"predictions_{date}.jsonl"
-
-        if not predictions_file.exists():
-            return jsonify({
-                "date": date,
-                "predictions": [],
-                "count": 0
-            }), 200
-
-        # Lire les dernières prédictions
-        predictions = []
-        with open(predictions_file, encoding="utf-8") as f:
-            lines = f.readlines()
-            # Prendre les N dernières lignes
-            for line in lines[-limit:]:
-                import json
-                predictions.append(json.loads(line))
-
-        return jsonify({
-            "date": date,
-            "predictions": predictions,
-            "count": len(predictions),
-            "limit": limit
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@shadow_mode_bp.route('/comparisons', methods=['GET'])
-@jwt_required()
-@role_required(UserRole.admin)
-def get_recent_comparisons():
-    """
-    Retourne les comparaisons récentes (DQN vs Réel).
-    
-    Query params:
-        - limit: Nombre de comparaisons à retourner (défaut: 50)
-        - date: Date au format YYYYMMDD (défaut: aujourd'hui)
-        - agreement: "true" | "false" | "all" (défaut: all)
-    
-    Returns:
-        JSON avec liste des comparaisons récentes
-    """
-    try:
-        manager = get_shadow_manager()
-        limit = int(request.args.get('limit', 50))
-        date = request.args.get('date', datetime.utcnow().strftime('%Y%m%d'))
-        agreement_filter = request.args.get('agreement', 'all')
-
-        comparisons_file = manager.log_dir / f"comparisons_{date}.jsonl"
-
-        if not comparisons_file.exists():
-            return jsonify({
-                "date": date,
-                "comparisons": [],
-                "count": 0
-            }), 200
-
-        # Lire les dernières comparaisons
-        comparisons = []
-        with open(comparisons_file, encoding="utf-8") as f:
-            lines = f.readlines()
-            for line in lines[-limit:]:
-                import json
-                comp = json.loads(line)
-
-                # Filtrer par agreement si demandé
-                if agreement_filter == "true" and not comp.get("agreement"):
-                    continue
-                if agreement_filter == "false" and comp.get("agreement"):
-                    continue
-
-                comparisons.append(comp)
-
-        return jsonify({
-            "date": date,
-            "comparisons": comparisons,
-            "count": len(comparisons),
-            "limit": limit,
-            "agreement_filter": agreement_filter
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@shadow_mode_bp.route('/reload-model', methods=['POST'])
-@jwt_required()
-@role_required(UserRole.admin)
-def reload_model():
-    """
-    Recharge le modèle DQN (utile après un réentraînement).
-    
-    Body (optionnel):
-        - model_path: Chemin vers le nouveau modèle
-    
-    Returns:
-        JSON confirmant le rechargement
-    """
-    try:
-        global shadow_manager
-
-        data = request.get_json() or {}
-        model_path = data.get('model_path', 'data/rl/models/dqn_best.pth')
-
-        # Créer une nouvelle instance avec le nouveau modèle
-        shadow_manager = ShadowModeManager(
-            model_path=model_path,
-            log_dir="data/rl/shadow_mode",
-            enable_logging=True
-        )
-
-        return jsonify({
-            "message": "Modèle rechargé avec succès",
-            "model_path": model_path,
-            "model_loaded": shadow_manager.agent is not None
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+def register_shadow_mode_routes(app):
+    """Enregistre les routes shadow mode avec l'application Flask."""
+    app.register_blueprint(shadow_mode_bp)
+    return shadow_mode_bp

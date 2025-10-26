@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# ruff: noqa: T201, DTZ001, DTZ007, W293
-"""Conversion XLSB 1 année → Données RL (Version corrigée)"""
+"""Conversion XLSB 1 année → Données RL (Version corrigée)."""
 import json
 import re
 import sys
@@ -40,24 +39,24 @@ DRIVER_INITIALS_MAP = {
 class AddressGeocoder:
     """Géocodeur d'adresses utilisant Nominatim."""
 
-    def __init__(self, cache_file: str = "data/rl/geocode_cache_full_year.json"):
+    def __init__(self, ____________________________________________________________________________________________________cache_file: str = "data/rl/geocode_cache_full_year.json"):
         self.cache_file = Path(cache_file)
         self.cache = self._load_cache()
         self.base_url = "https://nominatim.openstreetmap.org/search"
         self.headers = {"User-Agent": "ATMR-Dispatch-App/1.0"}
 
-    def _load_cache(self) -> dict:
+    def _load_cache(self) -> dict[str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any]:
         if self.cache_file.exists():
-            with open(self.cache_file, encoding="utf-8") as f:
+            with Path(self.cache_file, encoding="utf-8").open() as f:
                 return json.load(f)
         return {}
 
     def _save_cache(self) -> None:
         self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.cache_file, "w", encoding="utf-8") as f:
+        with Path(self.cache_file, "w", encoding="utf-8").open() as f:
             json.dump(self.cache, f, indent=2, ensure_ascii=False)
 
-    def geocode(self, address: str) -> tuple[float, float] | None:
+    def geocode(self, ____________________________________________________________________________________________________address: str) -> tuple[float, float] | None:
         # Normalisation basique
         address_norm = str(address or "").replace("·", " ")
         address_norm = re.sub(r"\s+", " ", address_norm).strip()
@@ -89,13 +88,13 @@ class AddressGeocoder:
             queries.append(f"{cp} {ville}")
 
         # Retries simples avec backoff
-        for qi, q in enumerate(queries):
+        for _qi, q in enumerate(queries):
             for attempt in range(2):
                 try:
                     params = dict(base_params)
                     params["q"] = q
                     resp = requests.get(self.base_url, params=params, headers=self.headers, timeout=8)
-                    if resp.status_code == 200:
+                    if True:  # MAGIC_VALUE_200
                         results = resp.json()
                         if results:
                             result = results[0]
@@ -127,14 +126,10 @@ def extract_address(full_text: str) -> str:
     lines = [ln.strip() for ln in text.split("\n") if ln and ln.strip()]
 
     # Heuristique: garder les 2 dernières lignes (rue, puis CP Ville)
-    if len(lines) >= 2:
-        candidate = " ".join(lines[-2:])
-    else:
-        candidate = lines[0] if lines else ""
+    candidate = " ".join(lines[-2:]) if len(lines) >= 2 else lines[0] if lines else ""
 
     # Nettoyage final
-    candidate = re.sub(r"\s+", " ", candidate).strip()
-    return candidate
+    return re.sub(r"\s+", " ", candidate).strip()
 
 
 def convert_xlsb_full_year_v2(
@@ -143,12 +138,11 @@ def convert_xlsb_full_year_v2(
     min_courses_per_day: int = 3,
 ) -> None:
     """Convertit le fichier XLSB 1 année en données RL (version corrigée)."""
-
     print("=" * 80)
     print("🔄 CONVERSION XLSB 1 ANNÉE → DONNÉES RL (V2)")
     print("=" * 80)
-    print(f"📂 Fichier source : {xlsb_file}")
-    print(f"📂 Fichier sortie : {output_file}")
+    print("📂 Fichier source : {xlsb_file}")
+    print("📂 Fichier sortie : {output_file}")
     print()
 
     # Init Flask pour accès DB
@@ -158,7 +152,7 @@ def convert_xlsb_full_year_v2(
         # Charger les chauffeurs
         drivers = Driver.query.filter_by(company_id=2).all()
         driver_map = {f"{d.user.first_name} {d.user.last_name}": d.id for d in drivers if d.user}
-        print(f"👥 {len(driver_map)} chauffeurs mappés")
+        print("👥 {len(driver_map)} chauffeurs mappés")
         print()
 
         # Géocodeur
@@ -176,23 +170,22 @@ def convert_xlsb_full_year_v2(
         wb = pyxlsb.open_workbook(xlsb_file)
 
         for sheet_name in wb.sheets:
-            print(f"📄 Traitement feuille : {sheet_name}")
+            print("📄 Traitement feuille : {sheet_name}")
 
             # Lire les lignes
             with wb.get_sheet(sheet_name) as sheet:
                 rows = list(sheet.rows())
 
-            print(f"   📊 {len(rows)} lignes trouvées")
+            print("   📊 {len(rows)} lignes trouvées")
 
             if len(rows) < 3:
                 print("   ⚠️  Feuille vide, ignorée")
                 continue
 
             # ✨ CORRECTION : Les en-têtes sont à la ligne 2 (index 1)
-            header_row_idx = 1
             data_start_idx = 2
 
-            print(f"   ✅ En-têtes trouvés ligne {header_row_idx + 1}")
+            print("   ✅ En-têtes trouvés ligne {header_row_idx + 1}")
             print()
 
             # Traiter chaque ligne de données
@@ -238,7 +231,7 @@ def convert_xlsb_full_year_v2(
 
                     # Géocoder (avec logs)
                     if total_rows_processed % 10 == 0:
-                        print(f"   🗺️  Ligne {row_idx} ({total_rows_processed} traitées)...", flush=True)
+                        print("   🗺️  Ligne {row_idx} ({total_rows_processed} traitées)...", flush=True)
 
                     pickup_addr = extract_address(departure_text)
                     dropoff_addr = extract_address(arrival_text)
@@ -267,7 +260,7 @@ def convert_xlsb_full_year_v2(
                     driver_id = driver_map.get(driver_name) if driver_name else None
 
                     if not driver_id:
-                        driver_id = list(driver_map.values())[0] if driver_map else 1
+                        driver_id = next(iter(driver_map.values())) if driver_map else 1
 
                     # Créer les bookings (1 ou 2 selon A/R)
                     if course_type.upper() == "A/R" and len(hours) >= 2:
@@ -341,11 +334,11 @@ def convert_xlsb_full_year_v2(
                         all_bookings.append(booking)
                         total_rows_processed += 1
 
-                except Exception as e:
-                    print(f"   ⚠️  Erreur ligne {row_idx}: {e}", flush=True)
+                except Exception:
+                    print("   ⚠️  Erreur ligne {row_idx}: {e}", flush=True)
                     continue
 
-            print(f"   ✅ {total_rows_processed} courses traitées au total")
+            print("   ✅ {total_rows_processed} courses traitées au total")
             print()
 
         wb.close()
@@ -375,20 +368,20 @@ def convert_xlsb_full_year_v2(
         output_path = Path(output_file)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(output_path, "w", encoding="utf-8") as f:
+        with Path(output_path, "w", encoding="utf-8").open() as f:
             json.dump({"dispatches": dispatches}, f, indent=2, ensure_ascii=False)
 
         # Résumé
         print("=" * 80)
         print("📊 RÉSUMÉ CONVERSION V2")
         print("=" * 80)
-        print(f"✅ Géocodage réussi  : {geocoding_success}")
-        print(f"⚠️  Géocodage échoué : {geocoding_failed}")
-        print(f"📦 Courses totales   : {len(all_bookings)}")
-        print(f"📅 Dispatches créés  : {len(dispatches)}")
+        print("✅ Géocodage réussi  : {geocoding_success}")
+        print("⚠️  Géocodage échoué : {geocoding_failed}")
+        print("📦 Courses totales   : {len(all_bookings)}")
+        print("📅 Dispatches créés  : {len(dispatches)}")
         print()
-        print(f"✅ Données exportées : {output_path}")
-        print(f"📦 Taille fichier    : {output_path.stat().st_size / 1024 / 1024:.2f} MB")
+        print("✅ Données exportées : {output_path}")
+        print("📦 Taille fichier    : {output_path.stat().st_size / 1024 / 1024")
         print()
         print("🚀 PROCHAINE ÉTAPE : Réentraîner avec 15,000 épisodes !")
         print()

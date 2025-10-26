@@ -1,0 +1,18 @@
+{
+  "model_name": "dqn_dispatch",
+  "model_arch": "dueling_dqn",
+  "version": "v1.0.0",
+  "training_config": {
+    "learning_rate": 0.001,
+    "batch_size": 64,
+    "episodes": 1000,
+    "use_per": true,
+    "use_double_dqn": true,
+    "use_n_step": true
+  },
+  "kpi_thresholds": {
+    "punctuality_rate": 0.85,
+    "avg_distance": 15.0,
+    "avg_delay": 5.0
+  }
+}

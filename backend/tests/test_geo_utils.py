@@ -25,7 +25,7 @@ class TestHaversineDistance:
     def test_distance_same_point(self):
         """Distance entre même point = 0."""
         distance = haversine_distance(48.8566, 2.3522, 48.8566, 2.3522)
-        assert distance < 0.001  # Presque 0
+        assert distance < 0.0001  # Presque 0
 
     def test_distance_meters(self):
         """Version en mètres."""

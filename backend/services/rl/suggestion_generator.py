@@ -1,8 +1,6 @@
 # backend/services/rl/suggestion_generator.py
-# ruff: noqa: T201, W293
 # pyright: reportMissingImports=false
-"""
-Système de suggestions PROACTIVES basées sur RL (Reinforcement Learning).
+"""Système de suggestions PROACTIVES basées sur RL (Reinforcement Learning).
 
 Ce module génère des suggestions d'optimisation PROACTIVES en analysant l'ensemble
 des assignments d'une journée avec le modèle DQN entraîné. Utilisé pour optimisation
@@ -49,40 +47,39 @@ _model_loaded = False
 
 def _lazy_import_rl():
     """Import RL modules only when needed."""
-    global _dqn_agent, _dispatch_env
+    global _dqn_agent, _dispatch_env  # noqa: PLW0603
     if _dqn_agent is None:
         try:
-            from services.rl import dispatch_env, dqn_agent
-            _dqn_agent = dqn_agent
+            from services.rl import dispatch_env, improved_dqn_agent
+            _dqn_agent = improved_dqn_agent
             _dispatch_env = dispatch_env
         except ImportError as e:
-            logger.warning(f"[RL] Could not import RL modules: {e}")
+            logger.warning("[RL] Could not import RL modules: %s", e)
             raise
 
 
 class RLSuggestionGenerator:
-    """
-    Générateur de suggestions RL pour le dispatch.
-    
+    """Générateur de suggestions RL pour le dispatch.
+
     Utilise le modèle DQN entraîné pour analyser l'état actuel du système
     et proposer des réassignations optimales.
     """
 
-    def __init__(self, model_path: str | None = None):
-        """
-        Initialise le générateur de suggestions.
-        
+    def __init__(self, model_path: str | None = None):  # pyright: ignore[reportMissingSuperCall]
+        """Initialise le générateur de suggestions.
+
         Args:
             model_path: Chemin vers le modèle DQN entraîné (.pth)
+
         """
-        self.model_path = model_path or "data/ml/dqn_agent_best_v3_3.pth"
+        self.model_path = model_path or "data/ml/dqn_agent_best_v33.pth"
         self.agent = None
         self.env = None
         self._load_model()
 
     def _load_model(self):
         """Charge le modèle DQN entraîné."""
-        global _model_loaded
+        global _model_loaded  # noqa: PLW0603
 
         if _model_loaded and self.agent is not None:
             return
@@ -93,9 +90,8 @@ class RLSuggestionGenerator:
             model_file = Path(self.model_path)
             if not model_file.exists():
                 logger.warning(
-                    f"[RL] Modèle DQN non trouvé: {model_file}. "
-                    "Les suggestions seront basiques. "
-                    "Entraînez le modèle avec: python backend/scripts/rl/train_dqn.py"
+                    "[RL] Modèle DQN non trouvé: %s. Les suggestions seront basiques. Entraînez le modèle avec: python backend/scripts/rl/train_dqn.py",
+                    model_file
                 )
                 return
 
@@ -104,21 +100,22 @@ class RLSuggestionGenerator:
             dummy_env = DispatchEnv(num_drivers=5, max_bookings=10)
 
             # Créer et charger l'agent
-            from services.rl.dqn_agent import DQNAgent
-            self.agent = DQNAgent(
-                observation_dim=dummy_env.observation_space.shape[0],
+            from services.rl.improved_dqn_agent import ImprovedDQNAgent
+            self.agent = ImprovedDQNAgent(
+                state_dim=dummy_env.observation_space.shape[0],
                 action_dim=dummy_env.action_space.n,
-                learning_rate=0.0001
+                learning_rate=0.00001
             )
 
             self.agent.load(str(model_file))
             self.agent.q_network.eval()  # Mode évaluation
             _model_loaded = True
 
-            logger.info(f"[RL] ✅ Modèle DQN chargé: {model_file}")
+            logger.info("[RL] ✅ Modèle DQN chargé: %s", model_file)
 
         except Exception as e:
-            logger.error(f"[RL] Erreur lors du chargement du modèle: {e}", exc_info=True)
+
+            logger.error("[RL] Erreur lors du chargement du modèle: %s", e)
             self.agent = None
 
     def generate_suggestions(
@@ -130,19 +127,19 @@ class RLSuggestionGenerator:
         min_confidence: float = 0.5,
         max_suggestions: int = 20
     ) -> List[Dict[str, Any]]:
-        """
-        Génère des suggestions RL pour optimiser les assignments.
-        
+        """Génère des suggestions RL pour optimiser les assignments.
+
         Args:
             company_id: ID de l'entreprise
             assignments: Liste des assignments actifs
             drivers: Liste des conducteurs disponibles
             for_date: Date au format YYYY-MM-DD
-            min_confidence: Confiance minimale (0.0-1.0)
+            min_confidence: Confiance minimale (0-1)
             max_suggestions: Nombre maximum de suggestions
-            
+
         Returns:
             Liste de suggestions triées par confiance décroissante
+
         """
         if self.agent is None:
             # Fallback: suggestions basiques
@@ -156,10 +153,10 @@ class RLSuggestionGenerator:
 
     def _generate_rl_suggestions(
         self,
-        company_id: int,
+        _company_id: int,
         assignments: List[Any],
         drivers: List[Any],
-        for_date: str,
+        _for_date: str,
         min_confidence: float,
         max_suggestions: int
     ) -> List[Dict[str, Any]]:
@@ -182,7 +179,11 @@ class RLSuggestionGenerator:
                 # Obtenir les Q-values pour toutes les actions
                 with torch.no_grad():
                     state_tensor = torch.FloatTensor(state).unsqueeze(0)
-                    q_values = self.agent.q_network(state_tensor).cpu().numpy()[0]
+                    if self.agent is not None and hasattr(self.agent, "q_network"):
+                        q_values = self.agent.q_network(
+                            state_tensor).cpu().numpy()[0]
+                    else:
+                        continue
 
                 # Analyser les Q-values pour trouver les meilleures actions
                 # Action 0-4 = assigner au driver 0-4
@@ -233,15 +234,17 @@ class RLSuggestionGenerator:
                     expected_gain = max(0, int(q_value * 2))  # Rough estimate
 
                     # Get driver names from user relation
-                    current_user = getattr(current_driver, 'user', None)
+                    current_user = getattr(current_driver, "user", None)
                     current_name = (
-                        f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}".strip()
+                        f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}".strip(
+                        )
                         if current_user else f"Driver #{current_driver.id}"
                     )
 
-                    alt_user = getattr(alt_driver, 'user', None)
+                    alt_user = getattr(alt_driver, "user", None)
                     alt_name = (
-                        f"{getattr(alt_user, 'first_name', '')} {getattr(alt_user, 'last_name', '')}".strip()
+                        f"{getattr(alt_user, 'first_name', '')} {getattr(alt_user, 'last_name', '')}".strip(
+                        )
                         if alt_user else f"Driver #{alt_driver.id}"
                     )
 
@@ -268,32 +271,32 @@ class RLSuggestionGenerator:
                     suggestions.append(suggestion)
 
         except Exception as e:
-            logger.error(f"[RL] Erreur génération suggestions DQN: {e}", exc_info=True)
+
+            logger.error("[RL] Erreur génération suggestions DQN: %s", e)
             # Fallback vers suggestions basiques
             return self._generate_basic_suggestions(
                 assignments, drivers, min_confidence, max_suggestions
             )
 
         # Trier par confiance décroissante
-        suggestions.sort(key=lambda x: x['confidence'], reverse=True)
+        suggestions.sort(key=lambda x: x["confidence"], reverse=True)
 
         return suggestions[:max_suggestions]
 
-    def _build_state(self, assignment: Any, drivers: List[Any]) -> np.ndarray:
-        """
-        Construit l'état pour le modèle DQN avec VRAIES features.
-        
+    def _build_state(self, assignment: Any, drivers: List[Any]) -> np.ndarray[Any, np.dtype[np.float32]]:
+        """Construit l'état pour le modèle DQN avec VRAIES features.
+
         Format (adapté à l'environnement d'entraînement):
         - Infos booking (4 features) : pickup_time, distance, is_emergency, time_until_pickup
-        - Infos drivers (5 drivers × 3 features = 15) : is_available, distance_to_pickup, current_load
+        - Infos drivers (5 drivers x 3 features = 15) : is_available, distance_to_pickup, current_load
         - Total: 19 features (match avec l'environnement)
-        
+
         Normalisation :
         - pickup_time : Heure du jour (0-24) → [0, 1]
-        - distance : Distance en km / 50.0 → [0, 1]
-        - time_until_pickup : Heures jusqu'au pickup / 4.0 → [0, 1]
-        - driver_distance : Distance en km / 30.0 → [0, 1]
-        - current_load : Nombre assignments / 5.0 → [0, 1]
+        - distance : Distance en km / 50 → [0, 1]
+        - time_until_pickup : Heures jusqu'au pickup / 4 → [0, 1]
+        - driver_distance : Distance en km / 30 → [0, 1]
+        - current_load : Nombre assignments / 5 → [0, 1]
         """
         from models import AssignmentStatus
         from shared.geo_utils import haversine_distance
@@ -303,38 +306,40 @@ class RLSuggestionGenerator:
         booking = assignment.booking
 
         # ✅ Booking features (4 VRAIES features)
-        
+
         # 1. Normalized pickup time (heure du jour 0-24 → 0-1)
         scheduled_time = booking.scheduled_time
         if scheduled_time:
-            hour_of_day = scheduled_time.hour + scheduled_time.minute / 60.0
-            normalized_time = hour_of_day / 24.0
+            hour_of_day = scheduled_time.hour + scheduled_time.minute / 60
+            normalized_time = hour_of_day / 24
         else:
             normalized_time = 0.5  # Fallback si pas de scheduled_time
-        
+
         # 2. Distance pickup-dropoff normalisée (km, max 50km)
-        pickup_lat = getattr(booking, 'pickup_lat', None)
-        pickup_lon = getattr(booking, 'pickup_lon', None)
-        dropoff_lat = getattr(booking, 'dropoff_lat', None)
-        dropoff_lon = getattr(booking, 'dropoff_lon', None)
-        
+        pickup_lat = getattr(booking, "pickup_lat", None)
+        pickup_lon = getattr(booking, "pickup_lon", None)
+        dropoff_lat = getattr(booking, "dropoff_lat", None)
+        dropoff_lon = getattr(booking, "dropoff_lon", None)
+
         if pickup_lat and pickup_lon and dropoff_lat and dropoff_lon:
-            distance_km = haversine_distance(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
-            normalized_distance = min(distance_km / 50.0, 1.0)
+            distance_km = haversine_distance(
+                pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+            normalized_distance = min(distance_km / 50, 1)
         else:
             normalized_distance = 0.5  # Fallback si pas de coordonnées
-        
-        # 3. Is emergency (0.0 ou 1.0)
-        is_emergency_val = 1.0 if getattr(booking, 'is_emergency', False) else 0.0
-        
+
+        # 3. Is emergency (0 ou 1)
+        is_emergency_val = 1 if getattr(booking, "is_emergency", False) else 0
+
         # 4. Temps jusqu'au pickup normalisé (heures, max 4h)
         if scheduled_time:
-            time_until_pickup_seconds = (scheduled_time - now_local()).total_seconds()
-            time_until_pickup_hours = max(0.0, time_until_pickup_seconds / 3600.0)
-            normalized_time_until = min(time_until_pickup_hours / 4.0, 1.0)
+            time_until_pickup_seconds = (
+                scheduled_time - now_local()).total_seconds()
+            time_until_pickup_hours = max(0, time_until_pickup_seconds / 3600)
+            normalized_time_until = min(time_until_pickup_hours / 4, 1)
         else:
             normalized_time_until = 0.5  # Fallback
-        
+
         state.extend([
             normalized_time,
             normalized_distance,
@@ -342,26 +347,34 @@ class RLSuggestionGenerator:
             normalized_time_until
         ])
 
-        # ✅ Drivers features (5 × 3 = 15 VRAIES features)
+        # ✅ Drivers features (5 x 3 = 15 VRAIES features)
         for i in range(5):
             if i < len(drivers):
                 driver = drivers[i]
-                
-                # 1. Is available (0.0 ou 1.0)
-                is_available_val = 1.0 if getattr(driver, 'is_available', False) else 0.0
-                
+
+                # 1. Is available (0 ou 1)
+                is_available_val = 1 if getattr(
+                    driver, "is_available", False) else 0
+
                 # 2. Distance driver-pickup normalisée (km, max 30km)
-                driver_lat = getattr(driver, 'current_lat', getattr(driver, 'latitude', None))
-                driver_lon = getattr(driver, 'current_lon', getattr(driver, 'longitude', None))
-                
+                driver_lat = getattr(
+                    driver, "current_lat", getattr(
+                        driver, "latitude", None))
+                driver_lon = getattr(
+                    driver, "current_lon", getattr(
+                        driver, "longitude", None))
+
                 if driver_lat and driver_lon and pickup_lat and pickup_lon:
-                    driver_distance_km = haversine_distance(driver_lat, driver_lon, pickup_lat, pickup_lon)
-                    normalized_driver_distance = min(driver_distance_km / 30.0, 1.0)
+                    driver_distance_km = haversine_distance(
+                        driver_lat, driver_lon, pickup_lat, pickup_lon)
+                    normalized_driver_distance = min(
+                        driver_distance_km / 30, 1)
                 else:
                     # Fallback si pas de GPS : distance moyenne
                     normalized_driver_distance = 0.5
-                
-                # 3. Charge actuelle normalisée (nombre assignments actifs, max 5)
+
+                # 3. Charge actuelle normalisée (nombre assignments actifs, max
+                # 5)
                 try:
                     from models import Assignment
                     current_load = Assignment.query.filter(
@@ -374,11 +387,11 @@ class RLSuggestionGenerator:
                             AssignmentStatus.EN_ROUTE_DROPOFF
                         ])
                     ).count()
-                    normalized_load = min(current_load / 5.0, 1.0)
+                    normalized_load = min(current_load / 5, 1)
                 except Exception as e:
-                    logger.warning(f"[RL] Error counting driver load: {e}")
-                    normalized_load = 0.0  # Fallback
-                
+                    logger.warning("[RL] Error counting driver load: %s", e)
+                    normalized_load = 0  # Fallback
+
                 state.extend([
                     is_available_val,
                     normalized_driver_distance,
@@ -386,24 +399,24 @@ class RLSuggestionGenerator:
                 ])
             else:
                 # Padding pour drivers manquants
-                state.extend([0.0, 0.0, 0.0])
+                state.extend([0, 0, 0])
 
         return np.array(state, dtype=np.float32)
 
     def _calculate_confidence(self, q_value: float, rank: int) -> float:
-        """
-        Calcule un score de confiance basé sur la Q-value et le rang.
-        
+        """Calcule un score de confiance basé sur la Q-value et le rang.
+
         Args:
             q_value: Q-value du modèle DQN
             rank: Rang de la suggestion (0 = meilleure, 1 = 2ème, etc.)
-            
+
         Returns:
             Score de confiance entre 0.5 et 0.95
+
         """
         # Q-value positif = bon, négatif = mauvais
         # Normaliser avec sigmoid
-        base_confidence = 1.0 / (1.0 + np.exp(-q_value / 10.0))
+        base_confidence = 1 / (1 + np.exp(-q_value / 10))
 
         # Réduire selon le rang
         rank_penalty = 0.1 * rank
@@ -420,8 +433,7 @@ class RLSuggestionGenerator:
         min_confidence: float,
         max_suggestions: int
     ) -> List[Dict[str, Any]]:
-        """
-        Génère des suggestions basiques sans modèle RL.
+        """Génère des suggestions basiques sans modèle RL.
         Utilisé en fallback ou quand le modèle n'est pas disponible.
         """
         suggestions = []
@@ -434,33 +446,35 @@ class RLSuggestionGenerator:
             current_driver = assignment.driver
 
             # Get current driver name and type
-            current_user = getattr(current_driver, 'user', None)
+            current_user = getattr(current_driver, "user", None)
             if current_user:
-                current_first = getattr(current_user, 'first_name', '')
-                current_last = getattr(current_user, 'last_name', '')
+                current_first = getattr(current_user, "first_name", "")
+                current_last = getattr(current_user, "last_name", "")
                 current_driver_name = f"{current_first} {current_last}".strip()
             else:
                 current_driver_name = f"Driver #{current_driver.id}"
 
             # Vérifier type de driver
-            current_driver_type = getattr(current_driver, 'driver_type', None)
-            if current_driver_type and hasattr(current_driver_type, 'value'):
+            current_driver_type = getattr(current_driver, "driver_type", None)
+            if current_driver_type and hasattr(current_driver_type, "value"):
                 current_type_value = current_driver_type.value
             else:
-                current_type_value = 'REGULAR'
+                current_type_value = "REGULAR"
 
             # Trouver conducteurs alternatifs REGULAR (pas EMERGENCY)
             alternative_drivers = []
             for d in drivers:
                 if d.id == current_driver.id:
                     continue
-                    
+
                 # Vérifier type
-                d_type = getattr(d, 'driver_type', None)
-                d_type_value = d_type.value if d_type and hasattr(d_type, 'value') else 'REGULAR'
-                
-                # Prendre seulement les REGULAR (pas les EMERGENCY pour suggestions)
-                if d_type_value == 'REGULAR' and d.is_available:
+                d_type = getattr(d, "driver_type", None)
+                d_type_value = d_type.value if d_type and hasattr(
+                    d_type, "value") else "REGULAR"
+
+                # Prendre seulement les REGULAR (pas les EMERGENCY pour
+                # suggestions)
+                if d_type_value == "REGULAR" and d.is_available:
                     alternative_drivers.append(d)
 
             if not alternative_drivers:
@@ -470,16 +484,16 @@ class RLSuggestionGenerator:
             alt_driver = alternative_drivers[0]
 
             # Confiance selon le type de changement
-            confidence = 0.85 if current_type_value == 'EMERGENCY' else 0.70
+            confidence = 0.85 if current_type_value == "EMERGENCY" else 0.70
 
             if confidence < min_confidence:
                 continue
 
             # Get suggested driver name from user relation
-            driver_user = getattr(alt_driver, 'user', None)
+            driver_user = getattr(alt_driver, "user", None)
             if driver_user:
-                first_name = getattr(driver_user, 'first_name', '')
-                last_name = getattr(driver_user, 'last_name', '')
+                first_name = getattr(driver_user, "first_name", "")
+                last_name = getattr(driver_user, "last_name", "")
                 suggested_driver_name = f"{first_name} {last_name}".strip()
             else:
                 suggested_driver_name = f"Driver #{alt_driver.id}"
@@ -503,7 +517,7 @@ class RLSuggestionGenerator:
             suggestions.append(suggestion)
 
         # Trier par confiance
-        suggestions.sort(key=lambda x: x['confidence'], reverse=True)
+        suggestions.sort(key=lambda x: x["confidence"], reverse=True)
 
         return suggestions[:max_suggestions]
 
@@ -514,8 +528,7 @@ _generator: RLSuggestionGenerator | None = None
 
 def get_suggestion_generator() -> RLSuggestionGenerator:
     """Retourne le générateur de suggestions (singleton)."""
-    global _generator
+    global _generator  # noqa: PLW0603
     if _generator is None:
         _generator = RLSuggestionGenerator()
     return _generator
-

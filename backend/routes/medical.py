@@ -10,22 +10,44 @@ from models import MedicalEstablishment, MedicalService, db
 
 # --- Namespace et Parsers ---
 
-medical_ns = Namespace("medical", description="Recherche d'établissements et services médicaux")
+medical_ns = Namespace(
+    "medical",
+    description="Recherche d'établissements et services médicaux")
 
 # Parser pour l'endpoint /establishments
 establishments_parser = reqparse.RequestParser()
-establishments_parser.add_argument("q", type=str, required=False, help="Texte à rechercher", location="args")
-establishments_parser.add_argument("limit", type=int, default=8, help="Nombre max de résultats", location="args")
+establishments_parser.add_argument(
+    "q",
+    type=str,
+    required=False,
+    help="Texte à rechercher",
+    location="args")
+establishments_parser.add_argument(
+    "limit",
+    type=int,
+    default=8,
+    help="Nombre max de résultats",
+    location="args")
 
 # Parser pour l'endpoint /services
 services_parser = reqparse.RequestParser()
-services_parser.add_argument("establishment_id", type=int, required=True, help="ID de l'établissement est requis", location="args")
-services_parser.add_argument("q", type=str, required=False, help="Texte pour filtrer les services", location="args")
+services_parser.add_argument(
+    "establishment_id",
+    type=int,
+    required=True,
+    help="ID de l'établissement est requis",
+    location="args")
+services_parser.add_argument(
+    "q",
+    type=str,
+    required=False,
+    help="Texte pour filtrer les services",
+    location="args")
 
 
 def _like_ci(col: Any, like_query: str):
     """LIKE insensible à la casse, portable (équivalent à ILIKE)."""
-    return func.lower(cast(Any, col)).like(like_query)
+    return func.lower(col).like(like_query)
 
 
 # --- Routes ---
@@ -42,10 +64,11 @@ class Establishments(Resource):
 
         qr = db.session.query(MedicalEstablishment)
 
-        # active = True si la colonne existe (certaines bases peuvent ne pas l'avoir)
+        # active = True si la colonne existe (certaines bases peuvent ne pas
+        # l'avoir)
         est_active_col = getattr(MedicalEstablishment, "active", None)
         if est_active_col is not None:
-            qr = qr.filter(cast(Any, est_active_col).is_(True))
+            qr = qr.filter(est_active_col.is_(True))
 
         if q:
             like_query = f"%{q.lower()}%"
@@ -59,7 +82,7 @@ class Establishments(Resource):
             )
 
         rows = (
-            qr.order_by(cast(Any, MedicalEstablishment.display_name).asc())
+            qr.order_by(cast("Any", MedicalEstablishment.display_name).asc())
               .limit(limit)
               .all()
         )
@@ -90,13 +113,13 @@ class Services(Resource):
         q = (args.get("q") or "").strip()
 
         query = db.session.query(MedicalService).filter(
-            cast(Any, MedicalService.establishment_id) == estab_id
+            cast("Any", MedicalService.establishment_id) == estab_id
         )
 
         # active = True si la colonne existe
         svc_active_col = getattr(MedicalService, "active", None)
         if svc_active_col is not None:
-            query = query.filter(cast(Any, svc_active_col).is_(True))
+            query = query.filter(svc_active_col.is_(True))
 
         if q:
             like_query = f"%{q.lower()}%"
@@ -109,15 +132,15 @@ class Services(Resource):
 
         rows = (
             query.order_by(
-                cast(Any, MedicalService.category).asc(),
-                cast(Any, MedicalService.name).asc()
+                cast("Any", MedicalService.category).asc(),
+                cast("Any", MedicalService.name).asc()
             )
             .all()
         )
 
         current_app.logger.info(
-            f"✅ Found {len(rows)} services for establishment {estab_id} with query '{q}'"
-        )
+            "✅ Found %s services for establishment %s with query '%s'",
+            len(rows), estab_id, q)
 
         result = [{
             "id": r.id,

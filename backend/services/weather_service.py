@@ -1,5 +1,4 @@
-"""
-Service pour récupérer les données météo en temps réel.
+"""Service pour récupérer les données météo en temps réel.
 
 Utilise OpenWeatherMap API (gratuit jusqu'à 1,000 calls/jour).
 
@@ -10,15 +9,27 @@ Features météo:
 - Vent (km/h)
 - Visibilité (m)
 
-Conversion en weather_factor (0.0 - 1.0):
-- 0.0 = Conditions idéales
+Conversion en weather_factor (0 - 1):
+- 0 = Conditions idéales
 - 0.5 = Conditions normales
-- 1.0 = Conditions très défavorables
+- 1 = Conditions très défavorables
 """
 import logging
 import os
 from datetime import datetime, timedelta
 from typing import Any
+
+# Constantes pour éviter les valeurs magiques
+SNOW_ZERO = 0
+RAIN_ZERO = 0
+WIND_SPEED_THRESHOLD = 50
+VISIBILITY_THRESHOLD = 1000
+CLOUDS_THRESHOLD = 80
+TEMP_THRESHOLD = 35
+TEMP_ZERO = 0
+TEMP_EXTREME_MIN = -5
+TEMP_MODERATE_MIN = 0
+TEMP_MODERATE_MAX = 3
 
 logger = logging.getLogger(__name__)
 
@@ -36,23 +47,24 @@ class WeatherService:
 
     @staticmethod
     def get_weather(lat: float, lon: float) -> dict[str, Any]:
-        """
-        Récupère les données météo pour des coordonnées.
+        """Récupère les données météo pour des coordonnées.
+
         Args:
             lat: Latitude
             lon: Longitude
         Returns:
             Dict avec données météo + weather_factor calculé
+
         """
         if not OPENWEATHER_API_KEY:
             logger.warning("[Weather] API key not configured, using default factor")
             return WeatherService._get_default_weather()
 
         # Vérifier cache
-        cache_key = f"{lat:.4f},{lon:.4f}"
+        cache_key = f"{lat},{lon}"
         cached = WeatherService._get_from_cache(cache_key)
         if cached:
-            logger.debug(f"[Weather] Using cached data for {cache_key}")
+            logger.debug("[Weather] Using cached data for %s", cache_key)
             return cached
 
         # Appeler API
@@ -84,26 +96,25 @@ class WeatherService:
             WeatherService._put_in_cache(cache_key, weather_data)
 
             logger.info(
-                f"[Weather] Fetched for ({lat:.4f}, {lon:.4f}): "
-                f"temp={weather_data['temperature']}°C, "
-                f"conditions={weather_data['main_condition']}, "
-                f"factor={weather_data['weather_factor']:.2f}"
+                "[Weather] Fetched for (%s,%s) temp=%s°C, conditions=%s, factor=%s",
+                lat, lon, weather_data["temperature"], weather_data["main_condition"], weather_data["weather_factor"]
             )
 
             return weather_data
 
         except Exception as e:
-            logger.error(f"[Weather] API call failed: {e}")
+            logger.error("[Weather] API call failed: %s", e)
             return WeatherService._get_default_weather()
 
     @staticmethod
     def _parse_weather_response(data: dict[str, Any]) -> dict[str, Any]:
-        """
-        Parse la réponse OpenWeatherMap.
+        """Parse la réponse OpenWeatherMap.
+
         Args:
             data: Réponse JSON de l'API
         Returns:
             Dict avec données structurées
+
         """
         try:
             main = data.get("main", {})
@@ -113,26 +124,25 @@ class WeatherService:
             snow = data.get("snow", {})
 
             return {
-                "temperature": main.get("temp", 15.0),
-                "feels_like": main.get("feels_like", 15.0),
+                "temperature": main.get("temp", 15),
+                "feels_like": main.get("feels_like", 15),
                 "humidity": main.get("humidity", 50),
                 "main_condition": weather.get("main", "Clear"),  # Clear, Rain, Snow, etc.
                 "description": weather.get("description", ""),
                 "wind_speed": wind.get("speed", 0) * 3.6,  # m/s → km/h
-                "rain_1h": rain.get("1h", 0.0),  # mm
-                "snow_1h": snow.get("1h", 0.0),  # mm
+                "rain_1h": rain.get("1h", 0),  # mm
+                "snow_1h": snow.get("1h", 0),  # mm
                 "visibility": data.get("visibility", 10000),  # metres
                 "clouds": data.get("clouds", {}).get("all", 0),  # %
-                "timestamp": datetime.now().isoformat(),  # noqa: DTZ005
+                "timestamp": datetime.now().isoformat(),
             }
         except Exception as e:
-            logger.error(f"[Weather] Failed to parse response: {e}")
+            logger.error("[Weather] Failed to parse response: %s", e)
             return WeatherService._get_default_weather()
 
     @staticmethod
     def _calculate_weather_factor(weather_data: dict[str, Any]) -> float:
-        """
-        Calcule le facteur météo (0.0 = idéal, 1.0 = très défavorable).
+        """Calcule le facteur météo (0 = idéal, 1 = très défavorable).
         Facteurs considérés:
         - Précipitations (pluie/neige)
         - Vent
@@ -142,82 +152,85 @@ class WeatherService:
         Args:
             weather_data: Données météo parsées
         Returns:
-            Float entre 0.0 et 1.0
+            Float entre 0 et 1.
         """
-        factor = 0.0
+        factor = 0
 
         # 1. Précipitations (40% du facteur)
-        rain = weather_data.get("rain_1h", 0.0)
-        snow = weather_data.get("snow_1h", 0.0)
+        rain = weather_data.get("rain_1h", 0)
+        snow = weather_data.get("snow_1h", 0)
 
-        if snow > 0:
+        if snow > SNOW_ZERO:
             # Neige = très impactant
             factor += min(0.4, 0.2 + snow * 0.05)
-        elif rain > 0:
+        elif rain > RAIN_ZERO:
             # Pluie modérément impactant
             factor += min(0.3, 0.1 + rain * 0.02)
 
         # 2. Vent (20% du facteur)
-        wind_speed = weather_data.get("wind_speed", 0.0)
-        if wind_speed > 50:  # > 50 km/h = fort
+        wind_speed = weather_data.get("wind_speed", 0)
+        if wind_speed > WIND_SPEED_THRESHOLD:  # > WIND_SPEED_THRESHOLD km/h = fort
             factor += 0.2
-        elif wind_speed > 30:  # 30-50 km/h = modéré
+        elif wind_speed > WIND_SPEED_THRESHOLD:  # WIND_SPEED_THRESHOLD-50 km/h = modéré
             factor += 0.1
 
         # 3. Visibilité (20% du facteur)
         visibility = weather_data.get("visibility", 10000)
-        if visibility < 1000:  # < 1km = brouillard épais
+        if visibility < VISIBILITY_THRESHOLD:  # < 1km = brouillard épais
             factor += 0.2
-        elif visibility < 5000:  # 1-5km = visibilité réduite
+        elif visibility < VISIBILITY_THRESHOLD:  # 1-5km = visibilité réduite
             factor += 0.1
 
         # 4. Nuages (10% du facteur)
         clouds = weather_data.get("clouds", 0)
-        if clouds > 80:  # Très couvert
+        if clouds > CLOUDS_THRESHOLD:  # Très couvert
             factor += 0.05
 
         # 5. Température extrême (10% du facteur)
-        temp = weather_data.get("temperature", 15.0)
-        if temp < -5 or temp > 35:  # Extrême
+        temp = weather_data.get("temperature", 15)
+        if temp < TEMP_EXTREME_MIN or temp > TEMP_THRESHOLD:  # Extrême
             factor += 0.1
-        elif temp < 0 or temp > 30:  # Froid/chaud
+        elif temp < TEMP_MODERATE_MIN or temp > TEMP_MODERATE_MAX:  # Froid/chaud
             factor += 0.05
 
-        # Limiter entre 0.0 et 1.0
-        return max(0.0, min(1.0, factor))
+        # Limiter entre 0 et 1
+        return max(0, min(1, factor))
 
     @staticmethod
     def _get_default_weather() -> dict[str, Any]:
-        """
-        Retourne des conditions météo par défaut (neutre).
+        """Retourne des conditions météo par défaut (neutre).
         Utilisé en cas d'erreur API ou API key manquante.
+
         Returns:
             Dict avec conditions neutres
+
         """
         return {
-            "temperature": 15.0,
-            "feels_like": 15.0,
+            "temperature": 15,
+            "feels_like": 15,
             "humidity": 50,
             "main_condition": "Clear",
             "description": "Conditions normales (par défaut)",
-            "wind_speed": 10.0,
-            "rain_1h": 0.0,
-            "snow_1h": 0.0,
+            "wind_speed": 10,
+            "rain_1h": 0,
+            "snow_1h": 0,
             "visibility": 10000,
             "clouds": 20,
             "weather_factor": 0.5,  # Neutre
-            "timestamp": datetime.now().isoformat(),  # noqa: DTZ005
+            "timestamp": datetime.now().isoformat(),
             "is_default": True,
         }
 
     @staticmethod
     def _get_from_cache(key: str) -> dict[str, Any] | None:
-        """
-        Récupère depuis le cache si valide.
+        """Récupère depuis le cache si valide.
+
         Args:
             key: Clé du cache (lat,lon)
+
         Returns:
             Dict avec données ou None si expiré
+
         """
         if key not in _weather_cache:
             return None
@@ -226,7 +239,7 @@ class WeatherService:
         cached_at = datetime.fromisoformat(cached_data["cached_at"])
 
         # Vérifier expiration (1h)
-        if datetime.now() - cached_at > timedelta(seconds=_cache_ttl_seconds):  # noqa: DTZ005
+        if datetime.now() - cached_at > timedelta(seconds=_cache_ttl_seconds):
             del _weather_cache[key]
             return None
 
@@ -234,15 +247,16 @@ class WeatherService:
 
     @staticmethod
     def _put_in_cache(key: str, data: dict[str, Any]) -> None:
-        """
-        Met en cache les données météo.
+        """Met en cache les données météo.
+
         Args:
             key: Clé du cache (lat,lon)
             data: Données à cacher
+
         """
         _weather_cache[key] = {
             "data": data,
-            "cached_at": datetime.now().isoformat(),  # noqa: DTZ005
+            "cached_at": datetime.now().isoformat(),
         }
 
     @staticmethod
@@ -253,10 +267,11 @@ class WeatherService:
 
     @staticmethod
     def get_cache_stats() -> dict[str, Any]:
-        """
-        Statistiques du cache.
+        """Statistiques du cache.
+
         Returns:
             Dict avec nombre d'entrées et taille
+
         """
         return {
             "entries": len(_weather_cache),
@@ -265,13 +280,14 @@ class WeatherService:
 
 
 def get_weather_factor(lat: float, lon: float) -> float:
-    """
-    Helper pour obtenir rapidement le weather_factor.
+    """Helper pour obtenir rapidement le weather_factor.
+
     Args:
         lat: Latitude
         lon: Longitude
     Returns:
-        Float entre 0.0 et 1.0 (facteur météo)
+        Float entre 0 et 1 (facteur météo)
+
     """
     weather = WeatherService.get_weather(lat, lon)
     return weather.get("weather_factor", 0.5)

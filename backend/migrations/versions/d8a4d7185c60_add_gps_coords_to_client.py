@@ -9,25 +9,25 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = 'd8a4d7185c60'
-down_revision = '715e89e538c3'
+revision = "d8a4d7185c60"
+down_revision = "715e89e538c3"
 branch_labels = None
 depends_on = None
 
 
 def upgrade():
     # Ajouter les colonnes GPS pour l'adresse de domicile
-    op.add_column('client', sa.Column('domicile_lat', sa.Numeric(precision=10, scale=7), nullable=True))
-    op.add_column('client', sa.Column('domicile_lon', sa.Numeric(precision=10, scale=7), nullable=True))
+    op.add_column("client", sa.Column("domicile_lat", sa.Numeric(precision=10, scale=7), nullable=True))
+    op.add_column("client", sa.Column("domicile_lon", sa.Numeric(precision=10, scale=7), nullable=True))
 
     # Ajouter les colonnes GPS pour l'adresse de facturation
-    op.add_column('client', sa.Column('billing_lat', sa.Numeric(precision=10, scale=7), nullable=True))
-    op.add_column('client', sa.Column('billing_lon', sa.Numeric(precision=10, scale=7), nullable=True))
+    op.add_column("client", sa.Column("billing_lat", sa.Numeric(precision=10, scale=7), nullable=True))
+    op.add_column("client", sa.Column("billing_lon", sa.Numeric(precision=10, scale=7), nullable=True))
 
 
 def downgrade():
     # Supprimer les colonnes GPS
-    op.drop_column('client', 'billing_lon')
-    op.drop_column('client', 'billing_lat')
-    op.drop_column('client', 'domicile_lon')
-    op.drop_column('client', 'domicile_lat')
+    op.drop_column("client", "billing_lon")
+    op.drop_column("client", "billing_lat")
+    op.drop_column("client", "domicile_lon")
+    op.drop_column("client", "domicile_lat")

@@ -1,0 +1,26 @@
+{
+  "timestamp": "2025-10-23T21:27:24.917284+00:00",
+  "model_version": "v1.0.0",
+  "model_architecture": "dueling_dqn",
+  "performance_metrics": {
+    "punctuality_rate": 0.88,
+    "avg_distance": 12.5,
+    "avg_delay": 3.2,
+    "driver_utilization": 0.79,
+    "customer_satisfaction": 0.84,
+    "cost_efficiency": 0.77
+  },
+  "kpi_thresholds": {
+    "punctuality_rate": 0.85,
+    "avg_distance": 15.0,
+    "avg_delay": 5.0,
+    "driver_utilization": 0.75,
+    "customer_satisfaction": 0.8
+  },
+  "model_path": "data/ml/model_registry/current/dqn_dispatch_dueling_dqn.pth",
+  "metadata_path": "data/ml/model_registry/metadata/dqn_dispatch_dueling_dqn_v1.0.0.json",
+  "promotion_date": "2025-10-23T21:27:24.917304+00:00",
+  "deployment_status": "production",
+  "rollback_available": true,
+  "next_version": "v1.1.0"
+}

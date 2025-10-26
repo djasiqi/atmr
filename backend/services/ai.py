@@ -24,11 +24,14 @@ OSRM_BASE_URL = (
 PHOTON_BASE_URL = os.getenv("PHOTON_BASE_URL") or os.getenv("PHOTON_URL") or "https://photon.komoot.io"
 OSRM_TIMEOUT = int(os.getenv("UD_OSRM_TIMEOUT_SEC") or 12)
 
+# Constantes pour éviter les valeurs magiques
+MIN_ADDRESS_LENGTH = 5
+
 # -------------------------------------------------------------------
 # Géocodage avec Photon
 # -------------------------------------------------------------------
 def geocode_address(address: str):
-    if not address or len(address) < 5:
+    if not address or len(address) < MIN_ADDRESS_LENGTH:
         return None
     try:
         r = requests.get(
@@ -44,7 +47,7 @@ def geocode_address(address: str):
         lon, lat = feat["geometry"]["coordinates"]  # [lon, lat]
         return (float(lat), float(lon))
     except Exception as e:
-        logger.warning(f"⚠️ Erreur Photon: {e}")
+        logger.warning("⚠️ Erreur Photon: %s", e)
         return None
 
 # -------------------------------------------------------------------
@@ -67,7 +70,7 @@ def osrm_route(lat1, lon1, lat2, lon2):
             "duration_s": int(route.get("duration", 0)),
         }
     except Exception as e:
-        logger.error(f"Erreur OSRM: {e}")
+        logger.error("Erreur OSRM: %s", e)
         return None
 
 # -------------------------------------------------------------------
@@ -83,7 +86,7 @@ def get_optimized_route(pickup: str, dropoff: str):
         return {"error": "Géocodage impossible pour l'une des adresses."}
     route = osrm_route(a[0], a[1], b[0], b[1])
     if not route:
-        return {"error": "Pas d’itinéraire disponible."}
+        return {"error": "Pas d'itinéraire disponible."}
     # Le front attend une polyline (decode côté React via @mapbox/polyline)
     return route
 
@@ -107,7 +110,7 @@ def find_best_driver(pickup_address: str, company_id: int):
                     min_km, best = km, driver
         return best
     except Exception as e:
-        logger.error(f"Erreur find_best_driver: {e}")
+        logger.error("Erreur find_best_driver: %s", e)
         return None
 
 def assign_driver_to_booking(booking_id: int):
@@ -123,7 +126,7 @@ def assign_driver_to_booking(booking_id: int):
         db.session.commit()
         return booking
     except Exception as e:
-        logger.error(f"Erreur assign_driver_to_booking: {e}")
+        logger.error("Erreur assign_driver_to_booking: %s", e)
         return None
 
 def predict_travel_time(pickup: str, dropoff: str):
@@ -137,13 +140,12 @@ def predict_travel_time(pickup: str, dropoff: str):
             return {"error": "Pas de route trouvée."}
         return {"duration_seconds": route["duration_s"]}
     except Exception as e:
-        logger.error(f"Erreur predict_travel_time: {e}")
+        logger.error("Erreur predict_travel_time: %s", e)
         return {"error": "Erreur interne."}
 
 def get_recommended_routes(company_id: int):
-    """
-    Retourne le format attendu par le front:
-    { "recommended_routes": [ ["A -> B", 12], ... ] }
+    """Retourne le format attendu par le front:
+    { "recommended_routes": [ ["A -> B", 12], ... ] }.
     """
     try:
         company = Company.query.get(company_id)
@@ -157,5 +159,5 @@ def get_recommended_routes(company_id: int):
         top = sorted(route_counts.items(), key=lambda x: x[1], reverse=True)[:5]
         return {"recommended_routes": top}
     except Exception as e:
-        logger.error(f"Erreur get_recommended_routes: {e}")
+        logger.error("Erreur get_recommended_routes: %s", e)
         return {"recommended_routes": []}

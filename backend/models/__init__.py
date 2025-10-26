@@ -1,6 +1,5 @@
 # models/__init__.py
-"""
-Point d'entrée principal du package models.
+"""Point d'entrée principal du package models.
 Importe tous les models extraits depuis les fichiers individuels.
 """
 
@@ -75,39 +74,80 @@ from .vehicle import Vehicle
 
 # ========== EXPORTS ==========
 __all__ = [
-    # Core
-    'db',
-
-    # Helpers
-    '_as_dt', '_as_str', '_as_float', '_as_int', '_as_bool', '_iso', '_coerce_enum',
-    '_encryption_key', '_encryption_key_str',
-
-    # Enums
-    'UserRole', 'BookingStatus', 'PaymentStatus', 'GenderEnum', 'ClientType',
-    'InvoiceStatus', 'InvoiceLineType', 'PaymentMethod', 'DriverType', 'DriverState',
-    'VacationType', 'SenderRole', 'RealtimeEventType', 'RealtimeEntityType',
-    'AssignmentStatus', 'DispatchStatus', 'DispatchMode',
-    'ShiftType', 'ShiftStatus', 'UnavailabilityReason', 'BreakType',
-
-    # Models principaux
-    'User', 'Company', 'Vehicle', 'Client', 'Booking', 'Payment',
-
-    # Models Driver & Planning
-    'Driver', 'DriverShift', 'DriverUnavailability', 'DriverWeeklyTemplate',
-    'DriverBreak', 'DriverPreference', 'DriverVacation',
-    'DriverWorkingConfig', 'CompanyPlanningSettings',
-
-    # Models Facturation
-    'Invoice', 'InvoiceLine', 'InvoicePayment', 'InvoiceReminder',
-    'CompanyBillingSettings', 'InvoiceSequence',
-
-    # Models Communication & Lieux
-    'Message', 'FavoritePlace', 'MedicalEstablishment', 'MedicalService',
-
+    "ABTestResult",
+    "Assignment",
+    "AssignmentStatus",
+    "AutonomousAction",
+    "Booking",
+    "BookingStatus",
+    "BreakType",
+    "Client",
+    "ClientType",
+    "Company",
+    "CompanyBillingSettings",
+    "CompanyPlanningSettings",
+    "DailyStats",
+    "DispatchMetrics",
+    "DispatchMode",
     # Models Dispatch & Temps Réel
-    'DispatchRun', 'Assignment', 'DriverStatus', 'RealtimeEvent',
-    'DispatchMetrics', 'DailyStats',
-
+    "DispatchRun",
+    "DispatchStatus",
+    # Models Driver & Planning
+    "Driver",
+    "DriverBreak",
+    "DriverPreference",
+    "DriverShift",
+    "DriverState",
+    "DriverStatus",
+    "DriverType",
+    "DriverUnavailability",
+    "DriverVacation",
+    "DriverWeeklyTemplate",
+    "DriverWorkingConfig",
+    "FavoritePlace",
+    "GenderEnum",
+    # Models Facturation
+    "Invoice",
+    "InvoiceLine",
+    "InvoiceLineType",
+    "InvoicePayment",
+    "InvoiceReminder",
+    "InvoiceSequence",
+    "InvoiceStatus",
     # Models ML & Autonomous
-    'MLPrediction', 'AutonomousAction', 'ABTestResult', 'RLSuggestionMetric', 'RLFeedback',
+    "MLPrediction",
+    "MedicalEstablishment",
+    "MedicalService",
+    # Models Communication & Lieux
+    "Message",
+    "Payment",
+    "PaymentMethod",
+    "PaymentStatus",
+    "RLFeedback",
+    "RLSuggestionMetric",
+    "RealtimeEntityType",
+    "RealtimeEvent",
+    "RealtimeEventType",
+    "SenderRole",
+    "ShiftStatus",
+    "ShiftType",
+    "UnavailabilityReason",
+    # Models principaux
+    "User",
+    # Enums
+    "UserRole",
+    "VacationType",
+    "Vehicle",
+    "_as_bool",
+    # Helpers
+    "_as_dt",
+    "_as_float",
+    "_as_int",
+    "_as_str",
+    "_coerce_enum",
+    "_encryption_key",
+    "_encryption_key_str",
+    "_iso",
+    # Core
+    "db",
 ]

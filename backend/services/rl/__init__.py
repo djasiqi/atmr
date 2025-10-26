@@ -1,5 +1,4 @@
-"""
-Module de Reinforcement Learning pour le dispatch autonome.
+"""Module de Reinforcement Learning pour le dispatch autonome.
 
 Contient:
 - dispatch_env.py: Environnement Gym custom
@@ -7,5 +6,4 @@ Contient:
 - utils.py: Fonctions utilitaires
 """
 
-__version__ = "0.1.0"
-
+__version__ = "0.10"

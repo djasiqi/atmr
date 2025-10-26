@@ -1,6 +1,18 @@
-#!/usr/bin/env python3
-"""
-Configuration centralisée des hyperparamètres optimaux pour le système RL.
+
+# Constantes pour éviter les valeurs magiques
+import json
+import logging
+from pathlib import Path
+from typing import Any, ClassVar, Dict, List
+
+LR_ONE = 1
+GAMMA_ZERO = 0
+MIN_LEARNING_RATE = 1e-6
+MAX_LEARNING_RATE = 1e-2
+MIN_GAMMA = 0.5
+MAX_GAMMA = 0.99
+
+"""Configuration centralisée des hyperparamètres optimaux pour le système RL.
 
 Basé sur les résultats Optuna et les meilleures pratiques identifiées
 dans l'analyse du système ATMR.
@@ -9,21 +21,16 @@ Auteur: ATMR Project - RL Team
 Date: 21 octobre 2025
 """
 
-import json
-from pathlib import Path
-from typing import Any, Dict, List
-
 
 class OptimalHyperparameters:
-    """
-    Configuration des hyperparamètres optimaux basés sur Optuna.
-    
+    """Configuration des hyperparamètres optimaux basés sur Optuna.
+
     Les valeurs sont issues de l'analyse Optuna avec best_reward: 544.28
     et optimisées pour le contexte de dispatch médical ATMR.
     """
 
     # Configuration optimale identifiée par Optuna
-    OPTUNA_BEST = {
+    OPTUNA_BEST: ClassVar[Dict[str, Any]] = {
         # Learning parameters
         "learning_rate": 9.32e-05,
         "gamma": 0.951,
@@ -41,7 +48,15 @@ class OptimalHyperparameters:
         # PER parameters (ajoutés pour Sprint 1)
         "alpha": 0.6,  # Priorité exponentielle
         "beta_start": 0.4,  # Importance sampling début
-        "beta_end": 1.0,  # Importance sampling fin
+        "beta_end": 1,  # Importance sampling fin
+
+        # N-step parameters (ajoutés pour Étape 5)
+        "use_n_step": True,  # Activer N-step learning
+        "n_step": 3,  # Nombre d'étapes pour N-step
+        "n_step_gamma": 0.99,  # Gamma pour N-step
+
+        # Dueling DQN parameters (ajoutés pour Étape 6)
+        "use_dueling": True,  # Activer Dueling DQN
 
         # Soft update parameters
         "tau": 0.005,  # Soft update rate
@@ -63,7 +78,7 @@ class OptimalHyperparameters:
     }
 
     # Configuration étendue pour Optuna tuning
-    OPTUNA_SEARCH_SPACE = {
+    OPTUNA_SEARCH_SPACE: ClassVar[Dict[str, Any]] = {
         # Learning rate (log scale)
         "learning_rate": {
             "type": "float",
@@ -89,11 +104,11 @@ class OptimalHyperparameters:
         "epsilon_start": {
             "type": "float",
             "low": 0.8,
-            "high": 1.0
+            "high": 1
         },
         "epsilon_end": {
             "type": "float",
-            "low": 0.01,
+            "low": 0.1,
             "high": 0.1
         },
         "epsilon_decay": {
@@ -129,14 +144,14 @@ class OptimalHyperparameters:
         "beta_end": {
             "type": "float",
             "low": 0.8,
-            "high": 1.0
+            "high": 1
         },
 
         # Soft update
         "tau": {
             "type": "float",
             "low": 0.001,
-            "high": 0.01
+            "high": 0.1
         },
 
         # Network architecture
@@ -152,7 +167,7 @@ class OptimalHyperparameters:
         },
         "dropout": {
             "type": "float",
-            "low": 0.0,
+            "low": 0,
             "high": 0.5
         },
 
@@ -170,12 +185,12 @@ class OptimalHyperparameters:
     }
 
     # Configurations spécialisées par contexte
-    CONTEXT_CONFIGS = {
+    CONTEXT_CONFIGS: ClassVar[Dict[str, Any]] = {
         "production": {
             # Configuration optimisée pour la production
             "learning_rate": 5e-05,  # Plus conservateur
             "epsilon_start": 0.1,  # Exploration minimale
-            "epsilon_end": 0.01,
+            "epsilon_end": 0.1,
             "epsilon_decay": 0.999,
             "batch_size": 64,  # Plus petit pour latence
             "buffer_size": 100000,
@@ -197,21 +212,21 @@ class OptimalHyperparameters:
 
         "evaluation": {
             # Configuration pour l'évaluation
-            "learning_rate": 0.0,  # Pas d'apprentissage
-            "epsilon_start": 0.0,  # Pas d'exploration
-            "epsilon_end": 0.0,
-            "epsilon_decay": 1.0,
+            "learning_rate": 0,  # Pas d'apprentissage
+            "epsilon_start": 0,  # Pas d'exploration
+            "epsilon_end": 0,
+            "epsilon_decay": 1,
             "batch_size": 1,  # Pas de batch
             "buffer_size": 0,  # Pas de buffer
             "target_update_freq": 0,
-            "tau": 0.0,
+            "tau": 0,
         },
 
         "fine_tuning": {
             # Configuration pour le fine-tuning
             "learning_rate": 1e-05,  # Très petit
             "epsilon_start": 0.1,
-            "epsilon_end": 0.01,
+            "epsilon_end": 0.1,
             "epsilon_decay": 0.999,
             "batch_size": 32,
             "buffer_size": 50000,
@@ -221,9 +236,9 @@ class OptimalHyperparameters:
     }
 
     # Configurations de reward shaping
-    REWARD_SHAPING_CONFIGS = {
+    REWARD_SHAPING_CONFIGS: ClassVar[Dict[str, Any]] = {
         "default": {
-            "punctuality_weight": 1.0,
+            "punctuality_weight": 1,
             "distance_weight": 0.5,
             "equity_weight": 0.3,
             "efficiency_weight": 0.2,
@@ -248,7 +263,7 @@ class OptimalHyperparameters:
 
         "efficiency_focused": {
             "punctuality_weight": 0.7,
-            "distance_weight": 1.0,
+            "distance_weight": 1,
             "equity_weight": 0.2,
             "efficiency_weight": 0.4,
             "satisfaction_weight": 0.2,
@@ -257,14 +272,14 @@ class OptimalHyperparameters:
 
     @classmethod
     def get_optimal_config(cls, context: str = "training") -> Dict[str, Any]:
-        """
-        Retourne la configuration optimale pour un contexte donné.
+        """Retourne la configuration optimale pour un contexte donné.
 
         Args:
             context: Contexte d'utilisation ("production", "training", "evaluation", "fine_tuning")
 
         Returns:
             Configuration optimale
+
         """
         base_config = cls.OPTUNA_BEST.copy()
 
@@ -275,71 +290,73 @@ class OptimalHyperparameters:
         return base_config
 
     @classmethod
-    def get_reward_shaping_config(cls, profile: str = "default") -> Dict[str, float]:
-        """
-        Retourne la configuration de reward shaping.
+    def get_reward_shaping_config(
+            cls, profile: str = "default") -> Dict[str, float]:
+        """Retourne la configuration de reward shaping.
 
         Args:
             profile: Profil de reward shaping
 
         Returns:
             Configuration de reward shaping
+
         """
-        return cls.REWARD_SHAPING_CONFIGS.get(profile, cls.REWARD_SHAPING_CONFIGS["default"])
+        return cls.REWARD_SHAPING_CONFIGS.get(
+            profile, cls.REWARD_SHAPING_CONFIGS["default"])
 
     @classmethod
     def get_optuna_search_space(cls) -> Dict[str, Any]:
-        """
-        Retourne l'espace de recherche Optuna.
+        """Retourne l'espace de recherche Optuna.
 
         Returns:
             Espace de recherche pour Optuna
+
         """
         return cls.OPTUNA_SEARCH_SPACE.copy()
 
     @classmethod
     def save_config(cls, config: Dict[str, Any], filename: str) -> None:
-        """
-        Sauvegarde une configuration dans un fichier JSON.
+        """Sauvegarde une configuration dans un fichier JSON.
 
         Args:
             config: Configuration à sauvegarder
             filename: Nom du fichier
+
         """
         output_dir = Path("backend/data/rl/configs")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         output_path = output_dir / filename
 
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with Path(output_path, "w", encoding="utf-8").open() as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
 
     @classmethod
     def load_config(cls, filename: str) -> Dict[str, Any]:
-        """
-        Charge une configuration depuis un fichier JSON.
+        """Charge une configuration depuis un fichier JSON.
 
         Args:
             filename: Nom du fichier
 
         Returns:
             Configuration chargée
+
         """
         config_path = Path("backend/data/rl/configs") / filename
 
-        with open(config_path, encoding='utf-8') as f:
+        with Path(config_path, encoding="utf-8").open() as f:
             return json.load(f)
 
     @classmethod
     def validate_config(cls, config: Dict[str, Any]) -> List[str]:
-        """
-        Valide une configuration et retourne les erreurs.
+        """Valide une configuration et retourne les erreurs.
 
         Args:
             config: Configuration à valider
 
         Returns:
             Liste des erreurs de validation
+
         """
         errors = []
 
@@ -356,12 +373,12 @@ class OptimalHyperparameters:
         # Vérifier les plages de valeurs
         if "learning_rate" in config:
             lr = config["learning_rate"]
-            if not (1e-6 <= lr <= 1e-2):
+            if not (MIN_LEARNING_RATE <= lr <= MAX_LEARNING_RATE):
                 errors.append(f"learning_rate hors plage: {lr}")
 
         if "gamma" in config:
             gamma = config["gamma"]
-            if not (0.5 <= gamma <= 0.99):
+            if not (MIN_GAMMA <= gamma <= MAX_GAMMA):
                 errors.append(f"gamma hors plage: {gamma}")
 
         if "batch_size" in config:
@@ -373,11 +390,11 @@ class OptimalHyperparameters:
 
     @classmethod
     def generate_config_summary(cls) -> str:
-        """
-        Génère un résumé des configurations disponibles.
+        """Génère un résumé des configurations disponibles.
 
         Returns:
             Résumé formaté
+
         """
         summary = []
         summary.append("=" * 80)
@@ -414,23 +431,26 @@ class OptimalHyperparameters:
 
 
 # Configuration par défaut pour le Sprint 1
-SPRINT1_CONFIG = OptimalHyperparameters.get_optimal_config("training")
+SPRINT1 = OptimalHyperparameters.get_optimal_config("training")
 
 # Configuration de production pour le Sprint 1
-SPRINT1_PRODUCTION_CONFIG = OptimalHyperparameters.get_optimal_config("production")
+SPRINT1 = OptimalHyperparameters.get_optimal_config("production")
 
 # Configuration de reward shaping pour le Sprint 1
-SPRINT1_REWARD_CONFIG = OptimalHyperparameters.get_reward_shaping_config("punctuality_focused")
+SPRINT1 = OptimalHyperparameters.get_reward_shaping_config(
+    "punctuality_focused")
 
 
 if __name__ == "__main__":
     # Générer et afficher le résumé
     summary = OptimalHyperparameters.generate_config_summary()
-    print(summary)
+    logging.info(summary)
 
     # Sauvegarder les configurations Sprint 1
-    OptimalHyperparameters.save_config(SPRINT1_CONFIG, "sprint1_training_config.json")
-    OptimalHyperparameters.save_config(SPRINT1_PRODUCTION_CONFIG, "sprint1_production_config.json")
-    OptimalHyperparameters.save_config(SPRINT1_REWARD_CONFIG, "sprint1_reward_config.json")
+    OptimalHyperparameters.save_config(SPRINT1, "sprint1training_config.json")
+    OptimalHyperparameters.save_config(
+        SPRINT1, "sprint1production_config.json")
+    OptimalHyperparameters.save_config(SPRINT1, "sprint1reward_config.json")
 
-    print("\nConfigurations Sprint 1 sauvegardées dans backend/data/rl/configs/")
+    logging.info(
+        "\nConfigurations Sprint 1 sauvegardées dans backend/data/rl/configs/")

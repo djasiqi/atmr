@@ -1,8 +1,11 @@
 {
   // --- Python ---
   "python.envFile": "${workspaceFolder}/backend/.env",
-  "python.analysis.extraPaths": ["${workspaceFolder}/backend"],
-  "python.defaultInterpreterPath": "C:/Users/jasiq/atmr/backend/venv/Scripts/python.exe",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/backend",
+    "/usr/local/lib/python3.11/site-packages"
+  ],
+  "python.defaultInterpreterPath": "/usr/local/bin/python",
   "python.analysis.autoSearchPaths": true,
   "python.analysis.useLibraryCodeForTypes": true,
   "python.testing.unittestArgs": ["-v", "-s", "./backend", "-p", "*test.py"],
@@ -61,7 +64,8 @@
   // --- Pyright ---
   "cursorpyright.analysis.autoSearchPaths": true,
   "cursorpyright.analysis.extraPaths": [
-    "${workspaceFolder}/backend"
+    "${workspaceFolder}/backend",
+    "/usr/local/lib/python3.11/site-packages"
   ],
   "cursorpyright.analysis.typeCheckingMode": "basic",
   "cursorpyright.analysis.useLibraryCodeForTypes": true,

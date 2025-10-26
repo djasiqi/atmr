@@ -29,20 +29,22 @@ MAX_BACKLOG = int(os.getenv("UD_RTC_MAX_QUEUE_BACKLOG", "100"))
 
 _APP: Any | None = None
 
+
 def init_app(app):
     """À appeler depuis create_app(app)."""
-    global _APP
+    global _APP  # noqa: PLW0603
     _APP = app
 
 # ============================================================
 # State par entreprise
 # ============================================================
 
+
 @dataclass
 class CompanyDispatchState:
     company_id: int
     # Sémaphore/lock pour empêcher deux runs concurrents sur la même entreprise
-    lock: Any = field(default_factory=lambda: __import__('threading').Lock())
+    lock: Any = field(default_factory=lambda: __import__("threading").Lock())
     # Timer de déclenchement différé (coalescing)
     timer: Any | None = None
     # Indique si un run est en cours
@@ -56,24 +58,25 @@ class CompanyDispatchState:
     # 🔴 NEW: paramètres cumulés pour le prochain run (for_date, overrides, ...)
     params: Dict[str, Any] = field(default_factory=dict)
     # Référence à l'app Flask (capturée sur trigger() si contexte dispo)
-    app_ref: Any | None = None  # type: ignore
+    app_ref: Any | None = None
     # 🔴 NEW: ID de la dernière tâche Celery
     last_task_id: str | None = None
 
 
-# Mémoire globale in‑process (une entrée par company_id)
+# Mémoire globale in-process (une entrée par company_id)
 _STATE: Dict[int, CompanyDispatchState] = {}
 # Statut observable par l'API /status
 _LAST_RESULT: Dict[int, Dict[str, Any]] = {}
 _LAST_ERROR: Dict[int, str | None] = {}
 _RUNNING: Dict[int, bool] = {}
 _PROGRESS: Dict[int, int] = {}  # 0..100 approximation de progression
-_CELERY_STATE: Dict[int, str] = {}  # État Celery (PENDING, STARTED, SUCCESS, FAILURE, etc.)
+# État Celery (PENDING, STARTED, SUCCESS, FAILURE, etc.)
+_CELERY_STATE: Dict[int, str] = {}
 
 # Lock global pour l'accès au dict
-_STATE_LOCK = __import__('threading').Lock()
+_STATE_LOCK = __import__("threading").Lock()
 # Interrupteur global (stop propre)
-_STOP_EVENT = __import__('threading').Event()
+_STOP_EVENT = __import__("threading").Event()
 
 
 def _get_state(company_id: int) -> CompanyDispatchState:
@@ -86,9 +89,8 @@ def _get_state(company_id: int) -> CompanyDispatchState:
 
 
 def get_status(company_id: int) -> Dict[str, Any]:
-    """
-    Utilisé par GET /company_dispatch/status
-    Enrichi avec des informations de diagnostic plus détaillées
+    """Utilisé par GET /company_dispatch/status
+    Enrichi avec des informations de diagnostic plus détaillées.
     """
     last = _LAST_RESULT.get(company_id) or {}
     last_error = _LAST_ERROR.get(company_id)
@@ -111,17 +113,17 @@ def get_status(company_id: int) -> Dict[str, Any]:
             celery_state = task_result.state
 
             # Update running state based on Celery task state
-            is_running = celery_state in ('PENDING', 'RECEIVED', 'STARTED')
+            is_running = celery_state in ("PENDING", "RECEIVED", "STARTED")
             _RUNNING[company_id] = is_running
             _CELERY_STATE[company_id] = celery_state
 
             # If task has failed, get the error
-            if celery_state == 'FAILURE' and task_result.failed():
+            if celery_state == "FAILURE" and task_result.failed():
                 _LAST_ERROR[company_id] = str(task_result.result)
                 last_error = _LAST_ERROR[company_id]
 
             # If task has succeeded, update the last result
-            if celery_state == 'SUCCESS' and task_result.ready():
+            if celery_state == "SUCCESS" and task_result.ready():
                 try:
                     result = task_result.get()
                     if isinstance(result, dict):
@@ -131,10 +133,11 @@ def get_status(company_id: int) -> Dict[str, Any]:
                         drivers_count = len(last.get("drivers", []))
                         assignments_count = len(last.get("assignments", []))
                 except Exception as e:
-                    logger.exception(f"[Queue] Error getting task result: {e}")
+                    logger.exception(
+                        "[Queue] Error getting task result: %s", e)
 
         except Exception as e:
-            logger.exception(f"[Queue] Error checking task status: {e}")
+            logger.exception("[Queue] Error checking task status: %s", e)
 
     # Determine reason if there are no assignments
     reason = None
@@ -167,22 +170,22 @@ def get_status(company_id: int) -> Dict[str, Any]:
 
 
 def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Utilisé par POST /company_dispatch/run (async).
+    """Utilisé par POST /company_dispatch/run (async).
     Enfile un job (coalescé) et renvoie un job_id.
     """
     job_id = str(uuid.uuid4())
     mode = str((params or {}).get("mode", "auto")).strip().lower()
     trigger(company_id, reason="manual_trigger", mode=mode, params=params)
-    return {"id": job_id, "company_id": company_id, "status": "queued", "dispatch_run_id": None}
+    return {"id": job_id, "company_id": company_id,
+            "status": "queued", "dispatch_run_id": None}
 
 
-def trigger(company_id: int, reason: str = "generic", mode: str = "auto", params: Dict[str, Any] | None = None) -> None:
-    """
-    Appel léger depuis les routes ou services :
-      - Empile la demande (pour debug),
-      - Programme/relance un timer de coalescence,
-      - Garantit qu'un seul run partira après DEBOUNCE+COALESCE.
+def trigger(company_id: int, reason: str = "generic",
+            mode: str = "auto", params: Dict[str, Any] | None = None) -> None:
+    """Appel léger depuis les routes ou services :
+    - Empile la demande (pour debug),
+    - Programme/relance un timer de coalescence,
+    - Garantit qu'un seul run partira après DEBOUNCE+COALESCE.
     """
     st = _get_state(company_id)
 
@@ -192,7 +195,8 @@ def trigger(company_id: int, reason: str = "generic", mode: str = "auto", params
         st.backlog[-1] = f"{st.backlog[-1]} | (saturated)"
     else:
         st.backlog.append(f"{datetime.now(UTC).isoformat()} {reason}")
-    # Coalesce: on mémorise/merge les derniers params (on garde la dernière valeur pour chaque clé)
+    # Coalesce: on mémorise/merge les derniers params (on garde la dernière
+    # valeur pour chaque clé)
     if params:
         st.params = dict(params)
 
@@ -201,7 +205,7 @@ def trigger(company_id: int, reason: str = "generic", mode: str = "auto", params
         # (LocalProxy → objet réel)
         get_obj = getattr(current_app, "_get_current_object", None)
         if callable(get_obj):
-            st.app_ref = get_obj()  # type: ignore[misc]
+            st.app_ref = get_obj()
         else:
             st.app_ref = current_app  # fallback typé Any
     except Exception:
@@ -212,9 +216,7 @@ def trigger(company_id: int, reason: str = "generic", mode: str = "auto", params
 
 
 def stop_all() -> None:
-    """
-    Arrête proprement tous les timers (à appeler lors du shutdown).
-    """
+    """Arrête proprement tous les timers (à appeler lors du shutdown)."""
     _STOP_EVENT.set()
     with _STATE_LOCK:
         for st in _STATE.values():
@@ -229,18 +231,17 @@ def stop_all() -> None:
 # ============================================================
 
 def _schedule_run(st: CompanyDispatchState, mode: str) -> None:
-    """
-    Programme (ou reprogramme) un timer pour exécuter _try_run après DEBOUNCE+COALESCE.
-    """
+    """Programme (ou reprogramme) un timer pour exécuter _try_run après DEBOUNCE+COALESCE."""
     delay_sec = (DEBOUNCE_MS + COALESCE_MS) / 1000.0
 
-    # Si un timer existe déjà, on le remplace pour prolonger la fenêtre de coalescence.
+    # Si un timer existe déjà, on le remplace pour prolonger la fenêtre de
+    # coalescence.
     if st.timer is not None:
         with suppress(Exception):
             st.timer.cancel()
 
     # Utiliser threading.Timer pour le debounce/coalesce
-    timer_cls = __import__('threading').Timer
+    timer_cls = __import__("threading").Timer
     t = timer_cls(delay_sec, _try_run, kwargs={"st": st, "mode": mode})
     t.daemon = True
     t.start()
@@ -248,8 +249,7 @@ def _schedule_run(st: CompanyDispatchState, mode: str) -> None:
 
 
 def _try_run(st: CompanyDispatchState, mode: str) -> None:
-    """
-    Tente de lancer un run pour l'entreprise si aucune exécution concurrente.
+    """Tente de lancer un run pour l'entreprise si aucune exécution concurrente.
     Gère un TTL basique au cas où un run serait resté bloqué.
     """
     if _STOP_EVENT.is_set():
@@ -257,9 +257,12 @@ def _try_run(st: CompanyDispatchState, mode: str) -> None:
 
     # Vérifier/renouveler le TTL si running
     now = datetime.now(UTC)
-    if st.running and st.last_start and now - st.last_start > timedelta(seconds=LOCK_TTL_SEC):
+    if st.running and st.last_start and now - \
+            st.last_start > timedelta(seconds=LOCK_TTL_SEC):
         # On considère le run précédent comme bloqué (TTL expiré)
-        logger.warning("[Queue] TTL expired for company=%s, forcing unlock", st.company_id)
+        logger.warning(
+            "[Queue] TTL expired for company=%s, forcing unlock",
+            st.company_id)
         st.running = False
 
     # Essayer de prendre le lock
@@ -287,17 +290,18 @@ def _try_run(st: CompanyDispatchState, mode: str) -> None:
 
 
 def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
-    """
-    Enqueue a Celery task instead of running in a thread.
-    """
+    """Enqueue a Celery task instead of running in a thread."""
     company_id = st.company_id
     reasons = list(st.backlog)
     st.backlog.clear()
 
-    # Choisit l'app : celle capturée sur trigger() ou celle injectée globalement
+    # Choisit l'app : celle capturée sur trigger() ou celle injectée
+    # globalement
     app = getattr(st, "app_ref", None) or _APP
     if app is None:
-        logger.error("[Queue] No Flask app available for company=%s; aborting run", company_id)
+        logger.error(
+            "[Queue] No Flask app available for company=%s; aborting run",
+            company_id)
         st.running = False
         st.last_start = None
         _RUNNING[company_id] = False
@@ -308,7 +312,8 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
         with app.app_context():
             logger.info(
                 "[Queue] Dispatch start company=%s mode=%s reasons=%s params_keys=%s",
-                company_id, mode, reasons[-3:], list(getattr(st, "params", {}).keys()),
+                company_id, mode, reasons[-3:], list(
+                    getattr(st, "params", {}).keys()),
             )
 
             # Déballer proprement les params coalescés
@@ -329,7 +334,9 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             dedup_key = f"dispatch:enqueued:{company_id}:{params_hash}"
 
             if not redis_client.setnx(dedup_key, 1):
-                logger.info("[Queue] Duplicate run ignored for company=%s (same params)", company_id)
+                logger.info(
+                    "[Queue] Duplicate run ignored for company=%s (same params)",
+                    company_id)
                 st.running = False
                 st.last_start = None
                 _RUNNING[company_id] = False
@@ -353,7 +360,8 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             from tasks.dispatch_tasks import run_dispatch_task
 
             # Enqueue Celery task
-            TaskCallable = cast(Any, run_dispatch_task)  # .delay non typé dans stubs
+            # .delay non typé dans stubs
+            TaskCallable = cast("Any", run_dispatch_task)
             task = TaskCallable.delay(**run_kwargs)
             st.last_task_id = task.id
             _CELERY_STATE[company_id] = task.state
@@ -367,7 +375,10 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             _PROGRESS[company_id] = 20
 
     except Exception as e:
-        logger.exception("[Queue] Failed to enqueue Celery task company=%s: %s", company_id, e)
+        logger.exception(
+            "[Queue] Failed to enqueue Celery task company=%s: %s",
+            company_id,
+            e)
         st.running = False
         st.last_start = None
         _RUNNING[company_id] = False

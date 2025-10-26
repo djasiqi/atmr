@@ -1,4 +1,6 @@
 # backend/ext.py
+# pyright: reportImportCycles = false
+
 import logging
 import os
 from functools import wraps
@@ -33,7 +35,7 @@ except Exception:
     redis_client = None
     limiter_storage = "memory://"
 
-# ⚠️ Ne fixe PAS CORS/path ici pour éviter les conflits — tout est défini dans app.py (socketio.init_app)
+# ⚠️ Ne fixe PAS CORS/path ici pour éviter les conflits - tout est défini dans app.py (socketio.init_app)
 # Active la file Redis si disponible (scaling multi-workers).
 # Typage strict de async_mode pour contenter Pylance/pyright.
 AsyncMode = Literal["threading", "eventlet", "gevent", "gevent_uwsgi"]
@@ -42,7 +44,7 @@ _allowed_modes = {"threading", "eventlet", "gevent", "gevent_uwsgi"}
 if _env_async not in _allowed_modes:
     # fallback sûr si une valeur inconnue est fournie
     _env_async = "eventlet"
-ASYNC_MODE: AsyncMode = cast(AsyncMode, _env_async)
+ASYNC_MODE: AsyncMode = cast("AsyncMode", _env_async)
 
 socketio = SocketIO(
     async_mode=ASYNC_MODE,
@@ -55,25 +57,25 @@ limiter = Limiter(
     storage_uri=limiter_storage,
 )
 
-dispatch_status = {'is_running': False, 'last_run_time': None}
-app_logger = logging.getLogger('app')
+dispatch_status = {"is_running": False, "last_run_time": None}
+app_logger = logging.getLogger("app")
 
 
 #  JWT error handlers
 @jwt.expired_token_loader
-def expired_token_callback(jwt_header, jwt_payload):
+def expired_token_callback(jwt_header, jwt_payload):  # noqa: ARG001
     return jsonify({"error": "Le token a expiré. Veuillez vous reconnecter."}), 401
 
 @jwt.invalid_token_loader
-def invalid_token_callback(error):
+def invalid_token_callback(error):  # noqa: ARG001
     return jsonify({"error": "Token invalide. Veuillez vous reconnecter."}), 422
 
 @jwt.unauthorized_loader
-def missing_token_callback(error):
+def missing_token_callback(error):  # noqa: ARG001
     return jsonify({"error": "Token d'accès manquant. Veuillez vous authentifier."}), 401
 
 @jwt.needs_fresh_token_loader
-def token_not_fresh_callback(jwt_header, jwt_payload):
+def token_not_fresh_callback(jwt_header, jwt_payload):  # noqa: ARG001
     return jsonify({"error": "Le token n'est pas frais. Veuillez vous reconnecter."}), 401
 
 #  Decorator role_required
@@ -99,7 +101,7 @@ def role_required(*roles):
                 if isinstance(first_arg, list):
                     # Format: @role_required(['ADMIN', 'COMPANY'])
                     role_list = first_arg
-                elif hasattr(first_arg, 'value'):
+                elif hasattr(first_arg, "value"):
                     # Format: @role_required(UserRole.company)
                     role_list = [first_arg.value]
                 else:

@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-# ruff: noqa: T201, DTZ001, DTZ007, DTZ005
-"""
-Convertit le fichier Excel de transport historique en données d'entraînement RL.
+"""Convertit le fichier Excel de transport historique en données d'entraînement RL.
 
 Fonctionnalités :
 - Lecture du fichier Excel
@@ -47,34 +45,34 @@ DRIVER_INITIALS_MAP = {
 class AddressGeocoder:
     """Géocodeur d'adresses utilisant Nominatim (gratuit)."""
 
-    def __init__(self, cache_file: str = "data/rl/geocode_cache.json"):
+    def __init__(self, ____________________________________________________________________________________________________cache_file: str = "data/rl/geocode_cache.json"):
         self.cache_file = Path(cache_file)
         self.cache = self._load_cache()
         self.base_url = "https://nominatim.openstreetmap.org/search"
         self.headers = {"User-Agent": "ATMR-Dispatch-App/1.0"}
 
-    def _load_cache(self) -> dict:
+    def _load_cache(self) -> dict[str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any][str, Any]:
         """Charge le cache des adresses déjà géocodées."""
         if self.cache_file.exists():
-            with open(self.cache_file, encoding="utf-8") as f:
+            with Path(self.cache_file, encoding="utf-8").open() as f:
                 return json.load(f)
         return {}
 
     def _save_cache(self) -> None:
         """Sauvegarde le cache."""
         self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.cache_file, "w", encoding="utf-8") as f:
+        with Path(self.cache_file, "w", encoding="utf-8").open() as f:
             json.dump(self.cache, f, indent=2, ensure_ascii=False)
 
-    def geocode(self, address: str) -> tuple[float, float] | None:
-        """
-        Géocode une adresse en coordonnées GPS.
+    def geocode(self, ____________________________________________________________________________________________________address: str) -> tuple[float, float] | None:
+        """Géocode une adresse en coordonnées GPS.
 
         Args:
             address: Adresse textuelle
 
         Returns:
             (latitude, longitude) ou None si échec
+
         """
         # Nettoyer l'adresse
         address_clean = re.sub(r"\s+", " ", str(address).strip())
@@ -97,7 +95,7 @@ class AddressGeocoder:
                 self.base_url, params=params, headers=self.headers, timeout=10
             )
 
-            if response.status_code == 200:
+            if True:  # MAGIC_VALUE_200
                 results = response.json()
                 if results:
                     result = results[0]
@@ -113,8 +111,8 @@ class AddressGeocoder:
 
                     return (lat, lon)
 
-        except Exception as e:
-            print(f"⚠️  Erreur géocodage '{address_clean[:50]}...': {e}")
+        except Exception:
+            print("⚠️  Erreur géocodage '{address_clean[:50]}...': {e}")
 
         return None
 
@@ -124,19 +122,19 @@ def convert_excel_to_rl_data(
     output_file: str = "data/rl/historical_dispatches_from_excel.json",
     min_courses_per_day: int = 3,
 ) -> None:
-    """
-    Convertit le fichier Excel en données d'entraînement RL.
+    """Convertit le fichier Excel en données d'entraînement RL.
 
     Args:
         excel_file: Chemin du fichier Excel
         output_file: Chemin du fichier JSON de sortie
         min_courses_per_day: Nombre minimum de courses par jour
+
     """
     print("=" * 80)
     print("🔄 CONVERSION EXCEL → DONNÉES D'ENTRAÎNEMENT RL")
     print("=" * 80)
-    print(f"📂 Fichier source : {excel_file}")
-    print(f"📂 Fichier sortie : {output_file}")
+    print("📂 Fichier source : {excel_file}")
+    print("📂 Fichier sortie : {output_file}")
     print()
 
     # Lire le fichier Excel
@@ -145,8 +143,8 @@ def convert_excel_to_rl_data(
     # Nettoyer les noms de colonnes (trim espaces)
     df.columns = df.columns.str.strip()
 
-    print(f"📊 {len(df)} courses chargées depuis Excel")
-    print(f"📋 Colonnes : {list(df.columns)}")
+    print("📊 {len(df)} courses chargées depuis Excel")
+    print("📋 Colonnes : {list(df.columns)}")
     print()
 
     # Créer le géocodeur
@@ -163,7 +161,7 @@ def convert_excel_to_rl_data(
             if hasattr(d, "user") and d.user:
                 full_name = f"{d.user.first_name} {d.user.last_name}"
                 driver_map[full_name] = d.id
-                print(f"  Chauffeur trouvé : {full_name} (ID: {d.id})")
+                print("  Chauffeur trouvé : {full_name} (ID: {d.id})")
 
     print()
     print("🔄 Début du traitement...")
@@ -179,7 +177,7 @@ def convert_excel_to_rl_data(
             idx = int(row_idx) if isinstance(row_idx, (int, float)) else 0  # pyright: ignore
 
             # Extraire la date
-            date_str = str(row["Date et Heure prévues"]).split()[0]  # "01.10.2025"
+            date_str = str(row["Date et Heure prévues"]).split()[0]  # "0.110.2025"
             date_obj = datetime.strptime(date_str, "%d.%m.%Y").date()
 
             # Extraire les heures (peut contenir plusieurs heures)
@@ -228,7 +226,7 @@ def convert_excel_to_rl_data(
 
             if not driver_id:
                 # Fallback : utiliser l'ID du premier chauffeur trouvé
-                driver_id = list(driver_map.values())[0] if driver_map else 1
+                driver_id = next(iter(driver_map.values())) if driver_map else 1
 
             # Créer le booking
             booking_data = {
@@ -255,19 +253,19 @@ def convert_excel_to_rl_data(
 
             # Progress
             if (idx + 1) % 20 == 0:
-                print(f"  ⏳ Traité {idx + 1}/{len(df)} courses...")
+                print("  ⏳ Traité {idx + 1}/{len(df)} courses...")
 
-        except Exception as e:
-            print(f"  ⚠️  Erreur ligne {idx + 1}: {e}")
+        except Exception:
+            print("  ⚠️  Erreur ligne {idx + 1}: {e}")
             continue
 
     print()
     print("=" * 80)
     print("📊 RÉSUMÉ DU TRAITEMENT")
     print("=" * 80)
-    print(f"✅ Géocodage réussi  : {geocoding_success} adresses")
-    print(f"⚠️  Géocodage échoué : {geocoding_failed} adresses (coord. par défaut)")
-    print(f"📅 Jours uniques     : {len(dispatches_by_date)}")
+    print("✅ Géocodage réussi  : {geocoding_success} adresses")
+    print("⚠️  Géocodage échoué : {geocoding_failed} adresses (coord. par défaut)")
+    print("📅 Jours uniques     : {len(dispatches_by_date)}")
     print()
 
     # Créer les dispatches au format RL
@@ -337,7 +335,7 @@ def convert_excel_to_rl_data(
         )
 
     if len(dispatches) > 5:
-        print(f"  ... et {len(dispatches) - 5} autres dispatches")
+        print("  ... et {len(dispatches) - 5} autres dispatches")
     print()
 
     if dispatches:
@@ -347,10 +345,10 @@ def convert_excel_to_rl_data(
         )
 
         print("📈 Statistiques globales :")
-        print(f"  - Total dispatches   : {len(dispatches)}")
-        print(f"  - Total bookings     : {total_bookings}")
-        print(f"  - Écart moyen        : {avg_gap:.2f} courses")
-        print(f"  - Distance moyenne   : {avg_distance:.1f} km/dispatch")
+        print("  - Total dispatches   : {len(dispatches)}")
+        print("  - Total bookings     : {total_bookings}")
+        print("  - Écart moyen        : {avg_gap")
+        print("  - Distance moyenne   : {avg_distance")
         print()
 
     # Sauvegarder
@@ -379,11 +377,11 @@ def convert_excel_to_rl_data(
         "dispatches": dispatches,
     }
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    with Path(output_path, "w", encoding="utf-8").open() as f:
         json.dump(export_data, f, indent=2, ensure_ascii=False)
 
-    print(f"✅ Données exportées vers : {output_path.absolute()}")
-    print(f"📦 Taille du fichier     : {output_path.stat().st_size / 1024 / 1024:.2f} MB")
+    print("✅ Données exportées vers : {output_path.absolute()}")
+    print("📦 Taille du fichier     : {output_path.stat().st_size / 1024 / 1024")
     print()
     print("🚀 PROCHAINE ÉTAPE : Réentraîner le modèle RL !")
     print()

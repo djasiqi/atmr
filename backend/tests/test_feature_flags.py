@@ -1,4 +1,3 @@
-# ruff: noqa: T201
 """Tests pour le système de feature flags ML."""
 
 import pytest
@@ -21,7 +20,6 @@ class TestFeatureFlags:
 
     def test_enable_disable_ml(self):
         """Test activation/désactivation ML."""
-        from feature_flags import FeatureFlags
 
         FeatureFlags.reset_stats()
 
@@ -44,7 +42,6 @@ class TestFeatureFlags:
 
     def test_traffic_percentage(self):
         """Test pourcentage de trafic."""
-        from feature_flags import FeatureFlags
 
         FeatureFlags.reset_stats()
         FeatureFlags.set_ml_enabled(True)
@@ -59,11 +56,10 @@ class TestFeatureFlags:
         # Vérifier proportion (avec tolérance)
         assert 30 <= enabled_count <= 70  # ~50% ±20%
 
-        print(f"✅ Trafic percentage OK ({enabled_count}% activé sur 100 requêtes)")
+        print("✅ Trafic percentage OK ({enabled_count}% activé sur 100 requêtes)")
 
     def test_stats_recording(self):
         """Test enregistrement statistiques."""
-        from feature_flags import FeatureFlags
 
         FeatureFlags.reset_stats()
         FeatureFlags.set_ml_enabled(True)
@@ -87,11 +83,10 @@ class TestFeatureFlags:
         assert stats["ml_failures"] == 1
         assert stats["ml_success_rate"] == 2/3
 
-        print(f"✅ Stats recording OK (success rate: {stats['ml_success_rate']:.1%})")
+        print("✅ Stats recording OK (success rate: {stats['ml_success_rate']")
 
     def test_get_stats(self):
         """Test récupération statistiques complètes."""
-        from feature_flags import FeatureFlags
 
         FeatureFlags.reset_stats()
 
@@ -102,7 +97,7 @@ class TestFeatureFlags:
         assert "total_requests" in stats
         assert "ml_success_rate" in stats
 
-        print(f"✅ Get stats OK ({len(stats)} metrics)")
+        print("✅ Get stats OK ({len(stats)} metrics)")
 
 
 class TestFeatureFlagsAPI:
@@ -119,7 +114,7 @@ class TestFeatureFlagsAPI:
         assert "stats" in data
         assert "health" in data
 
-        print(f"✅ GET /status OK (health: {data['health']['status']})")
+        print("✅ GET /status OK (health: {data['health']['status']})")
 
     def test_enable_ml(self, client):
         """Test endpoint POST /api/feature-flags/ml/enable."""
@@ -208,7 +203,7 @@ class TestFeatureFlagsAPI:
         assert "healthy" in data
         assert "success_rate" in data
 
-        print(f"✅ GET /ml/health OK (status: {data['status']})")
+        print("✅ GET /ml/health OK (status: {data['status']})")
 
 
 if __name__ == "__main__":
@@ -226,8 +221,8 @@ if __name__ == "__main__":
         test.test_traffic_percentage()
         test.test_stats_recording()
         test.test_get_stats()
-    except Exception as e:
-        print(f"❌ Erreur: {e}")
+    except Exception:
+        print("❌ Erreur: {e}")
         import traceback
         traceback.print_exc()
         import sys

@@ -8,13 +8,13 @@ from models import Driver, User, UserRole
 
 def test_list_drivers_unauthenticated(client):
     """GET /drivers sans authentification renvoie 401."""
-    response = client.get('/api/drivers/')
+    response = client.get("/api/drivers/")
     assert response.status_code == 401
 
 
 def test_list_drivers_authenticated(client, auth_headers):
     """GET /drivers avec authentification renvoie liste."""
-    response = client.get('/api/drivers/', headers=auth_headers)
+    response = client.get("/api/drivers/", headers=auth_headers)
     # Peut être 200 ou 404 selon si route existe
     assert response.status_code in [200, 404, 405]
 
@@ -38,7 +38,7 @@ def test_driver_has_company_relationship(db, sample_driver, sample_company):
 def test_driver_availability_flag(db, sample_driver):
     """Driver a un flag is_available."""
     driver = Driver.query.get(sample_driver.id)
-    assert hasattr(driver, 'is_available')
+    assert hasattr(driver, "is_available")
     assert isinstance(driver.is_available, bool)
 
 
@@ -52,10 +52,10 @@ def test_driver_license_number(db, sample_driver):
 def test_driver_serialize(db, sample_driver):
     """Driver.serialize retourne dict avec données."""
     driver = Driver.query.get(sample_driver.id)
-    if hasattr(driver, 'serialize'):
+    if hasattr(driver, "serialize"):
         serialized = driver.serialize
         assert isinstance(serialized, dict)
-        assert 'id' in serialized or 'user' in serialized
+        assert "id" in serialized or "user" in serialized
 
 
 def test_available_drivers_query(db, sample_driver):

@@ -107,3 +107,4 @@ psycopg[binary]>=3.1,<4
 
 scikit-learn==1.7.2
 nplusone==1.0.0
+sqlalchemy2-stubs==0.0.2a38

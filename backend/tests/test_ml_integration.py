@@ -1,4 +1,3 @@
-# ruff: noqa: T201, DTZ001, DTZ005
 # pyright: reportArgumentType=false
 """Tests d'intégration pour le modèle ML de prédiction de retards."""
 
@@ -46,69 +45,69 @@ class TestMLFeatures:
         features = extract_base_features(booking, driver)
 
         # Vérifier features temporelles
-        assert 'time_of_day' in features
-        assert features['time_of_day'] == 17.0  # 17h30 → 17
-        assert features['day_of_week'] == 0.0  # Lundi
+        assert "time_of_day" in features
+        assert features["time_of_day"] == 17.0  # 17h30 → 17
+        assert features["day_of_week"] == 0.0  # Lundi
 
         # Vérifier features spatiales
-        assert 'distance_km' in features
-        assert features['distance_km'] > 0
+        assert "distance_km" in features
+        assert features["distance_km"] > 0
 
         # Vérifier features driver
-        assert 'driver_total_bookings' in features
-        assert features['driver_total_bookings'] == 150.0
+        assert "driver_total_bookings" in features
+        assert features["driver_total_bookings"] == 150.0
 
-        print(f"✅ Base features extracted: {len(features)} features")
+        print("✅ Base features extracted: {len(features)} features")
 
     def test_create_interaction_features(self):
         """Test création features d'interaction."""
         from services.ml_features import create_interaction_features
 
         base_features = {
-            'distance_km': 10.0,
-            'traffic_density': 0.8,
-            'weather_factor': 0.6,
-            'is_medical': 0.0,
-            'is_urgent': 0.0,
+            "distance_km": 10.0,
+            "traffic_density": 0.8,
+            "weather_factor": 0.6,
+            "is_medical": 0.0,
+            "is_urgent": 0.0,
         }
 
         interactions = create_interaction_features(base_features)
 
-        assert 'distance_x_traffic' in interactions
-        assert interactions['distance_x_traffic'] == 10.0 * 0.8
+        assert "distance_x_traffic" in interactions
+        assert interactions["distance_x_traffic"] == 10.0 * 0.8
 
-        assert 'distance_x_weather' in interactions
-        assert interactions['distance_x_weather'] == 10.0 * 0.6
+        assert "distance_x_weather" in interactions
+        assert interactions["distance_x_weather"] == 10.0 * 0.6
 
-        assert 'traffic_x_weather' in interactions
+        assert "traffic_x_weather" in interactions
         assert len(interactions) == 5
 
-        print(f"✅ Interactions created: {len(interactions)} features")
+        print("✅ Interactions created: {len(interactions)} features")
 
     def test_create_temporal_features(self):
         """Test création features temporelles."""
         from services.ml_features import create_temporal_features
 
         base_features = {
-            'time_of_day': 17.0,  # Heure de pointe
-            'day_of_week': 5.0,   # Samedi
+            "time_of_day": 17.0,  # Heure de pointe
+            "day_of_week": 5.0,   # Samedi
         }
 
         temporal = create_temporal_features(base_features)
 
-        assert 'is_rush_hour' in temporal
-        assert temporal['is_rush_hour'] == 1.0  # 17h = rush hour
+        assert "is_rush_hour" in temporal
+        assert temporal["is_rush_hour"] == 1.0  # 17h = rush hour
 
-        assert 'is_evening_peak' in temporal
-        assert temporal['is_evening_peak'] == 1.0
+        assert "is_evening_peak" in temporal
+        assert temporal["is_evening_peak"] == 1.0
 
-        assert 'is_weekend' in temporal
-        assert temporal['is_weekend'] == 1.0  # Samedi
+        assert "is_weekend" in temporal
+        assert temporal["is_weekend"] == 1.0  # Samedi
 
-        assert 'hour_sin' in temporal
-        assert 'hour_cos' in temporal
+        assert "hour_sin" in temporal
+        assert "hour_cos" in temporal
 
-        print(f"✅ Temporal features created: {len(temporal)} features")
+        print("✅ Temporal features created: {len(temporal)} features")
 
     def test_complete_pipeline(self):
         """Test pipeline complet de feature engineering."""
@@ -124,15 +123,15 @@ class TestMLFeatures:
 
         # Vérifier présence features critiques
         critical_features = [
-            'distance_x_weather',  # Top 1 (34.7%)
-            'traffic_x_weather',   # Top 2 (18.9%)
-            'distance_km',         # Top 3 (7.0%)
+            "distance_x_weather",  # Top 1 (34.7%)
+            "traffic_x_weather",   # Top 2 (18.9%)
+            "distance_km",         # Top 3 (7.0%)
         ]
 
         for feat in critical_features:
             assert feat in all_features, f"Missing critical feature: {feat}"
 
-        print(f"✅ Complete pipeline: {len(all_features)} features generated")
+        print("✅ Complete pipeline: {len(all_features)} features generated")
 
 
 class TestMLPredictor:
@@ -145,24 +144,23 @@ class TestMLPredictor:
         # Vérifier si modèle existe
         model_path = "data/ml/models/delay_predictor.pkl"
 
-        if os.path.exists(model_path):
+        if Path(model_path).exists():
             predictor = DelayMLPredictor(model_path=model_path)
 
             assert predictor.is_trained is True
             assert predictor.model is not None
             assert len(predictor.feature_names) > 0
 
-            print(f"✅ Model loaded: {len(predictor.feature_names)} features")
+            print("✅ Model loaded: {len(predictor.feature_names)} features")
         else:
-            print(f"⚠️ Model not found at {model_path}, skipping")
+            print("⚠️ Model not found at {model_path}, skipping")
 
     def test_predict_delay_with_mock_data(self):
         """Test prédiction avec données mock."""
-        from services.unified_dispatch.ml_predictor import DelayMLPredictor
 
         model_path = "data/ml/models/delay_predictor.pkl"
 
-        if not os.path.exists(model_path):
+        if not Path(model_path).exists():
             pytest.skip("Model not available for testing")
 
         predictor = DelayMLPredictor(model_path=model_path)
@@ -182,20 +180,19 @@ class TestMLPredictor:
         assert -10.0 <= prediction.predicted_delay_minutes <= 60.0
 
         print("✅ Prediction successful:")
-        print(f"   Delay: {prediction.predicted_delay_minutes:.2f} min")
-        print(f"   Confidence: {prediction.confidence:.2f}")
-        print(f"   Risk: {prediction.risk_level}")
-        print(f"   Top factors: {list(prediction.contributing_factors.keys())[:3]}")
+        print("   Delay: {prediction.predicted_delay_minutes")
+        print("   Confidence: {prediction.confidence")
+        print("   Risk: {prediction.risk_level}")
+        print("   Top factors: {list(prediction.contributing_factors.keys())[:3]}")
 
     def test_prediction_performance(self):
         """Test performance temps de prédiction."""
         import time
 
-        from services.unified_dispatch.ml_predictor import DelayMLPredictor
 
         model_path = "data/ml/models/delay_predictor.pkl"
 
-        if not os.path.exists(model_path):
+        if not Path(model_path).exists():
             pytest.skip("Model not available for testing")
 
         predictor = DelayMLPredictor(model_path=model_path)
@@ -215,7 +212,7 @@ class TestMLPredictor:
         # Ajuster cible à 200ms (plus réaliste avec feature engineering complet)
         assert elapsed < 200  # Cible réaliste: < 200ms
 
-        print(f"✅ Performance: {elapsed:.2f}ms par prédiction")
+        print("✅ Performance: {elapsed")
 
 
 if __name__ == "__main__":
@@ -232,8 +229,8 @@ if __name__ == "__main__":
         test.test_create_interaction_features()
         test.test_create_temporal_features()
         test.test_complete_pipeline()
-    except Exception as e:
-        print(f"❌ Erreur: {e}")
+    except Exception:
+        print("❌ Erreur: {e}")
         sys.exit(1)
 
     # Test 2: Prédicteur
@@ -243,8 +240,8 @@ if __name__ == "__main__":
         test_ml.test_model_loads_if_available()
         test_ml.test_predict_delay_with_mock_data()
         test_ml.test_prediction_performance()
-    except Exception as e:
-        print(f"❌ Erreur: {e}")
+    except Exception:
+        print("❌ Erreur: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

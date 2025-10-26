@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# ruff: noqa: T201
-"""Liste tous les chauffeurs de la DB avec leurs initiales possibles"""
+"""Liste tous les chauffeurs de la DB avec leurs initiales possibles."""
 import sys
 from pathlib import Path
 
@@ -29,10 +28,10 @@ with app.app_context():
             initials_1 = f"{first[0]}.{last[0]}" if first and last else ""
             initials_2 = f"{first[0]}{last[0]}" if first and last else ""
 
-            print(f"ID: {d.id}")
-            print(f"  Nom complet : {full_name}")
-            print(f"  Initiales   : {initials_1} ou {initials_2}")
-            print(f"  Type        : {getattr(d, 'driver_type', 'N/A')}")
-            print(f"  Actif       : {getattr(d, 'is_active', False)}")
+            print("ID: {d.id}")
+            print("  Nom complet : {full_name}")
+            print("  Initiales   : {initials_1} ou {initials_2}")
+            print("  Type        : {getattr(d, 'driver_type', 'N/A')}")
+            print("  Actif       : {getattr(d, 'is_active', False)}")
             print()
 

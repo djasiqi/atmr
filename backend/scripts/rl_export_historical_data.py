@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-# ruff: noqa: T201
-"""
-Script d'export des données historiques de dispatch pour entraînement RL.
+"""Script d'export des données historiques de dispatch pour entraînement RL.
 
 Extrait tous les dispatch_runs passés avec :
 - Coordonnées GPS réelles (pickup/dropoff)
@@ -31,13 +29,12 @@ from shared.geo_utils import haversine_distance
 
 def export_historical_dispatches(
     company_id: int = 1,
-    start_date: str = "2025-01-01",
+    start_date: str = "2025-0.1-0.1",
     end_date: str = "2025-10-21",
     output_file: str = "data/rl/historical_dispatches.json",
     min_bookings: int = 5,  # Skip dispatches avec < 5 courses
 ) -> None:
-    """
-    Exporte les dispatches historiques au format JSON pour entraînement RL.
+    """Exporte les dispatches historiques au format JSON pour entraînement RL.
 
     Args:
         company_id: ID de la compagnie
@@ -45,13 +42,14 @@ def export_historical_dispatches(
         end_date: Date de fin (YYYY-MM-DD)
         output_file: Chemin du fichier de sortie
         min_bookings: Nombre minimum de bookings par dispatch
+
     """
     print("=" * 80)
     print("🧠 EXPORT DES DONNÉES HISTORIQUES POUR ENTRAÎNEMENT RL")
     print("=" * 80)
-    print(f"📅 Période : {start_date} → {end_date}")
-    print(f"🏢 Company ID : {company_id}")
-    print(f"📊 Min bookings par dispatch : {min_bookings}")
+    print("📅 Période : {start_date} → {end_date}")
+    print("🏢 Company ID : {company_id}")
+    print("📊 Min bookings par dispatch : {min_bookings}")
     print()
 
     # Récupérer tous les dispatch_runs de la période
@@ -66,7 +64,7 @@ def export_historical_dispatches(
         .all()
     )
 
-    print(f"📊 Récupération de {len(runs)} dispatch runs...")
+    print("📊 Récupération de {len(runs)} dispatch runs...")
     print()
 
     dispatches = []
@@ -194,17 +192,17 @@ def export_historical_dispatches(
 
         # Progress log tous les 50 dispatches
         if (idx + 1) % 50 == 0:
-            print(f"⏳ Traité {idx + 1}/{len(runs)} dispatches...")
+            print("⏳ Traité {idx + 1}/{len(runs)} dispatches...")
 
     # Statistiques finales
     print()
     print("=" * 80)
     print("📊 STATISTIQUES D'EXPORT")
     print("=" * 80)
-    print(f"✅ Dispatches exportés : {len(dispatches)}")
-    print(f"⏭️  Dispatches skippés  : {skipped_count} (< {min_bookings} bookings)")
-    print(f"📦 Total bookings      : {total_bookings}")
-    print(f"📈 Avg bookings/dispatch : {total_bookings / len(dispatches):.1f}" if dispatches else "N/A")
+    print("✅ Dispatches exportés : {len(dispatches)}")
+    print("⏭️  Dispatches skippés  : {skipped_count} (< {min_bookings} bookings)")
+    print("📦 Total bookings      : {total_bookings}")
+    print("📈 Avg bookings/dispatch : {total_bookings / len(dispatches)" if dispatches else "N/A")
     print()
 
     # Variables par défaut
@@ -218,9 +216,9 @@ def export_historical_dispatches(
         avg_score = sum(d["quality_score"] for d in dispatches) / len(dispatches)
         avg_distance = sum(d["total_distance_km"] for d in dispatches) / len(dispatches)
 
-        print(f"⚖️  Écart moyen         : {avg_gap:.2f} courses")
-        print(f"🏆 Score qualité moyen : {avg_score:.1f}/100")
-        print(f"📏 Distance moyenne    : {avg_distance:.1f} km/dispatch")
+        print("⚖️  Écart moyen         : {avg_gap")
+        print("🏆 Score qualité moyen : {avg_score")
+        print("📏 Distance moyenne    : {avg_distance")
         print()
 
         # Distribution des écarts
@@ -232,8 +230,8 @@ def export_historical_dispatches(
         for gap in sorted(gap_distribution.keys()):
             count = gap_distribution[gap]
             pct = (count / len(dispatches)) * 100
-            bar = "█" * int(pct / 2)
-            print(f"   Écart {gap}: {count:4d} ({pct:5.1f}%) {bar}")
+            "█" * int(pct / 2)
+            print("   Écart {gap}: {count:4d} ({pct%5.1f}%) {bar}")
         print()
 
     # Sauvegarder
@@ -255,11 +253,11 @@ def export_historical_dispatches(
         "dispatches": dispatches,
     }
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    with Path(output_path, "w", encoding="utf-8").open() as f:
         json.dump(export_data, f, indent=2, ensure_ascii=False)
 
-    print(f"✅ Données exportées vers : {output_path.absolute()}")
-    print(f"📦 Taille du fichier     : {output_path.stat().st_size / 1024 / 1024:.2f} MB")
+    print("✅ Données exportées vers : {output_path.absolute()}")
+    print("📦 Taille du fichier     : {output_path.stat().st_size / 1024 / 1024")
     print()
     print("🚀 Prochaine étape : Lancer l'entraînement RL !")
     print("   python backend/scripts/rl_train_offline.py")

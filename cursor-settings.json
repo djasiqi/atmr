@@ -1,0 +1,128 @@
+{
+  "// COMMENTAIRES": "Ces paramètres optimisent les performances de Cursor pour le projet ATMR",
+  
+  "// 1. Exclure les fichiers inutiles de l'indexation": "",
+  "files.exclude": {
+    "**/.git": true,
+    "**/.DS_Store": true,
+    "**/node_modules": true,
+    "**/venv": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.mypy_cache": true,
+    "**/.ruff_cache": true,
+    "**/htmlcov": true,
+    "**/backend/uploads": true,
+    "**/osrm/data": true,
+    "**/Redis": true,
+    "**/*.log": true,
+    "**/session": true,
+    "**/backend/data/ml": true,
+    "**/backend/data/rl": true,
+    "**/backend/temp_ml_registry": true,
+    "**/backend/temp_rl_registry": true,
+    "**/backend/temp_eval_registry": true,
+    "**/backend/temp_symlink_registry": true,
+    "**/*.db": true,
+    "**/*.sqlite": true,
+    "**/*.sqlite3": true,
+    "**/devdb": true,
+    "**/backend/instance": true
+  },
+  
+  "// 2. Exclure de la recherche pour accélérer": "",
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/venv": true,
+    "**/__pycache__": true,
+    "**/backend/uploads": true,
+    "**/osrm/data": true,
+    "**/Redis": true,
+    "**/session": true,
+    "**/*.log": true,
+    "**/*.txt": true,
+    "**/backend/data/ml": true,
+    "**/backend/data/rl": true,
+    "**/.venv": true,
+    "**/htmlcov": true
+  },
+  
+  "// 3. Réduire le monitoring des fichiers": "",
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/venv/**": true,
+    "**/__pycache__/**": true,
+    "**/backend/uploads/**": true,
+    "**/osrm/data/**": true,
+    "**/Redis/**": true,
+    "**/session/**": true,
+    "**/*.log": true,
+    "**/*.txt": true,
+    "**/backend/data/ml/**": true,
+    "**/backend/data/rl/**": true,
+    "**/.pytest_cache/**": true,
+    "**/.mypy_cache/**": true,
+    "**/.ruff_cache/**": true
+  },
+  
+  "// 4. Optimiser la recherche": "",
+  "search.followSymlinks": false,
+  "search.smartCase": true,
+  "search.useIgnoreFiles": true,
+  
+  "// 5. Limiter la mémoire utilisée": "",
+  "files.maxMemoryForLargeFilesMB": 4096,
+  
+  "// 6. Configuration Cursor spécifique": "",
+  "cursor.indexCodebase": {
+    "maxFiles": 50000,
+    "maxSizeMB": 100
+  },
+  "cursor.autocomplete.enabled": true,
+  "cursor.chat.maxContextTokens": 16000,
+  
+  "// 7. Autocomplétion et suggestions": "",
+  "editor.suggestSelection": "first",
+  "editor.suggest.maxVisibleSuggestions": 10,
+  "editor.suggest.localityBonus": true,
+  "editor.inlineSuggest.enabled": true,
+  "editor.inlineSuggest.showToolbar": "onHover",
+  
+  "// 8. Performance du copilot": "",
+  "cursor.copilot.enabled": true,
+  "cursor.copilotInTab.enabled": true,
+  "cursor.copilot.maxSuggestions": 3,
+  
+  "// 9. Formattage automatique": "",
+  "editor.formatOnSave": true,
+  "editor.formatOnPaste": true,
+  
+  "// 10. Limiter les extensions actives": "",
+  "extensions.autoCheckUpdates": false,
+  "extensions.autoUpdate": false,
+  
+  "// 11. Optimisations Python": "",
+  "python.analysis.indexing": true,
+  "python.analysis.completeFunctionParens": true,
+  "python.analysis.autoImportCompletions": true,
+  
+  "// 12. Configuration du linter Ruff": "",
+  "ruff.enable": true,
+  "ruff.lint.enable": true,
+  "ruff.format.args": ["--line-length", "100"],
+  
+  "// 13. Désactiver l'indexation TypeScript pour Node (si non utilisé)": "",
+  "typescript.tsdk": null,
+  
+  "// 14. Performance du terminal": "",
+  "terminal.integrated.scrollback": 5000,
+  "terminal.integrated.fastScrollSensitivity": 5,
+  
+  "// 15. Préchargement pour vitesse": "",
+  "cursor.experimental.prefetch.enabled": true
+}
+
+
+
