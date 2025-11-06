@@ -1,7 +1,7 @@
 // app.config.js
 module.exports = () => ({
   name: "Liri Opérations",
-  slug: "liri-operations",
+  slug: "lumo-driver",
   version: "1.0.1",
   // sdkVersion: "53.0.0", // Supprimé : n'est plus nécessaire avec les SDKs récents
   scheme: "liri",
