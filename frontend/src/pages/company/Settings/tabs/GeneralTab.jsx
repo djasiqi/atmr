@@ -1,6 +1,7 @@
 // frontend/src/pages/company/Settings/tabs/GeneralTab.jsx
 import React, { useRef } from 'react';
 import styles from '../CompanySettings.module.css';
+import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
 
 // Helpers
 const formatIbanPretty = (value = '') => {
@@ -21,6 +22,7 @@ const GeneralTab = ({
   form,
   fieldErrors,
   handleChange,
+  handleAddressSelect,
   logoPreview,
   onClickPickFile: _onClickPickFile,
   onPickFile,
@@ -174,7 +176,13 @@ const GeneralTab = ({
 
             <div className={styles.formGroup}>
               <label htmlFor="address">Adresse opérationnelle</label>
-              <input id="address" name="address" value={form.address} onChange={handleChange} />
+              <AddressAutocomplete
+                name="address"
+                value={form.address}
+                onChange={handleChange}
+                onSelect={handleAddressSelect}
+                placeholder="Saisir l'adresse opérationnelle..."
+              />
             </div>
 
             <div className={styles.formGroup}>

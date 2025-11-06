@@ -41,20 +41,20 @@ driver_ns = Namespace("driver", description="Gestion des chauffeurs")
 # Modèles Swagger
 # ---------------------------
 driver_profile_model = driver_ns.model("DriverProfileUpdate", {
-    "first_name": fields.String(description="Prénom"),
-    "last_name": fields.String(description="Nom"),
-    "phone": fields.String(description="Téléphone"),
-    "status": fields.String(description="disponible | hors service"),
+    "first_name": fields.String(description="Prénom", min_length=1, max_length=100),
+    "last_name": fields.String(description="Nom", min_length=1, max_length=100),
+    "phone": fields.String(description="Téléphone", max_length=20),
+    "status": fields.String(description="Statut", enum=["disponible", "hors service"]),
     # HR fields
-    "contract_type": fields.String(description="CDI | CDD | HOURLY"),
-    "weekly_hours": fields.Integer(description="Heures contrat / semaine"),
-    "hourly_rate_cents": fields.Integer(description="Taux horaire (centimes)"),
-    "employment_start_date": fields.String(description="YYYY-MM-DD"),
-    "employment_end_date": fields.String(description="YYYY-MM-DD"),
-    "license_categories": fields.List(fields.String, description="Ex: ['B','C1']"),
-    "license_valid_until": fields.String(description="YYYY-MM-DD"),
-    "trainings": fields.List(fields.Raw, description="[{name, valid_until}]"),
-    "medical_valid_until": fields.String(description="YYYY-MM-DD"),
+    "contract_type": fields.String(description="Type de contrat (max 50 caractères)", max_length=50),
+    "weekly_hours": fields.Integer(description="Heures contrat / semaine (0-168)", minimum=0, maximum=168),
+    "hourly_rate_cents": fields.Integer(description="Taux horaire (centimes, >= 0)", minimum=0),
+    "employment_start_date": fields.String(description="Date de début (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"),
+    "employment_end_date": fields.String(description="Date de fin (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"),
+    "license_categories": fields.List(fields.String(description="Catégorie de permis", max_length=10), description="Ex: ['B','C1'] (max 10 catégories)"),
+    "license_valid_until": fields.String(description="Validité permis (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"),
+    "trainings": fields.List(fields.Raw(description="Formation: {name, valid_until}"), description="Formations (max 50)"),
+    "medical_valid_until": fields.String(description="Validité médicale (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"),
 })
 
 photo_model = driver_ns.model("DriverPhoto", {
@@ -92,14 +92,14 @@ def get_driver_from_token() -> tuple[Driver | None, dict[str, Any] | None, int |
     Retourne (driver, None, None) si trouvé, sinon (None, error_response, status_code).
     """
     user_public_id = get_jwt_identity()
-    app_logger.info("JWT Identity récupérée: {user_public_id}")
+    app_logger.info(f"JWT Identity récupérée: {user_public_id}")
 
     user = User.query.filter_by(public_id=user_public_id).one_or_none()
     if not user:
         app_logger.error("User not found for public_id: {user_public_id}")
         return None, {"error": "User not found"}, 404
 
-    app_logger.info("User details: id={user.id}, role={user.role}")
+    app_logger.info(f"User details: id={user.id}, role={user.role}")
 
     if user.role != UserRole.driver:
         app_logger.error(
@@ -164,64 +164,63 @@ class DriverProfile(Resource):
             return error_response, status_code
         driver = cast("Driver", driver)
 
-        data = request.get_json()
-        app_logger.info("Payload reçu pour mise à jour du profil: {data}")
-        if not data:
-            return {"error": "Aucune donnée fournie"}, 400
+        data = request.get_json() or {}
+        
+        # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+        from marshmallow import ValidationError
+
+        from schemas.driver_schemas import DriverProfileUpdateSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        
+        try:
+            validated_data = validate_request(DriverProfileUpdateSchema(), data, strict=False)
+        except ValidationError as e:
+            return handle_validation_error(e)
+        
+        app_logger.info(f"Payload reçu pour mise à jour du profil: {validated_data}")
         if not driver.user:
             return {"error": "Aucun utilisateur associé au driver"}, 500
 
-        driver.user.first_name = data.get("first_name", driver.user.first_name)
-        driver.user.last_name = data.get("last_name", driver.user.last_name)
-        driver.user.phone = data.get("phone", driver.user.phone)
+        # Mise à jour champs utilisateur - utilise données validées
+        if validated_data.get("first_name"):
+            driver.user.first_name = validated_data["first_name"]
+        if validated_data.get("last_name"):
+            driver.user.last_name = validated_data["last_name"]
+        if validated_data.get("phone"):
+            driver.user.phone = validated_data["phone"]
 
-        status_val = data.get("status")
-        if isinstance(status_val, str):
-            val = status_val.strip().lower()
-            if val == "disponible":
+        # Statut
+        if validated_data.get("status"):
+            status_val = validated_data["status"].strip().lower()
+            if status_val == "disponible":
                 driver.is_active = True
-            elif val == "hors service":
+            elif status_val == "hors service":
                 driver.is_active = False
 
         try:
-            # HR optional updates
-            ct = data.get("contract_type")
-            if isinstance(ct, str) and ct:
-                driver.contract_type = ct.upper()
-            if "weekly_hours" in data:
-                with contextlib.suppress(Exception):
-                    driver.weekly_hours = int(data.get("weekly_hours")) if data.get(
-                        "weekly_hours") is not None else None
-            if "hourly_rate_cents" in data:
-                with contextlib.suppress(Exception):
-                    driver.hourly_rate_cents = int(data.get("hourly_rate_cents")) if data.get(
-                        "hourly_rate_cents") is not None else None
-            from datetime import date as _date
-
-            def _parse_d(s):
-                try:
-                    return _date.fromisoformat(
-                        s) if isinstance(s, str) and s else None
-                except Exception:
-                    return None
-            if "employment_start_date" in data:
-                driver.employment_start_date = _parse_d(
-                    data.get("employment_start_date"))
-            if "employment_end_date" in data:
-                driver.employment_end_date = _parse_d(
-                    data.get("employment_end_date"))
-            if "license_categories" in data and isinstance(
-                    data.get("license_categories"), list):
-                driver.license_categories = list(
-                    map(str, data.get("license_categories")))
-            if "license_valid_until" in data:
-                driver.license_valid_until = _parse_d(
-                    data.get("license_valid_until"))
-            if "trainings" in data and isinstance(data.get("trainings"), list):
-                driver.trainings = data.get("trainings")
-            if "medical_valid_until" in data:
-                driver.medical_valid_until = _parse_d(
-                    data.get("medical_valid_until"))
+            # HR optional updates - utilise données validées
+            if validated_data.get("contract_type"):
+                driver.contract_type = validated_data["contract_type"].upper()
+            if validated_data.get("weekly_hours") is not None:
+                driver.weekly_hours = validated_data["weekly_hours"]
+            if validated_data.get("hourly_rate_cents") is not None:
+                driver.hourly_rate_cents = validated_data["hourly_rate_cents"]
+            
+            # Dates (déjà validées par Marshmallow comme Date)
+            if validated_data.get("employment_start_date"):
+                driver.employment_start_date = validated_data["employment_start_date"]
+            if validated_data.get("employment_end_date"):
+                driver.employment_end_date = validated_data["employment_end_date"]
+            if validated_data.get("license_valid_until"):
+                driver.license_valid_until = validated_data["license_valid_until"]
+            if validated_data.get("medical_valid_until"):
+                driver.medical_valid_until = validated_data["medical_valid_until"]
+            
+            # Listes
+            if validated_data.get("license_categories"):
+                driver.license_categories = [str(cat) for cat in validated_data["license_categories"]]
+            if validated_data.get("trainings"):
+                driver.trainings = validated_data["trainings"]
 
             db.session.commit()
             app_logger.info(
@@ -250,7 +249,7 @@ class DriverPhoto(Resource):
         driver = cast("Driver", driver)
 
         data = request.get_json()
-        app_logger.info("Payload reçu pour mise à jour de la photo: {data}")
+        app_logger.info(f"Payload reçu pour mise à jour de la photo: {data}")
         if not data or "photo" not in data:
             return {"error": "Donnée photo non fournie"}, 400
 
@@ -439,7 +438,7 @@ class DriverLocation(Resource):
 
         try:
             p = request.get_json(force=True)
-            app_logger.debug("📍 Received location data: {p} (type={type(p)})")
+            app_logger.debug(f"📍 Received location data: {p} (type={type(p)})")
 
             if not p:
                 result = {"error": "No data provided"}
@@ -671,7 +670,7 @@ class UpdateBookingStatus(Resource):
             status_code = 200
         else:
             data = request.get_json()
-            app_logger.info("Body reçu pour status update: %s", data)
+            app_logger.info(f"Body reçu pour status update: {data}")
 
             try:
                 driver, error_response, status_code = get_driver_from_token()
@@ -905,7 +904,7 @@ class SavePushToken(Resource):
         try:
             # Log & typage strict
             payload_raw = request.get_json(force=True) or {}
-            app_logger.info("[push-token] payload={payload_raw}")
+            app_logger.info(f"[push-token] payload={payload_raw}")
             payload: dict[str, Any] = tcast("dict[str, Any]", payload_raw)
 
             # token (expo/fcm) requis

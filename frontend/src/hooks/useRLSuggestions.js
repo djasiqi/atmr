@@ -44,8 +44,21 @@ export const useRLSuggestions = (date, options = {}) => {
       setSuggestions(sortedSuggestions);
       setError(null);
     } catch (err) {
-      setError(err.message);
-      console.error('[useRLSuggestions] Error:', err);
+      // ⚡ Ignorer les erreurs 401 si le refresh est en cours ou réussi
+      // (l'intercepteur Axios gère le refresh automatiquement)
+      if (err?.response?.status === 401 && err?.config?._retryAfterRefresh) {
+        // Refresh réussi, ne pas logger l'erreur
+        return;
+      }
+      
+      // Ne logger que les vraies erreurs (pas les 401 en cours de refresh)
+      if (err?.response?.status !== 401) {
+        setError(err.message);
+        console.error('[useRLSuggestions] Error:', err);
+      } else {
+        // 401 mais refresh possible → ne pas définir d'erreur, juste ignorer
+        console.debug('[useRLSuggestions] 401 error, refresh token will be attempted');
+      }
       setSuggestions([]);
     } finally {
       setLoading(false);

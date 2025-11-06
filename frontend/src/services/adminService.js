@@ -102,27 +102,17 @@ export const fetchUsers = async () => {
 
 /**
  * Récupère la liste de toutes les entreprises.
- * On suppose que l'endpoint GET /companies retourne un objet { companies: [...] }
+ * Utilise GET /companies qui liste toutes les companies (admin uniquement).
  */
 export const fetchCompanies = async () => {
   try {
     const token = getAuthToken();
-    // 1er essai : /companies/
-    try {
-      const r1 = await apiClient.get("/companies/", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      console.log("📌 Données reçues de /companies/ :", r1.data);
-      return r1.data?.companies ?? r1.data ?? [];
-    } catch (e) {
-      if (e?.response?.status !== 404) throw e;
-      // 2e essai : /admin/companies
-      const r2 = await apiClient.get("/admin/companies", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      console.log("📌 Données reçues de /admin/companies :", r2.data);
-      return r2.data?.companies ?? r2.data ?? [];
-    }
+    const response = await apiClient.get("/companies", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    console.log("📌 Données reçues de /companies :", response.data);
+    // La réponse peut être un array ou un objet { companies: [...] }
+    return response.data?.companies ?? (Array.isArray(response.data) ? response.data : []);
   } catch (error) {
     console.error(
       "❌ Erreur lors de la récupération des entreprises :",

@@ -5,6 +5,7 @@ import os
 from flask import request
 from flask_restx import Namespace, Resource, fields
 
+from config import Config
 from ext import redis_client
 from services.osrm_client import route_info
 
@@ -47,8 +48,9 @@ class OSRMRoute(Resource):
             if None in (pickup_lat, pickup_lon, dropoff_lat, dropoff_lon):
                 return {"error": "Paramètres manquants"}, 400
 
-            # URL du serveur OSRM
-            osrm_base_url = os.getenv("OSRM_BASE_URL", "http://localhost:5001")
+            # URL du serveur OSRM (priorité Config -> env -> fallback service docker)
+            config_base = getattr(Config, "UD_OSRM_URL", None)
+            osrm_base_url = os.getenv("OSRM_BASE_URL", config_base or "http://osrm:5000")
 
             # Obtenir l'itinéraire avec géométrie complète
             result = route_info(
@@ -56,7 +58,7 @@ class OSRMRoute(Resource):
                 destination=(dropoff_lat, dropoff_lon),  # type: ignore
                 base_url=osrm_base_url,
                 profile="driving",
-                timeout=10,
+                timeout=4,  # ⚡ Réduit à 4s pour fail-fast (cohérent avec frontend)
                 redis_client=redis_client,
                 cache_ttl_s=1,
                 overview="full",  # Géométrie complète

@@ -1,0 +1,75 @@
+/* ReservationActions.module.css - Styles centralisés pour les boutons d'action de réservation */
+
+.actionsContainer {
+  display: flex;
+  gap: var(--spacing-xxs);
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: var(--radius-md, 6px);
+  background: transparent;
+  color: var(--text-tertiary, #6b7280);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.actionButton:hover {
+  background: var(--bg-hover, #f9fafb);
+  border-color: var(--border-primary, #d1d5db);
+  color: var(--text-primary, #111827);
+}
+
+.actionButton:active {
+  background: var(--bg-hover, #f3f4f6);
+}
+
+/* Variante Urgent (discrète avec accent orange au hover) */
+.urgentButton {
+  background: transparent;
+  color: var(--text-tertiary, #6b7280);
+  border-color: var(--border-primary, #e5e7eb);
+}
+
+.urgentButton:hover {
+  background: rgba(249, 115, 22, 0.08);
+  border-color: rgba(249, 115, 22, 0.3);
+  color: #f97316;
+}
+
+/* Variante Supprimer (discrète avec accent rouge au hover) */
+.deleteButton {
+  background: transparent;
+  color: var(--text-tertiary, #6b7280);
+  border-color: var(--border-primary, #e5e7eb);
+}
+
+.deleteButton:hover {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .actionsContainer {
+    gap: var(--spacing-xxs);
+  }
+
+  .actionButton {
+    width: 28px;
+    height: 28px;
+    font-size: var(--font-sm);
+  }
+}
+

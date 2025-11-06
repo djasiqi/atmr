@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from flask import current_app
+from flask import current_app, request
 from flask_restx import Namespace, Resource, reqparse
 from sqlalchemy import func, or_
 
@@ -57,10 +57,21 @@ class Establishments(Resource):
     @medical_ns.expect(establishments_parser)
     def get(self):
         """Autocomplete d'établissements (alias + nom + display_name)."""
-        args = establishments_parser.parse_args(strict=True)
-        q = (args.get("q") or "").strip()
-        # borne 1..25 et assure un int
-        limit = max(1, min(int(args.get("limit") or 8), 25))
+        # ✅ 2.4: Validation Marshmallow pour query params (optionnel mais recommandé)
+
+        from schemas.medical_schemas import MedicalEstablishmentQuerySchema
+        from schemas.validation_utils import validate_request
+        
+        args_dict = dict(request.args)
+        try:
+            validated_args = validate_request(MedicalEstablishmentQuerySchema(), args_dict, strict=False)
+            q = (validated_args.get("q") or "").strip()
+            limit = validated_args.get("limit", 8)
+        except Exception:
+            # Fallback sur reqparse si validation échoue
+            args = establishments_parser.parse_args(strict=True)
+            q = (args.get("q") or "").strip()
+            limit = max(1, min(int(args.get("limit") or 8), 25))
 
         qr = db.session.query(MedicalEstablishment)
 
@@ -108,9 +119,28 @@ class Services(Resource):
     @medical_ns.expect(services_parser)
     def get(self):
         """Liste les services actifs d'un établissement, avec filtre optionnel."""
-        args = services_parser.parse_args(strict=True)
-        estab_id = int(args["establishment_id"])
-        q = (args.get("q") or "").strip()
+        # ✅ 2.4: Validation Marshmallow pour query params (optionnel mais recommandé)
+        from marshmallow import ValidationError
+
+        from schemas.medical_schemas import MedicalServiceQuerySchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        
+        args_dict = dict(request.args)
+        try:
+            validated_args = validate_request(MedicalServiceQuerySchema(), args_dict)
+            estab_id = validated_args["establishment_id"]
+            q = (validated_args.get("q") or "").strip()
+        except ValidationError as e:
+            return handle_validation_error(e)
+        except Exception as fallback_err:
+            # Fallback sur reqparse si validation échoue
+            try:
+                args = services_parser.parse_args(strict=True)
+                estab_id = int(args["establishment_id"])
+                q = (args.get("q") or "").strip()
+            except Exception:
+                # Si reqparse échoue aussi, retourner 400
+                return {"error": "establishment_id is required", "message": str(fallback_err)}, 400
 
         query = db.session.query(MedicalService).filter(
             cast("Any", MedicalService.establishment_id) == estab_id

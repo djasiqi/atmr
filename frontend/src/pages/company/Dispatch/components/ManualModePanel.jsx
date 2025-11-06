@@ -1,6 +1,5 @@
 import React, { useMemo, useCallback, useState } from 'react';
 import DispatchTable from '../../Dashboard/components/DispatchTable';
-import AssignmentModal from '../../Dashboard/AssignmentModal';
 import DispatchTableSkeleton from '../../../../components/SkeletonLoaders/DispatchTableSkeleton';
 import EmptyState from '../../../../components/EmptyState';
 import ModeBanner from './ModeBanner';
@@ -20,11 +19,13 @@ const ManualModePanel = ({
   setSortBy,
   sortOrder,
   setSortOrder,
-  selectedReservationForAssignment,
-  setSelectedReservationForAssignment,
-  onAssignDriver,
-  onDeleteReservation,
+  selectedReservationForAssignment: _selectedReservationForAssignment, // Conservé pour compatibilité mais non utilisé
+  setSelectedReservationForAssignment, // Fonction pour ouvrir la modale d'assignation
+  onSchedule, // 🆕 Handler pour planifier l'heure
+  onDispatchNow, // 🆕 Handler pour dispatch urgent
+  onDelete, // 🆕 Handler pour supprimer (ouvre la modale)
   currentDate, // 🆕 Date actuelle pour charger suggestions
+  drivers: _drivers = [], // 🆕 Liste des chauffeurs pour l'assignation (utilisée dans UnifiedDispatchRefactored)
   styles = {},
 }) => {
   // 🆕 État pour collapsible suggestions
@@ -123,9 +124,22 @@ const ManualModePanel = ({
       ) : (
         <DispatchTable
           dispatches={sortedDispatches}
-          onAssign={(reservationId) => setSelectedReservationForAssignment(reservationId)}
-          onDelete={onDeleteReservation}
+          onAssign={
+            setSelectedReservationForAssignment
+              ? (reservationId) => {
+                  // Si c'est une fonction, l'appeler directement
+                  if (typeof setSelectedReservationForAssignment === 'function') {
+                    setSelectedReservationForAssignment(reservationId);
+                  }
+                }
+              : undefined
+          }
+          onSchedule={onSchedule}
+          onDispatchNow={onDispatchNow}
+          onDelete={onDelete}
           formatTime={formatTime}
+          hideEdit={true}
+          hideDelete={true}
         />
       )}
 
@@ -229,14 +243,7 @@ const ManualModePanel = ({
         styles={styles}
       />
 
-      {/* Modal d'assignation */}
-      {selectedReservationForAssignment && (
-        <AssignmentModal
-          reservationId={selectedReservationForAssignment}
-          onClose={() => setSelectedReservationForAssignment(null)}
-          onAssign={onAssignDriver}
-        />
-      )}
+      {/* Modal d'assignation - Gérée par ReservationModals dans UnifiedDispatchRefactored */}
     </>
   );
 };

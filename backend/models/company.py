@@ -164,9 +164,9 @@ class Company(db.Model):
             "user_id": self.user_id,
             "service_area": self.service_area,
             "max_daily_bookings": self.max_daily_bookings,
-            "created_at": created_dt.isoformat() if created_dt else None,
+            "created_at": created_dt.isoformat() if isinstance(created_dt, datetime) else None,
             "dispatch_enabled": _as_bool(self.dispatch_enabled),
-            "accepted_at": accepted_dt.isoformat() if accepted_dt else None,
+            "accepted_at": accepted_dt.isoformat() if isinstance(accepted_dt, datetime) else None,
             "vehicles": [v.serialize for v in self.vehicles],
         }
 

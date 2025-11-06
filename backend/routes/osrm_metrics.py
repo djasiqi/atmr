@@ -30,19 +30,19 @@ class OsrmStatus(Resource):
         """
         cb = _osrm_circuit_breaker
         state = "closed"
-        if cb.is_open():
+        if cb.state == "OPEN":
             state = "open"
-        elif getattr(cb, "_failure_count", 0) > 0:
+        elif cb.state == "HALF_OPEN" or cb.failure_count > 0:
             state = "half_open"
 
         return jsonify({
             "status": "ok",
             "circuit_breaker": {
                 "state": state,
-                "failure_count": getattr(cb, "_failure_count", 0),
-                "last_failure_time": getattr(cb, "_last_failure_time", 0),
+                "failure_count": cb.failure_count,
+                "last_failure_time": cb.last_failure_time,
                 "threshold": cb.failure_threshold,
-                "timeout_seconds": getattr(cb, "timeout", 60),
+                "timeout_seconds": cb.timeout_duration,
             },
             "message": (
                 "Circuit is OPEN - OSRM requests blocked temporarily"
@@ -62,8 +62,10 @@ class OsrmReset(Resource):
         vérification manuelle que l'OSRM backend est opérationnel.
         """
         cb = _osrm_circuit_breaker
-        cb._failure_count = 0
-        cb._last_failure_time = 0
+        with cb._lock:
+            cb.failure_count = 0
+            cb.last_failure_time = None
+            cb.state = "CLOSED"
         logger.warning(
             "[OSRM] Circuit-breaker réinitialisé manuellement via API")
         return jsonify({

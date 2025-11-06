@@ -515,6 +515,48 @@ def solve(problem: Dict[str, Any],
     # Bornes conservatrices pour maîtriser l'espace de recherche/mémoire:
     search_params.solution_limit = 1
     search_params.log_search = False
+    
+    # ✅ B5: Warm-start: Injecter les assignments heuristiques comme hint initial
+    heuristic_assignments = problem.get("heuristic_assignments")
+    if heuristic_assignments and getattr(settings.solver, "enable_warm_start", True):
+        try:
+            from services.unified_dispatch.warm_start import apply_warm_start
+            # Enrichir le problème avec les informations nécessaires
+            enriched_problem = {
+                **problem,
+                "pickup_nodes": pickup_nodes,
+                "dropoff_nodes": dropoff_nodes,
+                "booking_id_to_p_node": booking_id_to_p_node,
+            }
+            warm_start_applied = apply_warm_start(
+                routing, heuristic_assignments, enriched_problem, manager
+            )
+            if warm_start_applied:
+                logger.info("[Solver] Warm-start applied from heuristic assignments")
+        except Exception as e:
+            logger.warning("[Solver] Failed to apply warm-start: %s", e)
+    
+    # ✅ B5: Mesurer le gain warm-start (optionnel, pour taille 100-200)
+    try:
+        # Taille cible pour mesure gain
+        from services.unified_dispatch.warm_start_gain_tracker import (
+            TARGET_SIZE_MAX,
+            TARGET_SIZE_MIN,
+            measure_warm_start_gain,
+        )
+        
+        size = len(bookings)
+        if TARGET_SIZE_MIN <= size <= TARGET_SIZE_MAX and heuristic_assignments:
+            gain_result = measure_warm_start_gain(problem, heuristic_assignments, solve)
+            
+            if not gain_result.get("skipped"):
+                gain_pct = gain_result.get("gain_pct", 0)
+                logger.info(
+                    "[B5] Warm-start gain: %.1f%% (size=%d, without=%.0fms, with=%.0fms)",
+                    gain_pct, size, gain_result.get("without_ms", 0), gain_result.get("with_ms", 0)
+                )
+    except Exception as e:
+        logger.debug("[B5] Warm-start gain tracking not available: %s", e)
 
     # Résolution
     with contextlib.suppress(Exception):

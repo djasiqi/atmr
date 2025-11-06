@@ -13,7 +13,7 @@ from flask_jwt_extended import decode_token
 from flask_socketio import SocketIO, emit, join_room
 
 from ext import db, redis_client
-from models import Company, Driver, Message, User, UserRole
+from models import Company, Driver, Message, SenderRole, User, UserRole
 
 # Constantes pour éviter les valeurs magiques
 RECEIVER_ID_ZERO = 0
@@ -149,22 +149,29 @@ def init_chat_socket(socketio: SocketIO):
     @socketio.on("team_chat_message")
     def handle_team_chat(data):  # noqa: PLR0911
         local_id = data.get("_localId")
+        logger.info("📨 [CHAT] team_chat_message reçu: data=%s", data)
         try:
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX au lieu de session Flask
             sid = _get_sid()
             sid_data = _SID_INDEX.get(sid, {})
             user_public_id = sid_data.get("user_public_id")
+            logger.info("📨 [CHAT] SID=%s, user_public_id=%s, sid_data=%s", sid, user_public_id, sid_data)
 
             if not user_public_id:
+                logger.error("❌ [CHAT] Session JWT introuvable pour SID=%s", sid)
                 emit("error", {"error": "Session JWT introuvable. Reconnectez-vous."})
                 return
 
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user:
+                logger.error("❌ [CHAT] Utilisateur non trouvé pour public_id=%s", user_public_id)
                 emit("error", {"error": "Utilisateur non reconnu."})
                 return
 
-            content = (data.get("content") or "").strip()
+            content_raw = data.get("content")
+            logger.info("📨 [CHAT] Content brut reçu: %s (type=%s)", content_raw, type(content_raw).__name__)
+            content = (content_raw or "").strip()
+            logger.info("📨 [CHAT] Content après strip: '%s' (len=%d, bool=%s)", content, len(content), bool(content))
 
             # ✅ Validation longueur message
             if len(content) > MAX_MESSAGE_LENGTH:
@@ -174,6 +181,7 @@ def init_chat_socket(socketio: SocketIO):
             receiver_id = data.get("receiver_id")
             timestamp = datetime.now(UTC)
             if not content:
+                logger.error("❌ [CHAT] Message vide détecté après validation")
                 emit("error", {"error": "Message vide non autorisé."})
                 return
 
@@ -193,8 +201,8 @@ def init_chat_socket(socketio: SocketIO):
                     emit("error", {"error": "Chauffeur introuvable."})
                     return
                 company_id = driver.company_id
-                # ✅ FIX: Utiliser "DRIVER" en majuscules pour matcher l'Enum SenderRole
-                sender_role = "DRIVER"
+                # ✅ FIX: Utiliser l'Enum SenderRole au lieu d'une chaîne
+                sender_role = SenderRole.DRIVER
                 sender_id = user.id
                 company_obj = None
                 logger.info("📨 Chat driver: user_id=%s, driver_id=%s, company_id=%s", user.id, driver.id, company_id)
@@ -204,8 +212,8 @@ def init_chat_socket(socketio: SocketIO):
                     emit("error", {"error": "Entreprise introuvable."})
                     return
                 company_id = company_obj.id
-                # ✅ FIX: Utiliser "COMPANY" en majuscules pour matcher l'Enum SenderRole
-                sender_role = "COMPANY"
+                # ✅ FIX: Utiliser l'Enum SenderRole au lieu d'une chaîne
+                sender_role = SenderRole.COMPANY
                 # ✅ FIX: Ne jamais mettre sender_id=None pour l'entreprise
                 sender_id = user.id
                 logger.info("📨 Chat company: user_id=%s, company_id=%s", user.id, company_id)
@@ -213,31 +221,52 @@ def init_chat_socket(socketio: SocketIO):
                 emit("error", {"error": "Rôle non autorisé pour le chat."})
                 return
 
+            logger.info("📨 [CHAT] Création du message: sender_id=%s, receiver_id=%s, company_id=%s, sender_role=%s, content='%s' (len=%d)", 
+                       sender_id, receiver_id, company_id, sender_role, content[:50], len(content))
             MessageCtor = cast("Any", Message)
-            message = MessageCtor(
-                sender_id=sender_id,
-                receiver_id=receiver_id,
-                company_id=company_id,
-                sender_role=sender_role,
-                content="",
-                timestamp=timestamp,
-            )
-            db.session.add(message)
-            db.session.commit()
+            try:
+                # ✅ Vérifier que le contenu n'est pas vide avant de créer le message
+                content_final = content.strip() if content else ""
+                logger.info("📨 [CHAT] Contenu final avant création: '%s' (len=%d, type=%s)", content_final, len(content_final), type(content_final).__name__)
+                if not content_final:
+                    logger.error("❌ [CHAT] Contenu vide détecté juste avant création: content='%s'", content)
+                    emit("error", {"error": "Le contenu du message ne peut pas être vide."})
+                    return
+                
+                logger.info("📨 [CHAT] Création de l'objet Message avec content='%s'", content_final[:100])
+                message = MessageCtor(
+                    sender_id=sender_id,
+                    receiver_id=receiver_id,
+                    company_id=company_id,
+                    sender_role=sender_role,
+                    content=content_final,  # ✅ FIX: Utiliser le contenu réel et s'assurer qu'il est stripé
+                    timestamp=timestamp,
+                )
+                logger.info("📨 [CHAT] Message créé avec succès, id=%s, content vérifié='%s'", getattr(message, "id", "N/A"), getattr(message, "content", "N/A")[:50])
+                logger.info("📨 [CHAT] Message créé, ajout à la session...")
+                db.session.add(message)
+                logger.info("📨 [CHAT] Commit en cours...")
+                db.session.commit()
+                logger.info("✅ [CHAT] Message sauvegardé en DB: id=%s, content='%s', sender_role=%s", message.id, content[:50], sender_role)
+            except Exception as commit_err:
+                db.session.rollback()
+                logger.exception("❌ [CHAT] Erreur lors du commit du message: %s", commit_err)
+                emit("error", {"error": f"Erreur lors de la sauvegarde du message: {commit_err!s}"})
+                return
 
             payload = {
                 "id": message.id,
                 "sender_id": sender_id,
                 "receiver_id": receiver_id,
                 "receiver_name": message.receiver.first_name if message.receiver else None,
-                "sender_role": sender_role,
+                "sender_role": sender_role.value if hasattr(sender_role, "value") else str(sender_role),  # ✅ S'assurer que c'est une chaîne
                 "sender_name": user.first_name,  # ✅ Utiliser user.first_name directement
                 "content": content,
                 "timestamp": timestamp.isoformat(),
                 "type": "chat",
                 "company_id": company_id,
-                # ✅ FIX: company_name disponible et test en MAJ
-                "company_name": (company_obj.name if (sender_role == "COMPANY" and company_obj) else None),
+                # ✅ FIX: company_name disponible
+                "company_name": (company_obj.name if (sender_role == SenderRole.COMPANY and company_obj) else None),
                 "_localId": local_id,
             }
 

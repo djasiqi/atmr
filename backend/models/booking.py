@@ -290,10 +290,10 @@ class Booking(db.Model):
 
         date_local, time_local = split_date_time_local(
             scheduled_dt) if scheduled_dt else (None, None)
-        created_loc = to_geneva_local(created_dt) if created_dt else None
-        updated_loc = to_geneva_local(updated_dt) if updated_dt else None
+        created_loc = to_geneva_local(created_dt) if isinstance(created_dt, datetime) else None
+        updated_loc = to_geneva_local(updated_dt) if isinstance(updated_dt, datetime) else None
 
-        amt = _as_float(self.amount, 0.0)
+        amt = _as_float(self.amount)
         status_val = cast("BookingStatus", self.status)
 
         cli = self.client
@@ -484,8 +484,8 @@ class Booking(db.Model):
         if not self.is_assignable():
             msg = "La réservation ne peut pas être attribuée actuellement."
             raise ValueError(msg)
-        current_driver_id = _as_int(getattr(self, "driver_id", None), 0)
-        target_driver_id = _as_int(driver_id, 0)
+        current_driver_id = _as_int(getattr(self, "driver_id", None))
+        target_driver_id = _as_int(driver_id)
         if current_driver_id == target_driver_id:
             return
         self.driver_id = driver_id
@@ -511,7 +511,7 @@ class Booking(db.Model):
         if btype == "patient":
             target.billed_to_company_id = None
             return
-        company_id = _as_int(getattr(target, "billed_to_company_id", None), 0)
+        company_id = _as_int(getattr(target, "billed_to_company_id", None))
         if company_id <= COMPANY_ID_ZERO:
             msg = "billed_to_company_id est obligatoire si billed_to_type n'est pas 'patient'"
             raise ValueError(msg)

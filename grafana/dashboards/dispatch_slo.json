@@ -1,0 +1,167 @@
+{
+  "dashboard": {
+    "title": "Dispatch SLO Dashboard (A4)",
+    "tags": ["dispatch", "slo", "a4"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "SLO Breaches Total (Last 15 min)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "dispatch_slo_breaches_total",
+            "legendFormat": "Breaches",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Count"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "SLO Breach Severity",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "dispatch_slo_breach_severity",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 1, "color": "yellow"},
+                {"value": 2, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Should Page Oncall",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 8, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "dispatch_slo_should_alert",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 1, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "SLO Breaches by Type",
+        "type": "piechart",
+        "gridPos": {"x": 8, "y": 8, "w": 16, "h": 8},
+        "targets": [
+          {
+            "expr": "dispatch_slo_breaches_by_type",
+            "legendFormat": "{{type}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Dispatch Total Time",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "dispatch_total_time",
+            "legendFormat": "{{company_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Time (seconds)"}
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Assignment Rate",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "dispatch_assignment_rate",
+            "legendFormat": "{{company_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percentunit", "label": "Rate", "min": 0, "max": 1}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Quality Score",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "dispatch_quality_score",
+            "legendFormat": "{{company_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "none", "label": "Score", "min": 0, "max": 100}
+        ]
+      },
+      {
+        "id": 8,
+        "title": "SQL Queries Count",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sql_queries_count",
+            "legendFormat": "{{company_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Count"}
+        ]
+      }
+    ],
+    "annotations": {
+      "list": [
+        {
+          "name": "SLO Breach Alert",
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "dispatch_slo_should_alert == 1",
+          "iconColor": "red",
+          "titleFormat": "SLO Breach",
+          "tagsFormat": ""
+        }
+      ]
+    },
+    "version": 1
+  }
+}
+

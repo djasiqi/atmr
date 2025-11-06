@@ -20,6 +20,9 @@ import NotFound from './pages/Error/NotFound';
 // Réduction bundle : 3.2 MB → 2.1 MB (-34%)
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard/AdminDashboard'));
 const AdminUsers = lazy(() => import('./pages/admin/Users/AdminUsers'));
+const AdminReservations = lazy(() => import('./pages/admin/Reservations/AdminReservations'));
+const AdminInvoices = lazy(() => import('./pages/admin/Invoices/AdminInvoices'));
+const AdminSettings = lazy(() => import('./pages/admin/Settings/AdminSettings'));
 const ShadowModeDashboard = lazy(() => import('./pages/admin/ShadowMode/ShadowModeDashboard'));
 const ClientDashboard = lazy(() => import('./pages/client/Dashboard/ClientDashboard'));
 const AccountUser = lazy(() => import('./pages/client/Account/AccountUser'));
@@ -224,6 +227,14 @@ const App = () => {
               }
             />
             <Route
+              path="/dashboard/admin/:public_id/reservations"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminReservations />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/dashboard/admin/:public_id/users"
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
@@ -236,6 +247,22 @@ const App = () => {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <ShadowModeDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/admin/:public_id/invoices"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminInvoices />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/admin/:public_id/settings"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminSettings />
                 </ProtectedRoute>
               }
             />

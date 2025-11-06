@@ -1,0 +1,301 @@
+/* ReservationModals.module.css - Styles centralisés pour toutes les modales de réservation */
+
+.modalWrapper {
+  width: 100%;
+  max-width: 100%;
+  padding: var(--spacing-xl);
+  box-sizing: border-box;
+}
+
+/* Réduire la largeur spécifiquement pour la modale "Planifier l'heure" */
+.modalWrapper:has(.formGroup) {
+  padding: var(--spacing-lg);
+}
+
+.modalWrapper > h3 {
+  margin: 0 0 var(--spacing-lg) 0;
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  padding: 0;
+  border: none;
+}
+
+.reservationInfo {
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  border: 1px solid var(--border-primary);
+}
+
+/* Amélioration de l'affichage des informations dans le bloc réservation */
+.reservationInfo .infoRow {
+  align-items: flex-start;
+}
+
+.reservationInfo .infoRow .label {
+  min-width: 120px;
+  padding-top: 2px;
+}
+
+.reservationInfo .infoRow span:not(.label) {
+  line-height: 1.6;
+}
+
+.infoRow {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-sm);
+  font-size: var(--font-sm);
+  line-height: 1.5;
+}
+
+.infoRow:last-child {
+  margin-bottom: 0;
+}
+
+.infoRow .label {
+  min-width: 110px;
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-medium);
+  flex-shrink: 0;
+}
+
+.infoRow strong,
+.infoRow span:not(.label) {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-normal);
+  flex: 1;
+  word-break: break-word;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-lg);
+}
+
+.formGroup:last-of-type {
+  margin-bottom: 0;
+}
+
+.label {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xxs);
+  margin-bottom: var(--spacing-xs);
+}
+
+.label span {
+  color: var(--error-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.input {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  font-size: var(--font-base);
+  font-family: var(--font-family-base);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+  height: 40px;
+}
+
+.input:hover {
+  border-color: var(--border-secondary);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.1);
+}
+
+.input:disabled {
+  background: var(--bg-disabled);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Style pour les inputs date et time avec icônes natives */
+.input[type="date"],
+.input[type="time"] {
+  position: relative;
+}
+
+.input[type="date"]::-webkit-calendar-picker-indicator,
+.input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+.input[type="date"]::-webkit-calendar-picker-indicator:hover,
+.input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+.hint {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  margin-top: var(--spacing-xxs);
+  font-style: normal;
+}
+
+.buttonGroup {
+  display: flex;
+  gap: var(--spacing-sm);
+  justify-content: flex-end;
+  margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--border-primary);
+  flex-wrap: nowrap; /* Empêcher le retour à la ligne */
+  align-items: center; /* Alignement vertical des boutons */
+}
+
+/* Pour la modale "Planifier l'heure", les boutons sont alignés horizontalement à droite sur la même ligne */
+.modalWrapper:has(.formGroup) .buttonGroup {
+  justify-content: flex-end; /* Alignés à droite */
+  align-items: center; /* Même niveau vertical */
+  gap: var(--spacing-md); /* Espacement uniforme entre les boutons */
+  flex-wrap: nowrap; /* Forcer à rester sur une seule ligne */
+}
+
+/* Pour la modale "Assigner", le bouton Annuler est centré */
+.modalWrapper:has(.driverList) .buttonGroup {
+  justify-content: center;
+  align-items: center;
+}
+
+/* Responsive : sur mobile, les boutons passent en colonne */
+@media (max-width: 768px) {
+  .buttonGroup {
+    flex-direction: column;
+  }
+
+  .buttonGroup > * {
+    width: 100%;
+  }
+}
+
+/* Styles pour la modal d'assignation de chauffeur */
+.driverList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: var(--spacing-xs);
+}
+
+/* Scrollbar personnalisée */
+.driverList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.driverList::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.driverList::-webkit-scrollbar-thumb {
+  background: var(--border-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.driverList::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+.driverItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  transition: all 0.2s ease;
+  gap: var(--spacing-md);
+}
+
+.driverItem:hover {
+  border-color: var(--border-secondary);
+  box-shadow: var(--shadow-xs);
+}
+
+.driverInfo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xxs);
+  flex: 1;
+  min-width: 0;
+}
+
+.driverName {
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  font-size: var(--font-base);
+  line-height: 1.4;
+}
+
+.driverPhone {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
+.noDrivers {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--text-tertiary);
+  font-style: normal;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .modalWrapper {
+    padding: var(--spacing-lg);
+    max-width: 100%;
+  }
+
+  .modalWrapper:has(.formGroup) {
+    max-width: 100%;
+    padding: var(--spacing-md);
+  }
+
+  .modalWrapper > h3 {
+    font-size: var(--font-base);
+  }
+
+  .buttonGroup {
+    flex-direction: column;
+  }
+
+  .buttonGroup > * {
+    width: 100%;
+  }
+
+  .infoRow {
+    flex-direction: column;
+    gap: var(--spacing-xxs);
+  }
+
+  .infoRow .label {
+    min-width: auto;
+  }
+}
+

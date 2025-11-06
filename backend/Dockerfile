@@ -13,12 +13,25 @@ WORKDIR /app
 RUN apt-get update && apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
     gcc g++ libpq-dev \
+    pkg-config libcairo2-dev \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt requirements-rl.txt ./
+COPY requirements.txt* requirements-rl.txt* ./
 RUN python -m pip install --upgrade pip && \
-    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt && \
-    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-rl.txt
+    if [ -f requirements.txt ]; then pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt; fi && \
+    if [ -f requirements-rl.txt ]; then pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-rl.txt; fi && \
+    pip wheel --no-cache-dir --wheel-dir /wheels \
+    prometheus-client \
+    opentelemetry-api \
+    opentelemetry-sdk \
+    opentelemetry-instrumentation-flask \
+    opentelemetry-instrumentation-sqlalchemy \
+    opentelemetry-instrumentation-celery \
+    opentelemetry-instrumentation-requests \
+    opentelemetry-exporter-otlp-proto-grpc \
+    pytest-cov \
+    coverage
 
 
 ############ Stage 2: runtime (léger, non-root, sécurisé) ######################
@@ -37,28 +50,41 @@ ARG WITH_POSTGRES=true
 # (openssl/libssl, ca-certificates, expat, sqlite, gnutls, tar, gzip)
 RUN apt-get update && apt-get upgrade -y && \
     if [ "$WITH_POSTGRES" = "true" ]; then \
-    apt-get install -y --no-install-recommends libpq5 ca-certificates ; \
-    else \
-    apt-get install -y --no-install-recommends ca-certificates ; \
+    apt-get install -y --no-install-recommends libpq5 ; \
     fi && \
     apt-get install -y --no-install-recommends \
-    --only-upgrade \
-    openssl libssl3 ca-certificates \
+    libcairo2 \
+    libgomp1 \
+    ca-certificates \
+    openssl libssl3 \
     libexpat1 libsqlite3-0 libgnutls30 tar gzip && \
+    apt-get upgrade -y --only-upgrade openssl libssl3 ca-certificates libexpat1 libsqlite3-0 libgnutls30 tar gzip && \
     rm -rf /var/lib/apt/lists/*
 
 # Installer les wheels construites au stage builder
 COPY --from=builder /wheels /wheels
-COPY --from=builder /app/requirements.txt /app/requirements-rl.txt ./
+COPY --from=builder /app/requirements.txt* /app/requirements-rl.txt* ./
 RUN python -m pip install --upgrade pip && \
-    pip install --no-index --find-links=/wheels -r requirements.txt && \
-    pip install --no-index --find-links=/wheels -r requirements-rl.txt && \
+    if [ -f requirements.txt ]; then pip install --no-index --find-links=/wheels -r requirements.txt; fi && \
+    if [ -f requirements-rl.txt ]; then pip install --no-index --find-links=/wheels -r requirements-rl.txt; fi && \
+    pip install --no-index --find-links=/wheels \
+    prometheus-client \
+    opentelemetry-api \
+    opentelemetry-sdk \
+    opentelemetry-instrumentation-flask \
+    opentelemetry-instrumentation-sqlalchemy \
+    opentelemetry-instrumentation-celery \
+    opentelemetry-instrumentation-requests \
+    opentelemetry-exporter-otlp-proto-grpc \
+    pytest-cov \
+    coverage && \
     rm -rf /wheels
 
 # Créer un utilisateur non-root
 RUN useradd -u 10001 -m appuser
 
 # Copier le code APRÈS installation des deps (meilleur cache)
+
 COPY . /app
 RUN chown -R appuser:appuser /app
 

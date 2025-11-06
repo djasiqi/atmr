@@ -104,6 +104,11 @@
   grid-template-columns: 40% 1fr;
   gap: var(--spacing-lg);
   margin-bottom: var(--spacing-xl);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  /* ⚡ Empêche le grid de dépasser */
+  min-width: 0;
 }
 
 .leftColumn,
@@ -111,6 +116,15 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+  min-width: 0; /* ⚡ Permet au flex de rétrécir si nécessaire */
+  overflow-x: hidden; /* ⚡ Empêche le débordement horizontal */
+}
+
+/* ⚡ Contrainte spécifique pour la colonne droite */
+.rightColumn {
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Responsive : 1 colonne sur petits écrans */
@@ -324,6 +338,9 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-primary);
   margin-bottom: var(--spacing-md);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .tab {
@@ -340,6 +357,8 @@
   align-items: center;
   color: var(--text-tertiary);
   font-size: var(--font-sm);
+  min-width: 0; /* ⚡ Permet au flex de rétrécir si nécessaire */
+  overflow: hidden; /* ⚡ Empêche le débordement du texte */
 }
 
 .tab:hover {
@@ -363,6 +382,8 @@
   font-weight: var(--font-weight-semibold);
   min-width: 20px;
   text-align: center;
+  flex-shrink: 0; /* ⚡ Empêche le badge de rétrécir */
+  margin-left: var(--spacing-xs); /* ⚡ Ajoute un espace entre le texte et le badge */
 }
 
 .tabActive .tabBadge {

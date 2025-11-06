@@ -89,7 +89,7 @@ class Payment(db.Model):
 
     @property
     def serialize(self):
-        amt = _as_float(self.amount, 0.0)
+        amt = _as_float(self.amount)
         bk = self.booking
         return {
             "id": self.id,

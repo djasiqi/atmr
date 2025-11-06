@@ -20,13 +20,28 @@ payments_ns = Namespace(
 
 # Modèle Swagger pour la mise à jour du statut d'un paiement (admin uniquement)
 payment_status_model = payments_ns.model("PaymentStatus", {
-    "status": fields.String(required=True, description="Nouveau statut (pending, completed, failed)")
+    "status": fields.String(
+        required=True,
+        description="Nouveau statut",
+        enum=["pending", "completed", "failed"]
+    )
 })
 
 # Modèle Swagger pour la création d'un paiement
 payment_create_model = payments_ns.model("PaymentCreate", {
-    "amount": fields.Float(required=True, description="Montant du paiement"),
-    "method": fields.String(required=True, description="Méthode de paiement (ex: credit_card, paypal, etc.)")
+    "amount": fields.Float(
+        required=True,
+        description="Montant du paiement",
+        minimum=0.01
+    ),
+    "method": fields.String(
+        required=True,
+        description="Méthode de paiement (ex: credit_card, paypal, etc.)",
+        min_length=1,
+        max_length=50
+    ),
+    "booking_id": fields.Integer(description="ID de la réservation associée (optionnel)"),
+    "reference": fields.String(description="Référence du paiement (optionnel, max 100 caractères)", max_length=100)
 })
 
 # ====================================================
@@ -39,9 +54,13 @@ class ClientPayments(Resource):
     @jwt_required()
     def get(self):
         try:
-            current_user_id = get_jwt_identity()
-            client = Client.query.filter_by(
-    user_id=current_user_id).one_or_none()
+            jwt_public_id = get_jwt_identity()
+            # Récupérer l'utilisateur via son public_id (UUID)
+            current_user = User.query.filter_by(public_id=jwt_public_id).one_or_none()
+            if not current_user:
+                return {"error": "User not found"}, 401
+            
+            client = Client.query.filter_by(user_id=current_user.id).one_or_none()
             if not client:
                 return {"error": "Unauthorized: Client not found"}, 403
 
@@ -67,13 +86,13 @@ class PaymentResource(Resource):
     @jwt_required()
     def get(self, payment_id: int):
         try:
-            current_user_id = get_jwt_identity()
+            jwt_public_id = get_jwt_identity()
             payment = Payment.query.get(payment_id)
             if not payment:
                 return {"error": "Payment not found"}, 404
 
-            # Charger l'utilisateur par ID direct
-            current_user = User.query.get(current_user_id)
+            # Charger l'utilisateur via son public_id (UUID)
+            current_user = User.query.filter_by(public_id=jwt_public_id).one_or_none()
             if not current_user:
                 return {"error": "User not found"}, 401
 
@@ -118,19 +137,26 @@ class PaymentResource(Resource):
                 return {"error": "Payment not found"}, 404
 
             data = request.get_json(silent=True) or {}
-            new_status_raw = str(data.get("status", "")).strip().lower()
+            
+            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+            from marshmallow import ValidationError
 
+            from schemas.payment_schemas import PaymentStatusUpdateSchema
+            from schemas.validation_utils import handle_validation_error, validate_request
+            
+            try:
+                validated_data = validate_request(PaymentStatusUpdateSchema(), data)
+            except ValidationError as e:
+                return handle_validation_error(e)
+            
             status_map = {
                 "pending": PaymentStatus.PENDING,
                 "completed": PaymentStatus.COMPLETED,
                 "failed": PaymentStatus.FAILED,
             }
-            if new_status_raw not in status_map:
-                return {"error": "Invalid status"}, 400
-
-            payment.status = status_map[new_status_raw]
+            payment.status = status_map[validated_data["status"]]
             db.session.commit()
-            return {"message": f"Payment status updated to {new_status_raw}"}, 200
+            return {"message": f"Payment status updated to {validated_data['status']}"}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             app_logger.error("❌ ERREUR update_payment_status: %s - %s", type(e).__name__, str(e))
@@ -146,8 +172,13 @@ class CreatePayment(Resource):
     @payments_ns.expect(payment_create_model)
     def post(self, booking_id: int):
         try:
-            current_user_id = get_jwt_identity()
-            client = Client.query.filter_by(user_id=current_user_id).one_or_none()
+            jwt_public_id = get_jwt_identity()
+            # Récupérer l'utilisateur via son public_id (UUID)
+            current_user = User.query.filter_by(public_id=jwt_public_id).one_or_none()
+            if not current_user:
+                return {"error": "User not found"}, 401
+            
+            client = Client.query.filter_by(user_id=current_user.id).one_or_none()
             if not client:
                 return {"error": "Unauthorized: Client not found"}, 403
 
@@ -155,17 +186,22 @@ class CreatePayment(Resource):
             if not booking:
                 return {"error": "Booking not found"}, 404
 
+            # ✅ 2.4: Validation Marshmallow avec PaymentCreateSchema
+            from marshmallow import ValidationError
+
+            from schemas.payment_schemas import PaymentCreateSchema
+            from schemas.validation_utils import handle_validation_error, validate_request
+
             data = request.get_json(silent=True) or {}
             try:
-                amount = float(data["amount"])
-                method = str(data["method"])
-            except (KeyError, ValueError, TypeError):
-                return {"error": "Invalid payload (amount, method required)."}, 400
+                validated_data = validate_request(PaymentCreateSchema(), data)
+            except ValidationError as e:
+                return handle_validation_error(e)
 
             payload: dict[str, Any] = {
-                "amount": amount,
+                "amount": validated_data["amount"],
                 "date": datetime.utcnow(),  # stocke en UTC
-                "method": method,
+                "method": validated_data["method"],
                 "status": PaymentStatus.PENDING,
                 "client_id": client.id,
                 "booking_id": booking_id,

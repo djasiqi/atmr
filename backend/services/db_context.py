@@ -31,6 +31,8 @@ def db_transaction(
 ) -> Generator[Any, None, None]:
     """Context manager pour gérer proprement les transactions SQLAlchemy.
 
+    ⚠️ D3: Détecte les tentatives d'écriture en mode read-only (via chaos injector).
+
     Args:
         auto_commit: Commit automatique si aucune exception (défaut: True)
         auto_rollback: Rollback automatique en cas d'exception (défaut: True)
@@ -59,12 +61,35 @@ def db_transaction(
 
     Raises:
         SQLAlchemyError: Si reraise=True et une erreur survient
+        RuntimeError: Si DB est en read-only et tentative d'écriture
 
     """
+    # ✅ D3: Vérifier DB read-only avant d'autoriser les écritures
+    try:
+        from chaos.injectors import get_chaos_injector
+        injector = get_chaos_injector()
+        if injector.enabled and injector.db_read_only and auto_commit:
+            # Si on va committer (écriture), bloquer
+            logger.warning("[CHAOS] DB read-only: transaction write blocked")
+            raise RuntimeError("Database is in read-only mode. Writes are temporarily disabled.")
+    except ImportError:
+        # Si module chaos non disponible, continuer normalement
+        pass
+    
     try:
         yield db.session
 
         if auto_commit:
+            # ✅ D3: Re-vérifier avant commit (peut avoir changé entre-temps)
+            try:
+                from chaos.injectors import get_chaos_injector
+                injector = get_chaos_injector()
+                if injector.enabled and injector.db_read_only:
+                    logger.warning("[CHAOS] DB read-only: commit blocked")
+                    raise RuntimeError("Database is in read-only mode. Commit blocked.")
+            except ImportError:
+                pass
+            
             db.session.commit()
             logger.debug("Transaction committed successfully")
 

@@ -15,11 +15,36 @@ services:
       timeout: 3s
       retries: 10
     restart: unless-stopped
+    # ✅ 3.6: Limits CPU/mémoire
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  # ✅ 3.5: Reverse proxy nginx (optionnel, décommenter pour activer)
+  # nginx:
+  #   image: nginx:alpine
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+  #   depends_on:
+  #     - api
+  #   restart: unless-stopped
+  #   networks:
+  #     - default
 
   api:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    # ✅ 3.5: Si nginx est activé, l'API n'a pas besoin d'exposer le port 5000 publiquement
+    # expose:
+    #   - "5000"
     healthcheck:
       test:
         [
@@ -34,7 +59,7 @@ services:
       gunicorn wsgi:app
       --bind 0.0.0.0:5000
       --worker-class eventlet
-      --workers 1
+      --workers ${GUNICORN_WORKERS:-2}
       --timeout 120
       --access-logfile -
       --error-logfile -
@@ -46,6 +71,7 @@ services:
       - backend/.env
     environment:
       - PYTHONPATH=/app
+      - GUNICORN_WORKERS=2
       - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
       - SOCKETIO_ASYNC_MODE=${SOCKETIO_ASYNC_MODE:-eventlet}
       - SIO_DISABLE_UPGRADES=false
@@ -62,6 +88,12 @@ services:
       - TZ=Europe/Zurich
       - PDF_BASE_URL=${PDF_BASE_URL:-http://localhost:5000}
       - UPLOADS_PUBLIC_BASE=${UPLOADS_PUBLIC_BASE:-/uploads}
+      - API_DOCS=${API_DOCS:-off}
+      - API_LEGACY_ENABLED=${API_LEGACY_ENABLED:-false}
+      # ✅ D3: Variables de chaos (NE JAMAIS activer en production)
+      - CHAOS_ENABLED=${CHAOS_ENABLED:-false}
+      - CHAOS_OSRM_DOWN=${CHAOS_OSRM_DOWN:-false}
+      - CHAOS_DB_READ_ONLY=${CHAOS_DB_READ_ONLY:-false}
     volumes:
       - ./backend:/app
     depends_on:
@@ -72,6 +104,15 @@ services:
       osrm:
         condition: service_started
     restart: unless-stopped
+    # ✅ 3.6: Limits CPU/mémoire pour API
+    deploy:
+      resources:
+        limits:
+          cpus: "3.0"
+          memory: 6G
+        reservations:
+          cpus: "1.5"
+          memory: 3G
 
   celery-worker:
     build:
@@ -125,6 +166,15 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+    # ✅ 3.6: Limits CPU/mémoire pour Celery Worker
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
 
   celery-beat:
     build:
@@ -176,6 +226,15 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+    # ✅ 3.6: Limits CPU/mémoire pour Celery Beat
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
 
   flower:
     build:
@@ -190,15 +249,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-    command:
-      [
-        "celery",
-        "-A",
-        "celery_app:celery",
-        "flower",
-        "--broker=redis://redis:6379/0",
-        "--port=5555",
-      ]
+    command: ["celery", "-A", "celery_app:celery", "flower", "--port=5555"]
 
     ports:
       - "5555:5555"
@@ -218,6 +269,15 @@ services:
       celery-worker:
         condition: service_started
     restart: unless-stopped
+    # ✅ 3.6: Limits CPU/mémoire pour Flower
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
 
   redis:
     image: redis:7-alpine
@@ -232,6 +292,15 @@ services:
       retries: 5
     command: redis-server --appendonly yes
     restart: unless-stopped
+    # ✅ 3.6: Limits CPU/mémoire pour Redis
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
   osrm:
     image: osrm/osrm-backend:latest
@@ -241,7 +310,104 @@ services:
     # OSRM est testé via fallback haversine côté backend si indisponible
     command: osrm-routed --algorithm mld /data/switzerland-latest.osrm
     restart: unless-stopped
+    # ✅ 3.6: Limits CPU/mémoire pour OSRM
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: atmr-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:9090/-/healthy",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    # ✅ 3.6: Limits CPU/mémoire pour Prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: atmr-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3001
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/api/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    restart: unless-stopped
+    # ✅ 3.6: Limits CPU/mémoire pour Grafana
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
 volumes:
   pg_data:
   redis-data:
+  prometheus-data:
+  grafana-data:

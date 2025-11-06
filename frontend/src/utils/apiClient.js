@@ -2,7 +2,9 @@
 import axios from 'axios';
 import { getRefreshToken } from '../hooks/useAuthToken';
 
-let apiBase = process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_API_URL || '/api';
+let baseApiRest = process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_API_URL || '/api/v1';
+
+let socketTarget = process.env.REACT_APP_SOCKET_URL || '/socket.io';
 
 // En dev (CRA sur localhost:3000), on force le proxy '/api' pour éviter le CORS
 try {
@@ -11,25 +13,59 @@ try {
     window.location &&
     /localhost:3000$/i.test(window.location.host)
   ) {
-    // En dev, reste strictement sur /api pour s'aligner avec le backend (pas de /v1 implicite)
-    apiBase = '/api';
+    // En dev, utiliser explicitement /api/v1 pour s'aligner avec le backend versionné
+    baseApiRest = '/api/v1';
+    socketTarget = '/socket.io';
   }
 } catch (_) {
   // no-op
 }
 
-const apiClient = axios.create({
-  baseURL: apiBase,
+const apiRest = axios.create({
+  baseURL: baseApiRest,
   headers: {
     'Content-Type': 'application/json; charset=utf-8',
     Accept: 'application/json; charset=utf-8',
   },
-  withCredentials: false, // ❌ pas de cookies, on est en JWT header
+  withCredentials: false,
   timeout: 30000,
-  // ✅ Force UTF-8 encoding pour toutes les réponses
   responseType: 'json',
   responseEncoding: 'utf8',
 });
+
+export const apiSocket = axios.create({
+  baseURL: socketTarget,
+  timeout: 30000,
+});
+
+const addAuthHeader = (cfg = {}) => {
+  if (!cfg.headers) {
+    cfg.headers = {};
+  }
+
+  const token = localStorage.getItem('authToken');
+  const hasAuthHeader = cfg.headers.Authorization;
+
+  if (cfg.baseURL && cfg.baseURL.endsWith('/')) {
+    cfg.baseURL = cfg.baseURL.slice(0, -1);
+  }
+
+  if (
+    token &&
+    !hasAuthHeader &&
+    !cfg.url?.includes('/auth/refresh-token') &&
+    !(cfg.headers['X-Skip-Auth'] || cfg.headers['x-skip-auth'])
+  ) {
+    cfg.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return cfg;
+};
+
+apiRest.interceptors.request.use(addAuthHeader);
+apiSocket.interceptors.request.use(addAuthHeader);
+
+export const apiClient = apiRest;
 
 // ✅ Flag pour éviter boucle infinie refresh
 let isRefreshing = false;
@@ -46,38 +82,32 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
-export const logoutUser = () => {
+export const cleanLocalSession = () => {
   localStorage.removeItem('authToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
   localStorage.removeItem('public_id');
-  window.location.href = '/login';
 };
 
-apiClient.interceptors.request.use((cfg) => {
-  // normalise baseURL (évite //api si jamais apiBase finit par /)
-  if (cfg.baseURL && cfg.baseURL.endsWith('/')) {
-    cfg.baseURL = cfg.baseURL.slice(0, -1);
-  }
+export const logoutUser = async (options = { redirect: true }) => {
+  try {
+    await apiClient.delete('/shadow-mode/session', {
+      baseURL: '/api',
+      skipAuthRedirect: true,
+    });
+  } catch (error) {
+    console.warn(
+      '⚠️ Impossible de désactiver le Shadow Mode lors de la déconnexion:',
+      error?.response?.data || error?.message || error
+    );
+  } finally {
+    cleanLocalSession();
 
-  // NE PAS remplacer Authorization si déjà présent (cas du refresh token)
-  const hasAuthHeader = cfg.headers && cfg.headers.Authorization;
-  const token = localStorage.getItem('authToken');
-
-  // N'ajoute pas Authorization si :
-  // - Le header Authorization est déjà défini (refresh token)
-  // - On a un opt-out explicite
-  // - C'est une requête vers /auth/refresh-token
-  if (
-    !hasAuthHeader &&
-    token &&
-    !cfg.url?.includes('/auth/refresh-token') &&
-    !(cfg.headers && (cfg.headers['X-Skip-Auth'] || cfg.headers['x-skip-auth']))
-  ) {
-    cfg.headers.Authorization = `Bearer ${token}`;
+    if (options?.redirect !== false) {
+      window.location.href = '/login';
+    }
   }
-  return cfg;
-});
+};
 
 apiClient.interceptors.response.use(
   (res) => res,
@@ -135,9 +165,15 @@ apiClient.interceptors.response.use(
         // Process queued requests
         processQueue(null, newToken);
 
-        // Retry requête originale
+        // Retry requête originale avec nouveau token
         cfg.headers.Authorization = `Bearer ${newToken}`;
-        return apiClient(cfg);
+        // ⚡ Marquer que c'est un retry après refresh réussi pour éviter logs d'erreur
+        cfg._retryAfterRefresh = true;
+        // ⚡ Supprimer l'erreur de la config pour éviter les logs Axios
+        delete cfg._isRetry;
+        const retryResponse = await apiClient(cfg);
+        // ✅ Refresh réussi → retourner la réponse réussie (pas l'erreur 401 initiale)
+        return retryResponse;
       } catch (refreshError) {
         processQueue(refreshError, null);
         logoutUser();

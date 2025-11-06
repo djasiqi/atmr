@@ -1,0 +1,114 @@
+{
+  "dashboard": {
+    "title": "ATMR Dispatch SLO Monitoring",
+    "tags": ["dispatch", "slo", "atmr", "monitoring"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "SLO Breaches Total",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "dispatch_slo_breaches_total",
+            "legendFormat": "Breaches (window={{window_minutes}}min)",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Count"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "SLO Breach Severity",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "dispatch_slo_breach_severity",
+            "legendFormat": "{{severity}} (0=info, 1=warning, 2=critical)",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "min": 0, "max": 2, "label": "Severity"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Should Alert (Pager)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "dispatch_slo_should_alert",
+            "legendFormat": "Should Page (0=no, 1=yes)",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "min": 0, "max": 1, "label": "Alert"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 4,
+        "title": "SLO Breaches by Type",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(dispatch_slo_breaches_by_type[5m])) by (type)",
+            "legendFormat": "{{type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Breaches/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Recent Breaches Table",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "topk(10, dispatch_slo_breaches_by_type)",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {},
+              "indexByName": {},
+              "renameByName": {
+                "Time": "Time",
+                "Value": "Count",
+                "type": "Breach Type"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {}
+  }
+}
+

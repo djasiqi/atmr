@@ -5,12 +5,15 @@ Fournit des endpoints REST pour consulter les rapports,
 KPIs et métriques du mode shadow.
 """
 
+import os
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt, jwt_required
 from flask_restx import Api, Namespace, Resource, fields
 
+from ext import redis_client
 from services.rl.shadow_mode_manager import ShadowModeManager
 
 # Créer le blueprint
@@ -61,6 +64,179 @@ company_summary_model = api.model("CompanySummary", {
 
 # Initialiser le gestionnaire shadow mode
 shadow_manager = ShadowModeManager()
+
+
+_STATE_KEY = "shadow_mode:active"
+_ACTIVE_COUNT_KEY = "shadow_mode:admin_count"
+_FALLBACK_STATE = {"active": False, "count": 0}
+
+
+def _get_state_from_store() -> bool:
+    """Lit l'état courant (Redis si dispo, sinon fallback mémoire)."""
+    if redis_client:
+        try:
+            value = redis_client.get(_STATE_KEY)
+            if value is None:
+                return False
+            return value.decode("utf-8") == "1"
+        except Exception:
+            return bool(_FALLBACK_STATE["active"])
+    return bool(_FALLBACK_STATE["active"])
+
+
+def _set_state_in_store(active: bool) -> None:
+    """Persiste l'état (Redis si dispo, sinon fallback mémoire)."""
+    if redis_client:
+        try:
+            redis_client.set(_STATE_KEY, "1" if active else "0")
+            _FALLBACK_STATE["active"] = active
+            return
+        except Exception:
+            _FALLBACK_STATE["active"] = active
+            return
+
+    _FALLBACK_STATE["active"] = active
+
+
+def _get_count_from_store() -> int:
+    if redis_client:
+        try:
+            value = cast(Any, redis_client.get(_ACTIVE_COUNT_KEY))
+            if value is None:
+                return 0
+            if isinstance(value, (bytes, bytearray)):
+                value = value.decode("utf-8", "ignore") or "0"
+            return int(value)
+        except Exception:
+            return int(_FALLBACK_STATE["count"])
+    return int(_FALLBACK_STATE["count"])
+
+
+def _set_count_in_store(count: int) -> None:
+    count = max(count, 0)
+
+    if redis_client:
+        try:
+            redis_client.set(_ACTIVE_COUNT_KEY, str(count))
+            _FALLBACK_STATE["count"] = count
+            return
+        except Exception:
+            _FALLBACK_STATE["count"] = count
+            return
+
+    _FALLBACK_STATE["count"] = count
+
+
+def _shadow_mode_enabled() -> bool:
+    env_override = os.getenv("SHADOW_MODE_ENABLED")
+    if env_override is not None:
+        return env_override.lower() in {"1", "true", "yes", "on"}
+    return _get_state_from_store()
+
+
+def _session_placeholder() -> Dict[str, Any]:
+    """Structure par défaut renvoyée lorsque le Shadow Mode est inactif."""
+    return {
+        "agreement_rate": 0.0,
+        "comparisons_count": 0,
+        "predictions_count": 0,
+        "disagreements_count": 0,
+        "high_confidence_disagreements": 0,
+        "last_event_at": None,
+    }
+
+
+@shadow_mode_bp.route("/status", methods=["GET"])
+def get_shadow_mode_status():
+    """Retourne l'état global du Shadow Mode.
+
+    Cette route est consommée par le dashboard admin pour déterminer si des
+    statistiques doivent être affichées. Tant que le backend n'a pas encore
+    branché le Shadow Mode, on renvoie un état « inactive » mais avec un code 200.
+    """
+
+    enabled = _shadow_mode_enabled()
+    session_stats = _session_placeholder()
+
+    payload: Dict[str, Any] = {
+        "status": "active" if enabled else "inactive",
+        "message": (
+            "Shadow Mode actif – données disponibles"
+            if enabled
+            else "Shadow Mode non activé dans l'environnement courant"
+        ),
+        "last_updated": datetime.now(UTC).isoformat(),
+        "comparisons_count": session_stats["comparisons_count"],
+        "predictions_count": session_stats["predictions_count"],
+    }
+
+    return jsonify(payload), 200
+
+
+@shadow_mode_bp.route("/stats", methods=["GET"])
+def get_shadow_mode_stats():
+    """Retourne les statistiques de session Shadow Mode.
+
+    Tant que le moteur RL n'alimente pas ces métriques, on renvoie une structure
+    vide mais cohérente afin que le frontend reste fonctionnel.
+    """
+
+    enabled = _shadow_mode_enabled()
+    session_stats = _session_placeholder()
+
+    payload: Dict[str, Any] = {
+        "session_stats": session_stats,
+        "status": "active" if enabled else "inactive",
+        "last_updated": datetime.now(UTC).isoformat(),
+    }
+
+    return jsonify(payload), 200
+
+
+@shadow_mode_bp.route("/predictions", methods=["GET"])
+def get_shadow_mode_predictions():
+    """Retourne la liste des dernières prédictions RL.
+
+    Placeholder pour intégration future : renvoie une liste vide mais la route
+    existe pour éviter les 404 côté front.
+    """
+
+    return jsonify({"predictions": [], "count": 0}), 200
+
+
+@shadow_mode_bp.route("/comparisons", methods=["GET"])
+def get_shadow_mode_comparisons():
+    """Retourne les comparaisons humain vs RL les plus récentes.
+
+    Placeholder renvoyant un tableau vide afin d'éviter les erreurs front.
+    """
+
+    return jsonify({"comparisons": [], "count": 0}), 200
+
+
+@shadow_mode_bp.route("/session", methods=["POST", "DELETE"])
+@jwt_required()
+def toggle_shadow_mode_session():
+    """Active/désactive le Shadow Mode selon la session admin."""
+
+    claims = get_jwt() or {}
+    role = str(claims.get("role", "")).upper()
+
+    if role != "ADMIN":
+        return jsonify({"error": "Accès réservé aux administrateurs."}), 403
+
+    if request.method == "POST":
+        current = _get_count_from_store()
+        new_count = current + 1
+        _set_count_in_store(new_count)
+        _set_state_in_store(new_count > 0)
+        return jsonify({"status": "activated", "active": True, "count": new_count}), 200
+
+    current = _get_count_from_store()
+    new_count = max(current - 1, 0)
+    _set_count_in_store(new_count)
+    _set_state_in_store(new_count > 0)
+    return jsonify({"status": "deactivated", "active": new_count > 0, "count": new_count}), 200
 
 
 @reports_ns.route("/daily/<string:company_id>")

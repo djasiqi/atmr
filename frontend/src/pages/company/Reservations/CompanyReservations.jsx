@@ -8,6 +8,7 @@ import {
   rejectReservation,
   scheduleReservation,
   dispatchNowForReservation,
+  updateReservation,
 } from '../../../services/companyService';
 import ReservationTable from '../Dashboard/components/ReservationTable';
 import ReservationDetailsModal from '../Dashboard/components/ReservationDetailsModal';
@@ -17,7 +18,7 @@ import ReservationFilters from './components/ReservationFilters';
 import ReservationMapView from './components/ReservationMapView';
 import ReservationAlerts from './components/ReservationAlerts';
 import TopClients from './components/TopClients';
-import ScheduleReturnModal from './components/ScheduleReturnModal';
+import ReservationModals from '../../../components/reservations/ReservationModals';
 import styles from './CompanyReservations.module.css';
 
 const CompanyReservations = () => {
@@ -34,8 +35,8 @@ const CompanyReservations = () => {
   const [selectedReservation, setSelectedReservation] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [reservationToDelete, setReservationToDelete] = useState(null);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [reservationToSchedule, setReservationToSchedule] = useState(null);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [scheduleModalReservation, setScheduleModalReservation] = useState(null);
 
   // Nouveaux états pour les améliorations
   const [activeTab, setActiveTab] = useState('all');
@@ -209,32 +210,61 @@ const CompanyReservations = () => {
     }
   };
 
-  const handleAssign = async (_reservation) => {
+  // États pour la modale d'édition
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editModalReservation, setEditModalReservation] = useState(null);
+
+  const handleEdit = (reservation) => {
+    // Passer l'objet complet
+    const resObj = typeof reservation === 'object' ? reservation : reservations.find((r) => r.id === reservation);
+    if (!resObj) return;
+    setEditModalReservation(resObj);
+    setEditModalOpen(true);
+  };
+
+  const handleConfirmEdit = async (updatedData) => {
+    if (!editModalReservation) return;
     try {
-      // Ouvrir un modal de sélection de chauffeur (à implémenter si nécessaire)
-      // Pour l'instant, juste recharger
+      await updateReservation(editModalReservation.id, updatedData);
+      setEditModalOpen(false);
+      setEditModalReservation(null);
       loadReservations();
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error("Erreur lors de l'assignation:", err);
+      console.error('Erreur lors de l\'édition:', err);
+      throw err;
     }
   };
 
   const handleSchedule = (reservation) => {
-    setReservationToSchedule(reservation);
-    setShowScheduleModal(true);
+    // Passer l'objet complet
+    const resObj = typeof reservation === 'object' ? reservation : reservations.find((r) => r.id === reservation);
+    if (!resObj) return;
+    setScheduleModalReservation(resObj);
+    setScheduleModalOpen(true);
   };
 
-  const handleConfirmSchedule = async (isoDatetime) => {
-    if (!reservationToSchedule) return;
+  const handleConfirmSchedule = async (data) => {
+    setScheduleModalOpen(false);
+    if (!scheduleModalReservation) return;
 
     try {
-      await scheduleReservation(reservationToSchedule.id, isoDatetime);
+      let isoDatetime;
+      if (typeof data === 'string') {
+        // Format "YYYY-MM-DD HH:mm"
+        isoDatetime = data;
+      } else if (data?.return_time) {
+        // Format { return_time: "YYYY-MM-DDTHH:mm" }
+        isoDatetime = data.return_time.replace('T', ' ');
+      } else {
+        throw new Error('Format de date invalide');
+      }
+
+      await scheduleReservation(scheduleModalReservation.id, isoDatetime);
       loadReservations();
-      setShowScheduleModal(false);
-      setReservationToSchedule(null);
+      setScheduleModalReservation(null);
     } catch (err) {
       console.error('Erreur lors de la planification:', err);
+      setScheduleModalReservation(null);
       throw err; // Laisser le modal afficher l'erreur
     }
   };
@@ -529,9 +559,11 @@ const CompanyReservations = () => {
                     onDelete={handleDeleteRequest}
                     onAccept={handleAccept}
                     onReject={handleReject}
-                    onAssign={handleAssign}
+                    onEdit={handleEdit}
                     onSchedule={handleSchedule}
                     onDispatchNow={handleDispatchNow}
+                    hideAssign={true}
+                    hideUrgent={true}
                   />
                   {/* Pagination avec sélecteur d'éléments par page */}
                   <div className={styles.paginationContainer}>
@@ -673,15 +705,31 @@ const CompanyReservations = () => {
               })()}
           </ConfirmationModal>
 
-          {/* Modal de planification de l'heure de retour */}
-          <ScheduleReturnModal
-            isOpen={showScheduleModal}
-            onClose={() => {
-              setShowScheduleModal(false);
-              setReservationToSchedule(null);
+          {/* Modales centralisées */}
+          <ReservationModals
+            scheduleModalOpen={scheduleModalOpen}
+            scheduleModalReservation={scheduleModalReservation}
+            onScheduleConfirm={handleConfirmSchedule}
+            onScheduleClose={() => {
+              setScheduleModalOpen(false);
+              setScheduleModalReservation(null);
             }}
-            reservation={reservationToSchedule}
-            onConfirm={handleConfirmSchedule}
+            assignModalOpen={false}
+            assignModalReservation={null}
+            assignModalDrivers={[]}
+            onAssignConfirm={() => {}}
+            onAssignClose={() => {}}
+            editModalOpen={editModalOpen}
+            editModalReservation={editModalReservation}
+            onEditConfirm={handleConfirmEdit}
+            onEditClose={() => {
+              setEditModalOpen(false);
+              setEditModalReservation(null);
+            }}
+            deleteModalOpen={false}
+            deleteModalReservation={null}
+            onDeleteConfirm={() => {}}
+            onDeleteClose={() => {}}
           />
         </main>
       </div>

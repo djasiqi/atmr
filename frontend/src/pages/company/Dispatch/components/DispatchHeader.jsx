@@ -19,6 +19,8 @@ const DispatchHeader = ({
   styles = {},
   onShowAdvancedSettings, // 🆕
   hasOverrides = false, // 🆕
+  fastMode = false, // ⚡ Mode rapide
+  setFastMode, // ⚡ Setter pour mode rapide
 }) => {
   const _makeToday = () => {
     const d = new Date();
@@ -61,50 +63,84 @@ const DispatchHeader = ({
       )}
 
       <div className={styles.compactFilters}>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className={styles.dateInput}
-        />
-        <label className={styles.checkboxLabel}>
+        {/* En mode fully_auto, afficher uniquement le sélecteur de date */}
+        {dispatchMode === 'fully_auto' ? (
           <input
-            type="checkbox"
-            checked={regularFirst}
-            onChange={(e) => setRegularFirst(e.target.checked)}
-            className={styles.checkbox}
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className={styles.dateInput}
           />
-          Chauffeurs réguliers prioritaires
-        </label>
-        <label className={styles.checkboxLabel}>
-          <input
-            type="checkbox"
-            checked={allowEmergency}
-            onChange={(e) => setAllowEmergency(e.target.checked)}
-            className={styles.checkbox}
-          />
-          Autoriser chauffeurs d'urgence
-        </label>
-        <button onClick={onRunDispatch} disabled={loading} className={styles.dispatchBtn}>
-          {loading ? '⏳ En cours...' : '🚀 Lancer Dispatch'}
-        </button>
+        ) : (
+          <>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className={styles.dateInput}
+            />
+            {/* ⚡ En mode manuel, afficher uniquement le calendrier */}
+            {dispatchMode !== 'manual' && (
+              <>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={regularFirst}
+                    onChange={(e) => setRegularFirst(e.target.checked)}
+                    className={styles.checkbox}
+                  />
+                  Chauffeurs réguliers prioritaires
+                </label>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={allowEmergency}
+                    onChange={(e) => setAllowEmergency(e.target.checked)}
+                    className={styles.checkbox}
+                  />
+                  Autoriser chauffeurs d'urgence
+                </label>
+                {/* ⚡ Option Dispatch rapide */}
+                {setFastMode && (
+                  <label
+                    className={styles.checkboxLabel}
+                    title="Garantit une solution en moins de 1 minute"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={fastMode}
+                      onChange={(e) => setFastMode(e.target.checked)}
+                      className={styles.checkbox}
+                    />
+                    ⚡ Dispatch rapide (&lt;1min)
+                  </label>
+                )}
+                <button onClick={onRunDispatch} disabled={loading} className={styles.dispatchBtn}>
+                  {loading ? '⏳ En cours...' : '🚀 Lancer Dispatch'}
+                </button>
 
-        {/* 🆕 Bouton paramètres avancés */}
-        {onShowAdvancedSettings && (
-          <button
-            onClick={onShowAdvancedSettings}
-            className={`${styles.advancedBtn} ${hasOverrides ? styles.hasOverrides : ''}`}
-            title={
-              hasOverrides ? 'Paramètres personnalisés actifs' : 'Configurer paramètres avancés'
-            }
-          >
-            ⚙️ {hasOverrides ? 'Paramètres ✓' : 'Avancé'}
-          </button>
+                {/* 🆕 Bouton paramètres avancés */}
+                {onShowAdvancedSettings && (
+                  <button
+                    onClick={onShowAdvancedSettings}
+                    className={`${styles.advancedBtn} ${hasOverrides ? styles.hasOverrides : ''}`}
+                    title={
+                      hasOverrides
+                        ? 'Paramètres personnalisés actifs'
+                        : 'Configurer paramètres avancés'
+                    }
+                  >
+                    ⚙️ {hasOverrides ? 'Paramètres ✓' : 'Avancé'}
+                  </button>
+                )}
+              </>
+            )}
+
+            <span className={styles.courseCount}>
+              {/* On pourrait afficher le nombre de courses ici si disponible */}
+            </span>
+          </>
         )}
-
-        <span className={styles.courseCount}>
-          {/* On pourrait afficher le nombre de courses ici si disponible */}
-        </span>
       </div>
     </div>
   );

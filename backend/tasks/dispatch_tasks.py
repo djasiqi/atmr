@@ -9,11 +9,11 @@ from typing import Any, Dict, cast
 
 from celery import shared_task
 from celery.exceptions import MaxRetriesExceededError
-from flask import current_app as app
 from sqlalchemy import exc as sa_exc
 
+from celery_app import get_flask_app
 from ext import db
-from models import Company
+from models import Company, DispatchMode
 from services.unified_dispatch import engine
 
 logger = logging.getLogger(__name__)
@@ -32,13 +32,13 @@ def _safe_int(v: Any) -> int | None:
 @shared_task(
     bind=True,
     acks_late=True,  # ✅ Ne pas ack avant traitement complet
-    task_time_limit=0.300,  # 5 minutes max
-    task_soft_time_limit=0.270,
+    task_time_limit=600,  # 10 minutes max (600 secondes) - augmenté pour grandes matrices
+    task_soft_time_limit=540,  # 9 minutes soft limit (540 secondes)
     max_retries=3,
     default_retry_delay=30,
     autoretry_for=(Exception,),
     retry_backoff=True,
-    retry_backoff_max=0.300,
+    retry_backoff_max=300,  # 5 minutes max (300 secondes)
     retry_jitter=True,
     name="tasks.dispatch_tasks.run_dispatch_task"
 )
@@ -50,12 +50,14 @@ def run_dispatch_task(
     regular_first: bool = True,
     allow_emergency: bool | None = None,
     overrides: Dict[str, Any] | None = None,
+    dispatch_run_id: int | None = None,  # ✅ Nouveau paramètre optionnel
 ) -> Dict[str, Any]:
     """Exécuté par un worker Celery.
     - Nettoie/normalise la session DB avant/après.
     - Normalise le payload (mode/overrides).
     - Ne laisse jamais la session en état 'aborted'.
     - Retourne toujours un dict cohérent.
+    - Si dispatch_run_id est fourni, réutilise le DispatchRun existant.
     """
     start_time = time.time()
     task_id = getattr(self.request, "id", None)
@@ -70,15 +72,42 @@ def run_dispatch_task(
         ov["mode"] = mode  # garde une source unique pour le moteur
 
     # On fait tout sous app_context pour une session/teardown propre
+    # ✅ Utiliser get_flask_app() au lieu de current_app pour éviter les conflits Flask-RESTX
+    app = get_flask_app()
     with app.app_context():
         # Assainit d'abord la session si elle a été "polluée" par un appel
         # précédent
         with suppress(Exception):
             db.session.rollback()
 
+        # ✅ Si dispatch_run_id est fourni, mettre à jour son statut à RUNNING
+        if dispatch_run_id:
+            try:
+                from models import DispatchRun, DispatchStatus
+                existing_run = DispatchRun.query.get(dispatch_run_id)
+                if existing_run:
+                    existing_run.status = DispatchStatus.RUNNING
+                    existing_run.started_at = datetime.now(UTC)
+                    db.session.commit()
+                    logger.info(
+                        "[Celery] Updated existing DispatchRun id=%s to RUNNING status",
+                        dispatch_run_id
+                    )
+                else:
+                    logger.warning(
+                        "[Celery] DispatchRun id=%s not found, will be created by engine.run()",
+                        dispatch_run_id
+                    )
+            except Exception as e:
+                logger.exception(
+                    "[Celery] Failed to update DispatchRun id=%s to RUNNING: %s",
+                    dispatch_run_id, e
+                )
+                # Continuer quand même, engine.run() créera le DispatchRun
+
         logger.info(
-            "[Celery] Starting dispatch task company_id=%s for_date=%s mode=%s task_id=%s",
-            company_id, for_date, mode, task_id,
+            "[Celery] Starting dispatch task company_id=%s for_date=%s mode=%s task_id=%s dispatch_run_id=%s",
+            company_id, for_date, mode, task_id, dispatch_run_id,
             extra={
                 "task_id": task_id,
                 "company_id": company_id,
@@ -86,6 +115,7 @@ def run_dispatch_task(
                 "mode": mode,
                 "regular_first": regular_first,
                 "allow_emergency": allow_emergency,
+                "dispatch_run_id": dispatch_run_id,
             },
         )
 
@@ -99,6 +129,10 @@ def run_dispatch_task(
                 "allow_emergency": allow_emergency,
                 "overrides": ov,
             }
+            # ✅ Passer dispatch_run_id à engine.run() pour réutiliser le DispatchRun existant
+            if dispatch_run_id:
+                run_kwargs["existing_dispatch_run_id"] = dispatch_run_id
+            
             raw_result: Any = engine.run(**run_kwargs)
 
             # -------- Normalisation résultat --------
@@ -147,16 +181,28 @@ def run_dispatch_task(
             assigned = len(cast("list[Any]", result.get("assignments") or []))
             unassigned = len(cast("list[Any]", result.get("unassigned") or []))
             dispatch_run_id = result.get("dispatch_run_id")
+            
+            # ✅ Logger le nombre d'assignments appliqués avec succès
+            applied_count = 0
+            if dispatch_run_id:
+                try:
+                    from models import DispatchRun
+                    dr = DispatchRun.query.get(dispatch_run_id)
+                    if dr and hasattr(dr, "assignments"):
+                        applied_count = len(dr.assignments)
+                except Exception:
+                    pass  # Ignorer les erreurs de comptage
 
             logger.info(
-                "[Celery] Dispatch completed successfully company_id=%s for_date=%s assigned=%s unassigned=%s dispatch_run_id=%s duration=%.3fs",
-                company_id, for_date, assigned, unassigned, dispatch_run_id, time.time() - start_time,
+                "[Celery] Dispatch completed successfully company_id=%s for_date=%s assigned=%s unassigned=%s applied=%s dispatch_run_id=%s duration=%.3fs",
+                company_id, for_date, assigned, unassigned, applied_count, dispatch_run_id, time.time() - start_time,
                 extra={
                     "task_id": task_id,
                     "company_id": company_id,
                     "for_date": for_date,
                     "assigned": assigned,
                     "unassigned": unassigned,
+                    "applied": applied_count,
                     "dispatch_run_id": dispatch_run_id,
                     "duration": time.time() - start_time,
                 },
@@ -191,14 +237,80 @@ def run_dispatch_task(
                     }
             except Exception:
                 pass
+            
+            # ✅ Détecter timeout Celery
+            is_timeout = isinstance(e, (TimeoutError,)) or "timeout" in str(e).lower() or "time limit" in str(e).lower()
+            if is_timeout:
+                logger.error(
+                    "[Celery] ⏱️ TIMEOUT detected: task_id=%s elapsed=%.1fs",
+                    task_id, time.time() - start_time
+                )
+            
+            # ✅ Marquer le DispatchRun comme FAILED si disponible
+            failed_dispatch_run_id = dispatch_run_id
+            if not failed_dispatch_run_id:
+                # Essayer de récupérer le dispatch_run_id depuis les params
+                failed_dispatch_run_id = locals().get("dispatch_run_id")
+            
+            if failed_dispatch_run_id:
+                try:
+                    from models import DispatchRun, DispatchStatus
+                    failed_run = DispatchRun.query.get(failed_dispatch_run_id)
+                    if failed_run:
+                        if is_timeout:
+                            failed_run.status = DispatchStatus.FAILED
+                            failed_run.completed_at = datetime.now(UTC)
+                            failed_run.result = {"reason": "FAILED_TIMEOUT", "error": str(e)[:200]}
+                            logger.info(
+                                "[Celery] Marked DispatchRun id=%s as FAILED_TIMEOUT",
+                                failed_dispatch_run_id
+                            )
+                        else:
+                            failed_run.mark_failed(reason=f"Task failed: {type(e).__name__}: {str(e)[:200]}")
+                        db.session.commit()
+                        logger.info(
+                            "[Celery] Marked DispatchRun id=%s as FAILED",
+                            failed_dispatch_run_id
+                        )
+                        
+                        # ✅ Notifier via WebSocket même en cas d'échec
+                        try:
+                            from datetime import date as date_type
+
+                            from services.notification_service import notify_dispatch_run_completed
+                            day_date = date_type.fromisoformat(for_date) if for_date else None
+                            date_str = day_date.isoformat() if day_date else None
+                            notify_dispatch_run_completed(
+                                company_id,
+                                failed_dispatch_run_id,
+                                0,  # 0 assignments en cas d'échec
+                                date_str,
+                            )
+                            logger.info(
+                                "[Celery] Notified WebSocket of failed dispatch_run_id=%s",
+                                failed_dispatch_run_id
+                            )
+                        except Exception as notify_err:
+                            logger.exception(
+                                "[Celery] Failed to notify WebSocket of error: %s",
+                                notify_err
+                            )
+                except Exception as mark_err:
+                    logger.exception(
+                        "[Celery] Failed to mark DispatchRun as FAILED: %s",
+                        mark_err
+                    )
+            
             logger.error(
-                "[Celery] Dispatch FAILED company_id=%s for_date=%s type=%s msg=%s extra=%s\n%s",
-                company_id, for_date, type(e).__name__, str(e), extra_sql, tb,
+                "[Celery] Dispatch FAILED company_id=%s for_date=%s dispatch_run_id=%s type=%s msg=%s extra=%s\n%s",
+                company_id, for_date, failed_dispatch_run_id, type(e).__name__, str(e), extra_sql, tb,
                 extra={
                     "task_id": task_id,
                     "company_id": company_id,
                     "for_date": for_date,
+                    "dispatch_run_id": failed_dispatch_run_id,
                     "error": str(e),
+                    "error_type": type(e).__name__,
                     "retry_count": getattr(self.request, "retries", 0),
                     "max_retries": getattr(self, "max_retries", 0),
                 },
@@ -240,7 +352,8 @@ def run_dispatch_task(
 @shared_task(
     name="tasks.dispatch_tasks.autorun_tick",
     acks_late=True,
-    task_time_limit=0.600  # 10 minutes (peut lancer plusieurs dispatch)
+    task_time_limit=600,  # ✅ 10 minutes (600 secondes) - corrigé de 0.600
+    task_soft_time_limit=540,  # ✅ 9 minutes soft limit (540 secondes)
 )
 def autorun_tick() -> Dict[str, Any]:
     start_time = time.time()
@@ -330,7 +443,8 @@ def autorun_tick() -> Dict[str, Any]:
 @shared_task(
     name="tasks.dispatch_tasks.realtime_monitoring_tick",
     acks_late=True,
-    task_time_limit=0.300  # 5 minutes max
+    task_time_limit=300,  # ✅ 5 minutes max (300 secondes) - corrigé de 0.300
+    task_soft_time_limit=270,  # ✅ 4.5 minutes soft limit (270 secondes)
 )
 def realtime_monitoring_tick() -> Dict[str, Any]:
     """Tâche Celery périodique pour le monitoring temps réel du dispatch.
@@ -460,3 +574,83 @@ def realtime_monitoring_tick() -> Dict[str, Any]:
     )
 
     return results
+
+
+@shared_task(
+    bind=True,
+    acks_late=True,
+    task_time_limit=300,  # 5 minutes max
+    max_retries=2,
+    name="tasks.dispatch_tasks.ensure_agents_running",
+)
+def ensure_agents_running(self) -> Dict[str, Any]:  # noqa: ARG001
+    """Tâche périodique pour s'assurer que tous les agents sont actifs pour les entreprises en mode FULLY_AUTO.
+    
+    Cette tâche démarre automatiquement tous les agents pour les entreprises en mode fully_auto,
+    même si le backend redémarre ou si un agent s'arrête.
+    
+    Returns:
+        Dict avec le nombre d'agents démarrés et vérifiés
+    """
+    app = get_flask_app()
+    started_count = 0
+    already_running_count = 0
+    error_count = 0
+    
+    with app.app_context():
+        try:
+            # Récupérer toutes les entreprises en mode FULLY_AUTO
+            companies = (
+                Company.query.filter(
+                    Company.dispatch_mode == DispatchMode.FULLY_AUTO
+                )
+                .all()
+            )
+            
+            logger.info(
+                "[AgentAutoStart] Vérification agents pour %d entreprise(s) en mode FULLY_AUTO",
+                len(companies)
+            )
+            
+            for company in companies:
+                try:
+                    from services.agent_dispatch.orchestrator import get_agent_for_company
+                    
+                    agent = get_agent_for_company(company.id, app=app)
+                    
+                    if not agent.state.running:
+                        agent.start()
+                        started_count += 1
+                        logger.info(
+                            "[AgentAutoStart] ✅ Agent démarré pour company %s",
+                            company.id
+                        )
+                    else:
+                        already_running_count += 1
+                        logger.debug(
+                            "[AgentAutoStart] Agent déjà actif pour company %s",
+                            company.id
+                        )
+                except Exception as e:
+                    error_count += 1
+                    logger.exception(
+                        "[AgentAutoStart] ❌ Erreur démarrage agent pour company %s: %s",
+                        company.id, e
+                    )
+            
+            logger.info(
+                "[AgentAutoStart] Résumé: %d démarrés, %d déjà actifs, %d erreurs",
+                started_count, already_running_count, error_count
+            )
+            
+            return {
+                "started": started_count,
+                "already_running": already_running_count,
+                "errors": error_count,
+                "total_checked": len(companies),
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+            
+        except Exception as e:
+            logger.exception("[AgentAutoStart] Erreur globale: %s", e)
+            raise

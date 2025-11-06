@@ -3,6 +3,7 @@
 # Constantes pour éviter les valeurs magiques
 from __future__ import annotations
 
+import logging
 import re
 from decimal import Decimal
 from typing import Optional, cast
@@ -22,6 +23,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from typing_extensions import override
 
@@ -29,6 +31,8 @@ from ext import db
 
 from .base import _as_bool, _as_int, _iso
 from .enums import ClientType
+
+logger = logging.getLogger(__name__)
 
 CID_ZERO = 0
 MIN_PHONE_DIGITS = 6
@@ -121,6 +125,13 @@ class Client(db.Model):
         server_default=func.now(),
         nullable=False)
 
+    # ✅ D2: Colonnes chiffrées
+    contact_phone_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    gp_name_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    gp_phone_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    billing_address_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    encryption_migrated = Column(Boolean, default=False, nullable=False)
+
     # Relations
     user = relationship("User", back_populates="clients", passive_deletes=True)
     company = relationship(
@@ -159,7 +170,7 @@ class Client(db.Model):
 
     @validates("billing_address")
     def validate_billing_address(self, _key: str, value: Optional[str]) -> Optional[str]:
-        cid = _as_int(getattr(self, "company_id", None), 0)
+        cid = _as_int(getattr(self, "company_id", None))
         if cid > CID_ZERO and (not value or not str(value).strip()):
             # Si pas d'adresse de facturation, utiliser l'adresse de domicile
             # comme fallback
@@ -190,6 +201,128 @@ class Client(db.Model):
         if val == "patient":
             self.default_billed_to_company_id = None
         return val
+
+    # ✅ D2: Propriétés hybrides pour chiffrement/déchiffrement automatique
+    @hybrid_property
+    def contact_phone_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+        """Téléphone de contact déchiffré."""
+        try:
+            from security.crypto import get_encryption_service
+            is_migrated = bool(getattr(self, "encryption_migrated", False))
+            encrypted_val = getattr(self, "contact_phone_encrypted", None)
+            if is_migrated and encrypted_val:
+                try:
+                    return get_encryption_service().decrypt_field(encrypted_val)
+                except Exception as e:
+                    logger.error("[D2] Erreur déchiffrement contact_phone: %s", e)
+                    return None
+            return cast(Optional[str], getattr(self, "contact_phone", None))
+        except ImportError:
+            return cast(Optional[str], getattr(self, "contact_phone", None))
+    
+    @contact_phone_secure.setter
+    def contact_phone_secure(self, value: Optional[str]):
+        """Chiffre le téléphone de contact."""
+        try:
+            from security.crypto import get_encryption_service
+            if value:
+                self.contact_phone_encrypted = get_encryption_service().encrypt_field(value)
+                self.encryption_migrated = True
+                self.contact_phone = None  # Ancienne colonne dépréciée
+            else:
+                self.contact_phone_encrypted = None
+                self.contact_phone = None
+        except ImportError:
+            self.contact_phone = value
+    
+    @hybrid_property
+    def gp_name_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+        """Nom du médecin traitant déchiffré."""
+        try:
+            from security.crypto import get_encryption_service
+            is_migrated = bool(getattr(self, "encryption_migrated", False))
+            encrypted_val = getattr(self, "gp_name_encrypted", None)
+            if is_migrated and encrypted_val:
+                try:
+                    return get_encryption_service().decrypt_field(encrypted_val)
+                except Exception:
+                    return None
+            return cast(Optional[str], getattr(self, "gp_name", None))
+        except ImportError:
+            return cast(Optional[str], getattr(self, "gp_name", None))
+    
+    @gp_name_secure.setter
+    def gp_name_secure(self, value: Optional[str]):
+        """Chiffre le nom du médecin traitant."""
+        try:
+            from security.crypto import get_encryption_service
+            if value:
+                self.gp_name_encrypted = get_encryption_service().encrypt_field(value)
+                self.encryption_migrated = True
+            else:
+                self.gp_name_encrypted = None
+        except ImportError:
+            self.gp_name = value
+    
+    @hybrid_property 
+    def gp_phone_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+        """Téléphone du médecin traitant déchiffré."""
+        try:
+            from security.crypto import get_encryption_service
+            is_migrated = bool(getattr(self, "encryption_migrated", False))
+            encrypted_val = getattr(self, "gp_phone_encrypted", None)
+            if is_migrated and encrypted_val:
+                try:
+                    return get_encryption_service().decrypt_field(encrypted_val)
+                except Exception:
+                    return None
+            return cast(Optional[str], getattr(self, "gp_phone", None))
+        except ImportError:
+            return cast(Optional[str], getattr(self, "gp_phone", None))
+    
+    @gp_phone_secure.setter
+    def gp_phone_secure(self, value: Optional[str]):
+        """Chiffre le téléphone du médecin traitant."""
+        try:
+            from security.crypto import get_encryption_service
+            if value:
+                self.gp_phone_encrypted = get_encryption_service().encrypt_field(value)
+                self.encryption_migrated = True
+                self.gp_phone = None  # Ancienne colonne dépréciée
+            else:
+                self.gp_phone_encrypted = None
+                self.gp_phone = None
+        except ImportError:
+            self.gp_phone = value
+    
+    @hybrid_property
+    def billing_address_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+        """Adresse de facturation déchiffrée."""
+        try:
+            from security.crypto import get_encryption_service
+            is_migrated = bool(getattr(self, "encryption_migrated", False))
+            encrypted_val = getattr(self, "billing_address_encrypted", None)
+            if is_migrated and encrypted_val:
+                try:
+                    return get_encryption_service().decrypt_field(encrypted_val)
+                except Exception:
+                    return None
+            return cast(Optional[str], getattr(self, "billing_address", None))
+        except ImportError:
+            return cast(Optional[str], getattr(self, "billing_address", None))
+    
+    @billing_address_secure.setter
+    def billing_address_secure(self, value: Optional[str]):
+        """Chiffre l'adresse de facturation."""
+        try:
+            from security.crypto import get_encryption_service
+            if value:
+                self.billing_address_encrypted = get_encryption_service().encrypt_field(value)
+                self.encryption_migrated = True
+            else:
+                self.billing_address_encrypted = None
+        except ImportError:
+            self.billing_address = value
 
     # Serialization
     @property

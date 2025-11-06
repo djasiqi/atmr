@@ -762,3 +762,154 @@ class ShadowModeManager:
         self.logger.info(
             "Cleaned old data, kept %s recent decisions",
             len(recent_indices))
+
+    def generate_shadow_suggestions(
+        self,
+        bookings: List[Any],
+        drivers: List[Any],
+        current_assignments: Dict[int, int]
+    ) -> List[Dict[str, Any]]:
+        """Génère des suggestions RL en mode shadow (sans impact production).
+        
+        Args:
+            dispatch_run_id: ID du dispatch run
+            bookings: Liste des bookings à dispatcher
+            drivers: Liste des drivers disponibles
+            current_assignments: Dict {booking_id: driver_id} des assignations courantes
+            
+        Returns:
+            Liste de suggestions RL formatées
+        """
+        suggestions = []
+        
+        try:
+            from services.rl.suggestion_generator import get_suggestion_generator
+            
+            generator = get_suggestion_generator()
+            
+            for booking in bookings:
+                # Simuler état actuel pour RL
+                suggested_driver_id = current_assignments.get(booking.id)
+                
+                if not suggested_driver_id:
+                    continue
+                
+                # Générer suggestion RL
+                rl_suggestion = generator.generate_suggestion_for_booking(
+                    booking=booking,
+                    current_driver_id=suggested_driver_id,
+                    available_drivers=drivers,
+                    current_assignments=current_assignments
+                )
+                
+                if rl_suggestion:
+                    suggestions.append({
+                        "booking_id": booking.id,
+                        "current_driver_id": suggested_driver_id,
+                        "rl_suggested_driver_id": rl_suggestion.get("driver_id"),
+                        "confidence": rl_suggestion.get("confidence", 0.0),
+                        "score": rl_suggestion.get("score", 0.0),
+                        "reason": rl_suggestion.get("reason", "")
+                    })
+        
+        except Exception as e:
+            self.logger.error("[ShadowMode] Error generating suggestions: %s", e)
+        
+        return suggestions
+
+    def store_shadow_suggestions(
+        self,
+        dispatch_run_id: int,
+        suggestions: List[Dict[str, Any]],
+        kpi_snapshot: Dict[str, Any] | None = None
+    ) -> int:
+        """Stocke les suggestions RL en mode shadow dans la DB.
+        
+        Args:
+            dispatch_run_id: ID du dispatch run
+            suggestions: Liste de suggestions à stocker
+            kpi_snapshot: Snapshot des KPIs au moment de la suggestion
+            
+        Returns:
+            Nombre de suggestions stockées
+        """
+        stored_count = 0
+        
+        try:
+            from ext import db as ext_db
+            from models import RLSuggestion
+            
+            for suggestion in suggestions:
+                rl_sugg = RLSuggestion()
+                rl_sugg.dispatch_run_id = dispatch_run_id
+                rl_sugg.booking_id = suggestion["booking_id"]
+                rl_sugg.driver_id = suggestion["rl_suggested_driver_id"]
+                rl_sugg.score = suggestion.get("score", 0.0)
+                rl_sugg.kpi_snapshot = kpi_snapshot
+                ext_db.session.add(rl_sugg)
+                stored_count += 1
+            
+            ext_db.session.commit()
+            self.logger.info(
+                "[ShadowMode] Stored %s suggestions for dispatch_run %s",
+                stored_count, dispatch_run_id
+            )
+        
+        except Exception as e:
+            from ext import db as ext_db
+            ext_db.session.rollback()
+            self.logger.error(
+                "[ShadowMode] Failed to store suggestions: %s", e
+            )
+        
+        return stored_count
+
+    def compare_shadow_with_actual(
+        self,
+        dispatch_run_id: int,
+        actual_assignments: Dict[int, int]
+    ) -> Dict[str, Any]:
+        """Compare les suggestions shadow avec les assignations réelles.
+        
+        Args:
+            dispatch_run_id: ID du dispatch run
+            actual_assignments: Dict {booking_id: driver_id} des assignations réelles
+            
+        Returns:
+            Statistiques de comparaison
+        """
+        try:
+            from models import RLSuggestion
+            
+            # Récupérer les suggestions shadow
+            shadow_suggestions = RLSuggestion.query.filter_by(
+                dispatch_run_id=dispatch_run_id
+            ).all()
+            
+            if not shadow_suggestions:
+                return {"total": 0, "message": "No shadow suggestions found"}
+            
+            # Comparaison
+            agreements = 0
+            total = len(shadow_suggestions)
+            
+            for sugg in shadow_suggestions:
+                actual_driver = actual_assignments.get(sugg.booking_id)
+                if actual_driver == sugg.driver_id:
+                    agreements += 1
+            
+            agreement_rate = agreements / total if total > 0 else 0
+            
+            return {
+                "total_suggestions": total,
+                "agreements": agreements,
+                "disagreements": total - agreements,
+                "agreement_rate": agreement_rate,
+                "dispatch_run_id": dispatch_run_id
+            }
+        
+        except Exception as e:
+            self.logger.error(
+                "[ShadowMode] Failed to compare: %s", e
+            )
+            return {"error": str(e)}

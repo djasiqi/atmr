@@ -11,11 +11,28 @@ export default function useDispatchStatus(socket) {
   const [pollingActive, setPollingActive] = useState(false);
   const [currentDate, setCurrentDate] = useState(null);
 
-  // Polling du statut (backup si pas de socket)
+  // ✅ Polling du statut avec exponential backoff (backup si pas de socket)
   useEffect(() => {
     if (!pollingActive) return;
 
+    let attempts = 0;
+    let delay = 2000; // Start at 2s
+    const maxAttempts = 10;
+    const timeoutGlobal = 10 * 60 * 1000; // 10 minutes
+    const startTime = Date.now();
+    let timeoutId = null;
+
     const fetchStatus = async () => {
+      // ✅ Vérifier timeout global
+      const elapsed = Date.now() - startTime;
+      if (elapsed >= timeoutGlobal) {
+        console.warn('[Dispatch] Timeout global atteint (10min) pour polling status');
+        setPollingActive(false);
+        setStatus('idle');
+        setLabel('Timeout - Vérifiez manuellement');
+        return;
+      }
+
       try {
         const data = await getDispatchStatus();
         const isRunning = data?.is_running || false;
@@ -30,16 +47,40 @@ export default function useDispatchStatus(socket) {
           setProgress(100);
           setLabel('Optimisation terminée');
           setUpdatedAt(Date.now());
+          return;
+        }
+
+        // ✅ Réessayer avec exponential backoff
+        attempts += 1;
+        if (attempts < maxAttempts) {
+          delay = Math.min(delay * 1.5, 10000); // Exponential backoff, max 10s
+          timeoutId = setTimeout(fetchStatus, delay);
+        } else {
+          console.warn(`[Dispatch] Maximum attempts (${maxAttempts}) atteint pour polling status`);
+          setPollingActive(false);
         }
       } catch (error) {
         console.error('Erreur lors de la récupération du statut:', error);
-        setPollingActive(false);
+        // ✅ Réessayer avec exponential backoff même en cas d'erreur
+        attempts += 1;
+        if (attempts < maxAttempts) {
+          delay = Math.min(delay * 1.5, 10000);
+          timeoutId = setTimeout(fetchStatus, delay);
+        } else {
+          setPollingActive(false);
+        }
       }
     };
 
-    const intervalId = setInterval(fetchStatus, 2000);
-    return () => clearInterval(intervalId);
-  }, [pollingActive, setStatus, setProgress, setLabel, setPollingActive, setUpdatedAt]);
+    // Démarrer le premier fetch
+    timeoutId = setTimeout(fetchStatus, delay);
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [pollingActive]);
 
   // Fonction pour rafraîchir les assignations pour une date donnée
   const refreshAssignmentsForDate = useCallback(async (dateStr) => {

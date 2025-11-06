@@ -19,7 +19,7 @@ const MLDashboard = () => {
   // Charger les données
   const fetchSummary = async () => {
     try {
-      const response = await fetch('/api/ml-monitoring/summary');
+      const response = await fetch('/api/v1/ml-monitoring/summary');
       if (!response.ok) throw new Error('Failed to fetch summary');
 
       const data = await response.json();

@@ -1,30 +1,21 @@
-# Requirements pour le module Reinforcement Learning
-# Semaine 13-14: POC & Environnement Gym
-# Semaine 15-16: Agent DQN (PyTorch)
+﻿# Requirements pour le module Reinforcement Learning
 
-# Gymnasium - Environnement RL
+# ========== RL Core Framework ==========
 gymnasium>=0.29.0
 
-# NumPy - Calculs numériques
-numpy>=1.24.0
-
-# Pandas - Manipulation de données
-pandas>=2.0.0
-
-# PyTorch - Deep Learning (pour DQN - Semaine 15-16)
+# ========== Deep Learning (PyTorch) ==========
 torch>=2.0.0
 torchvision>=0.15.0
 
-# Optuna - Auto-tuning hyperparams (Semaine 17)
+# ========== Auto-tuning & Hyperparameter Optimization ==========
 optuna>=3.3.0
-optuna-dashboard>=0.13.0  # Visualisation interactive
+optuna-dashboard>=0.13.0
 
-# TensorBoard - Monitoring entraînement
+# ========== Monitoring & Visualization ==========
 tensorboard>=2.13.0
-
-# Matplotlib - Visualisation
 matplotlib>=3.7.0
 
-# Scikit-learn - Métriques
-scikit-learn>=1.3.0
 
+# ========== Supporting Libraries ==========
+cloudpickle>=3.0.0  # Pour serialization
+torchvision>=0.15.0  # Pour image processing RL

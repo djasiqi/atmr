@@ -109,6 +109,23 @@ export const scheduleReservation = async (reservationId, isoDatetime) => {
 };
 
 /**
+ * Met à jour une réservation (adresses, heure, informations médicales, etc.)
+ * Utilise l'endpoint spécifique pour les entreprises qui autorise PENDING, ACCEPTED et ASSIGNED
+ * @param {number} reservationId - ID de la réservation
+ * @param {object} updateData - Données à mettre à jour (pickup_location, dropoff_location, scheduled_time, medical_facility, doctor_name, notes_medical, etc.)
+ * @returns {Promise} Réservation mise à jour
+ */
+export const updateReservation = async (reservationId, updateData) => {
+  try {
+    const { data } = await apiClient.put(`/companies/me/reservations/${reservationId}`, updateData);
+    return data;
+  } catch (error) {
+    console.error('[CompanyService] Error updating reservation:', error);
+    throw error.response?.data || error.message;
+  }
+};
+
+/**
  * Dispatch maintenant une réservation (+ minutes_offset).
  */
 export const dispatchNowForReservation = async (reservationId, minutesOffset = 15) => {
@@ -370,6 +387,8 @@ const normalizeMode = (m) => {
   const s = String(m ?? 'auto')
     .trim()
     .toLowerCase();
+  // ⚡ Support pour semi_auto → convertit en auto (backend ne supporte que auto/heuristic_only/solver_only)
+  if (s === 'semi_auto' || s === 'semi-auto') return 'auto';
   if (s === 'heuristic') return 'heuristic_only';
   if (s === 'solver') return 'solver_only';
   if (['auto', 'heuristic_only', 'solver_only'].includes(s)) return s;
@@ -485,6 +504,31 @@ export const runDispatchNow = async ({
 };
 
 /**
+ * Récupère le statut du dispatch pour une entreprise.
+ *
+ * @param {string} forDate - Date optionnelle (YYYY-MM-DD) pour obtenir le statut d'un dispatch spécifique
+ * @returns {Promise<Object>} Statut du dispatch avec dispatch_run_id, compteurs, etc.
+ */
+export const fetchDispatchStatus = async (forDate = null) => {
+  try {
+    const params = forDate ? { date: forDate } : {};
+    const { data } = await apiClient.get('/company_dispatch/status', { params });
+
+    console.log(`[Dispatch] Status fetched for date=${forDate}:`, {
+      is_running: data.is_running,
+      dispatch_run_id: data.dispatch_run_id,
+      assignments_count: data.counters?.assignments || 0,
+      active_dispatch_run: data.active_dispatch_run,
+    });
+
+    return data;
+  } catch (error) {
+    console.error('[Dispatch] Error fetching status:', error?.response?.data || error);
+    throw error;
+  }
+};
+
+/**
  * Alias clair pour notre UI : "optimiser la journée"
  */
 export const runDispatchForDay = async ({
@@ -492,7 +536,7 @@ export const runDispatchForDay = async ({
   regularFirst = true,
   allowEmergency,
   mode = 'auto', // auto par défaut
-  runAsync = true, // Changed default to true for reliability
+  runAsync = true, // ⚡ Par défaut async, mais peut être forcé à false pour petits dispatchs
   overrides,
 } = {}) => {
   if (!forDate) throw new Error('forDate (YYYY-MM-DD) requis');
@@ -514,8 +558,13 @@ export const runDispatchForDay = async ({
     // --- bloc principal : /run ---
     console.log('Sending dispatch request with payload:', payload);
 
+    // ⚡ Timeout adaptatif : mode sync = 90s (pour dispatchs complexes), async = 60s
+    const timeout = runAsync ? 60000 : 90000; // 60s pour async, 90s pour sync
+
     // 1) on tente /run (200 si sync, 202 si async)
-    const { data } = await apiClient.post('/company_dispatch/run', payload);
+    const { data } = await apiClient.post('/company_dispatch/run', payload, {
+      timeout: timeout,
+    });
 
     console.log('Dispatch response:', data);
 
@@ -526,13 +575,22 @@ export const runDispatchForDay = async ({
     };
   } catch (e) {
     // --- fallback : /trigger ---
-    console.error('Dispatch request failed:', e);
-    console.error('Error details:', e?.response?.data);
+    // ⚡ Si c'est un timeout en mode sync, c'est acceptable (le dispatch continue en arrière-plan)
+    if (e.code === 'ECONNABORTED' && !runAsync) {
+      console.warn(
+        '⚠️ [Dispatch] Timeout en mode sync, le dispatch continue en arrière-plan. Vérifiez via WebSocket ou rafraîchissement.'
+      );
+    } else {
+      console.error('Dispatch request failed:', e);
+      console.error('Error details:', e?.response?.data);
+    }
     console.log('Falling back to /trigger endpoint');
 
     try {
-      // /trigger = file d'attente → toujours async
-      const { data } = await apiClient.post('/company_dispatch/trigger', payload);
+      // /trigger = file d'attente → toujours async (timeout 60s)
+      const { data } = await apiClient.post('/company_dispatch/trigger', payload, {
+        timeout: 60000, // 60s pour async
+      });
       return {
         ...data,
         status: data.status || 'queued',
@@ -558,7 +616,7 @@ const toYMD = (isoString) => {
  * Si forDate est omis, récupère pour aujourd’hui.
  */
 export const fetchAssignedReservations = async (forDate) => {
-  console.log(`Fetching assigned reservations for date: ${forDate}`);
+  console.log(`[Dispatch] Fetching assigned reservations for date: ${forDate}`);
 
   try {
     // Use separate try/catch blocks to handle each request independently
@@ -577,9 +635,9 @@ export const fetchAssignedReservations = async (forDate) => {
         : Array.isArray(payload?.reservations)
         ? payload.reservations
         : [];
-      console.log(`Received ${reservations.length} reservations`);
+      console.log(`[Dispatch] Received ${reservations.length} reservations for date=${forDate}`);
     } catch (error) {
-      console.error('Error fetching reservations:', error?.response?.data || error);
+      console.error('[Dispatch] Error fetching reservations:', error?.response?.data || error);
       // Continue with empty reservations array
     }
 
@@ -590,18 +648,49 @@ export const fetchAssignedReservations = async (forDate) => {
 
       // /company_dispatch/assignments doit rester un tableau
       assignments = Array.isArray(assignmentsRes.data) ? assignmentsRes.data : [];
-      console.log(`Received ${assignments.length} assignments`);
+      console.log(`[Dispatch] Received ${assignments.length} assignments for date=${forDate}`);
+
+      // ✅ Log détaillé pour debugging (avec driver info)
+      if (assignments.length > 0) {
+        console.log(
+          `[Dispatch] Assignments details:`,
+          assignments.map((a) => ({
+            id: a.id,
+            booking_id: a.booking_id,
+            driver_id: a.driver_id,
+            driver: a.driver
+              ? {
+                  id: a.driver.id,
+                  full_name: a.driver.full_name,
+                  name: a.driver.name,
+                  user: a.driver.user
+                    ? {
+                        first_name: a.driver.user.first_name,
+                        last_name: a.driver.user.last_name,
+                        username: a.driver.user.username,
+                      }
+                    : null,
+                }
+              : null,
+            status: a.status,
+          }))
+        );
+      } else {
+        console.warn(
+          `[Dispatch] No assignments found for date=${forDate} (${reservations.length} reservations exist)`
+        );
+      }
     } catch (error) {
-      console.error('Error fetching assignments:', error?.response?.data || error);
+      console.error('[Dispatch] Error fetching assignments:', error?.response?.data || error);
       // Continue with empty assignments array
     }
 
     console.log(
-      `Processing ${reservations.length} reservations and ${assignments.length} assignments`
+      `[Dispatch] Processing ${reservations.length} reservations and ${assignments.length} assignments for date=${forDate}`
     );
 
     const byBookingId = new Map(assignments.map((a) => [a.booking_id, a]));
-    console.log(`Created map with ${byBookingId.size} assignments by booking ID`);
+    console.log(`[Dispatch] Created map with ${byBookingId.size} assignments by booking ID`);
 
     // Jour cible : YYYY-MM-DD (local)
     const targetDay =
@@ -707,10 +796,17 @@ export const fetchAssignedReservations = async (forDate) => {
       })
       .filter(Boolean); // Remove any undefined entries
 
-    console.log(`Returning ${rows.length} formatted rows for dispatch table`);
+    console.log(
+      `[Dispatch] Returning ${rows.length} formatted rows for dispatch table (date=${forDate})`
+    );
+
+    // ✅ Log du nombre de lignes avec assignments
+    const rowsWithAssignments = rows.filter((r) => r.assignment);
+    console.log(`[Dispatch] Rows with assignments: ${rowsWithAssignments.length}/${rows.length}`);
+
     return rows;
   } catch (error) {
-    console.error('Error fetching assigned reservations:', error);
+    console.error('[Dispatch] Error fetching assigned reservations:', error);
     // Return empty array instead of throwing to prevent UI from breaking
     return [];
   }
@@ -858,7 +954,14 @@ export const createManualBooking = async (bookingData) => {
     const { data } = await apiClient.post('/companies/me/reservations/manual', bookingData);
     return data; // { message, reservation, return_booking? }
   } catch (error) {
-    throw error.response?.data || error.message;
+    // ⚡ Préserver toute la structure de l'erreur Axios pour que le frontend puisse accéder à error.response.data
+    // Si on lance seulement error.response?.data, on perd la structure { response: { data: {...}, status: 400 } }
+    if (error.response) {
+      // Erreur HTTP avec réponse (400, 500, etc.) - lancer l'erreur complète
+      throw error;
+    }
+    // Erreur réseau ou autre - lancer avec un format standardisé
+    throw new Error(error.message || 'Erreur lors de la création de la réservation');
   }
 };
 
@@ -875,7 +978,7 @@ export const rescheduleBooking = async (reservationId, newTime, date = null) => 
   try {
     const payload = { new_time: newTime };
     if (date) payload.date = date;
-    
+
     const { data } = await apiClient.put(
       `/companies/me/reservations/${reservationId}/reschedule`,
       payload
@@ -895,7 +998,7 @@ export const rescheduleBooking = async (reservationId, newTime, date = null) => 
  */
 export const scheduleReturn = async (reservationId, returnTime) => {
   try {
-    const { data} = await apiClient.put(
+    const { data } = await apiClient.put(
       `/companies/me/reservations/${reservationId}/schedule_return`,
       { return_time: returnTime }
     );

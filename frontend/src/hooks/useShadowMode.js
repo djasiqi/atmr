@@ -22,14 +22,31 @@ export const useShadowMode = (options = {}) => {
   const [comparisons, setComparisons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isBackendAvailable, setIsBackendAvailable] = useState(true);
 
   const loadShadowData = useCallback(async () => {
+    if (!isBackendAvailable) {
+      setLoading(false);
+      return;
+    }
+
     try {
-      const [statusRes, statsRes, predsRes, compsRes] = await Promise.all([
-        apiClient.get('/shadow-mode/status'),
-        apiClient.get('/shadow-mode/stats'),
-        apiClient.get('/shadow-mode/predictions', { params: { limit: 50 } }),
-        apiClient.get('/shadow-mode/comparisons', { params: { limit: 50 } }),
+      const statusRes = await apiClient.get('shadow-mode/status', {
+        baseURL: '/api',
+      });
+
+      const [statsRes, predsRes, compsRes] = await Promise.all([
+        apiClient.get('shadow-mode/stats', {
+          baseURL: '/api',
+        }),
+        apiClient.get('shadow-mode/predictions', {
+          baseURL: '/api',
+          params: { limit: 50 },
+        }),
+        apiClient.get('shadow-mode/comparisons', {
+          baseURL: '/api',
+          params: { limit: 50 },
+        }),
       ]);
 
       setStatus(statusRes.data);
@@ -38,27 +55,34 @@ export const useShadowMode = (options = {}) => {
       setComparisons(compsRes.data.comparisons || []);
       setError(null);
     } catch (err) {
-      console.error('[useShadowMode] Error:', err);
-      setError(err.message);
+      const statusCode = err?.response?.status;
 
-      // En cas d'erreur 404, Shadow Mode n'est pas actif (c'est OK)
-      if (err.response?.status === 404 || err.response?.status === 403) {
+      if (statusCode === 404 || statusCode === 403) {
+        setIsBackendAvailable(false);
         setStatus({ status: 'unavailable' });
         setStats(null);
+        setPredictions([]);
+        setComparisons([]);
+        setError(null);
+      } else {
+        console.error('[useShadowMode] Error:', err);
+        setError(err.message || 'Erreur inconnue lors du chargement du Shadow Mode');
       }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isBackendAvailable]);
 
   useEffect(() => {
     loadShadowData();
 
-    if (autoRefresh) {
+    if (autoRefresh && isBackendAvailable) {
       const interval = setInterval(loadShadowData, refreshInterval);
       return () => clearInterval(interval);
     }
-  }, [loadShadowData, autoRefresh, refreshInterval]);
+
+    return undefined;
+  }, [loadShadowData, autoRefresh, refreshInterval, isBackendAvailable]);
 
   // Métriques dérivées
   const agreementRate = stats?.agreement_rate || 0;

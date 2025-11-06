@@ -1,0 +1,121 @@
+# yaml-language-server: disable
+# ✅ 2.11: Exemple de configuration Alertmanager pour PagerDuty
+# 
+# Usage:
+#   1. Copier ce fichier vers alertmanager.yml
+#   2. Remplacer <PAGERDUTY_INTEGRATION_KEY> par votre clé d'intégration PagerDuty
+#   3. Déployer Alertmanager avec docker-compose ou Kubernetes
+#
+# Documentation: https://prometheus.io/docs/alerting/latest/configuration/
+
+global:
+  # Durée avant de considérer une alerte comme résolue
+  resolve_timeout: 5m
+
+# Configuration des routes d'alertes
+route:
+  # Route par défaut
+  receiver: 'default'
+  
+  # Grouper les alertes par cluster et alertname
+  group_by: ['cluster', 'alertname']
+  
+  # Grouper les alertes pendant 10 secondes avant d'envoyer
+  group_wait: 10s
+  
+  # Attendre 10 secondes avant d'envoyer des alertes supplémentaires au même groupe
+  group_interval: 10s
+  
+  # Renvoyer la même alerte après 3 heures si non résolue
+  repeat_interval: 3h
+  
+  # Routes spécifiques pour PagerDuty (severity=critical)
+  routes:
+    # Route pour alertes critiques (PagerDuty)
+    - match:
+        severity: critical
+        notification: pagerduty
+      receiver: 'pagerduty-critical'
+      continue: true  # Continuer à évaluer les routes suivantes
+      
+    # Route pour alertes warnings (PagerDuty)
+    - match:
+        severity: warning
+        notification: pagerduty
+      receiver: 'pagerduty-warning'
+      continue: true
+    
+    # Route pour alertes Slack (toutes)
+    - match:
+        notification: slack
+      receiver: 'slack'
+      continue: false
+
+# Receivers (destinations d'alertes)
+receivers:
+  # Receiver par défaut (Slack ou log)
+  - name: 'default'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts'
+        title: 'ATMR Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}{{ end }}'
+  
+  # Receiver PagerDuty pour alertes critiques
+  - name: 'pagerduty-critical'
+    pagerduty_configs:
+      - service_key: '<PAGERDUTY_INTEGRATION_KEY>'  # ⚠️ REMPLACER par votre clé
+        description: '{{ .GroupLabels.alertname }}'
+        severity: 'critical'
+        details:
+          summary: '{{ .CommonAnnotations.summary }}'
+          description: '{{ .CommonAnnotations.description }}'
+          runbook_url: '{{ .CommonAnnotations.runbook_url }}'
+          component: '{{ .CommonLabels.component }}'
+          environment: '{{ .CommonLabels.environment }}'
+    
+    # Fallback vers Slack si PagerDuty échoue
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts-critical'
+        title: '🚨 Critical Alert: {{ .GroupLabels.alertname }}'
+  
+  # Receiver PagerDuty pour alertes warnings
+  - name: 'pagerduty-warning'
+    pagerduty_configs:
+      - service_key: '<PAGERDUTY_INTEGRATION_KEY>'  # ⚠️ REMPLACER par votre clé
+        description: '{{ .GroupLabels.alertname }}'
+        severity: 'warning'
+        details:
+          summary: '{{ .CommonAnnotations.summary }}'
+          description: '{{ .CommonAnnotations.description }}'
+          runbook_url: '{{ .CommonAnnotations.runbook_url }}'
+  
+  # Receiver Slack pour alertes non-critiques
+  - name: 'slack'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts'
+        title: 'ATMR Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Severity:* {{ .Labels.severity }}
+          *Component:* {{ .Labels.component }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+          {{ end }}
+
+# Templates pour formater les messages
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Inhibition rules (supprimer alertes redondantes)
+inhibit_rules:
+  # Si une alerte critique est déclenchée, supprimer les warnings pour le même composant
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['component', 'cluster']
+

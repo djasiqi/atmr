@@ -4,13 +4,15 @@ Extrait depuis models.py (lignes 249-418).
 """
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from datetime import date
 from typing import Optional, cast
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Index, Integer, String, func
+from sqlalchemy import Boolean, Column, Date, DateTime, Index, Integer, String, Text, func
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from typing_extensions import override
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -19,6 +21,8 @@ from ext import db
 
 from .base import _coerce_enum, _iso
 from .enums import GenderEnum, UserRole
+
+logger = logging.getLogger(__name__)
 
 ADDRESS_MAX_LENGTH = 200
 
@@ -60,6 +64,14 @@ class User(db.Model):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     force_password_change = Column(Boolean, default=False, nullable=False)
+
+    # ✅ D2: Colonnes chiffrées (stockage)
+    phone_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    email_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    first_name_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_name_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    address_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    encryption_migrated = Column(Boolean, default=False, nullable=False)
 
     # ✅ Ajout de l'index sur `public_id` pour optimiser les recherches
     __table_args__ = (
@@ -153,20 +165,20 @@ class User(db.Model):
         """
         if gender_value is None:
             return None
-        coerced = _coerce_enum(gender_value, GenderEnum)
-        if coerced is None:
+        try:
+            return _coerce_enum(gender_value, GenderEnum)
+        except (ValueError, KeyError):
             msg = "Genre invalide."
-            raise ValueError(msg)
-        return coerced
+            raise ValueError(msg) from None
 
     @validates("role")
     def validate_role(self, _key, role_value):
         """Coerce str → UserRole, évite d'évaluer un Column en bool."""
-        coerced = _coerce_enum(role_value, UserRole)
-        if coerced is None:
+        try:
+            return _coerce_enum(role_value, UserRole)
+        except (ValueError, KeyError):
             msg = "Invalid role value. Allowed values: admin, client, driver, company."
-            raise ValueError(msg)
-        return coerced
+            raise ValueError(msg) from None
 
     @validates("email")
     def validate_email(self, _key, email):
@@ -180,6 +192,159 @@ class User(db.Model):
             msg = "Format d'email invalide."
             raise ValueError(msg)
         return email.strip()
+
+    # ✅ D2: Propriétés hybrides pour chiffrement/déchiffrement automatique
+    @hybrid_property
+    def phone_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+        """Récupère le téléphone déchiffré."""
+        try:
+            from security.crypto import get_encryption_service
+            # Vérifier si migration effectuée et données chiffrées
+            is_migrated = bool(getattr(self, "encryption_migrated", False))
+            encrypted_val = getattr(self, "phone_encrypted", None)
+            if is_migrated and encrypted_val:
+                try:
+                    return get_encryption_service().decrypt_field(encrypted_val)
+                except Exception as e:
+                    logger.error("[D2] Erreur déchiffrement phone: %s", e)
+                    return None
+            # Fallback sur ancienne colonne (migration progressive)
+            return getattr(self, "phone", None)
+        except ImportError:
+            return getattr(self, "phone", None)
+    
+    @phone_secure.setter
+    def phone_secure(self, value: Optional[str]):
+        """Chiffre et stocke le téléphone."""
+        try:
+            from security.crypto import get_encryption_service
+            if value:
+                self.phone_encrypted = get_encryption_service().encrypt_field(value)
+                self.encryption_migrated = True
+                # Garder l'ancienne colonne vide (dépréciée)
+                self.phone = None
+            else:
+                self.phone_encrypted = None
+                self.phone = None
+        except ImportError:
+            # Fallback si le service n'est pas disponible
+            self.phone = value
+    
+    @hybrid_property
+    def email_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+        """Récupère l'email déchiffré."""
+        try:
+            from security.crypto import get_encryption_service
+            is_migrated = bool(getattr(self, "encryption_migrated", False))
+            encrypted_val = getattr(self, "email_encrypted", None)
+            if is_migrated and encrypted_val:
+                try:
+                    return get_encryption_service().decrypt_field(encrypted_val)
+                except Exception:
+                    return None
+            return cast(Optional[str], getattr(self, "email", None))
+        except ImportError:
+            return cast(Optional[str], getattr(self, "email", None))
+    
+    @email_secure.setter
+    def email_secure(self, value: Optional[str]):
+        """Chiffre et stocke l'email."""
+        try:
+            from security.crypto import get_encryption_service
+            if value:
+                self.email_encrypted = get_encryption_service().encrypt_field(value)
+                self.encryption_migrated = True
+            else:
+                self.email_encrypted = None
+        except ImportError:
+            self.email = value
+    
+    @hybrid_property
+    def first_name_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+        """Récupère le prénom déchiffré."""
+        try:
+            from security.crypto import get_encryption_service
+            is_migrated = bool(getattr(self, "encryption_migrated", False))
+            encrypted_val = getattr(self, "first_name_encrypted", None)
+            if is_migrated and encrypted_val:
+                try:
+                    return get_encryption_service().decrypt_field(encrypted_val)
+                except Exception:
+                    return None
+            return cast(Optional[str], getattr(self, "first_name", None))
+        except ImportError:
+            return cast(Optional[str], getattr(self, "first_name", None))
+    
+    @first_name_secure.setter
+    def first_name_secure(self, value: Optional[str]):
+        """Chiffre et stocke le prénom."""
+        try:
+            from security.crypto import get_encryption_service
+            if value:
+                self.first_name_encrypted = get_encryption_service().encrypt_field(value)
+                self.encryption_migrated = True
+            else:
+                self.first_name_encrypted = None
+        except ImportError:
+            self.first_name = value
+    
+    @hybrid_property
+    def last_name_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+        """Récupère le nom déchiffré."""
+        try:
+            from security.crypto import get_encryption_service
+            is_migrated = bool(getattr(self, "encryption_migrated", False))
+            encrypted_val = getattr(self, "last_name_encrypted", None)
+            if is_migrated and encrypted_val:
+                try:
+                    return get_encryption_service().decrypt_field(encrypted_val)
+                except Exception:
+                    return None
+            return cast(Optional[str], getattr(self, "last_name", None))
+        except ImportError:
+            return cast(Optional[str], getattr(self, "last_name", None))
+    
+    @last_name_secure.setter
+    def last_name_secure(self, value: Optional[str]):
+        """Chiffre et stocke le nom."""
+        try:
+            from security.crypto import get_encryption_service
+            if value:
+                self.last_name_encrypted = get_encryption_service().encrypt_field(value)
+                self.encryption_migrated = True
+            else:
+                self.last_name_encrypted = None
+        except ImportError:
+            self.last_name = value
+    
+    @hybrid_property
+    def address_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+        """Récupère l'adresse déchiffrée."""
+        try:
+            from security.crypto import get_encryption_service
+            is_migrated = bool(getattr(self, "encryption_migrated", False))
+            encrypted_val = getattr(self, "address_encrypted", None)
+            if is_migrated and encrypted_val:
+                try:
+                    return get_encryption_service().decrypt_field(encrypted_val)
+                except Exception:
+                    return None
+            return cast(Optional[str], getattr(self, "address", None))
+        except ImportError:
+            return cast(Optional[str], getattr(self, "address", None))
+    
+    @address_secure.setter
+    def address_secure(self, value: Optional[str]):
+        """Chiffre et stocke l'adresse."""
+        try:
+            from security.crypto import get_encryption_service
+            if value:
+                self.address_encrypted = get_encryption_service().encrypt_field(value)
+                self.encryption_migrated = True
+            else:
+                self.address_encrypted = None
+        except ImportError:
+            self.address = value
 
     # Propriété pour la sérialisation
     @property

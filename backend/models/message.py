@@ -130,7 +130,13 @@ class Message(db.Model):
 
     @validates("content")
     def _v_content(self, _k, text):
-        if not text or not str(text).strip():
+        # ✅ Permettre None temporairement (sera validé côté handler)
+        if text is None:
+            return None
+        # ✅ Convertir en string et strip
+        text_str = text.strip() if isinstance(text, str) else str(text).strip() if text else ""
+        # ✅ Validation stricte : rejeter uniquement les chaînes vides (pas None)
+        if text_str == "":
             msg = "Le contenu du message ne peut pas être vide."
             raise ValueError(msg)
-        return text.strip()
+        return text_str

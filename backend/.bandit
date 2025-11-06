@@ -1,0 +1,17 @@
+# Configuration Bandit pour scan de sécurité Python
+
+[bandit]
+# Exclure certains dossiers/tests
+exclude_dirs = tests,venv,__pycache__,migrations/versions,htmlcov,node_modules
+
+# Niveau de confiance minimum (0-100)
+confidence = medium
+
+# Seuil de sévérité (low, medium, high)
+severity = medium
+
+# Ignorer certaines règles si nécessaire
+# skips = B101,B601
+
+# Exclure des lignes spécifiques (peut être ajouté dans le code avec # nosec)
+

@@ -132,10 +132,10 @@ class Vehicle(db.Model):
             "vin": self.vin,
             "seats": self.seats,
             "wheelchair_accessible": _as_bool(self.wheelchair_accessible),
-            "insurance_expires_at": ins_dt.isoformat() if ins_dt else None,
-            "inspection_expires_at": insp_dt.isoformat() if insp_dt else None,
+            "insurance_expires_at": ins_dt.isoformat() if isinstance(ins_dt, datetime) else None,
+            "inspection_expires_at": insp_dt.isoformat() if isinstance(insp_dt, datetime) else None,
             "is_active": _as_bool(self.is_active),
-            "created_at": created_dt.isoformat() if created_dt else None,
+            "created_at": created_dt.isoformat() if isinstance(created_dt, datetime) else None,
         }
 
     @override

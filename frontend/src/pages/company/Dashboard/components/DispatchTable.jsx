@@ -1,8 +1,9 @@
 // src/pages/company/Dashboard/components/DispatchTable.jsx
 import React from 'react';
 import styles from './ReservationTable.module.css';
-import { FiCheckCircle, FiXCircle, FiUserPlus, FiTrash2, FiClock, FiZap } from 'react-icons/fi';
+import { FiCheckCircle, FiXCircle } from 'react-icons/fi';
 import { renderBookingDateTime } from '../../../../utils/formatDate';
+import ReservationActions from '../../../../components/reservations/ReservationActions';
 
 /**
  * Tableau spécifique pour la page Dispatch
@@ -18,6 +19,10 @@ const DispatchTable = ({
   onDelete,
   onSchedule,
   onDispatchNow,
+  hideSchedule = false,
+  hideUrgent = false,
+  hideEdit = false,
+  hideDelete = false,
 }) => {
   const deletableStatuses = ['pending', 'accepted', 'assigned'];
 
@@ -40,7 +45,7 @@ const DispatchTable = ({
         <tbody>
           {data.map((r) => {
             const status = r.status?.toLowerCase() || 'unknown';
-            const isDeletable = deletableStatuses.includes(status);
+            const _isDeletable = deletableStatuses.includes(status); // Conservé pour référence future
             const isReturn = !!r.is_return;
 
             // ❌ Aucune action pour les statuts terminaux (canceled, completed, rejected, etc.)
@@ -56,7 +61,8 @@ const DispatchTable = ({
 
             // Vérifier si c'est un retour sans heure définie (à confirmer)
             // Utiliser le champ time_confirmed pour déterminer si l'heure est à confirmer
-            const needsTimeConfirmation =
+            // Conservé pour référence future (géré par ReservationActions)
+            const _needsTimeConfirmation =
               isReturn && (r.time_confirmed === false || !r.scheduled_time);
 
             return (
@@ -101,93 +107,38 @@ const DispatchTable = ({
                     </span>
                   ) : (
                     <>
-                      {/* A) Retour avec heure à confirmer => Planifier + Urgent + Assigner + Supprimer */}
-                      {needsTimeConfirmation ? (
+                      {/* B) Courses PENDING normales => Accepter + Rejeter */}
+                      {status === 'pending' && !isReturn && (
                         <>
                           <button
-                            onClick={() => onSchedule?.(r)}
-                            title="Planifier l'heure de retour"
-                            className={styles.actionButton}
+                            onClick={() => onAccept?.(r.id)}
+                            title="Accepter"
+                            className={`${styles.actionButton} ${styles.acceptButton}`}
                           >
-                            <FiClock />
+                            <FiCheckCircle />
                           </button>
                           <button
-                            onClick={() => onDispatchNow?.(r)}
-                            title="Urgent (+15 min)"
-                            className={`${styles.actionButton} ${styles.urgentButton || ''}`}
+                            onClick={() => onReject?.(r.id)}
+                            title="Rejeter"
+                            className={`${styles.actionButton} ${styles.rejectButton}`}
                           >
-                            <FiZap />
+                            <FiXCircle />
                           </button>
-                          <button
-                            onClick={() => onAssign?.(r)}
-                            title="Assigner un chauffeur"
-                            className={styles.actionButton}
-                          >
-                            <FiUserPlus />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              console.log('🗑️ Suppression de la réservation:', r.id);
-                              if (!window.confirm(`Supprimer la réservation #${r.id} ?`)) return;
-                              onDelete?.(r);
-                            }}
-                            title="Annuler/Supprimer"
-                            className={`${styles.actionButton} ${styles.deleteButton}`}
-                          >
-                            <FiTrash2 />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          {/* B) Courses PENDING normales => Accepter + Rejeter */}
-                          {status === 'pending' && !isReturn && (
-                            <>
-                              <button
-                                onClick={() => onAccept?.(r.id)}
-                                title="Accepter"
-                                className={`${styles.actionButton} ${styles.acceptButton}`}
-                              >
-                                <FiCheckCircle />
-                              </button>
-                              <button
-                                onClick={() => onReject?.(r.id)}
-                                title="Rejeter"
-                                className={`${styles.actionButton} ${styles.rejectButton}`}
-                              >
-                                <FiXCircle />
-                              </button>
-                            </>
-                          )}
-
-                          {/* C) Courses ACCEPTED/ASSIGNED => Assigner */}
-                          {['accepted', 'assigned'].includes(status) && !needsTimeConfirmation && (
-                            <button
-                              onClick={() => onAssign?.(r)}
-                              title="Assigner un chauffeur"
-                              className={styles.actionButton}
-                            >
-                              <FiUserPlus />
-                            </button>
-                          )}
-
-                          {/* D) Bouton Supprimer pour les autres cas */}
-                          {isDeletable && !needsTimeConfirmation && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                console.log('🗑️ Suppression de la réservation:', r.id);
-                                if (!window.confirm(`Supprimer la réservation #${r.id} ?`)) return;
-                                onDelete?.(r);
-                              }}
-                              title="Supprimer/Annuler la réservation"
-                              className={`${styles.actionButton} ${styles.deleteButton}`}
-                            >
-                              <FiTrash2 />
-                            </button>
-                          )}
                         </>
                       )}
+
+                      {/* Actions centralisées : Planifier, Urgent, Assigner, Supprimer */}
+                      <ReservationActions
+                        reservation={r}
+                        onSchedule={onSchedule}
+                        onDispatchNow={onDispatchNow}
+                        onAssign={onAssign}
+                        onDelete={onDelete}
+                        hideSchedule={hideSchedule}
+                        hideUrgent={hideUrgent}
+                        hideEdit={hideEdit}
+                        hideDelete={hideDelete}
+                      />
                     </>
                   )}
                 </td>

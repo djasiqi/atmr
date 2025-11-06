@@ -61,12 +61,12 @@ export function renderBookingDateTime(booking) {
     const day = pad(date.getDate());
     const month = pad(date.getMonth() + 1);
     const year = date.getFullYear();
-    return `${day}.${month}.${year} • Heure à confirmer`;
+    return `${day}.${month}.${year} • ⏱️`;
   }
 
   // Si c'est un retour sans scheduled_time du tout
   if (isReturn && !scheduledTime) {
-    return 'Heure à confirmer';
+    return '⏱️';
   }
 
   // 🔍 Détecter les heures à 00:00 (heure par défaut à confirmer)
@@ -81,7 +81,7 @@ export function renderBookingDateTime(booking) {
       const day = pad(date.getDate());
       const month = pad(date.getMonth() + 1);
       const year = date.getFullYear();
-      return `${day}.${month}.${year} • Heure à confirmer`;
+      return `${day}.${month}.${year} • ⏱️`;
     }
   }
 

@@ -22,6 +22,96 @@ import { extractMedicalServiceInfo } from '../../../../utils/medicalExtract';
 import { toast } from 'sonner';
 import styles from './ManualBookingForm.module.css';
 
+const ensureIsoDatetimeWithSeconds = (value) => {
+  if (!value || typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed)) {
+    return `${trimmed}:00`;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return trimmed;
+};
+
+// ⚡ Helper pour combiner date et time en datetime ISO 8601 (comme ensureIsoDatetimeWithSeconds)
+const combineDateAndTime = (dateStr, timeStr) => {
+  if (!dateStr || !dateStr.trim()) return undefined;
+  if (!timeStr || !timeStr.trim()) return undefined;
+
+  // 🔍 Debug
+  console.log('[combineDateAndTime] Input - dateStr:', dateStr, 'timeStr:', timeStr);
+
+  // Nettoyer dateStr : extraire uniquement YYYY-MM-DD (au cas où c'est déjà un datetime)
+  const dateMatch = dateStr.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  if (!dateMatch) {
+    console.warn('[combineDateAndTime] Format de date invalide:', dateStr);
+    return undefined;
+  }
+  const cleanDate = dateMatch[1]; // YYYY-MM-DD
+  console.log('[combineDateAndTime] cleanDate:', cleanDate);
+
+  // Nettoyer timeStr : extraire uniquement HH:mm (au cas où c'est déjà un datetime complet)
+  // Supprimer toute date qui pourrait être présente dans timeStr
+  let cleanTime = String(timeStr).trim();
+
+  // ⚡ Si timeStr contient un 'T', c'est probablement un datetime complet
+  // Extraire seulement la partie time après le dernier 'T'
+  if (cleanTime.includes('T')) {
+    // Utiliser lastIndexOf pour trouver le dernier 'T' et prendre tout ce qui suit
+    const lastTIndex = cleanTime.lastIndexOf('T');
+    if (lastTIndex !== -1 && lastTIndex < cleanTime.length - 1) {
+      cleanTime = cleanTime.substring(lastTIndex + 1);
+    }
+  }
+
+  // Extraire uniquement HH:mm (supprimer les secondes, millisecondes, timezone, etc.)
+  // Regex pour extraire HH:mm même si d'autres éléments sont présents
+  const timeExtractMatch = cleanTime.match(
+    /^(\d{1,2}):(\d{2})(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/
+  );
+  if (timeExtractMatch) {
+    const [, hours, minutes] = timeExtractMatch;
+    // S'assurer que les heures et minutes sont valides
+    const h = parseInt(hours, 10);
+    const m = parseInt(minutes, 10);
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      cleanTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    } else {
+      console.warn('[combineDateAndTime] Heure ou minutes invalides:', h, m);
+      return undefined;
+    }
+  }
+
+  console.log('[combineDateAndTime] cleanTime après nettoyage:', cleanTime);
+
+  // Vérifier que cleanTime est au format HH:mm valide
+  const timeMatch = cleanTime.match(/^(\d{2}):(\d{2})$/);
+  if (!timeMatch) {
+    console.warn(
+      '[combineDateAndTime] Format de time invalide après nettoyage:',
+      cleanTime,
+      '(original:',
+      timeStr,
+      ')'
+    );
+    return undefined;
+  }
+
+  const [, hours, minutes] = timeMatch;
+
+  // Format final : YYYY-MM-DDTHH:mm:00 (identique à ensureIsoDatetimeWithSeconds)
+  const result = `${cleanDate}T${hours}:${minutes}:00`;
+  console.log('[combineDateAndTime] Résultat final:', result);
+  return result;
+};
+
 export default function ManualBookingForm({ onSuccess }) {
   const queryClient = useQueryClient();
 
@@ -88,6 +178,7 @@ export default function ManualBookingForm({ onSuccess }) {
               dropoff_lat: dropoffCoords.lat,
               dropoff_lon: dropoffCoords.lon,
             },
+            timeout: 4000, // ⏱️ Timeout très court (4s) : fallback rapide si OSRM indisponible
           });
 
           if (response.data && response.data.duration) {
@@ -101,7 +192,15 @@ export default function ManualBookingForm({ onSuccess }) {
             setEstimatedDuration(null);
           }
         } catch (error) {
-          console.error('❌ Erreur calcul durée OSRM:', error);
+          // ⚡ Timeout OSRM est normal (fail-fast) → utiliser fallback silencieusement
+          const isTimeout = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
+          if (isTimeout) {
+            console.debug(
+              '⏱️ OSRM timeout (comportement attendu), utilisation du fallback Haversine'
+            );
+          } else {
+            console.warn('⚠️ Erreur calcul durée OSRM (non-timeout):', error.message || error);
+          }
 
           // ⚠️ Fallback: Calcul Haversine approximatif en cas d'erreur OSRM
           try {
@@ -121,7 +220,10 @@ export default function ManualBookingForm({ onSuccess }) {
             const durationMinutes = Math.round((distanceKm / 30) * 60);
 
             setEstimatedDuration(durationMinutes);
-            console.warn(`⚠️ Fallback Haversine : ${durationMinutes} min (approximatif)`);
+            if (!isTimeout) {
+              // Seulement afficher le warning pour les vraies erreurs (pas les timeouts)
+              console.debug(`📍 Durée estimée (Haversine) : ${durationMinutes} min`);
+            }
           } catch (fallbackError) {
             console.error('❌ Erreur fallback Haversine:', fallbackError);
             setEstimatedDuration(null);
@@ -423,12 +525,76 @@ export default function ManualBookingForm({ onSuccess }) {
       onSuccess?.(data);
     },
     onError: (err) => {
-      console.error('createManualBooking error:', err?.response?.data || err);
-      toast.error(
+      // ⚡ Ne pas logger les 401 temporaires qui sont gérés par le refresh automatique
+      const is401Refresh =
+        err?.response?.status === 401 && err?.config?._retryAfterRefresh === undefined;
+      if (!is401Refresh) {
+        // 🆕 Logger toute la structure de l'erreur pour debug
+        console.error('❌ createManualBooking error:', err);
+        console.error('📋 err.response:', err?.response);
+        console.error('📋 err.response?.data:', err?.response?.data);
+        console.error('📋 err.message:', err?.message);
+        console.error('📋 err.toString():', err?.toString());
+
+        // 🆕 Afficher les détails des erreurs de validation
+        const errorData = err?.response?.data || err?.data || err;
+        console.error("📋 Structure complète de l'erreur:", JSON.stringify(errorData, null, 2));
+
+        if (errorData?.errors) {
+          console.error('Détails des erreurs de validation:', errorData.errors);
+
+          // 🔍 Extraire récursivement tous les champs en erreur (gérer la structure nested)
+          const extractErrors = (obj, prefix = '', depth = 0) => {
+            const extracted = [];
+            if (!obj || typeof obj !== 'object' || depth > 10) return extracted; // Protection contre récursion infinie
+
+            for (const [key, value] of Object.entries(obj)) {
+              // Ignorer les clés spéciales et les structures "errors" nested qui sont juste des wrappers
+              if (key === 'message' || key.startsWith('_')) continue;
+
+              // ⚡ Si on trouve "errors" nested, descendre directement dedans sans ajouter au préfixe
+              if (key === 'errors' && value && typeof value === 'object' && !Array.isArray(value)) {
+                extracted.push(...extractErrors(value, prefix, depth + 1));
+                continue;
+              }
+
+              const fieldPath = prefix ? `${prefix}.${key}` : key;
+
+              if (Array.isArray(value)) {
+                // Liste de messages directement - c'est un champ réel en erreur
+                extracted.push({ field: fieldPath, messages: value });
+              } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+                // Objet nested, extraire récursivement
+                extracted.push(...extractErrors(value, fieldPath, depth + 1));
+              } else if (value) {
+                // Message unique
+                extracted.push({ field: fieldPath, messages: [String(value)] });
+              }
+            }
+            return extracted;
+          };
+
+          const allErrors = extractErrors(errorData.errors);
+
+          if (allErrors.length > 0) {
+            // Construire un message détaillé avec tous les champs en erreur
+            const errorMessages = allErrors.map(({ field, messages }) => {
+              const msgList = Array.isArray(messages) ? messages : [String(messages)];
+              return `• ${field}: ${msgList.join(', ')}`;
+            });
+            toast.error(`Erreur de validation:\n${errorMessages.join('\n')}`, { duration: 10000 });
+            return;
+          }
+        }
+      }
+
+      // Message d'erreur générique
+      const errorMessage =
         err?.response?.data?.error ||
-          err?.response?.data?.message ||
-          `Erreur création réservation : ${err.message}`
-      );
+        err?.response?.data?.message ||
+        `Erreur création réservation : ${err.message || 'Erreur inconnue'}`;
+
+      toast.error(errorMessage);
     },
   });
 
@@ -477,7 +643,7 @@ export default function ManualBookingForm({ onSuccess }) {
       pickup_lon: pickupCoords.lon ?? undefined,
       dropoff_lat: dropoffCoords.lat ?? undefined,
       dropoff_lon: dropoffCoords.lon ?? undefined,
-      scheduled_time: scheduledTime,
+      scheduled_time: ensureIsoDatetimeWithSeconds(scheduledTime),
       is_round_trip: !!isRoundTrip,
       amount: amount ? parseFloat(amount) : 0,
 
@@ -497,24 +663,57 @@ export default function ManualBookingForm({ onSuccess }) {
       // Nouveaux champs structurés
       establishment_id: establishment?.id ?? undefined,
       medical_service_id: serviceObj?.id ?? undefined,
-      // Si aller-retour : toujours envoyer return_date, optionnellement return_time
+      // Si aller-retour : toujours envoyer return_date
+      // return_time seulement si une heure est spécifiée (sinon = "heure à confirmer")
+      // ⚡ return_time doit être au format ISO 8601 complet (YYYY-MM-DDTHH:mm:ss)
       ...(isRoundTrip && returnDate
-        ? {
-            return_date: returnDate,
-            return_time: returnTime || undefined, // Si vide, backend mettra 00:00
-          }
+        ? (() => {
+            // Si returnTime est vide/null, ne PAS envoyer return_time (heure à confirmer)
+            if (!returnTime || !returnTime.trim()) {
+              return {
+                return_date: returnDate,
+                // Pas de return_time → signifie "heure à confirmer"
+              };
+            }
+
+            // Si returnTime est rempli, combiner avec returnDate pour créer un datetime ISO complet
+            // 🔍 Debug pour voir les valeurs avant formatage
+            console.log('🔍 [ReturnTime] returnDate:', returnDate, 'type:', typeof returnDate);
+            console.log(
+              '🔍 [ReturnTime] returnTime (raw):',
+              returnTime,
+              'type:',
+              typeof returnTime
+            );
+            const formattedReturnTime = combineDateAndTime(returnDate, returnTime);
+            console.log('🔍 [ReturnTime] formaté:', formattedReturnTime);
+
+            if (!formattedReturnTime) {
+              console.warn('⚠️ [ReturnTime] Échec du formatage, retour sans return_time');
+              return {
+                return_date: returnDate,
+                // Pas de return_time si le formatage échoue
+              };
+            }
+
+            return {
+              return_date: returnDate,
+              return_time: formattedReturnTime,
+            };
+          })()
         : {}),
 
-      // Récurrence
-      is_recurring: isRecurring,
+      // Récurrence (ne pas envoyer si is_recurring est false)
       ...(isRecurring
         ? {
-            recurrence_type: recurrenceType,
-            recurrence_days: recurrenceType === 'custom' ? selectedDays : undefined,
+            is_recurring: true,
+            recurrence_type: recurrenceType || undefined,
+            recurrence_days:
+              recurrenceType === 'custom' && selectedDays?.length > 0 ? selectedDays : undefined,
             recurrence_end_date: recurrenceEndDate || undefined,
-            occurrences: occurrences || undefined,
+            occurrences: occurrences > 0 ? occurrences : undefined,
           }
-        : {}),
+        : {}), // ⚡ Ne rien envoyer si la récurrence est désactivée (is_recurring aura la valeur par défaut false côté backend)
     };
 
     console.log('[ManualBookingForm] payload:', payload);
@@ -845,7 +1044,7 @@ export default function ManualBookingForm({ onSuccess }) {
                   name="return_time"
                   value={returnTime}
                   onChange={(e) => setReturnTime(e.target.value)}
-                  placeholder="Laisser vide pour « Heure à confirmer »"
+                  placeholder="Laisser vide pour « ⏱️ »"
                 />
                 <small
                   style={{

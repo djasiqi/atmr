@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import PropTypes from "prop-types";
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import PropTypes from 'prop-types';
 import {
   LinearProgress,
   Dialog,
@@ -14,33 +14,32 @@ import {
   Chip,
   Tooltip,
   Alert,
-} from "@mui/material";
-import { FiRefreshCw } from "react-icons/fi";
+} from '@mui/material';
+import { FiRefreshCw } from 'react-icons/fi';
 // import { MdSwapHoriz } from "react-icons/md"; // removed unused icon
-import styles from "./DispatchTable.module.css";
-import { renderBookingDateTime } from "../../../utils/formatDate";
+import styles from './DispatchTable.module.css';
+import { renderBookingDateTime } from '../../../utils/formatDate';
 
-import useCompanySocket from "../../../hooks/useCompanySocket";
-import useDispatchStatus from "../../../hooks/useDispatchStatus";
+import useCompanySocket from '../../../hooks/useCompanySocket';
+import useDispatchStatus from '../../../hooks/useDispatchStatus';
 import {
   runDispatchForDay,
   fetchDispatchRunById,
   fetchDispatchDelays,
-} from "../../../services/companyService";
+} from '../../../services/companyService';
 // Utilitaires locaux simples
-const pad2 = (n) => String(n).padStart(2, "0");
-const toYMD = (d) =>
-  `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const pad2 = (n) => String(n).padStart(2, '0');
+const toYMD = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
 const isActiveStatus = (s) =>
   [
-    "scheduled",
-    "en_route_pickup",
-    "arrived_pickup",
-    "onboard",
-    "en_route_dropoff",
-    "arrived_dropoff",
-  ].includes((s || "").toLowerCase());
+    'scheduled',
+    'en_route_pickup',
+    'arrived_pickup',
+    'onboard',
+    'en_route_dropoff',
+    'arrived_dropoff',
+  ].includes((s || '').toLowerCase());
 
 /**
  * Tableau des courses dispatchées avec suivi du moteur.
@@ -69,12 +68,10 @@ const DispatchTable = ({
   } = useDispatchStatus(socket);
 
   const isDispatching = isRunning;
-  const statusLabel = isDispatching ? label : "Planification à jour";
+  const statusLabel = isDispatching ? label : 'Planification à jour';
 
   // --- Panneau planification ---
-  const [dispatchDay, setDispatchDay] = useState(
-    initialDispatchDay || toYMD(new Date())
-  );
+  const [dispatchDay, setDispatchDay] = useState(initialDispatchDay || toYMD(new Date()));
   const [regularFirst, setRegularFirst] = useState(initialRegularFirst);
   const [allowEmergency, setAllowEmergency] = useState(initialAllowEmergency);
 
@@ -95,20 +92,40 @@ const DispatchTable = ({
         runAsync: true,
       });
 
-      console.log("Dispatch response:", response);
+      console.log('Dispatch response:', response);
 
       // Handle the response with our enhanced hook
       handleDispatchJobResponse(response);
 
-      // --- Fallback polling si on a un run_id mais pas d'event socket
+      // ✅ Fallback polling avec exponential backoff et timeout global
       if (response?.dispatch_run_id) {
         let attempts = 0;
-        const maxAttempts = 90; // ~3 minutes
+        const maxAttempts = 10; // Réduit de 90 à 10 (timeout global gère la limite)
+        let delay = 2000; // Start at 2s
+        const timeoutGlobal = 10 * 60 * 1000; // 10 minutes en millisecondes
+        const startTime = Date.now();
+
         const poll = async () => {
+          // ✅ Vérifier timeout global
+          const elapsed = Date.now() - startTime;
+          if (elapsed >= timeoutGlobal) {
+            console.warn(
+              `[Dispatch] Timeout global atteint (10min) pour dispatch_run_id=${response.dispatch_run_id}`
+            );
+            // Optionnel: notification utilisateur
+            if (typeof window !== 'undefined' && window.alert) {
+              // Ne pas utiliser alert() directement, mais plutôt un système de notification
+              console.warn(
+                '[Dispatch] Le dispatch prend plus de temps que prévu. Vérifiez manuellement.'
+              );
+            }
+            return; // Arrêter le polling
+          }
+
           try {
             const run = await fetchDispatchRunById(response.dispatch_run_id);
             // status attendu: queued|running|completed|failed (selon ton modèle)
-            if (run?.status === "completed" || run?.status === "failed") {
+            if (run?.status === 'completed' || run?.status === 'failed') {
               // Use the date from the response if available
               const reloadDate = response.for_date || dispatchDay;
               reload?.(reloadDate);
@@ -118,13 +135,21 @@ const DispatchTable = ({
             }
           } catch (e) {
             // on ignore l'erreur ponctuelle et on réessaie
+            console.warn('[Dispatch] Erreur polling (tentative', attempts + 1, '):', e);
           }
+
           attempts += 1;
           if (attempts < maxAttempts) {
-            setTimeout(poll, 2000);
+            // ✅ Exponential backoff: 2s → 5s → 10s (max 10s)
+            delay = Math.min(delay * 1.5, 10000);
+            setTimeout(poll, delay);
+          } else {
+            console.warn(
+              `[Dispatch] Maximum attempts (${maxAttempts}) atteint pour dispatch_run_id=${response.dispatch_run_id}`
+            );
           }
         };
-        setTimeout(poll, 2000);
+        setTimeout(poll, delay);
       }
 
       // Reload data after a short delay to ensure backend has processed the request
@@ -133,14 +158,14 @@ const DispatchTable = ({
         setUpdatedAt(Date.now());
       }, 2000);
     } catch (err) {
-      console.error("Dispatch failed:", err);
+      console.error('Dispatch failed:', err);
 
       // Provide more detailed error information
       const errorMessage =
         err?.response?.data?.message ||
         err?.response?.data?.error ||
         err?.message ||
-        "Erreur lors de la planification.";
+        'Erreur lors de la planification.';
 
       alert(`Erreur de dispatch: ${errorMessage}`);
     }
@@ -151,16 +176,16 @@ const DispatchTable = ({
     if (!socket) return;
 
     const handleDispatchCompleted = (data) => {
-      console.log("Dispatch run completed event received:", data);
+      console.log('Dispatch run completed event received:', data);
 
       // Ensure we have the necessary data
       if (!data) {
-        console.error("Invalid dispatch_run_completed event data");
+        console.error('Invalid dispatch_run_completed event data');
         return;
       }
 
       // Log the data for debugging
-      console.log("Dispatch run completed with data:", {
+      console.log('Dispatch run completed with data:', {
         dispatch_run_id: data.dispatch_run_id,
         assignments_count: data.assignments_count,
         date: data.date,
@@ -175,7 +200,7 @@ const DispatchTable = ({
         reload?.(reloadDate);
       } else {
         // Fallback to general reload
-        console.log("Reloading assignments (no specific date)");
+        console.log('Reloading assignments (no specific date)');
         reload?.();
       }
 
@@ -185,22 +210,19 @@ const DispatchTable = ({
 
     // Declare a handler named for proper removal
     const onDispatchRunCompleted = (data) => {
-      console.log("Dispatch run completed:", data);
+      console.log('Dispatch run completed:', data);
       // Verify that the structure is as expected
       if (data && (data.dispatch_run_id || data.date)) {
         handleDispatchCompleted(data);
       } else {
-        console.error(
-          "Structure d'événement dispatch_run_completed invalide:",
-          data
-        );
+        console.error("Structure d'événement dispatch_run_completed invalide:", data);
       }
     };
 
-    socket.on("dispatch_run_completed", onDispatchRunCompleted);
+    socket.on('dispatch_run_completed', onDispatchRunCompleted);
 
     return () => {
-      socket.off("dispatch_run_completed", onDispatchRunCompleted);
+      socket.off('dispatch_run_completed', onDispatchRunCompleted);
     };
   }, [socket, reload, dispatchDay]);
 
@@ -214,8 +236,8 @@ const DispatchTable = ({
   const updatedLabel = (() => {
     const delta = Math.max(0, relativeNow - updatedAt);
     const mins = Math.floor(delta / 60000);
-    if (mins === 0) return "il y a quelques secondes";
-    if (mins === 1) return "il y a 1 minute";
+    if (mins === 0) return 'il y a quelques secondes';
+    if (mins === 1) return 'il y a 1 minute';
     return `il y a ${mins} minutes`;
   })();
 
@@ -251,18 +273,14 @@ const DispatchTable = ({
           if (!bid) continue;
           const prev = map[bid]?.delay_minutes ?? 0;
           const cur = Number(
-            d.delay_minutes ??
-              d.pickup_delay_minutes ??
-              d.dropoff_delay_minutes ??
-              0
+            d.delay_minutes ?? d.pickup_delay_minutes ?? d.dropoff_delay_minutes ?? 0
           );
           if (!map[bid] || cur > prev) {
             map[bid] = {
               booking_id: bid,
               delay_minutes: cur,
               is_dropoff: d.is_dropoff || false,
-              estimated_arrival:
-                d.estimated_arrival || d.pickup_eta || d.dropoff_eta || null,
+              estimated_arrival: d.estimated_arrival || d.pickup_eta || d.dropoff_eta || null,
               scheduled_time: d.scheduled_time || null,
             };
           }
@@ -284,7 +302,7 @@ const DispatchTable = ({
 
     // Essaye de souscrire par date si le backend expose ces rooms
     try {
-      socket.emit("subscribe:date", dispatchDay);
+      socket.emit('subscribe:date', dispatchDay);
     } catch (_) {}
 
     const onAssignmentCreated = (data) => {
@@ -296,7 +314,7 @@ const DispatchTable = ({
                 assignment: {
                   id: data.assignment_id,
                   driver_id: data.driver_id,
-                  status: "assigned",
+                  status: 'assigned',
                   estimated_pickup_arrival: data.estimated_pickup_arrival,
                   estimated_dropoff_arrival: data.estimated_dropoff_arrival,
                 },
@@ -318,9 +336,7 @@ const DispatchTable = ({
 
     const onAssignmentCancelled = (data) => {
       setRows((prev) =>
-        prev.map((b) =>
-          b.id === data.booking_id ? { ...b, assignment: null } : b
-        )
+        prev.map((b) => (b.id === data.booking_id ? { ...b, assignment: null } : b))
       );
     };
 
@@ -344,11 +360,9 @@ const DispatchTable = ({
 
     const onBookingStatusChanged = (data) => {
       setRows((prev) =>
-        prev.map((b) =>
-          b.id === data.booking_id ? { ...b, status: data.status } : b
-        )
+        prev.map((b) => (b.id === data.booking_id ? { ...b, status: data.status } : b))
       );
-      if (["completed", "cancelled"].includes(data.status)) {
+      if (['completed', 'cancelled'].includes(data.status)) {
         setDelays((prev) => {
           const cp = { ...prev };
           delete cp[data.booking_id];
@@ -370,18 +384,14 @@ const DispatchTable = ({
             if (!bid) continue;
             const prev = map[bid]?.delay_minutes ?? 0;
             const cur = Number(
-              d.delay_minutes ??
-                d.pickup_delay_minutes ??
-                d.dropoff_delay_minutes ??
-                0
+              d.delay_minutes ?? d.pickup_delay_minutes ?? d.dropoff_delay_minutes ?? 0
             );
             if (!map[bid] || cur > prev) {
               map[bid] = {
                 booking_id: bid,
                 delay_minutes: cur,
                 is_dropoff: d.is_dropoff || false,
-                estimated_arrival:
-                  d.estimated_arrival || d.pickup_eta || d.dropoff_eta || null,
+                estimated_arrival: d.estimated_arrival || d.pickup_eta || d.dropoff_eta || null,
                 scheduled_time: d.scheduled_time || null,
               };
             }
@@ -391,23 +401,23 @@ const DispatchTable = ({
       }, 800);
     };
 
-    socket.on("dispatch:assignment:created", onAssignmentCreated);
-    socket.on("dispatch:assignment:updated", onAssignmentUpdated);
-    socket.on("dispatch:assignment:cancelled", onAssignmentCancelled);
-    socket.on("dispatch:delay:detected", onDelayDetected);
-    socket.on("booking:status:changed", onBookingStatusChanged);
-    socket.on("driver_location_update", onDriverLocationUpdated);
+    socket.on('dispatch:assignment:created', onAssignmentCreated);
+    socket.on('dispatch:assignment:updated', onAssignmentUpdated);
+    socket.on('dispatch:assignment:cancelled', onAssignmentCancelled);
+    socket.on('dispatch:delay:detected', onDelayDetected);
+    socket.on('booking:status:changed', onBookingStatusChanged);
+    socket.on('driver_location_update', onDriverLocationUpdated);
 
     return () => {
-      socket.off("dispatch:assignment:created", onAssignmentCreated);
-      socket.off("dispatch:assignment:updated", onAssignmentUpdated);
-      socket.off("dispatch:assignment:cancelled", onAssignmentCancelled);
-      socket.off("dispatch:delay:detected", onDelayDetected);
-      socket.off("booking:status:changed", onBookingStatusChanged);
-      socket.off("driver_location_update", onDriverLocationUpdated);
+      socket.off('dispatch:assignment:created', onAssignmentCreated);
+      socket.off('dispatch:assignment:updated', onAssignmentUpdated);
+      socket.off('dispatch:assignment:cancelled', onAssignmentCancelled);
+      socket.off('dispatch:delay:detected', onDelayDetected);
+      socket.off('booking:status:changed', onBookingStatusChanged);
+      socket.off('driver_location_update', onDriverLocationUpdated);
       if (locTimer) clearTimeout(locTimer);
       try {
-        socket.emit("unsubscribe:date", dispatchDay);
+        socket.emit('unsubscribe:date', dispatchDay);
       } catch (_) {}
     };
   }, [socket, dispatchDay]);
@@ -415,7 +425,7 @@ const DispatchTable = ({
   // --- Réassignation ---
   const [reModalOpen, setReModalOpen] = useState(false);
   const [selectedBooking /*, setSelectedBooking*/] = useState(null);
-  const [selectedDriver, setSelectedDriver] = useState("");
+  const [selectedDriver, setSelectedDriver] = useState('');
 
   // openReassign removed (no reassign button in current UI)
 
@@ -425,7 +435,7 @@ const DispatchTable = ({
         await onReassign?.(selectedBooking.assignment.id, selectedDriver);
         setReModalOpen(false);
       } catch (e) {
-        alert("Échec de la réassignation.");
+        alert('Échec de la réassignation.');
       }
     }
   };
@@ -437,13 +447,12 @@ const DispatchTable = ({
       .filter(
         (d) =>
           d.id !== currentId &&
-          ((typeof d.status === "string" &&
-            d.status.toLowerCase() === "available") ||
+          ((typeof d.status === 'string' && d.status.toLowerCase() === 'available') ||
             d.is_available === true)
       )
       .sort((a, b) => {
-        const an = a.name || a.username || "";
-        const bn = b.name || b.username || "";
+        const an = a.name || a.username || '';
+        const bn = b.name || b.username || '';
         return an.localeCompare(bn);
       });
   }, [selectedBooking, drivers]);
@@ -455,12 +464,8 @@ const DispatchTable = ({
 
   // --- Stats pied de tableau ---
   const total = rows.length;
-  const completed = rows.filter(
-    (b) => (b.status || "").toLowerCase() === "completed"
-  ).length;
-  const cancelled = rows.filter(
-    (b) => (b.status || "").toLowerCase() === "cancelled"
-  ).length;
+  const completed = rows.filter((b) => (b.status || '').toLowerCase() === 'completed').length;
+  const cancelled = rows.filter((b) => (b.status || '').toLowerCase() === 'cancelled').length;
   const inProgress = rows.filter((b) => isActiveStatus(b.status)).length;
   const delayedCount = Object.keys(delays).length;
 
@@ -479,10 +484,10 @@ const DispatchTable = ({
   const timingStatus = (b) => {
     // 1) signalements temps réel (prend le pas)
     const d = delays[b.id];
-    if (d && typeof d.delay_minutes === "number") {
+    if (d && typeof d.delay_minutes === 'number') {
       const mins = d.delay_minutes;
       return {
-        kind: mins <= 0 ? "on_time" : "delayed",
+        kind: mins <= 0 ? 'on_time' : 'delayed',
         minutes: Math.max(0, mins),
         label: mins <= 0 ? "À l'heure" : `${mins} min de retard`,
       };
@@ -493,32 +498,31 @@ const DispatchTable = ({
     if (sch && eta) {
       const diff = minutesBetween(eta, sch); // eta - scheduled
       if (diff !== null) {
-        if (diff <= 0)
-          return { kind: "on_time", minutes: 0, label: "À l'heure" };
+        if (diff <= 0) return { kind: 'on_time', minutes: 0, label: "À l'heure" };
         if (diff > 0 && diff < 10)
           return {
-            kind: "slightly_delayed",
+            kind: 'slightly_delayed',
             minutes: diff,
             label: `${diff} min de retard`,
           };
         return {
-          kind: "delayed",
+          kind: 'delayed',
           minutes: diff,
           label: `${diff} min de retard`,
         };
       }
     }
     // 3) impossibilité: pas d'assignation et statut actif/à venir
-    const st = (b.status || "").toLowerCase();
-    const isDone = st === "completed" || st === "cancelled";
+    const st = (b.status || '').toLowerCase();
+    const isDone = st === 'completed' || st === 'cancelled';
     if (!b.assignment && !isDone) {
       return {
-        kind: "impossible",
+        kind: 'impossible',
         minutes: null,
-        label: "Impossible (aucun chauffeur)",
+        label: 'Impossible (aucun chauffeur)',
       };
     }
-    return { kind: "unknown", minutes: null, label: "—" };
+    return { kind: 'unknown', minutes: null, label: '—' };
   };
 
   return (
@@ -563,17 +567,17 @@ const DispatchTable = ({
                 isDispatching
                   ? `Moteur en cours (${progress || 0}%)`
                   : !dispatchDay
-                  ? "Sélectionne une date"
+                  ? 'Sélectionne une date'
                   : "Lancer l'optimisation"
               }
             >
-              {isDispatching ? "Optimisation..." : "Optimiser cette journée"}
+              {isDispatching ? 'Optimisation...' : 'Optimiser cette journée'}
             </button>
           </div>
           <small className={styles.hint}>
-            Astuce : sélectionne le jour, puis "Optimiser cette journée". Le
-            moteur traitera d'abord les réguliers, puis n'utilisera les
-            chauffeurs d'urgence que si nécessaire (selon les options).
+            Astuce : sélectionne le jour, puis "Optimiser cette journée". Le moteur traitera d'abord
+            les réguliers, puis n'utilisera les chauffeurs d'urgence que si nécessaire (selon les
+            options).
           </small>
         </div>
       )}
@@ -631,8 +635,8 @@ const DispatchTable = ({
                 ? drivers.find((d) => d.id === b.assignment.driver_id) || {}
                 : {};
               // ✅ Résolution robuste du nom chauffeur (string, objet, fallback id)
-              let driverName = "Non assigné";
-              if (typeof b?.driver === "string" && b.driver.trim()) {
+              let driverName = 'Non assigné';
+              if (typeof b?.driver === 'string' && b.driver.trim()) {
                 driverName = b.driver.trim();
               } else if (b?.driver_username) {
                 driverName = b.driver_username;
@@ -644,35 +648,31 @@ const DispatchTable = ({
                 driverName = assignedDriver.username || assignedDriver.name;
               } else if (b?.driver_id) {
                 const byId = drivers.find((d) => d.id === b.driver_id);
-                if (byId)
-                  driverName = byId.username || byId.name || `#${byId.id}`;
+                if (byId) driverName = byId.username || byId.name || `#${byId.id}`;
               }
               // Si la course est terminée mais aucun nom détecté, afficher "Inconnu" plutôt que "Non assigné"
-              if (
-                (b.status || "").toLowerCase() === "completed" &&
-                driverName === "Non assigné"
-              ) {
-                driverName = "Inconnu";
+              if ((b.status || '').toLowerCase() === 'completed' && driverName === 'Non assigné') {
+                driverName = 'Inconnu';
               }
 
               return (
                 <tr key={b.id}>
                   <td>{b.id}</td>
-                  <td>{b.customer_name || b.client?.full_name || "—"}</td>
+                  <td>{b.customer_name || b.client?.full_name || '—'}</td>
                   <td>{renderBookingDateTime(b)}</td>
-                  <td>{b.pickup_location || "—"}</td>
-                  <td>{b.dropoff_location || "—"}</td>
+                  <td>{b.pickup_location || '—'}</td>
+                  <td>{b.dropoff_location || '—'}</td>
                   <td>{driverName}</td>
                   <td>
                     <Chip
                       size="small"
-                      label={b.status || "—"}
+                      label={b.status || '—'}
                       color={
-                        (b.status || "").toLowerCase() === "completed"
-                          ? "success"
-                          : (b.status || "").toLowerCase() === "cancelled"
-                          ? "error"
-                          : "default"
+                        (b.status || '').toLowerCase() === 'completed'
+                          ? 'success'
+                          : (b.status || '').toLowerCase() === 'cancelled'
+                          ? 'error'
+                          : 'default'
                       }
                       variant="outlined"
                     />
@@ -680,16 +680,12 @@ const DispatchTable = ({
                   <td>
                     {(() => {
                       const t = timingStatus(b);
-                      if (t.kind === "on_time") {
+                      if (t.kind === 'on_time') {
                         return (
-                          <Chip
-                            size="small"
-                            label={t.label}
-                            className={styles.statusChipOnTime}
-                          />
+                          <Chip size="small" label={t.label} className={styles.statusChipOnTime} />
                         );
                       }
-                      if (t.kind === "slightly_delayed") {
+                      if (t.kind === 'slightly_delayed') {
                         return (
                           <Tooltip title="Retard faible, OK si < 10 min">
                             <Chip
@@ -700,18 +696,14 @@ const DispatchTable = ({
                           </Tooltip>
                         );
                       }
-                      if (t.kind === "delayed") {
+                      if (t.kind === 'delayed') {
                         return (
                           <Tooltip title="Retard important">
-                            <Chip
-                              size="small"
-                              label={t.label}
-                              className={styles.statusChipDelay}
-                            />
+                            <Chip size="small" label={t.label} className={styles.statusChipDelay} />
                           </Tooltip>
                         );
                       }
-                      if (t.kind === "impossible") {
+                      if (t.kind === 'impossible') {
                         return (
                           <div className={styles.actionsCell}>
                             <Chip
@@ -721,7 +713,7 @@ const DispatchTable = ({
                             />
                             <button
                               className={styles.iconBtn}
-                              onClick={() => alert("Action: appeler le client")}
+                              onClick={() => alert('Action: appeler le client')}
                               aria-label="Appeler le client"
                               title="Appeler le client"
                             >
@@ -738,7 +730,7 @@ const DispatchTable = ({
             })
           ) : (
             <tr>
-              <td colSpan="8" style={{ textAlign: "center" }}>
+              <td colSpan="8" style={{ textAlign: 'center' }}>
                 Aucun dispatch à afficher.
               </td>
             </tr>
@@ -753,9 +745,7 @@ const DispatchTable = ({
                 <span>Terminées : {completed}</span>
                 <span>Annulées : {cancelled}</span>
                 {delayedCount > 0 && (
-                  <span className={styles.warning}>
-                    Retards : {delayedCount}
-                  </span>
+                  <span className={styles.warning}>Retards : {delayedCount}</span>
                 )}
               </div>
             </td>
@@ -764,11 +754,7 @@ const DispatchTable = ({
       </table>
 
       {/* --- Modal réassignation --- */}
-      <Dialog
-        open={!!onReassign && reModalOpen}
-        onClose={() => setReModalOpen(false)}
-        fullWidth
-      >
+      <Dialog open={!!onReassign && reModalOpen} onClose={() => setReModalOpen(false)} fullWidth>
         <DialogTitle>Réassigner la course</DialogTitle>
         <DialogContent dividers>
           {selectedBooking && (
@@ -776,31 +762,22 @@ const DispatchTable = ({
               <div className={styles.modalBlock}>
                 <strong>Course #{selectedBooking.id}</strong>
                 <div>
-                  Client :{" "}
-                  {selectedBooking.customer_name ||
-                    selectedBooking.client?.full_name ||
-                    "—"}
+                  Client :{' '}
+                  {selectedBooking.customer_name || selectedBooking.client?.full_name || '—'}
                 </div>
-                <div>Pickup : {selectedBooking.pickup_location || "—"}</div>
-                <div>Dropoff : {selectedBooking.dropoff_location || "—"}</div>
+                <div>Pickup : {selectedBooking.pickup_location || '—'}</div>
+                <div>Dropoff : {selectedBooking.dropoff_location || '—'}</div>
                 <div>Date/Heure : {renderBookingDateTime(selectedBooking)}</div>
                 {delays[selectedBooking.id] && (
                   <div style={{ marginTop: 8 }}>
-                    <Alert
-                      severity="warning"
-                      variant="outlined"
-                      sx={{ borderStyle: "dashed" }}
-                    >
-                      Retard estimé : {delays[selectedBooking.id].delay_minutes}{" "}
-                      min
+                    <Alert severity="warning" variant="outlined" sx={{ borderStyle: 'dashed' }}>
+                      Retard estimé : {delays[selectedBooking.id].delay_minutes} min
                     </Alert>
                   </div>
                 )}
               </div>
               <FormControl fullWidth sx={{ mt: 2 }}>
-                <InputLabel id="driver-select-label">
-                  Nouveau chauffeur
-                </InputLabel>
+                <InputLabel id="driver-select-label">Nouveau chauffeur</InputLabel>
                 <Select
                   labelId="driver-select-label"
                   label="Nouveau chauffeur"
@@ -809,7 +786,7 @@ const DispatchTable = ({
                 >
                   {availableDrivers.map((d) => (
                     <MenuItem key={d.id} value={d.id}>
-                      {d.name} {d.is_emergency_driver ? "(Urgence)" : ""}
+                      {d.name} {d.is_emergency_driver ? '(Urgence)' : ''}
                     </MenuItem>
                   ))}
                 </Select>
@@ -821,17 +798,12 @@ const DispatchTable = ({
               )}
               {delays[selectedBooking.id]?.has_alternative && (
                 <Alert sx={{ mt: 2 }} severity="success">
-                  Suggestion :{" "}
+                  Suggestion :{' '}
                   {
-                    drivers.find(
-                      (d) =>
-                        d.id ===
-                        delays[selectedBooking.id].alternative_driver_id
-                    )?.name
-                  }{" "}
-                  (arrivée ~{" "}
-                  {delays[selectedBooking.id].alternative_delay_minutes} min de
-                  retard)
+                    drivers.find((d) => d.id === delays[selectedBooking.id].alternative_driver_id)
+                      ?.name
+                  }{' '}
+                  (arrivée ~ {delays[selectedBooking.id].alternative_delay_minutes} min de retard)
                 </Alert>
               )}
             </>
@@ -839,11 +811,7 @@ const DispatchTable = ({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setReModalOpen(false)}>Annuler</Button>
-          <Button
-            variant="contained"
-            onClick={confirmReassign}
-            disabled={!selectedDriver}
-          >
+          <Button variant="contained" onClick={confirmReassign} disabled={!selectedDriver}>
             Confirmer
           </Button>
         </DialogActions>
@@ -853,18 +821,10 @@ const DispatchTable = ({
 };
 
 function normalizeAndSort(dispatches) {
-  const list = Array.isArray(dispatches)
-    ? dispatches
-    : dispatches
-    ? Object.values(dispatches)
-    : [];
+  const list = Array.isArray(dispatches) ? dispatches : dispatches ? Object.values(dispatches) : [];
   return [...list].sort((a, b) => {
-    const aMs = a?.scheduled_time
-      ? Date.parse(a.scheduled_time)
-      : Number.POSITIVE_INFINITY;
-    const bMs = b?.scheduled_time
-      ? Date.parse(b.scheduled_time)
-      : Number.POSITIVE_INFINITY;
+    const aMs = a?.scheduled_time ? Date.parse(a.scheduled_time) : Number.POSITIVE_INFINITY;
+    const bMs = b?.scheduled_time ? Date.parse(b.scheduled_time) : Number.POSITIVE_INFINITY;
     return aMs - bMs;
   });
 }

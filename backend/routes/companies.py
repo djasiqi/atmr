@@ -170,6 +170,27 @@ driver_model = companies_ns.model("Driver", {
     "is_active": fields.Boolean(description="Chauffeur actif")
 })
 
+# --- Client Create payload ---
+client_create_model = companies_ns.model("ClientCreate", {
+    "client_type": fields.String(
+        required=True,
+        enum=["SELF_SERVICE", "PRIVATE", "CORPORATE"],
+        description="Type de client"
+    ),
+    "email": fields.String(description="Email (requis pour SELF_SERVICE)"),
+    "first_name": fields.String(required=True, description="Prénom (requis pour PRIVATE/CORPORATE)", min_length=1, max_length=100),
+    "last_name": fields.String(required=True, description="Nom (requis pour PRIVATE/CORPORATE)", min_length=1, max_length=100),
+    "phone": fields.String(description="Téléphone", max_length=20),
+    "address": fields.String(required=True, description="Adresse (requis pour PRIVATE/CORPORATE)", min_length=1, max_length=500),
+    "birth_date": fields.String(description="Date de naissance (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"),
+    "is_institution": fields.Boolean(description="Indique si c'est une institution", default=False),
+    "institution_name": fields.String(description="Nom de l'institution (si is_institution=true)", max_length=200),
+    "contact_email": fields.String(description="Email de contact/facturation"),
+    "contact_phone": fields.String(description="Téléphone de contact/facturation"),
+    "billing_address": fields.String(description="Adresse de facturation", max_length=500),
+    "notes": fields.String(description="Notes"),
+})
+
 # --- Manual Booking payload ---
 manual_booking_model = companies_ns.model("ManualBooking", {
     # SEUL client_id, pickup, dropoff et scheduled_time sont requis
@@ -398,10 +419,50 @@ class CompanyMe(Resource):
             return error_response, status_code
 
         data = request.get_json(silent=True) or {}
+        
+        # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+        from marshmallow import ValidationError
+
+        from schemas.company_schemas import CompanyUpdateSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        
+        try:
+            validated_data = validate_request(CompanyUpdateSchema(), data, strict=False)
+        except ValidationError as e:
+            return handle_validation_error(e)
+
+        # Géocodage automatique de l'adresse si fournie et coordonnées absentes
+        address = validated_data.get("address")
+        if address:
+            # Si les coordonnées ne sont pas fournies dans le payload, géocoder l'adresse
+            if not validated_data.get("latitude") or not validated_data.get("longitude"):
+                try:
+                    from services.maps import geocode_address
+                    coords = geocode_address(validated_data["address"], country="CH")
+                    if coords:
+                        validated_data["latitude"] = coords.get("lat")
+                        validated_data["longitude"] = coords.get("lon")
+                        app_logger.info(
+                            "[Company] Geocoded company address: %s -> (%s, %s)",
+                            validated_data["address"],
+                            validated_data["latitude"],
+                            validated_data["longitude"],
+                        )
+                except Exception as e:
+                    app_logger.warning(
+                        "[Company] Failed to geocode company address: %s", e
+                    )
+            # Si les coordonnées sont déjà fournies (depuis AddressAutocomplete), les utiliser directement
+            elif validated_data.get("latitude") and validated_data.get("longitude"):
+                app_logger.info(
+                    "[Company] Using provided coordinates for address: (%s, %s)",
+                    validated_data["latitude"],
+                    validated_data["longitude"],
+                )
 
         # Liste blanche des champs modifiables
         allowed = {
-            "name", "address", "contact_email", "contact_phone",
+            "name", "address", "latitude", "longitude", "contact_email", "contact_phone",
             "billing_email", "billing_notes",
             "iban", "uid_ide",
             "domicile_address_line1", "domicile_address_line2",
@@ -409,7 +470,7 @@ class CompanyMe(Resource):
             "logo_url"  # Permettre la mise à jour du logo_url
         }
         try:
-            for k, v in data.items():
+            for k, v in validated_data.items():
                 if k in allowed:
                     setattr(company, k, v)
             db.session.commit()
@@ -523,6 +584,7 @@ class CompanyReservations(Resource):
 class AcceptReservation(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting acceptation réservation
     def post(self, reservation_id):
         # Utiliser la fonction helper pour récupérer l'entreprise depuis le
         # token
@@ -618,6 +680,7 @@ class RejectReservation(Resource):
 class AssignDriver(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting assignation chauffeur
     def post(self, reservation_id):  # noqa: PLR0911
         company, error_response, status_code = get_company_from_token()
         if error_response:
@@ -1164,6 +1227,7 @@ class DriverVacationsResource(Resource):
 class CreateManualReservation(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    @limiter.limit("100 per hour")  # ✅ 2.8: Rate limiting création réservation manuelle
     @companies_ns.expect(manual_booking_model, validate=True)
     def post(self):  # noqa: PLR0911
         company, err, code = get_company_from_token()
@@ -1179,35 +1243,40 @@ class CreateManualReservation(Resource):
             return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
         data = request.get_json() or {}
-        client_id = data.get("client_id")
-        if not client_id:
-            return {"error": "client_id est un champ obligatoire."}, 400
-        try:
-            client_id = int(client_id)
-        except (TypeError, ValueError):
-            return {"error": "client_id doit être un entier."}, 400
+        
+        # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+        from marshmallow import ValidationError
 
+        from schemas.company_schemas import ManualBookingCreateSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        
+        try:
+            validated_data = validate_request(ManualBookingCreateSchema(), data, strict=False)
+        except ValidationError as e:
+            return handle_validation_error(e)
+        
+        client_id = validated_data["client_id"]
         client = Client.query.filter_by(id=client_id, company_id=cid).first()
         if not client:
             return {"error": "Client non trouvé."}, 404
         user = client.user
 
-# ---------- 0) Résolution du payeur (defaults Client + override payload)
+# ---------- 0) Résolution du payeur (defaults Client + override payload) - utilise données validées
         def _norm_str(x: Any, default: str | None = None) -> str | None:
             if isinstance(x, str):
                 return x.strip()
             return default
 
         _bt_raw = _norm_str(
-            data.get("billed_to_type") or getattr(
+            validated_data.get("billed_to_type") or getattr(
     client, "default_billed_to_type", "patient"),
             "patient"
         )
         billed_to_type = (_bt_raw or "patient").lower()
-        billed_to_company_id = data.get("billed_to_company_id") or getattr(
+        billed_to_company_id = validated_data.get("billed_to_company_id") or getattr(
             client, "default_billed_to_company_id", None)
         billed_to_contact = _norm_str(
-    data.get("billed_to_contact") or getattr(
+    validated_data.get("billed_to_contact") or getattr(
         client, "default_billed_to_contact", None), None)
 
         # Validation de billed_to_type
@@ -1233,31 +1302,48 @@ class CreateManualReservation(Resource):
                 return {"error": "Société payeuse introuvable."}, 404
 
 
-# ---------- 1) Parse des dates + Récurrence ----------
+# ---------- 1) Parse des dates + Récurrence ---------- (utilise données validées)
         try:
             scheduled = parse_local_naive(
-    data["scheduled_time"])  # Naive Europe/Zurich
+    validated_data["scheduled_time"])  # Naive Europe/Zurich
         except Exception as e:
             return {"error": f"scheduled_time invalide: {e}"}, 400
 
-        is_rt = bool(data.get("is_round_trip", False))
+        is_rt = bool(validated_data.get("is_round_trip", False))
 
         return_dt = None
         return_time_confirmed = True  # Par défaut, l'heure est confirmée
-        return_date_str = data.get("return_date")  # Format: YYYY-MM-DD
-        return_time_str = data.get("return_time")  # Format: HH:MM (optionnel)
+        return_date_str = validated_data.get("return_date")  # Format: YYYY-MM-DD
+        return_time_str = validated_data.get("return_time")  # Format: HH:mm ou YYYY-MM-DDTHH:mm:00 (optionnel)
 
         if is_rt and return_date_str:
             try:
                 # Si on a la date ET l'heure, on combine
                 if return_time_str:
-                    combined = f"{return_date_str}T{return_time_str}"
+                    # ⚡ Extraire seulement l'heure de return_time_str si c'est déjà un datetime complet
+                    time_only = return_time_str
+                    if "T" in return_time_str:
+                        # Si return_time_str est déjà un datetime (ex: "2025-11-04T14:00:00"),
+                        # extraire seulement la partie heure après le dernier "T"
+                        time_parts = return_time_str.split("T")
+                        if len(time_parts) > 1:
+                            time_only = time_parts[-1]  # Prendre la dernière partie après le dernier T
+                            # Extraire seulement HH:mm (supprimer les secondes si présentes)
+                            time_only = time_only.split(":")[:2]
+                            time_only = ":".join(time_only)
+                            app_logger.debug("📅 Extrait heure '%s' du datetime '%s'", time_only, return_time_str)
+                    
+                    combined = f"{return_date_str}T{time_only}"
+                    # S'assurer que combined est au format complet avec secondes
+                    TIME_PARTS_COUNT = 2
+                    if len(combined.split("T")[1].split(":")) == TIME_PARTS_COUNT:
+                        combined = f"{combined}:00"
                     return_dt = parse_local_naive(combined)
                     return_time_confirmed = True
                     app_logger.info("📅 Retour programmé : %s", combined)
                 else:
                     # Date sans heure : mettre à 00:00 + time_confirmed = False
-                    combined = f"{return_date_str}T00:00"
+                    combined = f"{return_date_str}T00:00:00"
                     return_dt = parse_local_naive(combined)
                     return_time_confirmed = False
                     app_logger.info(
@@ -1267,16 +1353,16 @@ class CreateManualReservation(Resource):
                 return {"error": f"return_date/return_time invalide: {e}"}, 400
 
         # 🔄 Gestion de la récurrence
-        is_recurring = bool(data.get("is_recurring", False))
+        is_recurring = bool(validated_data.get("is_recurring", False))
         recurrence_dates = [scheduled]  # Par défaut, une seule date
 
         if is_recurring:
             from datetime import timedelta
-            recurrence_type = data.get("recurrence_type", "weekly")
-            occurrences = int(data.get("occurrences", 1))
-            recurrence_days = data.get(
+            recurrence_type = validated_data.get("recurrence_type", "weekly")
+            occurrences = int(validated_data.get("occurrences", 1))
+            recurrence_days = validated_data.get(
     "recurrence_days", [])  # Pour type "custom"
-            recurrence_end_date_str = data.get("recurrence_end_date")
+            recurrence_end_date_str = validated_data.get("recurrence_end_date")
 
             app_logger.info("🔄 Récurrence détectée")
             app_logger.info("  - Type: %s", recurrence_type)
@@ -1380,7 +1466,6 @@ class CreateManualReservation(Resource):
             import requests
 
             from config import Config
-            from services.osrm_client import route_info
 
             # Fonction de géocodage avec Nominatim (gratuit, pas de clé API)
             def geocode_with_nominatim(address: str):
@@ -1409,49 +1494,49 @@ class CreateManualReservation(Resource):
             pickup_coords = None
             dropoff_coords = None
 
-            if not data.get("pickup_lat") or not data.get("pickup_lon"):
+            if not validated_data.get("pickup_lat") or not validated_data.get("pickup_lon"):
                 app_logger.info(
     "🔍 Géocodage pickup nécessaire: %s",
-     data["pickup_location"])
-                pickup_coords = geocode_with_nominatim(data["pickup_location"])
+     validated_data["pickup_location"])
+                pickup_coords = geocode_with_nominatim(validated_data["pickup_location"])
                 if pickup_coords:
                     app_logger.info("✅ Pickup géocodé: %s", pickup_coords)
                 else:
                     app_logger.warning(
     "❌ Échec géocodage pickup: %s",
-     data["pickup_location"])
+     validated_data["pickup_location"])
 
-            if not data.get("dropoff_lat") or not data.get("dropoff_lon"):
+            if not validated_data.get("dropoff_lat") or not validated_data.get("dropoff_lon"):
                 app_logger.info(
     "🔍 Géocodage dropoff nécessaire: %s",
-     data["dropoff_location"])
+     validated_data["dropoff_location"])
                 dropoff_coords = geocode_with_nominatim(
-                    data["dropoff_location"])
+                    validated_data["dropoff_location"])
                 if dropoff_coords:
                     app_logger.info("✅ Dropoff géocodé: %s", dropoff_coords)
                 else:
                     app_logger.warning(
     "❌ Échec géocodage dropoff: %s",
-     data["dropoff_location"])
+     validated_data["dropoff_location"])
 
-            # Récupérer les coordonnées finales (frontend OU géocodées)
+            # Récupérer les coordonnées finales (frontend OU géocodées) - utilise données validées
 
-            if data.get("pickup_lat") and data.get("pickup_lon"):
+            if validated_data.get("pickup_lat") and validated_data.get("pickup_lon"):
                 final_pickup_coords = (
     float(
-        data["pickup_lat"]), float(
-            data["pickup_lon"]))
+        validated_data["pickup_lat"]), float(
+            validated_data["pickup_lon"]))
                 app_logger.info(
     "📍 Pickup coords depuis frontend: %s",
      final_pickup_coords)
             elif pickup_coords:
                 final_pickup_coords = pickup_coords
 
-            if data.get("dropoff_lat") and data.get("dropoff_lon"):
+            if validated_data.get("dropoff_lat") and validated_data.get("dropoff_lon"):
                 final_dropoff_coords = (
     float(
-        data["dropoff_lat"]), float(
-            data["dropoff_lon"]))
+        validated_data["dropoff_lat"]), float(
+            validated_data["dropoff_lon"]))
                 app_logger.info(
     "📍 Dropoff coords depuis frontend: %s",
      final_dropoff_coords)
@@ -1460,49 +1545,77 @@ class CreateManualReservation(Resource):
 
             if final_pickup_coords and final_dropoff_coords:
                 # Utiliser OSRM pour calculer la durée et la distance
+                # ⚡ Utiliser directement _route (sans singleflight) pour éviter blocages
+                # ⚡ Timeout très court (2s) pour fail-fast et ne pas bloquer la création
                 osrm_url = getattr(Config, "UD_OSRM_URL", "http://osrm:5000")
-                route_data = route_info(
-                    final_pickup_coords,
-                    final_dropoff_coords,
-                    base_url=osrm_url,
-                    profile="driving"
-                )
-                base_dur_s = int(route_data.get("duration", 0))
-                dist_m = int(route_data.get("distance", 0))
+                try:
+                    from services.osrm_client import _route
+                    # Appel direct à _route (bypass singleflight/cache) pour éviter blocages
+                    # Signature: _route(base_url, profile, origin, destination, *, ...)
+                    route_data = _route(
+                        base_url=osrm_url,
+                        profile="driving",
+                        origin=final_pickup_coords,
+                        destination=final_dropoff_coords,
+                        timeout=2,  # ⚡ Très court (2s) pour fail-fast
+                        overview="false",
+                        geometries="geojson",
+                        steps=False,
+                        annotations=False,
+                    )
+                    if route_data.get("code") == "Ok" and route_data.get("routes"):
+                        r0 = route_data["routes"][0]
+                        base_dur_s = int(r0.get("duration", 0))
+                        dist_m = int(r0.get("distance", 0))
+                    else:
+                        raise ValueError(f"OSRM bad response: {route_data.get('message', 'Unknown error')}")
+                except Exception as osrm_error:
+                    # ⚡ Fallback immédiat si OSRM timeout/erreur
+                    app_logger.warning("⚠️ OSRM timeout/erreur (timeout=2s), utilisation fallback haversine: %s", osrm_error)
+                    base_dur_s = None
+                    dist_m = None
 
-                # 🚦 Facteur rush hour : ajuster selon l'heure de la réservation
-                scheduled_hour = scheduled.hour if scheduled else datetime.now(
-                    UTC).hour
-                rush_hour_factor = 1
+                # 🚦 Facteur rush hour : ajuster selon l'heure de la réservation (seulement si OSRM a réussi)
+                if base_dur_s is not None:
+                    scheduled_hour = scheduled.hour if scheduled else datetime.now(
+                        UTC).hour
+                    rush_hour_factor = 1
 
-                # Heures de pointe du matin (7h-9h) : +30%
-                if MORNING_RUSH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD:
-                    rush_hour_factor = 1.3
-                    app_logger.info(
+                    # Heures de pointe du matin (7h-9h) : +30%
+                    if MORNING_RUSH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD:
+                        rush_hour_factor = 1.3
+                        app_logger.info(
     "🚦 Rush hour matinal détecté (%sh) : +30%",
      scheduled_hour)
-                # Heures de pointe du soir (17h-19h) : +30%
-                elif EVENING_RUSH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD:
-                    rush_hour_factor = 1.3
-                    app_logger.info(
+                    # Heures de pointe du soir (17h-19h) : +30%
+                    elif EVENING_RUSH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD:
+                        rush_hour_factor = 1.3
+                        app_logger.info(
     "🚦 Rush hour soir détecté (%sh) : +30%",
      scheduled_hour)
-                # Midi (12h-13h) : +15%
-                elif LUNCH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD:
-                    rush_hour_factor = 1.15
-                    app_logger.info(
+                    # Midi (12h-13h) : +15%
+                    elif LUNCH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD:
+                        rush_hour_factor = 1.15
+                        app_logger.info(
     "🚦 Heure de midi détectée (%sh) : +15%",
      scheduled_hour)
 
-                # Appliquer le facteur
-                dur_s = int(base_dur_s * rush_hour_factor)
+                    # Appliquer le facteur
+                    dur_s = int(base_dur_s * rush_hour_factor)
 
-                app_logger.info("✅ Durée/distance calculée via OSRM : %ss → %ss (%smin) / %sm (%.1fkm)", base_dur_s, dur_s, dur_s // 60, dist_m, dist_m / 1000)
+                    # ⚡ Formatage sécurisé : vérifier que dist_m n'est pas None avant division
+                    if dist_m is not None:
+                        app_logger.info("✅ Durée/distance calculée via OSRM : %ss → %ss (%smin) / %sm (%.1fkm)", base_dur_s, dur_s, dur_s // 60, dist_m, dist_m / 1000)
+                    else:
+                        app_logger.info("✅ Durée calculée via OSRM : %ss → %ss (%smin) / distance non disponible", base_dur_s, dur_s, dur_s // 60)
+                else:
+                    # ⚡ OSRM a échoué/timeout → dur_s et dist_m restent None (seront ignorés lors de la création)
+                    app_logger.info("⚠️ Durée/distance non calculée (OSRM indisponible), réservation créée sans ces informations")
             else:
                 app_logger.warning(
     "⚠️ Géocodage échoué pour pickup=%s ou dropoff=%s",
-    data["pickup_location"],
-     data["dropoff_location"])
+    validated_data["pickup_location"],
+     validated_data["dropoff_location"])
         except Exception as e:
 
             app_logger.error("❌ Calcul durée/distance OSRM échoué : %s", e)
@@ -1523,8 +1636,8 @@ class CreateManualReservation(Resource):
                 display_name = full_name or (
                     getattr(user, "username", "") or "Client")
 
-            # 💰 Utiliser le tarif préférentiel du client si disponible, sinon le montant fourni
-            amount_to_use = float(data.get("amount") or 0)
+            # 💰 Utiliser le tarif préférentiel du client si disponible, sinon le montant fourni (utilise données validées)
+            amount_to_use = float(validated_data.get("amount") or 0)
             if client.preferential_rate and client.preferential_rate > PREFERENTIAL_RATE_ZERO:
                 amount_to_use = float(client.preferential_rate)
                 app_logger.info(
@@ -1560,8 +1673,8 @@ class CreateManualReservation(Resource):
                 outbound.client_id = client.id
                 outbound.scheduled_time = occurrence_date
                 outbound.is_round_trip = is_rt
-                outbound.pickup_location = data["pickup_location"]
-                outbound.dropoff_location = data["dropoff_location"]
+                outbound.pickup_location = validated_data["pickup_location"]
+                outbound.dropoff_location = validated_data["dropoff_location"]
                 outbound.amount = amount_to_use
                 outbound.status = BookingStatus.ACCEPTED   # directement dispatchable
                 outbound.company_id = cid
@@ -1582,13 +1695,13 @@ class CreateManualReservation(Resource):
                 outbound.billed_to_company_id = billed_to_company_id
                 outbound.billed_to_contact = billed_to_contact
 
-                # 🏥 Informations médicales
-                outbound.medical_facility = data.get("medical_facility")
-                outbound.doctor_name = data.get("doctor_name")
-                outbound.hospital_service = data.get("hospital_service")
-                outbound.notes_medical = data.get("notes_medical")
-                outbound.wheelchair_client_has = data.get("wheelchair_client_has", False)
-                outbound.wheelchair_need = data.get("wheelchair_need", False)
+                # 🏥 Informations médicales (utilise données validées)
+                outbound.medical_facility = validated_data.get("medical_facility")
+                outbound.doctor_name = validated_data.get("doctor_name")
+                outbound.hospital_service = validated_data.get("hospital_service")
+                outbound.notes_medical = validated_data.get("notes_medical")
+                outbound.wheelchair_client_has = validated_data.get("wheelchair_client_has", False)
+                outbound.wheelchair_need = validated_data.get("wheelchair_need", False)
                 db.session.add(outbound)
                 db.session.flush()  # pour récupérer outbound.id
                 created_outbounds.append(outbound)
@@ -1625,13 +1738,13 @@ class CreateManualReservation(Resource):
                     return_booking.billed_to_company_id = billed_to_company_id
                     return_booking.billed_to_contact = billed_to_contact
 
-                    # 🏥 Informations médicales (mêmes que l'aller)
-                    return_booking.medical_facility = data.get("medical_facility")
-                    return_booking.doctor_name = data.get("doctor_name")
-                    return_booking.hospital_service = data.get("hospital_service")
-                    return_booking.notes_medical = data.get("notes_medical")
-                    return_booking.wheelchair_client_has = data.get("wheelchair_client_has", False)
-                    return_booking.wheelchair_need = data.get("wheelchair_need", False)
+                    # 🏥 Informations médicales (mêmes que l'aller) - utilise données validées
+                    return_booking.medical_facility = validated_data.get("medical_facility")
+                    return_booking.doctor_name = validated_data.get("doctor_name")
+                    return_booking.hospital_service = validated_data.get("hospital_service")
+                    return_booking.notes_medical = validated_data.get("notes_medical")
+                    return_booking.wheelchair_client_has = validated_data.get("wheelchair_client_has", False)
+                    return_booking.wheelchair_need = validated_data.get("wheelchair_need", False)
                     db.session.add(return_booking)
                     created_returns.append(return_booking)
 
@@ -1881,9 +1994,10 @@ parser.add_argument("billing_address",
 class CompanyClients(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    @companies_ns.param("search", "Terme à chercher dans le prénom ou le nom")
-    @companies_ns.param("page", "Numéro de page (défaut: 1)")
-    @companies_ns.param("per_page", "Résultats par page (défaut: 100, max: 1000)")
+    @limiter.limit("300 per hour")  # ✅ 2.8: Rate limiting liste clients
+    @companies_ns.param("search", "Terme à chercher dans le prénom ou le nom", type="string")
+    @companies_ns.param("page", "Numéro de page (défaut: 1, min: 1)", type="integer", default=1, minimum=1)
+    @companies_ns.param("per_page", "Résultats par page (défaut: 100, min: 1, max: 1000)", type="integer", default=100, minimum=1, maximum=1000)
     def get(self):
         """GET /companies/me/clients?search=<query>&page=1&per_page=0.100
         Retourne les clients manuels (PRIVATE ou CORPORATE) de l'entreprise courante,
@@ -1944,6 +2058,8 @@ class CompanyClients(Resource):
 
     @jwt_required()
     @role_required(UserRole.company)
+    @limiter.limit("50 per hour")  # ✅ 2.8: Rate limiting création client
+    @companies_ns.expect(client_create_model, validate=False)
     def post(self):  # noqa: PLR0911
         """POST /companies/me/clients
         Crée un nouveau client (SELF_SERVICE, PRIVATE ou CORPORATE)
@@ -1961,54 +2077,58 @@ class CompanyClients(Resource):
         if cid is None:
             return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
-        args = parser.parse_args()
-        # 🧰 helper pour accéder aux champs (dict ou namespace)
-        def arg(name: str):
-            return args.get(name) if hasattr(args, "get") else getattr(args, name, None)
-        # 🔤 client_type sûr (str) pour l'index Enum
-        ct_str = str(arg("client_type") or "").upper()
+        data = request.get_json() or {}
+        
+        # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+        from marshmallow import ValidationError
+
+        from schemas.company_schemas import ClientCreateSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        
+        try:
+            validated_data = validate_request(ClientCreateSchema(), data, strict=False)
+        except ValidationError as e:
+            return handle_validation_error(e)
+        
+        # Utilise données validées
+        ct_str = validated_data["client_type"].upper()
         if ct_str not in ClientType.__members__:
             return {"error": "client_type invalide. Valeurs possibles: SELF_SERVICE, PRIVATE, CORPORATE"}, 400
         ctype = ClientType[ct_str]
 
-        # Normalisation
-        raw_email = arg("email")
-        email = raw_email.strip() if isinstance(raw_email, str) and raw_email.strip() else None
+        # Normalisation email
+        email = validated_data.get("email")
+        if email:
+            email = email.strip()
 
-        # Validation selon type
+        # Validation selon type (déjà validé par le schema, mais double sécurité)
         if ctype == ClientType.SELF_SERVICE and not email:
             return {"error": "email requis pour self-service"}, 400
         if ctype != ClientType.SELF_SERVICE:
-            missing = [f for f in ("first_name", "last_name", "address") if not (arg(f) or "")]
+            missing = [f for f in ("first_name", "last_name", "address") if not validated_data.get(f)]
             if missing:
                 return {"error": f"Champs manquants pour facturation : {', '.join(missing)}"}, 400
 
-        # Parser la date de naissance
-        birth_date = None
-        raw_bd = arg("birth_date")
-        if raw_bd:
-            try:
-                birth_date = datetime.strptime(str(raw_bd), "%Y-%m-%d").date()
-            except ValueError:
-                return {"error": "Format de date de naissance invalide. Utiliser YYYY-MM-DD."}, 400
+        # Date de naissance (déjà validée par Marshmallow comme Date)
+        birth_date = validated_data.get("birth_date")
 
         # Génération du username
         if email:
             username = email.split("@")[0]
         else:
-            fn = (arg("first_name") or "").strip().lower()
-            ln = (arg("last_name") or "").strip().lower()
+            fn = (validated_data.get("first_name") or "").strip().lower()
+            ln = (validated_data.get("last_name") or "").strip().lower()
             username = f"{fn}.{ln}-{uuid4().hex[:6]}"
 
-        # Création du User
+        # Création du User - utilise données validées
         user = User()
         user.public_id = str(uuid4())
         user.username = username
-        user.first_name = (arg("first_name") or "")
-        user.last_name = (arg("last_name") or "")
+        user.first_name = validated_data.get("first_name") or ""
+        user.last_name = validated_data.get("last_name") or ""
         user.email = email
-        user.phone = arg("phone")
-        user.address = arg("address")
+        user.phone = validated_data.get("phone")
+        user.address = validated_data.get("address")
         user.birth_date = birth_date
         user.role = UserRole.client
 
@@ -2023,12 +2143,12 @@ class CompanyClients(Resource):
         db.session.add(user)
         db.session.flush()  # pour récupérer user.id
 
-        # Création du profil Client
-        is_inst = bool(arg("is_institution"))
-        inst_name = arg("institution_name") if is_inst else None
+        # Création du profil Client - utilise données validées
+        is_inst = bool(validated_data.get("is_institution", False))
+        inst_name = validated_data.get("institution_name") if is_inst else None
 
-        # Tarif préférentiel
-        preferential_rate = arg("preferential_rate")
+        # Tarif préférentiel (non dans schema pour l'instant, garde compatibilité)
+        preferential_rate = validated_data.get("preferential_rate")
         if preferential_rate:
             try:
                 from decimal import Decimal
@@ -2040,21 +2160,23 @@ class CompanyClients(Resource):
         client.user_id = user.id
         client.company_id = cid
         client.client_type = ctype
-        client.billing_address = arg("billing_address") or arg("address")
-        client.billing_lat = arg("billing_lat")
-        client.billing_lon = arg("billing_lon")
-        client.contact_email = arg("contact_email") or email
-        client.contact_phone = arg("contact_phone") or arg("phone")
+        client.billing_address = validated_data.get("billing_address") or validated_data.get("address")
+        client.billing_lat = validated_data.get("billing_lat")
+        client.billing_lon = validated_data.get("billing_lon")
+        client.contact_email = validated_data.get("contact_email") or email
+        client.contact_phone = validated_data.get("contact_phone") or validated_data.get("phone")
         client.is_institution = is_inst
         client.institution_name = inst_name
         # Adresse de domicile
-        client.domicile_address = arg("domicile_address")
-        client.domicile_zip = arg("domicile_zip")
-        client.domicile_city = arg("domicile_city")
-        client.domicile_lat = arg("domicile_lat")
-        client.domicile_lon = arg("domicile_lon")
+        client.domicile_address = validated_data.get("domicile_address")
+        client.domicile_zip = validated_data.get("domicile_zip")
+        client.domicile_city = validated_data.get("domicile_city")
+        client.domicile_lat = validated_data.get("domicile_lat")
+        client.domicile_lon = validated_data.get("domicile_lon")
         # Tarif préférentiel
         client.preferential_rate = preferential_rate
+        # Notes
+        client.notes = validated_data.get("notes")
         db.session.add(client)
 
         try:
@@ -2340,6 +2462,7 @@ class ToggleDriverType(Resource):
 class CreateDriver(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    @limiter.limit("20 per hour")  # ✅ 2.8: Rate limiting création chauffeur
     @companies_ns.expect(create_driver_model, validate=True)
     def post(self):
         """Crée un nouvel utilisateur avec le rôle chauffeur et l'associe à l'entreprise."""
@@ -2357,33 +2480,49 @@ class CreateDriver(Resource):
             return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
         data = request.get_json(silent=True) or {}
+        
+        # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+        from marshmallow import ValidationError
+
+        from schemas.company_schemas import DriverCreateSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        
+        try:
+            validated_data = validate_request(DriverCreateSchema(), data)
+        except ValidationError as e:
+            return handle_validation_error(e)
 
         # Vérifier si l'email ou le username existe déjà
-        if User.query.filter_by(email=data.get("email")).first():
-            return {"error": "Cette adresse email est déjà utilisée."}, 409
-        if User.query.filter_by(username=data.get("username")).first():
-            return {"error": "Ce nom d'utilisateur est déjà utilisé."}, 409
+        existing_email = User.query.filter_by(email=validated_data["email"]).first()
+        existing_username = User.query.filter_by(username=validated_data["username"]).first()
+        if existing_email or existing_username:
+            errors = []
+            if existing_email:
+                errors.append("Cette adresse email est déjà utilisée.")
+            if existing_username:
+                errors.append("Ce nom d'utilisateur est déjà utilisé.")
+            return {"error": " ".join(errors)}, 409
 
         try:
-            # 1. Créer l'objet User
+            # 1. Créer l'objet User - utilise données validées
             new_user = User()
-            new_user.username = data.get("username")
-            new_user.first_name = data.get("first_name")
-            new_user.last_name = data.get("last_name")
-            new_user.email = data.get("email")
+            new_user.username = validated_data["username"]
+            new_user.first_name = validated_data["first_name"]
+            new_user.last_name = validated_data["last_name"]
+            new_user.email = validated_data["email"]
             new_user.role = UserRole.driver
             new_user.public_id = str(uuid4())
-            new_user.set_password(data.get("password"))
+            new_user.set_password(validated_data["password"])
             db.session.add(new_user)
             db.session.flush()  # Pour obtenir l'ID du nouvel utilisateur
 
-            # 2. Créer l'objet Driver
+            # 2. Créer l'objet Driver - utilise données validées
             new_driver = Driver()
             new_driver.user_id = new_user.id
             new_driver.company_id = cid
-            new_driver.vehicle_assigned = data.get("vehicle_assigned")
-            new_driver.brand = data.get("brand")
-            new_driver.license_plate = data.get("license_plate")
+            new_driver.vehicle_assigned = validated_data["vehicle_assigned"]
+            new_driver.brand = validated_data["brand"]
+            new_driver.license_plate = validated_data["license_plate"]
             new_driver.is_active = True
             new_driver.is_available = True
             db.session.add(new_driver)
@@ -2403,6 +2542,121 @@ class CreateDriver(Resource):
 # ======================================================
 @companies_ns.route("/me/reservations/<int:reservation_id>")
 class SingleReservation(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting modification réservation
+    def put(self, reservation_id):  # noqa: PLR0911
+        """Met à jour une réservation (adresses, heure, informations médicales).
+        Permet la modification pour PENDING, ACCEPTED et ASSIGNED (pour les entreprises).
+        """
+        company, error_response, status_code = get_company_from_token()
+        if error_response:
+            return error_response, status_code
+
+        # 🔒 company.id → int sûr (évite Column[int]/Optional)
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        booking = Booking.query.filter_by(id=reservation_id, company_id=cid).first()
+        if not booking:
+            return {"error": "Réservation non trouvée."}, 404
+
+        # ✅ Autoriser la modification pour PENDING, ACCEPTED et ASSIGNED (pour les entreprises)
+        allowed_statuses = [BookingStatus.PENDING, BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]
+        if booking.status not in allowed_statuses:
+            return {
+                "error": f"Impossible de modifier une réservation avec le statut '{booking.status.value}'. Seules les réservations en attente, acceptées ou assignées peuvent être modifiées."
+            }, 400
+
+        data = request.get_json() or {}
+
+        # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+        from marshmallow import ValidationError
+
+        from schemas.booking_schemas import BookingUpdateSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+
+        try:
+            validated_data = validate_request(BookingUpdateSchema(), data, strict=False)
+        except ValidationError as e:
+            return handle_validation_error(e)
+
+        # Utilise données validées pour mettre à jour
+        updated_fields = []
+
+        if "pickup_location" in validated_data:
+            booking.pickup_location = validated_data["pickup_location"]
+            updated_fields.append("pickup_location")
+
+        if "dropoff_location" in validated_data:
+            booking.dropoff_location = validated_data["dropoff_location"]
+            updated_fields.append("dropoff_location")
+
+        if "pickup_lat" in validated_data:
+            booking.pickup_lat = validated_data["pickup_lat"]
+            updated_fields.append("pickup_lat")
+
+        if "pickup_lon" in validated_data:
+            booking.pickup_lon = validated_data["pickup_lon"]
+            updated_fields.append("pickup_lon")
+
+        if "dropoff_lat" in validated_data:
+            booking.dropoff_lat = validated_data["dropoff_lat"]
+            updated_fields.append("dropoff_lat")
+
+        if "dropoff_lon" in validated_data:
+            booking.dropoff_lon = validated_data["dropoff_lon"]
+            updated_fields.append("dropoff_lon")
+
+        if "scheduled_time" in validated_data:
+            from shared.time_utils import parse_local_naive
+            try:
+                sched_local = parse_local_naive(validated_data["scheduled_time"])
+                booking.scheduled_time = sched_local
+                updated_fields.append("scheduled_time")
+            except Exception as e:
+                return {"error": f"Format de date invalide: {e}"}, 400
+
+        if "medical_facility" in validated_data:
+            booking.medical_facility = validated_data["medical_facility"]
+            updated_fields.append("medical_facility")
+
+        if "doctor_name" in validated_data:
+            booking.doctor_name = validated_data["doctor_name"]
+            updated_fields.append("doctor_name")
+
+        if "notes_medical" in validated_data:
+            booking.notes_medical = validated_data["notes_medical"]
+            updated_fields.append("notes_medical")
+
+        if "amount" in validated_data:
+            booking.amount = validated_data["amount"]
+            updated_fields.append("amount")
+
+        if not updated_fields:
+            return {"error": "Aucun champ à mettre à jour fourni."}, 400
+
+        try:
+            db.session.commit()
+            app_logger.info(
+                "✅ Réservation #%s mise à jour par l'entreprise #%s (champs: %s)",
+                reservation_id,
+                cid,
+                ", ".join(updated_fields)
+            )
+            # Déclencher un re-dispatch si nécessaire
+            _maybe_trigger_dispatch(cid, "update")
+            return {"message": "Réservation mise à jour avec succès", "reservation": booking.serialize}, 200
+        except Exception as e:
+            db.session.rollback()
+            app_logger.error("❌ Erreur lors de la mise à jour de la réservation #%s: %s", reservation_id, e)
+            return {"error": "Une erreur interne est survenue."}, 500
+
     @jwt_required()
     @role_required(UserRole.company)
     def delete(self, reservation_id):  # noqa: PLR0911
@@ -2493,7 +2747,127 @@ class SingleReservation(Resource):
             return {"error": "Une erreur interne est survenue."}, 500
 
 # ======================================================
-# 23. Planifier une réservation (fixe scheduled_time)
+# 23. Mettre à jour une réservation (adresses, heure, infos médicales)
+# ======================================================
+@companies_ns.route("/me/reservations/<int:booking_id>")
+class UpdateReservation(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting modification réservation
+    def put(self, booking_id):  # noqa: PLR0911
+        """Met à jour une réservation (adresses, heure, informations médicales).
+        Permet la modification pour PENDING, ACCEPTED et ASSIGNED.
+        """
+        company, err, code = get_company_from_token()
+        if err:
+            return err, code
+
+        # 🔒 company.id → int sûr
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+
+        booking = Booking.query.filter_by(id=booking_id, company_id=cid).first()
+        if not booking:
+            return {"error": "Réservation introuvable."}, 404
+
+        # ✅ Autoriser la modification pour PENDING, ACCEPTED et ASSIGNED (pour les entreprises)
+        allowed_statuses = [BookingStatus.PENDING, BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]
+        if booking.status not in allowed_statuses:
+            return {
+                "error": f"Impossible de modifier une réservation avec le statut '{booking.status.value}'. Seules les réservations en attente, acceptées ou assignées peuvent être modifiées."
+            }, 400
+
+        data = request.get_json() or {}
+
+        # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+        from marshmallow import ValidationError
+
+        from schemas.booking_schemas import BookingUpdateSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+
+        try:
+            validated_data = validate_request(BookingUpdateSchema(), data, strict=False)
+        except ValidationError as e:
+            return handle_validation_error(e)
+
+        # Utilise données validées pour mettre à jour
+        updated_fields = []
+        
+        if "pickup_location" in validated_data:
+            booking.pickup_location = validated_data["pickup_location"]
+            updated_fields.append("pickup_location")
+        
+        if "dropoff_location" in validated_data:
+            booking.dropoff_location = validated_data["dropoff_location"]
+            updated_fields.append("dropoff_location")
+        
+        if "pickup_lat" in validated_data:
+            booking.pickup_lat = validated_data["pickup_lat"]
+            updated_fields.append("pickup_lat")
+        
+        if "pickup_lon" in validated_data:
+            booking.pickup_lon = validated_data["pickup_lon"]
+            updated_fields.append("pickup_lon")
+        
+        if "dropoff_lat" in validated_data:
+            booking.dropoff_lat = validated_data["dropoff_lat"]
+            updated_fields.append("dropoff_lat")
+        
+        if "dropoff_lon" in validated_data:
+            booking.dropoff_lon = validated_data["dropoff_lon"]
+            updated_fields.append("dropoff_lon")
+
+        if "scheduled_time" in validated_data:
+            from shared.time_utils import parse_local_naive
+            try:
+                sched_local = parse_local_naive(validated_data["scheduled_time"])
+                booking.scheduled_time = sched_local
+                updated_fields.append("scheduled_time")
+            except Exception as e:
+                return {"error": f"Format de date invalide: {e}"}, 400
+
+        if "medical_facility" in validated_data:
+            booking.medical_facility = validated_data["medical_facility"]
+            updated_fields.append("medical_facility")
+
+        if "doctor_name" in validated_data:
+            booking.doctor_name = validated_data["doctor_name"]
+            updated_fields.append("doctor_name")
+
+        if "notes_medical" in validated_data:
+            booking.notes_medical = validated_data["notes_medical"]
+            updated_fields.append("notes_medical")
+
+        if "amount" in validated_data:
+            booking.amount = validated_data["amount"]
+            updated_fields.append("amount")
+
+        if not updated_fields:
+            return {"error": "Aucun champ à mettre à jour fourni."}, 400
+
+        try:
+            db.session.commit()
+            app_logger.info(
+                "✅ Réservation #%s mise à jour par l'entreprise #%s (champs: %s)",
+                booking_id,
+                cid,
+                ", ".join(updated_fields)
+            )
+            # Déclencher un re-dispatch si nécessaire
+            _maybe_trigger_dispatch(cid, "update")
+            return {"message": "Réservation mise à jour avec succès", "reservation": booking.serialize}, 200
+        except Exception as e:
+            db.session.rollback()
+            app_logger.error("❌ Erreur lors de la mise à jour de la réservation #%s: %s", booking_id, e)
+            return {"error": "Une erreur interne est survenue."}, 500
+
+# ======================================================
+# 24. Planifier une réservation (fixe scheduled_time)
 # ======================================================
 @companies_ns.route("/me/reservations/<int:booking_id>/schedule")
 class ScheduleReservation(Resource):
@@ -2619,11 +2993,115 @@ class DispatchNowReservation(Resource):
         db.session.commit()
         db.session.refresh(booking)  # ✅ Rafraîchir l'objet pour obtenir les valeurs à jour
 
-        # Déclencher immédiatement la queue
+        # ⚡ Assignation automatique immédiate pour retours urgents
+        # (au lieu de déclencher un dispatch complet qui prendrait du temps)
+        assigned_driver = None
         if bool(getattr(company, "dispatch_enabled", True)):
-            _maybe_trigger_dispatch(cid, "update")
+            try:
+                from models import Driver
+                from services.unified_dispatch.apply import apply_assignments
+                from services.unified_dispatch.data import build_problem_data
+                from services.unified_dispatch.heuristics import assign_urgent
+                from services.unified_dispatch.settings import Settings
 
-        return {"message": "Dispatch urgent déclenché.", "reservation": booking.serialize}, 200
+                # ⚡ Construire un problème minimal pour cette seule booking urgente
+                # Utiliser for_date=None pour récupérer toutes les bookings actives de la journée
+                # (nécessaire pour calculer les conflits temporels avec les autres bookings)
+                from shared.time_utils import now_local
+                today_str = now_local().strftime("%Y-%m-%d")
+                
+                problem = build_problem_data(
+                    company_id=cid,
+                    settings=Settings(),
+                    for_date=today_str,  # ⚡ Utiliser la date d'aujourd'hui pour le contexte
+                    regular_first=True,
+                    allow_emergency=True,
+                    overrides=None,
+                )
+                
+                # Filtrer les bookings pour ne garder que celle-ci
+                # (mais garder les autres pour le contexte de calcul des conflits)
+                urgent_booking = next((b for b in problem["bookings"] if int(b.id) == booking_id), None)
+                
+                if not urgent_booking:
+                    app_logger.warning("⚠️ [Dispatch-Now] Booking #%s introuvable dans build_problem_data", booking_id)
+                    # Fallback : déclencher le dispatch classique
+                    _maybe_trigger_dispatch(cid, "update")
+                    return {"message": "Dispatch urgent déclenché.", "reservation": booking.serialize}, 200
+                
+                if problem["bookings"] and problem["drivers"]:
+                    # Utiliser assign_urgent pour trouver le meilleur chauffeur
+                    result = assign_urgent(
+                        problem=problem,
+                        urgent_booking_ids=[booking_id],
+                        settings=Settings(),
+                    )
+                    
+                    if result.assignments:
+                        # Appliquer l'assignation immédiatement
+                        apply_result = apply_assignments(
+                            company_id=cid,
+                            assignments=result.assignments,
+                            allow_reassign=True,
+                            respect_existing=False,  # ⚡ Permettre réassignation pour urgent
+                        )
+                        
+                        if apply_result.get("applied"):
+                            applied = apply_result["applied"][0] if apply_result["applied"] else None
+                            if applied:
+                                driver_id = applied.get("driver_id")
+                                if driver_id:
+                                    assigned_driver = Driver.query.get(driver_id)
+                                    app_logger.info(
+                                        "✅ [Dispatch-Now] Chauffeur #%s assigné automatiquement à la réservation #%s",
+                                        driver_id,
+                                        booking_id
+                                    )
+                                else:
+                                    app_logger.warning("⚠️ [Dispatch-Now] Assignation appliquée mais driver_id manquant")
+                        else:
+                            app_logger.warning(
+                                "⚠️ [Dispatch-Now] Aucune assignation appliquée (conflicts: %s)",
+                                apply_result.get("conflicts", [])
+                            )
+                    else:
+                        app_logger.warning(
+                            "⚠️ [Dispatch-Now] Aucun chauffeur disponible pour la réservation #%s",
+                            booking_id
+                        )
+                else:
+                    app_logger.warning(
+                        "⚠️ [Dispatch-Now] Problème incomplet (bookings: %d, drivers: %d)",
+                        len(problem.get("bookings", [])),
+                        len(problem.get("drivers", []))
+                    )
+                    # Fallback : déclencher le dispatch classique
+                    _maybe_trigger_dispatch(cid, "update")
+            except Exception as e:
+                app_logger.exception("❌ [Dispatch-Now] Erreur lors de l'assignation automatique: %s", e)
+                # Fallback : déclencher le dispatch classique en cas d'erreur
+                _maybe_trigger_dispatch(cid, "update")
+        else:
+            # Si dispatch désactivé, ne rien faire
+            pass
+
+        # Rafraîchir pour obtenir les données à jour (notamment driver si assigné)
+        db.session.refresh(booking)
+
+        response_data = {
+            "message": "Dispatch urgent déclenché.",
+            "reservation": booking.serialize,
+        }
+        
+        if assigned_driver:
+            response_data["assigned_driver"] = {
+                "id": int(assigned_driver.id),
+                "username": getattr(assigned_driver, "username", None),
+                "full_name": getattr(assigned_driver, "full_name", None),
+            }
+            response_data["message"] = f"Dispatch urgent déclenché. Chauffeur {assigned_driver.username or assigned_driver.full_name} assigné automatiquement."
+
+        return response_data, 200
 
 # ======================================================
 # 25. Gestion des véhicules de l'entreprise (CRUD)
