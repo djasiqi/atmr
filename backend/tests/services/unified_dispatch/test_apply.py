@@ -1,0 +1,245 @@
+# backend/tests/services/unified_dispatch/test_apply.py
+"""Tests pour apply_assignments avec rollback transactionnel complet."""
+
+import pytest
+from sqlalchemy.exc import IntegrityError
+
+from ext import db
+from models import Assignment, Booking, BookingStatus, Driver, DriverType
+from services.unified_dispatch.apply import apply_assignments
+from tests.factories import BookingFactory, CompanyFactory, DriverFactory
+
+
+@pytest.fixture
+def company():
+    """Créer une entreprise pour les tests."""
+    return CompanyFactory()
+
+
+@pytest.fixture
+def driver(company):
+    """Créer un chauffeur pour les tests."""
+    return DriverFactory(company=company, is_active=True, is_available=True)
+
+
+@pytest.fixture
+def bookings(company):
+    """Créer plusieurs bookings pour les tests."""
+    return [
+        BookingFactory(company=company, status=BookingStatus.ACCEPTED),
+        BookingFactory(company=company, status=BookingStatus.ACCEPTED),
+        BookingFactory(company=company, status=BookingStatus.ACCEPTED),
+    ]
+
+
+class TestRollbackTransactionnel:
+    """Tests pour vérifier le rollback transactionnel complet."""
+
+    def test_rollback_complet_en_cas_derreur_partielle(self, company, driver, bookings):
+        """Test : Échec partiel → rollback complet."""
+        # Préparer des assignations
+        assignments = [
+            type("Assignment", (), {
+                "booking_id": bookings[0].id,
+                "driver_id": driver.id,
+                "score": 1.0,
+            })(),
+            type("Assignment", (), {
+                "booking_id": bookings[1].id,
+                "driver_id": driver.id,
+                "score": 1.0,
+            })(),
+            # Troisième booking avec un driver_id invalide pour provoquer une erreur
+            type("Assignment", (), {
+                "booking_id": bookings[2].id,
+                "driver_id": 99999,  # Driver inexistant
+                "score": 1.0,
+            })(),
+        ]
+
+        # Tenter l'application
+        result = apply_assignments(
+            company_id=company.id,
+            assignments=assignments,
+            enforce_driver_checks=True,
+        )
+
+        # Vérifier qu'aucun booking n'a été assigné (rollback complet)
+        # Le troisième devrait être skipped, mais les deux premiers ne devraient
+        # PAS être persistés si une erreur survient
+        db.session.refresh(bookings[0])
+        db.session.refresh(bookings[1])
+        db.session.refresh(bookings[2])
+
+        # Avec le rollback transactionnel, si une erreur se produit dans la transaction,
+        # tous les changements doivent être annulés
+        # Dans ce cas, le driver_id invalide devrait être détecté avant les updates DB
+        # donc les bookings ne devraient pas être modifiés
+        assert bookings[0].driver_id is None or bookings[0].driver_id != driver.id
+        assert bookings[1].driver_id is None or bookings[1].driver_id != driver.id
+        assert bookings[2].driver_id is None
+
+        # Vérifier que le résultat indique les skips
+        assert bookings[2].id in result.get("skipped", {})
+
+    def test_atomicite_batch_assignations(self, company, driver, bookings):
+        """Test : Atomicité sur un batch d'assignations."""
+        # Préparer des assignations valides
+        assignments = [
+            type("Assignment", (), {
+                "booking_id": b.id,
+                "driver_id": driver.id,
+                "score": 1.0,
+            })() for b in bookings
+        ]
+
+        # Appliquer les assignations
+        result = apply_assignments(
+            company_id=company.id,
+            assignments=assignments,
+        )
+
+        # Vérifier que tous les bookings sont assignés
+        db.session.refresh(bookings[0])
+        db.session.refresh(bookings[1])
+        db.session.refresh(bookings[2])
+
+        assert bookings[0].driver_id == driver.id
+        assert bookings[1].driver_id == driver.id
+        assert bookings[2].driver_id == driver.id
+
+        # Vérifier que les assignments sont créés
+        assignments_db = Assignment.query.filter(
+            Assignment.booking_id.in_([b.id for b in bookings])
+        ).all()
+        assert len(assignments_db) == 3
+
+        # Vérifier le résultat
+        assert len(result["applied"]) == 3
+        assert len(result["skipped"]) == 0
+
+    def test_rollback_en_cas_de_conflit_db(self, company, driver, bookings):
+        """Test : Conflit DB → rollback et pas de corruption."""
+        # Créer une assignation existante pour créer un conflit
+        existing_assignment = Assignment(
+            booking_id=bookings[0].id,
+            driver_id=driver.id,
+            dispatch_run_id=1,
+        )
+        db.session.add(existing_assignment)
+        db.session.commit()
+
+        # Préparer des assignations, dont une qui crée un conflit
+        assignments = [
+            type("Assignment", (), {
+                "booking_id": bookings[0].id,  # Conflit potentiel
+                "driver_id": driver.id,
+                "dispatch_run_id": 1,  # Même dispatch_run_id
+                "score": 1.0,
+            })(),
+            type("Assignment", (), {
+                "booking_id": bookings[1].id,
+                "driver_id": driver.id,
+                "score": 1.0,
+            })(),
+        ]
+
+        # Appliquer (devrait gérer le conflit avec ON CONFLICT DO NOTHING)
+        result = apply_assignments(
+            company_id=company.id,
+            assignments=assignments,
+            dispatch_run_id=1,
+        )
+
+        # Vérifier que le conflit est géré (idempotence)
+        # Le booking[0] devrait garder son assignment existant
+        # Le booking[1] devrait être assigné
+        db.session.refresh(bookings[0])
+        db.session.refresh(bookings[1])
+
+        assert bookings[0].driver_id == driver.id  # Déjà assigné
+        assert bookings[1].driver_id == driver.id  # Nouvellement assigné
+
+        # Vérifier que le résultat indique les skips pour le conflit
+        # (ON CONFLICT DO NOTHING devrait être silencieux mais compter les conflits)
+        assert len(result["applied"]) >= 1  # Au moins booking[1]
+
+    def test_etat_coherent_apres_crash_simule(self, company, driver, bookings):
+        """Test : État cohérent après crash simulé."""
+        # Simuler un crash en levant une exception pendant l'application
+        assignments = [
+            type("Assignment", (), {
+                "booking_id": b.id,
+                "driver_id": driver.id,
+                "score": 1.0,
+            })() for b in bookings
+        ]
+
+        # Mock une exception pour simuler un crash
+        original_bulk_update = db.session.bulk_update_mappings
+
+        def mock_bulk_update(*args, **kwargs):
+            # Simuler un crash après le premier update
+            raise IntegrityError("Simulated crash", None, None)
+
+        db.session.bulk_update_mappings = mock_bulk_update
+
+        try:
+            apply_assignments(
+                company_id=company.id,
+                assignments=assignments,
+            )
+        except Exception:
+            # Exception attendue
+            pass
+        finally:
+            # Restaurer la méthode originale
+            db.session.bulk_update_mappings = original_bulk_update
+            # Rollback explicite pour nettoyer
+            db.session.rollback()
+
+        # Vérifier que l'état est cohérent (aucun booking partiellement assigné)
+        db.session.refresh(bookings[0])
+        db.session.refresh(bookings[1])
+        db.session.refresh(bookings[2])
+
+        # Tous les bookings devraient être dans leur état initial
+        # (pas d'assignation partielle due au crash)
+        for booking in bookings:
+            assert booking.driver_id is None or booking.status != BookingStatus.ASSIGNED
+
+    def test_transaction_avec_savepoint(self, company, driver, bookings):
+        """Test : Transaction avec savepoint (appel depuis engine.run())."""
+        # Simuler un appel depuis engine.run() qui a déjà une transaction
+        # En utilisant _begin_tx(), un savepoint devrait être créé
+        assignments = [
+            type("Assignment", (), {
+                "booking_id": b.id,
+                "driver_id": driver.id,
+                "score": 1.0,
+            })() for b in bookings
+        ]
+
+        # Démarrer une transaction externe (simule engine.run())
+        with db.session.begin():
+            # Appeler apply_assignments qui devrait créer un savepoint
+            result = apply_assignments(
+                company_id=company.id,
+                assignments=assignments,
+            )
+
+            # Vérifier que les assignations sont appliquées
+            assert len(result["applied"]) == 3
+
+            # Commit de la transaction externe
+            db.session.commit()
+
+        # Vérifier que les changements sont persistés
+        db.session.refresh(bookings[0])
+        db.session.refresh(bookings[1])
+        db.session.refresh(bookings[2])
+
+        assert bookings[0].driver_id == driver.id
+        assert bookings[1].driver_id == driver.id
+        assert bookings[2].driver_id == driver.id
+

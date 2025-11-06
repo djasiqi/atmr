@@ -11,8 +11,10 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 from flask_restx import Namespace, Resource, fields
 from sqlalchemy.orm import joinedload, selectinload
 
-from ext import db, role_required
+from ext import db, limiter, role_required
 from models import Booking, BookingStatus, Client, Driver, User, UserRole
+from schemas.booking_schemas import BookingCreateSchema
+from schemas.validation_utils import handle_validation_error, validate_request
 from services.maps import geocode_address, get_distance_duration
 from services.unified_dispatch import queue
 from shared.time_utils import to_utc
@@ -30,14 +32,31 @@ bookings_ns = Namespace(
 booking_create_model = bookings_ns.model(
     "BookingCreate",
     {
-        "customer_name": fields.String(required=True),
-        "pickup_location": fields.String(required=True),
-        "dropoff_location": fields.String(required=True),
-        "scheduled_time": fields.String(required=True, description="ISO 8601"),
-        "amount": fields.Float(required=True),
-        "medical_facility": fields.String(description="Établissement médical", default=""),
-        "doctor_name": fields.String(description="Nom du médecin", default=""),
+        "customer_name": fields.String(required=True, min_length=1, max_length=200, description="Nom du client"),
+        "pickup_location": fields.String(required=True, min_length=1, max_length=500, description="Lieu de prise en charge"),
+        "dropoff_location": fields.String(required=True, min_length=1, max_length=500, description="Lieu de dépose"),
+        "scheduled_time": fields.String(required=True, description="ISO 8601 (ex: 2024-01-15T14:30:00)"),
+        "amount": fields.Float(required=True, min=0, description="Montant de la réservation"),
+        "medical_facility": fields.String(description="Établissement médical", default="", max_length=200),
+        "doctor_name": fields.String(description="Nom du médecin", default="", max_length=200),
         "is_round_trip": fields.Boolean(description="Créer également un retour", default=False),
+        "return_time": fields.String(description="ISO 8601 pour l'heure de retour (optionnel)", default=None),
+    },
+)
+
+# Modèle Swagger pour mise à jour
+booking_update_model = bookings_ns.model(
+    "BookingUpdate",
+    {
+        "pickup_location": fields.String(min_length=1, max_length=500),
+        "dropoff_location": fields.String(min_length=1, max_length=500),
+        "scheduled_time": fields.String(description="ISO 8601"),
+        "amount": fields.Float(min=0),
+        "status": fields.String(enum=["pending", "confirmed", "in_progress", "completed", "cancelled"]),
+        "medical_facility": fields.String(max_length=200),
+        "doctor_name": fields.String(max_length=200),
+        "is_round_trip": fields.Boolean(),
+        "notes_medical": fields.String(max_length=1000),
     },
 )
 
@@ -170,64 +189,74 @@ def _check_booking_ownership(booking: Booking,  # noqa: PLR0911
 # =====================================================
 # Création d'une réservation pour un client
 # =====================================================
+def _validate_user_and_client(public_id: str) -> tuple[User | None, Client | None, tuple[dict[str, str], int] | None]:
+    """Valide utilisateur et client. Retourne (user, client, error_response)."""
+    jwt_public_id = get_jwt_identity()
+    user = User.query.filter_by(public_id=jwt_public_id).one_or_none()
+    if not user:
+        return None, None, ({"message": "Utilisateur non authentifié"}, 401)
+    
+    client = Client.query.join(User).filter(User.public_id == public_id).one_or_none()
+    if not client or client.user_id != user.id:
+        return None, None, ({"message": "Client non trouvé ou non associé à cet utilisateur"}, 403)
+    
+    return user, client, None
+
+
 @bookings_ns.route("/clients/<string:public_id>/bookings")
 class CreateBooking(Resource):
     @jwt_required()
     @role_required(UserRole.client)
+    @limiter.limit("50 per hour")  # ✅ 2.8: Rate limiting création réservations
     @bookings_ns.expect(booking_create_model)
     def post(self, public_id):
         """Créer une réservation pour un client (statut PENDING)."""
         try:
             data = request.get_json() or {}
-            jwt_public_id = get_jwt_identity()
-
-            user = User.query.filter_by(public_id=jwt_public_id).one_or_none()
-            if not user:
-                return {"message": "Utilisateur non authentifié"}, 401
-
-            # Client propriétaire (via public_id fourni dans l'URL)
-            client = Client.query.join(User).filter(
-                User.public_id == public_id).one_or_none()
-            if not client or client.user_id != user.id:
-                return {
-                    "message": "Client non trouvé ou non associé à cet utilisateur"}, 403
-
-            # Horaire (UTC-aware via helper) - interprète les naïfs en
-            # Europe/Zurich puis convertit en UTC
+            
+            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+            from marshmallow import ValidationError
             try:
-                # Interprète "YYYY-MM-DD HH:mm" (ou ISO sans Z) en
-                # Europe/Zurich et garde NAÏF (pas de tzinfo)
-                from shared.time_utils import parse_local_naive
-                scheduled_time = parse_local_naive(data["scheduled_time"])
-            except Exception as date_error:
-                app_logger.error(
-                    "Erreur de conversion scheduled_time: %s", date_error)
-                return {"error": "Invalid scheduled_time format"}, 400
+                validated_data = validate_request(BookingCreateSchema(), data)
+            except ValidationError as e:
+                return handle_validation_error(e)
+            
+            # Validation utilisateur et client
+            user, client, auth_error = _validate_user_and_client(public_id)
+            if auth_error:
+                return auth_error
+            assert user is not None  # Pour le type checker
+            assert client is not None  # Pour le type checker
 
-            # Durée/Distance (grâce à Google DM ou fallback coord si
-            # disponible)
+            # Horaire et distance
+            from shared.time_utils import parse_local_naive
+            try:
+                scheduled_time = parse_local_naive(validated_data["scheduled_time"])
+            except Exception as date_error:
+                app_logger.error("Erreur de conversion scheduled_time: %s", date_error)
+                return {"error": "Invalid scheduled_time format"}, 400
+            
             try:
                 duration_seconds, distance_meters = get_distance_duration(
-                    data["pickup_location"], data["dropoff_location"]
+                    validated_data["pickup_location"], validated_data["dropoff_location"]
                 )
             except Exception as e:
                 app_logger.error("Distance Matrix error: %s", e)
-                return {
-                    "error": f"Erreur lors du calcul durée/distance: {e}"}, 400
+                return {"error": f"Erreur lors du calcul durée/distance: {e}"}, 400
 
-            # Crée l'aller (PENDING)
+            # Crée l'aller (PENDING) - utilise données validées
             new_booking = cast("Any", Booking)(
-                customer_name=data["customer_name"],
-                pickup_location=data["pickup_location"],
-                dropoff_location=data["dropoff_location"],
+                customer_name=validated_data["customer_name"],
+                pickup_location=validated_data["pickup_location"],
+                dropoff_location=validated_data["dropoff_location"],
                 scheduled_time=scheduled_time,
-                amount=float(data["amount"]),
+                amount=float(validated_data["amount"]),
                 status=BookingStatus.PENDING,
                 user_id=user.id,
                 client_id=client.id,
-                company_id=client.company_id,  # lie déjà à l'entreprise si modèle le prévoit
-                medical_facility=data.get("medical_facility", ""),
-                doctor_name=data.get("doctor_name", ""),
+                company_id=client.company_id,
+                medical_facility=validated_data.get("medical_facility", ""),
+                doctor_name=validated_data.get("doctor_name", ""),
                 duration_seconds=duration_seconds,
                 distance_meters=distance_meters,
                 is_return=False,
@@ -239,23 +268,23 @@ class CreateBooking(Resource):
             try:
                 # Géocoder l'adresse de départ
                 pickup_coords = geocode_address(
-                    data["pickup_location"], country="CH")
+                    validated_data["pickup_location"], country="CH")
                 if pickup_coords:
                     new_booking.pickup_lat = pickup_coords.get("lat")
                     new_booking.pickup_lon = pickup_coords.get("lon")
                     app_logger.info(
                         "✅ Adresse de départ géocodée: %s -> (%s, %s)",
-                        data["pickup_location"],
+                        validated_data["pickup_location"],
                         pickup_coords.get("lat"),
                         pickup_coords.get("lon"))
                 else:
                     app_logger.warning(
                         "⚠️ Impossible de géocoder l'adresse de départ: %s",
-                        data["pickup_location"])
+                        validated_data["pickup_location"])
 
                 # Géocoder l'adresse d'arrivée
                 dropoff_coords = geocode_address(
-                    data["dropoff_location"], country="CH")
+                    validated_data["dropoff_location"], country="CH")
                 if dropoff_coords:
                     new_booking.dropoff_lat = dropoff_coords.get("lat")
                     new_booking.dropoff_lon = dropoff_coords.get("lon")
@@ -323,6 +352,7 @@ class CreateBooking(Resource):
 @bookings_ns.route("/<int:booking_id>")
 class BookingResource(Resource):
     @jwt_required()
+    @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting lecture réservation
     def get(self, booking_id):
         """Récupère une réservation (contrôle d'accès par rôle)."""
         try:
@@ -363,6 +393,8 @@ class BookingResource(Resource):
             return {"error": "Une erreur interne est survenue."}, 500
 
     @jwt_required()
+    @limiter.limit("100 per hour")  # ✅ 2.8: Rate limiting modification réservation
+    @bookings_ns.expect(booking_update_model, validate=False)
     def put(self, booking_id):  # noqa: PLR0911
         """Met à jour une réservation (si PENDING). Déclenche queue si utile."""
         try:
@@ -386,15 +418,36 @@ class BookingResource(Resource):
                     "error": "Seules les réservations en attente peuvent être modifiées"}, 400
 
             data = request.get_json() or {}
-            booking.pickup_location = data.get(
-                "pickup_location", booking.pickup_location)
-            booking.dropoff_location = data.get(
-                "dropoff_location", booking.dropoff_location)
-            if "scheduled_time" in data:
+            
+            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+            from marshmallow import ValidationError
+
+            from schemas.booking_schemas import BookingUpdateSchema
+            from schemas.validation_utils import handle_validation_error, validate_request
+            
+            try:
+                validated_data = validate_request(BookingUpdateSchema(), data, strict=False)
+            except ValidationError as e:
+                return handle_validation_error(e)
+            
+            # Utilise données validées
+            if "pickup_location" in validated_data:
+                booking.pickup_location = validated_data["pickup_location"]
+            if "dropoff_location" in validated_data:
+                booking.dropoff_location = validated_data["dropoff_location"]
+            if "scheduled_time" in validated_data:
                 try:
-                    booking.scheduled_time = to_utc(data["scheduled_time"])
+                    booking.scheduled_time = to_utc(validated_data["scheduled_time"])
                 except Exception:
                     return {"error": "Format de date invalide"}, 400
+            if "amount" in validated_data:
+                booking.amount = validated_data["amount"]
+            if "medical_facility" in validated_data:
+                booking.medical_facility = validated_data["medical_facility"]
+            if "doctor_name" in validated_data:
+                booking.doctor_name = validated_data["doctor_name"]
+            if "notes_medical" in validated_data:
+                booking.notes_medical = validated_data["notes_medical"]
 
             db.session.commit()
 
@@ -410,6 +463,7 @@ class BookingResource(Resource):
             return {"error": "Une erreur interne est survenue."}, 500
 
     @jwt_required()
+    @limiter.limit("50 per hour")  # ✅ 2.8: Rate limiting suppression réservation
     def delete(self, booking_id):
         """Annule une réservation (PENDING ou ASSIGNED). Déclenche queue si nécessaire."""
         try:
@@ -461,16 +515,64 @@ class BookingResource(Resource):
 # =====================================================
 
 
+def _get_admin_bookings(page: int, per_page: int, status_filter: str | None) -> tuple[dict[str, Any], int, dict[str, str]]:
+    """Helper pour récupérer les réservations pour un admin."""
+    query = Booking.query.options(
+        selectinload(Booking.driver).selectinload(Driver.user),
+        selectinload(Booking.client).selectinload(Client.user),
+        selectinload(Booking.company)
+    )
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    total = pagination.total or 0
+    bookings = pagination.items
+    headers = _build_pagination_links(page, per_page, total, "bookings.list_bookings")
+    result = [b.serialize for b in bookings]
+    return {"bookings": result, "total": total}, 200, headers
+
+
+def _get_client_bookings(user: User, page: int, per_page: int, status_filter: str | None) -> tuple[dict[str, Any], int, dict[str, str]] | None:
+    """Helper pour récupérer les réservations pour un client. Retourne None si erreur."""
+    client = Client.query.filter_by(user_id=user.id).one_or_none()
+    if not client:
+        return None
+    
+    query = Booking.query.options(
+        joinedload(Booking.client).joinedload(Client.user),
+        joinedload(Booking.driver).joinedload(Driver.user),
+        joinedload(Booking.company)
+    ).filter_by(client_id=client.id).order_by(Booking.scheduled_time.desc())
+    
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    total = pagination.total or 0
+    bookings = pagination.items
+    headers = _build_pagination_links(page, per_page, total, "bookings.list_bookings")
+    result = [b.serialize for b in bookings]
+    return {"bookings": result, "total": total}, 200, headers
+
+
 @bookings_ns.route("/")
 class ListBookings(Resource):
     @jwt_required()
+    @limiter.limit("300 per hour")  # ✅ 2.8: Rate limiting liste réservations
+    @bookings_ns.param("page", "Numéro de page (défaut: 1, min: 1)", type="integer", default=1, minimum=1)
+    @bookings_ns.param("per_page", "Résultats par page (défaut: 100, min: 1, max: 500)", type="integer", default=100, minimum=1, maximum=500)
+    @bookings_ns.param("status", "Filtre par statut (pending|confirmed|in_progress|completed|cancelled)", type="string", enum=["pending", "confirmed", "in_progress", "completed", "cancelled"])
+    @bookings_ns.param("from_date", "Date de début (YYYY-MM-DD)", type="string", pattern="^\\d{4}-\\d{2}-\\d{2}$")
+    @bookings_ns.param("to_date", "Date de fin (YYYY-MM-DD)", type="string", pattern="^\\d{4}-\\d{2}-\\d{2}$")
     def get(self):
         """Retourne les réservations (paginées).
 
         Query params:
-            - page: numéro de page (défaut: 1)
-            - per_page: résultats par page (défaut: 100, max: 500)
-            - status: filtre par statut (optionnel)
+            - page: numéro de page (défaut: 1, min: 1)
+            - per_page: résultats par page (défaut: 100, min: 1, max: 500)
+            - status: filtre par statut (pending|confirmed|in_progress|completed|cancelled), optionnel
+            - from_date: filtre par date de début (YYYY-MM-DD), optionnel
+            - to_date: filtre par date de fin (YYYY-MM-DD), optionnel
         """
         try:
             jwt_public_id = get_jwt_identity()
@@ -478,60 +580,29 @@ class ListBookings(Resource):
             if not user:
                 return {"error": "User not found"}, 401
 
-            # Pagination
-            page = int(request.args.get("page", 1))
-            per_page = min(int(request.args.get("per_page", 100)), 500)
-            status_filter = request.args.get("status")
+            # ✅ 2.4: Validation Marshmallow pour query params
+            from marshmallow import ValidationError
 
+            from schemas.booking_schemas import BookingListSchema
+            from schemas.validation_utils import handle_validation_error, validate_request
+            
+            args_dict = dict(request.args)
+            try:
+                validated_args = validate_request(BookingListSchema(), args_dict, strict=False)
+                page = validated_args.get("page", 1)
+                per_page = validated_args.get("per_page", 100)
+                status_filter = validated_args.get("status")
+            except ValidationError as e:
+                return handle_validation_error(e)
+
+            # Traitement selon le rôle
             if user.role == UserRole.admin:
-                # ✅ PERF: Eager loading pour éviter N+1 queries
-                query = Booking.query.options(
-                    selectinload(Booking.driver).selectinload(Driver.user),
-                    selectinload(Booking.client).selectinload(Client.user),
-                    selectinload(Booking.company)
-                )
-                if status_filter:
-                    query = query.filter_by(status=status_filter)
-                pagination = query.paginate(
-                    page=page, per_page=per_page, error_out=False)
-                total = pagination.total or 0
-                bookings = pagination.items
-
-                headers = _build_pagination_links(
-                    page, per_page, total, "bookings.list_bookings")
-                result = [b.serialize for b in bookings]
-                return {"bookings": result, "total": total}, 200, headers
-
+                return _get_admin_bookings(page, per_page, status_filter)
+            
             if user.role == UserRole.client:
-                client = Client.query.filter_by(user_id=user.id).one_or_none()
-                if not client:
-                    return {
-                        "error": "Unauthorized: No client profile found"}, 403
-                # ✅ Eager load client + user pour éviter N+1
-                query = Booking.query.options(
-                    joinedload(
-                        Booking.client).joinedload(
-                        Client.user),
-                    joinedload(
-                        Booking.driver).joinedload(
-                        Driver.user),
-                    joinedload(
-                        Booking.company)).filter_by(
-                            client_id=client.id).order_by(
-                                Booking.scheduled_time.desc())
-
-                if status_filter:
-                    query = query.filter_by(status=status_filter)
-
-                pagination = query.paginate(
-                    page=page, per_page=per_page, error_out=False)
-                total = pagination.total or 0
-                bookings = pagination.items
-
-                headers = _build_pagination_links(
-                    page, per_page, total, "bookings.list_bookings")
-                result = [b.serialize for b in bookings]
-                return {"bookings": result, "total": total}, 200, headers
+                client_result = _get_client_bookings(user, page, per_page, status_filter)
+                return client_result if client_result is not None else ({"error": "Unauthorized: No client profile found"}, 403)
+            
             return {"error": "Unauthorized: You don't have permission"}, 403
 
         except Exception as e:

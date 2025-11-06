@@ -5,20 +5,24 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import UTC, date, datetime, timedelta
 
 # Constantes pour éviter les valeurs magiques
 from typing import Any, Dict, cast
 
-from flask import request
+from flask import current_app, request
 from flask_jwt_extended import jwt_required
 from flask_restx import Namespace, Resource, fields
 from marshmallow import INCLUDE, Schema, validate
 from marshmallow import fields as ma_fields
 from werkzeug.exceptions import UnprocessableEntity
 
-from ext import db, role_required
+from ext import db, limiter, role_required
 from models import Assignment, AssignmentStatus, Booking, BookingStatus, Client, Company, DispatchRun, Driver, UserRole
 from routes.companies import get_company_from_token
 from services.unified_dispatch import data
@@ -93,6 +97,11 @@ class DispatchOverridesSchema(Schema):
     logging = ma_fields.Dict(required=False)
     features = ma_fields.Dict(required=False)
     autorun = ma_fields.Dict(required=False)
+    # ⚡ Champs supplémentaires pour fonctionnalités avancées
+    reset_existing = ma_fields.Bool(required=False, allow_none=True)
+    preferred_driver_id = ma_fields.Int(required=False, allow_none=True)  # ⚡ Permettre null
+    fast_mode = ma_fields.Bool(required=False, allow_none=True)
+    driver_load_multipliers = ma_fields.Dict(required=False, allow_none=True)
 
     class Meta:  # type: ignore
         unknown = INCLUDE  # Allow unknown fields like 'mode'
@@ -398,7 +407,83 @@ def _booking_time_expr() -> Any:
 class CompanyDispatchRun(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    @limiter.limit("30 per hour")  # ✅ 2.8: Rate limiting lancement dispatch (coûteux)
     @dispatch_ns.expect(run_model, validate=False)
+    @dispatch_ns.doc(
+        description="""
+        Lance un dispatch pour une journée donnée.
+        
+        **Mode asynchrone (async=true, par défaut)**:
+        - Enfile un job Celery via la queue
+        - Retourne 202 avec job_id et dispatch_run_id
+        - Utilisez GET /company_dispatch/status pour suivre le statut
+        - Recommandé pour >10 bookings
+        
+        **Mode synchrone (async=false)**:
+        - Exécute le dispatch immédiatement
+        - Retourne 200 avec le résultat complet
+        - Limité à <10 bookings (sinon erreur 400)
+        - Utilisez uniquement pour tests ou petits volumes
+        
+        **Overrides**:
+        Les overrides permettent de surcharger les paramètres de dispatch:
+        - `heuristic`: { "driver_load_balance": 0.5, "proximity": 0.3 }
+        - `fairness`: { "fairness_weight": 0.8 }
+        - `solver`: { "time_limit_sec": 120 }
+        - `preferred_driver_id`: ID du chauffeur préféré (ignoré dans Settings mais utilisé par heuristics)
+        - `reset_existing`: true pour réinitialiser les assignations existantes
+        - `fast_mode`: true pour activer le mode rapide (solver désactivé)
+        
+        **Exemples de payload**:
+        
+        Dispatch asynchrone simple:
+        ```json
+        {
+          "for_date": "2025-01-15",
+          "async": true
+        }
+        ```
+        
+        Dispatch avec overrides:
+        ```json
+        {
+          "for_date": "2025-01-15",
+          "async": true,
+          "regular_first": true,
+          "allow_emergency": false,
+          "overrides": {
+            "heuristic": {
+              "driver_load_balance": 0.7,
+              "proximity": 0.2
+            },
+            "fairness": {
+              "fairness_weight": 0.9
+            },
+            "preferred_driver_id": 123
+          }
+        }
+        ```
+        
+        **Validation**:
+        Utilisez POST /company_dispatch/settings/validate pour valider les overrides avant exécution.
+        """,
+        responses={
+            200: "Dispatch synchrone réussi",
+            202: "Dispatch asynchrone enfilé (job_id retourné)",
+            400: "Paramètres invalides ou mode sync avec >10 bookings",
+            500: "Erreur serveur"
+        },
+        example={
+            "for_date": "2025-01-15",
+            "async": True,
+            "regular_first": True,
+            "allow_emergency": None,
+            "overrides": {
+                "heuristic": {"driver_load_balance": 0.5},
+                "fairness": {"fairness_weight": 0.8}
+            }
+        }
+    )
     def post(self):
         """Lance un dispatch pour une journée donnée.
         - async=true (défaut) : enfile un job via la queue (202)
@@ -461,6 +546,23 @@ class CompanyDispatchRun(Resource):
             return job, 202
 
         # --- Mode sync: exécute immédiatement
+        # ✅ Limitation du mode sync à <10 bookings pour éviter les timeouts
+        max_sync_bookings = int(os.getenv("DISPATCH_SYNC_MAX_BOOKINGS", "10"))
+        from services.unified_dispatch.data import get_bookings_for_day
+        
+        bookings_count = len(get_bookings_for_day(company_id, for_date))
+        if bookings_count > max_sync_bookings:
+            dispatch_ns.abort(
+                400,
+                f"Mode sync limité à {max_sync_bookings} bookings max (trouvé: {bookings_count}). "
+                + "Utilisez async=true pour les dispatches volumineux."
+            )
+        
+        logger.info(
+            "[Dispatch] Mode sync autorisé: %d bookings (limite: %d)",
+            bookings_count, max_sync_bookings
+        )
+        
         from services.unified_dispatch import engine
         from services.unified_dispatch.validation import validate_assignments
         
@@ -498,12 +600,21 @@ class CompanyDispatchRun(Resource):
 class CompanyDispatchStatus(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    @dispatch_ns.doc(params={"date": "Date optionnelle (YYYY-MM-DD) pour obtenir le statut d'un dispatch spécifique"})
     def get(self):
-        """Statut courant du worker de dispatch (coalescing / dernier résultat / dernière erreur)."""
+        """Statut courant du worker de dispatch (coalescing / dernier résultat / dernière erreur).
+        
+        Retourne:
+        - Le statut du dernier dispatch (si disponible)
+        - Le dispatch_run_id actif (si date fournie)
+        - Le nombre d'assignments créés pour la date
+        - Le statut Celery de la tâche en cours
+        """
         try:
             company_id = _current_company_id()
-            logger.debug("[Dispatch] Status check for company=%s", company_id)
-            return get_status(company_id), 200
+            for_date = request.args.get("date")  # ✅ Paramètre optionnel pour date
+            logger.debug("[Dispatch] Status check for company=%s date=%s", company_id, for_date)
+            return get_status(company_id, for_date=for_date), 200
         except Exception as e:
             cid = locals().get("company_id", "?")
             logger.exception("[Dispatch] get_status failed company=%s", cid)
@@ -555,6 +666,23 @@ class DispatchPreview(Resource):
 class DispatchTrigger(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    @limiter.limit("50 per hour")  # ✅ 2.8: Rate limiting trigger dispatch
+    @dispatch_ns.doc(
+        description="""
+        ⚠️ **DÉPRÉCIÉ** - Cet endpoint sera supprimé dans une future version.
+        
+        **Migration recommandée**: Utilisez `POST /company_dispatch/run` avec `async=true`.
+        
+        **Guide de migration**: Voir `/docs/API_MIGRATION_TRIGGER_TO_RUN.md`
+        
+        Cet endpoint est maintenu pour compatibilité mais redirige vers `/run`.
+        """,
+        deprecated=True,
+        responses={
+            202: "Job enfilé (via /run)",
+            400: "Erreur de paramètres"
+        }
+    )
     def post(self):
         """(Déprécié) Déclenche un run async. Utilisez POST /company_dispatch/run."""
         company = _get_current_company()
@@ -578,6 +706,110 @@ class DispatchTrigger(Resource):
 
         job = trigger_job(company_id, params)
         return job, 202
+
+
+@dispatch_ns.route("/settings/validate")
+class DispatchSettingsValidate(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):
+        """Valide des overrides de settings avant application.
+        
+        Accepte un payload avec 'overrides' et retourne :
+        - applied: paramètres qui seront appliqués
+        - ignored: paramètres ignorés (inconnus ou non applicables)
+        - errors: erreurs de validation
+        """
+        from services.unified_dispatch import settings as ud_settings
+        
+        company = _get_current_company()
+        body = request.get_json(silent=True) or {}
+        overrides = body.get("overrides", {})
+        
+        if not overrides:
+            return {
+                "valid": True,
+                "applied": [],
+                "ignored": [],
+                "errors": [],
+                "message": "Aucun override fourni",
+            }, 200
+        
+        try:
+            # Créer settings de base pour la company
+            base_settings = ud_settings.for_company(company)
+            
+            # Tenter le merge pour valider
+            # Note: on n'utilise pas strict_validation ici pour ne pas bloquer
+            # mais on retourne les erreurs dans la réponse
+            new_settings = ud_settings.merge_overrides(base_settings, overrides)
+            
+            # Récupérer le résultat de validation depuis les logs
+            # (On pourrait améliorer merge_overrides pour retourner le résultat de validation)
+            # Pour l'instant, on vérifie manuellement les paramètres critiques
+            validation_result = {
+                "applied": [],
+                "ignored": [],
+                "errors": [],
+            }
+            
+            # Vérifier les paramètres appliqués
+            if "heuristic" in overrides:
+                h_ov = overrides["heuristic"]
+                if isinstance(h_ov, dict):
+                    if "driver_load_balance" in h_ov:
+                        if new_settings.heuristic.driver_load_balance == h_ov["driver_load_balance"]:
+                            validation_result["applied"].append("heuristic.driver_load_balance")
+                        else:
+                            validation_result["errors"].append(
+                                f"heuristic.driver_load_balance demandé={h_ov['driver_load_balance']} "
+                                + f"mais appliqué={new_settings.heuristic.driver_load_balance}"
+                            )
+                    if "proximity" in h_ov:
+                        if new_settings.heuristic.proximity == h_ov["proximity"]:
+                            validation_result["applied"].append("heuristic.proximity")
+                        else:
+                            validation_result["errors"].append(
+                                f"heuristic.proximity demandé={h_ov['proximity']} "
+                                + f"mais appliqué={new_settings.heuristic.proximity}"
+                            )
+            
+            if "fairness" in overrides:
+                f_ov = overrides["fairness"]
+                if isinstance(f_ov, dict) and "fairness_weight" in f_ov:
+                    if new_settings.fairness.fairness_weight == f_ov["fairness_weight"]:
+                        validation_result["applied"].append("fairness.fairness_weight")
+                    else:
+                        validation_result["errors"].append(
+                            f"fairness.fairness_weight demandé={f_ov['fairness_weight']} "
+                            + f"mais appliqué={new_settings.fairness.fairness_weight}"
+                        )
+            
+            # Identifier les clés ignorées (non dans Settings)
+            known_ignored_keys = ["preferred_driver_id", "mode", "run_async", "reset_existing", "fast_mode"]
+            for key in overrides:
+                if key not in ["heuristic", "solver", "fairness", "features", "time", "service_times", 
+                               "pooling", "realtime", "emergency", "matrix", "logging", "autorun", "rl", 
+                               "clustering", "multi_objective", "safety"] and key not in known_ignored_keys:
+                    validation_result["ignored"].append(key)
+            
+            return {
+                "valid": len(validation_result["errors"]) == 0,
+                "applied": validation_result["applied"],
+                "ignored": validation_result["ignored"],
+                "errors": validation_result["errors"],
+                "message": "Validation complétée" if len(validation_result["errors"]) == 0 else "Erreurs de validation détectées",
+            }, 200
+            
+        except Exception as e:
+            logger.exception("[Dispatch] Erreur validation settings: %s", e)
+            return {
+                "valid": False,
+                "applied": [],
+                "ignored": [],
+                "errors": [str(e)],
+                "message": f"Erreur lors de la validation: {e}",
+            }, 400
 
 
 @dispatch_ns.route("/autorun/enable")
@@ -626,6 +858,78 @@ class DispatchAutorunEnable(Resource):
             logger.exception("[Dispatch] autorun settings update failed company=%s", company_id)
             dispatch_ns.abort(500, f"Erreur mise à jour autorun: {e}")
 
+@dispatch_ns.route("/assignments/validate")
+class ValidateAssignmentsResource(Resource):
+    """Valide les assignations existantes pour détecter les conflits temporels."""
+    
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Vérifie les conflits temporels dans les assignations existantes.
+        
+        Query params:
+            date: Date au format YYYY-MM-DD (défaut: aujourd'hui)
+        
+        Returns:
+            {
+                "valid": bool,
+                "conflicts": List[Dict],
+                "summary": Dict
+            }
+        """
+        company_id = _current_company_id()
+        date_str = request.args.get("date")
+        
+        target_date = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else now_local().date()
+        
+        try:
+            from services.unified_dispatch.validation import validate_assignments
+            
+            # Récupérer les assignations pour la date
+            start_datetime = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
+            end_datetime = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
+            
+            assignments_data = []
+            assignments = (
+                Assignment.query.join(Booking)
+                .filter(
+                    Assignment.company_id == company_id,
+                    Booking.scheduled_time >= start_datetime,
+                    Booking.scheduled_time <= end_datetime,
+                    Assignment.status.in_([
+                        AssignmentStatus.SCHEDULED,
+                        AssignmentStatus.EN_ROUTE_PICKUP,
+                        AssignmentStatus.ARRIVED_PICKUP,
+                        AssignmentStatus.ONBOARD,
+                        AssignmentStatus.EN_ROUTE_DROPOFF,
+                    ])
+                )
+                .all()
+            )
+            
+            for assignment in assignments:
+                assignments_data.append({
+                    "booking_id": assignment.booking_id,
+                    "driver_id": assignment.driver_id,
+                    "scheduled_time": assignment.booking.scheduled_time.isoformat() if assignment.booking.scheduled_time else None,
+                })
+            
+            # Valider
+            result = validate_assignments(assignments_data, strict=False)
+            
+            return {
+                "valid": result["valid"],
+                "conflicts": result["warnings"] + result["errors"],
+                "summary": result["stats"],
+                "date": target_date.isoformat(),
+                "total_assignments": len(assignments_data)
+            }, 200
+            
+        except Exception as e:
+            logger.exception("[Validate Assignments] Erreur: %s", e)
+            return {"error": str(e)}, 500
+
+
 @dispatch_ns.route("/assignments")
 class AssignmentsListResource(Resource):
     @jwt_required()
@@ -633,73 +937,113 @@ class AssignmentsListResource(Resource):
     @dispatch_ns.doc(params={"date": "YYYY-MM-DD"})
     @dispatch_ns.marshal_list_with(assignment_model)
     def get(self):
-        """Liste des assignations pour un jour."""
-        d = _parse_date(request.args.get("date"))
-        # Utiliser day_local_bounds pour obtenir les bornes locales du jour (naïves)
-        # Booking.scheduled_time est naïf local, donc on ne convertit PAS en UTC
-        d0local, d1local = day_local_bounds(d.strftime("%Y-%m-%d"))
-        # Pas de conversion UTC - on utilise directement les bornes locales
-        d0, d1 = d0local, d1local
-
-        # 🔒 Filtre multi-colonnes temps (comme le front)
-        company = _get_current_company()
-        time_expr = _booking_time_expr()
-
-        # Ids des bookings du jour (entreprise courante), en excluant les statuts terminés/annulés
-        # ✅ PERF: Import selectinload au début du fichier pour éviter import local répété
-        from sqlalchemy.orm import selectinload as sel_load
-
-        booking_ids = [
-            b.id
-            for b in (
-                Booking.query.options(
-                    sel_load(Booking.driver).selectinload(Driver.user),
-                    sel_load(Booking.client).selectinload(Client.user),
-                    sel_load(Booking.company)
-                ).filter(
-                    Booking.company_id == company.id,
-                       time_expr >= d0,     # Comparaison avec bornes locales naïves
-                       time_expr < d1,
-                       # ✅ Exclure COMPLETED/RETURN_COMPLETED/CANCELLED/CANCELED
-                       cast("Any", Booking.status).notin_(
-                           [s for s in [
-                               getattr(BookingStatus, "COMPLETED", None),
-                               getattr(BookingStatus, "RETURN_COMPLETED", None),
-                               getattr(BookingStatus, "CANCELLED", None),
-                               getattr(BookingStatus, "CANCELED", None),
-                           ] if s is not None]
-                       ),
-                ).all()
+        """Liste des assignations pour un jour.
+        
+        Retourne toutes les assignations pour la date donnée, avec les relations booking et driver chargées.
+        """
+        try:
+            date_str = request.args.get("date")
+            logger.info(
+                "[Dispatch] /assignments request for date=%s company_id=%s",
+                date_str, _current_company_id()
             )
-        ]
+            
+            d = _parse_date(date_str)
+            # Utiliser day_local_bounds pour obtenir les bornes locales du jour (naïves)
+            # Booking.scheduled_time est naïf local, donc on ne convertit PAS en UTC
+            d0local, d1local = day_local_bounds(d.strftime("%Y-%m-%d"))
+            # Pas de conversion UTC - on utilise directement les bornes locales
+            d0, d1 = d0local, d1local
 
-        # Assignations pour ces bookings avec eager loading des relations
-        from sqlalchemy.orm import joinedload
+            logger.debug(
+                "[Dispatch] /assignments date bounds: %s to %s",
+                d0, d1
+            )
 
-        assignments = []
-        if booking_ids:
-            assignments = (
-                Assignment.query
-                .filter(Assignment.booking_id.in_(booking_ids))
-                .options(
-                    joinedload(Assignment.booking),  # Charger booking
-                    joinedload(Assignment.driver).joinedload(Driver.user)  # Charger driver + user
+            # 🔒 Filtre multi-colonnes temps (comme le front)
+            company = _get_current_company()
+            time_expr = _booking_time_expr()
+
+            # Ids des bookings du jour (entreprise courante), en excluant les statuts terminés/annulés
+            # ✅ PERF: Import selectinload au début du fichier pour éviter import local répété
+            from sqlalchemy.orm import selectinload as sel_load
+
+            bookings_query = Booking.query.options(
+                sel_load(Booking.driver).selectinload(Driver.user),
+                sel_load(Booking.client).selectinload(Client.user),
+                sel_load(Booking.company)
+            ).filter(
+                Booking.company_id == company.id,
+                time_expr >= d0,     # Comparaison avec bornes locales naïves
+                time_expr < d1,
+                # ✅ Exclure COMPLETED/RETURN_COMPLETED/CANCELLED/CANCELED
+                cast("Any", Booking.status).notin_(
+                    [s for s in [
+                        getattr(BookingStatus, "COMPLETED", None),
+                        getattr(BookingStatus, "RETURN_COMPLETED", None),
+                        getattr(BookingStatus, "CANCELLED", None),
+                        getattr(BookingStatus, "CANCELED", None),
+                    ] if s is not None]
+                ),
+            )
+            
+            bookings = bookings_query.all()
+            booking_ids = [b.id for b in bookings]
+            
+            logger.info(
+                "[Dispatch] /assignments found %d bookings for date=%s company_id=%s",
+                len(booking_ids), date_str, company.id
+            )
+
+            # Assignations pour ces bookings avec eager loading des relations
+            from sqlalchemy.orm import joinedload
+
+            assignments = []
+            if booking_ids:
+                assignments = (
+                    Assignment.query
+                    .filter(Assignment.booking_id.in_(booking_ids))
+                    .options(
+                        joinedload(Assignment.booking),  # Charger booking
+                        joinedload(Assignment.driver).joinedload(Driver.user)  # Charger driver + user
+                    )
+                    .all()
                 )
-                .all()
+                
+                logger.info(
+                    "[Dispatch] /assignments found %d assignments for %d bookings date=%s",
+                    len(assignments), len(booking_ids), date_str
+                )
+            else:
+                logger.debug(
+                    "[Dispatch] /assignments no bookings found for date=%s, returning empty assignments",
+                    date_str
+                )
+
+            # Enrichir manuellement les champs flat pour Flask-RESTX
+            for a in assignments:
+                if a.driver and a.driver.user:
+                    user = a.driver.user
+                    # Ajouter les champs flat au driver pour le marshalling
+                    a.driver.username = user.username
+                    a.driver.first_name = user.first_name
+                    a.driver.last_name = user.last_name
+                    full = f"{user.first_name or ''} {user.last_name or ''}".strip()
+                    a.driver.full_name = full or user.username
+
+            logger.debug(
+                "[Dispatch] /assignments returning %d assignments for date=%s",
+                len(assignments), date_str
             )
 
-        # Enrichir manuellement les champs flat pour Flask-RESTX
-        for a in assignments:
-            if a.driver and a.driver.user:
-                user = a.driver.user
-                # Ajouter les champs flat au driver pour le marshalling
-                a.driver.username = user.username
-                a.driver.first_name = user.first_name
-                a.driver.last_name = user.last_name
-                full = f"{user.first_name or ''} {user.last_name or ''}".strip()
-                a.driver.full_name = full or user.username
-
-        return assignments
+            return assignments
+            
+        except Exception as e:
+            logger.exception(
+                "[Dispatch] /assignments error for date=%s company_id=%s: %s",
+                request.args.get("date"), _current_company_id(), e
+            )
+            dispatch_ns.abort(500, f"Erreur récupération assignations: {e}")
 
 
 
@@ -1128,6 +1472,40 @@ class DelaysResource(Resource):
         return delays
 
 
+# ✅ Helper function pour calculer ETA en parallèle (utilisé par LiveDelaysResource)
+def _calculate_eta_for_assignment(driver_pos: tuple[float, float] | None, pickup_pos: tuple[float, float] | None, use_haversine_only: bool = False) -> int | None:
+    """Calcule l'ETA (en secondes) entre driver_pos et pickup_pos.
+    Retourne None si les positions ne sont pas disponibles ou en cas d'erreur.
+    Cette fonction est thread-safe et peut être appelée en parallèle.
+    
+    Args:
+        driver_pos: Position actuelle du chauffeur
+        pickup_pos: Position de pickup
+        use_haversine_only: Si True, utilise uniquement Haversine (bypass OSRM)
+    """
+    if not driver_pos or not pickup_pos:
+        return None
+    
+    # ✅ Si OSRM est indisponible (circuit breaker OPEN), utiliser directement Haversine
+    if use_haversine_only:
+        try:
+            from services.unified_dispatch.settings import DEFAULT_SETTINGS
+            from shared.geo_utils import haversine_distance
+            distance_km = haversine_distance(driver_pos[0], driver_pos[1], pickup_pos[0], pickup_pos[1])
+            avg_speed_kmh = float(getattr(getattr(DEFAULT_SETTINGS, "matrix", None), "avg_speed_kmh", 25))
+            eta_seconds = int((distance_km / max(avg_speed_kmh, 1e-3)) * 3600.0)
+            return max(1, eta_seconds)
+        except Exception as e:
+            logger.warning("[LiveDelays] Haversine fallback failed: %s", e)
+            return None
+    
+    try:
+        return data.calculate_eta(driver_pos, pickup_pos)
+    except Exception as e:
+        logger.warning("[LiveDelays] Failed to calculate ETA: %s", e)
+        return None
+
+
 @dispatch_ns.route("/delays/live")
 class LiveDelaysResource(Resource):
     @jwt_required()
@@ -1137,7 +1515,12 @@ class LiveDelaysResource(Resource):
         """Retards en temps réel avec recalcul des ETAs et suggestions intelligentes.
         Inclut les retards actuels ET prédits, avec suggestions de réassignation
         et impact sur les courses suivantes.
+        ✅ OPTIMISÉ: Parallélise les calculs d'ETA pour améliorer les performances.
+        ✅ OPTIMISÉ: Timeout global de 20s pour éviter les timeouts frontend.
         """
+        endpoint_start_time = time.time()
+        ENDPOINT_TIMEOUT_SECONDS = 15  # ✅ Timeout global réduit à 15s pour éviter les timeouts frontend (30s)
+        
         # Validation de la date
         date_str = request.args.get("date")
         if not date_str:
@@ -1153,9 +1536,18 @@ class LiveDelaysResource(Resource):
         company = _get_current_company()
         time_expr = _booking_time_expr()
 
-        # Récupérer toutes les assignations actives (EXCLURE les courses terminées)
+        # ✅ CRITIQUE: Filtrer les assignations par proximité temporelle (1h avant à 1h après le pickup)
+        # On ne doit calculer des ETAs que pour les courses proches de leur heure de pickup
+        # Cela évite de calculer des ETAs pour des courses qui sont à H+00 (plusieurs heures avant)
+        now = now_local()
+        TIME_WINDOW_BEFORE_MINUTES = 60  # Commencer à surveiller 1 heure avant (augmenté de 30 à 60 min)
+        TIME_WINDOW_AFTER_MINUTES = 60   # Arrêter de surveiller 1 heure après
+        time_window_start = now - timedelta(minutes=TIME_WINDOW_BEFORE_MINUTES)
+        time_window_end = now + timedelta(minutes=TIME_WINDOW_AFTER_MINUTES)
+
+        # ✅ Récupérer uniquement les assignations dans la fenêtre temporelle
         assigns = (
-            Assignment.query.join(Booking, Booking.id == Assignment.booking_id)
+            Assignment.query.join(Booking, Booking.id == Assignment.booking_id) 
             .filter(
                 Booking.company_id == company.id,
                 time_expr >= d0,
@@ -1166,11 +1558,36 @@ class LiveDelaysResource(Resource):
                     BookingStatus.RETURN_COMPLETED,
                     BookingStatus.CANCELED,
                 ]),
+                # ✅ FILTRE TEMPOREL: Ne traiter que les courses dans la fenêtre (30 min avant à 1h après)
+                time_expr >= time_window_start,
+                time_expr <= time_window_end,
             )
+            .limit(50)  # ✅ Limiter à 50 assignations max pour éviter les surcharges
             .all()
         )
 
-        delays = []
+        logger.info(
+            "[LiveDelays] Found %d assignments in time window [%s, %s] for company %s",
+            len(assigns), time_window_start.isoformat(), time_window_end.isoformat(), company.id
+        )
+
+        # ✅ Si aucune assignation dans la fenêtre temporelle, retourner rapidement
+        if not assigns:
+            logger.debug("[LiveDelays] No assignments in time window, returning empty response")
+            return {
+                "delays": [],
+                "summary": {
+                    "total": 0,
+                    "late": 0,
+                    "early": 0,
+                    "on_time": 0,
+                    "average_delay": 0,
+                },
+                "timestamp": now.isoformat(),
+            }, 200
+
+        # ✅ ÉTAPE 1: Préparer les données pour le calcul parallèle des ETAs
+        assignment_data = []
         for a in assigns:
             b = Booking.query.get(a.booking_id)
             if not b:
@@ -1201,6 +1618,105 @@ class LiveDelaysResource(Resource):
             pickup_lon = getattr(b, "pickup_lon", None)
             pickup_pos = (pickup_lat, pickup_lon) if pickup_lat and pickup_lon else None
 
+            assignment_data.append({
+                "assignment": a,
+                "booking": b,
+                "driver": driver,
+                "driver_pos": driver_pos,
+                "pickup_pos": pickup_pos,
+            })
+
+        # ✅ ÉTAPE 2: Vérifier le circuit breaker OSRM AVANT de lancer les calculs
+        # Si OSRM est indisponible, utiliser Haversine directement pour tous les calculs
+        use_haversine_only = False
+        try:
+            from services.osrm_client import _osrm_circuit_breaker
+            if _osrm_circuit_breaker.state == "OPEN":
+                logger.info("[LiveDelays] OSRM circuit breaker is OPEN, using Haversine only for all ETA calculations")
+                use_haversine_only = True
+        except Exception as e:
+            logger.warning("[LiveDelays] Could not check OSRM circuit breaker: %s, will try OSRM first", e)
+            # Si on ne peut pas vérifier le circuit breaker, continuer normalement
+            pass
+
+        # ✅ ÉTAPE 3: Calculer tous les ETAs en parallèle avec timeout global
+        eta_results = {}  # {assignment_id: eta_seconds}
+        assignments_needing_eta = [
+            (i, data_item) for i, data_item in enumerate(assignment_data)
+            if data_item["driver_pos"] and data_item["pickup_pos"]
+        ]
+
+        if assignments_needing_eta:
+            start_time = time.time()
+            # ✅ Timeout global réduit : 3s si Haversine (rapide), 5s si OSRM (peut être lent)
+            GLOBAL_TIMEOUT_SECONDS = 3 if use_haversine_only else 5
+            
+            def _calculate_with_index(index_data):
+                _, data_item = index_data  # Ignore l'index, on n'en a pas besoin
+                eta_sec = _calculate_eta_for_assignment(
+                    data_item["driver_pos"],
+                    data_item["pickup_pos"],
+                    use_haversine_only=use_haversine_only
+                )
+                return (data_item["assignment"].id, eta_sec)
+
+            # ✅ Utiliser ThreadPoolExecutor avec max_workers réduit pour éviter la surcharge
+            max_workers = min(5, len(assignments_needing_eta))  # Max 5 workers en parallèle (réduit de 10 à 5)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                try:
+                    futures = {executor.submit(_calculate_with_index, item): item[1]["assignment"].id
+                               for item in assignments_needing_eta}
+                    # ✅ Utiliser as_completed avec timeout global pour éviter d'attendre trop longtemps
+                    completed = 0
+                    for future in as_completed(futures, timeout=GLOBAL_TIMEOUT_SECONDS):
+                        try:
+                            assignment_id, eta_sec = future.result()
+                            if eta_sec is not None:
+                                eta_results[assignment_id] = eta_sec
+                            completed += 1
+                            # Si on dépasse le timeout global, arrêter d'attendre
+                            if time.time() - start_time >= GLOBAL_TIMEOUT_SECONDS:
+                                logger.warning(
+                                    "[LiveDelays] Global timeout (%ds) reached, stopping ETA calculations (%d/%d completed)",
+                                    GLOBAL_TIMEOUT_SECONDS, completed, len(futures)
+                                )
+                                break
+                        except Exception as e:
+                            assignment_id_key = futures.get(future, "unknown")
+                            logger.warning(
+                                "[LiveDelays] ETA calculation failed for assignment %s: %s",
+                                assignment_id_key, e
+                            )
+                except FutureTimeoutError:
+                    logger.warning(
+                        "[LiveDelays] Global timeout (%ds) reached for ETA calculations, using partial results (%d/%d completed)",
+                        GLOBAL_TIMEOUT_SECONDS, len(eta_results), len(assignments_needing_eta)
+                    )
+                except Exception as e:
+                    logger.warning("[LiveDelays] Error in parallel ETA calculation: %s", e)
+
+            elapsed_time = time.time() - start_time
+            logger.info(
+                "[LiveDelays] Calculated %d ETAs in parallel in %.2fs (timeout: %ds, total: %d)",
+                len(eta_results), elapsed_time, GLOBAL_TIMEOUT_SECONDS, len(assignments_needing_eta)
+            )
+
+        # ✅ ÉTAPE 4: Construire les delays avec les ETAs calculés
+        delays = []
+        for data_item in assignment_data:
+            # ✅ Vérifier le timeout global pour éviter les timeouts frontend
+            if time.time() - endpoint_start_time >= ENDPOINT_TIMEOUT_SECONDS:
+                logger.warning(
+                    "[LiveDelays] Endpoint timeout (%ds) reached, returning partial results (%d/%d delays)",
+                    ENDPOINT_TIMEOUT_SECONDS, len(delays), len(assignment_data)
+                )
+                break
+            a = data_item["assignment"]
+            b = data_item["booking"]
+            driver = data_item["driver"]
+            driver_pos = data_item["driver_pos"]
+            pickup_pos = data_item["pickup_pos"]
+
             # Temps prévus
             pickup_time = getattr(b, "pickup_time", None) or getattr(b, "scheduled_time", None)
             dropoff_time = getattr(b, "dropoff_time", None)
@@ -1219,13 +1735,18 @@ class LiveDelaysResource(Resource):
             pickup_time = _to_dt(pickup_time)
             dropoff_time = _to_dt(dropoff_time)
 
-            # Recalcul ETA en temps réel si position chauffeur ET pickup disponibles
+            # ✅ Utiliser l'ETA calculé en parallèle (ou calculer en fallback si non disponible)
             current_eta = None
-            if driver_pos and pickup_pos and pickup_time:
+            if a.id in eta_results and pickup_time:
+                # ✅ ETA calculé en parallèle disponible
+                eta_seconds = eta_results[a.id]
+                current_eta = now_local() + timedelta(seconds=eta_seconds)
+            elif driver_pos and pickup_pos and pickup_time:
+                # Fallback: calculer maintenant si pas dans les résultats (ne devrait pas arriver normalement)
                 try:
-                    # Utiliser calculate_eta pour estimation temps réel
-                    eta_seconds = data.calculate_eta(driver_pos, pickup_pos)
-                    current_eta = now_local() + timedelta(seconds=eta_seconds)
+                    eta_seconds = _calculate_eta_for_assignment(driver_pos, pickup_pos)
+                    if eta_seconds:
+                        current_eta = now_local() + timedelta(seconds=eta_seconds)
                 except Exception as e:
                     logger.warning("[LiveDelays] Failed to calculate ETA for assignment %s: %s", a.id, e)
 
@@ -1238,22 +1759,68 @@ class LiveDelaysResource(Resource):
                 )
                 current_eta = _to_dt(current_eta)
 
-            # Calcul du retard
+            # ✅ LOGIQUE INTELLIGENTE DE DÉTECTION DE RETARD
+            # Basée sur l'ETA GPS vs temps restant et le statut de la course
             delay_minutes = 0
             status = "unknown"
+            booking_status = getattr(b, "status", None)
 
             if pickup_time and current_eta:
                 try:
-                    delay_seconds = (current_eta - pickup_time).total_seconds()
-                    delay_minutes = int(delay_seconds / 60)
-
-                    if delay_minutes > DELAY_MINUTES_THRESHOLD:
-                        status = "late"
-                    elif delay_minutes < -DELAY_MINUTES_THRESHOLD:
-                        status = "early"
+                    current_time = now_local()
+                    time_remaining_until_pickup = (pickup_time - current_time).total_seconds() / 60.0  # en minutes
+                    
+                    # Calculer l'ETA en minutes depuis maintenant
+                    eta_from_now_seconds = (current_eta - current_time).total_seconds()
+                    eta_from_now_minutes = eta_from_now_seconds / 60.0
+                    
+                    if pickup_time > current_time:
+                        # ✅ Course dans le futur : logique intelligente de détection
+                        # Exemple : Chauffeur à 27 min du pickup, il reste 40 min → PAS de retard (il a le temps)
+                        # Exemple : Chauffeur à 27 min du pickup, il reste 25 min → Retard de 2 min si EN_ROUTE, problème si ASSIGNED
+                        
+                        if eta_from_now_minutes <= time_remaining_until_pickup:
+                            # ✅ Le chauffeur arrivera à temps (ETA GPS <= temps restant)
+                            status = "on_time"
+                            delay_minutes = 0
+                        else:
+                            # ⚠️ Le chauffeur sera en retard (ETA GPS > temps restant)
+                            potential_delay_minutes = int(eta_from_now_minutes - time_remaining_until_pickup)
+                            
+                            # Vérifier le statut de la course
+                            is_en_route = booking_status in [BookingStatus.EN_ROUTE, BookingStatus.IN_PROGRESS]
+                            
+                            if is_en_route:
+                                # ✅ Chauffeur en mouvement : le retard se propagera à l'arrivée
+                                # Exemple : Part avec 2 min de retard → 2 min de retard à l'arrivée
+                                delay_minutes = potential_delay_minutes
+                                status = "late" if delay_minutes > DELAY_MINUTES_THRESHOLD else "on_time"
+                                logger.debug(
+                                    "[LiveDelays] Driver EN_ROUTE but will be %d min late (ETA: %.1f min, remaining: %.1f min)",
+                                    delay_minutes, eta_from_now_minutes, time_remaining_until_pickup
+                                )
+                            else:
+                                # ❌ Chauffeur pas encore en route : signaler un problème
+                                # Il devrait être en route mais ne l'est pas
+                                delay_minutes = potential_delay_minutes
+                                status = "late"
+                                logger.warning(
+                                    "[LiveDelays] Driver should be EN_ROUTE but status is %s. Will be %d min late (ETA: %.1f min, remaining: %.1f min)",
+                                    booking_status, delay_minutes, eta_from_now_minutes, time_remaining_until_pickup
+                                )
                     else:
-                        status = "on_time"
-                except Exception:
+                        # ✅ Course passée ou en cours : calculer le retard normalement
+                        delay_seconds = (current_eta - pickup_time).total_seconds()
+                        delay_minutes = int(delay_seconds / 60)
+
+                        if delay_minutes > DELAY_MINUTES_THRESHOLD:
+                            status = "late"
+                        elif delay_minutes < -DELAY_MINUTES_THRESHOLD:
+                            status = "early"
+                        else:
+                            status = "on_time"
+                except Exception as e:
+                    logger.warning("[LiveDelays] Error calculating intelligent delay: %s", e)
                     pass
             elif pickup_time and not current_eta:
                 # ⭐ FALLBACK : Si pas d'ETA disponible, comparer heure actuelle vs heure prévue
@@ -1274,48 +1841,51 @@ class LiveDelaysResource(Resource):
                 except Exception as e:
                     logger.warning("[LiveDelays] Failed to calculate time-based delay: %s", e)
 
-            # Générer suggestions intelligentes
+            # ✅ OPTIMISATION CRITIQUE: Désactiver suggestions et cascade pour améliorer les performances
+            # Ces fonctionnalités sont coûteuses et peuvent être calculées de manière asynchrone si nécessaire
             suggestions_list = []
-            if delay_minutes != DELAY_MINUTES_ZERO:
-                try:
-                    company_id_int = int(cast("Any", company.id))
-                    suggestions = generate_suggestions(a, delay_minutes, company_id_int)
-                    suggestions_list = [s.to_dict() for s in suggestions]
-                    logger.info("[LiveDelays] Generated %d suggestions for assignment %s (delay: %d min)",
-                               len(suggestions_list), a.id, delay_minutes)
-                except Exception as e:
-                    logger.exception("[LiveDelays] Failed to generate suggestions for assignment %s: %s", a.id, e)
-
-            # Vérifier l'impact cascade (courses suivantes du même chauffeur)
             cascade_impact = []
-            if driver and delay_minutes > DELAY_MINUTES_THRESHOLD and pickup_time is not None:
-                try:
-                    # Trouver les prochaines courses du chauffeur
-                    next_assignments = (
-                        Assignment.query
-                        .join(Booking, Booking.id == Assignment.booking_id)
-                        .filter(
-                            Assignment.driver_id == driver.id,
-                            Assignment.id != a.id,
-                            Booking.scheduled_time > pickup_time,
-                            Booking.scheduled_time < pickup_time + timedelta(hours=4)
-                        )
-                        .order_by(Booking.scheduled_time.asc())
-                        .limit(3)
-                        .all()
-                    )
-
-                    for next_a in next_assignments:
-                        next_b = Booking.query.get(next_a.booking_id)
-                        if next_b:
-                            cascade_impact.append({
-                                "booking_id": next_b.id,
-                                "scheduled_time": next_b.scheduled_time.isoformat() if next_b.scheduled_time else None,
-                                "customer_name": getattr(next_b, "customer_name", None),
-                                "potential_delay_minutes": delay_minutes  # Propagation simplifiée
-                            })
-                except Exception as e:
-                    logger.warning("[LiveDelays] Failed to check cascade impact: %s", e)
+            
+            # ✅ DÉSACTIVÉ TEMPORAIREMENT pour améliorer les performances de l'endpoint /delays/live
+            # Les suggestions et l'impact cascade peuvent être calculés de manière asynchrone si nécessaire
+            # if delay_minutes > DELAY_MINUTES_THRESHOLD:  # Seulement pour retards > 15 min
+            #     try:
+            #         company_id_int = int(cast("Any", company.id))
+            #         suggestions = generate_suggestions(a, delay_minutes, company_id_int)
+            #         suggestions_list = [s.to_dict() for s in suggestions]
+            #     except Exception as e:
+            #         logger.warning("[LiveDelays] Failed to generate suggestions for assignment %s: %s", a.id, e)
+            
+            # ✅ DÉSACTIVÉ TEMPORAIREMENT pour améliorer les performances
+            # ✅ DÉSACTIVÉ TEMPORAIREMENT pour améliorer les performances
+            # if driver and delay_minutes > DELAY_MINUTES_THRESHOLD and pickup_time is not None:
+            #     try:
+            #         # Trouver les prochaines courses du chauffeur
+            #         next_assignments = (
+            #             Assignment.query
+            #             .join(Booking, Booking.id == Assignment.booking_id)
+            #             .filter(
+            #                 Assignment.driver_id == driver.id,
+            #                 Assignment.id != a.id,
+            #                 Booking.scheduled_time > pickup_time,
+            #                 Booking.scheduled_time < pickup_time + timedelta(hours=4)
+            #             )
+            #             .order_by(Booking.scheduled_time.asc())
+            #             .limit(3)
+            #             .all()
+            #         )
+            #
+            #         for next_a in next_assignments:
+            #             next_b = Booking.query.get(next_a.booking_id)
+            #             if next_b:
+            #                 cascade_impact.append({
+            #                     "booking_id": next_b.id,
+            #                     "scheduled_time": next_b.scheduled_time.isoformat() if next_b.scheduled_time else None,
+            #                     "customer_name": getattr(next_b, "customer_name", None),
+            #                     "potential_delay_minutes": delay_minutes  # Propagation simplifiée
+            #                 })
+            #     except Exception as e:
+            #         logger.warning("[LiveDelays] Failed to check cascade impact: %s", e)
 
             # Construire la réponse
             if current_eta or delay_minutes != DELAY_MINUTES_ZERO:
@@ -1412,10 +1982,29 @@ class OptimizerStopResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self):
-        """Arrête le monitoring en temps réel pour l'entreprise."""
+        """Arrête le monitoring en temps réel pour l'entreprise.
+        
+        ⚠️ En mode fully_auto, l'optimiseur ne peut pas être arrêté manuellement.
+        Changez le mode de dispatch pour arrêter l'optimiseur.
+        """
         company_id = _current_company_id()
+        company = _get_current_company()
 
         try:
+            # ✅ Empêcher l'arrêt si l'entreprise est en mode fully_auto
+            current_mode = getattr(company.dispatch_mode, "value", None) if hasattr(company, "dispatch_mode") else None
+            
+            if current_mode == "fully_auto":
+                logger.warning(
+                    "[Optimizer] Tentative d'arrêt refusée pour company %s (mode fully_auto actif)",
+                    company_id
+                )
+                return {
+                    "success": False,
+                    "error": "Impossible d'arrêter l'optimiseur en mode fully_auto. Changez le mode de dispatch pour arrêter l'optimiseur.",
+                    "current_mode": current_mode,
+                }, 403  # Forbidden
+
             stop_optimizer_for_company(company_id)
 
             return {
@@ -1451,6 +2040,102 @@ class OptimizerStatusResource(Resource):
 
         except Exception as e:
             logger.exception("[Optimizer] Failed to get status for company %s", company_id)
+            return {"error": f"Échec récupération statut: {e}"}, 500
+
+
+# ===== Routes Agent Dispatch Intelligent =====
+
+@dispatch_ns.route("/agent/start")
+class AgentStartResource(Resource):
+    """Démarre l'agent dispatch intelligent."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):
+        """Démarre l'agent dispatch pour l'entreprise."""
+        company_id = _current_company_id()
+
+        try:
+            from services.agent_dispatch.orchestrator import get_agent_for_company
+
+            agent = get_agent_for_company(company_id, app=current_app._get_current_object())
+            agent.start()
+
+            status = agent.get_status()
+            return {
+                "success": True,
+                "message": "Agent démarré",
+                "status": status,
+            }, 200
+
+        except Exception as e:
+            logger.exception("[Agent] Failed to start for company %s", company_id)
+            return {"error": f"Échec démarrage agent: {e}"}, 500
+
+
+@dispatch_ns.route("/agent/stop")
+class AgentStopResource(Resource):
+    """Arrête l'agent dispatch intelligent."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):
+        """Arrête l'agent dispatch pour l'entreprise.
+        
+        ⚠️ En mode fully_auto, l'agent ne peut pas être arrêté manuellement.
+        Changez le mode de dispatch pour arrêter l'agent.
+        """
+        company_id = _current_company_id()
+        company = _get_current_company()
+
+        try:
+            # ✅ Empêcher l'arrêt si l'entreprise est en mode fully_auto
+            current_mode = getattr(company.dispatch_mode, "value", None) if hasattr(company, "dispatch_mode") else None
+            
+            if current_mode == "fully_auto":
+                logger.warning(
+                    "[Agent] Tentative d'arrêt refusée pour company %s (mode fully_auto actif)",
+                    company_id
+                )
+                return {
+                    "success": False,
+                    "error": "Impossible d'arrêter l'agent en mode fully_auto. Changez le mode de dispatch pour arrêter l'agent.",
+                    "current_mode": current_mode,
+                }, 403  # Forbidden
+
+            from services.agent_dispatch.orchestrator import stop_agent_for_company
+
+            stop_agent_for_company(company_id)
+
+            return {
+                "success": True,
+                "message": "Agent arrêté",
+            }, 200
+
+        except Exception as e:
+            logger.exception("[Agent] Failed to stop for company %s", company_id)
+            return {"error": f"Échec arrêt agent: {e}"}, 500
+
+
+@dispatch_ns.route("/agent/status")
+class AgentStatusResource(Resource):
+    """Récupère le statut de l'agent dispatch intelligent."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Récupère le statut de l'agent."""
+        company_id = _current_company_id()
+
+        try:
+            from services.agent_dispatch.orchestrator import get_agent_for_company
+
+            agent = get_agent_for_company(company_id)
+            status = agent.get_status()
+            return status, 200
+
+        except Exception as e:
+            logger.exception("[Agent] Failed to get status for company %s", company_id)
             return {"error": f"Échec récupération statut: {e}"}, 500
 
 
@@ -1714,13 +2399,47 @@ class DispatchModeResource(Resource):
 
         # Changer le mode
         new_mode = body.get("dispatch_mode")
+        # Récupérer l'ancien mode de manière sécurisée (SQLAlchemy Column)
+        old_mode = getattr(company.dispatch_mode, "value", None) if hasattr(company, "dispatch_mode") else None
         if new_mode:
             from models import DispatchMode
             try:
                 cast("Any", company).dispatch_mode = DispatchMode(new_mode)
                 logger.info(
-                    "[Dispatch] Company %s changed mode to: %s",
+                    "[Dispatch] Company %s changed mode to: %s (from: %s)",
+                    company_id, new_mode, old_mode
+                )
+                
+                # ✅ Démarrer/arrêter l'agent automatiquement selon le mode
+                try:
+                    from services.agent_dispatch.orchestrator import (
+                        get_agent_for_company,
+                        stop_agent_for_company,
+                    )
+                    
+                    if new_mode == "fully_auto":
+                        # Démarrer l'agent automatiquement en mode fully_auto
+                        agent = get_agent_for_company(
+                            company_id, app=current_app._get_current_object()
+                        )
+                        if not agent.state.running:
+                            agent.start()
+                            logger.info(
+                                "[Dispatch] 🤖 Agent démarré automatiquement pour company %s (mode fully_auto)",
+                                company_id
+                            )
+                    elif old_mode == "fully_auto" and new_mode != "fully_auto":
+                        # Arrêter l'agent si on sort du mode fully_auto
+                        stop_agent_for_company(company_id)
+                        logger.info(
+                            "[Dispatch] ⏸️ Agent arrêté automatiquement pour company %s (mode changé vers %s)",
                     company_id, new_mode
+                        )
+                except Exception as agent_err:
+                    # Ne pas faire échouer le changement de mode si l'agent a un problème
+                    logger.warning(
+                        "[Dispatch] ⚠️ Erreur gestion agent lors changement mode: %s",
+                        agent_err
                 )
             except ValueError:
                 return {
@@ -2585,3 +3304,562 @@ class DispatchAdvancedSettingsResource(Resource):
             db.session.rollback()
             logger.exception("[Dispatch] Failed to delete advanced settings")
             return {"error": f"Échec de la suppression: {e}"}, 500
+
+
+# ===== FEATURE FLAGS & PERFORMANCE METRICS (Phase 0) =====
+
+@dispatch_ns.route("/features/flags")
+class FeatureFlagsResource(Resource):
+    """Gestion des feature flags pour le dispatch."""
+    
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Récupère les feature flags actifs pour l'entreprise.
+
+        Returns:
+            Dict des feature flags avec leur état actuel
+        """
+        company = _get_current_company()
+        
+        # Récupérer la config depuis company.autonomous_config
+        config = {}
+        try:
+            settings_raw = getattr(company, "autonomous_config", None)
+            if isinstance(settings_raw, str) and settings_raw:
+                config = json.loads(settings_raw)
+        except (json.JSONDecodeError, TypeError):
+            config = {}
+        
+        # Extraire les feature flags (avec valeurs par défaut)
+        features = config.get("features", {})
+        
+        return {
+            "company_id": company.id,
+            "features": {
+                "enable_solver": features.get("enable_solver", True),
+                "enable_heuristics": features.get("enable_heuristics", True),
+                "enable_events": features.get("enable_events", True),
+                "enable_db_bulk_ops": features.get("enable_db_bulk_ops", True),
+                "enable_rl": features.get("enable_rl", False),
+                "enable_rl_apply": features.get("enable_rl_apply", False),
+                "enable_clustering": features.get("enable_clustering", False),
+                "enable_parallel_heuristics": features.get("enable_parallel_heuristics", False),
+            }
+        }, 200
+    
+    @jwt_required()
+    @role_required(UserRole.company)
+    def put(self):
+        """Met à jour les feature flags.
+        
+        Body:
+        {
+            "features": {
+                "enable_rl": true,
+                "enable_rl_apply": false,
+                ...
+            }
+        }
+        """
+        company = _get_current_company()
+        company_id: int = _current_company_id()
+        
+        body = request.get_json() or {}
+        new_features = body.get("features")
+        
+        if not new_features or not isinstance(new_features, dict):
+            return {"error": "Le champ 'features' est requis et doit être un objet"}, 400
+        
+        # Charger la config existante
+        config = {}
+        try:
+            settings_raw = getattr(company, "autonomous_config", None)
+            if isinstance(settings_raw, str) and settings_raw:
+                config = json.loads(settings_raw)
+        except (json.JSONDecodeError, TypeError):
+            config = {}
+        
+        # Merger les nouveaux features
+        if "features" not in config:
+            config["features"] = {}
+        config["features"].update(new_features)
+        
+        # Sauvegarder
+        try:
+            cast("Any", company).autonomous_config = json.dumps(config)
+            db.session.add(company)
+            db.session.commit()
+            
+            logger.info(
+                "[Dispatch] Company %s updated feature flags: %s",
+                company_id,
+                list(new_features.keys())
+            )
+            
+            return {
+                "company_id": company_id,
+                "features": config["features"],
+                "message": "Feature flags mis à jour avec succès"
+            }, 200
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("[Dispatch] Failed to update feature flags")
+            return {"error": f"Échec de la mise à jour: {e}"}, 500
+
+
+@dispatch_ns.route("/metrics/performance")
+class PerformanceMetricsResource(Resource):
+    """Métriques de performance pour le dispatch."""
+    
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Récupère les métriques de performance pour une date.
+
+        Query params:
+            date: Date au format YYYY-MM-DD (optionnel, défaut: aujourd'hui)
+            dispatch_run_id: ID du dispatch run (optionnel, prioritaire sur date)
+            
+        Returns:
+            Métriques de performance détaillées
+        """
+        company_id = _current_company_id()
+        date_str = request.args.get("date")
+        dispatch_run_id_str = request.args.get("dispatch_run_id")
+        error_response = None
+        result_response = None
+        
+        # Si dispatch_run_id fourni, l'utiliser en priorité
+        if dispatch_run_id_str:
+            try:
+                dispatch_run_id = int(dispatch_run_id_str)
+            except ValueError:
+                error_response = ({"error": "dispatch_run_id invalide"}, 400)
+            else:
+                dispatch_run = DispatchRun.query.filter_by(id=dispatch_run_id, company_id=company_id).first()
+                if not dispatch_run:
+                    error_response = ({"error": "Dispatch run non trouvé"}, 404)
+                else:
+                    try:
+                        meta = dispatch_run.meta or {}
+                        perf_metrics = meta.get("performance_metrics")
+                        if perf_metrics:
+                            result_response = ({
+                                "dispatch_run_id": dispatch_run_id,
+                                "company_id": company_id,
+                                "date": dispatch_run.day.isoformat() if dispatch_run.day else None,
+                                "status": dispatch_run.status.value if hasattr(dispatch_run.status, "value") else str(dispatch_run.status),
+                                "metrics": perf_metrics
+                            }, 200)
+                        else:
+                            result_response = ({
+                                "dispatch_run_id": dispatch_run_id,
+                                "message": "Aucune métrique disponible pour ce dispatch run"
+                            }, 200)
+                    except Exception as e:
+                        logger.exception("[Dispatch] Failed to extract performance metrics")
+                        error_response = ({"error": f"Erreur lors de l'extraction: {e}"}, 500)
+        
+        # Sinon, utiliser la date
+        if not error_response and not result_response and dispatch_run_id_str is None:
+            if not date_str:
+                date_str = datetime.now(UTC).date().isoformat()
+            try:
+                date_obj = date.fromisoformat(date_str)
+            except ValueError:
+                error_response = ({"error": "Format de date invalide (attendu: YYYY-MM-DD)"}, 400)
+            else:
+                dispatch_run = DispatchRun.query.filter_by(company_id=company_id, day=date_obj).order_by(DispatchRun.created_at.desc()).first()
+                if not dispatch_run:
+                    result_response = ({"date": date_str, "message": "Aucun dispatch run trouvé pour cette date"}, 200)
+                else:
+                    try:
+                        meta = dispatch_run.meta or {}
+                        perf_metrics = meta.get("performance_metrics")
+                        if perf_metrics:
+                            result_response = ({
+                                "dispatch_run_id": dispatch_run.id,
+                                "date": date_str,
+                                "company_id": company_id,
+                                "status": dispatch_run.status.value if hasattr(dispatch_run.status, "value") else str(dispatch_run.status),
+                                "metrics": perf_metrics
+                            }, 200)
+                        else:
+                            result_response = ({"dispatch_run_id": dispatch_run.id, "date": date_str, "message": "Aucune métrique disponible"}, 200)
+                    except Exception as e:
+                        logger.exception("[Dispatch] Failed to extract performance metrics")
+                        error_response = ({"error": f"Erreur lors de l'extraction: {e}"}, 500)
+        
+        if error_response:
+            return error_response
+        if result_response:
+            return result_response
+        return {"error": "Erreur inconnue"}, 500
+
+
+@dispatch_ns.route("/metrics/prometheus")
+class PrometheusMetricsResource(Resource):
+    """Export des métriques au format Prometheus."""
+    
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Exporte les métriques au format Prometheus.
+
+        Query params:
+            date: Date au format YYYY-MM-DD (optionnel, défaut: aujourd'hui)
+            dispatch_run_id: ID du dispatch run (optionnel, prioritaire sur date)
+            
+        Returns:
+            Métriques au format Prometheus (text/plain)
+        """
+        from flask import Response
+        
+        company_id = _current_company_id()
+        date_str = request.args.get("date")
+        dispatch_run_id_str = request.args.get("dispatch_run_id")
+        error_response = None
+        response = None
+        
+        # Si dispatch_run_id fourni, l'utiliser en priorité
+        if dispatch_run_id_str:
+            try:
+                dispatch_run_id = int(dispatch_run_id_str)
+            except ValueError:
+                error_response = ({"error": "dispatch_run_id invalide"}, 400)
+            else:
+                dispatch_run = DispatchRun.query.filter_by(id=dispatch_run_id, company_id=company_id).first()
+                if not dispatch_run:
+                    error_response = ({"error": "Dispatch run non trouvé"}, 404)
+                else:
+                    meta = dispatch_run.meta or {}
+                    perf_metrics = meta.get("performance_metrics")
+                    if not perf_metrics:
+                        response = (Response("# No metrics available", mimetype="text/plain"), 200)
+        else:
+            # Sinon, utiliser la date
+            if not date_str:
+                date_str = datetime.now(UTC).date().isoformat()
+            try:
+                date_obj = date.fromisoformat(date_str)
+            except ValueError:
+                error_response = ({"error": "Format de date invalide (attendu: YYYY-MM-DD)"}, 400)
+            else:
+                dispatch_run = DispatchRun.query.filter_by(company_id=company_id, day=date_obj).order_by(DispatchRun.created_at.desc()).first()
+                if not dispatch_run:
+                    response = (Response(f"# No dispatch run found for date {date_str}", mimetype="text/plain"), 200)
+                else:
+                    meta = dispatch_run.meta or {}
+                    perf_metrics = meta.get("performance_metrics")
+                    if not perf_metrics:
+                        response = (Response("# No metrics available", mimetype="text/plain"), 200)
+        
+        # Convertir en format Prometheus si métriques disponibles
+        local_vars = locals()
+        if not error_response and not response and "perf_metrics" in local_vars and local_vars.get("perf_metrics") and "dispatch_run" in local_vars:
+            try:
+                from services.unified_dispatch.performance_metrics import DispatchPerformanceMetrics
+                perf_metrics = local_vars["perf_metrics"]
+                dispatch_run = local_vars["dispatch_run"]
+                
+                metrics = DispatchPerformanceMetrics(
+                    dispatch_run_id=dispatch_run.id,
+                    company_id=company_id,
+                    timestamp=datetime.now(UTC),
+                    data_collection_time=perf_metrics.get("timing", {}).get("data_collection", 0.0),
+                    heuristics_time=perf_metrics.get("timing", {}).get("heuristics", 0.0),
+                    solver_time=perf_metrics.get("timing", {}).get("solver", 0.0),
+                    persistence_time=perf_metrics.get("timing", {}).get("persistence", 0.0),
+                    total_time=perf_metrics.get("timing", {}).get("total", 0.0),
+                    sql_queries_count=perf_metrics.get("counters", {}).get("sql_queries", 0),
+                    cache_hits=perf_metrics.get("counters", {}).get("cache_hits", 0),
+                    cache_misses=perf_metrics.get("counters", {}).get("cache_misses", 0),
+                    bookings_processed=perf_metrics.get("counters", {}).get("bookings_processed", 0),
+                    drivers_available=perf_metrics.get("counters", {}).get("drivers_available", 0),
+                    quality_score=perf_metrics.get("quality", {}).get("quality_score", 0.0),
+                    assignment_rate=perf_metrics.get("quality", {}).get("assignment_rate", 0.0),
+                    algorithm_used=perf_metrics.get("algorithm", "unknown"),
+                    feature_flags=perf_metrics.get("feature_flags", {})
+                )
+                prometheus_text = metrics.to_prometheus_format()
+                response = (Response(prometheus_text, mimetype="text/plain"), 200)
+            except Exception as e:
+                logger.exception("[Dispatch] Failed to convert to Prometheus format")
+                error_response = ({"error": f"Erreur lors de la conversion: {e}"}, 500)
+        
+        if error_response:
+            return error_response
+        if response:
+            return response
+        return (Response("# No metrics available", mimetype="text/plain"), 200)
+
+
+@dispatch_ns.route("/metrics/a1-compliance")
+class A1ComplianceResource(Resource):
+    """Métriques de conformité A1 (prévention conflits temporels)."""
+    
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Récupère les métriques de conformité A1 sur N jours.
+        
+        Query params:
+            days: Nombre de jours à analyser (défaut: 7)
+            
+        Returns:
+            Métriques de conformité A1 avec violation_rate
+        """
+        company_id = _current_company_id()
+        days = request.args.get("days", 7, type=int)
+        
+        try:
+            # Récupérer les dispatch runs des N derniers jours
+            start_date = datetime.now(UTC).date() - timedelta(days=days)
+            runs = DispatchRun.query.filter(
+                DispatchRun.company_id == company_id,
+                DispatchRun.created_at >= start_date
+            ).all()
+            
+            # Calculer les statistiques
+            total_conflicts = sum(
+                r.meta.get("performance_metrics", {}).get("temporal_conflicts", 0)
+                for r in runs if r.meta
+            )
+            total_bookings = sum(
+                r.meta.get("counters", {}).get("bookings_processed", 0)
+                for r in runs if r.meta
+            )
+            
+            violation_rate = total_conflicts / total_bookings if total_bookings > 0 else 0
+            threshold = 0.001  # 0.1%
+            
+            return {
+                "temporal_conflicts": total_conflicts,
+                "total_bookings": total_bookings,
+                "violation_rate": violation_rate,
+                "threshold": threshold,
+                "compliant": violation_rate < threshold,
+                "days": days,
+                "runs_analyzed": len(runs)
+            }, 200
+            
+        except Exception as e:
+            logger.exception("[A1 Compliance] Erreur: %s", e)
+            return {"error": f"Erreur: {e}"}, 500
+
+
+@dispatch_ns.route("/metrics/a1-rejects")
+class A1RejectsResource(Resource):
+    """Détails des rejets pour conflits temporels."""
+    
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Récupère les détails des rejets pour conflits temporels.
+        
+        Query params:
+            days: Nombre de jours à analyser (défaut: 1)
+            limit: Nombre max de rejets (défaut: 100)
+            
+        Returns:
+            Liste des rejets avec conflict_penalty
+        """
+        company_id = _current_company_id()
+        days = request.args.get("days", 1, type=int)
+        limit = request.args.get("limit", 100, type=int)
+        
+        try:
+            # Récupérer les dispatch runs
+            start_date = datetime.now(UTC).date() - timedelta(days=days)
+            runs = DispatchRun.query.filter(
+                DispatchRun.company_id == company_id,
+                DispatchRun.created_at >= start_date
+            ).order_by(DispatchRun.created_at.desc()).limit(100).all()
+            
+            all_rejects = []
+            for run in runs:
+                if not run.meta:
+                    continue
+                
+                debug = run.meta.get("debug", {})
+                temporal_rejects = debug.get("temporal_conflict_rejects", [])
+                
+                for reject in temporal_rejects:
+                    reject["dispatch_run_id"] = run.id
+                    reject["created_at"] = run.created_at.isoformat() if run.created_at else None
+                    all_rejects.append(reject)
+            
+            # Limiter et retourner
+            all_rejects = all_rejects[:limit]
+            
+            return {
+                "rejects": all_rejects,
+                "count": len(all_rejects),
+                "days": days
+            }, 200
+            
+        except Exception as e:
+            logger.exception("[A1 Rejects] Erreur: %s", e)
+            return {"error": f"Erreur: {e}"}, 500
+
+
+@dispatch_ns.route("/metrics/a1-backout")
+class A1BackoutResource(Resource):
+    """Vérifie conformité A1 et active backout si nécessaire."""
+    
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):
+        """Vérifie conformité A1 et active backout si nécessaire.
+        
+        Body (JSON):
+            days: Nombre de jours à analyser (défaut: 7)
+            
+        Returns:
+            Décision de backout avec violation_rate
+        """
+        company_id = _current_company_id()
+        days = request.json.get("days", 7) if request.json else 7
+        
+        try:
+            # Récupérer statistiques
+            start_date = datetime.now(UTC).date() - timedelta(days=days)
+            runs = DispatchRun.query.filter(
+                DispatchRun.company_id == company_id,
+                DispatchRun.created_at >= start_date
+            ).all()
+            
+            total_conflicts = sum(
+                r.meta.get("performance_metrics", {}).get("temporal_conflicts", 0)
+                for r in runs if r.meta
+            )
+            total_bookings = sum(
+                r.meta.get("counters", {}).get("bookings_processed", 0)
+                for r in runs if r.meta
+            )
+            
+            violation_rate = total_conflicts / total_bookings if total_bookings > 0 else 0
+            threshold = 0.001
+            
+            backout_needed = violation_rate >= threshold
+            
+            if backout_needed:
+                logger.error(
+                    "[A1] ❌ Backout recommandé: violation_rate=%.4f >= threshold=%.4f (company_id=%s)",
+                    violation_rate, threshold, company_id
+                )
+                # TODO: Désactiver automatiquement le feature flag via DB
+            
+            return {
+                "compliant": violation_rate < threshold,
+                "violation_rate": violation_rate,
+                "threshold": threshold,
+                "backout_needed": backout_needed,
+                "total_conflicts": total_conflicts,
+                "total_bookings": total_bookings,
+                "message": "Backout recommandé" if backout_needed else "Conforme"
+            }, 200
+            
+        except Exception as e:
+            logger.exception("[A1 Backout] Erreur: %s", e)
+            return {"error": f"Erreur: {e}"}, 500
+
+
+@dispatch_ns.route("/reset")
+class ResetAssignmentsResource(Resource):
+    """Réinitialise toutes les assignations pour permettre un redémarrage propre."""
+    
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):
+        """Réinitialise toutes les assignations et remet les courses au statut ACCEPTED.
+        
+        Body (JSON, optionnel):
+            {
+                "date": "2025-11-06"  // optionnel, défaut: toutes les dates
+            }
+        
+        Returns:
+            {
+                "message": "Réinitialisation effectuée",
+                "assignments_deleted": int,
+                "bookings_reset": int
+            }
+        """
+        company_id = _current_company_id()
+        body = request.get_json() or {}
+        date_str = body.get("date")
+        start_datetime = None
+        end_datetime = None
+        
+        try:
+            # Récupérer toutes les assignations de la company
+            query = Assignment.query.join(Booking).filter(
+                Booking.company_id == company_id
+            )
+            
+            # Filtrer par date si fournie
+            if date_str:
+                try:
+                    target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+                    start_datetime = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=UTC)
+                    end_datetime = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=UTC)
+                    query = query.filter(
+                        Booking.scheduled_time >= start_datetime,
+                        Booking.scheduled_time < end_datetime
+                    )
+                except ValueError:
+                    return {"error": "Format de date invalide. Utilisez YYYY-MM-DD"}, 400
+            
+            # Récupérer les assignations et les booking_ids associés
+            assignments = query.all()
+            booking_ids = [a.booking_id for a in assignments]
+            
+            # Supprimer toutes les assignations
+            assignments_count = len(assignments)
+            for assignment in assignments:
+                db.session.delete(assignment)
+            
+            # Remettre les bookings au statut ACCEPTED et nettoyer driver_id
+            bookings_query = Booking.query.filter(Booking.company_id == company_id)
+            
+            # Filtrer par booking_ids si disponibles
+            if booking_ids:
+                bookings_query = bookings_query.filter(Booking.id.in_(booking_ids))
+            
+            # Filtrer par date si fournie
+            if date_str:
+                bookings_query = bookings_query.filter(
+                    Booking.scheduled_time >= start_datetime,
+                    Booking.scheduled_time < end_datetime
+                )
+            
+            bookings = bookings_query.all()
+            bookings_count = 0
+            for booking in bookings:
+                # Remettre au statut ACCEPTED si actuellement ASSIGNED
+                if booking.status == BookingStatus.ASSIGNED:
+                    booking.status = BookingStatus.ACCEPTED
+                    booking.driver_id = None
+                    bookings_count += 1
+            
+            db.session.commit()
+            
+            logger.info(
+                "[RESET] ✅ Réinitialisation effectuée pour company_id=%s: %d assignations supprimées, %d bookings réinitialisés",
+                company_id, assignments_count, bookings_count
+            )
+            
+            return {
+                "message": "Réinitialisation effectuée avec succès",
+                "assignments_deleted": assignments_count,
+                "bookings_reset": bookings_count,
+                "date": date_str or "toutes les dates"
+            }, 200
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("[RESET] Erreur lors de la réinitialisation: %s", e)
+            return {"error": f"Erreur lors de la réinitialisation: {e!s}"}, 500

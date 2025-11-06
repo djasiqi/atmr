@@ -65,8 +65,13 @@ from .medical import FavoritePlace, MedicalEstablishment, MedicalService
 from .message import Message
 from .ml_prediction import MLPrediction
 from .payment import Payment
+from .profiling_metrics import ProfilingMetrics  # ✅ 3.4: Profiling automatique
 from .rl_feedback import RLFeedback
+from .rl_suggestion import RLSuggestion
 from .rl_suggestion_metric import RLSuggestionMetric
+
+# A3: TaskFailure pour DLQ
+from .task_failure import TaskFailure
 
 # ========== ÉTAPE 2 : Import models extraits ==========
 from .user import User
@@ -123,7 +128,9 @@ __all__ = [
     "Payment",
     "PaymentMethod",
     "PaymentStatus",
+    "ProfilingMetrics",  # ✅ 3.4: Profiling automatique
     "RLFeedback",
+    "RLSuggestion",
     "RLSuggestionMetric",
     "RealtimeEntityType",
     "RealtimeEvent",
@@ -131,6 +138,7 @@ __all__ = [
     "SenderRole",
     "ShiftStatus",
     "ShiftType",
+    "TaskFailure",  # A3: DLQ model
     "UnavailabilityReason",
     # Models principaux
     "User",

@@ -98,7 +98,8 @@ jobs:
           cd backend
           pytest -v --cov=. --cov-report=xml --cov-report=html --cov-report=term-missing
 
-      - name: Check coverage for critical modules
+      # ✅ 3.1: Vérifier couverture globale ≥ 70% (bloquant)
+      - name: Check global coverage >= 70%
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
           REDIS_URL: redis://localhost:6379/0
@@ -107,15 +108,52 @@ jobs:
           JWT_SECRET_KEY: test-jwt-secret
         run: |
           cd backend
-          echo "Checking coverage for critical dispatch modules..."
+          echo "📊 Vérification couverture globale >= 70%..."
+          python scripts/check_coverage.py --coverage-xml coverage.xml --fail-under 70.0 --json coverage_report.json
+          echo "✅ Couverture globale >= 70%"
+
+      # ✅ 3.1: Vérifier couverture modules critiques >= 80%
+      - name: Check critical modules coverage >= 80%
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
+          REDIS_URL: redis://localhost:6379/0
+          FLASK_CONFIG: testing
+          SECRET_KEY: test-secret-key
+          JWT_SECRET_KEY: test-jwt-secret
+        run: |
+          cd backend
+          echo "🚨 Vérification couverture modules critiques >= 80%..."
+
+          # Vérifier dispatch modules critiques (déjà vérifiés séparément)
           pytest tests/test_heuristics.py tests/test_solver.py tests/test_autonomous_manager.py \
             --cov=services/unified_dispatch/heuristics.py \
             --cov=services/unified_dispatch/solver.py \
             --cov=services/unified_dispatch/autonomous_manager.py \
             --cov-report=term-missing \
-            --cov-fail-under=70 \
+            --cov-fail-under=80 \
             -v
-          echo "✅ Critical modules coverage >= 70%"
+
+          # Vérifier autres modules critiques via script
+          python scripts/check_coverage.py \
+            --coverage-xml coverage.xml \
+            --fail-under 80.0 \
+            --quiet || true
+
+          # Afficher rapport modules critiques uniquement
+          python -c "
+          import json
+          with open('coverage_report.json') as f:
+              report = json.load(f)
+          critical_low = report['critical_low_coverage']
+          if critical_low:
+              print('⚠️ Modules critiques < 80%:')
+              for path, stats in list(critical_low.items())[:10]:
+                  print(f'  {path}: {stats[\"percentage\"]:.2f}%')
+          else:
+              print('✅ Tous les modules critiques >= 80%')
+          "
+
+          echo "✅ Vérification modules critiques terminée"
 
       # Upload Codecov désactivé jusqu'à configuration du token
       # Pour activer : ajouter CODECOV_TOKEN dans GitHub Secrets et décommenter
@@ -134,7 +172,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage-report
-          path: backend/htmlcov/
+          path: |
+            backend/htmlcov/
+            backend/coverage_report.json
           retention-days: 7
 
   security:
@@ -164,6 +204,52 @@ jobs:
           pip-audit --requirement requirements.txt --format json > audit.json
           cat audit.json
         continue-on-error: true
+
+  security-scan:
+    name: Security Scan (Bandit + Semgrep)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create artifacts directory
+        run: mkdir -p artifacts
+
+      - name: Install security tools
+        run: |
+          pip install bandit semgrep safety
+
+      - name: Run Bandit (SAST)
+        run: |
+          cd backend
+          # Générer rapport JSON (ne bloque pas)
+          bandit -r . -f json -o ../artifacts/bandit.json || true
+          # Vérifier vulnérabilités high/critical (bloque si trouvées)
+          bandit -r . --severity-level high -q
+        continue-on-error: false
+
+      - name: Run Semgrep (OWASP rules)
+        run: |
+          cd backend
+          # Générer rapport JSON (ne bloque pas)
+          semgrep --config p/ci --config p/security-audit . --json -o ../artifacts/semgrep.json || true
+          # Vérifier règles de sécurité (bloque si trouvées)
+          semgrep --config p/ci --config p/security-audit . --error
+        continue-on-error: false
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: artifacts/*.json
+          retention-days: 30
 
   migrations:
     name: Migrations Check

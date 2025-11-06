@@ -1,0 +1,207 @@
+# yaml-language-server: disable
+# ✅ 2.11: Alertes SLO breach pour PagerDuty
+# Surveille les violations de SLO (Service Level Objectives) pour API et Dispatch
+
+groups:
+  # ============================================
+  # SLO API HTTP - Routes Critiques
+  # ============================================
+  - name: api_slo_breaches
+    interval: 30s
+    rules:
+      # Alerte: Violation répétée de latence SLO (p95 > seuil)
+      - alert: APISLOLatencyBreachRepeated
+        expr: |
+          (
+            rate(api_slo_latency_breach_total[5m]) > 0.1
+          )
+        for: 2m
+        labels:
+          severity: warning
+          component: api
+          slo_type: latency
+          notification: pagerduty
+        annotations:
+          summary: "Violation répétée de latence SLO API (p95)"
+          description: "Taux de violations latence > 0.1/s sur 5min pour {{ $labels.endpoint }} ({{ $labels.method }})"
+          runbook_url: "https://docs.atmr.ch/runbooks/api-slo-latency"
+          pagerduty_severity: "warning"
+      
+      # Alerte: Violation critique de latence (valeur absolue élevée)
+      - alert: APISLOLatencyBreachCritical
+        expr: |
+          (
+            rate(api_slo_latency_breach_total[1m]) > 1
+          )
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+          slo_type: latency
+          notification: pagerduty
+        annotations:
+          summary: "🚨 Violation CRITIQUE de latence SLO API"
+          description: "Plus d'1 violation/seconde détectée pour {{ $labels.endpoint }} → Page Oncall immédiat"
+          runbook_url: "https://docs.atmr.ch/runbooks/api-slo-latency-critical"
+          pagerduty_severity: "critical"
+      
+      # Alerte: Taux d'erreurs SLO élevé
+      - alert: APISLOErrorRateBreach
+        expr: |
+          (
+            rate(api_slo_error_breach_total[5m]) > 0.05
+          )
+        for: 3m
+        labels:
+          severity: critical
+          component: api
+          slo_type: error_rate
+          notification: pagerduty
+        annotations:
+          summary: "Taux d'erreurs SLO dépassé (> 5% sur 5min)"
+          description: "{{ $value }} erreurs/seconde détectées pour {{ $labels.endpoint }} → Possible dégradation service"
+          runbook_url: "https://docs.atmr.ch/runbooks/api-slo-error-rate"
+          pagerduty_severity: "critical"
+      
+      # Alerte: Disponibilité SLO compromise
+      - alert: APISLOAvailabilityBreach
+        expr: |
+          (
+            rate(api_slo_availability_breach_total[15m]) > 0
+          )
+        for: 10m
+        labels:
+          severity: critical
+          component: api
+          slo_type: availability
+          notification: pagerduty
+        annotations:
+          summary: "Disponibilité SLO compromise (< seuil sur 15min)"
+          description: "Disponibilité insuffisante pour {{ $labels.endpoint }} → Service dégradé"
+          runbook_url: "https://docs.atmr.ch/runbooks/api-slo-availability"
+          pagerduty_severity: "critical"
+      
+      # Alerte: Latence p95 absolue très élevée (backup)
+      - alert: APILatencyP95High
+        expr: |
+          (
+            histogram_quantile(0.95,
+              sum(rate(api_slo_request_duration_seconds_bucket[5m])) by (le, endpoint, method)
+            ) * 1000
+          ) > 2000
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+          slo_type: latency_absolute
+          notification: slack
+        annotations:
+          summary: "Latence p95 > 2s détectée"
+          description: "Latence p95 = {{ $value }}ms pour {{ $labels.endpoint }} → Performance dégradée"
+          runbook_url: "https://docs.atmr.ch/runbooks/api-performance"
+
+  # ============================================
+  # SLO Dispatch Engine - Conflits & Performance
+  # ============================================
+  - name: dispatch_slo_breaches
+    interval: 1m
+    rules:
+      # Alerte: SLO breach répété (déjà définie dans alerts-dispatch.yml mais ici avec PagerDuty)
+      - alert: DispatchSLOBreachRepeatedPagerDuty
+        expr: |
+          dispatch_slo_should_alert == 1
+        for: 2m
+        labels:
+          severity: critical
+          component: dispatch
+          slo_type: repeated_breach
+          notification: pagerduty
+        annotations:
+          summary: "🚨 SLO breach répété Dispatch → Page Oncall"
+          description: "{{ $value }} breaches SLO répétés détectés dans fenêtre 15min → Déclenchement PagerDuty"
+          runbook_url: "https://docs.atmr.ch/runbooks/dispatch-slo-breach"
+          pagerduty_severity: "critical"
+          action: "Consulter GET /api/prometheus/metrics et corriger performance dispatch"
+      
+      # Alerte: Nombre total de breaches SLO élevé (cumulatif)
+      - alert: DispatchSLOBreachCountHigh
+        expr: |
+          (
+            increase(dispatch_slo_breaches_total[1h]) > 10
+          )
+        for: 15m
+        labels:
+          severity: warning
+          component: dispatch
+          slo_type: cumulative_breach
+          notification: slack
+        annotations:
+          summary: "Plus de 10 breaches SLO Dispatch en 1h"
+          description: "{{ $value }} breaches détectés sur la dernière heure → Performance dégradée"
+          runbook_url: "https://docs.atmr.ch/runbooks/dispatch-performance"
+      
+      # Alerte: Severity critique (plusieurs breaches critiques)
+      - alert: DispatchSLOSeverityCritical
+        expr: |
+          (
+            dispatch_slo_breach_severity{severity="critical"} > 0
+          )
+        for: 1m
+        labels:
+          severity: critical
+          component: dispatch
+          slo_type: critical_severity
+          notification: pagerduty
+        annotations:
+          summary: "🚨 Severity CRITIQUE détectée pour Dispatch SLO"
+          description: "Breaches critiques dans fenêtre 15min → Action immédiate requise"
+          runbook_url: "https://docs.atmr.ch/runbooks/dispatch-slo-critical"
+          pagerduty_severity: "critical"
+
+  # ============================================
+  # SLO Global - Vue d'ensemble
+  # ============================================
+  - name: global_slo_summary
+    interval: 5m
+    rules:
+      # Alerte: Nombre total de violations SLO élevé (toutes sources)
+      - alert: GlobalSLOBreachesElevated
+        expr: |
+          (
+            sum(rate(api_slo_latency_breach_total[15m])) +
+            sum(rate(api_slo_error_breach_total[15m])) +
+            sum(rate(api_slo_availability_breach_total[15m])) +
+            increase(dispatch_slo_breaches_total[15m]) * 0.1
+          ) > 5
+        for: 10m
+        labels:
+          severity: warning
+          component: global
+          slo_type: summary
+          notification: slack
+        annotations:
+          summary: "Taux de violations SLO global élevé (> 5/min)"
+          description: "{{ $value }} violations/min détectées (API + Dispatch) → Dégradation système généralisée"
+          runbook_url: "https://docs.atmr.ch/runbooks/global-slo-summary"
+      
+      # Alerte: Service critique inaccessible (health check)
+      - alert: CriticalHealthCheckFailing
+        expr: |
+          (
+            rate(http_requests_total{endpoint="/api/health",status=~"5.."}[5m]) > 0.1
+          ) OR
+          (
+            rate(http_requests_total{endpoint="/api/ready",status=~"5.."}[5m]) > 0.1
+          )
+        for: 2m
+        labels:
+          severity: critical
+          component: infrastructure
+          slo_type: health_check
+          notification: pagerduty
+        annotations:
+          summary: "🚨 Health checks critiques échouent"
+          description: "{{ $labels.endpoint }} retourne > 10% erreurs 5xx → Service dégradé/HS"
+          runbook_url: "https://docs.atmr.ch/runbooks/health-check-failure"
+          pagerduty_severity: "critical"
+

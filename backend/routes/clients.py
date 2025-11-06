@@ -26,12 +26,12 @@ clients_ns = Namespace(
 
 # Modèle pour la mise à jour du profil client
 client_profile_model = clients_ns.model("ClientProfile", {
-    "first_name": fields.String(description="Prénom"),
-    "last_name": fields.String(description="Nom"),
-    "phone": fields.String(description="Téléphone"),
-    "address": fields.String(description="Adresse"),
-    "birth_date": fields.String(description="Date de naissance (YYYY-MM-DD)"),
-    "gender": fields.String(description="Genre")
+    "first_name": fields.String(description="Prénom", min_length=1, max_length=100),
+    "last_name": fields.String(description="Nom", min_length=1, max_length=100),
+    "phone": fields.String(description="Téléphone (format: +33123456789 ou 0123456789)", max_length=20),
+    "address": fields.String(description="Adresse", min_length=1, max_length=500),
+    "birth_date": fields.String(description="Date de naissance (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"),
+    "gender": fields.String(description="Genre", enum=["HOMME", "FEMME", "AUTRE"])
 })
 
 # Modèle pour la création d'une réservation
@@ -75,7 +75,7 @@ class ManageClientProfile(Resource):
     @jwt_required()
     @role_required(UserRole.client)
     @clients_ns.expect(client_profile_model)
-    def put(self, public_id):  # noqa: PLR0911
+    def put(self, public_id):
         try:
             # Validation initiale combinée
             current_user_public_id = get_jwt_identity()
@@ -94,45 +94,33 @@ class ManageClientProfile(Resource):
             if not client:
                 return {"error": "Client profile not found"}, 404
             
-            data = request.get_json()
-            if not data:
-                return {"error": "No data provided"}, 400
-
-            # Validation des champs combinée
-            error_message = None
+            data = request.get_json() or {}
             
-            if data.get("first_name") and not data["first_name"].strip():
-                error_message = "First name cannot be empty"
-            elif data.get("last_name") and not data["last_name"].strip():
-                error_message = "Last name cannot be empty"
-            elif "phone" in data and data["phone"] and not re.match(r"^\+?[0-9]{7,15}$", data["phone"]):
-                error_message = "Invalid phone number format"
-            elif "address" in data and data["address"] and not data["address"].strip():
-                error_message = "Address cannot be empty"
-            elif data.get("birth_date"):
-                try:
-                    datetime.strptime(data["birth_date"], "%Y-%m-%d").date()
-                except ValueError:
-                    error_message = "Invalid birth_date format"
-            elif "gender" in data and data["gender"] not in [g.value for g in GenderEnum]:
-                error_message = "Invalid gender value"
-            
-            if error_message:
-                return {"error": error_message}, 400
+            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+            from marshmallow import ValidationError
 
-            # Mise à jour des champs
-            if data.get("first_name"):
-                client.user.first_name = data["first_name"]
-            if data.get("last_name"):
-                client.user.last_name = data["last_name"]
-            if "phone" in data:
-                client.phone = data["phone"]
-            if "address" in data:
-                client.address = data["address"]
-            if data.get("birth_date"):
-                client.user.birth_date = datetime.strptime(data["birth_date"], "%Y-%m-%d").date()
-            if "gender" in data:
-                client.user.gender = GenderEnum(data["gender"])
+            from schemas.client_schemas import ClientUpdateSchema
+            from schemas.validation_utils import handle_validation_error, validate_request
+            
+            try:
+                validated_data = validate_request(ClientUpdateSchema(), data, strict=False)
+            except ValidationError as e:
+                return handle_validation_error(e)
+
+            # Mise à jour des champs - utilise données validées
+            if validated_data.get("first_name"):
+                client.user.first_name = validated_data["first_name"]
+            if validated_data.get("last_name"):
+                client.user.last_name = validated_data["last_name"]
+            if "phone" in validated_data:
+                client.phone = validated_data["phone"]
+            if "address" in validated_data:
+                client.address = validated_data["address"]
+            if validated_data.get("birth_date"):
+                from datetime import datetime
+                client.user.birth_date = datetime.strptime(validated_data["birth_date"], "%Y-%m-%d").date()
+            if "gender" in validated_data:
+                client.user.gender = GenderEnum(validated_data["gender"])
 
             db.session.commit()
             return {"message": "Profile updated successfully"}, 200

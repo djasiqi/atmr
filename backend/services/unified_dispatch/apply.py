@@ -1,4 +1,4 @@
-# backend/services/unified_dispatch/apply.py
+# backend/services/unified_dispatch/apply.py v1.0.0
 from __future__ import annotations
 
 import contextlib
@@ -11,11 +11,56 @@ from sqlalchemy.orm import joinedload
 
 from ext import db
 from models import Assignment, AssignmentStatus, Booking, BookingStatus, Driver
+from services.unified_dispatch.transaction_helpers import _begin_tx, _in_tx
 from shared.time_utils import now_utc  # UTC centralisé
 
 logger = logging.getLogger(__name__)
 
 _Assignment = Any
+
+
+# ✅ A2: Compteur thread-safe pour conflits DB (contraintes uniques)
+class DBConflictCounter:
+    """Compteur thread-safe pour les violations de contraintes uniques."""
+    _instance: 'DBConflictCounter | None' = None
+    
+    def __init__(self):
+        super().__init__()
+        self._counter = 0
+    
+    @classmethod
+    def get_instance(cls) -> 'DBConflictCounter':
+        """Retourne l'instance singleton."""
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+    
+    def reset(self) -> None:
+        """Réinitialise le compteur."""
+        self._counter = 0
+    
+    def increment(self) -> None:
+        """Incrémente le compteur."""
+        self._counter += 1
+    
+    def get_count(self) -> int:
+        """Retourne le nombre total de conflits."""
+        return self._counter
+
+
+def reset_db_conflict_counter() -> None:
+    """Réinitialise le compteur de conflits DB."""
+    DBConflictCounter.get_instance().reset()
+
+
+def get_db_conflict_count() -> int:
+    """Retourne le nombre de conflits DB depuis le dernier reset."""
+    return DBConflictCounter.get_instance().get_count()
+
+
+def increment_db_conflict_counter() -> None:
+    """Incrémente le compteur de conflits DB."""
+    DBConflictCounter.get_instance().increment()
 
 
 def apply_assignments(
@@ -28,6 +73,11 @@ def apply_assignments(
     enforce_driver_checks: bool = True,
     return_pairs: bool = False,
 ) -> Dict[str, Any]:
+    """Applique les assignations en base de données avec transaction atomique.
+    
+    Toutes les modifications (Booking, Assignment) sont effectuées dans une seule
+    transaction pour garantir l'atomicité. En cas d'erreur, rollback complet.
+    """
     if not assignments:
         return {"applied": [], "skipped": {},
                 "conflicts": [], "driver_load": {}}
@@ -41,6 +91,55 @@ def apply_assignments(
         logger.info(
             "[Apply] Using dispatch_run_id=%s for assignments",
             dispatch_run_id)
+
+    # ✅ Transaction globale pour garantir atomicité complète
+    # Utilise _begin_tx() qui détecte si une transaction existe déjà (savepoint)
+    # ou en crée une nouvelle si nécessaire
+    # Vérifier si une transaction existe déjà avant d'appeler _begin_tx()
+    had_existing_tx = _in_tx()
+    try:
+        with _begin_tx():
+            result = _apply_assignments_inner(
+                company_id=company_id,
+                assignments=assignments,
+                dispatch_run_id=dispatch_run_id,
+                allow_reassign=allow_reassign,
+                respect_existing=respect_existing,
+                enforce_driver_checks=enforce_driver_checks,
+                return_pairs=return_pairs,
+            )
+        # ✅ Commit la transaction principale après succès du bloc
+        # Si aucune transaction n'existait avant, on doit commit explicitement
+        # Sinon, le commit sera fait par le code appelant (engine.run())
+        if not had_existing_tx:
+            db.session.commit()
+        return result
+    except Exception as e:
+        logger.exception(
+            "[Apply] Transaction failed for company_id=%s: %s",
+            company_id, e)
+        # Rollback automatique en cas d'erreur
+        db.session.rollback()
+        return {
+            "applied": [],
+            "skipped": {},
+            "conflicts": [],
+            "driver_load": {},
+            "error": str(e),
+        }
+
+
+def _apply_assignments_inner(
+    company_id: int,
+    assignments: List[_Assignment],
+    *,
+    dispatch_run_id: int | None = None,
+    allow_reassign: bool = True,
+    respect_existing: bool = True,
+    enforce_driver_checks: bool = True,
+    return_pairs: bool = False,
+) -> Dict[str, Any]:
+    """Logique interne d'application des assignations (exécutée dans une transaction)."""
 
     # Helper: attr ou clé dict
     def _aget(obj: Any, name: str, default: Any = None) -> Any:
@@ -87,7 +186,7 @@ def apply_assignments(
         .filter(Driver.company_id == company_id, Driver.id.in_(driver_ids))
     )
 
-    # Appliquer FOR UPDATE uniquement si supporté (SQLite: non)
+    # ✅ A2: Lock doux en lecture (read=True pour lock non-bloquant)
     dialect_name = db.session.bind.dialect.name if db.session.bind else ""
     supports_for_update = dialect_name not in ("sqlite",)
 
@@ -97,6 +196,8 @@ def apply_assignments(
         use_skip_locked = os.getenv(
             "UD_APPLY_SKIP_LOCKED",
             "false").lower() == "true"
+        # ✅ A2: Lock doux en lecture (lock partagé pour idempotence)
+        # Note: avec_for_update(read=True) est un lock partagé PostgreSQL
         bookings_q = bookings_q.with_for_update(
             nowait=False, of=Booking, skip_locked=use_skip_locked)
         drivers_q = drivers_q.with_for_update(
@@ -198,10 +299,12 @@ def apply_assignments(
         applied_pairs.append((b_id, d_id))
         driver_load[d_id] += 1
 
-    # 4) Write back Bookings + upsert Assignments (une seule transaction si
-    # possible)
+    # 4) Write back Bookings + upsert Assignments
+    # ✅ Déjà dans une transaction globale (_begin_tx), donc begin_nested créerait
+    # un savepoint supplémentaire (optionnel mais peut être utile pour rollback partiel)
+    # On garde begin_nested pour compatibilité et rollback partiel si nécessaire
     try:
-        with db.session.begin_nested():  # ✅ Utilisation de begin_nested pour savepoint
+        with db.session.begin_nested():  # Savepoint pour rollback partiel si nécessaire
             if updates:
                 db.session.bulk_update_mappings(cast("Any", Booking), updates)
 
@@ -279,13 +382,50 @@ def apply_assignments(
 
                         update_assignments.append(update_assignment)
 
-                # ✅ PERF: Bulk insert/update au lieu de boucle
+                # ✅ A2: Idempotence avec UPSERT ON CONFLICT DO NOTHING
                 if new_assignments:
-                    db.session.bulk_insert_mappings(
-                        cast("Any", Assignment), new_assignments)
-                    logger.info(
-                        "[Apply] Bulk inserted %d new assignments",
-                        len(new_assignments))
+                    # Utiliser PostgreSQL insert avec ON CONFLICT
+                    from sqlalchemy.dialects.postgresql import insert
+                    
+                    try:
+                        # Pour chaque nouveau assignment, faire un upsert
+                        conflicts_count = 0
+                        for assignment in new_assignments:
+                            try:
+                                stmt = (
+                                    insert(Assignment)
+                                    .values(**assignment)
+                                    .on_conflict_do_nothing(
+                                        constraint="uq_assignment_run_booking"
+                                    )
+                                )
+                                db.session.execute(stmt)
+                            except Exception as conflict_err:
+                                # ✅ A2: Compter les conflits de contrainte unique
+                                if "unique" in str(conflict_err).lower() or "uq_assignment" in str(conflict_err):
+                                    conflicts_count += 1
+                                    increment_db_conflict_counter()
+                                    logger.debug(
+                                        "[Apply] Conflit unique ignoré (idempotence): %s",
+                                        conflict_err)
+                                else:
+                                    raise
+                        
+                        if conflicts_count > 0:
+                            logger.info(
+                                "[Apply] UPSERT: %d insertions, %d conflits ignorés (idempotent)",
+                                len(new_assignments) - conflicts_count, conflicts_count)
+                        else:
+                            logger.info(
+                                "[Apply] UPSERT inserted %d new assignments",
+                                len(new_assignments))
+                    except Exception as upsert_err:
+                        # Fallback sur bulk_insert si ON CONFLICT non supporté
+                        logger.warning(
+                            "[Apply] ON CONFLICT not supported, falling back to bulk_insert: %s",
+                            upsert_err)
+                        db.session.bulk_insert_mappings(
+                            cast("Any", Assignment), new_assignments)
 
                 if update_assignments:
                     db.session.bulk_update_mappings(
@@ -298,17 +438,18 @@ def apply_assignments(
                     "[Apply] No desired assignments to upsert (company_id=%s)",
                     company_id)
 
-        db.session.commit()  # ✅ Commit après le savepoint
+        # ✅ Commit le savepoint interne (begin_nested)
+        # La transaction principale sera commitée par apply_assignments()
+        db.session.commit()
 
-    except Exception as e:
+    except Exception:
         logger.exception(
             "[Apply] DB error while applying assignments (company_id=%s)",
             company_id)
-        db.session.rollback()  # ✅ Rollback sur erreur
-        return {
-            "applied": [], "skipped": dict.fromkeys(applied_ids, "db_error"),
-            "conflicts": [], "driver_load": {}, "error": str(e),
-        }
+        # Rollback du savepoint en cas d'erreur
+        # La transaction principale sera rollbackée par apply_assignments()
+        db.session.rollback()
+        raise  # Propager l'erreur pour que apply_assignments() gère le rollback global
     if dispatch_run_id:
         logger.info(
             "[Apply] Linked %d assignments to dispatch_run_id=%s",

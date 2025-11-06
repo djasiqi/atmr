@@ -1,6 +1,6 @@
 import logging
 from datetime import timedelta
-from typing import Any, Dict, cast
+from typing import cast
 
 import sentry_sdk  # CORRECTION : Importer directement
 from flask import current_app, make_response, request
@@ -13,6 +13,8 @@ from marshmallow import fields as ma_fields
 
 from ext import db, limiter, mail
 from models import Client, User, UserRole
+from schemas.auth_schemas import LoginSchema, RegisterSchema
+from schemas.validation_utils import handle_validation_error, validate_request
 
 app_logger = logging.getLogger("app")
 
@@ -22,21 +24,21 @@ auth_ns = Namespace(
 
 # Modèle Swagger pour la connexion (login)
 login_model = auth_ns.model("Login", {
-    "email": fields.String(required=True, description="L'adresse email de l'utilisateur"),
-    "password": fields.String(required=True, description="Le mot de passe de l'utilisateur")
+    "email": fields.String(required=True, description="L'adresse email de l'utilisateur (format email valide)"),
+    "password": fields.String(required=True, description="Le mot de passe de l'utilisateur", min_length=6)
 })
 
 # Modèle Swagger pour l'inscription (register)
 register_model = auth_ns.model("Register", {
-    "username": fields.String(required=True, description="Le nom d'utilisateur"),
-    "email": fields.String(required=True, description="L'adresse email de l'utilisateur"),
-    "password": fields.String(required=True, description="Le mot de passe de l'utilisateur"),
-    "first_name": fields.String(description="Prénom", default=None),
-    "last_name": fields.String(description="Nom", default=None),
-    "phone": fields.String(description="Numéro de téléphone", default=None),
-    "address": fields.String(description="Adresse", default=None),
-    "birth_date": fields.String(description="Date de naissance (YYYY-MM-DD)", default=None),
-    "gender": fields.String(description="Genre", default=None),
+    "username": fields.String(required=True, description="Le nom d'utilisateur", min_length=3, max_length=50),
+    "email": fields.String(required=True, description="L'adresse email de l'utilisateur (format email valide)"),
+    "password": fields.String(required=True, description="Le mot de passe de l'utilisateur", min_length=6),
+    "first_name": fields.String(description="Prénom", default=None, max_length=100),
+    "last_name": fields.String(description="Nom", default=None, max_length=100),
+    "phone": fields.String(description="Numéro de téléphone", default=None, max_length=20),
+    "address": fields.String(description="Adresse", default=None, max_length=500),
+    "birth_date": fields.String(description="Date de naissance (YYYY-MM-DD)", default=None, pattern="^\\d{4}-\\d{2}-\\d{2}$"),
+    "gender": fields.String(description="Genre (male|female|other)", default=None, enum=["male", "female", "other"]),
     "profile_image": fields.String(description="URL ou données base64 de l'image de profil", default=None)
 })
 
@@ -71,11 +73,15 @@ class Login(Resource):
         """Authentifie un utilisateur et renvoie un token d'accès."""
         try:
             data = request.get_json() or {}
-            email = data.get("email")
-            password = data.get("password")
-
-            if not email or not password:
-                return {"error": "Email et mot de passe requis."}, 400
+            
+            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+            try:
+                validated_data = validate_request(LoginSchema(), data)
+            except ValidationError as e:
+                return handle_validation_error(e)
+            
+            email = validated_data["email"]
+            password = validated_data["password"]
 
             user = User.query.filter_by(email=email).first()
             if not user or not user.check_password(password):
@@ -215,13 +221,15 @@ class Register(Resource):
             return response, 204
 
         try:
-            data = request.get_json()
+            data = request.get_json() or {}
             app_logger.info("Données reçues dans /auth/register : %s", data)
 
-            schema = UserSchema()
-            _loaded = schema.load(data)
-            # 🔒 typage explicite pour Pylance
-            validated_data: Dict[str, Any] = cast("Dict[str, Any]", _loaded)
+            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+            try:
+                validated_data = validate_request(RegisterSchema(), data, strict=False)
+            except ValidationError as e:
+                return handle_validation_error(e)
+            
             app_logger.info("Données validées : %s", validated_data)
 
             email: str = cast("str", validated_data.get("email"))
@@ -234,28 +242,31 @@ class Register(Resource):
             username: str = cast("str", validated_data.get("username"))
             password: str = cast("str", validated_data.get("password"))
             # NB: birth_date vient déjà en objet date (schéma marshmallow)
-            user = cast("Any", User)(
-                username=username,
-                email=email,
-                role=UserRole.client,
-                first_name=validated_data.get("first_name"),
-                last_name=validated_data.get("last_name"),
-                phone=validated_data.get("phone"),
-                address=validated_data.get("address"),
-                birth_date=validated_data.get("birth_date"),
-                gender=validated_data.get("gender"),
-                profile_image=validated_data.get("profile_image"),
-            )
+            import uuid
+            user = User()
+            user.username = username
+            user.email = email
+            user.role = UserRole.client  # SQLAlchemy SAEnum peut accepter l'enum directement
+            user.public_id = str(uuid.uuid4())
+            user.first_name = validated_data.get("first_name")
+            user.last_name = validated_data.get("last_name")
+            user.phone = validated_data.get("phone")
+            user.address = validated_data.get("address")
+            user.birth_date = validated_data.get("birth_date")
+            user.gender = validated_data.get("gender")
+            user.profile_image = validated_data.get("profile_image")
 
             user.set_password(password, force_change=False)
             db.session.add(user)
             db.session.flush()
 
             # Création du profil client associé
-            client = cast("Any", Client)(user_id=user.id, is_active=True)
-            app_logger.info("Client créé : %s", client)
+            client = Client()
+            client.user_id = user.id
+            client.is_active = True
             db.session.add(client)
             db.session.commit()
+            app_logger.info("Client créé : user_id=%s, client_id=%s", user.id, client.id)
 
             app_logger.info(
                 "Utilisateur et client enregistrés avec succès : %s",
@@ -271,10 +282,12 @@ class Register(Resource):
             return {"error": "Validation failed", "details": e.messages}, 400
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
+            # Utiliser repr() pour éviter les problèmes de formatage avec %
+            exception_message = repr(e) if "%" in str(e) else str(e)
+            app_logger.exception(
                 "❌ ERREUR register_user: %s - %s",
                 type(e).__name__,
-                str(e))
+                exception_message)
             return {"error": "Une erreur interne est survenue."}, 500
 
 

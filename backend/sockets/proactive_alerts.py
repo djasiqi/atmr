@@ -20,6 +20,7 @@ from flask import request
 from flask_socketio import SocketIO, emit, join_room, leave_room, rooms
 
 from services.proactive_alerts import ProactiveAlertsService
+from sockets.websocket_ack import get_ack_manager, register_ack_handlers
 
 logger = logging.getLogger(__name__)
 
@@ -234,11 +235,23 @@ def register_proactive_alerts_sockets(socketio: SocketIO):
             "timestamp": datetime.now(UTC).isoformat()
         })
 
-    logger.info("[ProactiveAlerts] Handlers Socket.IO enregistrés")
+    # ✅ C3: Enregistrer handlers ACK
+    register_ack_handlers(socketio)
+    
+    @socketio.on("message_ack")
+    def handle_message_ack(data: Dict[str, Any]):
+        """✅ C3: Handler pour ACK côté serveur."""
+        message_id = data.get("message_id")
+        if message_id:
+            manager = get_ack_manager()
+            manager.on_ack_received(message_id)
+    
+    logger.info("[ProactiveAlerts] Handlers Socket.IO enregistrés (incluant ACK C3)")
     
     # Référencer les handlers pour indiquer qu'ils sont utilisés par Socket.IO
     _handlers = (handle_connect, handle_disconnect, handle_subscribe_alerts, 
-                 handle_unsubscribe_alerts, handle_request_explanation, handle_ping)
+                 handle_unsubscribe_alerts, handle_request_explanation, handle_ping,
+                 handle_message_ack)
 
 
 def broadcast_delay_alert(

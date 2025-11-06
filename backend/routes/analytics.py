@@ -27,8 +27,17 @@ analytics_ns = Namespace(
 class AnalyticsDashboard(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    @analytics_ns.param("period", "Période d'analyse (7d|30d|90d|1y, défaut: 30d)", type="string", enum=["7d", "30d", "90d", "1y"], default="30d")
+    @analytics_ns.param("start_date", "Date de début (YYYY-MM-DD, optionnel)", type="string", pattern="^\\d{4}-\\d{2}-\\d{2}$")
+    @analytics_ns.param("end_date", "Date de fin (YYYY-MM-DD, optionnel)", type="string", pattern="^\\d{4}-\\d{2}-\\d{2}$")
     def get(self):
-        """Récupère les analytics pour le dashboard."""
+        """Récupère les analytics pour le dashboard.
+        
+        Query params:
+            - period: Période prédéfinie (7d|30d|90d|1y), défaut: 30d
+            - start_date: Date de début personnalisée (YYYY-MM-DD), optionnel
+            - end_date: Date de fin personnalisée (YYYY-MM-DD), optionnel
+        """
         logger.info("[Analytics] Dashboard endpoint called")
 
         try:
@@ -48,9 +57,20 @@ class AnalyticsDashboard(Resource):
                 logger.warning("[Analytics] Company not found: %s", msg)
                 return {"success": False, "error": msg}, code or 404
 
-            period = request.args.get("period", "30d")
-            start_str = request.args.get("start_date")
-            end_str = request.args.get("end_date")
+            # ✅ 2.4: Validation Marshmallow pour query params
+            from marshmallow import ValidationError
+
+            from schemas.analytics_schemas import AnalyticsDashboardQuerySchema
+            from schemas.validation_utils import handle_validation_error, validate_request
+            
+            args_dict = dict(request.args)
+            try:
+                validated_args = validate_request(AnalyticsDashboardQuerySchema(), args_dict, strict=False)
+                period = validated_args.get("period", "30d")
+                start_str = validated_args.get("start_date")
+                end_str = validated_args.get("end_date")
+            except ValidationError as e:
+                return handle_validation_error(e)
 
             if start_str and end_str:
                 try:
@@ -100,8 +120,13 @@ class AnalyticsDashboard(Resource):
 class AnalyticsInsights(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    @analytics_ns.param("lookback_days", "Nombre de jours à analyser (1-365, défaut: 30)", type="integer", minimum=1, maximum=365, default=30)
     def get(self):
-        """Génère des insights intelligents."""
+        """Génère des insights intelligents.
+        
+        Query params:
+            - lookback_days: Nombre de jours à analyser en arrière (1-365), défaut: 30
+        """
         try:
             company, err, code = get_company_from_token()
             if err or company is None:
@@ -110,7 +135,19 @@ class AnalyticsInsights(Resource):
                     err, dict) else "Company not found"
                 return {"success": False, "error": msg}, code or 404
 
-            lookback_days = int(request.args.get("lookback_days", 30))
+            # ✅ 2.4: Validation Marshmallow pour query params
+            from marshmallow import ValidationError
+
+            from schemas.analytics_schemas import AnalyticsInsightsQuerySchema
+            from schemas.validation_utils import handle_validation_error, validate_request
+            
+            args_dict = dict(request.args)
+            try:
+                validated_args = validate_request(AnalyticsInsightsQuerySchema(), args_dict, strict=False)
+                lookback_days = validated_args.get("lookback_days", 30)
+            except ValidationError as e:
+                return handle_validation_error(e)
+            
             patterns = detect_patterns(company.id, lookback_days)
 
             return {"success": True, "data": patterns}
@@ -124,8 +161,13 @@ class AnalyticsInsights(Resource):
 class WeeklySummary(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    @analytics_ns.param("week_start", "Date de début de semaine (YYYY-MM-DD, optionnel)", type="string", pattern="^\\d{4}-\\d{2}-\\d{2}$")
     def get(self):
-        """Récupère le résumé hebdomadaire."""
+        """Récupère un résumé hebdomadaire.
+        
+        Query params:
+            - week_start: Date de début de semaine (YYYY-MM-DD), optionnel
+        """
         try:
             company, err, code = get_company_from_token()
             if err or company is None:
@@ -134,7 +176,19 @@ class WeeklySummary(Resource):
                     err, dict) else "Company not found"
                 return {"success": False, "error": msg}, code or 404
 
-            week_start_str = request.args.get("week_start")
+            # ✅ 2.4: Validation Marshmallow pour query params
+            from marshmallow import ValidationError
+
+            from schemas.analytics_schemas import AnalyticsWeeklySummaryQuerySchema
+            from schemas.validation_utils import handle_validation_error, validate_request
+            
+            args_dict = dict(request.args)
+            try:
+                validated_args = validate_request(AnalyticsWeeklySummaryQuerySchema(), args_dict, strict=False)
+                week_start_str = validated_args.get("week_start")
+            except ValidationError as e:
+                return handle_validation_error(e)
+            
             if week_start_str:
                 try:
                     week_start = date.fromisoformat(week_start_str)
@@ -158,8 +212,17 @@ class WeeklySummary(Resource):
 class ExportAnalytics(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    @analytics_ns.param("start_date", "Date de début (YYYY-MM-DD, requis)", type="string", required=True, pattern="^\\d{4}-\\d{2}-\\d{2}$")
+    @analytics_ns.param("end_date", "Date de fin (YYYY-MM-DD, requis)", type="string", required=True, pattern="^\\d{4}-\\d{2}-\\d{2}$")
+    @analytics_ns.param("format", "Format d'export (csv|json, défaut: csv)", type="string", enum=["csv", "json"], default="csv")
     def get(self):
-        """Exporte les analytics en CSV ou JSON."""
+        """Exporte les analytics dans un format donné.
+        
+        Query params:
+            - start_date: Date de début (YYYY-MM-DD), requis
+            - end_date: Date de fin (YYYY-MM-DD), requis
+            - format: Format d'export (csv|json), défaut: csv
+        """
         try:
             company, err, code = get_company_from_token()
             if err or company is None:
@@ -168,13 +231,20 @@ class ExportAnalytics(Resource):
                     err, dict) else "Company not found"
                 return {"success": False, "error": msg}, code or 404
 
-            start_str = request.args.get("start_date")
-            end_str = request.args.get("end_date")
-            export_format = request.args.get("format", "csv")
+            # ✅ 2.4: Validation Marshmallow pour query params
+            from marshmallow import ValidationError
 
-            if not start_str or not end_str:
-                return {"success": False,
-                        "error": "start_date and end_date are required"}, 400
+            from schemas.analytics_schemas import AnalyticsExportQuerySchema
+            from schemas.validation_utils import handle_validation_error, validate_request
+            
+            args_dict = dict(request.args)
+            try:
+                validated_args = validate_request(AnalyticsExportQuerySchema(), args_dict)
+                start_str = validated_args["start_date"]
+                end_str = validated_args["end_date"]
+                export_format = validated_args.get("format", "csv")
+            except ValidationError as e:
+                return handle_validation_error(e)
 
             try:
                 start_date = date.fromisoformat(start_str)

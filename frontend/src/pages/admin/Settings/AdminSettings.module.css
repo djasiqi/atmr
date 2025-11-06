@@ -1,0 +1,51 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #f6f8fb;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+}
+
+.content {
+  flex: 1;
+  padding: 2.5rem 2rem;
+  overflow-y: auto;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: 2rem;
+  color: #1f2937;
+}
+
+.hero p {
+  margin-top: 0.5rem;
+  color: #4b5563;
+  max-width: 720px;
+}
+
+.placeholder {
+  margin-top: 2.5rem;
+  padding: 2rem;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(5, 150, 105, 0.08));
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  max-width: 720px;
+}
+
+.placeholder h2 {
+  margin: 0 0 1rem;
+  font-size: 1.4rem;
+  color: #065f46;
+}
+
+.placeholder p {
+  margin: 0.5rem 0;
+  color: #0f172a;
+  line-height: 1.5;
+}
+

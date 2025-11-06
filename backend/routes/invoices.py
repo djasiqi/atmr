@@ -94,25 +94,36 @@ reminder_model = invoices_ns.model("Reminder", {
 })
 
 billing_settings_model = invoices_ns.model("BillingSettings", {
-    "payment_terms_days": fields.Integer(required=False, allow_null=True),
-    "overdue_fee": fields.Float(required=False, allow_null=True),
-    "reminder1fee": fields.Float(required=False, allow_null=True),
-    "reminder2fee": fields.Float(required=False, allow_null=True),
-    "reminder3fee": fields.Float(required=False, allow_null=True),
-    "reminder_schedule_days": fields.Raw(required=False),
-    "auto_reminders_enabled": fields.Boolean(required=False),
-    "email_sender": fields.String(required=False, allow_null=True),
-    "invoice_number_format": fields.String(required=False),
-    "invoice_prefix": fields.String(required=False),
-    "iban": fields.String(required=False, allow_null=True),
-    "qr_iban": fields.String(required=False, allow_null=True),
-    "esr_ref_base": fields.String(required=False, allow_null=True),
-    "invoice_message_template": fields.String(required=False, allow_null=True),
-    "reminder1template": fields.String(required=False, allow_null=True),
-    "reminder2template": fields.String(required=False, allow_null=True),
-    "reminder3template": fields.String(required=False, allow_null=True),
-    "legal_footer": fields.String(required=False, allow_null=True),
-    "pdf_template_variant": fields.String(required=False),
+    "payment_terms_days": fields.Integer(required=False, allow_null=True, minimum=0, maximum=365, description="Jours de paiement (0-365)"),
+    "overdue_fee": fields.Float(required=False, allow_null=True, minimum=0, description="Frais de retard (>= 0)"),
+    "reminder1fee": fields.Float(required=False, allow_null=True, minimum=0, description="Frais rappel 1 (>= 0)"),
+    "reminder2fee": fields.Float(required=False, allow_null=True, minimum=0, description="Frais rappel 2 (>= 0)"),
+    "reminder3fee": fields.Float(required=False, allow_null=True, minimum=0, description="Frais rappel 3 (>= 0)"),
+    "reminder_schedule_days": fields.Raw(required=False, description="Planification des rappels (liste de jours)"),
+    "auto_reminders_enabled": fields.Boolean(required=False, description="Activer rappels automatiques"),
+    "email_sender": fields.String(required=False, allow_null=True, max_length=254, description="Email expéditeur"),
+    "invoice_number_format": fields.String(required=False, max_length=50, description="Format numéro facture"),
+    "invoice_prefix": fields.String(required=False, max_length=20, description="Préfixe numéro facture"),
+    "iban": fields.String(required=False, allow_null=True, pattern="^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$", description="IBAN (format: CH9300762011623852957)"),
+    "qr_iban": fields.String(required=False, allow_null=True, pattern="^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$", description="QR IBAN"),
+    "esr_ref_base": fields.String(required=False, allow_null=True, max_length=26, description="Référence ESR"),
+    "invoice_message_template": fields.String(required=False, allow_null=True, max_length=1000, description="Template message facture"),
+    "reminder1template": fields.String(required=False, allow_null=True, max_length=1000, description="Template rappel 1"),
+    "reminder2template": fields.String(required=False, allow_null=True, max_length=1000, description="Template rappel 2"),
+    "reminder3template": fields.String(required=False, allow_null=True, max_length=1000, description="Template rappel 3"),
+    "legal_footer": fields.String(required=False, allow_null=True, max_length=2000, description="Pied de page légal"),
+    "pdf_template_variant": fields.String(required=False, max_length=50, description="Variant template PDF"),
+})
+
+# Modèle Swagger pour génération de facture
+invoice_generate_model = invoices_ns.model("InvoiceGenerate", {
+    "client_id": fields.Integer(description="ID client unique (optionnel si client_ids utilisé)", minimum=1),
+    "client_ids": fields.List(fields.Integer(description="ID client", minimum=1), description="Liste d'IDs clients (au moins 1 élément)"),
+    "bill_to_client_id": fields.Integer(description="ID client payeur (facturation tierce)", minimum=1, allow_null=True),
+    "period_year": fields.Integer(required=True, minimum=2000, maximum=2100, description="Année (2000-2100)"),
+    "period_month": fields.Integer(required=True, minimum=1, maximum=12, description="Mois (1-12)"),
+    "client_reservations": fields.Raw(description="Sélection manuelle: {client_id: [reservation_ids]}"),
+    "reservation_ids": fields.List(fields.Integer(description="ID réservation"), description="Liste d'IDs réservations (optionnel)"),
 })
 
 # Parser pour les filtres
@@ -294,6 +305,7 @@ class CompanyBillingSettingsResource(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
+    @invoices_ns.expect(billing_settings_model, validate=False)
     def put(self, company_id):
         """Met à jour les paramètres de facturation d'une entreprise."""
         try:
@@ -311,12 +323,21 @@ class CompanyBillingSettingsResource(Resource):
             if not billing_settings:
                 return {"error": "Paramètres de facturation non trouvés"}, 404
 
-            data = request.get_json()
-            app_logger.info(
-                "Données reçues pour les paramètres de facturation: %s", data)
+            data = request.get_json() or {}
+            
+            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+            from marshmallow import ValidationError
 
-            if not data:
-                return {"error": "Aucune donnée fournie"}, 400
+            from schemas.invoice_schemas import BillingSettingsUpdateSchema
+            from schemas.validation_utils import handle_validation_error, validate_request
+            
+            try:
+                validated_data = validate_request(BillingSettingsUpdateSchema(), data, strict=False)
+            except ValidationError as e:
+                return handle_validation_error(e)
+            
+            app_logger.info(
+                "Données reçues pour les paramètres de facturation: %s", validated_data)
 
             # Convertir les chaînes vides en None pour les champs numériques
             for field in [
@@ -325,8 +346,8 @@ class CompanyBillingSettingsResource(Resource):
                 "reminder1fee",
                 "reminder2fee",
                     "reminder3fee"]:
-                if field in data:
-                    value = data[field]
+                if field in validated_data:
+                    value = validated_data[field]
                     if value == "" or value is None:
                         setattr(billing_settings, field, None)
                     else:
@@ -338,28 +359,28 @@ class CompanyBillingSettingsResource(Resource):
                                 "Valeur invalide pour %s: %s", field, value)
                             setattr(billing_settings, field, None)
 
-            # Mettre à jour les autres champs
+            # Mettre à jour les autres champs - utilise données validées
             # email d'envoi des factures
-            if "billing_email" in data or "email_sender" in data:
-                billing_settings.email_sender = data.get(
-                    "billing_email", data.get(
+            if "billing_email" in validated_data or "email_sender" in validated_data:
+                billing_settings.email_sender = validated_data.get(
+                    "billing_email", validated_data.get(
                         "email_sender", billing_settings.email_sender))
-            billing_settings.invoice_prefix = data.get(
-                "invoice_prefix", billing_settings.invoice_prefix)
-            billing_settings.invoice_number_format = data.get(
-                "invoice_number_format", billing_settings.invoice_number_format)
-            billing_settings.iban = data.get("iban", billing_settings.iban)
-            billing_settings.qr_iban = data.get(
-                "qr_iban", billing_settings.qr_iban)
+            if "invoice_prefix" in validated_data:
+                billing_settings.invoice_prefix = validated_data["invoice_prefix"]
+            if "invoice_number_format" in validated_data:
+                billing_settings.invoice_number_format = validated_data["invoice_number_format"]
+            if "iban" in validated_data:
+                billing_settings.iban = validated_data["iban"]
+            if "qr_iban" in validated_data:
+                billing_settings.qr_iban = validated_data["qr_iban"]
             # esr_ref_base dans le schéma, colonne esr_ref_base dans le modèle
-            if "esr_ref_base" in data:
-                billing_settings.esr_ref_base = data.get(
-                    "esr_ref_base") or None
+            if "esr_ref_base" in validated_data:
+                billing_settings.esr_ref_base = validated_data.get("esr_ref_base") or None
 
             # planning des rappels: accepter dict ou string JSON, ou tableau
             # ordonné
-            if "reminder_schedule_days" in data:
-                sched = data.get("reminder_schedule_days")
+            if "reminder_schedule_days" in validated_data:
+                sched = validated_data["reminder_schedule_days"]
                 try:
                     if isinstance(sched, str):
                         import json
@@ -377,10 +398,9 @@ class CompanyBillingSettingsResource(Resource):
                     app_logger.warning(
                         "reminder_schedule_days invalide, valeur ignorée")
 
-            # auto_reminders_enabled si fourni
-            if "auto_reminders_enabled" in data:
-                billing_settings.auto_reminders_enabled = bool(
-                    data.get("auto_reminders_enabled"))
+            # auto_reminders_enabled si fourni - utilise données validées
+            if "auto_reminders_enabled" in validated_data:
+                billing_settings.auto_reminders_enabled = validated_data["auto_reminders_enabled"]
 
             app_logger.info("Paramètres mis à jour avec succès")
             db.session.commit()
@@ -398,6 +418,7 @@ class GenerateInvoice(Resource):
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
     @limiter.limit("10 per minute")
+    @invoices_ns.expect(invoice_generate_model, validate=False)
     def post(self, company_id):
         """Génère une ou plusieurs factures avec support de la facturation tierce."""
         # Variables pour stocker le résultat
@@ -411,108 +432,119 @@ class GenerateInvoice(Resource):
                 result = {"error": "Entreprise non trouvée ou accès refusé"}
                 status_code = 404
             else:
-                data = request.get_json()
-                client_id = data.get("client_id")
-                # NOUVEAU: pour facturation groupée
-                client_ids = data.get("client_ids", [])
-                # NOUVEAU: support facturation tierce
-                bill_to_client_id = data.get("bill_to_client_id")
-                period_year = data.get("period_year")
-                period_month = data.get("period_month")
+                data = request.get_json() or {}
+                
+                # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+                from marshmallow import ValidationError
 
-                if not all([period_year, period_month]):
-                    result = {"error": "period_year et period_month sont requis"}
+                from schemas.invoice_schemas import InvoiceGenerateSchema
+                from schemas.validation_utils import handle_validation_error, validate_request
+                
+                try:
+                    validated_data = validate_request(InvoiceGenerateSchema(), data, strict=False)
+                except ValidationError as e:
+                    result = handle_validation_error(e)
                     status_code = 400
-                else:
-                    invoice_service = InvoiceService()
+                    return result, status_code
+                
+                client_id = validated_data.get("client_id")
+                # NOUVEAU: pour facturation groupée
+                client_ids = validated_data.get("client_ids", [])
+                # NOUVEAU: support facturation tierce
+                bill_to_client_id = validated_data.get("bill_to_client_id")
+                period_year = validated_data["period_year"]
+                period_month = validated_data["period_month"]
+                
+                # period_year et period_month sont déjà validés par le schema, donc toujours présents
+                invoice_service = InvoiceService()
 
-                    # Cas 1: Facturation groupée de plusieurs clients vers une
-                    # institution
-                    if client_ids and bill_to_client_id:
-                        app_logger.info(
-                            "Génération factures consolidées: %s clients vers institution %s",
-                            len(client_ids),
-                            bill_to_client_id)
+                # Cas 1: Facturation groupée de plusieurs clients vers une
+                # institution
+                if client_ids and bill_to_client_id:
+                    app_logger.info(
+                        "Génération factures consolidées: %s clients vers institution %s",
+                        len(client_ids),
+                        bill_to_client_id)
 
-                        # Vérifier que l'institution existe et appartient à
-                        # l'entreprise
+                    # Vérifier que l'institution existe et appartient à
+                    # l'entreprise
+                    institution = Client.query.filter_by(
+                        id=bill_to_client_id, company_id=company_id).first()
+                    if not institution:
+                        result = {"error": "Institution non trouvée"}
+                        status_code = 404
+                    elif not institution.is_institution:
+                        result = {"error": "Le client sélectionné n'est pas une institution"}
+                        status_code = 400
+                    else:
+                        # NOUVEAU: Support de la sélection manuelle de réservations
+                        # Format: { client_id: [reservation_ids] }
+                        client_reservations = validated_data.get("client_reservations")
+
+                        # Générer les factures
+                        invoice_result = invoice_service.generate_consolidated_invoice(
+                            company_id,
+                            client_ids,
+                            period_year,
+                            period_month,
+                            bill_to_client_id,
+                            client_reservations  # NOUVEAU
+                        )
+
+                        result = {
+                            "message": f"{invoice_result['success_count']} facture(s) générée(s), {invoice_result['error_count']} erreur(s)",
+                            "invoices": [inv.to_dict() for inv in invoice_result["invoices"]],
+                            "errors": invoice_result["errors"],
+                            "success_count": invoice_result["success_count"],
+                            "error_count": invoice_result["error_count"]
+                        }
+                        status_code = 201
+
+                # Cas 2: Facturation simple (avec ou sans tierce)
+                elif client_id:
+                    # Vérifier que le client appartient à l'entreprise
+                    client = Client.query.filter_by(
+                        id=client_id, company_id=company_id).first()
+                    if not client:
+                        result = {"error": "Client non trouvé"}
+                        status_code = 404
+                    # Si facturation tierce, vérifier l'institution
+                    elif bill_to_client_id:
                         institution = Client.query.filter_by(
                             id=bill_to_client_id, company_id=company_id).first()
                         if not institution:
-                            result = {"error": "Institution non trouvée"}
+                            result = {"error": "Institution payeuse non trouvée"}
                             status_code = 404
                         elif not institution.is_institution:
                             result = {"error": "Le client sélectionné n'est pas une institution"}
                             status_code = 400
                         else:
-                            # NOUVEAU: Support de la sélection manuelle de réservations
-                            # Format: { client_id: [reservation_ids] }
-                            client_reservations = data.get("client_reservations")
-
-                            # Générer les factures
-                            invoice_result = invoice_service.generate_consolidated_invoice(
-                                company_id,
-                                client_ids,
-                                period_year,
-                                period_month,
-                                bill_to_client_id,
-                                client_reservations  # NOUVEAU
-                            )
-
-                            result = {
-                                "message": f"{invoice_result['success_count']} facture(s) générée(s), {invoice_result['error_count']} erreur(s)",
-                                "invoices": [inv.to_dict() for inv in invoice_result["invoices"]],
-                                "errors": invoice_result["errors"],
-                                "success_count": invoice_result["success_count"],
-                                "error_count": invoice_result["error_count"]
-                            }
-                            status_code = 201
-
-                    # Cas 2: Facturation simple (avec ou sans tierce)
-                    elif client_id:
-                        # Vérifier que le client appartient à l'entreprise
-                        client = Client.query.filter_by(
-                            id=client_id, company_id=company_id).first()
-                        if not client:
-                            result = {"error": "Client non trouvé"}
-                            status_code = 404
-                        # Si facturation tierce, vérifier l'institution
-                        elif bill_to_client_id:
-                            institution = Client.query.filter_by(
-                                id=bill_to_client_id, company_id=company_id).first()
-                            if not institution:
-                                result = {"error": "Institution payeuse non trouvée"}
-                                status_code = 404
-                            elif not institution.is_institution:
-                                result = {"error": "Le client sélectionné n'est pas une institution"}
-                                status_code = 400
-                            else:
-                                # Générer la facture
-                                invoice = invoice_service.generate_invoice(
-                                    company_id,
-                                    client_id,
-                                    period_year,
-                                    period_month,
-                                    bill_to_client_id,
-                                    data.get("reservation_ids")
-                                )
-                                result = invoice.to_dict()
-                                status_code = 201
-                        else:
-                            # Générer la facture sans facturation tierce
+                            # Générer la facture
                             invoice = invoice_service.generate_invoice(
                                 company_id,
                                 client_id,
                                 period_year,
                                 period_month,
                                 bill_to_client_id,
-                                data.get("reservation_ids")
+                                validated_data.get("reservation_ids")
                             )
                             result = invoice.to_dict()
                             status_code = 201
                     else:
-                        result = {"error": "client_id ou client_ids requis"}
-                        status_code = 400
+                        # Générer la facture sans facturation tierce
+                        invoice = invoice_service.generate_invoice(
+                            company_id,
+                            client_id,
+                            period_year,
+                            period_month,
+                            bill_to_client_id,
+                            validated_data.get("reservation_ids")
+                        )
+                        result = invoice.to_dict()
+                        status_code = 201
+                else:
+                    result = {"error": "client_id ou client_ids requis"}
+                    status_code = 400
 
         except ValueError as e:
             app_logger.error("Erreur de validation: %s", str(e))

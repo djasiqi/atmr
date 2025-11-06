@@ -8,7 +8,57 @@ from typing import ClassVar
 # from dotenv import load_dotenv
 # load_dotenv()
 
+# ✅ 4.1: Import Vault client (optionnel)
+try:
+    from shared.vault_client import get_vault_client as _get_vault_client
+    VAULT_AVAILABLE = True
+except ImportError:
+    VAULT_AVAILABLE = False
+    _get_vault_client = None
+
 base_dir = Path(__file__).resolve().parent
+
+
+def _get_secret_from_vault_or_env(
+    vault_path: str,
+    vault_key: str,
+    env_key: str,
+    default: str | None = None,
+    required: bool = False,
+) -> str | None:
+    """✅ 4.1: Récupère un secret depuis Vault ou variable d'environnement.
+    
+    Essaie d'abord Vault, puis fallback vers .env.
+    
+    Args:
+        vault_path: Chemin Vault (ex: "dev/flask/secret_key")
+        vault_key: Clé dans Vault (généralement "value")
+        env_key: Nom de la variable d'environnement
+        default: Valeur par défaut si non trouvée
+        required: Si True, lève une exception si non trouvé
+        
+    Returns:
+        Valeur du secret ou None
+    """
+    if VAULT_AVAILABLE and _get_vault_client:
+        try:
+            vault = _get_vault_client()
+            value = vault.get_secret(vault_path, vault_key, env_fallback=env_key, default=default)
+            if value:
+                return value
+        except Exception:
+            # Fallback silencieux vers .env en cas d'erreur Vault
+            pass
+    
+    # Fallback vers variable d'environnement
+    value = os.getenv(env_key, default)
+    if value:
+        return value
+    
+    if required:
+        raise RuntimeError(f"Secret requis non trouvé: {env_key} (Vault path: {vault_path})")
+    
+    return None
 
 class Config:
     """Configuration de base partagée.
@@ -53,12 +103,30 @@ class DevelopmentConfig(Config):
     """Configuration pour le développement local (PostgreSQL via Docker)."""
 
     DEBUG = True
-    # Les clés sont chargées depuis .env pour le développement
-    SECRET_KEY = os.getenv("SECRET_KEY")
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
+    # ✅ 4.1: Chargement depuis Vault (si configuré) ou .env (fallback)
+    SECRET_KEY = _get_secret_from_vault_or_env(
+        vault_path="dev/flask/secret_key",
+        vault_key="value",
+        env_key="SECRET_KEY",
+    )
+    JWT_SECRET_KEY = _get_secret_from_vault_or_env(
+        vault_path="dev/jwt/secret_key",
+        vault_key="value",
+        env_key="JWT_SECRET_KEY",
+    )
+    MAIL_PASSWORD = _get_secret_from_vault_or_env(
+        vault_path="dev/mail/password",
+        vault_key="value",
+        env_key="MAIL_PASSWORD",
+    )
     # PostgreSQL via Docker (DATABASE_URL doit être défini)
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL") or os.getenv("DATABASE_URI")
+    # ✅ 4.1: Support dynamic secrets Database (via Vault) ou DATABASE_URL (fallback)
+    SQLALCHEMY_DATABASE_URI = _get_secret_from_vault_or_env(
+        vault_path="dev/database/url",
+        vault_key="value",
+        env_key="DATABASE_URL",
+        default=os.getenv("DATABASE_URI"),
+    )
 
     # ✅ PostgreSQL-specific options pour développement
     SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -83,11 +151,31 @@ class ProductionConfig(Config):
     """Configuration pour la production (PostgreSQL)."""
 
     DEBUG = False
-    # En production, ces variables DOIVENT être fournies par l'environnement du serveur
-    SECRET_KEY = os.getenv("SECRET_KEY")
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")  # PostgreSQL uniquement
+    # ✅ 4.1: En production, utiliser Vault (recommandé) ou variables d'environnement
+    SECRET_KEY = _get_secret_from_vault_or_env(
+        vault_path="prod/flask/secret_key",
+        vault_key="value",
+        env_key="SECRET_KEY",
+        required=True,  # Requis en production
+    )
+    JWT_SECRET_KEY = _get_secret_from_vault_or_env(
+        vault_path="prod/jwt/secret_key",
+        vault_key="value",
+        env_key="JWT_SECRET_KEY",
+        required=True,  # Requis en production
+    )
+    MAIL_PASSWORD = _get_secret_from_vault_or_env(
+        vault_path="prod/mail/password",
+        vault_key="value",
+        env_key="MAIL_PASSWORD",
+    )
+    # ✅ 4.1: Support dynamic secrets Database (via Vault) pour rotation automatique
+    SQLALCHEMY_DATABASE_URI = _get_secret_from_vault_or_env(
+        vault_path="prod/database/url",
+        vault_key="value",
+        env_key="DATABASE_URL",
+        required=True,  # Requis en production
+    )
 
     # ✅ PostgreSQL-specific options
     SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {  # pyright: ignore[reportIncompatibleVariableOverride]

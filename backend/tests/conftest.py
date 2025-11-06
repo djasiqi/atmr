@@ -16,6 +16,10 @@ from flask import Flask
 os.environ["FLASK_ENV"] = "testing"
 os.environ["PDF_BASE_URL"] = "http://localhost:5000"  # Valeur factice pour tests
 os.environ.setdefault("TEST_DATABASE_URL", "postgresql://atmr:atmr@localhost:5432/atmr_test")
+# Désactiver la doc RESTX pour éviter les conflits d'endpoint /specs en tests
+os.environ["API_DOCS"] = "off"
+# Désactiver l'API legacy pendant les tests pour éviter conflits RestX
+os.environ["API_LEGACY_ENABLED"] = "false"
 
 from app import create_app
 from ext import db as _db
@@ -73,13 +77,17 @@ def client(app, db):
 @pytest.fixture
 def sample_company(db, sample_user):
     """Crée une entreprise de test."""
-    company = Company(
-        name="Test Transport SA",
-        address="Rue de Test 1, 1000 Lausanne",
-        contact_phone="0211234567",
-        contact_email="contact@test-transport.ch",
-        user_id=sample_user.id
-    )
+    # ✅ Vérifier si une company existe déjà pour cet utilisateur
+    existing_company = Company.query.filter_by(user_id=sample_user.id).first()
+    if existing_company:
+        return existing_company
+    
+    company = Company()
+    company.name = "Test Transport SA"
+    company.address = "Rue de Test 1, 1000 Lausanne"
+    company.contact_phone = "0211234567"
+    company.contact_email = "contact@test-transport.ch"
+    company.user_id = sample_user.id
     db.session.add(company)
     db.session.commit()
     return company
@@ -87,49 +95,44 @@ def sample_company(db, sample_user):
 
 @pytest.fixture
 def sample_user(db):
-    """Crée un utilisateur de test (rôle company)."""
+    """Crée un utilisateur de test (rôle company) sans supprimer d'entités liées."""
     import uuid
 
-    from ext import bcrypt
-
-    # ✅ FIX: Générer un username unique par test pour éviter collisions
     unique_suffix = str(uuid.uuid4())[:8]
-
-    # ✅ FIX: Vérifier si l'utilisateur existe déjà, sinon créer
-    existing = User.query.filter_by(username="testuser").first()
-    if existing:
-        return existing
-
-    user = User(
-        username="testuser",  # Utiliser un username fixe mais vérifier d'abord
-        email=f"test-{unique_suffix}@example.com",
-        role=UserRole.company
-    )
-    # ✅ FIX: Générer le hash correctement avec bcrypt
-    password_hash = bcrypt.generate_password_hash("password123")
-    if isinstance(password_hash, bytes):
-        user.password = password_hash.decode("utf-8")
-    else:
-        user.password = password_hash
+    user = User()
+    user.username = f"testuser_{unique_suffix}"
+    user.email = f"test-{unique_suffix}@example.com"
+    user.role = UserRole.company
+    user.public_id = str(uuid.uuid4())
+    user.set_password("password123", force_change=False)
 
     db.session.add(user)
     db.session.commit()
-    db.session.refresh(user)  # ✅ Rafraîchir pour obtenir l'ID
+    db.session.refresh(user)
     return user
 
 
 @pytest.fixture
 def auth_headers(client, sample_user):
-    """Génère un token JWT valide pour l'utilisateur test."""
-    response = client.post("/api/auth/login", json={
-        "email": "test@example.com",
-        "password": "password123"
-    })
-    data = response.get_json()
-    if not data or "token" not in data:
-        pytest.fail(f"Login failed: {response.get_json()}")
+    """Génère un token JWT valide pour l'utilisateur test sans appeler /login."""
+    from flask_jwt_extended import create_access_token
 
-    token = data["token"]
+    cache_key = f"token_{sample_user.id}"
+    if not hasattr(auth_headers, "_token_cache"):
+        auth_headers._token_cache = {}  # type: ignore[attr-defined]
+    if cache_key in auth_headers._token_cache:  # type: ignore[attr-defined]
+        token = auth_headers._token_cache[cache_key]  # type: ignore[attr-defined]
+        return {"Authorization": f"Bearer {token}"}
+
+    claims = {
+        "role": sample_user.role.value,
+        "company_id": getattr(sample_user, "company_id", None),
+        "driver_id": getattr(sample_user, "driver_id", None),
+        "aud": "atmr-api",
+    }
+    with client.application.app_context():
+        token = create_access_token(identity=str(sample_user.public_id), additional_claims=claims)
+    auth_headers._token_cache[cache_key] = token  # type: ignore[attr-defined]
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -226,6 +229,38 @@ def simple_assignment(db, simple_booking, simple_driver):
     )
 
 
+@pytest.fixture
+def sample_client(db, sample_company):
+    """Crée un client de test avec utilisateur associé."""
+    from ext import bcrypt
+    from models.client import Client
+    from models.enums import UserRole
+    from models.user import User
+    
+    user = User()
+    user.username = "clientuser"
+    user.email = "client@example.com"
+    user.role = UserRole.client
+    user.first_name = "Jean"
+    user.last_name = "Dupont"
+    user.phone = "0791234567"
+    user.address = "Rue Client 1, 1000 Lausanne"
+    password_hash = bcrypt.generate_password_hash("password123")
+    user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash  # type: ignore[unnecessary-isinstance]
+    db.session.add(user)
+    db.session.flush()
+    
+    client = Client()
+    client.user_id = user.id
+    client.company_id = sample_company.id
+    client.billing_address = "Rue Client 1, 1000 Lausanne"
+    client.contact_email = "client@example.com"
+    client.contact_phone = "0791234567"
+    db.session.add(client)
+    db.session.commit()
+    return client
+
+
 # ========== FIXTURES POUR MOCKS ==========
 
 @pytest.fixture
@@ -263,10 +298,10 @@ def mock_osrm_client(monkeypatch):
 def mock_ml_predictor(monkeypatch):
     """Mock MLPredictor pour tests rapides."""
     class MockMLPredictor:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
             self.is_trained = True
 
-        def predict_delay(self, ____________________________________________________________________________________________________booking, driver, current_time=None):
+        def predict_delay(self, booking, driver, current_time=None):
             from services.unified_dispatch.ml_predictor import DelayPrediction
             return DelayPrediction(
                 booking_id=booking.id,
@@ -311,3 +346,161 @@ def cleanup_db(db):
     # Le rollback se fait déjà dans la fixture db(), mais on peut forcer ici
     db.session.rollback()
     db.session.remove()
+
+
+# ========== FIXTURES D3 - CHAOS ENGINEERING ==========
+
+@pytest.fixture
+def reset_chaos():
+    """Reset automatique du chaos injector après chaque test.
+    
+    ✅ D3: Garantit que le chaos est toujours désactivé après un test,
+    même si le test échoue.
+    """
+    try:
+        from chaos.injectors import get_chaos_injector
+        injector = get_chaos_injector()
+        
+        yield injector
+        
+    except ImportError:
+        # Module chaos non disponible, continuer normalement
+        yield None
+    finally:
+        # Reset automatique après le test
+        try:
+            from chaos.injectors import get_chaos_injector
+            injector = get_chaos_injector()
+            injector.enabled = False
+            injector.osrm_down = False
+            injector.db_read_only = False
+            injector.latency_ms = 0
+            injector.error_rate = 0.0
+            injector.timeout_rate = 0.0
+        except ImportError:
+            pass
+
+
+@pytest.fixture
+def chaos_injector():
+    """Fixture pour obtenir l'injecteur de chaos avec reset automatique.
+    
+    ✅ D3: Retourne l'injecteur de chaos et garantit le reset après le test.
+    
+    Usage:
+        def test_something(chaos_injector):
+            chaos_injector.enable()
+            chaos_injector.set_osrm_down(True)
+            # ... test ...
+    """
+    try:
+        from chaos.injectors import get_chaos_injector
+        injector = get_chaos_injector()
+        
+        # S'assurer que le chaos est désactivé au départ
+        injector.disable()
+        injector.set_osrm_down(False)
+        injector.set_db_read_only(False)
+        
+        yield injector
+        
+    except ImportError:
+        # Module chaos non disponible, continuer normalement
+        pytest.skip("Chaos injector module not available")
+    finally:
+        # Reset automatique après le test
+        try:
+            from chaos.injectors import get_chaos_injector, reset_chaos
+            reset_chaos()
+        except ImportError:
+            pass
+
+
+@pytest.fixture
+def mock_osrm_down():
+    """Fixture pour activer/désactiver automatiquement OSRM down.
+    
+    ✅ D3: Active OSRM down au début du test et le désactive à la fin.
+    
+    Usage:
+        def test_with_osrm_down(mock_osrm_down):
+            # OSRM down est automatiquement activé
+            # ... test ...
+            # OSRM down est automatiquement désactivé après le test
+    """
+    # Initialiser les variables pour éviter les erreurs de linter
+    initial_enabled = False
+    initial_osrm_down = False
+    
+    try:
+        from chaos.injectors import get_chaos_injector
+        injector = get_chaos_injector()
+        
+        # Sauvegarder l'état initial
+        initial_enabled = injector.enabled
+        initial_osrm_down = injector.osrm_down
+        
+        # Activer OSRM down
+        injector.enable()
+        injector.set_osrm_down(True)
+        
+        yield injector
+        
+    except ImportError:
+        # Module chaos non disponible, continuer normalement
+        pytest.skip("Chaos injector module not available")
+    finally:
+        # Restaurer l'état initial
+        try:
+            from chaos.injectors import get_chaos_injector
+            injector = get_chaos_injector()
+            injector.set_osrm_down(initial_osrm_down)
+            if not initial_enabled:
+                injector.disable()
+        except ImportError:
+            pass
+
+
+@pytest.fixture
+def mock_db_read_only():
+    """Fixture pour activer/désactiver automatiquement DB read-only.
+    
+    ✅ D3: Active DB read-only au début du test et le désactive à la fin.
+    
+    Usage:
+        def test_with_db_readonly(mock_db_read_only):
+            # DB read-only est automatiquement activé
+            # ... test ...
+            # DB read-only est automatiquement désactivé après le test
+    """
+    # Initialiser les variables pour éviter les erreurs de linter
+    initial_enabled = False
+    initial_db_read_only = False
+    
+    try:
+        from chaos.injectors import get_chaos_injector
+        injector = get_chaos_injector()
+        
+        # Sauvegarder l'état initial
+        initial_enabled = injector.enabled
+        initial_db_read_only = injector.db_read_only
+        
+        # Activer DB read-only
+        injector.enable()
+        injector.set_db_read_only(True)
+        
+        yield injector
+        
+    except ImportError:
+        # Module chaos non disponible, continuer normalement
+        pytest.skip("Chaos injector module not available")
+    finally:
+        # Restaurer l'état initial
+        try:
+            from chaos.injectors import get_chaos_injector
+            injector = get_chaos_injector()
+            injector.set_db_read_only(initial_db_read_only)
+            if not initial_enabled:
+                injector.disable()
+        except ImportError:
+            pass

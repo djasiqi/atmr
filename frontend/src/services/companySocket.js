@@ -10,34 +10,28 @@ const isDevelopmentLocalhost =
   typeof window !== 'undefined' && window.location && /localhost:3000$/i.test(window.location.host);
 
 const API_URL = (() => {
-  // En dev avec localhost:3000, utiliser le proxy
   if (isDevelopmentLocalhost) {
-    return window.location.origin; // localhost:3000 -> via proxy
+    return 'http://127.0.0.1:5000';
   }
 
-  const baseUrl = process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_API_URL || '/api';
-  // If it's a full URL, extract the origin
-  if (baseUrl.startsWith('http')) {
+  const baseUrl =
+    process.env.REACT_APP_SOCKET_URL ||
+    process.env.REACT_APP_API_BASE_URL ||
+    process.env.REACT_APP_API_URL;
+  if (baseUrl && baseUrl.startsWith('http')) {
     try {
       const url = new URL(baseUrl);
       return url.origin;
     } catch (e) {
-      console.error('Invalid API URL:', baseUrl);
+      console.error('Invalid SOCKET URL:', baseUrl);
       return window.location.origin;
     }
   }
-  // If it's a relative path like "/api", use window.location.origin
+
   return window.location.origin;
 })();
 
 function buildSocketOptions() {
-  // En dev via proxy: utiliser uniquement polling (plus fiable avec webpack-dev-server)
-  // En prod: laisser Socket.IO gérer (WS prioritaire, fallback polling)
-  const isDev =
-    typeof window !== 'undefined' &&
-    window.location &&
-    /localhost:3000$/i.test(window.location.host);
-
   const base = {
     path: '/socket.io',
     // 🔒 Auth dynamique : sera rappelé à chaque (re)connexion
@@ -52,8 +46,7 @@ function buildSocketOptions() {
     timeout: 20000,
     forceNew: false,
     withCredentials: true,
-    // En dev: polling uniquement (WebSocket upgrade échoue via proxy webpack-dev-server)
-    transports: isDev ? ['polling'] : ['polling', 'websocket'],
+    transports: isDevelopmentLocalhost ? ['websocket', 'polling'] : ['websocket', 'polling'],
   };
   return base;
 }

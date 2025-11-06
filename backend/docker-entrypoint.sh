@@ -184,10 +184,12 @@ start_application() {
         exec python app.py
     else
         echo "  Mode production: démarrage avec Gunicorn"
+        WORKERS="${GUNICORN_WORKERS:-4}"
+        echo "  Workers configurés: $WORKERS"
         exec gunicorn wsgi:app \
             --bind 0.0.0.0:5000 \
             --worker-class eventlet \
-            --workers 1 \
+            --workers "$WORKERS" \
             --timeout 120 \
             --keep-alive 2 \
             --max-requests 1000 \

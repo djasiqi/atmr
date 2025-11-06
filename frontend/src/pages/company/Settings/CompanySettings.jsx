@@ -111,6 +111,8 @@ export default function CompanySettings() {
   const [form, setForm] = useState({
     name: '',
     address: '',
+    latitude: null,
+    longitude: null,
     contact_email: '',
     contact_phone: '',
     iban: '',
@@ -129,6 +131,8 @@ export default function CompanySettings() {
     setForm({
       name: company.name || '',
       address: company.address || '',
+      latitude: company.latitude || null,
+      longitude: company.longitude || null,
       contact_email: company.contact_email || company.email || '',
       contact_phone: company.contact_phone || company.phone || '',
       iban: company.iban ? formatIbanPretty(company.iban) : '',
@@ -169,6 +173,16 @@ export default function CompanySettings() {
     }));
   };
 
+  const handleAddressSelect = (selectedItem) => {
+    // Mettre à jour l'adresse et les coordonnées GPS depuis AddressAutocomplete
+    setForm((prev) => ({
+      ...prev,
+      address: selectedItem?.address || selectedItem?.label || prev.address,
+      latitude: selectedItem?.lat || null,
+      longitude: selectedItem?.lon || null,
+    }));
+  };
+
   const onClickEdit = () => {
     setMessage('');
     setError('');
@@ -180,6 +194,8 @@ export default function CompanySettings() {
       setForm({
         name: company.name || '',
         address: company.address || '',
+        latitude: company.latitude || null,
+        longitude: company.longitude || null,
         contact_email: company.contact_email || company.email || '',
         contact_phone: company.contact_phone || company.phone || '',
         iban: company.iban ? formatIbanPretty(company.iban) : '',
@@ -209,6 +225,8 @@ export default function CompanySettings() {
     const payload = {
       name: form.name || undefined,
       address: form.address || undefined,
+      latitude: form.latitude || undefined,
+      longitude: form.longitude || undefined,
       contact_email: form.contact_email || undefined,
       contact_phone: form.contact_phone || undefined,
       billing_email: form.billing_email || undefined,
@@ -383,6 +401,7 @@ export default function CompanySettings() {
                     form={form}
                     fieldErrors={fieldErrors}
                     handleChange={handleChange}
+                    handleAddressSelect={handleAddressSelect}
                     logoPreview={logoPreview}
                     onClickPickFile={() => fileInputRef.current?.click()}
                     onPickFile={onPickFile}

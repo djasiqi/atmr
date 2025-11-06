@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import './AdvancedSettings.css';
 
-const AdvancedSettings = ({ onApply, initialSettings = {} }) => {
+const AdvancedSettings = ({ onApply, initialSettings = {}, drivers = [] }) => {
   // État local pour les overrides (utilise uniquement initialSettings fourni par le parent)
   const [overrides, setOverrides] = useState(initialSettings);
   const [expanded, setExpanded] = useState({});
@@ -379,6 +379,75 @@ const AdvancedSettings = ({ onApply, initialSettings = {} }) => {
         )}
       </div>
 
+      {/* Section: Préférence Chauffeur */}
+      <div className="settings-section">
+        <div className="section-header" onClick={() => toggleSection('driver_preference')}>
+          <span className="section-title">👤 Préférence Chauffeur</span>
+          <span className="section-toggle">{expanded.driver_preference ? '▼' : '▶'}</span>
+        </div>
+
+        {expanded.driver_preference && (
+          <div className="section-content">
+            <p className="section-description">
+              Définir un chauffeur préféré pour prioriser ses assignments. Si aucun chauffeur n'est
+              sélectionné, l'équité stricte sera appliquée (max 2 courses d'écart).
+            </p>
+
+            <div className="setting-item">
+              <label>Chauffeur préféré</label>
+              <select
+                value={overrides.preferred_driver_id || ''}
+                onChange={(e) =>
+                  updateOverride(
+                    'root',
+                    'preferred_driver_id',
+                    e.target.value ? parseInt(e.target.value) : null
+                  )
+                }
+              >
+                <option value="">Aucun (équité stricte)</option>
+                {drivers
+                  .filter((d) => !d.is_emergency) // Seulement les chauffeurs réguliers
+                  .map((driver) => (
+                    <option key={driver.id} value={driver.id}>
+                      {driver.username || driver.full_name || `Chauffeur #${driver.id}`}
+                    </option>
+                  ))}
+              </select>
+              <span className="setting-help">
+                Si sélectionné, ce chauffeur sera priorisé. Sinon, équité stricte (max 2 courses
+                d'écart).
+              </span>
+            </div>
+
+            {/* Multiplicateur de charge pour le chauffeur préféré */}
+            {overrides.preferred_driver_id && (
+              <div className="setting-item">
+                <label>Multiplicateur de charge (chauffeur préféré)</label>
+                <input
+                  type="number"
+                  min="1.0"
+                  max="3.0"
+                  step="0.1"
+                  value={overrides.driver_load_multipliers?.[overrides.preferred_driver_id] || 1.5}
+                  onChange={(e) => {
+                    const multipliers = overrides.driver_load_multipliers || {};
+                    updateOverride('root', 'driver_load_multipliers', {
+                      ...multipliers,
+                      [overrides.preferred_driver_id]: parseFloat(e.target.value) || 1.5,
+                    });
+                  }}
+                />
+                <span className="setting-help">
+                  Permet au chauffeur préféré de prendre plus de courses (1.5 = 50% de plus, 2.0 =
+                  100% de plus)
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Section: Chauffeurs d'urgence */}
       <div className="settings-section">
         <div className="section-header" onClick={() => toggleSection('emergency')}>
@@ -462,6 +531,7 @@ const AdvancedSettings = ({ onApply, initialSettings = {} }) => {
 AdvancedSettings.propTypes = {
   onApply: PropTypes.func.isRequired,
   initialSettings: PropTypes.object,
+  drivers: PropTypes.array,
 };
 
 export default AdvancedSettings;

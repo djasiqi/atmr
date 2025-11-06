@@ -13,7 +13,7 @@ from flask_restx import Namespace, Resource, fields
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import joinedload
 
-from ext import app_logger, db, role_required
+from ext import app_logger, db, limiter, role_required
 from models import Booking, BookingStatus, Client, Invoice, User, UserRole
 
 MONTH_THRESHOLD = 12
@@ -37,6 +37,7 @@ stats_model = admin_ns.model("Stats", {
 class AdminStats(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
+    @limiter.limit("100 per hour")  # ✅ 2.8: Rate limiting stats admin (coûteux)
     @admin_ns.marshal_with(stats_model)
     def get(self):
         """Récupère les statistiques administrateur."""
@@ -129,6 +130,7 @@ class RecentBookings(Resource):
 class AllUsers(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
+    @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting liste utilisateurs
     def get(self):
         """Récupère la liste complète des utilisateurs."""
         try:
@@ -203,10 +205,59 @@ class ManageUser(Resource):
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
+def _setup_driver_role(user: User, company_id: int | None) -> tuple[bool, dict[str, str] | None, int | None]:
+    """Helper pour configurer le rôle DRIVER. Retourne (success, error_response, status_code)."""
+    if not company_id:
+        db.session.rollback()
+        return False, {"error": "company_id is required for a driver."}, 400
+    
+    from models import Company, Driver
+    
+    company = Company.query.get(company_id)
+    if company is None:
+        db.session.rollback()
+        return False, {"error": f"Company {company_id} does not exist."}, 400
+    
+    drv = getattr(user, "driver", None)
+    if drv is None:
+        DriverCtor = cast("Any", Driver)
+        drv = DriverCtor(user_id=user.id, company_id=company_id, is_active=True)
+        db.session.add(drv)
+    else:
+        drv.company_id = company_id
+    
+    return True, None, None
+
+
+# Modèle Swagger pour mise à jour rôle utilisateur
+user_role_update_model = admin_ns.model("UserRoleUpdate", {
+    "role": fields.String(
+        required=True,
+        enum=["admin", "client", "driver", "company"],
+        description="Nouveau rôle"
+    ),
+    "company_id": fields.Integer(
+        description="ID entreprise (requis pour rôle driver, optionnel pour company)",
+        minimum=1
+    ),
+    "company_name": fields.String(
+        description="Nom entreprise (si création company)",
+        min_length=1,
+        max_length=200
+    ),
+})
+
+# Modèle Swagger pour review action autonome
+autonomous_action_review_model = admin_ns.model("AutonomousActionReview", {
+    "notes": fields.String(description="Notes de l'admin (max 1000 caractères)", max_length=1000),
+})
+
 @admin_ns.route("/users/<int:user_id>/role")
 class UpdateUserRole(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
+    @limiter.limit("50 per hour")  # ✅ 2.8: Rate limiting changement rôle utilisateur
+    @admin_ns.expect(user_role_update_model, validate=False)
     def put(self, user_id: int):
         """Met à jour le rôle d'un utilisateur et, si besoin,
         crée/assigne Driver ou Company en gérant la transition depuis l'ancien rôle.
@@ -225,113 +276,81 @@ class UpdateUserRole(Resource):
 
             # ---------- 2) Lire & valider le payload ----------
             data = request.get_json(silent=True) or {}
-            raw = str(data.get("role", "")).strip()
             
-            # Normalisation ; on accepte "admin" / "ADMIN" / value / name
+            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+            from marshmallow import ValidationError
+
+            from schemas.admin_schemas import UserRoleUpdateSchema
+            from schemas.validation_utils import handle_validation_error, validate_request
+            
+            try:
+                validated_data = validate_request(UserRoleUpdateSchema(), data)
+            except ValidationError as e:
+                return handle_validation_error(e)
+            
+            # Normaliser le rôle depuis les données validées
+            raw = validated_data["role"].strip().lower()
             key = raw.upper()
             try:
-                # par nom d'enum (ADMIN/DRIVER/COMPANY/CLIENT)
                 new_role_enum = UserRole[key]
             except KeyError:
-                # sinon par valeur d'enum (si jamais)
                 new_role_enum = next(
                     (r for r in UserRole if str(r.value).upper() == key),
                     None
                 )
             
-            if not raw or new_role_enum is None:
+            if new_role_enum is None:
                 return {"error": "Invalid role"}, 400
 
-            # Rôle précédent (toujours string upper pour comparaison)
             old_role_value = (
-                user.role.value if isinstance(
-                    user.role,
-                    UserRole) else str(
-                    user.role))
+                user.role.value if isinstance(user.role, UserRole) else str(user.role))
             old_role_value = str(old_role_value or "").upper()
 
             # ---------- 3) Affecter le nouveau rôle ----------
-            # ⚠️ Ton modèle est typé façon Pylance "Column[str]". Pour éviter les warnings,
-            # on assigne la valeur texte (PG enum accepte la string
-            # correspondante).
             cast("Any", user).role = new_role_enum.value
 
             # ---------- 4) Transitions selon le nouveau rôle ----------
             role_upper = str(new_role_enum.value).upper()
 
             if role_upper == "DRIVER":
-                # company_id requis
-                company_id = data.get("company_id")
-                if not company_id:
-                    db.session.rollback()
-                    return {"error": "company_id is required for a driver."}, 400
-
-                from models import Company, Driver
-
-                company = Company.query.get(company_id)
-                if company is None:
-                    db.session.rollback()
-                    return {"error": f"Company {company_id} does not exist."}, 400
-
-                drv = getattr(user, "driver", None)
-                if drv is None:
-                    # Contourner le __init__ typé des modèles (Pylance "No
-                    # parameter named ...")
-                    DriverCtor = cast("Any", Driver)
-                    drv = DriverCtor(
-                        user_id=user.id,
-                        company_id=company_id,
-                        is_active=True)
-                    db.session.add(drv)
-                else:
-                    drv.company_id = company_id
-
-                # ancien rôle = company ? on peut décider d'un traitement (désactivation, etc.)
-                # ici on laisse tel quel par défaut.
+                success, error, status = _setup_driver_role(
+                    user, validated_data.get("company_id"))
+                if not success:
+                    return error, status
 
             elif role_upper == "COMPANY":
                 from models import Company
                 
                 comp = getattr(user, "company", None)
                 if comp is None:
-                    name = data.get("company_name") or user.username
+                    name = validated_data.get("company_name") or user.username
                     CompanyCtor = cast("Any", Company)
                     comp = CompanyCtor(user_id=user.id, name=name)
                     db.session.add(comp)
                 else:
-                    new_name = data.get("company_name")
+                    new_name = validated_data.get("company_name")
                     if new_name:
                         comp.name = new_name
 
-                # si l'ancien rôle était DRIVER, on supprime le driver (ou on
-                # le désactive)
                 if old_role_value == "DRIVER":
                     drv = getattr(user, "driver", None)
                     if drv:
                         db.session.delete(drv)
 
             elif role_upper == "CLIENT":
-                # redevenir client : supprimer driver et company éventuels
                 drv = getattr(user, "driver", None)
                 if drv:
                     db.session.delete(drv)
                 comp = getattr(user, "company", None)
                 if comp:
                     db.session.delete(comp)
-                    # éviter toute référence pendante
                     with contextlib.suppress(Exception):
                         cast("Any", user).company = None
 
             elif role_upper == "ADMIN":
-                # on nettoie à minima le driver ; on conserve la company par
-                # défaut
                 drv = getattr(user, "driver", None)
                 if drv:
                     db.session.delete(drv)
-                # comp = getattr(user, "company", None)
-                # si tu veux aussi supprimer la company de l'admin, décommente :
-                # if comp:
-                #     db.session.delete(comp)
 
             # ---------- 5) Commit ----------
             db.session.commit()
@@ -351,6 +370,7 @@ class UpdateUserRole(Resource):
 class ResetUserPassword(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
+    @limiter.limit("10 per hour")  # ✅ 2.8: Rate limiting reset mot de passe (sécurité)
     def post(self, user_id):
         """Réinitialise le mot de passe d'un utilisateur."""
         try:
@@ -622,11 +642,12 @@ class AutonomousActionReview(Resource):
 
     @jwt_required()
     @role_required(UserRole.admin)
+    @admin_ns.expect(autonomous_action_review_model, validate=False)
     def post(self, action_id):
         """Marque une action autonome comme reviewée par un admin.
 
         Body:
-        - notes: notes optionnelles de l'admin
+        - notes: notes optionnelles de l'admin (max 1000 caractères)
         """
         from flask_jwt_extended import get_jwt_identity
 
@@ -636,7 +657,19 @@ class AutonomousActionReview(Resource):
             action = AutonomousAction.query.get_or_404(action_id)
 
             data = request.get_json() or {}
-            notes = data.get("notes", "")
+            
+            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+            from marshmallow import ValidationError
+
+            from schemas.admin_schemas import AutonomousActionReviewSchema
+            from schemas.validation_utils import handle_validation_error, validate_request
+            
+            try:
+                validated_data = validate_request(AutonomousActionReviewSchema(), data, strict=False)
+            except ValidationError as e:
+                return handle_validation_error(e)
+
+            notes = validated_data.get("notes") or ""
 
             action.reviewed_by_admin = True
             action.reviewed_at = datetime.now(UTC)

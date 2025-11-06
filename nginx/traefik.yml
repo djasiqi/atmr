@@ -1,0 +1,62 @@
+# ✅ 3.5: Configuration Traefik pour reverse proxy ATMR (alternative à nginx)
+
+api:
+  dashboard: true
+  insecure: false  # ✅ 3.5: Désactiver dashboard en production (utiliser authentification)
+  debug: false
+
+# ✅ 3.5: Entrypoints (ports d'écoute)
+entryPoints:
+  web:
+    address: ":80"
+    # ✅ 3.5: Timeouts
+    transport:
+      respondingTimeouts:
+        readTimeout: 60s
+        writeTimeout: 60s
+        idleTimeout: 180s
+
+  websecure:
+    address: ":443"
+    # ✅ 3.5: HTTPS/TLS (à configurer avec certificats)
+    # http:
+    #   tls:
+    #     certResolver: letsencrypt
+
+# ✅ 3.5: Providers Docker
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: "atmr_default"  # Nom du réseau Docker Compose
+    # ✅ 3.5: Watch pour auto-découverte des services
+    watch: true
+
+# ✅ 3.5: Logs
+log:
+  level: INFO
+
+accessLog: {}
+  # filePath: "/var/log/traefik/access.log"
+
+# ✅ 3.5: Métriques (Prometheus)
+metrics:
+  prometheus:
+    entryPoint: web
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+
+# ✅ 3.5: Rate limiting
+# Nécessite redis disponible
+# middlewares:
+#   api-rate-limit:
+#     rateLimit:
+#       average: 100
+#       period: 1s
+#       burst: 20
+#       sourceCriterion:
+#         ipStrategy: {}
+

@@ -16,6 +16,7 @@ from sqlalchemy import or_
 
 from ext import db
 from models import Assignment, Booking, BookingStatus, Driver
+from services.ml.eta_delay_model import get_eta_delay_model
 from services.notification_service import notify_dispatcher_optimization_opportunity
 from services.unified_dispatch.data import calculate_eta
 from services.unified_dispatch.delay_predictor import DelayPredictor
@@ -28,6 +29,7 @@ DELAY_MINUTES_THRESHOLD = 5
 ABS_DELAY_THRESHOLD = 10
 MIN_DETECTION_THRESHOLD = 5
 OVERLOADED_DRIVER_THRESHOLD = 2
+DEFAULT_CONFIDENCE_THRESHOLD = 0.6  # Epic 4.1 - Seuil P(retard) pour notification/reassign
 
 """Système d'optimisation en temps réel pour le dispatch.
 Surveille en continu les assignations et propose des ajustements automatiques.
@@ -82,6 +84,7 @@ class RealtimeOptimizer:
         self.check_interval = check_interval_seconds
         self.suggestion_engine = SuggestionEngine()
         self.delay_predictor = DelayPredictor()
+        self.eta_delay_model = get_eta_delay_model()  # Epic 4.1 - Modèle ML prédiction retard
         self._running = False
         self._thread: threading.Thread | None = None
         self._last_check: datetime | None = None
@@ -249,7 +252,18 @@ class RealtimeOptimizer:
             # Calculer le retard en temps réel
             delay_minutes = self._calculate_realtime_delay(
                 assignment, booking, driver)
-
+            
+            # Epic 4.1 - Utiliser prédiction ML si P(retard) > seuil
+            ml_prediction = self.eta_delay_model.predict(booking, driver, now_local())
+            if ml_prediction.probability_delay > DEFAULT_CONFIDENCE_THRESHOLD:
+                # Mettre à jour delay_minutes avec prédiction ML
+                if ml_prediction.predicted_delay_minutes > delay_minutes:
+                    delay_minutes = int(ml_prediction.predicted_delay_minutes)
+                    logger.info(
+                        "[RealtimeOptimizer] Prédiction ML: booking %s, P(retard)=%.2f, delay=%d min",
+                        booking.id, ml_prediction.probability_delay, delay_minutes
+                    )
+            
             # Seuil de détection : au moins 5 min de retard (plus sensible)
             if abs(delay_minutes) < MIN_DETECTION_THRESHOLD:
                 return None

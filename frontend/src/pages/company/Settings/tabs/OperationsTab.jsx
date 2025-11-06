@@ -19,6 +19,7 @@ const OperationsTab = () => {
   const [showAdvancedSettingsModal, setShowAdvancedSettingsModal] = useState(false);
   const [advancedSettings, setAdvancedSettings] = useState(null);
   const [loadingAdvancedSettings, setLoadingAdvancedSettings] = useState(false);
+  const [drivers, setDrivers] = useState([]);
 
   const [form, setForm] = useState({
     service_area: '',
@@ -56,6 +57,8 @@ const OperationsTab = () => {
       setShowAdvancedSettingsModal(false);
       showSuccess('✅ Paramètres avancés sauvegardés avec succès !');
       console.log('💾 [OperationsTab] Paramètres avancés sauvegardés:', data.dispatch_overrides);
+      // ✅ Recharger les paramètres pour s'assurer qu'ils sont à jour
+      await loadAdvancedSettings();
     } catch (err) {
       console.error('[OperationsTab] Erreur sauvegarde paramètres avancés:', err);
       showError('❌ Erreur lors de la sauvegarde des paramètres');
@@ -112,6 +115,19 @@ const OperationsTab = () => {
 
     loadData();
     loadAdvancedSettings(); // Charger aussi les paramètres avancés
+
+    // Charger les chauffeurs pour la sélection de préférence
+    const loadDrivers = async () => {
+      try {
+        const { data } = await apiClient.get('/companies/me/drivers');
+        // Normaliser la réponse (peut être un tableau ou un objet avec drivers)
+        const driversList = Array.isArray(data) ? data : data?.drivers || [];
+        setDrivers(driversList);
+      } catch (err) {
+        console.error('[OperationsTab] Erreur chargement chauffeurs:', err);
+      }
+    };
+    loadDrivers();
   }, []);
 
   const handleChange = (e) => {
@@ -450,6 +466,7 @@ const OperationsTab = () => {
             <AdvancedSettings
               onApply={saveAdvancedSettings}
               initialSettings={advancedSettings || {}}
+              drivers={drivers}
             />
           </div>
         </div>

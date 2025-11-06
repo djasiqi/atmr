@@ -1,0 +1,138 @@
+# Alertes Prometheus pour le système de dispatch ATMR
+# A1: Prévention des conflits temporels
+
+groups:
+  - name: dispatch_temporal_conflicts
+    interval: 1h
+    rules:
+      - alert: TemporalConflictsDetected
+        expr: increase(ud_temporal_conflict_total[1h]) > 0
+        for: 1h
+        labels:
+          severity: warning
+          component: dispatch
+          feature: a1_temporal_conflicts
+        annotations:
+          summary: "Conflits temporels détectés dans le dispatch"
+          description: "{{ $value }} conflit(s) temporel(s) détecté(s) sur la dernière heure pour l'entreprise {{ $labels.company_id }}"
+          action: "Vérifier via GET /api/dispatch/metrics/a1-compliance?days=1"
+      
+      - alert: TemporalConflictsHigh
+        expr: rate(ud_temporal_conflict_total[24h]) > 10
+        for: 1h
+        labels:
+          severity: critical
+          component: dispatch
+          feature: a1_temporal_conflicts
+        annotations:
+          summary: "Taux élevé de conflits temporels"
+          description: "Plus de 10 conflits temporels par heure détectés ({{ $value }}/h) pour l'entreprise {{ $labels.company_id }}"
+          action: "Considérer un backout via POST /api/dispatch/metrics/a1-backout"
+      
+      - alert: TemporalViolationRateHigh
+        expr: |
+          (
+            sum(increase(ud_temporal_conflict_total[7d]))
+            /
+            sum(increase(dispatch_bookings_processed_total[7d]))
+          ) > 0.001
+        for: 24h
+        labels:
+          severity: critical
+          component: dispatch
+          feature: a1_temporal_conflicts
+        annotations:
+          summary: "Taux de violation A1 > 0.1% sur 7 jours"
+          description: "Le taux de violation temporelle est de {{ $value | humanizePercentage }} pour l'entreprise {{ $labels.company_id }}"
+          action: "ACTIVER BACKOUT immédiatement via POST /api/dispatch/metrics/a1-backout"
+
+  # ✅ A3: Alertes DLQ (Dead Letter Queue)
+  - name: celery_dlq
+    interval: 1m
+    rules:
+      - alert: CeleryDLQBacklogHigh
+        expr: |
+          sum(increase(celery_dlq_failures_total[24h])) > 10
+        for: 5m
+        labels:
+          severity: critical
+          component: celery
+          feature: a3_dlq
+        annotations:
+          summary: "DLQ backlog élevé"
+          description: "{{ $value }} tâches en échec dans la DLQ depuis 24h (seuil: 10)"
+          action: "Consulter GET /api/dispatch-health/dlq"
+      
+      - alert: CeleryDLQRateHigh
+        expr: |
+          sum(rate(celery_dlq_failures_total[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+          component: celery
+          feature: a3_dlq
+        annotations:
+          summary: "Taux d'échecs DLQ élevé"
+          description: "{{ $value }} tâches/s envoyées en DLQ (seuil: 1/s)"
+          action: "Vérifier GET /api/dispatch-health/dlq"
+
+  # ✅ A4: Alertes SLO breaches
+  - name: dispatch_slo
+    interval: 1m
+    rules:
+      - alert: DispatchSLOBreachRepeated
+        expr: |
+          dispatch_slo_should_alert == 1
+        for: 2m
+        labels:
+          severity: critical
+          component: dispatch
+          feature: a4_slo
+        annotations:
+          summary: "SLO breach répété (> 3 breaches / 15 min)"
+          description: "{{ $value }} breaches SLO détectés dans fenêtre 15 min → Page Oncall"
+          action: "Consulter GET /api/prometheus/metrics et corriger performance dispatch"
+      
+      - alert: DispatchSLOBreachWarning
+        expr: |
+          dispatch_slo_breaches_total > 1
+        for: 10m
+        labels:
+          severity: warning
+          component: dispatch
+          feature: a4_slo
+        annotations:
+          summary: "SLO breach détecté (non-répété)"
+          description: "{{ $value }} breach(es) SLO détecté(s) dans fenêtre 15 min"
+          action: "Monitorer GET /api/prometheus/metrics"
+
+  # ✅ A5: Alertes OSRM cache hit-rate
+  - name: osrm_cache_slo
+    interval: 1m
+    rules:
+      - alert: OSrmCacheHitRateLow
+        expr: |
+          ud_osrm_cache_hit_rate < 0.70
+        for: 15m
+        labels:
+          severity: warning
+          component: osrm
+          feature: a5_cache
+        annotations:
+          summary: "Cache OSRM hit-rate < 70%"
+          description: "Hit-rate cache OSRM de {{ $value | humanizePercentage }} < 70% sur 15 min"
+          action: "Vérifier GET /api/prometheus/metrics et top misses"
+      
+      - alert: OSrmCacheBypassHigh
+        expr: |
+          rate(ud_osrm_cache_bypass_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: critical
+          component: osrm
+          feature: a5_cache
+        annotations:
+          summary: "Redis souvent HS -> cache bypass élevé"
+          description: "{{ $value }} bypass/s (> 10 bypass/min) → Redis probablement HS"
+          action: "Vérifier Redis availability et fallback"
+

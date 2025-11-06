@@ -14,9 +14,9 @@ from datetime import timedelta
 from typing import Any
 
 import numpy as np
-from feature_flags import FeatureFlags
 
 from db import db
+from feature_flags import FeatureFlags
 from models.ml_prediction import MLPrediction
 from shared.time_utils import now_utc
 

@@ -82,7 +82,9 @@ atmr/
 │   └── driver-app/       # App chauffeur
 │
 ├── scripts/              # Scripts utilitaires
-│   ├── backup_db.ps1     # Backup automatique
+│   ├── backup_db.sh      # Backup PostgreSQL
+│   ├── restore_db.sh     # Restauration PostgreSQL
+│   ├── test_backup_restore.sh  # Test backup/restore
 │   └── smoke_api.sh      # Tests de smoke
 │
 └── docker-compose.yml    # Orchestration Docker
@@ -171,11 +173,59 @@ SENTRY_DSN=https://your-dsn@sentry.io/project
 REACT_APP_SENTRY_DSN=https://your-dsn@sentry.io/project
 ```
 
+## ⚠️ Chaos Engineering (Tests de Résilience)
+
+**✅ D3: Système de tests de catastrophe pour valider la résilience.**
+
+Le système inclut des injecteurs de chaos pour simuler des pannes (OSRM down, DB read-only, réseau flaky) et valider que le système reste opérationnel.
+
+### ⚠️ ATTENTION : Ne JAMAIS activer en production !
+
+Les variables d'environnement suivantes contrôlent le chaos :
+
+```bash
+# Désactivé par défaut (sécurité)
+CHAOS_ENABLED=false          # Activer/désactiver chaos (défaut: false)
+CHAOS_OSRM_DOWN=false        # Simuler OSRM down (défaut: false)
+CHAOS_DB_READ_ONLY=false     # Simuler DB read-only (défaut: false)
+```
+
+### Utilisation en développement/test
+
+Pour activer le chaos lors des tests E2E :
+
+```bash
+# Via variables d'environnement Docker
+export CHAOS_ENABLED=true
+export CHAOS_OSRM_DOWN=true
+docker-compose restart api
+
+# Via script (optionnel)
+./backend/scripts/enable_chaos.sh
+```
+
+### Tests E2E de catastrophe
+
+Les tests se trouvent dans `backend/tests/e2e/test_disaster_scenarios.py` :
+
+```bash
+# Lancer les tests de résilience
+pytest backend/tests/e2e/test_disaster_scenarios.py -v
+```
+
+Voir `backend/RUNBOOK.md` pour les procédures de récupération et `backend/tests/e2e/TODO_D3.md` pour la liste complète des fonctionnalités.
+
 ## 🛠️ Scripts Utiles
 
 ```bash
 # Backup base de données
-./scripts/backup_db.ps1
+./scripts/backup_db.sh
+
+# Restaurer base de données
+./scripts/restore_db.sh backups/latest.dump --force
+
+# Tester backup/restore (complet)
+./scripts/test_backup_restore.sh
 
 # Tests de smoke API
 ./scripts/smoke_api.sh

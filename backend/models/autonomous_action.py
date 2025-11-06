@@ -169,7 +169,9 @@ class AutonomousAction(db.Model):
         query = cls.query.filter(
             cls.company_id == company_id,
             cls.created_at >= one_hour_ago,
-            cls.success == True  # noqa: E712
+            cls.success == True,  # noqa: E712
+            # Exclure les actions de monitoring (tick) du comptage
+            cls.action_type != "tick",
         )
 
         if action_type:
@@ -196,7 +198,9 @@ class AutonomousAction(db.Model):
         query = cls.query.filter(
             cls.company_id == company_id,
             cls.created_at >= today_start,
-            cls.success == True  # noqa: E712
+            cls.success == True,  # noqa: E712
+            # Exclure les actions de monitoring (tick) du comptage
+            cls.action_type != "tick",
         )
 
         if action_type:

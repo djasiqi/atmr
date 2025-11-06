@@ -39,8 +39,8 @@ const HeaderDashboard = () => {
     navigate(`/dashboard/account/${publicId}`);
   };
 
-  const handleLogout = () => {
-    logoutUser();
+  const handleLogout = async () => {
+    await logoutUser();
   };
 
   useEffect(() => {

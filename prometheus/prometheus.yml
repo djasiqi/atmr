@@ -1,0 +1,73 @@
+# yaml-language-server: disable
+# Configuration Prometheus pour ATMR Backend
+# ✅ 2.10: Configuration scraping métriques HTTP
+
+global: # noqa: SC200
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'atmr-backend'
+    environment: '${ENVIRONMENT:-development}'
+
+# ✅ 2.11: Alerting configuration avec PagerDuty
+# Note: Alertmanager non configuré pour l'instant
+# Décommentez et configurez une fois Alertmanager déployé:
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#             - alertmanager:9093
+#       # Timeout pour les alertes (optionnel, défaut: 10s)
+#       timeout: 10s
+
+# Load rules once and periodically evaluate them according to the 'evaluation_interval'.
+rule_files:
+  - 'alerts-dispatch.yml'
+  - 'alerts-slo.yml'  # ✅ 2.11: Alertes SLO breach pour PagerDuty
+
+# Scrape configurations
+scrape_configs:
+  # Métriques Prometheus de l'application backend (dispatch, SLO, OSRM)
+  - job_name: 'atmr-backend'
+    metrics_path: '/api/v1/prometheus/metrics'
+    static_configs:
+      - targets:
+          - 'api:5000'  # Service API dans docker-compose
+        labels:
+          service: 'atmr-backend'
+          component: 'api'
+          environment: '${ENVIRONMENT:-development}'
+    
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    
+    # Métadonnées additionnelles
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'dispatch_.*'
+        target_label: 'metric_type'
+        replacement: 'dispatch'
+      - source_labels: [__name__]
+        regex: 'osrm_.*'
+        target_label: 'metric_type'
+        replacement: 'osrm'
+      - source_labels: [__name__]
+        regex: '.*_slo_.*'
+        target_label: 'metric_type'
+        replacement: 'slo'
+
+  # Métriques système (si Prometheus node exporter est déployé)
+  # - job_name: 'node-exporter'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']
+
+  # Métriques Redis (si redis_exporter est déployé)
+  # - job_name: 'redis'
+  #   static_configs:
+  #     - targets: ['redis-exporter:9121']
+
+  # Métriques PostgreSQL (si postgres_exporter est déployé)
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
+

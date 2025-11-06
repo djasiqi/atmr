@@ -3,7 +3,6 @@
 # Constantes pour éviter les valeurs magiques
 from __future__ import annotations
 
-import contextlib
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional
 
@@ -232,6 +231,10 @@ class Assignment(db.Model):
     eta_pickup_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     eta_dropoff_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     delay_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    
+    # ✅ B2: Explicabilité des décisions (top-3 alternatives & contributions)
+    decision_explanation: Mapped[Dict[str, Any] | None] = mapped_column(
+        MutableDict.as_mutable(JSONB()), nullable=True)
 
     created_at = Column(
         DateTime(
@@ -258,7 +261,7 @@ class Assignment(db.Model):
     @property
     def serialize(self):
         status_val = getattr(self.status, "value", self.status)
-        delay: int = _as_int(getattr(self, "delay_seconds", 0), 0)
+        delay: int = _as_int(getattr(self, "delay_seconds", 0))
         return {
             "id": self.id,
             "dispatch_run_id": self.dispatch_run_id,
@@ -309,19 +312,16 @@ class Assignment(db.Model):
 
     @validates("status")
     def _v_status(self, _k, value):
-        coerced = _coerce_enum(value, AssignmentStatus)
-        if coerced is None and isinstance(value, str):
-            with contextlib.suppress(KeyError):
-                coerced = AssignmentStatus[value.upper()]
-        if coerced is None:
+        try:
+            return _coerce_enum(value, AssignmentStatus)
+        except (KeyError, ValueError) as err:
             allowed = ", ".join(AssignmentStatus.__members__.keys())
             msg = f"Statut invalide : {value}. Doit être l'un de {allowed}"
-            raise ValueError(msg)
-        return coerced
+            raise ValueError(msg) from err
 
     @validates("delay_seconds")
     def _v_delay(self, _k: str, v: Any) -> int:
-        val = _as_int(v, 0)
+        val = _as_int(v)
         if val < VAL_ZERO:
             msg = "delay_seconds ne peut pas être négatif."
             raise ValueError(msg)

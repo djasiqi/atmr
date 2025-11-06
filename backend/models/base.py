@@ -6,7 +6,7 @@ import base64
 import binascii
 import os
 from enum import Enum as PyEnum
-from typing import TypeVar
+from typing import TypeVar, cast
 
 TEnum = TypeVar("TEnum", bound=PyEnum)
 
@@ -49,3 +49,66 @@ def _load_encryption_key() -> bytes:
 
 _encryption_key = _load_encryption_key()
 _encryption_key_str = _encryption_key.hex()
+
+
+# --- Helper functions pour conversion de types ---
+def _as_bool(value):  # pyright: ignore[reportUnusedFunction]
+    """Convertit une valeur en booléen."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ("true", "1", "yes", "on")
+    return bool(value)
+
+
+def _as_int(value):  # pyright: ignore[reportUnusedFunction]
+    """Convertit une valeur en entier."""
+    if value is None:
+        return 0
+    return int(value)
+
+
+def _as_float(value):  # pyright: ignore[reportUnusedFunction]
+    """Convertit une valeur en flottant."""
+    if value is None:
+        return 0.0
+    return float(value)
+
+
+def _as_str(value):  # pyright: ignore[reportUnusedFunction]
+    """Convertit une valeur en string."""
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _as_dt(value):  # pyright: ignore[reportUnusedFunction]
+    """Convertit une valeur en datetime."""
+    if value is None:
+        return None
+    from datetime import datetime
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        from dateutil import parser
+        return parser.parse(value)
+    return value
+
+
+def _iso(dt):  # pyright: ignore[reportUnusedFunction]
+    """Convertit une datetime en string ISO."""
+    if dt is None:
+        return None
+    return dt.isoformat()
+
+
+def _coerce_enum(value, enum_class: type[TEnum]) -> TEnum:  # pyright: ignore[reportUnusedFunction]
+    """Convertit une valeur en enum."""
+    if isinstance(value, PyEnum):
+        return cast(TEnum, value)
+    if isinstance(value, str):
+        try:
+            return enum_class[value.upper()]
+        except KeyError:
+            return enum_class[value]
+    return enum_class(value)

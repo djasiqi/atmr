@@ -510,7 +510,7 @@ function CompanyDriverPlanning() {
               // Reuse driver profile endpoint
               // Uses /api/driver/me/profile if current user is driver; for company edit, call admin route if available
               const res = await fetch(
-                "/api/driver/" + selectedDriver.id + "/update-profile",
+                "/api/v1/driver/" + selectedDriver.id + "/update-profile",
                 {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },

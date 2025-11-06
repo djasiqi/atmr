@@ -32,7 +32,7 @@ export default function AddressAutocomplete({
   const PHOTON_BASE = process.env.REACT_APP_PHOTON_URL || 'https://photon.komoot.io';
 
   // Sync externe -> interne
-  useEffect(() => setQuery(value || ''), [value]);
+  useEffect(() => setQuery(value ? String(value) : ''), [value]);
 
   // Fermer la liste si on clique à l'extérieur
   useEffect(() => {
@@ -115,11 +115,11 @@ export default function AddressAutocomplete({
 
   // Fetch proxy backend puis fallback Photon direct
   async function fetchSuggestions(queryText, signal) {
-    const q = queryText.trim();
+    const q = (queryText || '').toString().trim();
 
     // 1) Proxy backend — mélange alias/favoris + Photon si ton backend le fait
     try {
-      const url = `/api/geocode/autocomplete?q=${encodeURIComponent(q)}&lat=${encodeURIComponent(
+      const url = `/api/v1/geocode/autocomplete?q=${encodeURIComponent(q)}&lat=${encodeURIComponent(
         BIAS.lat
       )}&lon=${encodeURIComponent(BIAS.lon)}&limit=${encodeURIComponent(maxResults)}`;
       const res = await fetch(url, { signal });
@@ -157,7 +157,7 @@ export default function AddressAutocomplete({
       return;
     }
 
-    if (!query || query.trim().length < minChars) {
+    if (!query || (typeof query === 'string' ? query.trim().length : 0) < minChars) {
       setItems([]);
       setOpen(false);
       setLoading(false);
@@ -170,13 +170,13 @@ export default function AddressAutocomplete({
         abortRef.current = ctl;
         setLoading(true);
 
-        const next = await fetchSuggestions(query, ctl.signal);
-        // Après: const next = await fetchSuggestions(query, ctl.signal);
+        const queryStr = String(query || '');
+        const next = await fetchSuggestions(queryStr, ctl.signal);
         let enriched = Array.isArray(next) ? next : [];
 
-        // Filet de sécu : si l’utilisateur tape "hug" et qu’aucun alias n’est présent,
-        // on injecte l’adresse HUG en tête (évite de dépendre à 100% du backend).
-        const qn = (query || '').trim().toLowerCase();
+        // Filet de sécu : si l'utilisateur tape "hug" et qu'aucun alias n'est présent,
+        // on injecte l'adresse HUG en tête (évite de dépendre à 100% du backend).
+        const qn = (query || '').toString().trim().toLowerCase();
         const hasAlias = enriched.some((it) => it.source === 'alias');
         const looksHUG = /\bhug\b|h[ôo]pit(?:al|aux).+gen[eè]ve|\bh[ôo]pital\s+cantonal\b/.test(qn);
         if (looksHUG && !hasAlias) {
@@ -256,7 +256,7 @@ export default function AddressAutocomplete({
     if (it.source === 'google_places' && it.place_id && (!it.lat || !it.lon)) {
       try {
         const response = await fetch(
-          `/api/geocode/place-details?place_id=${encodeURIComponent(it.place_id)}`
+          `/api/v1/geocode/place-details?place_id=${encodeURIComponent(it.place_id)}`
         );
 
         if (response.ok) {

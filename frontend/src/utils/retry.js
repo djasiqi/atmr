@@ -9,7 +9,7 @@
  *
  * @example
  * const data = await retryWithBackoff(
- *   () => fetch('/api/data'),
+ *   () => fetch('/api/v1/data'),
  *   3,
  *   1000,
  *   (attempt) => console.log(`Tentative ${attempt}...`)

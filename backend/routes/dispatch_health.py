@@ -1,5 +1,6 @@
 """Routes pour le monitoring de santé du système de dispatch."""
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 from flask import request
@@ -9,6 +10,8 @@ from flask_restx import Namespace, Resource, fields
 from ext import db, role_required
 from models import DispatchRun, UserRole
 from routes.companies import get_company_from_token
+
+logger = logging.getLogger(__name__)
 
 # Constantes pour éviter les valeurs magiques
 MIN_RATES_FOR_TREND = 2
@@ -52,6 +55,100 @@ trends_response = dispatch_health_ns.model(
 )
 
 # ===== Routes =====
+
+
+@dispatch_health_ns.route("/dlq")
+class DLQResource(Resource):
+    """✅ A3: Métriques DLQ (Dead Letter Queue) pour les tâches Celery échouées."""
+    
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Récupère le backlog DLQ et l'âge max des messages.
+        
+        Returns:
+            JSON avec backlog, âge max, détails des tâches échouées, alertes
+        """
+        from models import TaskFailure
+        
+        try:
+            # Récupérer toutes les tâches échouées
+            failures = TaskFailure.query.order_by(
+                TaskFailure.last_seen.desc()
+            ).limit(100).all()
+            
+            # Calculer backlog et âge max
+            backlog = len(failures)
+            now = datetime.now(UTC)
+            
+            max_age_seconds = 0
+            oldest_task = None
+            for failure in failures:
+                age = (now - failure.last_seen).total_seconds()
+                if age > max_age_seconds:
+                    max_age_seconds = age
+                    oldest_task = failure
+            
+            max_age_minutes = int(max_age_seconds / 60)
+            
+            # ✅ A3: Seuils d'alerte
+            DLQ_BACKLOG_THRESHOLD = 10
+            DLQ_AGE_THRESHOLD_MINUTES = 5
+            MAX_EXAMPLES_PER_TASK = 3
+            
+            # Grouper par task_name
+            by_task = {}
+            for failure in failures:
+                task_name = failure.task_name or "unknown"
+                if task_name not in by_task:
+                    by_task[task_name] = {
+                        "count": 0,
+                        "last_seen": failure.last_seen.isoformat() if failure.last_seen else None,
+                        "examples": []
+                    }
+                by_task[task_name]["count"] += 1
+                if len(by_task[task_name]["examples"]) < MAX_EXAMPLES_PER_TASK:
+                    by_task[task_name]["examples"].append({
+                        "task_id": failure.task_id,
+                        "exception": failure.exception[:200],
+                        "first_seen": failure.first_seen.isoformat() if failure.first_seen else None,
+                        "last_seen": failure.last_seen.isoformat() if failure.last_seen else None,
+                        "failure_count": failure.failure_count,
+                    })
+            
+            # ✅ A3: Alertes
+            alerts = []
+            if backlog > DLQ_BACKLOG_THRESHOLD:
+                alerts.append({
+                    "severity": "critical",
+                    "message": f"DLQ backlog élevé: {backlog} tâches en échec",
+                    "threshold": DLQ_BACKLOG_THRESHOLD,
+                    "value": backlog
+                })
+            if max_age_minutes > DLQ_AGE_THRESHOLD_MINUTES:
+                alerts.append({
+                    "severity": "warning",
+                    "message": f"Âge max DLQ: {max_age_minutes} minutes (> {DLQ_AGE_THRESHOLD_MINUTES} min)",
+                    "threshold": DLQ_AGE_THRESHOLD_MINUTES,
+                    "value": max_age_minutes
+                })
+            
+            return {
+                "backlog": backlog,
+                "max_age_minutes": max_age_minutes,
+                "max_age_task": {
+                    "task_id": oldest_task.task_id,
+                    "task_name": oldest_task.task_name,
+                    "last_seen": oldest_task.last_seen.isoformat() if oldest_task and oldest_task.last_seen else None
+                } if oldest_task else None,
+                "by_task_name": by_task,
+                "alerts": alerts,
+                "timestamp": now.isoformat()
+            }, 200
+            
+        except Exception as e:
+            logger.exception("[DLQ] Error retrieving DLQ metrics: %s", e)
+            return {"error": str(e)}, 500
 
 
 @dispatch_health_ns.route("/health")

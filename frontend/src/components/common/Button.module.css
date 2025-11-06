@@ -1,0 +1,191 @@
+/* Button.module.css - Styles centralisés pour tous les boutons de l'application */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: var(--font-base);
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-family-base);
+  border-radius: var(--radius-lg);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  text-decoration: none;
+  white-space: nowrap;
+  box-sizing: border-box;
+  flex-shrink: 0; /* Empêcher le bouton de rétrécir */
+}
+
+.button:disabled,
+.button:disabled:hover {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ============================================================
+   VARIANTS
+   ============================================================ */
+
+/* Primary - Bouton principal (bleu) */
+.primary {
+  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-hover) 100%);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--brand-hover) 0%, var(--brand-primary-dark) 100%);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Secondary - Bouton secondaire (gris) */
+.secondary {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 2px solid var(--border-primary);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-xs);
+}
+
+/* Success - Bouton de succès (vert) */
+.success {
+  background: linear-gradient(135deg, var(--success-primary) 0%, var(--success-hover) 100%);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.success:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--success-hover) 0%, var(--success-primary) 100%);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Danger - Bouton de danger (rouge) */
+.danger {
+  background: linear-gradient(135deg, var(--danger-primary) 0%, var(--danger-hover) 100%);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.danger:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--danger-hover) 0%, var(--danger-primary) 100%);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Warning - Bouton d'avertissement (orange/jaune) */
+.warning {
+  background: linear-gradient(135deg, var(--warning-primary) 0%, var(--warning-hover) 100%);
+  color: var(--warning-text, #000);
+  box-shadow: var(--shadow-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.warning:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--warning-hover) 0%, var(--warning-primary) 100%);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Ghost - Bouton transparent avec bordure */
+.ghost {
+  background: transparent;
+  color: var(--brand-primary);
+  border: 2px solid var(--brand-primary);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--brand-primary);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-xs);
+}
+
+/* ============================================================
+   SIZES
+   ============================================================ */
+
+.sm {
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: var(--font-sm);
+  border-radius: var(--radius-md);
+}
+
+.md {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: var(--font-base);
+  border-radius: var(--radius-lg);
+}
+
+.lg {
+  padding: var(--spacing-md) var(--spacing-xl);
+  font-size: var(--font-lg);
+  border-radius: var(--radius-xl);
+}
+
+/* ============================================================
+   FULL WIDTH
+   ============================================================ */
+
+.fullWidth {
+  width: 100%;
+}
+
+/* ============================================================
+   LOADING STATE
+   ============================================================ */
+
+.loading {
+  position: relative;
+  pointer-events: none;
+}
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.contentWithLoader {
+  margin-left: var(--spacing-xs);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Pour les boutons secondary/ghost qui ont une couleur de texte différente */
+.secondary .spinner,
+.ghost .spinner {
+  border-color: rgba(0, 0, 0, 0.1);
+  border-top-color: currentColor;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .button {
+    font-size: var(--font-sm);
+    padding: var(--spacing-xs) var(--spacing-md);
+  }
+  
+  .lg {
+    padding: var(--spacing-sm) var(--spacing-lg);
+  }
+}
+

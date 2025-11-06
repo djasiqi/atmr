@@ -8,7 +8,7 @@ import OverviewCards from './components/OverviewCards';
 import ReservationChart from './components/ReservationChart';
 import ReservationTable from './components/ReservationTable';
 import DriverTable from '../../driver/components/Dashboard/DriverTable';
-import AssignmentModal from './AssignmentModal';
+import ReservationModals from '../../../components/reservations/ReservationModals';
 import DriverLiveMap from './components/DriverLiveMap';
 import {
   acceptReservation,
@@ -28,10 +28,10 @@ import useDispatchDelays from '../../../hooks/useDispatchDelays';
 import styles from './CompanyDashboard.module.css';
 import ManualBookingForm from './components/ManualBookingForm';
 import ChatWidget from '../../../components/widgets/ChatWidget';
-import ReturnTimeModal from './components/ReturnTimeModal';
 import EditDriverForm from '../components/EditDriverForm';
 import Modal from '../../../components/common/Modal';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
+import { Toaster, toast } from 'sonner';
 
 function makeToday() {
   const d = new Date();
@@ -99,14 +99,23 @@ const CompanyDashboard = () => {
     }
   };
 
-  // Ouvre la modale pour planifier le retour (ou choisir Urgent)
-  const [openReturnModal, setOpenReturnModal] = useState(false);
-  const [selectedReturnReservation, setSelectedReturnReservation] = useState(null);
+  // États pour les modales centralisées
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [scheduleModalReservation, setScheduleModalReservation] = useState(null);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assignModalReservation, setAssignModalReservation] = useState(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteModalReservation, setDeleteModalReservation] = useState(null);
+
   const handleScheduleReservation = (reservation) => {
-    const id = reservation?.id ?? reservation;
-    if (!id) return;
-    setSelectedReturnReservation(id);
-    setOpenReturnModal(true);
+    // Passer l'objet complet (pas juste l'ID)
+    const resObj =
+      typeof reservation === 'object'
+        ? reservation
+        : reservations.find((r) => r.id === reservation);
+    if (!resObj) return;
+    setScheduleModalReservation(resObj);
+    setScheduleModalOpen(true);
   };
 
   // Dispatch urgent: +15 min
@@ -117,14 +126,54 @@ const CompanyDashboard = () => {
       await dispatchNowForReservation(id, 15);
       await reloadReservations();
       await queryClient.invalidateQueries(['reservations']);
+      toast.success('Dispatch urgent déclenché avec succès');
     } catch (e) {
-      console.error('Dispatch urgent:', e);
-      alert(e?.response?.data?.error || 'Erreur lors du dispatch urgent.');
+      // ⚡ Gestion améliorée : extraire le message du backend
+      const errorData = e?.response?.data;
+      const errorMessage = errorData?.message || errorData?.error;
+      const status = e?.response?.status;
+
+      // 🔍 Debug pour comprendre pourquoi la détection ne fonctionne pas
+      console.debug('[DispatchNow] Error status:', status);
+      console.debug('[DispatchNow] Error data:', errorData);
+      console.debug('[DispatchNow] Error message:', errorMessage);
+
+      // ⚡ Si c'est un retour avec aller non complété (400), c'est un comportement attendu
+      // Vérifier dans error ET message pour détecter les retours
+      const errorLower = (errorMessage || '').toLowerCase();
+      const errorErrorLower = (errorData?.error || '').toLowerCase();
+      const isReturnNotReady =
+        status === 400 &&
+        (errorLower.includes('retour') ||
+          errorLower.includes('aller') ||
+          errorErrorLower.includes('retour') ||
+          errorErrorLower.includes('aller'));
+
+      console.debug('[DispatchNow] isReturnNotReady:', isReturnNotReady);
+
+      if (isReturnNotReady) {
+        // ⚡ Message informatif (warning) au lieu d'une erreur
+        // Utiliser le message détaillé du backend s'il existe (message contient plus de détails)
+        const detailMessage =
+          errorData?.message ||
+          errorData?.error ||
+          "Impossible de déclencher un retour d'urgence. La course aller doit être complétée avant de déclencher le retour.";
+
+        console.debug('[DispatchNow] Showing warning:', detailMessage);
+        toast.warning(detailMessage, {
+          duration: 5000, // ⚡ Plus long pour que l'utilisateur puisse lire
+        });
+        // ⚡ Ne pas logger comme erreur car c'est un comportement attendu (utiliser debug)
+        console.debug('Dispatch urgent refusé (comportement attendu):', detailMessage);
+      } else {
+        // ⚡ Vraie erreur : afficher et logger
+        console.error('Dispatch urgent:', e);
+        toast.error(errorMessage || 'Erreur lors du dispatch urgent.');
+      }
     }
   };
 
   // Modale d'assignation
-  const [selectedReservation, setSelectedReservation] = useState(null);
 
   // Liste des dispatches (assignations/affectations) pour la carte et la table
   const { data: dispatchedReservations = [], refetch: refetchAssigned } = useQuery({
@@ -214,21 +263,34 @@ const CompanyDashboard = () => {
       console.error('Erreur rejet :', err);
     }
   };
-  const openAssignModal = (res) => setSelectedReservation(res);
+  const openAssignModal = (res) => {
+    // Passer l'objet complet
+    const resObj = typeof res === 'object' ? res : reservations.find((r) => r.id === res);
+    if (!resObj) return;
+    setAssignModalReservation(resObj);
+    setAssignModalOpen(true);
+  };
   const handleAssignDriver = async (reservationId, driverId) => {
     try {
       await assignDriver(reservationId, driverId);
       reloadReservations();
-      setSelectedReservation(null);
+      setAssignModalOpen(false);
+      setAssignModalReservation(null);
     } catch (err) {
       console.error('Erreur assignation chauffeur :', err);
     }
   };
 
   // Ouvre la modale de retour
-  const handleTriggerReturn = (reservationId) => {
-    setSelectedReturnReservation(reservationId);
-    setOpenReturnModal(true);
+  const handleTriggerReturn = (reservation) => {
+    // Passer l'objet complet (pas juste l'ID)
+    const resObj =
+      typeof reservation === 'object'
+        ? reservation
+        : reservations.find((r) => r.id === reservation);
+    if (!resObj) return;
+    setScheduleModalReservation(resObj);
+    setScheduleModalOpen(true);
   };
 
   // Transforme en ISO local sans offset ni "Z"
@@ -244,8 +306,10 @@ const CompanyDashboard = () => {
 
   // Confirme l'heure du retour OU marque en 'Urgent +15 min'
   const handleConfirmReturnTime = async (data) => {
-    setOpenReturnModal(false);
-    if (!selectedReturnReservation) return;
+    setScheduleModalOpen(false);
+    if (!scheduleModalReservation) return;
+
+    const reservationId = scheduleModalReservation?.id ?? scheduleModalReservation;
     try {
       let payload = {};
       if (data?.urgent) {
@@ -257,14 +321,34 @@ const CompanyDashboard = () => {
       } else if (data?.return_time) {
         payload = { return_time: data.return_time };
       }
-      await triggerReturnBooking(selectedReturnReservation, payload);
-      setSelectedReturnReservation(null);
+      await triggerReturnBooking(reservationId, payload);
+      setScheduleModalReservation(null);
       await reloadReservations();
       await queryClient.invalidateQueries(['reservations']);
     } catch (err) {
       console.error('Retour :', err);
       alert(err?.response?.data?.error || 'Erreur serveur.');
     }
+  };
+
+  const handleDeleteReservationClick = (reservation) => {
+    // Passer l'objet complet
+    const resObj =
+      typeof reservation === 'object'
+        ? reservation
+        : reservations.find((r) => r.id === reservation);
+    if (!resObj) return;
+    setDeleteModalReservation(resObj);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModalReservation) return;
+
+    const id = deleteModalReservation?.id ?? deleteModalReservation;
+    await handleDeleteReservation(id);
+    setDeleteModalOpen(false);
+    setDeleteModalReservation(null);
   };
 
   // Après ajout manuel
@@ -395,6 +479,8 @@ const CompanyDashboard = () => {
 
   return (
     <div className={styles.companyContainer}>
+      {/* ⚡ Toaster pour les notifications toast */}
+      <Toaster position="top-right" richColors />
       <CompanyHeader />
 
       {/* 🆕 Badge d'alerte pour les retards détectés */}
@@ -410,7 +496,7 @@ const CompanyDashboard = () => {
               )}
             </span>
             <a
-              href={`/dashboard/company/${company?.public_id}/dispatch`}
+              href={company?.public_id ? `/dashboard/company/${company.public_id}/dispatch` : '#'}
               className={styles.delayAlertLink}
             >
               Voir les détails et suggestions →
@@ -543,9 +629,11 @@ const CompanyDashboard = () => {
                   onReject={handleReject}
                   onAssign={openAssignModal}
                   onTriggerReturn={handleTriggerReturn}
-                  onDelete={handleDeleteReservation}
+                  onDelete={handleDeleteReservationClick}
                   onSchedule={handleScheduleReservation}
                   onDispatchNow={handleDispatchNow}
+                  hideSchedule={true}
+                  hideEdit={true}
                 />
               )}
 
@@ -555,9 +643,11 @@ const CompanyDashboard = () => {
                   loading={loadingReservations}
                   onAssign={openAssignModal}
                   onTriggerReturn={handleTriggerReturn}
-                  onDelete={handleDeleteReservation}
+                  onDelete={handleDeleteReservationClick}
                   onSchedule={handleScheduleReservation}
                   onDispatchNow={handleDispatchNow}
+                  hideSchedule={true}
+                  hideEdit={true}
                 />
               )}
             </div>
@@ -584,28 +674,35 @@ const CompanyDashboard = () => {
             <EditDriverForm driver={driverToEdit} onClose={handleCloseModal} />
           </Modal>
         )}
-
-        {/* Modal assignation */}
-        {selectedReservation && (
-          <AssignmentModal
-            reservation={selectedReservation}
-            driver={(driver || []).filter((d) => d.is_active)}
-            onAssign={handleAssignDriver}
-            onClose={() => setSelectedReservation(null)}
-          />
-        )}
       </div>
 
       {company?.id && <ChatWidget companyId={company.id} />}
 
-      {/* Modale Retour */}
-      {openReturnModal && (
-        <ReturnTimeModal
-          open={openReturnModal}
-          onClose={() => setOpenReturnModal(false)}
-          onConfirm={handleConfirmReturnTime}
-        />
-      )}
+      {/* Modales centralisées */}
+      <ReservationModals
+        scheduleModalOpen={scheduleModalOpen}
+        scheduleModalReservation={scheduleModalReservation}
+        onScheduleConfirm={handleConfirmReturnTime}
+        onScheduleClose={() => {
+          setScheduleModalOpen(false);
+          setScheduleModalReservation(null);
+        }}
+        assignModalOpen={assignModalOpen}
+        assignModalReservation={assignModalReservation}
+        assignModalDrivers={(driver || []).filter((d) => d.is_active)}
+        onAssignConfirm={handleAssignDriver}
+        onAssignClose={() => {
+          setAssignModalOpen(false);
+          setAssignModalReservation(null);
+        }}
+        deleteModalOpen={deleteModalOpen}
+        deleteModalReservation={deleteModalReservation}
+        onDeleteConfirm={handleConfirmDelete}
+        onDeleteClose={() => {
+          setDeleteModalOpen(false);
+          setDeleteModalReservation(null);
+        }}
+      />
     </div>
   );
 };

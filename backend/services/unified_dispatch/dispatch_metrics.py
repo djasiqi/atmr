@@ -2,10 +2,11 @@
 # Constantes pour éviter les valeurs magiques
 from __future__ import annotations
 
+import hashlib
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from ext import db
 from models import Assignment, Booking, BookingStatus, DispatchRun, Driver
@@ -15,6 +16,23 @@ DELAY_MINUTES_THRESHOLD = 5
 DELAYED_ZERO = 0
 AVG_ZERO = 0
 POOLING_WINDOW_SECONDS = 600  # 10 minutes en secondes
+MIN_VALUES_FOR_GINI = 2  # ✅ C4: Minimum drivers pour calculer Gini
+
+# ✅ B1: Version du calcul de quality score
+QUALITY_FORMULA_VERSION = "v1.0"
+QUALITY_WEIGHTS = {
+    "assignment": 0.30,
+    "on_time": 0.30,
+    "pooling": 0.15,
+    "fairness": 0.15,
+    "delay": 0.10,
+}
+QUALITY_THRESHOLD = 70.0  # Seuil pour activer auto-apply RL
+
+def get_quality_formula_hash() -> str:
+    """Retourne le hash des poids pour traçabilité."""
+    weights_str = str(sorted(QUALITY_WEIGHTS.items()))
+    return hashlib.sha256(weights_str.encode()).hexdigest()[:8]
 
 """Système de métriques de qualité pour le dispatch.
 Collecte, calcule et expose les indicateurs de performance.
@@ -56,6 +74,7 @@ class DispatchQualityMetrics:
     max_bookings_per_driver: int
     min_bookings_per_driver: int
     fairness_coefficient: float  # 0-1 (1 = parfaitement équitable)
+    gini_index: float  # ✅ C4: Indice de Gini (0 = parfait, 1 = inéquitable)
 
     # Métriques de coût
     total_distance_km: float
@@ -71,6 +90,9 @@ class DispatchQualityMetrics:
 
     # Score global de qualité (0-100)
     quality_score: float
+    quality_formula_version: str = QUALITY_FORMULA_VERSION
+    quality_weights_hash: str = ""
+    dominant_factors: Dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convertit en dictionnaire pour JSON."""
@@ -207,8 +229,8 @@ class DispatchMetricsCollector:
         # 6. Performance algorithmique
         algo_stats = self._extract_algorithm_stats(run_metadata)
 
-        # 7. Score global de qualité (0-100)
-        quality_score = self._calculate_quality_score(
+        # 7. Score global de qualité (0-100) avec version/hash
+        quality_score, dominant_factors = self._calculate_quality_score(
             assignment_rate=assignment_rate,
             on_time_rate=(on_time / max(1, assigned_bookings)) * 100,
             pooling_rate=pooling_rate,
@@ -240,6 +262,7 @@ class DispatchMetricsCollector:
             max_bookings_per_driver=driver_stats["max_bookings_per_driver"],
             min_bookings_per_driver=driver_stats["min_bookings_per_driver"],
             fairness_coefficient=driver_stats["fairness_coefficient"],
+            gini_index=driver_stats["gini_index"],  # ✅ C4
 
             total_distance_km=distance_stats["total_distance_km"],
             avg_distance_per_booking=distance_stats["avg_distance_per_booking"],
@@ -251,7 +274,10 @@ class DispatchMetricsCollector:
             fallback_used=algo_stats["fallback_used"],
             execution_time_sec=algo_stats["execution_time_sec"],
 
-            quality_score=quality_score
+            quality_score=quality_score,
+            quality_formula_version=QUALITY_FORMULA_VERSION,
+            quality_weights_hash=get_quality_formula_hash(),
+            dominant_factors=dominant_factors
         )
 
     def _count_pooled_bookings(self, assignments: List[Assignment]) -> int:
@@ -350,7 +376,8 @@ class DispatchMetricsCollector:
                 "avg_bookings_per_driver": 0,
                 "max_bookings_per_driver": 0,
                 "min_bookings_per_driver": 0,
-                "fairness_coefficient": 1.0
+                "fairness_coefficient": 1.0,
+                "gini_index": 0.0  # ✅ C4: Parfaitement équitable
             }
 
         counts = list(driver_counts.values())
@@ -367,13 +394,47 @@ class DispatchMetricsCollector:
         else:
             fairness = 1.0
 
+        # ✅ C4: Calcul de l'indice de Gini
+        gini = self._calculate_gini_index(counts)
+
         return {
             "drivers_used": len(driver_counts),
             "avg_bookings_per_driver": avg,
             "max_bookings_per_driver": max_count,
             "min_bookings_per_driver": min_count,
-            "fairness_coefficient": fairness
+            "fairness_coefficient": fairness,
+            "gini_index": gini
         }
+    
+    def _calculate_gini_index(self, values: List[int]) -> float:
+        """✅ C4: Calcule l'indice de Gini pour mesurer l'inégalité de répartition.
+        
+        L'indice de Gini mesure l'inégalité de distribution :
+        - 0 = parfaitement équitable (tous les drivers ont le même nombre de courses)
+        - 1 = parfaitement inéquitable (un seul driver a toutes les courses)
+        
+        Args:
+            values: Liste des nombres de courses par driver
+            
+        Returns:
+            Indice de Gini (0-1)
+        """
+        if not values or len(values) < MIN_VALUES_FOR_GINI:
+            return 0.0
+        
+        n = len(values)
+        values_sorted = sorted(values)
+        
+        # Formule de Gini : G = (2 * Σ(i * value_i)) / (n * Σ(value_i)) - (n+1)/n
+        cumsum_values = sum(value * (i + 1) for i, value in enumerate(values_sorted))
+        total = sum(values_sorted)
+        
+        if total == 0:
+            return 0.0
+        
+        gini = (2 * cumsum_values) / (n * total) - (n + 1) / n
+        
+        return max(0.0, min(1.0, gini))
 
     def _calculate_distance_metrics(
             self, assignments: List[Assignment], all_bookings: List[Booking]) -> Dict[str, Any]:
@@ -425,7 +486,7 @@ class DispatchMetricsCollector:
         pooling_rate: float,
         fairness: float,
         avg_delay: float
-    ) -> float:
+    ) -> Tuple[float, Dict[str, float]]:
         """Calcule un score global de qualité (0-100).
 
         Pondération :
@@ -434,27 +495,35 @@ class DispatchMetricsCollector:
         - 15% : Taux de pooling
         - 15% : Équité chauffeurs
         - 10% : Retard moyen (pénalité)
+        
+        Returns:
+            Tuple de (score, dominant_factors)
         """
         score = 0
-
-        # 1. Taux d'assignation (0-30 points)
-        score += (assignment_rate / 100) * 30
-
-        # 2. Taux de ponctualité (0-30 points)
-        score += (on_time_rate / 100) * 30
-
-        # 3. Taux de pooling (0-15 points)
-        score += (pooling_rate / 100) * 15
-
-        # 4. Équité (0-15 points)
-        score += fairness * 15
-
-        # 5. Pénalité retard moyen (0-10 points)
-        # 0 min de retard = 10 points, 30+ min = 0 points
+        
+        # Calculer chaque contribution
+        assignment_contrib = (assignment_rate / 100) * 30
+        on_time_contrib = (on_time_rate / 100) * 30
+        pooling_contrib = (pooling_rate / 100) * 15
+        fairness_contrib = fairness * 15
         delay_penalty = max(0, 10 - (avg_delay / 3))
-        score += delay_penalty
-
-        return round(min(100, max(0, score)), 2)
+        
+        score = assignment_contrib + on_time_contrib + pooling_contrib + fairness_contrib + delay_penalty
+        
+        # Calculer les facteurs dominants (top 3)
+        contributions = {
+            "assignment": assignment_contrib,
+            "on_time": on_time_contrib,
+            "pooling": pooling_contrib,
+            "fairness": fairness_contrib,
+            "delay": delay_penalty
+        }
+        
+        # Trier par contribution et garder top 3
+        sorted_factors = sorted(contributions.items(), key=lambda x: x[1], reverse=True)
+        dominant_factors = dict(sorted_factors[:3])
+        
+        return round(min(100, max(0, score)), 2), dominant_factors
 
 
 def collect_dispatch_metrics(

@@ -4,7 +4,7 @@
  * Interactions avec les endpoints de retards et d'optimisation
  */
 
-import apiClient from "../utils/apiClient";
+import apiClient from '../utils/apiClient';
 
 /**
  * Récupère les retards pour une date donnée
@@ -13,12 +13,12 @@ import apiClient from "../utils/apiClient";
  */
 export const getDelays = async (date) => {
   try {
-    const response = await apiClient.get("/company_dispatch/delays", {
+    const response = await apiClient.get('/company_dispatch/delays', {
       params: { date },
     });
     return response.data;
   } catch (error) {
-    console.error("[DispatchMonitoring] Error fetching delays:", error);
+    console.error('[DispatchMonitoring] Error fetching delays:', error);
     throw error;
   }
 };
@@ -30,12 +30,23 @@ export const getDelays = async (date) => {
  */
 export const getLiveDelays = async (date) => {
   try {
-    const response = await apiClient.get("/company_dispatch/delays/live", {
+    const response = await apiClient.get('/company_dispatch/delays/live', {
       params: { date },
     });
     return response.data;
   } catch (error) {
-    console.error("[DispatchMonitoring] Error fetching live delays:", error);
+    // ⚡ Ignorer les erreurs 401 si le refresh est en cours ou réussi
+    if (error?.response?.status === 401 && error?.config?._retryAfterRefresh) {
+      // Refresh réussi, ne pas logger l'erreur
+      return null;
+    }
+
+    // Ne logger que les vraies erreurs (pas les 401 en cours de refresh)
+    if (error?.response?.status !== 401) {
+      console.error('[DispatchMonitoring] Error fetching live delays:', error);
+    } else {
+      console.debug('[DispatchMonitoring] 401 error, refresh token will be attempted');
+    }
     throw error;
   }
 };
@@ -47,12 +58,12 @@ export const getLiveDelays = async (date) => {
  */
 export const startRealTimeOptimizer = async (checkIntervalSeconds = 120) => {
   try {
-    const response = await apiClient.post("/company_dispatch/optimizer/start", {
+    const response = await apiClient.post('/company_dispatch/optimizer/start', {
       check_interval_seconds: checkIntervalSeconds,
     });
     return response.data;
   } catch (error) {
-    console.error("[DispatchMonitoring] Error starting optimizer:", error);
+    console.error('[DispatchMonitoring] Error starting optimizer:', error);
     throw error;
   }
 };
@@ -63,10 +74,10 @@ export const startRealTimeOptimizer = async (checkIntervalSeconds = 120) => {
  */
 export const stopRealTimeOptimizer = async () => {
   try {
-    const response = await apiClient.post("/company_dispatch/optimizer/stop");
+    const response = await apiClient.post('/company_dispatch/optimizer/stop');
     return response.data;
   } catch (error) {
-    console.error("[DispatchMonitoring] Error stopping optimizer:", error);
+    console.error('[DispatchMonitoring] Error stopping optimizer:', error);
     throw error;
   }
 };
@@ -77,13 +88,21 @@ export const stopRealTimeOptimizer = async () => {
  */
 export const getOptimizerStatus = async () => {
   try {
-    const response = await apiClient.get("/company_dispatch/optimizer/status");
+    const response = await apiClient.get('/company_dispatch/optimizer/status');
     return response.data;
   } catch (error) {
-    console.error(
-      "[DispatchMonitoring] Error fetching optimizer status:",
-      error
-    );
+    // ⚡ Ignorer les erreurs 401 si le refresh est en cours ou réussi
+    if (error?.response?.status === 401 && error?.config?._retryAfterRefresh) {
+      // Refresh réussi, ne pas logger l'erreur
+      return null;
+    }
+
+    // Ne logger que les vraies erreurs (pas les 401 en cours de refresh)
+    if (error?.response?.status !== 401) {
+      console.error('[DispatchMonitoring] Error fetching optimizer status:', error);
+    } else {
+      console.debug('[DispatchMonitoring] 401 error, refresh token will be attempted');
+    }
     throw error;
   }
 };
@@ -96,15 +115,12 @@ export const getOptimizerStatus = async () => {
 export const getOptimizationOpportunities = async (date = null) => {
   try {
     const params = date ? { date } : {};
-    const response = await apiClient.get(
-      "/company_dispatch/optimizer/opportunities",
-      {
-        params,
-      }
-    );
+    const response = await apiClient.get('/company_dispatch/optimizer/opportunities', {
+      params,
+    });
     return response.data;
   } catch (error) {
-    console.error("[DispatchMonitoring] Error fetching opportunities:", error);
+    console.error('[DispatchMonitoring] Error fetching opportunities:', error);
     throw error;
   }
 };
@@ -123,7 +139,7 @@ export const applySuggestion = async (assignmentId, newDriverId) => {
     );
     return response.data;
   } catch (error) {
-    console.error("[DispatchMonitoring] Error applying suggestion:", error);
+    console.error('[DispatchMonitoring] Error applying suggestion:', error);
     throw error;
   }
 };
@@ -145,6 +161,73 @@ export const rejectSuggestion = async (bookingId) => {
   }
 };
 
+/**
+ * Démarre l'agent dispatch intelligent
+ * @returns {Promise} Statut de l'agent
+ */
+export const startAgent = async () => {
+  try {
+    const response = await apiClient.post('/company_dispatch/agent/start');
+    return response.data;
+  } catch (error) {
+    console.error('[Agent] Error starting agent:', error);
+    throw error;
+  }
+};
+
+/**
+ * Arrête l'agent dispatch intelligent
+ * @returns {Promise} Confirmation d'arrêt
+ */
+export const stopAgent = async () => {
+  try {
+    const response = await apiClient.post('/company_dispatch/agent/stop');
+    return response.data;
+  } catch (error) {
+    console.error('[Agent] Error stopping agent:', error);
+    throw error;
+  }
+};
+
+/**
+ * Récupère le statut de l'agent dispatch intelligent
+ * @returns {Promise} Statut (running, last_tick, actions_today, osrm_health, etc.)
+ */
+export const getAgentStatus = async () => {
+  try {
+    const response = await apiClient.get('/company_dispatch/agent/status');
+    return response.data;
+  } catch (error) {
+    // ⚡ Ignorer les erreurs 401 si le refresh est en cours ou réussi
+    if (error?.response?.status === 401 && error?.config?._retryAfterRefresh) {
+      return null;
+    }
+
+    if (error?.response?.status !== 401) {
+      console.error('[Agent] Error fetching agent status:', error);
+    } else {
+      console.debug('[Agent] 401 error, refresh token will be attempted');
+    }
+    throw error;
+  }
+};
+
+/**
+ * Réinitialise toutes les assignations et remet les courses au statut ACCEPTED
+ * @param {string} date - Date au format YYYY-MM-DD (optionnel, défaut: toutes les dates)
+ * @returns {Promise} Résultat de la réinitialisation
+ */
+export const resetAssignments = async (date = null) => {
+  try {
+    const body = date ? { date } : {};
+    const response = await apiClient.post('/company_dispatch/reset', body);
+    return response.data;
+  } catch (error) {
+    console.error('[DispatchMonitoring] Error resetting assignments:', error);
+    throw error;
+  }
+};
+
 // Export d'un objet de service avec toutes les méthodes
 const dispatchMonitoringService = {
   getDelays,
@@ -155,6 +238,10 @@ const dispatchMonitoringService = {
   getOptimizationOpportunities,
   applySuggestion,
   rejectSuggestion,
+  startAgent,
+  stopAgent,
+  getAgentStatus,
+  resetAssignments,
 };
 
 export default dispatchMonitoringService;

@@ -8,12 +8,34 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  /* ⚡ Améliore la visibilité de la scrollbar sur desktop */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-primary) var(--bg-secondary);
+}
+
+.tableContainer::-webkit-scrollbar {
+  height: 8px;
+}
+
+.tableContainer::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.tableContainer::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+  border-radius: var(--radius-sm);
+}
+
+.tableContainer::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1000px;
+  min-width: 800px; /* ⚡ Réduit de 1000px à 800px pour mieux s'adapter */
+  table-layout: auto;
 }
 
 .table th {

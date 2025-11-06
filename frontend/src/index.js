@@ -74,6 +74,35 @@ onFCP(sendWebVitalToSentry);
 onLCP(sendWebVitalToSentry);
 onTTFB(sendWebVitalToSentry);
 
+// ===== GESTION ERREURS EXTENSIONS NAVIGATEUR =====
+// ⚡ Ignorer l'erreur "listener indicated asynchronous response"
+// qui est généralement causée par des extensions de navigateur
+window.addEventListener(
+  'error',
+  (event) => {
+    if (
+      event.message?.includes('listener indicated an asynchronous response') ||
+      event.message?.includes('message channel closed')
+    ) {
+      // Ignorer silencieusement cette erreur (elle vient des extensions)
+      event.preventDefault();
+      return false;
+    }
+  },
+  true
+);
+
+// Gérer aussi les erreurs de promesse non catchées liées aux extensions
+window.addEventListener('unhandledrejection', (event) => {
+  if (
+    event.reason?.message?.includes('listener indicated an asynchronous response') ||
+    event.reason?.message?.includes('message channel closed')
+  ) {
+    // Ignorer silencieusement cette erreur (elle vient des extensions)
+    event.preventDefault();
+  }
+});
+
 // ===== ERROR BOUNDARY (Sentry) =====
 const SentryErrorBoundary = Sentry.ErrorBoundary;
 

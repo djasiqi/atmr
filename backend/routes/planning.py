@@ -35,12 +35,29 @@ planning_ns = Namespace("planning", description="Planning Chauffeurs")
 @planning_ns.route("/companies/me/planning/shifts")
 class ShiftsMe(Resource):
     @jwt_required()
+    @planning_ns.param("driver_id", "ID du chauffeur (optionnel, > 0)", type="integer", minimum=1)
     def get(self):
+        """Récupère les shifts (planning) de l'entreprise.
+        
+        Query params:
+            - driver_id: ID du chauffeur pour filtrer (optionnel)
+        """
         company, _, _ = get_company_from_token()
         if not company:
             return {"error": "unauthorized"}, 401
-        args = request.args
-        driver_id = args.get("driver_id", type=int)
+        # ✅ 2.4: Validation Marshmallow pour query params
+        from marshmallow import ValidationError
+
+        from schemas.planning_schemas import PlanningShiftsQuerySchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        
+        args_dict = dict(request.args)
+        try:
+            validated_args = validate_request(PlanningShiftsQuerySchema(), args_dict, strict=False)
+            driver_id = validated_args.get("driver_id")
+        except ValidationError as e:
+            return handle_validation_error(e)
+        
         q = db.session.query(DriverShift).filter(
             DriverShift.company_id == company.id)
         if driver_id:
@@ -206,12 +223,29 @@ class ShiftBreakDetail(Resource):
 @planning_ns.route("/companies/me/planning/unavailability")
 class Unavailability(Resource):
     @jwt_required()
+    @planning_ns.param("driver_id", "ID du chauffeur (optionnel, > 0)", type="integer", minimum=1)
     def get(self):
+        """Récupère les indisponibilités de l'entreprise.
+        
+        Query params:
+            - driver_id: ID du chauffeur pour filtrer (optionnel)
+        """
         company, _, _ = get_company_from_token()
         if not company:
             return {"error": "unauthorized"}, 401
-        args = request.args
-        driver_id = args.get("driver_id", type=int)
+        # ✅ 2.4: Validation Marshmallow pour query params
+        from marshmallow import ValidationError
+
+        from schemas.planning_schemas import PlanningUnavailabilityQuerySchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        
+        args_dict = dict(request.args)
+        try:
+            validated_args = validate_request(PlanningUnavailabilityQuerySchema(), args_dict, strict=False)
+            driver_id = validated_args.get("driver_id")
+        except ValidationError as e:
+            return handle_validation_error(e)
+        
         q = db.session.query(DriverUnavailability).filter(
             DriverUnavailability.company_id == company.id)
         if driver_id:
@@ -272,11 +306,29 @@ class UnavailabilityDetail(Resource):
 @planning_ns.route("/companies/me/planning/weekly-template")
 class WeeklyTemplate(Resource):
     @jwt_required()
+    @planning_ns.param("driver_id", "ID du chauffeur (optionnel, > 0)", type="integer", minimum=1)
     def get(self):
+        """Récupère les templates hebdomadaires de l'entreprise.
+        
+        Query params:
+            - driver_id: ID du chauffeur pour filtrer (optionnel)
+        """
         company, _, _ = get_company_from_token()
         if not company:
             return {"error": "unauthorized"}, 401
-        driver_id = request.args.get("driver_id", type=int)
+        # ✅ 2.4: Validation Marshmallow pour query params
+        from marshmallow import ValidationError
+
+        from schemas.planning_schemas import PlanningWeeklyTemplateQuerySchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        
+        args_dict = dict(request.args)
+        try:
+            validated_args = validate_request(PlanningWeeklyTemplateQuerySchema(), args_dict, strict=False)
+            driver_id = validated_args.get("driver_id")
+        except ValidationError as e:
+            return handle_validation_error(e)
+        
         q = db.session.query(DriverWeeklyTemplate).filter(
             DriverWeeklyTemplate.company_id == company.id)
         if driver_id:

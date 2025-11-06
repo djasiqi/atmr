@@ -6,13 +6,38 @@ import os
 import uuid
 from contextlib import suppress
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Dict, List, cast
 
 from celery.result import AsyncResult
 from flask import current_app
+from sqlalchemy.exc import IntegrityError
+
+from ext import db
+from models import DispatchRun, DispatchStatus
+from models.base import _as_dt, _iso
 
 logger = logging.getLogger(__name__)
+
+
+def _serialize_datetimes(obj: Any) -> Any:
+    """Sérialise récursivement tous les objets datetime/date en chaînes ISO.
+    
+    Args:
+        obj: Objet à sérialiser (dict, list, datetime, date, ou autre)
+        
+    Returns:
+        Objet avec tous les datetime/date sérialisés en chaînes ISO
+    """
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, date):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: _serialize_datetimes(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_serialize_datetimes(item) for item in obj]
+    return obj
 
 # ============================================================
 # Valeurs par défaut raisonnables, surchargées via ENV.
@@ -88,9 +113,13 @@ def _get_state(company_id: int) -> CompanyDispatchState:
         return st
 
 
-def get_status(company_id: int) -> Dict[str, Any]:
+def get_status(company_id: int, for_date: str | None = None) -> Dict[str, Any]:
     """Utilisé par GET /company_dispatch/status
     Enrichi avec des informations de diagnostic plus détaillées.
+    
+    Args:
+        company_id: ID de l'entreprise
+        for_date: Date optionnelle (YYYY-MM-DD) pour obtenir le statut d'un dispatch spécifique
     """
     last = _LAST_RESULT.get(company_id) or {}
     last_error = _LAST_ERROR.get(company_id)
@@ -99,6 +128,37 @@ def get_status(company_id: int) -> Dict[str, Any]:
     bookings_count = len(last.get("bookings", []))
     drivers_count = len(last.get("drivers", []))
     assignments_count = len(last.get("assignments", []))
+
+    # ✅ Récupérer le DispatchRun actif pour cette date si fournie
+    active_dispatch_run_id = None
+    active_dispatch_status = None
+    active_assignments_count = 0
+    dispatch_run = None  # ✅ Déclarer dispatch_run pour utilisation ultérieure
+    
+    if for_date:
+        try:
+            from datetime import date as date_type
+            day_date = date_type.fromisoformat(for_date)
+            dispatch_run = DispatchRun.query.filter_by(
+                company_id=company_id,
+                day=day_date
+            ).order_by(DispatchRun.created_at.desc()).first()
+            
+            if dispatch_run:
+                active_dispatch_run_id = dispatch_run.id
+                active_dispatch_status = dispatch_run.status.value if hasattr(dispatch_run.status, "value") else str(dispatch_run.status)
+                
+                # ✅ Compter les assignments pour ce DispatchRun
+                active_assignments_count = len(dispatch_run.assignments) if hasattr(dispatch_run, "assignments") else 0
+                
+                logger.debug(
+                    "[Queue] Found active DispatchRun id=%s status=%s assignments=%s for company=%s date=%s",
+                    active_dispatch_run_id, active_dispatch_status, active_assignments_count, company_id, for_date
+                )
+        except Exception as e:
+            logger.exception(
+                "[Queue] Error fetching DispatchRun for date=%s: %s", for_date, e
+            )
 
     # Check Celery task status if we have a task_id
     celery_state = "UNKNOWN"
@@ -151,11 +211,31 @@ def get_status(company_id: int) -> Dict[str, Any]:
         else:
             reason = "unknown"
 
+    # ✅ Utiliser le dispatch_run_id actif si disponible, sinon celui du dernier résultat
+    dispatch_run_id = active_dispatch_run_id or last.get("dispatch_run_id") or (last.get("meta", {}) or {}).get("dispatch_run_id")
+
+    # ✅ Construire active_dispatch_run avec sérialisation des dates si dispatch_run existe
+    active_dispatch_run_dict = None
+    if dispatch_run and active_dispatch_run_id:
+        active_dispatch_run_dict = {
+            "id": active_dispatch_run_id,
+            "status": active_dispatch_status,
+            "assignments_count": active_assignments_count,
+            "day": dispatch_run.day.isoformat() if dispatch_run.day else None,
+            "created_at": _iso(_as_dt(dispatch_run.created_at)) if dispatch_run.created_at else None,
+            "started_at": _iso(_as_dt(dispatch_run.started_at)) if dispatch_run.started_at else None,
+            "completed_at": _iso(_as_dt(dispatch_run.completed_at)) if dispatch_run.completed_at else None,
+        }
+
+    # ✅ Sérialiser récursivement tous les objets datetime/date pour éviter les erreurs JSON
+    serialized_last = _serialize_datetimes(last) if last else {}
+    serialized_meta = _serialize_datetimes(last.get("meta")) if last and last.get("meta") else None
+    
     return {
         "is_running": bool(_RUNNING.get(company_id, False)),
         "progress": int(_PROGRESS.get(company_id, 0)),
-        "last_result": last,
-        "last_result_meta": last.get("meta"),
+        "last_result": serialized_last,
+        "last_result_meta": serialized_meta,
         "last_error": last_error,
         "reason": reason,
         "counters": {
@@ -163,7 +243,8 @@ def get_status(company_id: int) -> Dict[str, Any]:
             "drivers": drivers_count,
             "assignments": assignments_count,
         },
-        "dispatch_run_id": last.get("dispatch_run_id") or (last.get("meta", {}) or {}).get("dispatch_run_id"),
+        "dispatch_run_id": dispatch_run_id,
+        "active_dispatch_run": active_dispatch_run_dict,
         "celery_state": _CELERY_STATE.get(company_id, celery_state),
         "last_task_id": st.last_task_id,
     }
@@ -172,12 +253,141 @@ def get_status(company_id: int) -> Dict[str, Any]:
 def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
     """Utilisé par POST /company_dispatch/run (async).
     Enfile un job (coalescé) et renvoie un job_id.
+    Crée le DispatchRun avec statut PENDING avant l'enfilage pour avoir un dispatch_run_id immédiatement.
     """
     job_id = str(uuid.uuid4())
     mode = str((params or {}).get("mode", "auto")).strip().lower()
+    
+    logger.info(
+        "[Queue] trigger_job called for company_id=%s params_keys=%s",
+        company_id, list(params.keys()) if params else []
+    )
+    
+    # Créer le DispatchRun avec statut PENDING avant l'enfilage
+    dispatch_run_id = None
+    try:
+        for_date_str = params.get("for_date")
+        logger.debug(
+            "[Queue] trigger_job: for_date_str=%s",
+            for_date_str
+        )
+        if for_date_str:
+            # Parser la date
+            try:
+                day_date = date.fromisoformat(for_date_str)
+            except (ValueError, TypeError):
+                logger.warning(
+                    "[Queue] Invalid for_date=%s, cannot create DispatchRun early",
+                    for_date_str
+                )
+                day_date = None
+        else:
+            # Utiliser aujourd'hui par défaut
+            day_date = datetime.now(UTC).date()
+            logger.warning(
+                "[Queue] No for_date in params, using today=%s for DispatchRun",
+                day_date
+            )
+        
+        if day_date:
+            logger.info(
+                "[Queue] trigger_job: day_date=%s, attempting to create/reuse DispatchRun",
+                day_date
+            )
+            # Créer ou réutiliser le DispatchRun avec statut PENDING
+            # Utiliser une transaction courte pour éviter les race conditions
+            try:
+                # ✅ Flask/SQLAlchemy gère automatiquement les transactions - pas besoin de begin()
+                # Vérifier si un DispatchRun existe déjà pour cette date
+                existing_run = DispatchRun.query.filter_by(
+                    company_id=company_id,
+                    day=day_date
+                ).first()
+                
+                if existing_run:
+                    # Réutiliser le DispatchRun existant
+                    existing_run.status = DispatchStatus.PENDING
+                    existing_run.started_at = None
+                    existing_run.completed_at = None
+                    existing_run.config = {
+                        "mode": mode,
+                        "regular_first": params.get("regular_first", True),
+                        "allow_emergency": params.get("allow_emergency"),
+                        "for_date": for_date_str,
+                    }
+                    dispatch_run_id = existing_run.id
+                    logger.info(
+                        "[Queue] Reusing existing DispatchRun id=%s for company=%s day=%s",
+                        dispatch_run_id, company_id, day_date
+                    )
+                else:
+                    # Créer un nouveau DispatchRun
+                    new_run = DispatchRun()
+                    new_run.company_id = company_id
+                    new_run.day = day_date
+                    new_run.status = DispatchStatus.PENDING
+                    new_run.created_at = datetime.now(UTC)
+                    new_run.config = {
+                        "mode": mode,
+                        "regular_first": params.get("regular_first", True),
+                        "allow_emergency": params.get("allow_emergency"),
+                        "for_date": for_date_str,
+                    }
+                    db.session.add(new_run)
+                    db.session.flush()  # Pour obtenir l'ID
+                    dispatch_run_id = new_run.id
+                    logger.info(
+                        "[Queue] Created DispatchRun id=%s with status PENDING for company=%s day=%s",
+                        dispatch_run_id, company_id, day_date
+                    )
+                
+                # ✅ Commit explicite pour persister la transaction
+                db.session.commit()
+                logger.debug(
+                    "[Queue] DispatchRun id=%s committed successfully",
+                    dispatch_run_id
+                )
+            except IntegrityError:
+                # Race condition : un autre thread a créé le DispatchRun entre temps
+                db.session.rollback()
+                existing_run = DispatchRun.query.filter_by(
+                    company_id=company_id,
+                    day=day_date
+                ).first()
+                if existing_run:
+                    dispatch_run_id = existing_run.id
+                    logger.info(
+                        "[Queue] Race condition: using existing DispatchRun id=%s",
+                        dispatch_run_id
+                    )
+                else:
+                    logger.error(
+                        "[Queue] Failed to create/reuse DispatchRun after IntegrityError"
+                    )
+            except Exception as e:
+                db.session.rollback()
+                logger.exception(
+                    "[Queue] Failed to create DispatchRun early: %s", e
+                )
+                # Continuer sans dispatch_run_id (fallback vers comportement actuel)
+    except Exception as e:
+        logger.exception(
+            "[Queue] Error creating DispatchRun early: %s", e
+        )
+        # Continuer sans dispatch_run_id (fallback vers comportement actuel)
+    
+    # Passer le dispatch_run_id dans les params pour la tâche Celery
+    if dispatch_run_id:
+        params = dict(params)  # Copie pour éviter mutation
+        params["dispatch_run_id"] = dispatch_run_id
+    
     trigger(company_id, reason="manual_trigger", mode=mode, params=params)
-    return {"id": job_id, "company_id": company_id,
-            "status": "queued", "dispatch_run_id": None}
+    return {
+        "id": job_id,
+        "company_id": company_id,
+        "status": "queued",
+        "dispatch_run_id": dispatch_run_id,  # Retourner le dispatch_run_id si créé
+    }
 
 
 def trigger(company_id: int, reason: str = "generic",
@@ -360,9 +570,10 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             from tasks.dispatch_tasks import run_dispatch_task
 
             # Enqueue Celery task
-            # .delay non typé dans stubs
+            # ✅ Forcer explicitement la queue "default" pour éviter les problèmes de routage
+            # .apply_async permet de spécifier la queue, contrairement à .delay
             TaskCallable = cast("Any", run_dispatch_task)
-            task = TaskCallable.delay(**run_kwargs)
+            task = TaskCallable.apply_async(kwargs=run_kwargs, queue="default")
             st.last_task_id = task.id
             _CELERY_STATE[company_id] = task.state
 

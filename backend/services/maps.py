@@ -11,6 +11,7 @@ import requests
 
 from ext import app_logger
 from shared.geo_utils import haversine_tuple as _haversine_km
+from shared.retry import retry_http_request  # ✅ 2.3: Retry uniformisé
 
 # Constantes pour éviter les valeurs magiques
 RATE_ZERO = 0
@@ -318,39 +319,43 @@ def _dm_request(
     inflight_key = hashlib.sha1(json.dumps({"o": origins, "d": dests, "p": params}, sort_keys=True).encode("utf-8")).hexdigest()
 
     def _do() -> List[List[int | None]]:
-        for attempt in range(max_retries + 1):
-            try:
-                resp = requests.get(url, params=params, timeout=timeout)
-                data = resp.json()
-                if data.get("status") != "OK":
-                    msg = f"status={data.get('status')} err={data.get('error_message')}"
-                    raise RuntimeError(msg)
+        """Exécute la requête Distance Matrix avec retry uniformisé."""
+        def _fetch_matrix() -> List[List[int | None]]:
+            resp = requests.get(url, params=params, timeout=timeout)
+            resp.raise_for_status()  # Lève exception pour codes HTTP d'erreur
+            data = resp.json()
+            if data.get("status") != "OK":
+                msg = f"status={data.get('status')} err={data.get('error_message')}"
+                raise RuntimeError(msg)
 
-                rows = data.get("rows", [])
-                out: List[List[int | None]] = []
-                for r in rows:
-                    row_vals: List[int | None] = []
-                    for el in r.get("elements", []):
-                        if el.get("status") == "OK":
-                            dur = (el.get("duration_in_traffic") or el.get("duration") or {}).get("value", 0)
-                            row_vals.append(int(dur))
-                        else:
-                            row_vals.append(None)
-                    while len(row_vals) < len(dests):
+            rows = data.get("rows", [])
+            out: List[List[int | None]] = []
+            for r in rows:
+                row_vals: List[int | None] = []
+                for el in r.get("elements", []):
+                    if el.get("status") == "OK":
+                        dur = (el.get("duration_in_traffic") or el.get("duration") or {}).get("value", 0)
+                        row_vals.append(int(dur))
+                    else:
                         row_vals.append(None)
-                    out.append(row_vals[:len(dests)])
-                while len(out) < len(origins):
-                    out.append([None for _ in dests])
-                return out[:len(origins)]
-            except Exception as e:
-                if attempt >= max_retries:
-                    app_logger.warning("⚠️ DistanceMatrix request error (final): %s", e)
-                    return [[None for _ in dests] for _ in origins]
-                app_logger.warning("⚠️ DistanceMatrix request error (retry %s/%s): %s", attempt + 1, max_retries, e)
-                time.sleep((retry_backoff_ms / 1000.0) * (attempt + 1))
-
-        # Ne devrait pas arriver, garde-fou type-safe
-        return [[None for _ in dests] for _ in origins]
+                while len(row_vals) < len(dests):
+                    row_vals.append(None)
+                out.append(row_vals[:len(dests)])
+            while len(out) < len(origins):
+                out.append([None for _ in dests])
+            return out[:len(origins)]
+        
+        # ✅ 2.3: Utiliser retry uniformisé avec fallback gracieux
+        try:
+            return retry_http_request(
+                _fetch_matrix,
+                max_retries=max_retries,
+                base_delay_ms=retry_backoff_ms,
+            )
+        except Exception as e:
+            app_logger.warning("⚠️ DistanceMatrix request error (final après retries): %s", e)
+            # Retourner matrice vide en cas d'échec définitif
+            return [[None for _ in dests] for _ in origins]
 
     start = time.time()
     res = cast("List[List[int | None]]", _singleflight(inflight_key, _do))

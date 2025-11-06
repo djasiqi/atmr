@@ -255,6 +255,8 @@
   box-shadow: var(--shadow-xl);
   animation: slideUp 0.3s ease-out;
   z-index: var(--z-modal);
+  width: auto;
+  min-width: 0;
 }
 
 /* Style pour les titres directs (h2, h3) sans modal-header */
@@ -330,10 +332,16 @@
 }
 
 /* Tailles de modals */
-.modal-sm .modal-content { max-width: 400px; }
-.modal-md .modal-content { max-width: 600px; }
-.modal-lg .modal-content { max-width: 900px; }
-.modal-xl .modal-content { max-width: 1200px; }
+.modal-sm .modal-content { max-width: 400px !important; }
+.modal-md .modal-content { max-width: 600px !important; }
+.modal-lg .modal-content { max-width: 900px !important; }
+.modal-xl .modal-content { max-width: 1200px !important; }
+
+/* Taille spéciale pour les modales compactes (planification, assignation) */
+.modal-compact .modal-content { 
+  max-width: 420px !important;
+  width: auto;
+}
 
 /* ============================================================
    CARDS
