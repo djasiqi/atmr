@@ -30,12 +30,6 @@ function startOfWeek(d) {
   return dt;
 }
 
-function _addDays(iso, n) {
-  const d = new Date(iso);
-  d.setDate(d.getDate() + n);
-  return d.toISOString();
-}
-
 function formatRange(range, view) {
   const from = new Date(range.from);
   const to = new Date(range.to);

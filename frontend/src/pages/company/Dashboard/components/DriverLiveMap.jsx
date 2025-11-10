@@ -148,7 +148,6 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
   const mapRef = useRef(null);
   const mapElRef = useRef(null);
   const markersRef = useRef({}); // { [driverId]: L.Marker }
-  const [_driverLocations, setDriverLocations] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
   const { driver: staticDrivers, company } = useCompanyData();
 
@@ -220,7 +219,6 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       } catch {}
       mapRef.current = null;
       markersRef.current = {};
-      setDriverLocations({});
     };
   }, []);
 
@@ -340,11 +338,6 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       if (!id || !ll) return;
 
       const firstName = data.first_name || data.name || `Driver ${id}`;
-
-      setDriverLocations((prev) => ({
-        ...prev,
-        [id]: { lat: ll[0], lon: ll[1], name: firstName },
-      }));
 
       if (!markersRef.current[id]) {
         // Trouver le driver complet pour le statut
@@ -545,7 +538,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         const input = L.DomUtil.create('input', 'search-input');
         input.type = 'text';
         input.placeholder = 'Rechercher un chauffeur...';
-        input.value = searchQuery;
+        input.value = '';
         input.style.cssText = `
           border: none;
           outline: none;
@@ -566,7 +559,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
           height: 20px;
           cursor: pointer;
           font-size: 12px;
-          display: ${searchQuery ? 'flex' : 'none'};
+          display: none;
           align-items: center;
           justify-content: center;
         `;
@@ -608,7 +601,23 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         delete map._searchControl;
       }
     };
-  }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const map = getMap();
+    const container = map?._searchControl?.getContainer?.();
+    if (!container) return;
+
+    const input = container.querySelector('.search-input');
+    const clearBtn = container.querySelector('.clear-search');
+
+    if (input && input.value !== searchQuery) {
+      input.value = searchQuery;
+    }
+    if (clearBtn) {
+      clearBtn.style.display = searchQuery ? 'flex' : 'none';
+    }
+  }, [searchQuery]);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
