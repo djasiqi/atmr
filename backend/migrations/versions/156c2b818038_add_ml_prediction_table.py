@@ -33,7 +33,7 @@ def upgrade():
         # Identifiants
         sa.Column("booking_id", sa.Integer(), nullable=False),
         sa.Column("driver_id", sa.Integer(), nullable=True),
-        sa.Column("request_id", sa.String(length=0.100), nullable=True),
+        sa.Column("request_id", sa.String(length=100), nullable=True),
 
         # Prédiction ML
         sa.Column("predicted_delay_minutes", sa.Float(), nullable=False),

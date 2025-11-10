@@ -108,7 +108,7 @@ const parseEnterpriseSuccess = (
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [mode, setModeState] = useState<AuthMode>("driver");
+  const [mode, setModeState] = useState<AuthMode>("enterprise");
   const [initialLoading, setInitialLoading] = useState(true);
   const [deviceId, setDeviceId] = useState<string | null>(null);
 
@@ -211,12 +211,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const storedMode = await AsyncStorage.getItem(MODE_KEY);
         if (storedMode === "driver" || storedMode === "enterprise") {
           setModeState(storedMode);
+        } else {
+          await AsyncStorage.setItem(MODE_KEY, "enterprise");
         }
         const storedDevice = await AsyncStorage.getItem(ENTERPRISE_DEVICE_KEY);
         if (storedDevice) setDeviceId(storedDevice);
 
         const storedDriverToken = await AsyncStorage.getItem(DRIVER_TOKEN_KEY);
-        if (storedDriverToken) {
+        if (storedDriverToken && (storedMode === "driver" || !storedMode)) {
           setDriverToken(storedDriverToken);
           try {
             const profile = await fetchDriverProfile();

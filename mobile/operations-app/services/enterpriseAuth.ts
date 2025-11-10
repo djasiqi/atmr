@@ -1,9 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios, { AxiosHeaders } from "axios";
+import axios, {
+  AxiosError,
+  AxiosHeaders,
+  InternalAxiosRequestConfig,
+} from "axios";
 import Constants from "expo-constants";
 
 const expoExtra = Constants.expoConfig?.extra || {};
-const PROD_API_URL: string = expoExtra.productionApiUrl || "";
+const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL;
+const PROD_API_URL: string =
+  ENV_API_URL || (expoExtra.publicApiUrl as string) || expoExtra.productionApiUrl || "";
 
 const getDevHost = (): string => {
   const legacyHost = (Constants as any)?.manifest?.debuggerHost?.split(":")[0];
@@ -19,7 +25,8 @@ const getDevHost = (): string => {
   return detectedHost;
 };
 
-const PORT = expoExtra.backendPort || "5000";
+const ENV_PORT = process.env.EXPO_PUBLIC_BACKEND_PORT;
+const PORT = ENV_PORT || expoExtra.backendPort || "5000";
 const API_PREFIX = "/api/v1/company_mobile";
 
 const baseURL = __DEV__
@@ -29,6 +36,10 @@ const baseURL = __DEV__
 export const ENTERPRISE_TOKEN_KEY = "enterprise.token";
 export const ENTERPRISE_REFRESH_KEY = "enterprise.refresh";
 export const ENTERPRISE_SESSION_KEY = "enterprise.session";
+
+type AxiosConfig = InternalAxiosRequestConfig<any> & {
+  __isRetryRequest?: boolean;
+};
 
 export interface EnterpriseUserPayload {
   id: number;
@@ -96,6 +107,85 @@ export const enterpriseApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+const clearEnterpriseStorage = async () => {
+  await AsyncStorage.multiRemove([
+    ENTERPRISE_TOKEN_KEY,
+    ENTERPRISE_REFRESH_KEY,
+    ENTERPRISE_SESSION_KEY,
+  ]);
+};
+
+const persistEnterpriseSession = async (
+  payload: EnterpriseTokenPayload
+): Promise<void> => {
+  const session = {
+    token: payload.token,
+    refreshToken: payload.refresh_token ?? null,
+    user: payload.user,
+    company: {
+      id: payload.company.id,
+      name: payload.company.name,
+      dispatchMode:
+        (payload.company as any).dispatchMode ?? payload.company.dispatch_mode,
+    },
+    scopes: payload.scopes ?? [],
+    sessionId: payload.session_id,
+  };
+
+  await AsyncStorage.setItem(ENTERPRISE_TOKEN_KEY, session.token);
+  await AsyncStorage.setItem(
+    ENTERPRISE_SESSION_KEY,
+    JSON.stringify(session)
+  );
+
+  if (session.refreshToken) {
+    await AsyncStorage.setItem(
+      ENTERPRISE_REFRESH_KEY,
+      session.refreshToken
+    );
+  } else {
+    await AsyncStorage.removeItem(ENTERPRISE_REFRESH_KEY);
+  }
+};
+
+let tokenRefreshPromise:
+  | Promise<string | null | undefined>
+  | null = null;
+
+const refreshAccessToken = async (): Promise<string | null | undefined> => {
+  if (!tokenRefreshPromise) {
+    tokenRefreshPromise = (async () => {
+      const refreshToken = await AsyncStorage.getItem(ENTERPRISE_REFRESH_KEY);
+      if (!refreshToken) {
+        await clearEnterpriseStorage();
+        return null;
+      }
+
+      try {
+        const response = await axios.post<EnterpriseTokenPayload>(
+          `${baseURL}/auth/refresh`,
+          { refresh_token: refreshToken },
+          {
+            headers: { "Content-Type": "application/json" },
+            timeout: 10000,
+          }
+        );
+
+        const payload = response.data;
+        await persistEnterpriseSession(payload);
+        return payload.token;
+      } catch (error) {
+        await clearEnterpriseStorage();
+        throw error;
+      } finally {
+        tokenRefreshPromise = null;
+      }
+    })();
+  }
+
+  return tokenRefreshPromise;
+};
+
 enterpriseApi.interceptors.request.use(
   async (config) => {
     try {
@@ -131,6 +221,42 @@ enterpriseApi.interceptors.request.use(
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+enterpriseApi.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const { response, config } = error;
+    const originalConfig = config as AxiosConfig | undefined;
+
+    if (
+      response?.status === 401 &&
+      originalConfig &&
+      !originalConfig.__isRetryRequest
+    ) {
+      try {
+        const newToken = await refreshAccessToken();
+        if (!newToken) {
+          return Promise.reject(error);
+        }
+
+        const headers =
+          originalConfig.headers instanceof AxiosHeaders
+            ? originalConfig.headers
+            : new AxiosHeaders(originalConfig.headers || {});
+
+        headers.set("Authorization", `Bearer ${newToken}`);
+        originalConfig.headers = headers;
+        originalConfig.__isRetryRequest = true;
+
+        return enterpriseApi(originalConfig);
+      } catch (refreshError) {
+        return Promise.reject(refreshError);
+      }
+    }
+
+    return Promise.reject(error);
+  }
 );
 
 export const loginEnterprise = async (

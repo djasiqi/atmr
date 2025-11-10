@@ -876,6 +876,8 @@ def run( # pyright: ignore[reportGeneralTypeIssues]
                                     initial_assignments=initial,
                                     bookings=problem["bookings"],
                                     drivers=regs,
+                                    matrix_quality=prob_regs.get("matrix_quality") if isinstance(prob_regs, dict) else None,
+                                    coord_quality=prob_regs.get("coord_quality") if isinstance(prob_regs, dict) else None,
                                 )
 
                                 # Appliquer les changements

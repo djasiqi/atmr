@@ -1,0 +1,9 @@
+/*
+!.git
+!.git/**/*
+!.easignore
+!/mobile
+/mobile/*
+!/mobile/operations-app
+!/mobile/operations-app/**
+

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from flask import current_app, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
@@ -12,10 +12,20 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload, selectinload
 
 from ext import db, limiter, role_required
-from models import Assignment, AutonomousAction, Booking, Company, Driver, Message, User, UserRole
+from models import (
+    Assignment,
+    AutonomousAction,
+    Booking,
+    Company,
+    DispatchMode,
+    Driver,
+    Message,
+    User,
+    UserRole,
+)
 from models.enums import AssignmentStatus, BookingStatus, DriverType, SenderRole
 from routes.companies import get_company_from_token
-from services.agent_dispatch.orchestrator import get_agent_for_company
+from services.agent_dispatch.orchestrator import get_agent_for_company, stop_agent_for_company
 from services.agent_dispatch.tools import AgentTools
 from services.unified_dispatch import settings as dispatch_settings
 from services.unified_dispatch.heuristics import MAX_FAIRNESS_GAP
@@ -935,6 +945,107 @@ class MobileRideUrgent(Resource):
         }, 200
 
 
+@company_mobile_dispatch_ns.route("/v1/mode")
+class MobileDispatchMode(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        company, company_id = _get_company_context()
+        mode_value = getattr(company.dispatch_mode, "value", "manual")
+        return {
+            "company_id": company_id,
+            "dispatch_mode": mode_value,
+            "autonomous_config": company.get_autonomous_config(),
+        }, 200
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def put(self):
+        company, company_id = _get_company_context()
+        payload = request.get_json(silent=True) or {}
+        new_mode = payload.get("dispatch_mode")
+        reason = payload.get("reason")
+
+        if not new_mode:
+            company_mobile_dispatch_ns.abort(400, "dispatch_mode requis")
+            raise AssertionError("dispatch_mode required") from None
+
+        try:
+            target_mode = DispatchMode(new_mode)
+        except ValueError as exc:
+            company_mobile_dispatch_ns.abort(
+                400, "Mode invalide. Utilisez manual, semi_auto ou fully_auto."
+            )
+            raise AssertionError("Invalid dispatch mode") from exc
+
+        previous_mode = getattr(company.dispatch_mode, "value", None)
+        if previous_mode == target_mode.value:
+            return {
+                "company_id": company_id,
+                "dispatch_mode": previous_mode,
+                "previous_mode": previous_mode,
+                "effective_at": datetime.now(UTC).isoformat(),
+                "message": "Aucun changement (mode identique).",
+            }, 200
+
+        cast("Any", company).dispatch_mode = target_mode
+
+        try:
+            if target_mode.value == "fully_auto":
+                agent = get_agent_for_company(
+                    company_id, app=current_app._get_current_object()
+                )
+                if not agent.state.running:
+                    agent.start()
+                    logger.info(
+                        "[Dispatch-Mobile] Agent démarré automatiquement pour company %s (mode fully_auto)",
+                        company_id,
+                    )
+            elif previous_mode == "fully_auto":
+                stop_agent_for_company(company_id)
+                logger.info(
+                    "[Dispatch-Mobile] Agent arrêté pour company %s (mode %s)",
+                    company_id,
+                    target_mode.value,
+                )
+        except Exception as agent_err:
+            logger.warning(
+                "[Dispatch-Mobile] Erreur lors du contrôle agent (%s): %s",
+                company_id,
+                agent_err,
+            )
+
+        try:
+            db.session.add(company)
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            logger.exception(
+                "[Dispatch-Mobile] Échec mise à jour mode dispatch pour company %s",
+                company_id,
+            )
+            company_mobile_dispatch_ns.abort(
+                500, f"Impossible de mettre à jour le mode dispatch: {exc}"
+            )
+            raise AssertionError("Commit failed") from exc
+
+        logger.info(
+            "[Dispatch-Mobile] Company %s mode %s -> %s (reason=%s)",
+            company_id,
+            previous_mode,
+            target_mode.value,
+            reason,
+        )
+
+        return {
+            "company_id": company_id,
+            "dispatch_mode": target_mode.value,
+            "previous_mode": previous_mode,
+            "effective_at": datetime.now(UTC).isoformat(),
+            "message": "Mode mis à jour avec succès.",
+        }, 200
+
+
 @company_mobile_dispatch_ns.route("/v1/settings")
 class MobileDispatchSettings(Resource):
     @jwt_required()
@@ -1048,7 +1159,7 @@ class MobileDispatchRun(Resource):
     @role_required(UserRole.company)
     @limiter.limit("10/minute")
     def post(self):
-        _, company_id = _get_company_context()
+        company, company_id = _get_company_context()
         body = request.get_json(silent=True) or {}
         target_date = body.get("date") or now_local().strftime("%Y-%m-%d")
 
@@ -1062,8 +1173,62 @@ class MobileDispatchRun(Resource):
             "company_id": company_id,
             "for_date": target_date,
             "regular_first": True,
-            "allow_emergency": None,
+            "allow_emergency": True,
+            "mode": "auto",
+            "dispatch_overrides": {
+                "fairness": {
+                    "enable_fairness": True,
+                    "fairness_window_days": 2,
+                    "fairness_weight": 0.7,
+                    "reset_daily_load": True,
+                },
+                "heuristic": {
+                    "driver_load_balance": 0.7,
+                    "proximity": 0.2,
+                    "priority": 0.08,
+                    "return_urgency": 0.02,
+                },
+                "solver": {
+                    "max_bookings_per_driver": 999,
+                },
+                "emergency": {
+                    "allow_emergency_drivers": True,
+                    "emergency_penalty": 600.0,
+                },
+            },
         }
+
+        dispatch_overrides = params.get("dispatch_overrides") or {}
+        if dispatch_overrides:
+            try:
+                base_settings = dispatch_settings.for_company(company)
+                _, validation = dispatch_settings.merge_overrides(
+                    base_settings,
+                    dispatch_overrides,
+                    return_validation=True,
+                )
+                logger.info(
+                    "[MobileDispatch] Validation overrides: applied=%s ignored=%s errors=%s",
+                    validation.get("applied"),
+                    validation.get("ignored"),
+                    validation.get("errors"),
+                )
+                critical_errors = validation.get("critical_errors", [])
+                if critical_errors:
+                    message = "Paramètres critiques ignorés: " + ", ".join(critical_errors)
+                    logger.warning(
+                        "[MobileDispatch] Overrides rejetés (critique): %s",
+                        critical_errors,
+                    )
+                    company_mobile_dispatch_ns.abort(400, message)
+            except ValueError as exc:
+                logger.exception(
+                    "[MobileDispatch] Validation overrides échouée: %s", exc)
+                company_mobile_dispatch_ns.abort(
+                    400, "Paramètres overrides invalides."
+                )
+            params["overrides"] = dispatch_overrides
+            params.pop("dispatch_overrides", None)
 
         job = trigger_job(company_id, params)
 

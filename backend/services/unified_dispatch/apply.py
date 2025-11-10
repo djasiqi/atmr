@@ -467,6 +467,22 @@ def _apply_assignments_inner(
         "conflicts": conflicts,
         "driver_load": dict(driver_load),
     }
+
+    if skipped:
+        for skipped_id, reason in skipped.items():
+            booking_obj = booking_map.get(skipped_id)
+            scheduled_time = getattr(booking_obj, "scheduled_time", None) if booking_obj else None
+            time_confirmed = getattr(booking_obj, "time_confirmed", None) if booking_obj else None
+            is_return = getattr(booking_obj, "is_return", None) if booking_obj else None
+            logger.warning(
+                "[Apply] Skipped booking_id=%s reason=%s scheduled_time=%s time_confirmed=%s is_return=%s",
+                skipped_id,
+                reason,
+                scheduled_time,
+                time_confirmed,
+                is_return,
+            )
+
     # Optionnel : retourner les paires (booking_id, driver_id) si demandé
     if return_pairs:
         result["applied_pairs"] = applied_pairs
@@ -478,25 +494,34 @@ def _apply_assignments_inner(
     # 🔔 Notifications Socket.IO vers les chauffeurs pour MAJ en temps réel (mobile)
     try:
         if applied_pairs:
-            # ✅ PERF: Charger tous les bookings en une seule query (évite N+1)
             notif_booking_ids = [b_id for b_id, _ in applied_pairs]
-            notif_bookings = {
-                b.id: b for b in Booking.query.filter(Booking.id.in_(notif_booking_ids)).all()
-            }
 
-            # Notifier chaque driver avec son booking
-            from services.notification_service import notify_driver_new_booking
-            for (b_id, d_id) in applied_pairs:
-                try:
-                    b = notif_bookings.get(b_id)
-                    if b is None:
-                        continue
-                    notify_driver_new_booking(int(d_id), b)
-                except Exception:
-                    logger.exception(
-                        "[Apply] notify_driver_new_booking failed booking_id=%s driver_id=%s",
-                        b_id,
-                        d_id)
+            # ⚠️ Utiliser une session indépendante pour éviter les transactions closes
+            session = db.create_scoped_session()
+            try:
+                notif_bookings = {
+                    b.id: b
+                    for b in session.query(Booking)
+                    .filter(Booking.id.in_(notif_booking_ids))
+                    .all()
+                }
+
+                from services.notification_service import notify_driver_new_booking
+
+                for (b_id, d_id) in applied_pairs:
+                    try:
+                        booking_obj = notif_bookings.get(b_id)
+                        if booking_obj is None:
+                            continue
+                        notify_driver_new_booking(int(d_id), booking_obj)
+                    except Exception:
+                        logger.exception(
+                            "[Apply] notify_driver_new_booking failed booking_id=%s driver_id=%s",
+                            b_id,
+                            d_id,
+                        )
+            finally:
+                session.close()
     except Exception:
         logger.exception(
             "[Apply] driver notifications failed (company_id=%s)",

@@ -65,6 +65,18 @@ export const useLocation = () => {
         }
 
         try {
+          const initial = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          if (isMounted) {
+            setLocation(initial);
+            await handleLocationUpdate(initial);
+          }
+        } catch (error) {
+          console.error("Erreur récupération position initiale:", error);
+        }
+
+        try {
           locationSubscription.current = await Location.watchPositionAsync(
             {
               // ✅ PERF: Balanced au lieu de High (-40% batterie)

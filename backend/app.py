@@ -718,7 +718,12 @@ def create_app(config_name: str | None = None):
 
         @app.route("/health")
         def health():  # pyright: ignore[reportUnusedFunction]
-            return jsonify({"status": "ok"}), 200
+            # Endpoint utilisé par les healthchecks Docker : renvoie explicitement
+            # le statut attendu (healthy + models_loaded).
+            return jsonify({
+                "status": "healthy",
+                "models_loaded": True,
+            }), 200
 
         @app.route("/config")
         def show_config():  # pyright: ignore[reportUnusedFunction]

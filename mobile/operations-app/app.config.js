@@ -1,7 +1,7 @@
 // app.config.js
 module.exports = () => ({
   name: "Liri Opérations",
-  slug: "lumo-driver",
+  slug: "operations-app",
   version: "1.0.1",
   // sdkVersion: "53.0.0", // Supprimé : n'est plus nécessaire avec les SDKs récents
   scheme: "liri",
@@ -82,6 +82,9 @@ module.exports = () => ({
       {
         android: {
           classpath: "com.google.gms:google-services:4.4.2",
+          gradlePluginVersion: "8.5.2",
+          gradleVersion: "8.5.2",
+          kotlinVersion: "2.0.21",
         },
       },
     ],
@@ -91,12 +94,14 @@ module.exports = () => ({
 
   extra: {
     productionApiUrl: "https://api.monapp.com",
+    publicApiUrl:
+      process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.216:5000",
     backendPort: 5000,
     // 👇 NOUVEAU : configure l’hôte/port Socket via env ou fallback
     SOCKET_HOST: process.env.SOCKET_HOST || "192.168.1.216",
     SOCKET_PORT: process.env.SOCKET_PORT || "5000",
     router: {},
-    eas: { projectId: "91b7d51b-eb9c-4239-a7bc-d08d56edc2f3" },
+    eas: { projectId: "3be107c7-29d2-4987-91a0-8d7c31604891" },
   },
 
   owner: "drinjasiqi",

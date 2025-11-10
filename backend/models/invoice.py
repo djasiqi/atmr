@@ -70,6 +70,8 @@ class Invoice(db.Model):
     subtotal_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
     late_fee_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
     reminder_fee_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    vat_total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    vat_breakdown = Column(JSONB, nullable=True)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
     amount_paid: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
     balance_due: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
@@ -214,6 +216,8 @@ class Invoice(db.Model):
             "subtotal_amount": float(self.subtotal_amount),
             "late_fee_amount": float(self.late_fee_amount),
             "reminder_fee_amount": float(self.reminder_fee_amount),
+            "vat_total_amount": float(self.vat_total_amount),
+            "vat_breakdown": self.vat_breakdown,
             "total_amount": float(self.total_amount),
             "amount_paid": float(self.amount_paid),
             "balance_due": float(self.balance_due),
@@ -270,6 +274,10 @@ class InvoiceLine(db.Model):
     qty: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=1)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    vat_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
+    vat_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    total_with_vat: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    adjustment_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Optionnel : tracer la source (réservation)
     reservation_id = Column(
@@ -300,6 +308,10 @@ class InvoiceLine(db.Model):
             "qty": float(self.qty),
             "unit_price": float(self.unit_price),
             "line_total": float(self.line_total),
+            "vat_rate": float(self.vat_rate) if self.vat_rate is not None else None,
+            "vat_amount": float(self.vat_amount),
+            "total_with_vat": float(self.total_with_vat),
+            "adjustment_note": self.adjustment_note,
             "reservation_id": self.reservation_id,
         }
 
@@ -405,6 +417,10 @@ class CompanyBillingSettings(db.Model):
     reminder1_fee: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True, default=0)
     reminder2_fee: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True, default=40)
     reminder3_fee: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True, default=0)
+    vat_applicable = Column(Boolean, nullable=False, default=True)
+    vat_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True, default=Decimal("7.7"))
+    vat_label: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    vat_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Planning des rappels (en jours)
     reminder_schedule_days = Column(JSON, nullable=False, default={
@@ -471,6 +487,10 @@ class CompanyBillingSettings(db.Model):
             "reminder3_template": self.reminder3_template,
             "legal_footer": self.legal_footer,
             "pdf_template_variant": self.pdf_template_variant,
+            "vat_applicable": self.vat_applicable,
+            "vat_rate": float(self.vat_rate) if self.vat_rate is not None else None,
+            "vat_label": self.vat_label,
+            "vat_number": self.vat_number,
         }
 
 

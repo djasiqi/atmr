@@ -21,7 +21,7 @@ def upgrade():
         "rl_feedbacks",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=False),
-        sa.Column("suggestion_id", sa.String(length=0.100), nullable=False),
+        sa.Column("suggestion_id", sa.String(length=100), nullable=False),
         sa.Column("booking_id", sa.Integer(), nullable=False),
         sa.Column("assignment_id", sa.Integer(), nullable=False),
         sa.Column("current_driver_id", sa.Integer(), nullable=False),

@@ -29,6 +29,8 @@ RUN apt-get update && apt-get upgrade -y && \
     libjpeg-dev \
     libpng-dev \
     libfreetype6-dev \
+    libcairo2-dev \
+    pkg-config \
     liblcms2-dev \
     libwebp-dev \
     libtiff5-dev \
@@ -38,10 +40,15 @@ RUN apt-get update && apt-get upgrade -y && \
     && rm -rf /var/lib/apt/lists/*
 
 # Copier et installer les dépendances Python
-COPY requirements.txt requirements-rl.txt requirements-dev.txt ./
+COPY requirements.txt requirements-rl.txt ./
 RUN python -m pip install --upgrade pip setuptools wheel && \
     pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt && \
-    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-rl.txt
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-rl.txt && \
+    (if [ -f requirements-dev.txt ]; then \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-dev.txt; \
+    else \
+    echo "requirements-dev.txt absent, skip"; \
+    fi)
 
 # Stage intermédiaire pour les tests de sécurité
 FROM builder AS security-scanner
@@ -106,9 +113,10 @@ RUN apt-get update && apt-get upgrade -y && \
     libjpeg62-turbo \
     libpng16-16 \
     libfreetype6 \
+    libcairo2 \
     liblcms2-2 \
     libwebp7 \
-    libtiff5 \
+    libtiff6 \
     libxml2 \
     libxslt1.1 \
     libffi8 \
@@ -214,7 +222,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Installation des dépendances de développement
 COPY --from=builder /wheels /wheels
-RUN pip install --no-index --find-links=/wheels -r requirements-dev.txt && \
+RUN if [ -f requirements-dev.txt ]; then \
+    pip install --no-index --find-links=/wheels -r requirements-dev.txt; \
+    else \
+    echo "requirements-dev.txt absent, skip"; \
+    fi; \
     rm -rf /wheels
 
 USER appuser
@@ -235,7 +247,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Installation des dépendances de test
 COPY --from=builder /wheels /wheels
-RUN pip install --no-index --find-links=/wheels -r requirements-dev.txt && \
+RUN if [ -f requirements-dev.txt ]; then \
+    pip install --no-index --find-links=/wheels -r requirements-dev.txt; \
+    else \
+    echo "requirements-dev.txt absent, skip"; \
+    fi; \
     rm -rf /wheels
 
 USER appuser

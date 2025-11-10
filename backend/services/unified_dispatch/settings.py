@@ -7,7 +7,7 @@ import os
 from ast import literal_eval
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Literal, Tuple, overload
 
 # paramètres centralisés (capacité, buffers, pénalités…)
 # ------------------------------------------------------------
@@ -116,6 +116,7 @@ class FairnessSettings:
     enable_fairness: bool = True             # activer l'équité
     fairness_window_days: int = 7            # fenêtre d'équité (jours)
     fairness_weight: float = 0.3             # poids de l'équité
+    reset_daily_load: bool = False           # remettre les compteurs à zéro pour un run manuel
 
 
 @dataclass
@@ -323,11 +324,12 @@ def _validate_merge_result(
         "applied": [],
         "ignored": [],
         "errors": [],
+        "critical_errors": [],
     }
     
     # Clés critiques qui doivent être dans Settings
     critical_keys = {
-        "fairness": {"fairness_weight", "enabled"},
+        "fairness": {"fairness_weight", "enabled", "reset_daily_load"},
         "heuristic": {"driver_load_balance", "proximity", "priority"},
         "solver": {"time_limit_sec"},
         "features": {"enable_solver", "enable_heuristics", "enable_rl"},
@@ -350,6 +352,7 @@ def _validate_merge_result(
                             # Valeur différente de celle demandée → erreur
                             error_msg = f"Paramètre {path} appliqué avec valeur différente: {requested_value} → {final_value}"
                             validation_result["errors"].append(error_msg)
+                            validation_result["critical_errors"].append(path)
                             logger.warning("[Settings] %s", error_msg)
                         else:
                             validation_result["applied"].append(path)
@@ -361,6 +364,7 @@ def _validate_merge_result(
                 # Paramètre demandé mais non appliqué → erreur
                 error_msg = f"Paramètre critique non appliqué: {path}"
                 validation_result["errors"].append(error_msg)
+                validation_result["critical_errors"].append(path)
                 logger.warning("[Settings] %s", error_msg)
     
     # Identifier les clés ignorées (inconnues mais demandées)
@@ -392,7 +396,30 @@ def _validate_merge_result(
     return validation_result
 
 
-def merge_overrides(base: Settings, overrides: Dict[str, Any]) -> Settings:
+@overload
+def merge_overrides(
+    base: Settings,
+    overrides: Dict[str, Any],
+) -> Settings:
+    ...
+
+
+@overload
+def merge_overrides(
+    base: Settings,
+    overrides: Dict[str, Any],
+    *,
+    return_validation: Literal[True],
+) -> Tuple[Settings, Dict[str, Any]]:
+    ...
+
+
+def merge_overrides(
+    base: Settings,
+    overrides: Dict[str, Any],
+    *,
+    return_validation: bool = False,
+) -> Settings | Tuple[Settings, Dict[str, Any]]:
     """Applique des overrides dict sur une instance Settings (avec sous-dataclasses).
     - Ignore les clés inconnues (mode, run_async, preferred_driver_id, ...)
     - Conserve les types des sous-objets (pas de dict qui remplace une dataclass).
@@ -464,6 +491,8 @@ def merge_overrides(base: Settings, overrides: Dict[str, Any]) -> Settings:
         if strict_validation:
             raise ValueError(f"Paramètres critiques non appliqués: {validation_result['errors']}")
     
+    if return_validation:
+        return new_settings, validation_result
     return new_settings
 
 

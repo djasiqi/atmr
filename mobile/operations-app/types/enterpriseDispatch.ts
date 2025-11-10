@@ -133,6 +133,12 @@ export interface AssignResponsePayload {
   message?: string;
 }
 
+export interface DispatchRunResponse {
+  message: string;
+  for_date: string;
+  job?: Record<string, any>;
+}
+
 export interface ModeResponse {
   mode_before: "manual" | "semi_auto" | "fully_auto";
   mode_after: "manual" | "semi_auto" | "fully_auto";

@@ -1,5 +1,7 @@
 import logging
 from datetime import UTC, datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Any, Dict, Optional, cast
 
 from sqlalchemy import and_
 
@@ -39,7 +41,108 @@ class InvoiceService:
         super().__init__()
         self.pdf_service = PDFService()
 
-    def generate_invoice(self, company_id, client_id, period_year, period_month, bill_to_client_id=None, reservation_ids=None):
+    def cancel_invoice(self, invoice: Invoice, *, force: bool = False) -> None:
+        """Annule une facture en libérant les réservations associées."""
+        current_status = cast(InvoiceStatus, invoice.status)
+
+        if not force and current_status not in {InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED}:
+            msg = "Seules les factures au statut 'draft' peuvent être annulées."
+            raise ValueError(msg)
+
+        if current_status == InvoiceStatus.CANCELLED:
+            # Rien à faire, déjà annulée
+            return
+
+        try:
+            # Libérer les réservations liées à chaque ligne
+            for line in invoice.lines:
+                if line.reservation_id:
+                    booking = Booking.query.filter_by(id=line.reservation_id).first()
+                    if booking and booking.invoice_line_id == line.id:
+                        booking.invoice_line_id = None
+                        booking.updated_at = datetime.now(UTC)
+
+            invoice.status = InvoiceStatus.CANCELLED
+            invoice.cancelled_at = datetime.now(UTC)
+            invoice.updated_at = datetime.now(UTC)
+            invoice.balance_due = Decimal("0.00")
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            app_logger.error("Erreur lors de l'annulation de la facture %s: %s", invoice.id, exc)
+            raise
+
+    def duplicate_invoice(self, invoice: Invoice) -> Dict[str, Any]:
+        """Prépare un brouillon correctif à partir d'une facture existante.
+
+        Cette méthode annule la facture originale (en libérant les trajets) et renvoie
+        le contexte nécessaire côté frontend pour pré-remplir le formulaire de création.
+        """
+        current_status = cast(InvoiceStatus, invoice.status)
+        if current_status == InvoiceStatus.DRAFT:
+            raise ValueError("La facture est déjà un brouillon et peut être modifiée directement.")
+
+        reservation_lines = [line for line in invoice.lines if line.reservation_id]
+        if not reservation_lines:
+            raise ValueError("Aucune course liée à cette facture ne peut être dupliquée.")
+
+        bill_to_client_id: Optional[int] = invoice.bill_to_client_id
+        billing_type = "third_party" if bill_to_client_id else "direct"
+        reservation_ids: list[int] = []
+        overrides: Dict[str, Dict[str, Any]] = {}
+
+        for line in reservation_lines:
+            if not line.reservation_id:
+                continue
+
+            reservation_ids.append(line.reservation_id)
+            override: Dict[str, Any] = {
+                "amount": float(line.line_total),
+            }
+            if line.vat_rate is not None:
+                override["vat_rate"] = float(line.vat_rate)
+            if line.adjustment_note:
+                override["note"] = line.adjustment_note
+            overrides[str(line.reservation_id)] = override
+
+        client_payload: Dict[str, Any] | None = None
+        if invoice.client:
+            client = invoice.client
+            user = getattr(client, "user", None)
+            client_payload = {
+                "id": client.id,
+                "first_name": getattr(user, "first_name", None) if user else None,
+                "last_name": getattr(user, "last_name", None) if user else None,
+                "username": getattr(user, "username", None) if user else None,
+                "full_name": f"{getattr(user, 'first_name', '') or ''} {getattr(user, 'last_name', '') or ''}".strip()
+                if user
+                else None,
+            }
+
+        # Annule la facture d'origine pour libérer les réservations
+        self.cancel_invoice(invoice, force=True)
+
+        return {
+            "billing_type": billing_type,
+            "client_id": invoice.client_id,
+            "bill_to_client_id": invoice.bill_to_client_id,
+            "period_year": invoice.period_year,
+            "period_month": invoice.period_month,
+            "reservation_ids": reservation_ids,
+            "overrides": overrides,
+            "client": client_payload,
+        }
+
+    def generate_invoice(
+        self,
+        company_id,
+        client_id,
+        period_year,
+        period_month,
+        bill_to_client_id=None,
+        reservation_ids=None,
+        overrides=None,
+    ):
         """Génère une nouvelle facture pour un client et une période.
 
         Args:
@@ -49,6 +152,7 @@ class InvoiceService:
             period_month: Mois de facturation
             bill_to_client_id: ID du payeur (clinique/institution). Si None, client_id paie.
             reservation_ids: Liste d'IDs de réservations spécifiques. Si None, prend toutes les réservations non facturées.
+            overrides: Dict facultatif {reservation_id: {amount, vat_rate, note}}
 
         Returns:
             Invoice: La facture créée
@@ -57,6 +161,16 @@ class InvoiceService:
         try:
             # Récupérer les paramètres de facturation
             billing_settings = self._get_billing_settings(company_id)
+
+            overrides_map: Dict[int, Dict[str, Any]] = {}
+            if overrides and isinstance(overrides, dict):
+                for key, value in overrides.items():
+                    try:
+                        reservation_id = int(key)
+                    except (TypeError, ValueError):
+                        continue
+                    if isinstance(value, dict):
+                        overrides_map[reservation_id] = value
 
             # Si bill_to_client_id est fourni, vérifier que c'est une institution
             if bill_to_client_id:
@@ -75,14 +189,15 @@ class InvoiceService:
                     )
 
             # Récupérer les réservations
+            target_statuses = ["COMPLETED", "RETURN_COMPLETED"]
             if reservation_ids:
                 # Mode sélection manuelle : récupérer seulement les réservations spécifiées
                 reservations = Booking.query.filter(
                     Booking.id.in_(reservation_ids),
                     Booking.company_id == company_id,
                     Booking.client_id == client_id,
-                    Booking.status.in_(["COMPLETED", "RETURN_COMPLETED", "ACCEPTED"]),
-                    Booking.invoice_line_id.is_(None)  # Pas déjà facturé
+                    Booking.status.in_(target_statuses),
+                    Booking.invoice_line_id.is_(None),  # Pas déjà facturé
                 ).all()
 
                 if len(reservations) != len(reservation_ids):
@@ -107,8 +222,18 @@ class InvoiceService:
             # Générer le numéro de facture
             invoice_number = self._generate_invoice_number(company_id, period_year, period_month)
 
-            # Calculer les montants
-            subtotal = sum(reservation.amount or 0 for reservation in reservations)
+            # Préparer la TVA
+            vat_applicable = bool(getattr(billing_settings, "vat_applicable", True))
+            default_vat_rate = Decimal("0")
+            if vat_applicable and getattr(billing_settings, "vat_rate", None) is not None:
+                default_vat_rate = Decimal(str(billing_settings.vat_rate)).quantize(Decimal("0.01"))
+            vat_label = getattr(billing_settings, "vat_label", None)
+            vat_number = getattr(billing_settings, "vat_number", None)
+
+            two_places = Decimal("0.01")
+            subtotal = Decimal("0.00")
+            vat_total = Decimal("0.00")
+            vat_breakdown: dict[str, dict[str, Decimal]] = {}
 
             # Récupérer les infos du client pour les descriptions
             client = Client.query.get(client_id)
@@ -127,9 +252,6 @@ class InvoiceService:
             invoice.period_year = period_year
             invoice.invoice_number = invoice_number
             invoice.currency = "CHF"
-            invoice.subtotal_amount = subtotal
-            invoice.total_amount = subtotal
-            invoice.balance_due = subtotal
             invoice.issued_at = datetime.now(UTC)
             invoice.due_date = datetime.now(UTC) + timedelta(days=billing_settings.payment_terms_days or 30)
             invoice.status = InvoiceStatus.DRAFT
@@ -139,6 +261,28 @@ class InvoiceService:
 
             # Créer les lignes de facture avec le nom du patient
             for reservation in reservations:
+                base_amount = Decimal(str(reservation.amount or 0)).quantize(two_places)
+                override = overrides_map.get(reservation.id)
+                if override and "amount" in override and override["amount"] is not None:
+                    try:
+                        base_amount = Decimal(str(override["amount"])).quantize(two_places, rounding=ROUND_HALF_UP)
+                    except (InvalidOperation, ValueError, TypeError):
+                        app_logger.warning("Montant override invalide pour réservation %s", reservation.id)
+
+                line_vat_rate = default_vat_rate
+                if override and override.get("vat_rate") is not None:
+                    try:
+                        line_vat_rate = Decimal(str(override["vat_rate"])).quantize(Decimal("0.01"))
+                    except (InvalidOperation, ValueError, TypeError):
+                        app_logger.warning("TVA override invalide pour réservation %s", reservation.id)
+                        line_vat_rate = default_vat_rate
+
+                if not vat_applicable:
+                    line_vat_rate = Decimal("0")
+
+                vat_amount = (base_amount * line_vat_rate / Decimal("100")).quantize(two_places, rounding=ROUND_HALF_UP)
+                total_with_vat = (base_amount + vat_amount).quantize(two_places, rounding=ROUND_HALF_UP)
+
                 # Si facturation tierce, inclure le nom du patient dans la description
                 if bill_to_client_id:
                     description = f"Trajet pour {patient_name}: {reservation.pickup_location} → {reservation.dropoff_location}"
@@ -150,14 +294,52 @@ class InvoiceService:
                 line.type = InvoiceLineType.RIDE
                 line.description = description
                 line.qty = 1
-                line.unit_price = reservation.amount or 0
-                line.line_total = reservation.amount or 0
+                line.unit_price = base_amount
+                line.line_total = base_amount
+                line.vat_rate = line_vat_rate
+                line.vat_amount = vat_amount
+                line.total_with_vat = total_with_vat
+                if override and override.get("note"):
+                    line.adjustment_note = str(override["note"])[:500]
                 line.reservation_id = reservation.id
                 db.session.add(line)
                 db.session.flush()  # Pour obtenir l'ID de la ligne
 
                 # NOUVEAU: Lier la réservation à la ligne de facture pour éviter double facturation
                 reservation.invoice_line_id = line.id
+
+                subtotal += base_amount
+                vat_total += vat_amount
+                rate_key = f"{line_vat_rate.normalize()}"
+                if rate_key not in vat_breakdown:
+                    vat_breakdown[rate_key] = {"base": Decimal("0.00"), "vat": Decimal("0.00")}
+                vat_breakdown[rate_key]["base"] += base_amount
+                vat_breakdown[rate_key]["vat"] += vat_amount
+
+            invoice.subtotal_amount = subtotal
+            invoice.vat_total_amount = vat_total
+            invoice.total_amount = subtotal + vat_total
+            invoice.balance_due = invoice.total_amount
+            vat_payload: Dict[str, Dict[str, float]] = {
+                rate: {
+                    "base": float(values["base"].quantize(two_places)),
+                    "vat": float(values["vat"].quantize(two_places)),
+                }
+                for rate, values in vat_breakdown.items()
+            }
+            invoice.vat_breakdown = cast(Any, vat_payload)
+
+            if isinstance(invoice.meta, dict):
+                current_meta: Dict[str, Any] = dict(invoice.meta)
+            else:
+                current_meta = {}
+            current_meta["vat"] = {
+                "applicable": vat_applicable and (default_vat_rate > Decimal("0")),
+                "default_rate": float(default_vat_rate),
+                "label": vat_label,
+                "number": vat_number,
+            }
+            invoice.meta = cast(Any, current_meta)
 
             # Générer le PDF
             pdf_url = self.pdf_service.generate_invoice_pdf(invoice)
@@ -183,7 +365,16 @@ class InvoiceService:
             app_logger.error("Erreur lors de la génération de la facture: %s", str(e))
             raise
 
-    def generate_consolidated_invoice(self, company_id, client_ids, period_year, period_month, bill_to_client_id, client_reservations=None):
+    def generate_consolidated_invoice(
+        self,
+        company_id,
+        client_ids,
+        period_year,
+        period_month,
+        bill_to_client_id,
+        client_reservations=None,
+        overrides=None,
+    ):
         """Génère plusieurs factures pour différents clients mais toutes adressées à une institution.
 
         Args:
@@ -193,6 +384,7 @@ class InvoiceService:
             period_month: Mois de facturation
             bill_to_client_id: ID de l'institution payeuse (clinique)
             client_reservations: Dict {client_id: [reservation_ids]} pour sélection manuelle. Si None, mode auto.
+            overrides: Dict optionnel {reservation_id: {amount, vat_rate, note}}
 
         Returns:
             Dict avec invoices créées et erreurs
@@ -230,7 +422,8 @@ class InvoiceService:
                     period_year=period_year,
                     period_month=period_month,
                     bill_to_client_id=bill_to_client_id,
-                    reservation_ids=reservation_ids_for_client  # NOUVEAU: Support sélection manuelle
+                    reservation_ids=reservation_ids_for_client,
+                    overrides=overrides,
                 )
                 invoices.append(invoice)
 
@@ -351,7 +544,8 @@ class InvoiceService:
                 Booking.client_id == client_id,
                 Booking.scheduled_time >= start_date,
                 Booking.scheduled_time < end_date,
-                Booking.status.in_(["COMPLETED", "RETURN_COMPLETED", "ACCEPTED"])  # Réservations terminées/confirmées
+                Booking.status.in_(["COMPLETED", "RETURN_COMPLETED"]),
+                Booking.invoice_line_id.is_(None),
             )
         ).all()
 

@@ -5,7 +5,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // --- Config base URL (inclut /api pour matcher le backend) ---
 const expoExtra = Constants.expoConfig?.extra || {};
-const PROD_API_URL = expoExtra.productionApiUrl;
+const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL;
+const PROD_API_URL =
+  ENV_API_URL || expoExtra.publicApiUrl || expoExtra.productionApiUrl;
+const DEV_API_URL = expoExtra.devApiUrl || expoExtra.publicApiUrl;
 
 const getDevHost = (): string => {
   const legacyHost = (Constants as any)?.manifest?.debuggerHost?.split(":")[0]; // Expo < 49
@@ -21,10 +24,12 @@ const getDevHost = (): string => {
   return detectedHost;
 };
 
-const PORT = expoExtra.backendPort || "5000";
+const ENV_PORT = process.env.EXPO_PUBLIC_BACKEND_PORT;
+const PORT = ENV_PORT || expoExtra.backendPort || "5000";
 export const baseURL = __DEV__
-  ? `http://${getDevHost()}:${PORT}/api`
-  : `${(PROD_API_URL || "").replace(/\/$/, "")}/api`;
+  ? `${(DEV_API_URL || `http://${getDevHost()}:${PORT}`)
+      .replace(/\/$/, "")}/api/v1`
+  : `${(PROD_API_URL || "").replace(/\/$/, "")}/api/v1`;
 
 // --- clés stockage ---
 const TOKEN_KEY = "token";

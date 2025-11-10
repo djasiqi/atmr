@@ -43,9 +43,9 @@ def upgrade():
 
     with op.batch_alter_table("driver_shift", schema=None) as batch_op:
         batch_op.add_column(sa.Column("timezone", sa.String(length=64), server_default="Europe/Zurich", nullable=False))
-        batch_op.add_column(sa.Column("site", sa.String(length=0.120), nullable=True))
-        batch_op.add_column(sa.Column("zone", sa.String(length=0.120), nullable=True))
-        batch_op.add_column(sa.Column("client_ref", sa.String(length=0.120), nullable=True))
+        batch_op.add_column(sa.Column("site", sa.String(length=120), nullable=True))
+        batch_op.add_column(sa.Column("zone", sa.String(length=120), nullable=True))
+        batch_op.add_column(sa.Column("client_ref", sa.String(length=120), nullable=True))
         batch_op.add_column(sa.Column("pay_code", sa.String(length=50), nullable=True))
         batch_op.add_column(sa.Column("vehicle_id", sa.Integer(), nullable=True))
         batch_op.add_column(sa.Column("notes_internal", sa.Text(), nullable=True))

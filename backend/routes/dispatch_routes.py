@@ -492,7 +492,17 @@ class CompanyDispatchRun(Resource):
         body: Dict[str, Any] = request.get_json(force=True) or {}
         logger.info("[Dispatch] /run body: %s", body)
 
-        # --- Validation avec Marshmallow
+        requested_mode = (body.get("mode") or "").strip().lower() or None
+        final_mode = (body.get("finalMode") or body.get("final_mode") or "").strip().lower() or None
+        if requested_mode not in {None, "auto", "heuristic_only", "solver_only"}:
+            requested_mode = None
+        if final_mode and final_mode not in {"auto", "heuristic_only", "solver_only"}:
+            final_mode = None
+        effective_mode = requested_mode or final_mode
+        if effective_mode == "semi_auto":
+            effective_mode = "heuristic_only"
+
+        # --- Validation with Marshmallow
         schema = DispatchRunSchema()
         errors = schema.validate(body)
         if errors:
@@ -515,7 +525,7 @@ class CompanyDispatchRun(Resource):
         # La validation Marshmallow garantit que 'async' est présent avec défaut True
         is_async = body.get("async", True)
 
-        mode = body.get("mode")
+        mode = effective_mode or body.get("mode")
 
         # --- Paramètres
         allow_emergency_val = body.get("allow_emergency")
@@ -531,9 +541,9 @@ class CompanyDispatchRun(Resource):
         }
 
         # --- Surcharges de paramètres
-        # Extract mode from root or overrides
-        mode = body.get("mode")
-        if mode:
+        if effective_mode:
+            params["mode"] = effective_mode
+        elif mode:
             params["mode"] = mode
 
         overrides = body.get("overrides")

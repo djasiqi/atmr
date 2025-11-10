@@ -14,9 +14,9 @@ import sqlalchemy as sa
 
 
 revision = "${up_revision}"
-down_revision = ${down_revision!r}
-branch_labels = ${branch_labels!r}
-depends_on = ${depends_on!r}
+down_revision = ${repr(down_revision)}
+branch_labels = ${repr(branch_labels)}
+depends_on = ${repr(depends_on)}
 
 
 def upgrade():

@@ -1,10 +1,11 @@
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from flask import request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from flask_restx import Namespace, Resource, fields, reqparse
+from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload
 
 from ext import limiter, role_required
@@ -21,6 +22,7 @@ from models import (
     User,
     db,
 )
+from models.enums import ClientType
 from services.invoice_service import InvoiceService
 from services.pdf_service import PDFService
 
@@ -402,6 +404,22 @@ class CompanyBillingSettingsResource(Resource):
             if "auto_reminders_enabled" in validated_data:
                 billing_settings.auto_reminders_enabled = validated_data["auto_reminders_enabled"]
 
+            if "vat_applicable" in validated_data:
+                billing_settings.vat_applicable = bool(validated_data["vat_applicable"])
+
+            if "vat_rate" in validated_data:
+                rate_value = validated_data.get("vat_rate")
+                if rate_value is None:
+                    billing_settings.vat_rate = None
+                else:
+                    billing_settings.vat_rate = Decimal(str(rate_value))
+
+            if "vat_label" in validated_data:
+                billing_settings.vat_label = validated_data.get("vat_label")
+
+            if "vat_number" in validated_data:
+                billing_settings.vat_number = validated_data.get("vat_number")
+
             app_logger.info("Paramètres mis à jour avec succès")
             db.session.commit()
             return billing_settings.to_dict()
@@ -411,6 +429,90 @@ class CompanyBillingSettingsResource(Resource):
                 "Erreur lors de la mise à jour des paramètres: %s", str(e))
             db.session.rollback()
             return {"error": f"Erreur interne du serveur: {e!s}"}, 500
+
+
+@invoices_ns.route("/companies/<int:company_id>/clients/eligible")
+class EligibleClients(Resource):
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    @invoices_ns.param("search", "Recherche par prénom, nom ou email", type="string")
+    @invoices_ns.param("limit", "Nombre maximum de clients retournés (1-200)", type="integer", default=50, minimum=1, maximum=200)
+    def get(self, company_id: int):
+        """Liste les clients ayant des trajets non facturés, avec possibilité de recherche."""
+        user_public_id = get_jwt_identity()
+        user = User.query.filter_by(public_id=user_public_id).first()
+        if not user or not user.company or user.company.id != company_id:
+            return {"error": "Entreprise non trouvée ou accès refusé"}, 404
+
+        search = (request.args.get("search") or "").strip()
+        try:
+            limit = int(request.args.get("limit", 50))
+        except ValueError:
+            limit = 50
+        limit = max(1, min(limit, 200))
+
+        unbilled_subquery = (
+            db.session.query(
+                Booking.client_id.label("client_id"),
+                func.count(Booking.id).label("unbilled_count"),
+                func.max(
+                    func.coalesce(Booking.completed_at, Booking.scheduled_time)
+                ).label("last_ride_at"),
+            )
+            .filter(
+                Booking.company_id == company_id,
+                Booking.status.in_([
+                    BookingStatus.COMPLETED.value,
+                    BookingStatus.RETURN_COMPLETED.value,
+                ]),
+                Booking.invoice_line_id.is_(None),
+            )
+            .group_by(Booking.client_id)
+            .subquery()
+        )
+
+        query = (
+            db.session.query(
+                Client,
+                unbilled_subquery.c.unbilled_count,
+                unbilled_subquery.c.last_ride_at,
+            )
+            .join(unbilled_subquery, Client.id == unbilled_subquery.c.client_id)
+            .options(joinedload(Client.user))
+            .filter(
+                Client.company_id == company_id,
+                Client.is_institution.is_(False),
+                Client.is_active.is_(True),
+                Client.client_type != ClientType.SELF_SERVICE,
+            )
+        )
+
+        if search:
+            pattern = f"%{search.lower()}%"
+            query = query.join(User, Client.user).filter(
+                or_(
+                    func.lower(User.first_name).like(pattern),
+                    func.lower(User.last_name).like(pattern),
+                    func.lower(User.email).like(pattern),
+                )
+            )
+
+        results = (
+            query.order_by(unbilled_subquery.c.last_ride_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        clients = []
+        for client, unbilled_count, last_ride_at in results:
+            payload = client.serialize
+            payload["unbilled_count"] = int(unbilled_count or 0)
+            payload["last_ride_at"] = (
+                last_ride_at.isoformat() if isinstance(last_ride_at, datetime) else None
+            )
+            clients.append(payload)
+
+        return {"clients": clients, "total": len(clients)}, 200
 
 
 @invoices_ns.route("/companies/<int:company_id>/invoices/generate")
@@ -458,6 +560,9 @@ class GenerateInvoice(Resource):
                 # period_year et period_month sont déjà validés par le schema, donc toujours présents
                 invoice_service = InvoiceService()
 
+                client_reservations = validated_data.get("client_reservations")
+                overrides = validated_data.get("overrides")
+
                 # Cas 1: Facturation groupée de plusieurs clients vers une
                 # institution
                 if client_ids and bill_to_client_id:
@@ -477,10 +582,6 @@ class GenerateInvoice(Resource):
                         result = {"error": "Le client sélectionné n'est pas une institution"}
                         status_code = 400
                     else:
-                        # NOUVEAU: Support de la sélection manuelle de réservations
-                        # Format: { client_id: [reservation_ids] }
-                        client_reservations = validated_data.get("client_reservations")
-
                         # Générer les factures
                         invoice_result = invoice_service.generate_consolidated_invoice(
                             company_id,
@@ -488,7 +589,8 @@ class GenerateInvoice(Resource):
                             period_year,
                             period_month,
                             bill_to_client_id,
-                            client_reservations  # NOUVEAU
+                            client_reservations,
+                            overrides,
                         )
 
                         result = {
@@ -526,7 +628,8 @@ class GenerateInvoice(Resource):
                                 period_year,
                                 period_month,
                                 bill_to_client_id,
-                                validated_data.get("reservation_ids")
+                                validated_data.get("reservation_ids"),
+                                overrides,
                             )
                             result = invoice.to_dict()
                             status_code = 201
@@ -538,7 +641,8 @@ class GenerateInvoice(Resource):
                             period_year,
                             period_month,
                             bill_to_client_id,
-                            validated_data.get("reservation_ids")
+                            validated_data.get("reservation_ids"),
+                            overrides,
                         )
                         result = invoice.to_dict()
                         status_code = 201
@@ -614,7 +718,7 @@ class SendInvoice(Resource):
 
             # Marquer comme envoyée
             invoice.status = InvoiceStatus.SENT
-            invoice.sent_at = datetime.now(datetime.timezone.utc)
+            invoice.sent_at = datetime.now(UTC)
             db.session.commit()
 
             return {
@@ -716,7 +820,7 @@ class InvoicePayments(Resource):
             payment.invoice_id = invoice.id
             payment.amount = 0.0
             payment.method = method_value  # passer la valeur ENUM attendue par la colonne SAEnum
-            payment.paid_at = datetime.now(datetime.timezone.utc)
+            payment.paid_at = datetime.now(UTC)
             db.session.add(payment)
 
             # Mettre à jour le montant payé de la facture
@@ -728,7 +832,7 @@ class InvoicePayments(Resource):
             # Mettre à jour le statut
             if invoice.balance_due <= BALANCE_DUE_ZERO:
                 invoice.status = InvoiceStatus.PAID
-                invoice.paid_at = datetime.now(datetime.timezone.utc)
+                invoice.paid_at = datetime.now(UTC)
             elif invoice.amount_paid > AMOUNT_PAID_ZERO:
                 invoice.status = InvoiceStatus.PARTIALLY_PAID
 
@@ -855,18 +959,61 @@ class CancelInvoice(Resource):
             if not invoice:
                 return {"error": "Facture non trouvée"}, 404
 
-            # Annuler la facture
-            invoice.status = InvoiceStatus.CANCELLED
-            invoice.cancelled_at = datetime.now(datetime.timezone.utc)
-            db.session.commit()
+            invoice_service = InvoiceService()
+            invoice_service.cancel_invoice(invoice)
 
             return {
                 "message": "Facture annulée",
-                "status": invoice.status.value}
+                "status": invoice.status.value,
+            }
 
+        except ValueError as e:
+            app_logger.warning(
+                "Erreur métier lors de l'annulation de la facture %s: %s", invoice_id, e
+            )
+            db.session.rollback()
+            return {"error": str(e)}, 400
         except Exception as e:
             app_logger.error(
                 "Erreur lors de l'annulation de la facture: %s", str(e))
+            db.session.rollback()
+            return {"error": "Erreur interne du serveur"}, 500
+
+
+@invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>/duplicate")
+class DuplicateInvoice(Resource):
+    """Endpoint pour dupliquer une facture existante en brouillon correctif."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def post(self, company_id, invoice_id):
+        try:
+            user_public_id = get_jwt_identity()
+            user = User.query.filter_by(public_id=user_public_id).first()
+            if not user or not user.company or user.company.id != company_id:
+                return {"error": "Non autorisé"}, 403
+
+            invoice = Invoice.query.filter_by(
+                id=invoice_id, company_id=company_id).first()
+            if not invoice:
+                return {"error": "Facture non trouvée"}, 404
+
+            invoice_service = InvoiceService()
+            draft_context = invoice_service.duplicate_invoice(invoice)
+
+            return {
+                "message": "Les transports ont été libérés. Veuillez corriger le brouillon puis générer une nouvelle facture.",
+                "draft": draft_context,
+            }, 200
+
+        except ValueError as e:
+            app_logger.warning(
+                "Erreur métier lors de la duplication de la facture %s: %s", invoice_id, e)
+            db.session.rollback()
+            return {"error": str(e)}, 400
+        except Exception as e:
+            app_logger.error(
+                "Erreur lors de la duplication de la facture %s: %s", invoice_id, e)
             db.session.rollback()
             return {"error": "Erreur interne du serveur"}, 500
 
