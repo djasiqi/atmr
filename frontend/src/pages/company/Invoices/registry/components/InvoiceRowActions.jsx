@@ -6,6 +6,7 @@ import {
   canGenerateReminder,
   canRegeneratePdf,
   canCancelInvoice,
+  canDuplicateInvoice,
   getNextReminderLevel,
 } from '../../../../../services/invoiceService';
 
@@ -17,6 +18,7 @@ const InvoiceRowActions = ({
   onRegeneratePdf,
   onCancel,
   onViewPdf,
+  onDuplicate,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
@@ -78,6 +80,14 @@ const InvoiceRowActions = ({
       onClick: onRegeneratePdf,
       className: styles.actionBtnSecondary,
       show: canRegeneratePdf(invoice),
+    },
+    {
+      key: 'duplicate',
+      label: 'Créer un correctif',
+      icon: '📝',
+      onClick: onDuplicate,
+      className: styles.actionBtnSecondary,
+      show: canDuplicateInvoice(invoice),
     },
     {
       key: 'cancel',
