@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import styles from './NewInvoiceModal.module.css';
 import { generateInvoice, invoiceService } from '../../../../../services/invoiceService';
-import { fetchCompanyClients } from '../../../../../services/companyService';
 import ReservationSelector from './ReservationSelector';
 
-const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
+const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initialDraft = null }) => {
   const [billingType, setBillingType] = useState('direct'); // 'direct' ou 'third_party'
   const [formData, setFormData] = useState({
     client_id: '',
@@ -14,6 +13,10 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
     period_month: new Date().getMonth() + 1,
   });
   const [clients, setClients] = useState([]);
+  const [clientCache, setClientCache] = useState({});
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [clientsError, setClientsError] = useState(null);
   const [institutions, setInstitutions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -22,36 +25,206 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
   // NOUVEAU: Gestion des sélections de réservations par client
   const [selectedReservations, setSelectedReservations] = useState({}); // { client_id: [reservation_objects] }
   const [showReservationSelection, setShowReservationSelection] = useState(false);
-
-  // Charger la liste des clients et institutions
+  const [overrides, setOverrides] = useState({});
+  const [preselectedReservations, setPreselectedReservations] = useState({});
   useEffect(() => {
-    const loadData = async () => {
-      if (!companyId) return;
+    if (!open) return;
 
+    if (initialDraft) {
+      const billing = initialDraft.billing_type === 'third_party' ? 'third_party' : 'direct';
+      setBillingType(billing);
+
+      setFormData({
+        client_id: initialDraft.client_id ? String(initialDraft.client_id) : '',
+        client_ids:
+          billing === 'third_party' && Array.isArray(initialDraft.client_ids)
+            ? initialDraft.client_ids
+            : [],
+        bill_to_client_id: initialDraft.bill_to_client_id
+          ? String(initialDraft.bill_to_client_id)
+          : '',
+        period_year: initialDraft.period_year ?? new Date().getFullYear(),
+        period_month: initialDraft.period_month ?? new Date().getMonth() + 1,
+      });
+
+      setOverrides(initialDraft.overrides || {});
+      if (
+        Array.isArray(initialDraft.reservation_ids) &&
+        initialDraft.client_id &&
+        initialDraft.reservation_ids.length > 0
+      ) {
+        setPreselectedReservations({
+          [initialDraft.client_id]: initialDraft.reservation_ids.map((id) => Number(id)),
+        });
+      } else {
+        setPreselectedReservations({});
+      }
+
+      if (initialDraft.client) {
+        setClientCache((prev) => ({ ...prev, [initialDraft.client.id]: initialDraft.client }));
+        setClients((prev) => {
+          if (prev.some((c) => c.id === initialDraft.client.id)) {
+            return prev;
+          }
+          return [...prev, initialDraft.client];
+        });
+      }
+
+      setSelectedReservations({});
+      setClientSearch('');
+      setShowReservationSelection(true);
+      return;
+    }
+
+    // Réinitialiser les champs pour une création manuelle
+    setBillingType('direct');
+    setFormData({
+      client_id: '',
+      client_ids: [],
+      bill_to_client_id: '',
+      period_year: new Date().getFullYear(),
+      period_month: new Date().getMonth() + 1,
+    });
+    setOverrides({});
+    setSelectedReservations({});
+    setPreselectedReservations({});
+    setShowReservationSelection(false);
+    setClientSearch('');
+  }, [open, initialDraft]);
+  const [vatConfig, setVatConfig] = useState({
+    applicable: false,
+    defaultRate: 0,
+    label: '',
+    number: '',
+  });
+
+  // Charger la liste des institutions à l'ouverture du modal
+  useEffect(() => {
+    if (!open || !companyId) return;
+
+    let isMounted = true;
+
+    const loadInstitutions = async () => {
       try {
         setLoading(true);
-
-        // Charger les clients
-        const clientsData = await fetchCompanyClients();
-        // Filtrer pour ne garder que les clients non-institutions pour la sélection patient
-        const regularClients = clientsData.filter((c) => !c.is_institution);
-        setClients(regularClients);
-
-        // Charger les institutions
         const institutionsData = await invoiceService.fetchInstitutions(companyId);
+        if (!isMounted) return;
         setInstitutions(institutionsData.institutions || []);
       } catch (err) {
-        console.error('Erreur lors du chargement des données:', err);
-        setError('Erreur lors du chargement des données');
+        console.error('Erreur lors du chargement des institutions:', err);
+        if (isMounted) {
+          setError('Erreur lors du chargement des institutions');
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
-    if (open) {
-      loadData();
-    }
+    loadInstitutions();
+
+    return () => {
+      isMounted = false;
+    };
   }, [companyId, open]);
+
+  useEffect(() => {
+    if (!open || !companyId) return;
+    let cancelled = false;
+
+    const loadBillingSettings = async () => {
+      try {
+        const settings = await invoiceService.fetchBillingSettings(companyId);
+        if (cancelled || !settings) return;
+        setVatConfig({
+          applicable: Boolean(settings.vat_applicable),
+          defaultRate:
+            settings.vat_rate !== undefined && settings.vat_rate !== null
+              ? Number(settings.vat_rate)
+              : 0,
+          label: settings.vat_label ?? '',
+          number: settings.vat_number ?? '',
+        });
+      } catch (err) {
+        console.warn('Erreur chargement paramètres TVA:', err);
+        if (!cancelled) {
+          setVatConfig((prev) => ({
+            ...prev,
+            applicable: false,
+            defaultRate: 0,
+          }));
+        }
+      }
+    };
+
+    loadBillingSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId, open]);
+
+  // Charger les clients éligibles (trajets non facturés) avec recherche
+  useEffect(() => {
+    if (!open || !companyId) return;
+
+    let cancelled = false;
+
+    const fetchClients = async () => {
+      try {
+        setClientsLoading(true);
+        setClientsError(null);
+        const query = clientSearch.trim();
+
+        const response = await invoiceService.fetchEligibleClients(companyId, {
+          search: query || undefined,
+          limit: 120,
+        });
+        const list = Array.isArray(response?.clients) ? response.clients : [];
+
+        if (!list.length) {
+          setClientsError(
+            query
+              ? 'Aucun client trouvé pour cette recherche.'
+              : "Aucun client éligible (courses terminées non facturées) n'a été trouvé pour cette période."
+          );
+        }
+
+        if (cancelled) return;
+
+        setClients(list);
+        setClientCache((prev) => {
+          const next = { ...prev };
+          list.forEach((client) => {
+            if (client && client.id != null) {
+              next[client.id] = client;
+            }
+          });
+          return next;
+        });
+      } catch (err) {
+        console.error('Erreur lors du chargement des clients éligibles:', err);
+        if (!cancelled) {
+          setClients([]);
+          setClientsError(
+            'Impossible de charger les clients à facturer. Vérifiez que votre backend est à jour.'
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setClientsLoading(false);
+        }
+      }
+    };
+
+    const timer = setTimeout(fetchClients, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [companyId, open, clientSearch]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -111,6 +284,212 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
     });
   }, []);
 
+  const handleOverrideChange = useCallback((reservationId, patch) => {
+    const key = String(reservationId);
+    setOverrides((prev) => {
+      const current = prev[key] ? { ...prev[key] } : {};
+      let changed = false;
+
+      Object.entries(patch).forEach(([field, value]) => {
+        if (value === null || value === undefined || value === '') {
+          if (field in current) {
+            delete current[field];
+            changed = true;
+          }
+        } else if (current[field] !== value) {
+          current[field] = value;
+          changed = true;
+        }
+      });
+
+      const next = { ...prev };
+      if (Object.keys(current).length === 0) {
+        if (next[key]) {
+          delete next[key];
+          changed = true;
+        }
+      } else {
+        next[key] = current;
+      }
+
+      return changed ? next : prev;
+    });
+  }, []);
+
+  const selectedClientIds = useMemo(() => {
+    const ids = new Set();
+    if (formData.client_id) {
+      const parsed = parseInt(formData.client_id, 10);
+      if (!Number.isNaN(parsed)) ids.add(parsed);
+    }
+    formData.client_ids.forEach((value) => {
+      const parsed = parseInt(value, 10);
+      if (!Number.isNaN(parsed)) ids.add(parsed);
+    });
+    return Array.from(ids);
+  }, [formData.client_id, formData.client_ids]);
+
+  const selectedClients = useMemo(() => {
+    return selectedClientIds.map((id) => clientCache[id]).filter(Boolean);
+  }, [selectedClientIds, clientCache]);
+
+  const allClients = useMemo(() => {
+    const seen = new Set();
+    const ordered = [];
+
+    selectedClients.forEach((client) => {
+      if (client && !seen.has(client.id)) {
+        seen.add(client.id);
+        ordered.push(client);
+      }
+    });
+
+    clients.forEach((client) => {
+      if (client && !seen.has(client.id)) {
+        seen.add(client.id);
+        ordered.push(client);
+      }
+    });
+
+    return ordered;
+  }, [clients, selectedClients]);
+
+  useEffect(() => {
+    const hasPendingPreselection = Object.values(preselectedReservations).some(
+      (ids) => Array.isArray(ids) && ids.length > 0
+    );
+    if (
+      hasPendingPreselection &&
+      (!selectedReservations || Object.keys(selectedReservations || {}).length === 0)
+    ) {
+      return;
+    }
+
+    const activeIds = new Set();
+    Object.values(selectedReservations).forEach((list) => {
+      (list || []).forEach((reservation) => {
+        if (reservation?.id != null) {
+          activeIds.add(String(reservation.id));
+        }
+      });
+    });
+
+    setOverrides((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      Object.keys(prev).forEach((key) => {
+        if (!activeIds.has(key)) {
+          delete next[key];
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [selectedReservations, preselectedReservations]);
+
+  const directClient = useMemo(() => {
+    if (!formData.client_id) return null;
+    const target = parseInt(formData.client_id, 10);
+    if (Number.isNaN(target)) return null;
+    return allClients.find((client) => client.id === target) || null;
+  }, [allClients, formData.client_id]);
+
+  const computeTotals = useCallback(
+    (reservationsList = []) => {
+      return reservationsList.reduce(
+        (acc, reservation) => {
+          const override = overrides[String(reservation?.id)] || {};
+          const baseAmount = Number(
+            override.amount ?? reservation?.amount ?? reservation?.estimated_amount ?? 0
+          );
+          const amount = Number.isNaN(baseAmount) ? 0 : baseAmount;
+          const vatRate = vatConfig.applicable
+            ? Number(
+                override.vat_rate ??
+                  reservation?.vat_rate ??
+                  reservation?.default_vat_rate ??
+                  vatConfig.defaultRate ??
+                  0
+              )
+            : 0;
+          const sanitizedRate = Number.isNaN(vatRate) ? 0 : vatRate;
+          const vatValue = vatConfig.applicable
+            ? Number(((amount * sanitizedRate) / 100).toFixed(2))
+            : 0;
+          const total = Number((amount + vatValue).toFixed(2));
+
+          acc.base += amount;
+          acc.vat += vatValue;
+          acc.total += total;
+          return acc;
+        },
+        { base: 0, vat: 0, total: 0 }
+      );
+    },
+    [overrides, vatConfig]
+  );
+
+  const activeClientId = formData.client_id ? parseInt(formData.client_id, 10) : null;
+  const directSelection = useMemo(() => {
+    if (!activeClientId) return [];
+    return selectedReservations[activeClientId] || [];
+  }, [activeClientId, selectedReservations]);
+  const directTotals = useMemo(
+    () => computeTotals(directSelection),
+    [computeTotals, directSelection]
+  );
+
+  const consolidatedSelection = useMemo(
+    () => Object.values(selectedReservations).reduce((acc, list) => acc.concat(list || []), []),
+    [selectedReservations]
+  );
+  const consolidatedTotals = useMemo(
+    () => computeTotals(consolidatedSelection),
+    [computeTotals, consolidatedSelection]
+  );
+
+  const formatCurrency = useCallback((value) => `${Number(value || 0).toFixed(2)} CHF`, []);
+
+  const buildOverridesPayload = useCallback(
+    (reservationsList = []) => {
+      const payload = {};
+      reservationsList.forEach((reservation) => {
+        if (!reservation || reservation.id == null) return;
+        const override = overrides[String(reservation.id)];
+        if (!override) return;
+        const clean = {};
+        if (override.amount !== undefined) {
+          const amount = Number(override.amount);
+          if (!Number.isNaN(amount)) clean.amount = amount;
+        }
+        if (override.vat_rate !== undefined) {
+          const rate = Number(override.vat_rate);
+          if (!Number.isNaN(rate)) clean.vat_rate = rate;
+        }
+        if (override.note) {
+          clean.note = override.note;
+        }
+        if (Object.keys(clean).length > 0) {
+          payload[reservation.id] = clean;
+        }
+      });
+      return payload;
+    },
+    [overrides]
+  );
+
+  const formatClientLabel = useCallback((client) => {
+    if (!client) return 'Client';
+    const name =
+      (client.full_name && client.full_name.trim()) ||
+      `${client.first_name || ''} ${client.last_name || ''}`.trim() ||
+      client.username ||
+      `Client #${client.id}`;
+    const count = client.unbilled_count ?? 0;
+    const suffix = count > 1 ? 's' : '';
+    return `${name} • ${count} transport${suffix}`;
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -141,15 +520,24 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
       if (billingType === 'direct') {
         // Facturation directe
         const clientId = parseInt(formData.client_id);
-        const reservs = selectedReservations?.[clientId];
-        const reservationIds = Array.isArray(reservs) ? reservs.map((r) => r?.id || r) : undefined;
+        const reservs = Array.isArray(selectedReservations?.[clientId])
+          ? selectedReservations[clientId]
+          : [];
+        const reservationIds = reservs.length > 0 ? reservs.map((r) => r?.id || r) : undefined;
+        const overridePayload = buildOverridesPayload(reservs);
 
-        result = await generateInvoice(companyId, {
+        const payload = {
           client_id: clientId,
           period_year: formData.period_year,
           period_month: formData.period_month,
-          reservation_ids: reservationIds, // NOUVEAU: Support sélection manuelle
-        });
+          reservation_ids: reservationIds,
+        };
+
+        if (Object.keys(overridePayload).length > 0) {
+          payload.overrides = overridePayload;
+        }
+
+        result = await generateInvoice(companyId, payload);
 
         // Ouvrir le PDF dans un nouvel onglet
         if (result.pdf_url) {
@@ -168,14 +556,22 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
           }
         });
 
-        result = await invoiceService.generateConsolidatedInvoice(companyId, {
+        const overridePayload = buildOverridesPayload(consolidatedSelection);
+
+        const payload = {
           client_ids: formData.client_ids.map((id) => parseInt(id)),
           bill_to_client_id: parseInt(formData.bill_to_client_id),
           period_year: formData.period_year,
           period_month: formData.period_month,
           client_reservations:
-            Object.keys(clientReservations).length > 0 ? clientReservations : undefined, // NOUVEAU
-        });
+            Object.keys(clientReservations).length > 0 ? clientReservations : undefined,
+        };
+
+        if (Object.keys(overridePayload).length > 0) {
+          payload.overrides = overridePayload;
+        }
+
+        result = await invoiceService.generateConsolidatedInvoice(companyId, payload);
 
         if (result.invoices && result.invoices.length > 0) {
           setSuccessMessage(
@@ -299,6 +695,26 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
           {billingType === 'direct' && (
             <>
               <div className={styles.formGroup}>
+                <label htmlFor="clientSearch" className={styles.label}>
+                  Recherche client
+                </label>
+                <input
+                  id="clientSearch"
+                  type="search"
+                  className={styles.searchInput}
+                  placeholder="Nom, prénom ou email"
+                  value={clientSearch}
+                  onChange={(e) => setClientSearch(e.target.value)}
+                  disabled={clientsLoading}
+                />
+                <small className={styles.hint}>
+                  Affiche uniquement les clients avec trajets non facturés.
+                </small>
+              </div>
+
+              {clientsError && <div className="alert alert-error mb-sm">{clientsError}</div>}
+
+              <div className={styles.formGroup}>
                 <label htmlFor="client_id" className={styles.label}>
                   Client *
                 </label>
@@ -309,16 +725,25 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
                   onChange={handleInputChange}
                   className={styles.select}
                   required
-                  disabled={loading}
+                  disabled={loading || clientsLoading}
                 >
                   <option value="">Sélectionner un client</option>
-                  {clients.map((client) => (
+                  {allClients.map((client) => (
                     <option key={client.id} value={client.id}>
-                      {`${client.first_name || ''} ${client.last_name || ''}`.trim() ||
-                        client.username}
+                      {`${formatClientLabel(client)}${
+                        directClient && client.id === directClient.id && clientSearch.trim()
+                          ? ' (sélectionné)'
+                          : ''
+                      }`}
                     </option>
                   ))}
                 </select>
+                {clientsLoading && <small className={styles.hint}>Chargement des clients…</small>}
+                {!clientsLoading && allClients.length === 0 && (
+                  <small className={styles.hint}>
+                    Aucun client avec transports à facturer pour le moment.
+                  </small>
+                )}
               </div>
 
               {/* Sélection des transports pour facturation directe */}
@@ -336,25 +761,45 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
                   </div>
 
                   {showReservationSelection && (
-                    <ReservationSelector
-                      companyId={companyId}
-                      clientId={parseInt(formData.client_id)}
-                      clientName={
-                        clients.find((c) => c.id === parseInt(formData.client_id))?.full_name || ''
-                      }
-                      period={{ year: formData.period_year, month: formData.period_month }}
-                      billToType="patient"
-                      onSelectionChange={(reservations) =>
-                        handleReservationSelectionChange(parseInt(formData.client_id), reservations)
-                      }
-                    />
-                  )}
-
-                  {selectedReservations?.[parseInt(formData.client_id)]?.length > 0 && (
-                    <small className={styles.hint}>
-                      {selectedReservations[parseInt(formData.client_id)].length} transport(s)
-                      sélectionné(s)
-                    </small>
+                    <>
+                      <ReservationSelector
+                        companyId={companyId}
+                        clientId={parseInt(formData.client_id)}
+                        clientName={directClient?.full_name || ''}
+                        period={{ year: formData.period_year, month: formData.period_month }}
+                        billToType="patient"
+                        vatConfig={vatConfig}
+                        overrides={overrides}
+                        preselectedIds={
+                          preselectedReservations[parseInt(formData.client_id, 10)] || []
+                        }
+                        onOverrideChange={handleOverrideChange}
+                        onSelectionChange={(reservations) =>
+                          handleReservationSelectionChange(
+                            parseInt(formData.client_id),
+                            reservations
+                          )
+                        }
+                      />
+                      {directSelection.length > 0 && (
+                        <div className={styles.summaryCard}>
+                          <div className={styles.summaryCardRow}>
+                            <span>Montant HT</span>
+                            <strong>{formatCurrency(directTotals.base)}</strong>
+                          </div>
+                          {vatConfig.applicable && (
+                            <div className={styles.summaryCardRow}>
+                              <span>TVA totale</span>
+                              <strong>{formatCurrency(directTotals.vat)}</strong>
+                            </div>
+                          )}
+                          <div className={`${styles.summaryCardRow} ${styles.summaryCardTotal}`}>
+                            <span>Total TTC</span>
+                            <strong>{formatCurrency(directTotals.total)}</strong>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -447,12 +892,37 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId }) => {
                               }
                               period={{ year: formData.period_year, month: formData.period_month }}
                               billToType="clinic"
-                              onSelectionChange={handleReservationSelectionChange}
+                              vatConfig={vatConfig}
+                              overrides={overrides}
+                              preselectedIds={preselectedReservations[clientId] || []}
+                              onOverrideChange={handleOverrideChange}
+                              onSelectionChange={(reservations) =>
+                                handleReservationSelectionChange(clientId, reservations)
+                              }
                             />
                           </div>
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+
+              {consolidatedSelection.length > 0 && (
+                <div className={styles.summaryCard}>
+                  <div className={styles.summaryCardRow}>
+                    <span>Montant HT global</span>
+                    <strong>{formatCurrency(consolidatedTotals.base)}</strong>
+                  </div>
+                  {vatConfig.applicable && (
+                    <div className={styles.summaryCardRow}>
+                      <span>TVA totale</span>
+                      <strong>{formatCurrency(consolidatedTotals.vat)}</strong>
+                    </div>
+                  )}
+                  <div className={`${styles.summaryCardRow} ${styles.summaryCardTotal}`}>
+                    <span>Total TTC</span>
+                    <strong>{formatCurrency(consolidatedTotals.total)}</strong>
                   </div>
                 </div>
               )}

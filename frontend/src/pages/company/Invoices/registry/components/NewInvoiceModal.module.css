@@ -267,6 +267,38 @@
   opacity: 0.6;
 }
 
+.summaryCard {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: #f9fafb;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.summaryCardRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: #374151;
+}
+
+.summaryCardRow span {
+  color: #6b7280;
+}
+
+.summaryCardRow strong {
+  color: #111827;
+  font-size: 15px;
+}
+
+.summaryCardTotal strong {
+  color: #0f766e;
+  font-weight: 600;
+}
+
 /* Responsive */
 @media (max-width: 640px) {
   .modal {

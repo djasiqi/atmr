@@ -1,42 +1,68 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoiceService } from '../../../../../services/invoiceService';
 import styles from './ReservationSelector.module.css';
 
-const ReservationSelector = ({ 
-  companyId, 
+const ReservationSelector = ({
+  companyId,
   clientId,
   clientName,
-  period, 
+  period,
   billToType,
-  onSelectionChange 
+  vatConfig,
+  overrides = {},
+  onOverrideChange,
+  onSelectionChange,
+  preselectedIds = [],
 }) => {
   const [reservations, setReservations] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
-  const [filter, setFilter] = useState('clinic'); // Filtre par défaut sur 'clinic' pour facturation tierce
+  const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hasAutoSelected, setHasAutoSelected] = useState(false);
+  useEffect(() => {
+    if (!reservations.length) return;
+    if (!Array.isArray(preselectedIds) || preselectedIds.length === 0) return;
+    const normalized = preselectedIds
+      .map((id) => Number(id))
+      .filter((id) => !Number.isNaN(id) && reservations.some((res) => res.id === id));
+    if (normalized.length === 0) return;
 
-  // Charger les réservations non facturées
+    const currentKey = [...selectedIds].sort((a, b) => a - b).join(',');
+    const nextKey = [...normalized].sort((a, b) => a - b).join(',');
+
+    if (currentKey !== nextKey) {
+      setSelectedIds(normalized);
+      setHasAutoSelected(true);
+    }
+  }, [preselectedIds, reservations, selectedIds]);
+
+  const vatApplicable = Boolean(vatConfig?.applicable);
+  const defaultVatRate = vatApplicable
+    ? Number.isFinite(Number(vatConfig?.defaultRate))
+      ? Number(vatConfig.defaultRate)
+      : 0
+    : 0;
+
   useEffect(() => {
     const loadReservations = async () => {
       if (!companyId || !clientId || !period.year || !period.month) return;
-      
+
       try {
         setLoading(true);
         setError(null);
-        
-        const data = await invoiceService.fetchUnbilledReservations(
-          companyId,
-          clientId,
-          {
-            year: period.year,
-            month: period.month,
-            billed_to_type: filter !== 'all' ? filter : undefined
-          }
-        );
-        
-        setReservations(data.reservations || []);
+
+        const data = await invoiceService.fetchUnbilledReservations(companyId, clientId, {
+          year: period.year,
+          month: period.month,
+          billed_to_type: filter !== 'all' ? filter : undefined,
+        });
+
+        const list = Array.isArray(data?.reservations) ? data.reservations : [];
+        setReservations(list);
+
+        // Retirer les sélections qui n'existent plus
+        setSelectedIds((prev) => prev.filter((id) => list.some((res) => res.id === id)));
       } catch (err) {
         console.error('Erreur chargement réservations:', err);
         setError('Erreur lors du chargement des transports');
@@ -49,36 +75,33 @@ const ReservationSelector = ({
     loadReservations();
   }, [companyId, clientId, period, filter]);
 
-  // Auto-sélectionner les transports qui matchent le type de facturation (une seule fois)
   useEffect(() => {
     if (billToType && reservations.length > 0 && !hasAutoSelected) {
-      const matching = reservations
-        .filter(r => r.billed_to_type === billToType)
-        .map(r => r.id);
-      setSelectedIds(matching);
-      setHasAutoSelected(true);
+      const matching = reservations.filter((r) => r.billed_to_type === billToType).map((r) => r.id);
+      if (matching.length > 0) {
+        setSelectedIds(matching);
+        setHasAutoSelected(true);
+      }
     }
   }, [reservations, billToType, hasAutoSelected]);
 
-  // Notifier le parent des changements de sélection
   useEffect(() => {
-    if (onSelectionChange) {
-      const selected = reservations.filter(r => selectedIds.includes(r.id));
-      onSelectionChange(selected);
-    }
+    if (!onSelectionChange) return;
+    const selected = reservations.filter((r) => selectedIds.includes(r.id));
+    onSelectionChange(selected);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds]);
+  }, [selectedIds, reservations]);
 
   const handleToggle = (reservationId) => {
-    setSelectedIds(prev =>
+    setSelectedIds((prev) =>
       prev.includes(reservationId)
-        ? prev.filter(id => id !== reservationId)
+        ? prev.filter((id) => id !== reservationId)
         : [...prev, reservationId]
     );
   };
 
   const handleSelectAll = () => {
-    const allIds = reservations.map(r => r.id);
+    const allIds = reservations.map((r) => r.id);
     setSelectedIds(allIds);
   };
 
@@ -86,8 +109,30 @@ const ReservationSelector = ({
     setSelectedIds([]);
   };
 
-  const selectedReservations = reservations.filter(r => selectedIds.includes(r.id));
-  const totalSelected = selectedReservations.reduce((sum, r) => sum + (r.amount || 0), 0);
+  const handleAmountChange = (reservationId, value) => {
+    const numeric = parseFloat(value);
+    if (!onOverrideChange) return;
+    if (value === '') {
+      onOverrideChange(reservationId, { amount: null });
+    } else if (!Number.isNaN(numeric)) {
+      onOverrideChange(reservationId, { amount: numeric });
+    }
+  };
+
+  const handleVatChange = (reservationId, value) => {
+    if (!onOverrideChange) return;
+    const numeric = parseFloat(value);
+    if (value === '') {
+      onOverrideChange(reservationId, { vat_rate: null });
+    } else if (!Number.isNaN(numeric)) {
+      onOverrideChange(reservationId, { vat_rate: numeric });
+    }
+  };
+
+  const handleNoteChange = (reservationId, value) => {
+    if (!onOverrideChange) return;
+    onOverrideChange(reservationId, { note: value?.trim?.() ? value : null });
+  };
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -95,7 +140,7 @@ const ReservationSelector = ({
       return new Date(dateString).toLocaleDateString('fr-FR', {
         day: '2-digit',
         month: '2-digit',
-        year: 'numeric'
+        year: 'numeric',
       });
     } catch {
       return '-';
@@ -106,29 +151,71 @@ const ReservationSelector = ({
     const labels = {
       patient: '👤 Patient',
       clinic: '🏥 Clinique',
-      insurance: '🏢 Assurance'
+      insurance: '🏢 Assurance',
     };
     return labels[type] || type;
   };
 
-  const getBillingTypeClass = (type) => {
-    return type || 'patient';
-  };
+  const getBillingTypeClass = (type) => type || 'patient';
+
+  const computeAmounts = useCallback(
+    (reservation) => {
+      const override = overrides?.[reservation.id] || {};
+      const amount = Number(
+        override.amount ?? reservation.amount ?? reservation.estimated_amount ?? 0
+      );
+      const vatRate = vatApplicable
+        ? Number(
+            override.vat_rate ??
+              reservation.vat_rate ??
+              reservation.default_vat_rate ??
+              defaultVatRate
+          )
+        : 0;
+      const sanitizedAmount = Number.isNaN(amount) ? 0 : amount;
+      const sanitizedVatRate = Number.isNaN(vatRate) ? 0 : vatRate;
+      const vatValue = vatApplicable
+        ? Number(((sanitizedAmount * sanitizedVatRate) / 100).toFixed(2))
+        : 0;
+      const total = Number((sanitizedAmount + vatValue).toFixed(2));
+
+      return {
+        amount: sanitizedAmount,
+        vatRate: sanitizedVatRate,
+        vatValue,
+        total,
+        note: override.note || '',
+      };
+    },
+    [overrides, vatApplicable, defaultVatRate]
+  );
+
+  const selectedReservations = useMemo(
+    () => reservations.filter((r) => selectedIds.includes(r.id)),
+    [reservations, selectedIds]
+  );
+
+  const summaryTotals = useMemo(() => {
+    return selectedReservations.reduce(
+      (acc, reservation) => {
+        const figures = computeAmounts(reservation);
+        acc.base += figures.amount;
+        acc.vat += figures.vatValue;
+        acc.total += figures.total;
+        return acc;
+      },
+      { base: 0, vat: 0, total: 0 }
+    );
+  }, [selectedReservations, computeAmounts]);
+
+  const formatCurrency = (value) => `${Number(value || 0).toFixed(2)} CHF`;
 
   if (loading) {
-    return (
-      <div className={styles.loading}>
-        Chargement des transports...
-      </div>
-    );
+    return <div className={styles.loading}>Chargement des transports...</div>;
   }
 
   if (error) {
-    return (
-      <div className={styles.error}>
-        {error}
-      </div>
-    );
+    return <div className={styles.error}>{error}</div>;
   }
 
   if (reservations.length === 0) {
@@ -179,63 +266,149 @@ const ReservationSelector = ({
       </div>
 
       <div className={styles.reservationsList}>
-        {reservations.map(reservation => (
-          <label
-            key={reservation.id}
-            className={`${styles.reservationItem} ${
-              selectedIds.includes(reservation.id) ? styles.selected : ''
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={selectedIds.includes(reservation.id)}
-              onChange={() => handleToggle(reservation.id)}
-              className={styles.checkbox}
-            />
-            
-            <div className={styles.reservationContent}>
-              <div className={styles.reservationHeader}>
-                <span className={styles.date}>
-                  {formatDate(reservation.date)}
-                </span>
-                <span className={styles.amount}>
-                  {(reservation.amount || 0).toFixed(2)} CHF
-                </span>
-              </div>
-              
-              <div className={styles.route}>
-                <span className={styles.location}>{reservation.pickup_location}</span>
-                <span className={styles.arrow}>→</span>
-                <span className={styles.location}>{reservation.dropoff_location}</span>
-              </div>
-              
-              <div className={styles.reservationFooter}>
-                <span className={`${styles.badge} ${styles[getBillingTypeClass(reservation.billed_to_type)]}`}>
-                  {getBillingTypeLabel(reservation.billed_to_type)}
-                </span>
-                {reservation.is_return && (
-                  <span className={styles.returnBadge}>↩ Retour</span>
-                )}
-                {reservation.is_urgent && (
-                  <span className={styles.urgentBadge}>⚡ Urgent</span>
-                )}
-                {reservation.medical_facility && (
-                  <span className={styles.medicalBadge}>
-                    🏥 {reservation.medical_facility}
+        {reservations.map((reservation) => {
+          const isSelected = selectedIds.includes(reservation.id);
+          const figures = computeAmounts(reservation);
+
+          return (
+            <label
+              key={reservation.id}
+              className={`${styles.reservationItem} ${isSelected ? styles.selected : ''}`}
+            >
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => handleToggle(reservation.id)}
+                className={styles.checkbox}
+              />
+
+              <div className={styles.reservationContent}>
+                <div className={styles.reservationHeader}>
+                  <span className={styles.date}>{formatDate(reservation.date)}</span>
+                  <div className={styles.amountStack}>
+                    <span className={styles.amount}>{formatCurrency(figures.amount)}</span>
+                    {vatApplicable && (
+                      <span className={styles.amountVat}>
+                        TVA {figures.vatRate.toFixed(2)}% · {formatCurrency(figures.vatValue)}
+                      </span>
+                    )}
+                    <span className={styles.amountTotal}>
+                      Total {formatCurrency(figures.total)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className={styles.route}>
+                  <span className={styles.location}>{reservation.pickup_location}</span>
+                  <span className={styles.arrow}>→</span>
+                  <span className={styles.location}>{reservation.dropoff_location}</span>
+                </div>
+
+                <div className={styles.reservationFooter}>
+                  <span
+                    className={`${styles.badge} ${
+                      styles[getBillingTypeClass(reservation.billed_to_type)]
+                    }`}
+                  >
+                    {getBillingTypeLabel(reservation.billed_to_type)}
                   </span>
+                  {reservation.is_return && <span className={styles.returnBadge}>↩ Retour</span>}
+                  {reservation.is_urgent && <span className={styles.urgentBadge}>⚡ Urgent</span>}
+                  {reservation.medical_facility && (
+                    <span className={styles.medicalBadge}>🏥 {reservation.medical_facility}</span>
+                  )}
+                </div>
+
+                {isSelected && (
+                  <div className={styles.adjustments}>
+                    <div className={styles.adjustGrid}>
+                      <label className={styles.field}>
+                        <span>Montant HT</span>
+                        <input
+                          type="number"
+                          step="0.05"
+                          min="0"
+                          className={styles.input}
+                          value={
+                            overrides?.[reservation.id]?.amount !== undefined
+                              ? overrides[reservation.id].amount
+                              : ''
+                          }
+                          placeholder={figures.amount.toFixed(2)}
+                          onChange={(e) => handleAmountChange(reservation.id, e.target.value)}
+                        />
+                      </label>
+
+                      {vatApplicable && (
+                        <label className={styles.field}>
+                          <span>TVA %</span>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            className={styles.input}
+                            value={
+                              overrides?.[reservation.id]?.vat_rate !== undefined
+                                ? overrides[reservation.id].vat_rate
+                                : ''
+                            }
+                            placeholder={figures.vatRate.toFixed(2)}
+                            onChange={(e) => handleVatChange(reservation.id, e.target.value)}
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    <label className={styles.field}>
+                      <span>Note d’ajustement (facultatif)</span>
+                      <textarea
+                        rows={2}
+                        className={styles.noteInput}
+                        value={overrides?.[reservation.id]?.note ?? ''}
+                        placeholder="Ex. Ajustement temps d’attente"
+                        onChange={(e) => handleNoteChange(reservation.id, e.target.value)}
+                      />
+                    </label>
+
+                    <div className={styles.adjustSummary}>
+                      <span>
+                        HT <strong>{formatCurrency(figures.amount)}</strong>
+                      </span>
+                      {vatApplicable && (
+                        <span>
+                          TVA <strong>{formatCurrency(figures.vatValue)}</strong>
+                        </span>
+                      )}
+                      <span>
+                        TTC <strong>{formatCurrency(figures.total)}</strong>
+                      </span>
+                    </div>
+                  </div>
                 )}
               </div>
-            </div>
-          </label>
-        ))}
+            </label>
+          );
+        })}
       </div>
 
       <div className={styles.summary}>
         <div className={styles.summaryItem}>
-          <strong>{selectedIds.length}</strong> transport(s) sélectionné(s)
-        </div>
-        <div className={styles.summaryItem}>
-          <strong>{totalSelected.toFixed(2)} CHF</strong>
+          <div className={styles.summaryLabel}>
+            {selectedIds.length} transport(s) sélectionné(s)
+          </div>
+          <div className={styles.summaryAmounts}>
+            <span>
+              HT : <strong>{formatCurrency(summaryTotals.base)}</strong>
+            </span>
+            {vatApplicable && (
+              <span>
+                TVA : <strong>{formatCurrency(summaryTotals.vat)}</strong>
+              </span>
+            )}
+            <span className={styles.summaryTotal}>
+              TTC : <strong>{formatCurrency(summaryTotals.total)}</strong>
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -243,4 +416,3 @@ const ReservationSelector = ({
 };
 
 export default ReservationSelector;
-

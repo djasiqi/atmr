@@ -124,6 +124,7 @@
   background-repeat: no-repeat;
   background-position: right var(--spacing-xs) center;
   background-size: 16px;
+  -webkit-appearance: none;
   appearance: none;
 }
 

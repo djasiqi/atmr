@@ -9,6 +9,7 @@ import {
   cancelInvoice,
   fetchBillingSettings,
   updateBillingSettings,
+  duplicateInvoice,
 } from '../../../../services/invoiceService';
 import useCompanyData from '../../../../hooks/useCompanyData';
 import Filters from './components/Filters';
@@ -47,7 +48,7 @@ const InvoicesRegistry = () => {
     invoice: null,
   });
   const [settingsDrawer, setSettingsDrawer] = useState({ open: false });
-  const [newInvoiceModal, setNewInvoiceModal] = useState({ open: false });
+  const [newInvoiceModal, setNewInvoiceModal] = useState({ open: false, invoiceDraft: null });
 
   // Billing settings
   const [billingSettings, setBillingSettings] = useState(null);
@@ -149,6 +150,34 @@ const InvoicesRegistry = () => {
     }
   };
 
+  const handleDuplicateInvoice = async (invoiceId) => {
+    if (
+      !window.confirm(
+        'Créer un brouillon correctif pour cette facture ? Les courses originales seront libérées.'
+      )
+    )
+      return;
+
+    try {
+      const response = await duplicateInvoice(company.id, invoiceId);
+      await loadInvoices();
+
+      const draftContext = response?.draft;
+      if (draftContext) {
+        setNewInvoiceModal({
+          open: true,
+          invoiceDraft: draftContext,
+        });
+      } else {
+        window.alert(
+          'Les transports ont été libérés. Vous pouvez créer un nouveau brouillon manuellement.'
+        );
+      }
+    } catch (err) {
+      setError(err.message || 'Erreur lors de la duplication de la facture');
+    }
+  };
+
   const handleUpdateBillingSettings = async (settingsData) => {
     try {
       await updateBillingSettings(company.id, settingsData);
@@ -228,7 +257,7 @@ const InvoicesRegistry = () => {
             </button>
             <button
               className={styles.newInvoiceBtn}
-              onClick={() => setNewInvoiceModal({ open: true })}
+              onClick={() => setNewInvoiceModal({ open: true, invoiceDraft: null })}
             >
               ➕ Nouvelle facture
             </button>
@@ -337,6 +366,7 @@ const InvoicesRegistry = () => {
                       onReminder={() => setReminderModal({ open: true, invoice })}
                       onRegeneratePdf={() => handleRegeneratePdf(invoice.id)}
                       onCancel={() => handleCancelInvoice(invoice.id)}
+                      onDuplicate={() => handleDuplicateInvoice(invoice.id)}
                       onViewPdf={() => window.open(invoice.pdf_url, '_blank')}
                     />
                   </td>
@@ -392,7 +422,8 @@ const InvoicesRegistry = () => {
 
       <NewInvoiceModal
         open={newInvoiceModal.open}
-        onClose={() => setNewInvoiceModal({ open: false })}
+        initialDraft={newInvoiceModal.invoiceDraft}
+        onClose={() => setNewInvoiceModal({ open: false, invoiceDraft: null })}
         onInvoiceGenerated={handleNewInvoiceGenerated}
         companyId={company?.id}
       />

@@ -83,6 +83,7 @@
 
 /* Bouton "Déconnexion" en plein brand */
 .logoutBtn {
+  -webkit-appearance: none;
   appearance: none;
   border: 1px solid transparent;
   background: var(--brand-primary);

@@ -87,6 +87,7 @@
 
 /* Select Dropdown */
 .select {
+  -webkit-appearance: none;
   appearance: none;
   padding: var(--spacing-sm);
   border: 2px solid var(--border-secondary);

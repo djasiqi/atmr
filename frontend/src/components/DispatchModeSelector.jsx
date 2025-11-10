@@ -15,6 +15,7 @@ const DispatchModeSelector = ({ onModeChange }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const fullyAutoLocked = true;
 
   // 🆕 Intégration Shadow Mode pour afficher statuts RL
   const {
@@ -44,6 +45,13 @@ const DispatchModeSelector = ({ onModeChange }) => {
   const handleModeChange = async (newMode) => {
     if (newMode === currentMode) {
       return; // Déjà sur ce mode
+    }
+
+    if (newMode === 'fully_auto' && fullyAutoLocked) {
+      window.alert(
+        '🚧 Le mode « Totalement Automatique » est actuellement en développement et ne peut pas être activé.'
+      );
+      return;
     }
 
     // Confirmation pour passage en fully_auto
@@ -285,15 +293,17 @@ const DispatchModeSelector = ({ onModeChange }) => {
         {/* MODE FULLY AUTO */}
         <div
           className={`mode-card ${currentMode === 'fully_auto' ? 'active' : ''} ${
-            saving ? 'disabled' : ''
+            saving || fullyAutoLocked ? 'disabled' : ''
           } ${!isReadyForPhase2 && shadowModeActive ? 'warning-border' : ''}`}
-          onClick={() => !saving && handleModeChange('fully_auto')}
+          onClick={() => !saving && !fullyAutoLocked && handleModeChange('fully_auto')}
         >
           <div className="mode-radio"></div>
           <div className="mode-content">
             <div className="mode-title">
               <h3>🚀 Totalement Automatique</h3>
-              <span className="mode-badge advanced">⚡ Avancé</span>
+              <span className="mode-badge advanced">
+                {fullyAutoLocked ? '🔒 En développement' : '⚡ Avancé'}
+              </span>
               {getRLBadge('fully_auto')}
             </div>
             <p className="mode-description">
@@ -325,6 +335,11 @@ const DispatchModeSelector = ({ onModeChange }) => {
             {!isReadyForPhase2 && shadowModeActive && (
               <div className="mode-warning">
                 ⚠️ Shadow Mode pas encore validé. Recommandé d'attendre validation avant activation.
+              </div>
+            )}
+            {fullyAutoLocked && (
+              <div className="mode-warning">
+                🚧 Mode en développement — activation bientôt disponible.
               </div>
             )}
           </div>
@@ -362,11 +377,17 @@ const DispatchModeSelector = ({ onModeChange }) => {
             recommandé après validation.
           </div>
         )}
-        {!shadowModeActive && !shadowLoading && (
+        {!shadowModeActive && !shadowLoading && !fullyAutoLocked && (
           <div className="info-section warning">
             <strong>🔍 Shadow Mode inactif:</strong> Le système MDI n'est pas en cours de
             surveillance. Contactez votre administrateur pour activer le Shadow Mode avant
             d'utiliser le mode Fully Auto.
+          </div>
+        )}
+        {fullyAutoLocked && (
+          <div className="info-section info">
+            <strong>🚧 Mode Totalement Automatique</strong> : fonctionnalité en cours de
+            finalisation, indisponible pour le moment.
           </div>
         )}
       </div>
