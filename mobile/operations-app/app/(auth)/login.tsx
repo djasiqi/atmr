@@ -1,5 +1,5 @@
 // src/app/(auth)/login.tsx
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -11,16 +11,18 @@ import {
   TextInput,
 } from "react-native";
 import { router } from "expo-router";
+import Ionicons from "react-native-vector-icons/Ionicons";
+
 import { useAuth } from "@/hooks/useAuth";
 import { Loader } from "@/components/ui/Loader";
-import Ionicons from "react-native-vector-icons/Ionicons";
-import { loginStyles as styles } from "@/styles/loginStyles";
+import { getLoginStyles } from "@/styles/loginStyles";
 
 export default function LoginScreen() {
   const { login, loading, setMode } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const { styles, palette } = useMemo(() => getLoginStyles("driver"), []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -44,75 +46,88 @@ export default function LoginScreen() {
         style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Connexion Chauffeur</Text>
-          <Text style={styles.subtitle}>
-            Connectez-vous à votre espace chauffeur
-          </Text>
-        </View>
-
-        <View style={styles.form}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#999"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-          />
-
-          <View style={styles.passwordContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Mot de passe"
-              placeholderTextColor="#999"
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-            />
-            <TouchableOpacity
-              style={styles.eyeButton}
-              onPress={() => setShowPassword((v) => !v)}
-            >
-              <Ionicons
-                name={showPassword ? "eye" : "eye-off"}
-                size={24}
-                color="#000"
-              />
-            </TouchableOpacity>
+        <View style={styles.card}>
+          <View style={styles.header}>
+            <Text style={styles.kicker}>Espace Chauffeur</Text>
+            <Text style={styles.title}>{"Missions en\nTemps Réel"}</Text>
+            <Text style={styles.subtitle}>
+              Pilotez votre journée : missions, disponibilité et communication.
+            </Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.forgotContainer}
-            onPress={() => router.push("/(auth)/forgot-password")}
-          >
-            <Text style={styles.forgotText}>Mot de passe oublié ?</Text>
-          </TouchableOpacity>
+          <View style={styles.form}>
+            <View style={styles.inputBlock}>
+              <Text style={styles.label}>Email Chauffeur</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="chauffeur@liri.ch"
+                placeholderTextColor={palette.placeholder}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+              />
+            </View>
 
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader />
-            ) : (
-              <Text style={styles.loginButtonText}>Se connecter</Text>
-            )}
-          </TouchableOpacity>
+            <View style={styles.inputBlock}>
+              <Text style={styles.label}>Mot de passe</Text>
+              <View style={styles.passwordField}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Mot de passe"
+                  placeholderTextColor={palette.placeholder}
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword((v) => !v)}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye" : "eye-off"}
+                    size={22}
+                    color={palette.secondary}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
 
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={async () => {
-              await setMode("enterprise");
-              router.replace("/(enterprise-auth)/login" as any);
-            }}
-          >
-            <Text style={styles.secondaryButtonText}>
-              Accès entreprise dispatch
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.helperLink}
+              onPress={() => router.push("/(auth)/forgot-password")}
+            >
+              <Text style={styles.helperLinkText}>Mot de passe oublié ?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader />
+              ) : (
+                <Text style={styles.primaryButtonText}>Se connecter</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.switchRow}>
+              <Text style={styles.switchPrompt}>
+                Besoin du dispatch mobile ?
+              </Text>
+              <TouchableOpacity
+                onPress={async () => {
+                  await setMode("enterprise");
+                  router.replace("/(enterprise-auth)/login" as any);
+                }}
+              >
+                <Text style={styles.switchLink}>
+                  Accéder à l’espace entreprise
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

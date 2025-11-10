@@ -3,8 +3,10 @@ import { io, type Socket } from "socket.io-client";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { baseURL } from "./api"; // ← réutilise l’URL déjà déduite (Expo dev/prod)
 
-// Flask-SocketIO vit à la racine (/socket.io). On enlève le suffixe /api.
-const SOCKET_ORIGIN = baseURL.replace(/\/api$/, "");
+type SocketRole = "driver" | "enterprise";
+
+// Flask-SocketIO vit à la racine (/socket.io). On enlève le suffixe /api ou /api/vX.
+const SOCKET_ORIGIN = baseURL.replace(/\/api(?:\/v\d+)?$/, "");
 
 // (Optionnel) logs verbeux en dev pour socket.io
 let enableSocketIODebug = () => {};
@@ -14,6 +16,7 @@ try {
 } catch {}
 
 let socket: Socket | null = null;
+let socketRole: SocketRole | null = null;
 let connectPromise: Promise<Socket> | null = null;
 
 const IS_DEV = __DEV__;
@@ -25,24 +28,45 @@ function buildOptions(token: string) {
     extraHeaders: { Authorization: `Bearer ${token}` },
     reconnection: true,
     reconnectionAttempts: Infinity,
-    // reconnectionAttempts: Number.POSITIVE_INFINITY,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
     timeout: 20000,
     forceNew: true,
+    transports: ["websocket", "polling"],
+    upgrade: true,
+    rememberUpgrade: true,
   };
-  // En dev mobile: polling-only + pas d’upgrade (Android/proxy-friendly)
-  return IS_DEV ? { ...base, transports: ["polling"], upgrade: false } : base;
+  // En dev, on garde polling en secours mais on privilégie WebSocket
+  return IS_DEV ? { ...base, transports: ["websocket", "polling"] } : base;
 }
 
-export async function connectSocket(token: string): Promise<Socket | null> {
+export async function connectSocket(
+  token: string,
+  role: SocketRole = "driver"
+): Promise<Socket | null> {
   if (!token) {
     console.warn("❌ Aucun token fourni à connectSocket");
     return null;
   }
-  if (socket?.connected) return socket;
-  if (connectPromise) return connectPromise;
+
+  if (socket && socketRole && socketRole !== role) {
+    try {
+      socket.off();
+      socket.disconnect();
+    } catch {}
+    socket = null;
+    connectPromise = null;
+  }
+
+  if (socket?.connected && socketRole === role) {
+    return socket;
+  }
+  if (connectPromise && socketRole === role) {
+    return connectPromise;
+  }
   if (IS_DEV) enableSocketIODebug();
+
+  socketRole = role;
 
   connectPromise = new Promise<Socket>((resolve, reject) => {
     try {
@@ -51,10 +75,11 @@ export async function connectSocket(token: string): Promise<Socket | null> {
 
       socket.on("connect", () => {
         console.log("✅ Socket connecté, sid:", socket?.id);
-        +(
-          // rejoindre la room chauffeur à la connexion (avec driver_id si dispo)
-          (+joinDriverRoom().catch(() => {}))
-        );
+        if (socketRole === "driver") {
+          +joinDriverRoom().catch(() => {});
+        } else if (socketRole === "enterprise") {
+          +joinCompanyRoom().catch(() => {});
+        }
         resolve(socket as Socket);
       });
 
@@ -99,6 +124,7 @@ export function disconnectSocket() {
     socket?.disconnect();
   } finally {
     socket = null;
+    socketRole = null;
     connectPromise = null;
   }
 }
@@ -128,6 +154,16 @@ export async function joinDriverRoom() {
       "📍 join_driver_room émis sans driver_id (erreur AsyncStorage)"
     );
   }
+}
+
+export async function joinCompanyRoom() {
+  const s = socket ?? (connectPromise ? await connectPromise : null);
+  if (!s) {
+    console.warn("⚠️ Socket non connecté, impossible de rejoindre la room entreprise");
+    return;
+  }
+  s.emit("join_company");
+  console.log("🏢 join_company émis");
 }
 
 export async function sendDriverLocation(payload: {

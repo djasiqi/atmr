@@ -26,6 +26,7 @@ SC_ZERO = 0
 CURRENT_LOAD_THRESHOLD = 2
 DID_THRESHOLD = 3
 LATENESS_THRESHOLD_MIN = 15
+FALLBACK_COORD_DEFAULT = (46.2044, 6.1432)
 # ⚡ Seuils pour bonus trajets d'urgence (minutes depuis le bureau)
 EMERGENCY_PICKUP_NEAR_THRESHOLD = 10  # Pickup proche du bureau
 EMERGENCY_PICKUP_MEDIUM_THRESHOLD = 15  # Pickup moyen du bureau
@@ -33,6 +34,55 @@ EMERGENCY_PICKUP_FAR_THRESHOLD = 20  # Pickup loin du bureau
 EMERGENCY_TRIP_SHORT_THRESHOLD = 15  # Trajet court
 EMERGENCY_TRIP_MEDIUM_THRESHOLD = 20  # Trajet moyen
 MAX_FAIRNESS_GAP = 2  # Écart maximum entre chauffeurs réguliers (équité stricte)
+def baseline_and_cap_loads(loads: Dict[int, int]) -> Tuple[Dict[int, int], int]:
+    """Normalise les charges brutes en retirant la charge minimale (baseline)
+    puis en bornant l'écart maximal à MAX_FAIRNESS_GAP.
+
+    Returns:
+        tuple(normalized_loads, baseline)
+    """
+    if not loads:
+        return {}, 0
+
+    numeric_loads: Dict[int, int] = {}
+    for raw_id, raw_value in loads.items():
+        try:
+            did = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        try:
+            count = int(raw_value)
+        except (TypeError, ValueError):
+            count = 0
+        numeric_loads[did] = max(count, 0)
+
+    if not numeric_loads:
+        return {}, 0
+
+    baseline = min(numeric_loads.values())
+    normalized: Dict[int, int] = {}
+    for did, load in numeric_loads.items():
+        diff = max(0, load - baseline)
+        normalized[did] = min(diff, MAX_FAIRNESS_GAP)
+    return normalized, baseline
+
+
+def _normalized_loads(loads: Dict[int, int]) -> Dict[int, int]:
+    """Normalise les charges en retirant la charge minimale et en bornant l'écart maximal.
+
+    Cela évite que des historiques trop élevés déséquilibrent la répartition courante :
+    seules les différences dans la fenêtre MAX_FAIRNESS_GAP sont conservées.
+    """
+    if not loads:
+        return {}
+    min_load = min(loads.values())
+    normalized: Dict[int, int] = {}
+    for did, load in loads.items():
+        diff = load - min_load
+        diff = max(diff, 0)
+        normalized[did] = min(diff, MAX_FAIRNESS_GAP)
+    return normalized
+
 PREFERRED_EXTRA_GAP = 1  # Marge supplémentaire autorisée pour le chauffeur préféré
 
 DEFAULT_SETTINGS = Settings()
@@ -269,27 +319,50 @@ def _current_driver_id(b: Booking) -> int | None:
     return _py_int(getattr(b, "driver_id", None))
 
 
-def _driver_current_coord(d: Driver) -> Tuple[float, float]:
-    # On assume que data.py a mis à jour current_lat/current_lon
+def _driver_current_coord(d: Driver) -> Tuple[Tuple[float, float], float]:
+    factor = float(getattr(d, "_coord_quality_factor", 1.0) or 1.0)
+    coord: Tuple[float, float] | None = None
+
     cur_lat = getattr(d, "current_lat", None)
     cur_lon = getattr(d, "current_lon", None)
     if cur_lat is not None and cur_lon is not None:
-        return (float(cur_lat), float(cur_lon))
-    # fallback sur base chauffeur
-    lat = getattr(d, "latitude", None)
-    lon = getattr(d, "longitude", None)
-    if lat is not None and lon is not None:
-        return (float(lat), float(lon))
-    # fallback Genève
-    return (46.2044, 6.1432)
+        try:
+            coord = (float(cur_lat), float(cur_lon))
+        except Exception:
+            coord = None
+
+    if coord is None:
+        lat = getattr(d, "latitude", None)
+        lon = getattr(d, "longitude", None)
+        if lat is not None and lon is not None:
+            try:
+                coord = (float(lat), float(lon))
+            except Exception:
+                coord = None
+
+    if coord is None:
+        coord = FALLBACK_COORD_DEFAULT
+        factor = min(factor, 0.5)
+
+    factor = max(0.2, min(factor, 1.0))
+    return coord, factor
 
 
 def _booking_coords(
         b: Booking) -> Tuple[Tuple[float, float], Tuple[float, float]]:
-    return (
-        (float(cast("Any", b.pickup_lat)), float(cast("Any", b.pickup_lon))),
-        (float(cast("Any", b.dropoff_lat)), float(cast("Any", b.dropoff_lon))),
-    )
+    def _extract(lat_value: Any, lon_value: Any) -> Tuple[float, float]:
+        try:
+            lat = float(lat_value) if lat_value is not None else float("nan")
+            lon = float(lon_value) if lon_value is not None else float("nan")
+            if math.isnan(lat) or math.isnan(lon):
+                raise ValueError("nan coordinate")
+            return (lat, lon)
+        except Exception:
+            return FALLBACK_COORD_DEFAULT  # Genève par défaut
+
+    pickup_coord = _extract(getattr(b, "pickup_lat", None), getattr(b, "pickup_lon", None))
+    dropoff_coord = _extract(getattr(b, "dropoff_lat", None), getattr(b, "dropoff_lon", None))
+    return (pickup_coord, dropoff_coord)
 
 
 def _is_booking_assigned(b: Booking) -> bool:
@@ -349,16 +422,14 @@ def _is_return_urgent(b: Booking, settings: Settings) -> bool:
 
 def _driver_fairness_penalty(
         driver_id: int, fairness_counts: Dict[int, int]) -> float:
-    """Plus le chauffeur a déjà de courses aujourd'hui, plus la pénalité augmente.
-    Renvoie une valeur [0..1] (à soustraire au score final).
-    ⚡ RENFORCÉ : Pénalité plus forte pour mieux équilibrer la charge.
-    """
-    cnt = fairness_counts.get(driver_id, 0)
-    if cnt <= CNT_ZERO:
-        return 0
-    # ⚡ Échelle renforcée : 1 course = 0.08, 3 courses = 0.24, 5 courses = 0.40, cap à 0.5
-    # Plus de pénalité pour mieux équilibrer la charge
-    return min(0.5, 0.08 * cnt)
+    """Plus le chauffeur a déjà de courses (dans la fenêtre équité), plus la pénalité augmente."""
+    normalized = _normalized_loads(fairness_counts)
+    diff = normalized.get(driver_id, 0)
+    if diff <= 0:
+        return 0.0
+    # Échelle agressive : diff=1 → 0.35, diff=2 → 0.7 (fort découragement)
+    penalty = 0.35 * diff
+    return min(0.8, penalty)
 
 
 def _regular_driver_bonus(b: Booking, d: Driver) -> float:
@@ -436,8 +507,10 @@ def _score_driver_for_booking(
     # ⚡ AMÉLIORATION: Utiliser le meilleur des deux points de départ pour le calcul de base
     # Cela évite de pénaliser inutilement les courses quand last_dropoff_coord est loin
     # Puis ajouter un bonus de continuité si last_dropoff_coord est utilisé et proche
-    current_coord = _driver_current_coord(d)
+    current_coord, driver_quality_factor = _driver_current_coord(d)
     p_coord, d_coord = _booking_coords(b)
+    booking_quality_factor = float(getattr(b, "_coord_quality_factor", 1.0) or 1.0)
+    coord_quality_factor = max(0.2, min(driver_quality_factor, booking_quality_factor))
 
     # Initialiser use_last_dropoff_for_bonus
     use_last_dropoff_for_bonus = False
@@ -445,7 +518,7 @@ def _score_driver_for_booking(
     # Calculer les distances depuis les deux points possibles
     to_pickup_from_current = haversine_minutes(
         current_coord, p_coord, avg_kmh=avg_kmh, min_minutes=1, max_minutes=180
-    ) if current_coord else 999
+    )
     
     to_pickup_from_last_dropoff = 999
     if last_dropoff_coord:
@@ -537,6 +610,7 @@ def _score_driver_for_booking(
         prox_score = 0
     else:
         prox_score = max(0, 1 - (to_pickup_min - 5) / 25)
+    prox_score *= coord_quality_factor
     
     # ⚡ Bonus de continuité géographique si last_dropoff_coord est utilisé
     # Cela récompense les courses qui minimisent les trajets entre courses consécutives
@@ -595,6 +669,7 @@ def _score_driver_for_booking(
         "preferred_driver_bonus": preferred_bonus * 1.0,  # ✅ Ajout du bonus préférence dans le breakdown
         "lateness_penalty": -lateness_penalty,
         "continuity_bonus": continuity_bonus,  # ⚡ Bonus de continuité géographique
+        "coord_quality": coord_quality_factor,
     }
     
     # Fusion avec score RL si activé
@@ -651,8 +726,10 @@ def _score_booking_driver_pair(
         d_id = int(cast("Any", d.id))
         dw = (0, 24 * 60)  # Default window (driver_window non utilisé dans cette version simplifiée)
         
+        normalized_counts = _normalized_loads(fairness_counts)
+
         sc, breakdown, time_est = _score_driver_for_booking(
-            b, d, dw, settings, fairness_counts, company_coords=company_coords, preferred_driver_id=preferred_driver_id, last_dropoff_coord=last_dropoff_coord
+            b, d, dw, settings, normalized_counts, company_coords=company_coords, preferred_driver_id=preferred_driver_id, last_dropoff_coord=last_dropoff_coord
         )
         
         return (b_id, d_id, sc, breakdown, time_est)
@@ -680,7 +757,10 @@ def assign(problem: Dict[str, Any],
     bookings: List[Booking] = problem["bookings"]
     drivers: List[Driver] = problem["drivers"]
     driver_windows: List[Tuple[int, int]] = problem.get("driver_windows", [])
-    fairness_counts: Dict[int, int] = problem.get("fairness_counts", {})
+    fairness_counts_raw: Dict[int, int] = problem.get("fairness_counts", {})
+    fairness_counts, fairness_baseline = baseline_and_cap_loads(fairness_counts_raw)
+    problem["fairness_counts"] = fairness_counts
+    problem["fairness_baseline"] = fairness_baseline
     company_coords: Tuple[float, float] | None = problem.get("company_coords")  # ⚡ Coordonnées du bureau
     driver_load_multipliers: Dict[int, float] = problem.get("driver_load_multipliers", {})  # ⚡ Multiplicateurs de charge par chauffeur
     preferred_driver_id: int | None = problem.get("preferred_driver_id")  # ⚡ Chauffeur préféré
@@ -742,23 +822,32 @@ def assign(problem: Dict[str, Any],
         """
         # Équité stricte : filtrer selon MAX_FAIRNESS_GAP
         if not current_loads:
-            eligible = all_drivers
-            min_load = 0
-            max_allowed_load = min_load + MAX_FAIRNESS_GAP
-        else:
-            min_load = min(current_loads.values())
-            max_allowed_load = min_load + MAX_FAIRNESS_GAP
+            return all_drivers
+
+        min_load = min(current_loads.values())
+
+        # Priorité absolue aux chauffeurs avec la charge minimale
+        eligible = [
+            d for d in all_drivers
+            if current_loads.get(int(cast("Any", d.id)), 0) == min_load
+        ]
+
+        # Si tout le monde a déjà au moins min_load+1, élargir progressivement jusqu'à MAX_FAIRNESS_GAP
+        gap = 1
+        while not eligible and gap <= MAX_FAIRNESS_GAP:
             eligible = [
                 d for d in all_drivers
-                if current_loads.get(int(cast("Any", d.id)), 0) <= max_allowed_load
+                if current_loads.get(int(cast("Any", d.id)), 0) <= min_load + gap
             ]
-            # Si aucun éligible (tous dépassent le gap), utiliser seulement ceux avec min_load
-            if not eligible:
-                eligible = [
-                    d for d in all_drivers
-                    if current_loads.get(int(cast("Any", d.id)), 0) == min_load
-                ]
+            gap += 1
+
+        # Si malgré tout aucun chauffeur n'est éligible (cas extrême), retourner la liste complète
+        if not eligible:
+            eligible = all_drivers
         
+        max_allowed_for_log = min_load + MAX_FAIRNESS_GAP
+        preferred_gap_limit = max_allowed_for_log + PREFERRED_EXTRA_GAP
+
         # ⚡ CORRECTION: Si un chauffeur préféré est défini, l'inclure dans la liste éligible
         # Le bonus de +3.0 dans le scoring fera la priorisation
         if preferred_driver_id:
@@ -768,7 +857,6 @@ def assign(problem: Dict[str, Any],
                 adjusted_cap = get_adjusted_max_cap(preferred_did)
                 current_load = current_loads.get(preferred_did, 0)
                 
-                preferred_gap_limit = max_allowed_load + PREFERRED_EXTRA_GAP
                 # Toujours inclure le préféré s'il est sous le cap et dans la marge d'équité élargie
                 if (
                     current_load < adjusted_cap
@@ -790,11 +878,11 @@ def assign(problem: Dict[str, Any],
                         "[HEURISTIC] ⚠️ Chauffeur préféré #%s au cap (load: %d/%d), bonus non appliqué",
                         preferred_did, current_load, adjusted_cap
                     )
-        
         logger.debug(
             "[HEURISTIC] 📊 Équité stricte: %d chauffeurs éligibles (min_load: %s, max_allowed: %s)",
-            len(eligible), min(current_loads.values()) if current_loads else "N/A", 
-            (min(current_loads.values()) + MAX_FAIRNESS_GAP) if current_loads else "N/A"
+            len(eligible),
+            min_load,
+            max_allowed_for_log,
         )
         return eligible if eligible else all_drivers
 
@@ -890,10 +978,11 @@ def assign(problem: Dict[str, Any],
         logger.debug("[DISPATCH] Assignation urgente #$%s...", b_id)
 
         # ⚡ Calculer les charges actuelles pour tous les chauffeurs
-        current_loads = {
+        raw_loads = {
             int(cast("Any", d.id)): fairness_effective.get(int(cast("Any", d.id)), 0)
             for d in drivers
         }
+        current_loads = _normalized_loads(raw_loads)
         # ⚡ Filtrer les chauffeurs éligibles selon préférence ou équité stricte
         eligible_drivers = get_eligible_drivers(drivers, current_loads)
 
@@ -913,7 +1002,7 @@ def assign(problem: Dict[str, Any],
                 d,
                 dw,
                 settings,
-                fairness_effective,
+                current_loads,
                 company_coords=company_coords,
                 preferred_driver_id=preferred_driver_id,
             )
@@ -1101,10 +1190,11 @@ def assign(problem: Dict[str, Any],
     if use_parallel and len(regular) > PARALLEL_MIN_BOOKINGS and len(drivers) > PARALLEL_MIN_DRIVERS:
         # Pré-scorer toutes les combinaisons en parallèle
         # ⚡ Calculer les charges actuelles pour tous les chauffeurs (pour le scoring parallèle)
-        current_loads_parallel = {
+        raw_loads_parallel = {
             int(cast("Any", d.id)): fairness_effective.get(int(cast("Any", d.id)), 0)
             for d in drivers
         }
+        current_loads_parallel = _normalized_loads(raw_loads_parallel)
         eligible_drivers_parallel = get_eligible_drivers(drivers, current_loads_parallel)
         scoring_tasks = []
         for b in regular:
@@ -1131,7 +1221,7 @@ def assign(problem: Dict[str, Any],
                     d,
                     (0, 24 * 60),
                     settings,
-                    fairness_effective,
+                    _normalized_loads(fairness_effective),
                     driver_index,
                     company_coords,
                     preferred_driver_id=preferred_driver_id,
@@ -1161,10 +1251,11 @@ def assign(problem: Dict[str, Any],
         rejected_reasons = []
 
         # ⚡ Calculer les charges actuelles pour tous les chauffeurs
-        current_loads = {
+        raw_loads_regular = {
             int(cast("Any", d.id)): fairness_effective.get(int(cast("Any", d.id)), 0)
             for d in drivers
         }
+        current_loads = _normalized_loads(raw_loads_regular)
         # ⚡ Filtrer les chauffeurs éligibles selon préférence ou équité stricte
         eligible_drivers = get_eligible_drivers(drivers, current_loads)
 
@@ -1202,7 +1293,7 @@ def assign(problem: Dict[str, Any],
                         d,
                         dw,
                         settings,
-                        fairness_effective,
+                        current_loads,
                         company_coords=company_coords,
                         preferred_driver_id=preferred_driver_id,
                         last_dropoff_coord=last_dropoff_for_driver,
@@ -1213,7 +1304,7 @@ def assign(problem: Dict[str, Any],
                     d,
                     dw,
                     settings,
-                    fairness_effective,
+                    current_loads,
                     company_coords=company_coords,
                     preferred_driver_id=preferred_driver_id,
                     last_dropoff_coord=last_dropoff_for_driver,
@@ -1656,14 +1747,14 @@ def assign(problem: Dict[str, Any],
         
         if last_dropoff:
             # Trouver le chauffeur correspondant
-            d = next((dr for dr in drivers if int(cast("Any", dr.id)) == did), None)
-            if d:
+            driver_obj = drivers[driver_index.get(did, 0)] if driver_index.get(did) is not None else None
+            if driver_obj:
                 di = driver_index.get(did, 0)
                 dw = driver_windows[di] if di < len(driver_windows) else (0, 24 * 60)
                 # Re-scorer avec last_dropoff_coord
                 sc_improved, breakdown_improved, (est_s_improved, est_f_improved) = _score_driver_for_booking(
                     b,
-                    d,
+                    driver_obj,
                     dw,
                     settings,
                     fairness_effective,
@@ -2101,6 +2192,7 @@ def assign(problem: Dict[str, Any],
     debug = {
         "proposed_load": proposed_load,
         "fairness_counts": fairness_counts,
+        "fairness_baseline": fairness_baseline,
         "urgent_count": len(urgent),
         "regular_count": len(regular),
         "max_cap": max_cap,
@@ -2132,10 +2224,20 @@ def assign_urgent(
         return HeuristicResult(assignments=[], unassigned_booking_ids=[
         ], debug={"reason": "no_urgent"})
 
+    allow_emergency = bool(getattr(settings.emergency, "allow_emergency", True))
+    logger.info(
+        "[Heuristics] assign_urgent start urgent=%s allow_emergency=%s",
+        len(urgent_booking_ids),
+        allow_emergency,
+    )
+
     bookings: List[Booking] = problem["bookings"]
     drivers: List[Driver] = problem["drivers"]
     driver_windows: List[Tuple[int, int]] = problem.get("driver_windows", [])
-    fairness_counts: Dict[int, int] = problem.get("fairness_counts", {})
+    fairness_counts_raw: Dict[int, int] = problem.get("fairness_counts", {})
+    fairness_counts, fairness_baseline = baseline_and_cap_loads(fairness_counts_raw)
+    problem["fairness_counts"] = fairness_counts
+    problem["fairness_baseline"] = fairness_baseline
     company_coords: Tuple[float, float] | None = problem.get("company_coords")  # ⚡ Coordonnées du bureau
     driver_load_multipliers: Dict[int, float] = problem.get("driver_load_multipliers", {})  # ⚡ Multiplicateurs de charge
     preferred_driver_id: int | None = problem.get("preferred_driver_id")  # ⚡ Chauffeur préféré
@@ -2162,11 +2264,12 @@ def assign_urgent(
     def _choose_best(
             b: Booking, regular_only: bool) -> HeuristicAssignment | None:
         best: Tuple[float, HeuristicAssignment] | None = None
+        norm_loads = _normalized_loads(fairness_effective_local)
+        emergency_candidate_logged = False
         for d in drivers:
             # Évite l'ouverture des chauffeurs d'urgence si regular_only
-            # ✅ Vérifier via driver_type (pas is_emergency)
-            driver_type = getattr(d, "driver_type", None)
-            driver_type_str = str(driver_type or "").strip().upper()
+            driver_type_attr = getattr(d, "driver_type", None)
+            driver_type_str = str(driver_type_attr or "").strip().upper()
             if "." in driver_type_str:
                 driver_type_str = driver_type_str.split(".")[-1]
             if regular_only and driver_type_str == "EMERGENCY":
@@ -2184,7 +2287,7 @@ def assign_urgent(
                 d,
                 dw,
                 settings,
-                fairness_effective_local,
+                norm_loads,
                 company_coords=company_coords,
                 preferred_driver_id=preferred_driver_id,
             )
@@ -2197,27 +2300,21 @@ def assign_urgent(
                 sc += 0.3
 
             # Malus sur "emergency" pour ne l'utiliser qu'en dernier recours
-            # ✅ Utiliser le paramètre configurable par le client (settings.emergency.emergency_penalty)
-            # ✅ Vérifier via driver_type (pas is_emergency)
-            driver_type = getattr(d, "driver_type", None)
-            driver_type_str = str(driver_type or "").strip().upper()
-            if "." in driver_type_str:
-                driver_type_str = driver_type_str.split(".")[-1]
             if driver_type_str == "EMERGENCY":
-                # Convertir la pénalité (0-1000) en malus de score
                 emergency_penalty = float(getattr(settings.emergency, "emergency_penalty", 900.0))
                 malus = -(emergency_penalty / 180.0)  # 900 / 180 = 5.0, 500 / 180 = 2.78
                 sc += malus
-            cand = HeuristicAssignment(
-                booking_id=int(cast("Any", b.id)),
-                driver_id=did,
-                score=sc,
-                reason="return_urgent",
-                estimated_start_min=est_s,
-                estimated_finish_min=est_f,
-            )
-            if best is None or sc > best[0]:
-                best = (sc, cand)
+                if not regular_only and not emergency_candidate_logged:
+                    logger.info(
+                        "[Heuristics] Emergency driver candidate driver_id=%s booking_id=%s allow_emergency=%s score=%.2f duration=%s",
+                        did,
+                        getattr(b, "id", None),
+                        allow_emergency,
+                        sc,
+                        est_f - est_s,
+                    )
+                    emergency_candidate_logged = True
+
         return best[1] if best else None
 
     # Ordonner les urgents par horaire (si dispo)
@@ -2258,6 +2355,7 @@ def assign_urgent(
         "picked": [int(a.booking_id) for a in assignments],
         "unassigned": unassigned,
         "proposed_load": proposed_load,
+        "fairness_baseline": fairness_baseline,
     }
     return HeuristicResult(assignments=assignments,
                            unassigned_booking_ids=unassigned, debug=debug)
@@ -2278,7 +2376,10 @@ def closest_feasible(
     bookings: List[Booking] = problem["bookings"]
     drivers: List[Driver] = problem["drivers"]
     driver_windows: List[Tuple[int, int]] = problem.get("driver_windows", [])
-    fairness_counts: Dict[int, int] = problem.get("fairness_counts", {})
+    fairness_counts_raw: Dict[int, int] = problem.get("fairness_counts", {})
+    fairness_counts, fairness_baseline = baseline_and_cap_loads(fairness_counts_raw)
+    problem["fairness_counts"] = fairness_counts
+    problem.setdefault("fairness_baseline", fairness_baseline)
     max_cap = settings.solver.max_bookings_per_driver
     preferred_driver_id: int | None = problem.get("preferred_driver_id")  # ⚡ Chauffeur préféré
 
@@ -2319,17 +2420,15 @@ def closest_feasible(
     assignments: List[HeuristicAssignment] = []
     unassigned: List[int] = []
 
+    min_effective_load = min(fairness_effective_fb.values()
+                             ) if fairness_effective_fb else 0
+
     for bid in booking_ids:
         b = by_id.get(int(cast("Any", bid)))
         if not b:
             continue
         best: Tuple[float, HeuristicAssignment] | None = None
-        if fairness_effective_fb:
-            min_load_fb = min(fairness_effective_fb.values())
-            max_allowed_load_fb = min_load_fb + MAX_FAIRNESS_GAP
-        else:
-            min_load_fb = 0
-            max_allowed_load_fb = MAX_FAIRNESS_GAP
+        normalized_fb = _normalized_loads(fairness_effective_fb)
         for d in drivers:
             did = int(cast("Any", d.id))
             # Cap ajusté selon préférences (si disponible)
@@ -2339,11 +2438,19 @@ def closest_feasible(
                 adjusted_cap = int(max_cap * multiplier)
             if fairness_effective_fb.get(did, 0) >= adjusted_cap:
                 continue
-            # Équité stricte : éviter de dépasser le gap max (avec marge limitée pour le préféré)
-            allowed_gap = max_allowed_load_fb
+
+            effective_load = fairness_effective_fb.get(did, 0)
+            allowed_gap = MAX_FAIRNESS_GAP
             if preferred_driver_id and did == preferred_driver_id:
                 allowed_gap += PREFERRED_EXTRA_GAP
-            if fairness_effective_fb.get(did, 0) > allowed_gap:
+            if (effective_load - min_effective_load) > allowed_gap:
+                logger.debug(
+                    "[FALLBACK] ⛔ Skip driver #%s (load=%s, min=%s, allowed=%s)",
+                    did,
+                    effective_load,
+                    min_effective_load,
+                    allowed_gap,
+                )
                 continue
             di = driver_index[did]
             dw = driver_windows[di] if di < len(
@@ -2354,7 +2461,7 @@ def closest_feasible(
                 d,
                 dw,
                 settings,
-                fairness_effective_fb,
+                normalized_fb,
                 company_coords=company_coords,
                 preferred_driver_id=preferred_driver_id,
             )
@@ -2585,6 +2692,8 @@ def closest_feasible(
         "proposed_load": proposed_load,
         "busy_until": busy_until,
         "driver_scheduled_times": driver_scheduled_times,
+        "fairness_counts": fairness_counts,
+        "fairness_baseline": problem.get("fairness_baseline", fairness_baseline),
     }
     return HeuristicResult(assignments=assignments,
                            unassigned_booking_ids=unassigned, debug=debug)

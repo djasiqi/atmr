@@ -1,4 +1,3 @@
-
 # backend/services/unified_dispatch/data.py
 from __future__ import annotations
 
@@ -24,7 +23,7 @@ from services.dispatch_utils import count_assigned_bookings_for_day
 from services.maps import geocode_address
 from services.osrm_client import build_distance_matrix_osrm_with_cb as build_distance_matrix_osrm
 from services.osrm_client import eta_seconds as osrm_eta_seconds
-from services.unified_dispatch.heuristics import haversine_minutes
+from services.unified_dispatch.heuristics import baseline_and_cap_loads, haversine_minutes
 from services.unified_dispatch.settings import Settings, driver_work_window_from_config
 from shared.time_utils import day_local_bounds, now_local, parse_local_naive
 
@@ -44,6 +43,9 @@ DELAY_SECONDS_ZERO = 0
 MAX_DRIVER_IDS_IN_LOG = 10  # Limite le nombre de driver IDs affichés dans les logs
 FAIRNESS_SLOW_QUERY_THRESHOLD_MS = 5000  # Seuil pour warning si fairness_counts > 5s
 BUILD_MATRIX_SLOW_THRESHOLD_MS = 30000  # Seuil pour warning si build_time_matrix > 30s
+MIN_TRAVEL_MINUTES = 2
+LARGE_MATRIX_THRESHOLD = 999
+LOW_COORD_QUALITY_THRESHOLD = 0.65
 
 logger = logging.getLogger(__name__)
 DEFAULT_SETTINGS = Settings()
@@ -54,6 +56,18 @@ DEFAULT_SETTINGS = Settings()
 _ALLOW_SERVER_GEOCODE = os.getenv(
     "DISPATCH_ALLOW_SERVER_GEOCODE", "0") not in (
         "0", "", "false", "False", "FALSE")
+
+FALLBACK_COORD_DEFAULT = (46.2044, 6.1432)
+COORD_QUALITY_FACTORS: Dict[str, float] = {
+    "original": 1.0,
+    "live": 1.0,
+    "profile": 0.9,
+    "geocoded": 0.88,
+    "company": 0.75,
+    "centroid": 0.6,
+    "configured": 0.55,
+    "default": 0.5,
+}
 
 # Optionnel: consid\u00e8re une position "fra\u00eeche" si < SI_THRESHOLD min
 _POS_TTL = timedelta(minutes=5)
@@ -500,11 +514,11 @@ def get_available_drivers_split(
 
 
 # ============================================================
-# 2\ufe0f\u20e3 Enrichissement coordonn\u00e9es (sans Google / sans g\u00e9ocodage)
+# 2️⃣ Enrichissement coordonnées (sans Google / sans géocodage)
 # ============================================================
 
-def _company_latlon(company: Company) -> tuple[float, float]:
-    """Retourne les coords de l'entreprise si dispo, sinon Genève."""
+def _company_latlon_optional(company: Company) -> tuple[float, float] | None:
+    """Retourne les coords de l'entreprise si disponibles, sinon None."""
     if company:
         c_any = cast("Any", company)
         lat = getattr(c_any, "latitude", None)
@@ -513,9 +527,71 @@ def _company_latlon(company: Company) -> tuple[float, float]:
             try:
                 return float(lat), float(lon)
             except Exception:
-                pass
-    # Fallback Gen\u00e8ve (centre-ville)
-    return 46.2044, 6.1432
+                return None
+    return None
+
+
+def _configured_fallback_coords(company: Company) -> tuple[float, float] | None:
+    """Récupère des coordonnées de fallback configurables dans l'autonomous_config."""
+    if not company or not hasattr(company, "get_autonomous_config"):
+        return None
+    try:
+        config_raw: Any = company.get_autonomous_config() or {}
+    except Exception:
+        return None
+
+    if not isinstance(config_raw, dict):
+        return None
+
+    config = config_raw
+
+    candidates: List[Any] = []
+    dispatch_overrides_raw = config.get("dispatch_overrides", {}) or {}
+    if isinstance(dispatch_overrides_raw, dict):
+        candidates.append(dispatch_overrides_raw.get("fallback_coords"))
+    candidates.append(config.get("fallback_coords"))
+
+    for candidate in candidates:
+        lat: float | None
+        lon: float | None
+        if isinstance(candidate, dict):
+            lat = _to_float_opt(candidate.get("lat"))
+            lon = _to_float_opt(candidate.get("lon"))
+        elif isinstance(candidate, (list, tuple)) and len(candidate) >= N_THRESHOLD:
+            lat = _to_float_opt(candidate[0])
+            lon = _to_float_opt(candidate[1])
+        else:
+            continue
+        if lat is not None and lon is not None:
+            return (lat, lon)
+    return None
+
+
+def _compute_bookings_centroid(bookings: List[Booking]) -> tuple[float, float] | None:
+    """Calcule le centroïde des bookings disposant déjà de coordonnées fiables."""
+    coords: List[Tuple[float, float]] = []
+    for b in bookings:
+        pickup_quality = getattr(b, "_pickup_coord_quality", None)
+        lat = _to_float_opt(getattr(b, "pickup_lat", None))
+        lon = _to_float_opt(getattr(b, "pickup_lon", None))
+        if lat is None or lon is None:
+            lat = _to_float_opt(getattr(b, "dropoff_lat", None))
+            lon = _to_float_opt(getattr(b, "dropoff_lon", None))
+        if lat is None or lon is None:
+            continue
+        if pickup_quality and pickup_quality in {"company", "centroid", "configured", "default"}:
+            continue
+        coords.append((lat, lon))
+
+    if not coords:
+        return None
+    lat_avg = sum(lat for lat, _ in coords) / len(coords)
+    lon_avg = sum(lon for _, lon in coords) / len(coords)
+    return (lat_avg, lon_avg)
+
+
+def _coord_factor(quality: str) -> float:
+    return COORD_QUALITY_FACTORS.get(quality, 1.0)
 
 
 def _to_float_opt(x: Any) -> float | None:
@@ -556,97 +632,140 @@ def _geocode_safe_cached(address: str) -> tuple[float, float] | None:
 
 
 def enrich_booking_coords(bookings: List[Booking], company: Company) -> None:
-    """Compl\u00e8te les coordonn\u00e9es pickup/dropoff des bookings MANQUANTES.
-    R\u00e8gles :
-      - Si le frontend a d\u00e9j\u00e0 fourni lat/lon \u21d2 on ne touche \u00e0 rien.
-      - Sinon, si DISPATCH_ALLOW_SERVER_GEOCODE=1 et une adresse est disponible \u21d2 on tente un g\u00e9ocodage.
-      - Sinon, fallback : coords de l'entreprise, sinon Gen\u00e8ve.
-      - \u00c9crit en m\u00e9moire uniquement (pas de commit).
+    """Complète les coordonnées pickup/dropoff des bookings MANQUANTES.
+    Règles :
+      - Si le frontend a déjà fourni lat/lon → on conserve.
+      - Sinon, si DISPATCH_ALLOW_SERVER_GEOCODE=1 et une adresse est disponible → tentative de géocodage.
+      - Sinon, fallback ordonné : coords de l'entreprise, centroïde du lot, coords configurées.
+      - Un fallback ultime sur FALLBACK_COORD_DEFAULT est utilisé si nécessaire.
     """
-    fallback_lat, fallback_lon = _company_latlon(company)
+    company_coord = _company_latlon_optional(company)
+    configured_coord = _configured_fallback_coords(company)
+    centroid_coord = _compute_bookings_centroid(bookings)
+
+    def _resolve_fallback() -> tuple[Tuple[float, float], str]:
+        for coord, quality in (
+            (company_coord, "company"),
+            (centroid_coord, "centroid"),
+            (configured_coord, "configured"),
+        ):
+            if coord:
+                return coord, quality
+        return FALLBACK_COORD_DEFAULT, "default"
 
     for b in bookings:
+        b_any: Any = b
+
         # --- PICKUP ---
-        plat = getattr(b, "pickup_lat", None)
-        plon = getattr(b, "pickup_lon", None)
+        pickup_quality = "original"
+        plat = _to_float_opt(getattr(b, "pickup_lat", None))
+        plon = _to_float_opt(getattr(b, "pickup_lon", None))
         if plat is None or plon is None:
-            # tenter g\u00e9ocodage si autoris\u00e9 et texte connu
-            addr = getattr(
-                b, "pickup_address", None) or getattr(
-                b, "pickup", None)
-            got = _geocode_safe_cached(str(addr)) if (
-                _ALLOW_SERVER_GEOCODE and addr) else None
+            addr = getattr(b, "pickup_address", None) or getattr(b, "pickup", None)
+            got = _geocode_safe_cached(str(addr)) if (_ALLOW_SERVER_GEOCODE and addr) else None
             if got:
                 plat, plon = got
+                pickup_quality = "geocoded"
             else:
-                plat, plon = fallback_lat, fallback_lon
+                (plat, plon), pickup_quality = _resolve_fallback()
         try:
-            b_any: Any = b
             b_any.pickup_lat = float(cast("Any", plat))
             b_any.pickup_lon = float(cast("Any", plon))
         except Exception:
-            b_any = cast("Any", b)
-            b_any.pickup_lat, b_any.pickup_lon = fallback_lat, fallback_lon
+            (plat, plon), pickup_quality = _resolve_fallback()
+            b_any.pickup_lat, b_any.pickup_lon = plat, plon
+        b_any._pickup_coord_quality = pickup_quality
+        b_any._pickup_coord_factor = _coord_factor(pickup_quality)
 
         # --- DROPOFF ---
-        dlat = getattr(b, "dropoff_lat", None)
-        dlon = getattr(b, "dropoff_lon", None)
+        drop_quality = "original"
+        dlat = _to_float_opt(getattr(b, "dropoff_lat", None))
+        dlon = _to_float_opt(getattr(b, "dropoff_lon", None))
         if dlat is None or dlon is None:
-            addr = getattr(
-                b, "dropoff_address", None) or getattr(
-                b, "dropoff", None)
-            got = _geocode_safe_cached(str(addr)) if (
-                _ALLOW_SERVER_GEOCODE and addr) else None
+            addr = getattr(b, "dropoff_address", None) or getattr(b, "dropoff", None)
+            got = _geocode_safe_cached(str(addr)) if (_ALLOW_SERVER_GEOCODE and addr) else None
             if got:
                 dlat, dlon = got
+                drop_quality = "geocoded"
             else:
-                # si pas d'adresse ou \u00e9chec g\u00e9ocode, fallback =
-                # pickup (plus r\u00e9aliste que centre-ville)
-                dlat, dlon = b.pickup_lat, b.pickup_lon
+                # Fallback sur pickup déjà résolu
+                dlat, dlon = b_any.pickup_lat, b_any.pickup_lon
+                drop_quality = pickup_quality if pickup_quality != "default" else "configured"
         try:
-            b_any = cast("Any", b)
             b_any.dropoff_lat = float(cast("Any", dlat))
             b_any.dropoff_lon = float(cast("Any", dlon))
         except Exception:
-            b_any = cast("Any", b)
             b_any.dropoff_lat, b_any.dropoff_lon = b_any.pickup_lat, b_any.pickup_lon
+            drop_quality = pickup_quality
+        b_any._dropoff_coord_quality = drop_quality
+        b_any._dropoff_coord_factor = _coord_factor(drop_quality)
+
+        # Synthèse qualité (min des facteurs pickup / dropoff)
+        overall_factor = min(
+            getattr(b_any, "_pickup_coord_factor", 1.0),
+            getattr(b_any, "_dropoff_coord_factor", 1.0),
+        )
+        b_any._coord_quality_factor = overall_factor
+        b_any._coord_quality_label = pickup_quality if pickup_quality == drop_quality else f"{pickup_quality}|{drop_quality}"
 
 
 def enrich_driver_coords(drivers: List[Driver], company: Company) -> None:
-    """Remplit d.current_lat / d.current_lon (attributs \u00e9ph\u00e9m\u00e8res).
-    - Utilise driver.latitude/longitude si pr\u00e9sentes ET r\u00e9centes (last_position_update frais).
-    - Sinon, fallback sur les coords de l'entreprise, sinon Gen\u00e8ve.
-    """
+    """Remplit d.current_lat / d.current_lon avec suivi de la qualité des coordonnées."""
     now = now_local()
-    default_latlon = _company_latlon(company)
+    company_coord = _company_latlon_optional(company)
+    configured_coord = _configured_fallback_coords(company)
 
     for d in drivers:
-        lat = getattr(d, "latitude", None)
-        lon = getattr(d, "longitude", None)
+        d_any: Any = d
+        coord_quality = "default"
+        chosen_lat: float | None = None
+        chosen_lon: float | None = None
 
-        # Fra\u00eecheur de la position
+        current_lat = getattr(d, "current_lat", None)
+        current_lon = getattr(d, "current_lon", None)
+
         fresh = False
         ts = getattr(d, "last_position_update", None)
         if ts is not None:
             try:
                 ts_local = parse_local_naive(ts)
-                fresh = bool(ts_local) and (
-                    now - ts_local) <= _POS_TTL
+                fresh = bool(ts_local) and (now - ts_local) <= _POS_TTL
             except Exception:
                 fresh = False
 
-        # Si pas de coord. ou trop ancien -> fallback entreprise (ou
-        # Gen\u00e8ve)
-        if lat is None or lon is None or not fresh:
-            lat, lon = default_latlon
+        if fresh and current_lat is not None and current_lon is not None:
+            lat_live = _to_float_opt(current_lat)
+            lon_live = _to_float_opt(current_lon)
+            if lat_live is not None and lon_live is not None:
+                chosen_lat = lat_live
+                chosen_lon = lon_live
+                coord_quality = "live"
 
-        # cast safe
-        try:
-            d.current_lat = float(cast("Any", lat))
-            d.current_lon = float(cast("Any", lon))
-        except Exception:
-            d.current_lat = float(default_latlon[0])
-            d.current_lon = float(default_latlon[1])
+        if chosen_lat is None or chosen_lon is None:
+            lat = _to_float_opt(getattr(d, "latitude", None))
+            lon = _to_float_opt(getattr(d, "longitude", None))
+            if lat is not None and lon is not None:
+                chosen_lat, chosen_lon = lat, lon
+                coord_quality = "profile"
+
+        if chosen_lat is None or chosen_lon is None:
+            for coord, quality in (
+                (company_coord, "company"),
+                (configured_coord, "configured"),
+            ):
+                if coord:
+                    chosen_lat, chosen_lon = coord
+                    coord_quality = quality
+                    break
+
+        if chosen_lat is None or chosen_lon is None:
+            chosen_lat, chosen_lon = FALLBACK_COORD_DEFAULT
+            coord_quality = "default"
+
+        d_any.current_lat = chosen_lat
+        d_any.current_lon = chosen_lon
+        d_any._coord_quality = coord_quality
+        d_any._coord_quality_factor = _coord_factor(coord_quality)
 
 # ============================================================
 # 3\ufe0f\u20e3 Matrice de temps / distances
@@ -658,11 +777,11 @@ def build_time_matrix(
     drivers: List[Driver],
     settings=DEFAULT_SETTINGS,
     for_date: str | None = None
-) -> Tuple[List[List[int]], List[Tuple[float, float]]]:
+) -> Tuple[List[List[int]], List[Tuple[float, float]], Dict[str, Any]]:
     _ = for_date  
     """Construit la matrice de temps en minutes entre chaque point
     (drivers start \u2192 pickups \u2192 dropoffs).
-    Retourne (time_matrix_minutes, coords_list).
+    Retourne (time_matrix_minutes, coords_list, metadata).
     """
     coords: List[Tuple[float, float]] = []
 
@@ -670,14 +789,14 @@ def build_time_matrix(
         try:
             return (float(lat), float(lon))
         except Exception:
-            return (46.2044, 6.1432)  # Gen\u00e8ve
+            return FALLBACK_COORD_DEFAULT  # Genève
 
     # Points de d\u00e9part chauffeurs
     for d in drivers:
         lat = getattr(d, "current_lat", getattr(d, "latitude", None))
         lon = getattr(d, "current_lon", getattr(d, "longitude", None))
         if lat is None or lon is None:
-            lat, lon = 46.2044, 6.1432
+            lat, lon = FALLBACK_COORD_DEFAULT
         coords.append(_safe_tuple(cast("Any", lat), cast("Any", lon)))
 
     # Pickups & dropoffs
@@ -687,7 +806,7 @@ def build_time_matrix(
         dlat = getattr(b, "dropoff_lat", None)
         dlon = getattr(b, "dropoff_lon", None)
         if plat is None or plon is None:
-            plat, plon = 46.2044, 6.1432
+            plat, plon = FALLBACK_COORD_DEFAULT
         if dlat is None or dlon is None:
             dlat, dlon = plat, plon
         coords.append(_safe_tuple(cast("Any", plat), cast("Any", plon)))
@@ -695,12 +814,31 @@ def build_time_matrix(
 
     n = len(coords)
     if n == N_ZERO:
-        return [], []
+        empty_meta: Dict[str, Any] = {
+            "provider": (settings.matrix.provider or "haversine").lower(),
+            "fallback_used": False,
+            "used_haversine": False,
+            "max_entry": 0,
+            "min_entry": 0,
+            "node_count": n,
+            "has_large_value": False,
+        }
+        return [], [], empty_meta
     if n == N_ONE:
-        return [[0]], coords
+        singleton_meta: Dict[str, Any] = {
+            "provider": (settings.matrix.provider or "haversine").lower(),
+            "fallback_used": False,
+            "used_haversine": False,
+            "max_entry": 0,
+            "min_entry": 0,
+            "node_count": n,
+            "has_large_value": False,
+        }
+        return [[0]], coords, singleton_meta
 
     provider = (settings.matrix.provider or "haversine").lower()
-    # Param\u00e8tres cache/OSRM
+    fallback_used = False
+    # Paramètres cache/OSRM
     coord_prec = int(
         getattr(
             getattr(
@@ -736,7 +874,6 @@ def build_time_matrix(
             "[Dispatch] 🔵 OSRM request: n=%d nodes url=%s timeout=%ds max_retries=%d",
             n, osrm_url, osrm_timeout, osrm_max_retries
         )
-        fallback_used = False
         try:
             matrix_sec = build_distance_matrix_osrm(
                 coords_canon,  # coords arrondies pour stabilité du cache OSRM
@@ -793,6 +930,7 @@ def build_time_matrix(
                 )
 
     else:
+        fallback_used = provider != "osrm"
         avg_kmh = float(
             getattr(
                 getattr(
@@ -813,13 +951,32 @@ def build_time_matrix(
                 row_min.append(0)
             else:
                 try:
-                    minutes = int(max(2, math.ceil(float(t) / 60)))
+                    minutes = int(max(MIN_TRAVEL_MINUTES, math.ceil(float(t) / 60)))
                 except Exception:
-                    minutes = 2
+                    minutes = MIN_TRAVEL_MINUTES
                 row_min.append(minutes)
         time_matrix_min.append(row_min)
 
-    return time_matrix_min, coords
+    max_entry = 0
+    min_entry = math.inf
+    for row in time_matrix_min:
+        for val in row:
+            max_entry = max(max_entry, val)
+            min_entry = min(min_entry, val)
+    if min_entry == math.inf:
+        min_entry = 0
+
+    matrix_meta: Dict[str, Any] = {
+        "provider": provider,
+        "fallback_used": bool(fallback_used),
+        "used_haversine": provider != "osrm" or fallback_used,
+        "max_entry": int(max_entry),
+        "min_entry": int(min_entry),
+        "node_count": n,
+    }
+    matrix_meta["has_large_value"] = matrix_meta["max_entry"] >= LARGE_MATRIX_THRESHOLD
+
+    return time_matrix_min, coords, matrix_meta
 
 
 def _to_minutes_window(win: Any, t0: datetime,
@@ -973,6 +1130,22 @@ def build_vrptw_problem(
             fairness_counts,
     )
 
+    if getattr(settings.fairness, "reset_daily_load", False):
+        logger.info(
+            "[Dispatch] 🧹 reset_daily_load activé – remise à zéro des charges chauffeurs (run manuel)"
+        )
+        fairness_counts = {int(driver_id): 0 for driver_id in fairness_counts}
+
+    fairness_counts, fairness_baseline = baseline_and_cap_loads(fairness_counts)
+    if fairness_counts:
+        logger.info(
+            "[Dispatch] ♻️ Fairness normalization: baseline=%d, capped_counts=%s",
+            fairness_baseline,
+            {k: v for k, v in fairness_counts.items() if v} or "{0: 0}",
+        )
+    else:
+        fairness_baseline = 0
+
     # 1) Matrice temps (en minutes) + coordonn\u00e9es ordonn\u00e9es
     logger.debug(
         "[Dispatch] ⏱️ Starting build_time_matrix: bookings=%d drivers=%d provider=%s",
@@ -981,7 +1154,7 @@ def build_vrptw_problem(
     )
     build_matrix_start = time.time()
     try:
-        time_matrix_min, coords_list = build_time_matrix(
+        time_matrix_min, coords_list, matrix_meta = build_time_matrix(
             bookings=bookings,
             drivers=drivers,
             settings=settings,
@@ -1098,6 +1271,27 @@ def build_vrptw_problem(
     assert len(service_times) == SERVICE_TIMES_THRESHOLD * \
         len(bookings), "service_times != SERVICE_TIMES_THRESHOLD par booking"
 
+    booking_factors = [float(getattr(b, "_coord_quality_factor", 1.0) or 1.0) for b in bookings]
+    booking_labels = [getattr(b, "_coord_quality_label", "original") for b in bookings]
+    driver_factors = [float(getattr(d, "_coord_quality_factor", 1.0) or 1.0) for d in drivers]
+    driver_labels = [getattr(d, "_coord_quality", "live") for d in drivers]
+    fallback_labels = {"company", "centroid", "configured", "default"}
+
+    min_booking_factor = min(booking_factors) if booking_factors else 1.0
+    min_driver_factor = min(driver_factors) if driver_factors else 1.0
+    has_booking_fallback = any(label in fallback_labels for label in booking_labels)
+    has_driver_fallback = any(label in fallback_labels for label in driver_labels)
+
+    coord_quality_summary: Dict[str, Any] = {
+        "min_booking_factor": min_booking_factor,
+        "min_driver_factor": min_driver_factor,
+        "min_factor": min(min_booking_factor, min_driver_factor),
+        "has_fallback": has_booking_fallback or has_driver_fallback,
+        "booking_fallback_labels": {label for label in booking_labels if label in fallback_labels},
+        "driver_fallback_labels": {label for label in driver_labels if label in fallback_labels},
+    }
+    coord_quality_summary["low_quality"] = coord_quality_summary["min_factor"] < LOW_COORD_QUALITY_THRESHOLD
+
     return {
         "company_id": company.id,
         "bookings": bookings,
@@ -1116,9 +1310,12 @@ def build_vrptw_problem(
         "horizon": horizon,
         "base_time": t0,
         "for_date": for_date,
+        "fairness_baseline": fairness_baseline,
         # ----- facultatif, pratique pour debug/observabilit\u00e9 -----
         "matrix_provider": (settings.matrix.provider or "haversine").lower(),
         "matrix_units": "minutes",
+        "matrix_quality": matrix_meta,
+        "coord_quality": coord_quality_summary,
     }
 
 

@@ -37,7 +37,7 @@ def upgrade():
 
         # Type d'action
         sa.Column("action_type", sa.String(length=50), nullable=False),
-        sa.Column("action_description", sa.String(length=0.500), nullable=False),
+        sa.Column("action_description", sa.String(length=500), nullable=False),
         sa.Column("action_data", sa.Text(), nullable=True),
 
         # Résultat
@@ -50,7 +50,7 @@ def upgrade():
         sa.Column("expected_improvement_minutes", sa.Float(), nullable=True),
 
         # Contexte
-        sa.Column("trigger_source", sa.String(length=0.100), nullable=True),
+        sa.Column("trigger_source", sa.String(length=100), nullable=True),
 
         # Sécurité / Review
         sa.Column("reviewed_by_admin", sa.Boolean(), nullable=False, default=False),

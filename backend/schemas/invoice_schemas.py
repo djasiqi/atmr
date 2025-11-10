@@ -53,6 +53,13 @@ class BillingSettingsUpdateSchema(Schema):
     
     # reminder_schedule_days peut être une liste
     reminder_schedule_days = fields.Raw(allow_none=True)
+    vat_applicable = fields.Bool()
+    vat_rate = fields.Float(
+        allow_none=True,
+        validate=validate.Range(min=0, max=100, error="vat_rate doit être entre 0 et 100")
+    )
+    vat_label = fields.Str(validate=validate.Length(max=50), allow_none=True)
+    vat_number = fields.Str(validate=validate.Length(max=50), allow_none=True)
     
     class Meta:  # type: ignore
         unknown = "INCLUDE"
@@ -78,4 +85,12 @@ class InvoiceGenerateSchema(Schema):
     # Sélection manuelle de réservations: { client_id: [reservation_ids] }
     client_reservations = fields.Dict(allow_none=True)
     reservation_ids = fields.List(fields.Int(), allow_none=True)
+    overrides = fields.Dict(
+        keys=fields.Str(),
+        values=fields.Dict(
+            keys=fields.Str(),
+            values=fields.Raw()
+        ),
+        allow_none=True
+    )
 

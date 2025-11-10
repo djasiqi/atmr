@@ -14,7 +14,7 @@ from flask import current_app
 from sqlalchemy.exc import IntegrityError
 
 from ext import db
-from models import DispatchRun, DispatchStatus
+from models import Company, DispatchRun, DispatchStatus
 from models.base import _as_dt, _iso
 
 logger = logging.getLogger(__name__)
@@ -262,6 +262,18 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
         "[Queue] trigger_job called for company_id=%s params_keys=%s",
         company_id, list(params.keys()) if params else []
     )
+
+    snapshot: Dict[str, Any] = {
+        "for_date": params.get("for_date"),
+        "mode": params.get("mode"),
+        "regular_first": params.get("regular_first"),
+        "allow_emergency": params.get("allow_emergency"),
+    }
+    if isinstance(params.get("overrides"), dict):
+        snapshot["overrides_keys"] = sorted(params["overrides"].keys())
+    if isinstance(params.get("dispatch_overrides"), dict):
+        snapshot["dispatch_overrides_keys"] = sorted(params["dispatch_overrides"].keys())
+    logger.info("[Queue] trigger_job params snapshot=%s", snapshot)
     
     # Créer le DispatchRun avec statut PENDING avant l'enfilage
     dispatch_run_id = None
@@ -303,7 +315,10 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
                     company_id=company_id,
                     day=day_date
                 ).first()
-                
+
+                if existing_run and existing_run.day != day_date:
+                    existing_run = None
+
                 if existing_run:
                     # Réutiliser le DispatchRun existant
                     existing_run.status = DispatchStatus.PENDING
@@ -354,6 +369,8 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
                     company_id=company_id,
                     day=day_date
                 ).first()
+                if existing_run and existing_run.day != day_date:
+                    existing_run = None
                 if existing_run:
                     dispatch_run_id = existing_run.id
                     logger.info(
@@ -376,6 +393,31 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
         )
         # Continuer sans dispatch_run_id (fallback vers comportement actuel)
     
+    # Harmoniser les overrides (legacy dispatch_overrides → overrides)
+    if params.get("dispatch_overrides") and "overrides" not in params:
+        params = dict(params)
+        params["overrides"] = params.pop("dispatch_overrides")
+
+    # Appliquer les overrides de company.autonomous_config si absents
+    if "overrides" not in params:
+        try:
+            company_obj = Company.query.get(company_id)
+            if company_obj:
+                auto_cfg = company_obj.get_autonomous_config()
+                dispatch_defaults = auto_cfg.get("dispatch_overrides")
+                if isinstance(dispatch_defaults, dict) and dispatch_defaults:
+                    params = dict(params)
+                    params["overrides"] = dispatch_defaults
+                    logger.info(
+                        "[Queue] trigger_job applied company dispatch_overrides (keys=%s)",
+                        sorted(dispatch_defaults.keys())
+                    )
+        except Exception as exc:
+            logger.warning(
+                "[Queue] Failed to load company dispatch_overrides for company_id=%s: %s",
+                company_id, exc
+            )
+
     # Passer le dispatch_run_id dans les params pour la tâche Celery
     if dispatch_run_id:
         params = dict(params)  # Copie pour éviter mutation

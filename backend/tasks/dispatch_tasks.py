@@ -50,6 +50,7 @@ def run_dispatch_task(
     regular_first: bool = True,
     allow_emergency: bool | None = None,
     overrides: Dict[str, Any] | None = None,
+    dispatch_overrides: Dict[str, Any] | None = None,
     dispatch_run_id: int | None = None,  # ✅ Nouveau paramètre optionnel
 ) -> Dict[str, Any]:
     """Exécuté par un worker Celery.
@@ -68,6 +69,10 @@ def run_dispatch_task(
         mode = "auto"
 
     ov = dict(overrides or {})
+    if dispatch_overrides:
+        legacy_overrides = dict(dispatch_overrides)
+        legacy_overrides.update(ov)
+        ov = legacy_overrides
     if "mode" not in ov:
         ov["mode"] = mode  # garde une source unique pour le moteur
 

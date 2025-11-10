@@ -1,12 +1,15 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import Ionicons from "react-native-vector-icons/Ionicons";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function IndexScreen() {
@@ -18,6 +21,9 @@ export default function IndexScreen() {
     isDriverAuthenticated,
     isEnterpriseAuthenticated,
   } = useAuth();
+  const [selectedMode, setSelectedMode] = useState(mode ?? "driver");
+  const toggleAnim = useRef(new Animated.Value(mode === "enterprise" ? 1 : 0)).current;
+  const [toggleWidth, setToggleWidth] = useState(0);
 
   useEffect(() => {
     if (loading) return;
@@ -28,6 +34,11 @@ export default function IndexScreen() {
     }
   }, [loading, mode, isDriverAuthenticated, isEnterpriseAuthenticated, router]);
 
+  useEffect(() => {
+    setSelectedMode(mode ?? "driver");
+    toggleAnim.setValue(mode === "enterprise" ? 1 : 0);
+  }, [mode, toggleAnim]);
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -37,40 +48,133 @@ export default function IndexScreen() {
     );
   }
 
+  const handleSelect = (target: "driver" | "enterprise") => {
+    if (selectedMode === target) return;
+    setSelectedMode(target);
+    Animated.timing(toggleAnim, {
+      toValue: target === "enterprise" ? 1 : 0,
+      duration: 260,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleContinue = async () => {
+    await setMode(selectedMode);
+    if (selectedMode === "driver") {
+      router.replace("/(auth)/login");
+    } else {
+      router.replace("/(enterprise-auth)/login" as any);
+    }
+  };
+
+  const indicatorTranslate = toggleAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, toggleWidth > 0 ? toggleWidth / 2 : 0],
+  });
+
+  const description =
+    selectedMode === "enterprise"
+      ? {
+          title: "Espace Enterprise Dispatch",
+          text: "Pilotez les assignations, suivez les alertes critiques et ajustez les paramètres en temps réel depuis votre téléphone.",
+        }
+      : {
+          title: "Espace Chauffeur",
+          text: "Consultez vos missions quotidiennes, mettez à jour votre disponibilité et gardez le contact avec l’équipe.",
+        };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Bienvenue</Text>
-      <Text style={styles.subtitle}>
-        Choisissez l’espace auquel vous souhaitez accéder.
-      </Text>
+      <LinearGradient
+        colors={["#06100C", "#10261A", "#06100C"]}
+        style={StyleSheet.absoluteFill}
+      />
 
-      <TouchableOpacity
-        style={styles.card}
-        onPress={async () => {
-          await setMode("driver");
-          router.replace("/(auth)/login");
-        }}
-      >
-        <Text style={styles.cardTitle}>Espace Chauffeur</Text>
-        <Text style={styles.cardDescription}>
-          Suivez vos missions, mettez à jour votre statut et accédez aux détails
-          clients.
+      <View style={styles.content}>
+        <Text style={styles.brand}>Bienvenue</Text>
+        <Text style={styles.headline}>Choisissez votre espace</Text>
+        <Text style={styles.subtitle}>
+          Accédez aux outils dédiés à la conduite ou au dispatch en un seul geste.
         </Text>
-      </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.card}
-        onPress={async () => {
-          await setMode("enterprise");
-          router.replace("/(enterprise-auth)/login" as any);
-        }}
-      >
-        <Text style={styles.cardTitle}>Espace Enterprise Dispatch</Text>
-        <Text style={styles.cardDescription}>
-          Pilotez les assignations et surveillez l’activité en temps réel depuis
-          votre mobile.
-        </Text>
-      </TouchableOpacity>
+        <View
+          style={styles.toggleWrapper}
+          onLayout={(event) => setToggleWidth(event.nativeEvent.layout.width)}
+        >
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.toggleIndicator,
+              {
+                width:
+                  toggleWidth > 0 ? Math.max(toggleWidth / 2 - 8, 0) : 0,
+                transform: [{ translateX: indicatorTranslate }],
+              },
+            ]}
+          />
+          <TouchableOpacity
+            style={styles.toggleOption}
+            onPress={() => handleSelect("driver")}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name="car-outline"
+              size={22}
+              style={
+                selectedMode === "driver"
+                  ? styles.toggleIconActive
+                  : styles.toggleIcon
+              }
+            />
+            <Text
+              style={
+                selectedMode === "driver"
+                  ? styles.toggleLabelActive
+                  : styles.toggleLabel
+              }
+            >
+              Chauffeur
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.toggleOption}
+            onPress={() => handleSelect("enterprise")}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name="business-outline"
+              size={22}
+              style={
+                selectedMode === "enterprise"
+                  ? styles.toggleIconActive
+                  : styles.toggleIcon
+              }
+            />
+            <Text
+              style={
+                selectedMode === "enterprise"
+                  ? styles.toggleLabelActive
+                  : styles.toggleLabel
+              }
+            >
+              Entreprise
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{description.title}</Text>
+          <Text style={styles.cardDescription}>{description.text}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.primaryButton}
+          activeOpacity={0.9}
+          onPress={handleContinue}
+        >
+          <Text style={styles.primaryButtonText}>Accéder à cet espace</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -78,47 +182,117 @@ export default function IndexScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
-    backgroundColor: "#0B1736",
-    justifyContent: "center",
+    backgroundColor: "#06100C",
   },
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0B1736",
+    backgroundColor: "#06100C",
   },
   info: {
     marginTop: 12,
     color: "#fff",
     fontSize: 16,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#fff",
+  content: {
+    flex: 1,
+    padding: 28,
+    justifyContent: "center",
+  },
+  brand: {
+    color: "rgba(255,255,255,0.55)",
+    textTransform: "uppercase",
+    letterSpacing: 4,
+    fontSize: 13,
     marginBottom: 12,
   },
+  headline: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#F4FFFA",
+    marginBottom: 10,
+  },
   subtitle: {
-    fontSize: 18,
-    color: "#d1d8ff",
-    marginBottom: 32,
+    fontSize: 16,
+    color: "#8AA295",
+    marginBottom: 28,
   },
   card: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
+    backgroundColor: "rgba(244,255,250,0.05)",
+    borderRadius: 18,
+    padding: 22,
+    marginBottom: 28,
+    borderWidth: 1,
+    borderColor: "rgba(121,197,156,0.18)",
   },
   cardTitle: {
     fontSize: 22,
     fontWeight: "600",
-    color: "#fff",
+    color: "#E6F2EA",
     marginBottom: 8,
   },
   cardDescription: {
     fontSize: 16,
-    color: "#dbe1ff",
-    lineHeight: 22,
+    color: "rgba(244,255,250,0.78)",
+    lineHeight: 23,
+  },
+  toggleWrapper: {
+    flexDirection: "row",
+    backgroundColor: "rgba(244,255,250,0.08)",
+    borderRadius: 18,
+    padding: 4,
+    marginBottom: 28,
+    position: "relative",
+    overflow: "hidden",
+  },
+  toggleIndicator: {
+    position: "absolute",
+    top: 4,
+    bottom: 4,
+    borderRadius: 14,
+    backgroundColor: "rgba(10,122,77,0.4)",
+  },
+  toggleOption: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 14,
+    zIndex: 1,
+    gap: 4,
+  },
+  toggleIcon: {
+    color: "rgba(244,255,250,0.45)",
+  },
+  toggleIconActive: {
+    color: "#F4FFFA",
+  },
+  toggleLabel: {
+    fontSize: 15,
+    color: "rgba(244,255,250,0.6)",
+    fontWeight: "600",
+    letterSpacing: 0.2,
+  },
+  toggleLabelActive: {
+    fontSize: 15,
+    color: "#F4FFFA",
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+  primaryButton: {
+    backgroundColor: "#00796B",
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center",
+    shadowColor: "#00796B",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+    letterSpacing: 0.4,
   },
 });

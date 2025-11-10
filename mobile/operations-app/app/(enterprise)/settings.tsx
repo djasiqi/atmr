@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
 import "dayjs/locale/fr";
 
@@ -28,8 +30,33 @@ const numberOr = (value: string, fallback: number): number => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const palette = {
+  background: "#07130E",
+  heroGradient: ["#11412F", "#07130E"] as [string, string],
+  heroBorder: "rgba(46,128,94,0.36)",
+  heroText: "#E6F2EA",
+  heroMeta: "rgba(184,214,198,0.72)",
+  cardBg: "rgba(10,34,26,0.9)",
+  cardBorder: "rgba(59,143,105,0.28)",
+  cardShadow: "#04150F",
+  muted: "rgba(184,214,198,0.75)",
+  inputBg: "rgba(5,22,16,0.82)",
+  inputBorder: "rgba(59,143,105,0.3)",
+  inputText: "#F4FFFA",
+  divider: "rgba(46,128,94,0.2)",
+  primary: "#1EB980",
+  primaryText: "#052015",
+  secondaryBg: "rgba(10,34,26,0.6)",
+  secondaryBorder: "rgba(59,143,105,0.28)",
+  dangerBg: "rgba(241,104,104,0.18)",
+  dangerBorder: "rgba(241,104,104,0.3)",
+  logoutBg: "rgba(10,34,26,0.55)",
+  logoutBorder: "rgba(59,143,105,0.2)",
+  error: "#F87171",
+};
+
 export default function EnterpriseSettingsScreen() {
-  const { refreshEnterprise } = useAuth();
+  const { refreshEnterprise, logoutEnterprise, switchMode } = useAuth();
 
   const [settings, setSettings] = useState<DispatchSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +64,11 @@ export default function EnterpriseSettingsScreen() {
   const [dispatchDate, setDispatchDate] = useState<string>(() =>
     dayjs().format("YYYY-MM-DD")
   );
+
+  const heroSubtitle = useMemo(() => {
+    if (!settings) return "Chargement des paramètres…";
+    return `Veille au bon équilibre de l'algorithme et déclenche les actions critiques sans quitter le mobile.`;
+  }, [settings]);
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -153,15 +185,35 @@ export default function EnterpriseSettingsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Paramètres dispatch</Text>
-      <Text style={styles.subtitle}>
-        Ajustez les règles clés et déclenchez des actions ponctuelles.
-      </Text>
+      <LinearGradient
+        colors={palette.heroGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.hero}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={styles.heroTitle}>Paramètres dispatch</Text>
+          <Text style={styles.heroSubtitle}>{heroSubtitle}</Text>
+        </View>
+        <View style={styles.heroBadge}>
+          <Ionicons name="settings-outline" size={18} color={palette.primaryText} />
+          <Text style={styles.heroBadgeText}>
+            {settings ? "Actifs" : "Initialisation"}
+          </Text>
+        </View>
+      </LinearGradient>
 
+      <Text style={styles.sectionKicker}>Calibration</Text>
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Règles d’équité & urgence</Text>
+        <Text style={styles.sectionDescription}>
+          Ajuste le comportement du moteur pour respecter les SLA et la rotation
+          des chauffeurs.
+        </Text>
+
         <LabeledInput
           label="Fairness – écart maximal"
+          help="Limite acceptable entre chauffeurs pour la charge courante."
           value={settings ? settings.fairness.max_gap.toString() : ""}
           onChangeText={(value) =>
             setSettings((prev) =>
@@ -178,6 +230,7 @@ export default function EnterpriseSettingsScreen() {
         />
         <LabeledInput
           label="Pénalité chauffeur urgence"
+          help="Pénalité appliquée aux chauffeurs déjà sollicités en urgence."
           value={
             settings ? settings.emergency.emergency_penalty.toString() : ""
           }
@@ -201,66 +254,72 @@ export default function EnterpriseSettingsScreen() {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Temps de service</Text>
-        <LabeledInput
-          label="Temps pickup (min)"
-          value={takeSettingsField("pickup_service_min")}
-          onChangeText={(value) =>
-            setSettings((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    service_times: {
-                      ...prev.service_times,
-                      pickup_service_min: numberOr(
-                        value,
-                        prev.service_times.pickup_service_min
-                      ),
-                    },
-                  }
-                : prev
-            )
-          }
-        />
-        <LabeledInput
-          label="Temps drop-off (min)"
-          value={takeSettingsField("dropoff_service_min")}
-          onChangeText={(value) =>
-            setSettings((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    service_times: {
-                      ...prev.service_times,
-                      dropoff_service_min: numberOr(
-                        value,
-                        prev.service_times.dropoff_service_min
-                      ),
-                    },
-                  }
-                : prev
-            )
-          }
-        />
-        <LabeledInput
-          label="Marge transition (min)"
-          value={takeSettingsField("min_transition_margin_min")}
-          onChangeText={(value) =>
-            setSettings((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    service_times: {
-                      ...prev.service_times,
-                      min_transition_margin_min: numberOr(
-                        value,
-                        prev.service_times.min_transition_margin_min
-                      ),
-                    },
-                  }
-                : prev
-            )
-          }
-        />
+        <Text style={styles.sectionDescription}>
+          Définit les durées standards utilisées par l’optimiseur pour planifier
+          les créneaux.
+        </Text>
+        <View style={styles.inputGrid}>
+          <LabeledInput
+            label="Pickup (min)"
+            value={takeSettingsField("pickup_service_min")}
+            onChangeText={(value) =>
+              setSettings((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      service_times: {
+                        ...prev.service_times,
+                        pickup_service_min: numberOr(
+                          value,
+                          prev.service_times.pickup_service_min
+                        ),
+                      },
+                    }
+                  : prev
+              )
+            }
+          />
+          <LabeledInput
+            label="Drop-off (min)"
+            value={takeSettingsField("dropoff_service_min")}
+            onChangeText={(value) =>
+              setSettings((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      service_times: {
+                        ...prev.service_times,
+                        dropoff_service_min: numberOr(
+                          value,
+                          prev.service_times.dropoff_service_min
+                        ),
+                      },
+                    }
+                  : prev
+              )
+            }
+          />
+          <LabeledInput
+            label="Marge transition (min)"
+            value={takeSettingsField("min_transition_margin_min")}
+            onChangeText={(value) =>
+              setSettings((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      service_times: {
+                        ...prev.service_times,
+                        min_transition_margin_min: numberOr(
+                          value,
+                          prev.service_times.min_transition_margin_min
+                        ),
+                      },
+                    }
+                  : prev
+              )
+            }
+          />
+        </View>
       </View>
 
       <TouchableOpacity
@@ -268,42 +327,86 @@ export default function EnterpriseSettingsScreen() {
         onPress={handleSave}
         disabled={loading || !settings}
       >
-        <Text style={styles.primaryButtonText}>Enregistrer</Text>
+        <Text style={styles.primaryButtonText}>
+          {loading ? "Sauvegarde…" : "Enregistrer les ajustements"}
+        </Text>
       </TouchableOpacity>
 
+      <Text style={styles.sectionKicker}>Actions ponctuelles</Text>
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Actions rapides</Text>
+        <Text style={styles.sectionTitle}>Pilotage quotidien</Text>
+        <Text style={styles.sectionDescription}>
+          Déclenche les opérations essentielles pour la date sélectionnée.
+        </Text>
+
         <LabeledInput
-          label="Date cible (YYYY-MM-DD)"
+          label="Date cible"
+          help="Format ISO attendu : YYYY-MM-DD"
           value={dispatchDate}
           onChangeText={setDispatchDate}
+          keyboardType="default"
         />
+
         <TouchableOpacity
           style={styles.secondaryButton}
           onPress={handleRunDispatch}
           disabled={loading}
         >
-          <Text style={styles.secondaryButtonText}>
-            Lancer un dispatch semi-auto
-          </Text>
+          <Ionicons name="flash-outline" size={18} color={palette.primaryText} />
+          <Text style={styles.secondaryButtonText}>Lancer un dispatch</Text>
         </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.secondaryButton}
           onPress={handleRunOptimizer}
           disabled={loading}
         >
+          <Ionicons name="sparkles-outline" size={18} color={palette.primaryText} />
           <Text style={styles.secondaryButtonText}>Relancer l’optimiseur</Text>
         </TouchableOpacity>
+
         <TouchableOpacity
           style={[styles.secondaryButton, styles.dangerButton]}
           onPress={handleResetAssignments}
           disabled={loading}
         >
-          <Text style={styles.secondaryButtonText}>Reset assignations</Text>
+          <Ionicons name="alert-circle-outline" size={18} color={palette.error} />
+          <Text style={styles.dangerButtonText}>Reset assignations</Text>
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity
+          style={[styles.secondaryButton, styles.logoutButton]}
+          onPress={() =>
+            Alert.alert(
+              "Déconnexion",
+              "Voulez-vous quitter l'espace entreprise ?",
+              [
+                { text: "Annuler", style: "cancel" },
+                {
+                  text: "Se déconnecter",
+                  style: "destructive",
+                  onPress: async () => {
+                    await logoutEnterprise();
+                    await switchMode("driver");
+                  },
+                },
+              ]
+            )
+          }
+        >
+          <Ionicons name="log-out-outline" size={18} color={palette.primaryText} />
+          <Text style={styles.secondaryButtonText}>Se déconnecter</Text>
         </TouchableOpacity>
       </View>
 
-      {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
+      {errorMessage && (
+        <View style={styles.errorBanner}>
+          <Ionicons name="alert-triangle" size={18} color={palette.error} />
+          <Text style={styles.error}>{errorMessage}</Text>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -311,19 +414,27 @@ export default function EnterpriseSettingsScreen() {
 const LabeledInput = ({
   label,
   value,
+  help,
   onChangeText,
+  keyboardType,
 }: {
   label: string;
   value: string;
+  help?: string;
   onChangeText: (text: string) => void;
+  keyboardType?: "numeric" | "default";
 }) => (
   <View style={styles.inputGroup}>
-    <Text style={styles.inputLabel}>{label}</Text>
+    <View style={styles.inputHeader}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      {help ? <Text style={styles.inputHelp}>{help}</Text> : null}
+    </View>
     <TextInput
       style={styles.input}
       value={value}
       onChangeText={onChangeText}
-      keyboardType="numeric"
+      keyboardType={keyboardType ?? "numeric"}
+      placeholderTextColor={palette.muted}
     />
   </View>
 );
@@ -331,78 +442,177 @@ const LabeledInput = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0B1736",
+    backgroundColor: palette.background,
   },
   content: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 48,
+    gap: 22,
   },
-  title: {
-    color: "#FFFFFF",
-    fontSize: 22,
+  hero: {
+    borderRadius: 24,
+    padding: 22,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 18,
+    borderWidth: 1,
+    borderColor: palette.heroBorder,
+  },
+  heroTitle: {
+    color: palette.heroText,
+    fontSize: 26,
     fontWeight: "700",
+    letterSpacing: 0.3,
   },
-  subtitle: {
-    color: "#9AA5CC",
+  heroSubtitle: {
+    color: palette.heroMeta,
+    fontSize: 14,
     marginTop: 6,
-    marginBottom: 20,
+  },
+  heroBadge: {
+    backgroundColor: palette.countPillBg,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  heroBadgeText: {
+    color: palette.primaryText,
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  sectionKicker: {
+    color: palette.muted,
+    textTransform: "uppercase",
+    letterSpacing: 3,
+    fontSize: 12,
   },
   card: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 18,
+    backgroundColor: palette.cardBg,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
+    shadowColor: palette.cardShadow,
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 6,
+    gap: 14,
   },
   sectionTitle: {
-    color: "#FFFFFF",
-    fontSize: 17,
+    color: palette.heroText,
+    fontSize: 18,
     fontWeight: "600",
-    marginBottom: 12,
+  },
+  sectionDescription: {
+    color: palette.muted,
+    fontSize: 13,
+    lineHeight: 19,
   },
   inputGroup: {
-    marginBottom: 12,
+    gap: 8,
+  },
+  inputHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    gap: 12,
   },
   inputLabel: {
-    color: "#B7C5F5",
+    color: palette.heroText,
     fontSize: 14,
-    marginBottom: 6,
+    fontWeight: "600",
+  },
+  inputHelp: {
+    color: palette.muted,
+    fontSize: 12,
+    flex: 1,
+    textAlign: "right",
   },
   input: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 12,
-    padding: 12,
-    color: "#FFFFFF",
+    backgroundColor: palette.inputBg,
+    borderRadius: 14,
+    padding: 14,
+    color: palette.inputText,
+    borderWidth: 1,
+    borderColor: palette.inputBorder,
+    fontSize: 15,
+  },
+  inputGrid: {
+    flexDirection: "column",
+    gap: 12,
   },
   primaryButton: {
-    backgroundColor: "#4D6BFE",
-    borderRadius: 12,
-    paddingVertical: 14,
+    backgroundColor: palette.primary,
+    borderRadius: 16,
+    paddingVertical: 16,
     alignItems: "center",
-    marginBottom: 18,
+    justifyContent: "center",
+    shadowColor: palette.primary,
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 18,
+    elevation: 6,
   },
   primaryButtonText: {
-    color: "#FFFFFF",
+    color: palette.primaryText,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
+    letterSpacing: 0.4,
   },
   secondaryButton: {
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderRadius: 12,
+    backgroundColor: palette.secondaryBg,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: palette.secondaryBorder,
     paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
-  },
-  dangerButton: {
-    backgroundColor: "rgba(248,113,113,0.2)",
+    justifyContent: "center",
+    gap: 10,
   },
   secondaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
+    color: palette.primaryText,
+    fontSize: 14,
     fontWeight: "600",
   },
-  error: {
-    color: "#F87171",
-    marginTop: 12,
+  dangerButton: {
+    backgroundColor: palette.dangerBg,
+    borderColor: palette.dangerBorder,
+  },
+  dangerButtonText: {
+    color: palette.error,
     fontSize: 14,
+    fontWeight: "600",
+  },
+  logoutButton: {
+    backgroundColor: palette.logoutBg,
+    borderColor: palette.logoutBorder,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: palette.divider,
+    marginVertical: 12,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+    backgroundColor: "rgba(241,104,104,0.12)",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(241,104,104,0.24)",
+  },
+  error: {
+    color: palette.error,
+    flex: 1,
+    fontSize: 13,
   },
 });

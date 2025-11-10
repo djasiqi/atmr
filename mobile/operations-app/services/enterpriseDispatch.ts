@@ -1,5 +1,6 @@
 import { enterpriseApi } from "./enterpriseAuth";
 import {
+  DispatchRunResponse,
   DispatchStatus,
   PaginatedRides,
   RideDetail,
@@ -91,22 +92,32 @@ export const cancelRide = async (
 
 export const switchDispatchMode = async (
   target_mode: "manual" | "semi_auto" | "fully_auto",
-  reason: string,
-  dry_run: boolean = false
+  reason?: string
 ): Promise<ModeResponse> => {
-  const response = await enterpriseApi.post<ModeResponse>(
-    "/dispatch/v1/modes/switch",
-    {
-      target_mode,
-      reason,
-      dry_run,
-    }
-  );
-  return response.data;
+  const response = await enterpriseApi.put("/dispatch/v1/mode", {
+    dispatch_mode: target_mode,
+    reason,
+  });
+
+  const payload = response.data as {
+    dispatch_mode?: "manual" | "semi_auto" | "fully_auto";
+    previous_mode?: "manual" | "semi_auto" | "fully_auto";
+    message?: string;
+  };
+
+  const nowIso = new Date().toISOString();
+
+  return {
+    mode_before: payload.previous_mode ?? target_mode,
+    mode_after: payload.dispatch_mode ?? target_mode,
+    effective_at: nowIso,
+    requires_approval: false,
+    audit_event_id: payload.message ?? "",
+  };
 };
 
 export const getDispatchModes = async () => {
-  const response = await enterpriseApi.get("/dispatch/v1/modes");
+  const response = await enterpriseApi.get("/dispatch/v1/mode");
   return response.data;
 };
 
@@ -129,8 +140,16 @@ export const markRideUrgent = async (
   await enterpriseApi.post(`/dispatch/v1/rides/${rideId}/urgent`, payload);
 };
 
-export const runDispatch = async (forDate?: string) => {
-  await enterpriseApi.post("/dispatch/v1/run", { date: forDate });
+export const runDispatch = async (
+  forDate?: string
+): Promise<DispatchRunResponse> => {
+  const response = await enterpriseApi.post<DispatchRunResponse>(
+    "/dispatch/v1/run",
+    {
+      date: forDate,
+    }
+  );
+  return response.data;
 };
 
 export const runOptimizer = async (forDate?: string) => {
@@ -155,11 +174,40 @@ export const updateDispatchSettings = async (
   return response.data;
 };
 
-export const getDispatchMessages = async (): Promise<DispatchMessage[]> => {
-  const response = await enterpriseApi.get<DispatchMessage[]>(
-    "/dispatch/v1/chat/messages"
+type ChatMessagesResponse = {
+  messages: DispatchMessage[];
+  count: number;
+};
+
+const normalizeDispatchMessage = (message: any): DispatchMessage => {
+  const createdAt =
+    message?.created_at ?? message?.timestamp ?? new Date().toISOString();
+
+  return {
+    id: message?.id,
+    sender_id: message?.sender_id !== undefined ? message.sender_id : null,
+    sender_role: message?.sender_role ?? undefined,
+    sender_name: message?.sender_name ?? null,
+    content: message?.content ?? "",
+    created_at: createdAt,
+  };
+};
+
+export const getDispatchMessages = async (params?: {
+  before?: string;
+  limit?: number;
+}): Promise<DispatchMessage[]> => {
+  const response = await enterpriseApi.get<ChatMessagesResponse>(
+    "/dispatch/v1/chat/messages",
+    {
+      params: {
+        before: params?.before,
+        limit: params?.limit,
+      },
+    }
   );
-  return response.data;
+  const rawMessages = response.data?.messages ?? [];
+  return rawMessages.map(normalizeDispatchMessage);
 };
 
 export const sendDispatchMessage = async (content: string) => {
@@ -167,5 +215,5 @@ export const sendDispatchMessage = async (content: string) => {
     "/dispatch/v1/chat/messages",
     { content }
   );
-  return response.data;
+  return normalizeDispatchMessage(response.data);
 };

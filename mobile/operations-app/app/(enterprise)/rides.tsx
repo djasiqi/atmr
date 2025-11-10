@@ -11,11 +11,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import dayjs from "dayjs";
 import "dayjs/locale/fr";
 
 import { useAuth } from "@/hooks/useAuth";
+import { useEnterpriseContext } from "@/context/EnterpriseContext";
+import { RideSnippetCard } from "@/components/enterprise/cards/RideSnippetCard";
 import {
   getDispatchRides,
   markRideUrgent,
@@ -32,25 +36,73 @@ const TABS: { label: string; value: TabValue }[] = [
   { label: "Assignées", value: "assigned" },
   { label: "Urgences", value: "urgent" },
 ];
+const TAB_ACCESSIBILITY: Record<TabValue, string> = {
+  unassigned: "Courses non assignées",
+  assigned: "Courses assignées",
+  urgent: "Courses urgentes",
+};
+
+const palette = {
+  background: "#07130E",
+  heroGradient: ["#11412F", "#07130E"] as [string, string],
+  heroBorder: "rgba(46,128,94,0.36)",
+  heroText: "#E6F2EA",
+  heroMeta: "rgba(184,214,198,0.72)",
+  searchBackground: "rgba(10,34,26,0.82)",
+  searchBorder: "rgba(59,143,105,0.28)",
+  searchPlaceholder: "rgba(184,214,198,0.55)",
+  tabBackground: "rgba(10,34,26,0.82)",
+  tabBorder: "rgba(59,143,105,0.28)",
+  tabActive: "#1EB980",
+  tabActiveShadow: "rgba(30,185,128,0.25)",
+  tabText: "rgba(184,214,198,0.65)",
+  tabTextActive: "#052015",
+  listGap: 18,
+  emptyState: "rgba(184,214,198,0.7)",
+  error: "#F87171",
+  modalOverlay: "rgba(5,22,16,0.82)",
+  modalBackground: "#08211A",
+  modalBorder: "rgba(46,128,94,0.4)",
+  modalTitle: "#E6F2EA",
+  modalText: "rgba(184,214,198,0.8)",
+  modalButton: "#1EB980",
+  modalButtonText: "#052015",
+  modalCancelText: "rgba(184,214,198,0.75)",
+  divider: "rgba(46,128,94,0.2)",
+  countPillBg: "rgba(30,185,128,0.12)",
+  countPillText: "#1EB980",
+  loadingText: "rgba(184,214,198,0.7)",
+};
 
 export default function EnterpriseRidesScreen() {
   const { enterpriseSession } = useAuth();
+  const { selectedDate } = useEnterpriseContext();
 
   const [selectedTab, setSelectedTab] = useState<TabValue>("unassigned");
   const [rides, setRides] = useState<RideSummary[]>([]);
+  const [tabCounts, setTabCounts] = useState<Record<TabValue, number>>({
+    unassigned: 0,
+    assigned: 0,
+    urgent: 0,
+  });
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [scheduleModal, setScheduleModal] = useState<{
     rideId: string | null;
     value: string;
-  }>({ rideId: null, value: "" });
+    label?: string;
+  }>({ rideId: null, value: "", label: undefined });
   const [actionLoading, setActionLoading] = useState(false);
 
   const currentDate = useMemo(() => {
-    const now = dayjs().tz ? dayjs().tz("Europe/Zurich") : dayjs();
-    return now.format("YYYY-MM-DD");
-  }, []);
+    return selectedDate ?? dayjs().format("YYYY-MM-DD");
+  }, [selectedDate]);
+
+  const formattedDay = useMemo(() => {
+    const base = dayjs(currentDate);
+    return base.format("dddd D MMMM");
+  }, [currentDate]);
 
   const loadRides = useCallback(async () => {
     if (!enterpriseSession) return;
@@ -61,9 +113,13 @@ export default function EnterpriseRidesScreen() {
         date: currentDate,
         status: selectedTab,
         query: search || undefined,
-        page_size: 40,
+        page_size: 120,
       });
       setRides(response.items);
+      setTabCounts((prev) => ({
+        ...prev,
+        [selectedTab]: response.total ?? response.items.length,
+      }));
     } catch (error: any) {
       const message =
         error?.response?.data?.error ??
@@ -75,15 +131,42 @@ export default function EnterpriseRidesScreen() {
     }
   }, [currentDate, enterpriseSession, search, selectedTab]);
 
+  const refreshTabCounts = useCallback(async () => {
+    if (!enterpriseSession) return;
+    try {
+      const responses = await Promise.all(
+        TABS.map((tab) =>
+          getDispatchRides({
+            date: currentDate,
+            status: tab.value,
+            page_size: 1,
+          })
+        )
+      );
+      setTabCounts({
+        unassigned: responses[0]?.total ?? 0,
+        assigned: responses[1]?.total ?? 0,
+        urgent: responses[2]?.total ?? 0,
+      });
+    } catch (error) {
+      console.warn("Impossible de rafraîchir les compteurs de courses", error);
+    }
+  }, [currentDate, enterpriseSession]);
+
   useEffect(() => {
     loadRides();
   }, [loadRides]);
+
+  useEffect(() => {
+    refreshTabCounts();
+  }, [refreshTabCounts]);
 
   const handleUrgent = useCallback(
     async (rideId: string) => {
       setActionLoading(true);
       try {
         await markRideUrgent(rideId, { extra_delay_minutes: 15 });
+        await refreshTabCounts();
         await loadRides();
       } catch (error: any) {
         const message =
@@ -95,14 +178,14 @@ export default function EnterpriseRidesScreen() {
         setActionLoading(false);
       }
     },
-    [loadRides]
+    [loadRides, refreshTabCounts]
   );
 
   const confirmSchedule = useCallback(async () => {
     if (!scheduleModal.rideId) return;
     const raw = scheduleModal.value.trim();
     if (!raw) {
-      setScheduleModal({ rideId: null, value: "" });
+      setScheduleModal({ rideId: null, value: "", label: undefined });
       return;
     }
     const [hour, minute] = raw.split(":");
@@ -121,6 +204,7 @@ export default function EnterpriseRidesScreen() {
     setActionLoading(true);
     try {
       await scheduleRide(scheduleModal.rideId, { pickup_at: isoDate });
+      await refreshTabCounts();
       await loadRides();
     } catch (error: any) {
       const message =
@@ -130,11 +214,96 @@ export default function EnterpriseRidesScreen() {
       setErrorMessage(message);
     } finally {
       setActionLoading(false);
-      setScheduleModal({ rideId: null, value: "" });
+      setScheduleModal({ rideId: null, value: "", label: undefined });
     }
-  }, [currentDate, loadRides, scheduleModal]);
+  }, [currentDate, loadRides, refreshTabCounts, scheduleModal]);
 
-  const filteredRides = rides;
+  const handleOpenDetails = useCallback((rideId: string) => {
+    router.push({
+      pathname: "/(enterprise)/ride-details",
+      params: { rideId },
+    } as any);
+  }, []);
+
+  const onSubmitSearch = useCallback(() => {
+    loadRides();
+  }, [loadRides]);
+
+  const renderRideCard = (ride: RideSummary) => {
+    const pickupTime = ride.time.pickup_at
+      ? dayjs(ride.time.pickup_at).format("HH[h]mm")
+      : "À définir";
+    const badges =
+      ride.client.priority === "HIGH"
+        ? [{ label: "Priorité", tone: "danger" as const }]
+        : ride.client.priority === "LOW"
+          ? [{ label: "Confort", tone: "info" as const }]
+          : undefined;
+
+    return (
+      <RideSnippetCard
+        key={ride.id}
+        ride={{
+          id: ride.id,
+          time: pickupTime,
+          showUndefinedIcon: !ride.time.pickup_at,
+          client: ride.client.name,
+          pickup: ride.route.pickup_address,
+          dropoff: ride.route.dropoff_address,
+          assignedTo: ride.driver?.name ?? null,
+          badges,
+          footerActions: (
+            <View style={styles.cardActions}>
+              <TouchableOpacity
+                style={styles.actionButtonPrimary}
+                onPress={() =>
+                  setScheduleModal({
+                    rideId: ride.id,
+                    value: ride.time.pickup_at
+                      ? dayjs(ride.time.pickup_at).format("HH:mm")
+                      : "",
+                    label: ride.client.name,
+                  })
+                }
+              >
+                <Ionicons
+                  name="time-outline"
+                  size={16}
+                  color={palette.modalButtonText}
+                />
+                <Text style={styles.actionButtonPrimaryText}>Planifier</Text>
+              </TouchableOpacity>
+              {selectedTab !== "urgent" && (
+                <TouchableOpacity
+                  style={styles.actionButtonGhost}
+                  onPress={() => handleUrgent(ride.id)}
+                  disabled={actionLoading}
+                >
+                  <Ionicons
+                    name="flame-outline"
+                    size={16}
+                    color={palette.tabActive}
+                  />
+                  <Text style={styles.actionButtonGhostText}>Urgent +15</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.actionButtonGhost}
+                onPress={() => handleOpenDetails(ride.id)}
+              >
+                <Ionicons
+                  name="open-outline"
+                  size={16}
+                  color={palette.heroText}
+                />
+                <Text style={styles.actionButtonGhostText}>Voir la fiche</Text>
+              </TouchableOpacity>
+            </View>
+          ),
+        }}
+      />
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -145,110 +314,133 @@ export default function EnterpriseRidesScreen() {
           <RefreshControl refreshing={loading} onRefresh={loadRides} />
         }
       >
-        <Text style={styles.title}>
-          Courses du {dayjs(currentDate).format("DD MMM YYYY")}
-        </Text>
+        <LinearGradient
+          colors={palette.heroGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.hero}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.heroKicker}>Plan de transport</Text>
+            <Text style={styles.heroTitle}>{formattedDay}</Text>
+            <Text style={styles.heroSubtitle}>
+              {tabCounts[selectedTab] ?? rides.length} course
+              {((tabCounts[selectedTab] ?? rides.length) || 0) > 1
+                ? "s"
+                : ""}{" "}
+              {selectedTab === "unassigned"
+                ? "à traiter"
+                : selectedTab === "assigned"
+                  ? "en cours"
+                  : "à prioriser"}
+            </Text>
+          </View>
+          <View style={styles.heroCountPill}>
+            <Ionicons
+              name="clipboard-outline"
+              size={18}
+              color={palette.countPillText}
+            />
+            <Text style={styles.heroCount}>
+              {tabCounts.unassigned + tabCounts.assigned + tabCounts.urgent}
+            </Text>
+          </View>
+        </LinearGradient>
+
         <View style={styles.tabs}>
-          {TABS.map((tab) => (
-            <TouchableOpacity
-              key={tab.value}
-              style={[
-                styles.tabButton,
-                selectedTab === tab.value && styles.tabButtonActive,
-              ]}
-              onPress={() => setSelectedTab(tab.value)}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  selectedTab === tab.value && styles.tabTextActive,
-                ]}
+          {TABS.map((tab) => {
+            const isActive = selectedTab === tab.value;
+            return (
+              <TouchableOpacity
+                key={tab.value}
+                style={[styles.tabButton, isActive && styles.tabButtonActive]}
+                onPress={() => setSelectedTab(tab.value)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={TAB_ACCESSIBILITY[tab.value]}
+                accessibilityState={{ selected: isActive }}
               >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text
+                  style={[styles.tabCount, isActive && styles.tabCountActive]}
+                >
+                  {tabCounts[tab.value]}
+                </Text>
+                <Text
+                  style={[styles.tabText, isActive && styles.tabTextActive]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Rechercher (client, adresse, chauffeur...)"
-          placeholderTextColor="#98A5C7"
-          style={styles.searchInput}
-          returnKeyType="search"
-          onSubmitEditing={loadRides}
-        />
+        <View style={styles.searchBar}>
+          <Ionicons
+            name="search-outline"
+            size={18}
+            color={palette.searchPlaceholder}
+          />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Rechercher client, adresse ou chauffeur"
+            placeholderTextColor={palette.searchPlaceholder}
+            style={styles.searchInput}
+            returnKeyType="search"
+            onSubmitEditing={onSubmitSearch}
+          />
+          <TouchableOpacity
+            style={styles.searchTrigger}
+            onPress={onSubmitSearch}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="arrow-forward" size={18} color={palette.heroText} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.divider} />
 
         {loading ? (
           <View style={styles.loading}>
-            <ActivityIndicator color="#4D6BFE" />
-            <Text style={styles.loadingText}>Chargement des courses…</Text>
+            <ActivityIndicator color={palette.tabActive} />
+            <Text style={styles.loadingText}>Préparation des courses…</Text>
           </View>
-        ) : filteredRides.length === 0 ? (
-          <Text style={styles.muted}>Aucune course dans cette catégorie.</Text>
+        ) : rides.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons
+              name="leaf-outline"
+              size={32}
+              color={palette.emptyState}
+            />
+            <Text style={styles.emptyStateTitle}>Pas de course ici</Text>
+            <Text style={styles.emptyStateText}>
+              Ajuste la date ou change d’onglet pour consulter d’autres trajets.
+            </Text>
+          </View>
         ) : (
-          filteredRides.map((ride) => (
-            <View key={ride.id} style={styles.rideCard}>
-              <View style={styles.rideHeader}>
-                <Text style={styles.rideClient}>{ride.client.name}</Text>
-                <Text style={styles.rideTime}>
-                  {ride.time.pickup_at
-                    ? dayjs(ride.time.pickup_at).format("HH:mm")
-                    : "⏱️ À définir"}
-                </Text>
-              </View>
-              <Text style={styles.rideRoute}>{ride.route.pickup_address}</Text>
-              <Text style={styles.rideRoute}>
-                → {ride.route.dropoff_address}
-              </Text>
-              <View style={styles.rideActions}>
-                <TouchableOpacity
-                  style={styles.primaryAction}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(enterprise)/ride-details",
-                      params: { rideId: ride.id },
-                    } as any)
-                  }
-                >
-                  <Text style={styles.primaryActionText}>Voir</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.secondaryAction}
-                  onPress={() =>
-                    setScheduleModal({ rideId: ride.id, value: "" })
-                  }
-                >
-                  <Text style={styles.secondaryActionText}>Planifier</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.secondaryAction}
-                  onPress={() => handleUrgent(ride.id)}
-                  disabled={actionLoading}
-                >
-                  <Text style={styles.secondaryActionText}>Urgent +15</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
+          <View style={{ gap: palette.listGap }}>
+            {rides.map((ride) => renderRideCard(ride))}
+          </View>
         )}
 
-        {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
-
-        <TouchableOpacity
-          style={styles.refreshButton}
-          onPress={loadRides}
-          disabled={loading}
-        >
-          <Text style={styles.refreshButtonText}>Rafraîchir</Text>
-        </TouchableOpacity>
+        {errorMessage && (
+          <View style={styles.errorBanner}>
+            <Ionicons name="alert-circle" size={18} color={palette.error} />
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        )}
       </ScrollView>
 
       <Modal visible={!!scheduleModal.rideId} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Planifier l’horaire</Text>
+            <Text style={styles.modalTitle}>Planifier la course</Text>
+            {scheduleModal.label ? (
+              <Text style={styles.modalSubtitle}>{scheduleModal.label}</Text>
+            ) : null}
             <TextInput
               style={styles.modalInput}
               value={scheduleModal.value}
@@ -256,14 +448,20 @@ export default function EnterpriseRidesScreen() {
                 setScheduleModal((prev) => ({ ...prev, value: text }))
               }
               placeholder="HH:mm"
-              placeholderTextColor="#9AA5CC"
+              placeholderTextColor={palette.modalText}
               keyboardType="numeric"
               autoFocus
             />
             <View style={styles.modalActions}>
               <Pressable
                 style={styles.modalCancel}
-                onPress={() => setScheduleModal({ rideId: null, value: "" })}
+                onPress={() =>
+                  setScheduleModal({
+                    rideId: null,
+                    value: "",
+                    label: undefined,
+                  })
+                }
               >
                 <Text style={styles.modalCancelText}>Annuler</Text>
               </Pressable>
@@ -272,7 +470,7 @@ export default function EnterpriseRidesScreen() {
                 onPress={confirmSchedule}
                 disabled={actionLoading}
               >
-                <Text style={styles.modalConfirmText}>Confirmer</Text>
+                <Text style={styles.modalConfirmText}>Enregistrer</Text>
               </Pressable>
             </View>
           </View>
@@ -285,155 +483,247 @@ export default function EnterpriseRidesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0B1736",
+    backgroundColor: palette.background,
   },
   scroll: {
     flex: 1,
   },
   content: {
     padding: 20,
+    paddingBottom: 32,
+    gap: 20,
   },
-  title: {
-    color: "#FFFFFF",
-    fontSize: 22,
+  hero: {
+    borderRadius: 24,
+    padding: 22,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 18,
+    borderWidth: 1,
+    borderColor: palette.heroBorder,
+  },
+  heroKicker: {
+    color: palette.heroMeta,
+    textTransform: "uppercase",
+    letterSpacing: 3,
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  heroTitle: {
+    color: palette.heroText,
+    fontSize: 26,
     fontWeight: "700",
-    marginBottom: 16,
+    letterSpacing: 0.3,
+    textTransform: "capitalize",
+  },
+  heroSubtitle: {
+    color: palette.heroMeta,
+    fontSize: 14,
+    marginTop: 6,
+  },
+  heroCountPill: {
+    backgroundColor: palette.countPillBg,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: palette.tabBorder,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  heroCount: {
+    color: palette.countPillText,
+    fontWeight: "700",
+    fontSize: 16,
   },
   tabs: {
     flexDirection: "row",
-    gap: 8,
-    marginBottom: 16,
+    gap: 10,
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    minWidth: 0,
+    backgroundColor: palette.tabBackground,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
+    borderColor: palette.tabBorder,
+    flexDirection: "column",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
   },
   tabButtonActive: {
-    backgroundColor: "#4D6BFE",
-    borderColor: "#4D6BFE",
+    backgroundColor: palette.tabActive,
+    borderColor: palette.tabActive,
+    shadowColor: palette.tabActiveShadow,
+    shadowOpacity: 0.45,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 14,
+    elevation: 8,
   },
   tabText: {
-    color: "#B7C5F5",
+    color: palette.tabText,
     fontWeight: "600",
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    textAlign: "center",
+    flexShrink: 1,
   },
   tabTextActive: {
-    color: "#FFFFFF",
+    color: palette.tabTextActive,
+  },
+  tabCount: {
+    color: palette.tabText,
+    fontWeight: "600",
+    fontSize: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: "rgba(10,34,26,0.55)",
+  },
+  tabCountActive: {
+    color: palette.tabTextActive,
+    backgroundColor: "rgba(5,32,22,0.22)",
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: palette.searchBackground,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: palette.searchBorder,
   },
   searchInput: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 12,
-    padding: 12,
-    color: "#FFFFFF",
-    marginBottom: 14,
+    flex: 1,
+    color: palette.heroText,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    fontSize: 15,
+  },
+  searchTrigger: {
+    borderRadius: 999,
+    padding: 8,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: palette.divider,
   },
   loading: {
     alignItems: "center",
     paddingVertical: 40,
+    gap: 12,
   },
   loadingText: {
-    color: "#A9B6E5",
-    marginTop: 10,
+    color: palette.loadingText,
+    fontSize: 14,
   },
-  muted: {
-    color: "#9AA5CC",
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 48,
+    gap: 12,
   },
-  rideCard: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
+  emptyStateTitle: {
+    color: palette.heroText,
+    fontWeight: "600",
+    fontSize: 16,
   },
-  rideHeader: {
+  emptyStateText: {
+    color: palette.emptyState,
+    fontSize: 14,
+    textAlign: "center",
+    paddingHorizontal: 20,
+  },
+  cardActions: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
+    flexWrap: "wrap",
+    gap: 10,
   },
-  rideClient: {
-    color: "#FFFFFF",
+  actionButtonPrimary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: palette.modalButton,
+  },
+  actionButtonPrimaryText: {
+    color: palette.modalButtonText,
     fontWeight: "600",
-    fontSize: 15,
-  },
-  rideTime: {
-    color: "#E2E8FF",
-    fontWeight: "600",
-  },
-  rideRoute: {
-    color: "#C0CDF7",
     fontSize: 13,
   },
-  rideActions: {
+  actionButtonGhost: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 12,
-  },
-  primaryAction: {
-    flex: 1,
-    marginRight: 8,
-    backgroundColor: "#4D6BFE",
-    borderRadius: 10,
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    alignItems: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: palette.tabBorder,
+    backgroundColor: "rgba(10,34,26,0.6)",
   },
-  primaryActionText: {
-    color: "#FFFFFF",
+  actionButtonGhostText: {
+    color: palette.heroText,
     fontWeight: "600",
+    fontSize: 13,
   },
-  secondaryAction: {
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 14,
+    backgroundColor: "rgba(248,113,113,0.12)",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(248,113,113,0.24)",
+  },
+  errorText: {
+    color: palette.error,
     flex: 1,
-    marginLeft: 8,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  secondaryActionText: {
-    color: "#E2E8FF",
-    fontWeight: "600",
-  },
-  error: {
-    color: "#F87171",
-    marginTop: 12,
-  },
-  refreshButton: {
-    marginTop: 12,
-    backgroundColor: "#4D6BFE",
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  refreshButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 13,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: palette.modalOverlay,
     alignItems: "center",
     justifyContent: "center",
+    padding: 24,
   },
   modalCard: {
-    backgroundColor: "#102347",
-    width: "80%",
-    borderRadius: 16,
-    padding: 18,
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: palette.modalBackground,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: palette.modalBorder,
+    gap: 16,
   },
   modalTitle: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 12,
+    color: palette.modalTitle,
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  modalSubtitle: {
+    color: palette.modalText,
+    fontSize: 14,
   },
   modalInput: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 10,
-    padding: 12,
-    color: "#FFFFFF",
-    marginBottom: 16,
+    backgroundColor: "rgba(10,34,26,0.82)",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    color: palette.heroText,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: palette.searchBorder,
   },
   modalActions: {
     flexDirection: "row",
@@ -441,21 +731,21 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   modalCancel: {
-    paddingVertical: 10,
     paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   modalCancelText: {
-    color: "#9AA5CC",
+    color: palette.modalCancelText,
     fontWeight: "600",
   },
   modalConfirm: {
-    backgroundColor: "#4D6BFE",
-    paddingVertical: 10,
+    backgroundColor: palette.modalButton,
     paddingHorizontal: 18,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 14,
   },
   modalConfirmText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
+    color: palette.modalButtonText,
+    fontWeight: "700",
   },
 });

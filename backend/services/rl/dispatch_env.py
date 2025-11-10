@@ -163,6 +163,9 @@ class DispatchEnv(gym.Env):
         # ⭐ NOUVEAU: Coordonnées des maisons des chauffeurs (simulées)
         self.driver_homes = []
 
+        self.active_driver_count = num_drivers
+        self.active_booking_count = max_bookings
+
         # Initialiser le système de reward shaping avancé
         try:
             from services.rl.reward_shaping import AdvancedRewardShaping, RewardShapingConfig
@@ -231,6 +234,8 @@ class DispatchEnv(gym.Env):
         # Générer des bookings initiaux
         self.bookings = []
         self._generate_new_bookings(self.np_random.randint(3, 8))
+
+        self.set_active_counts(self.num_drivers, min(len(self.bookings), self.max_bookings))
 
         # Réinitialiser le temps et les stats
         self.current_time = 0  # Démarrage à 8h00
@@ -369,23 +374,25 @@ class DispatchEnv(gym.Env):
 
         # Vérifications de sécurité : éviter les crashes si pas de drivers ou
         # bookings
-        if len(self.drivers) == 0 or len(self.bookings) == 0:
+        driver_limit = min(self.active_driver_count, len(self.drivers))
+        booking_limit = min(self.active_booking_count, len(self.bookings))
+        if driver_limit == 0 or booking_limit == 0:
             return mask
 
         # Actions d'assignation
-        for driver_idx, driver in enumerate(self.drivers):
+        for driver_idx in range(driver_limit):
+            driver = self.drivers[driver_idx]
             if not driver["available"]:
                 continue
 
-            for booking_idx, booking in enumerate(self.bookings):
+            for booking_idx in range(booking_limit):
+                booking = self.bookings[booking_idx]
                 if booking.get("assigned", False):
                     continue
 
                 # Vérifier contraintes VRPTW
                 if self._check_time_window_constraint(driver, booking):
                     action_idx = driver_idx * self.max_bookings + booking_idx + 1
-                    # Vérification de sécurité : s'assurer que l'index est dans
-                    # les limites
                     if 0 <= action_idx < self.action_space.n:
                         mask[action_idx] = True
 
@@ -904,3 +911,7 @@ class DispatchEnv(gym.Env):
 
     def close(self):
         """Nettoie les ressources."""
+
+    def set_active_counts(self, driver_count: int, booking_count: int) -> None:
+        self.active_driver_count = max(0, min(driver_count, self.num_drivers))
+        self.active_booking_count = max(0, min(booking_count, self.max_bookings))

@@ -1,24 +1,27 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { router } from "expo-router";
+import Ionicons from "react-native-vector-icons/Ionicons";
 
 import { useAuth } from "@/hooks/useAuth";
+import { Loader } from "@/components/ui/Loader";
+import { getLoginStyles } from "@/styles/loginStyles";
 
 export default function EnterpriseLoginScreen() {
   const { loginEnterprise, enterpriseLoading, setMode } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const { styles, palette } = useMemo(() => getLoginStyles("enterprise"), []);
 
   const handleSubmit = async () => {
     if (!email || !password) {
@@ -57,127 +60,88 @@ export default function EnterpriseLoginScreen() {
         style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Espace Enterprise Dispatch</Text>
-          <Text style={styles.subtitle}>
-            Accédez au pilotage des assignations et au monitoring en mobilité.
-          </Text>
-        </View>
-
-        <View style={styles.form}>
-          <Text style={styles.label}>Email entreprise</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="prenom.nom@entreprise.ch"
-            placeholderTextColor="#9AA3BC"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-          />
-
-          <Text style={styles.label}>Mot de passe</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Mot de passe"
-            placeholderTextColor="#9AA3BC"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
-
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={handleSubmit}
-            disabled={enterpriseLoading}
-          >
-            {enterpriseLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryButtonText}>Se connecter</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={async () => {
-              await setMode("driver");
-              router.replace("/(auth)/login");
-            }}
-          >
-            <Text style={styles.secondaryButtonText}>
-              Retour à l’espace chauffeur
+        <View style={styles.card}>
+          <View style={styles.header}>
+            <Text style={styles.kicker}>Espace Entreprise</Text>
+            <Text style={styles.title}>Supervision des Courses</Text>
+            <Text style={styles.subtitle}>
+              Affectez, suivez et optimisez vos courses en toute simplicité.
             </Text>
-          </TouchableOpacity>
+          </View>
+
+          <View style={styles.form}>
+            <View style={styles.inputBlock}>
+              <Text style={styles.label}>Email Entreprise</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="entreprise@liri.ch"
+                placeholderTextColor={palette.placeholder}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+              />
+            </View>
+
+            <View style={styles.inputBlock}>
+              <Text style={styles.label}>Mot de passe</Text>
+              <View style={styles.passwordField}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Mot de passe"
+                  placeholderTextColor={palette.placeholder}
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword((v) => !v)}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye" : "eye-off"}
+                    size={22}
+                    color={palette.secondary}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.helperLink}
+              onPress={() => router.push("/(auth)/forgot-password")}
+            >
+              <Text style={styles.helperLinkText}>Mot de passe oublié ?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={handleSubmit}
+              disabled={enterpriseLoading}
+            >
+              {enterpriseLoading ? (
+                <Loader />
+              ) : (
+                <Text style={styles.primaryButtonText}>Se connecter</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.switchRow}>
+              <Text style={styles.switchPrompt}>Vous êtes chauffeur ?</Text>
+              <TouchableOpacity
+                onPress={async () => {
+                  await setMode("driver");
+                  router.replace("/(auth)/login");
+                }}
+              >
+                <Text style={styles.switchLink}>
+                  Accéder à l’espace chauffeur
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#0B1736",
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 32,
-    justifyContent: "center",
-  },
-  header: {
-    marginBottom: 36,
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#CED6FF",
-    lineHeight: 22,
-  },
-  form: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 20,
-    padding: 24,
-  },
-  label: {
-    color: "#E3E9FF",
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  input: {
-    height: 48,
-    backgroundColor: "rgba(9,23,62,0.85)",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    color: "#FFFFFF",
-    marginBottom: 18,
-  },
-  primaryButton: {
-    backgroundColor: "#4D6BFE",
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  secondaryButton: {
-    marginTop: 20,
-    alignItems: "center",
-  },
-  secondaryButtonText: {
-    color: "#AAB6FF",
-    fontSize: 15,
-    fontWeight: "500",
-    textDecorationLine: "underline",
-  },
-});
