@@ -5,7 +5,6 @@ Fournit des helpers pour valider les entrées et retourner des erreurs structur�
 
 from typing import Any, Dict, cast
 
-from flask import jsonify
 from marshmallow import Schema, ValidationError
 from marshmallow.validate import Length
 
@@ -61,9 +60,9 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
     for field, messages in errors.items():
         # ⚡ Ignorer les clés spéciales de Marshmallow (_schema, _nested, etc.)
         # qui ne sont pas des champs de formulaire
-        if field.startswith('_'):
+        if field.startswith("_"):
             # Si c'est une erreur au niveau du schéma, l'ajouter au message général
-            if field == '_schema' and isinstance(messages, list):
+            if field == "_schema" and isinstance(messages, list):
                 formatted["message"] = messages[0] if messages else "Erreur de validation des données"
             continue
         

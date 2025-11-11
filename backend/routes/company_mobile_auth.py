@@ -307,20 +307,25 @@ class EnterpriseMobileLogin(Resource):
         mfa_code = data.get("mfa_code")
         device_id = data.get("device_id")
 
-        user: Optional[User]
-        company: Optional[Company]
+        user: Optional[User] = None
+        company: Optional[Company] = None
+        error_response: Optional[Tuple[Dict[str, Any], int]] = None
 
         if method == "password":
             if not email or not password:
-                return {"error": "Email et mot de passe requis."}, 400
-            user, company = _find_company_user_by_email(email)
-            if not user or not company or not user.check_password(password):
-                return {"error": "Identifiants invalides."}, 401
+                error_response = ({"error": "Email et mot de passe requis."}, 400)
+            else:
+                user, company = _find_company_user_by_email(email)
+                if not user or not company or not user.check_password(password):
+                    error_response = ({"error": "Identifiants invalides."}, 401)
         else:  # method == "oidc"
             try:
                 user, company = _handle_oidc_login(id_token, data.get("provider"))
             except ValueError as exc:
-                return {"error": str(exc)}, 401
+                error_response = ({"error": str(exc)}, 401)
+
+        if error_response:
+            return error_response
 
         if not user or not company:
             return {"error": "Accès refusé."}, 403
