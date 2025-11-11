@@ -68,11 +68,10 @@ jobs:
           vuln-type: os,library
 
       - name: Upload Trivy results to GitHub Security
-        if: always()
+        if: false
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
-          token: ${{ secrets.GH_ACTIONS_TOKEN }}
 
       - name: Copy compose files to server
         uses: appleboy/scp-action@v0.1.7
