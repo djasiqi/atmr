@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "backend/**"
+      - "frontend/**"
       - "docker-compose.yml"
       - "docker-compose.production.yml"
       - "pyrightconfig.json"
@@ -89,3 +90,48 @@ jobs:
             cd /srv/atmr/backend
             docker compose pull
             docker compose up -d
+
+  deploy-frontend:
+    name: Deploy frontend to Vercel
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: ${{ github.ref == 'refs/heads/main' }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
+      REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
+      REACT_APP_SOCKET_URL: ${{ secrets.REACT_APP_SOCKET_URL }}
+      REACT_APP_SENTRY_DSN: ${{ secrets.REACT_APP_SENTRY_DSN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Deploy to Vercel
+        working-directory: frontend
+        run: |
+          npm install --global vercel@latest
+          vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+
+          ENV_ARGS=""
+          if [ -n "$REACT_APP_API_URL" ]; then ENV_ARGS="$ENV_ARGS --env REACT_APP_API_URL=$REACT_APP_API_URL"; fi
+          if [ -n "$REACT_APP_API_BASE_URL" ]; then ENV_ARGS="$ENV_ARGS --env REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL"; fi
+          if [ -n "$REACT_APP_SOCKET_URL" ]; then ENV_ARGS="$ENV_ARGS --env REACT_APP_SOCKET_URL=$REACT_APP_SOCKET_URL"; fi
+          if [ -n "$REACT_APP_SENTRY_DSN" ]; then ENV_ARGS="$ENV_ARGS --env REACT_APP_SENTRY_DSN=$REACT_APP_SENTRY_DSN"; fi
+
+          vercel build --prod --token "$VERCEL_TOKEN" $ENV_ARGS
+          vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
