@@ -1,6 +1,7 @@
 // config-overrides.js
 
 const SML_EXCLUDE = /node_modules[\\/](svg-engine)/; // adapte le nom du paquet si besoin
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 module.exports = function override(config, _env) {
   const isSmlRule = (rule) => {
@@ -28,6 +29,17 @@ module.exports = function override(config, _env) {
   };
 
   (config.module?.rules || []).forEach(visit);
+
+  // Forcer MiniCssExtractPlugin à ignorer l'ordre des imports CSS (corrige les conflits de build CI)
+  config.plugins = (config.plugins || []).map((plugin) => {
+    if (plugin instanceof MiniCssExtractPlugin) {
+      plugin.options = {
+        ...plugin.options,
+        ignoreOrder: true,
+      };
+    }
+    return plugin;
+  });
 
   // Ignore "Failed to parse source map" (optionnel)
   config.ignoreWarnings = [...(config.ignoreWarnings || []), /Failed to parse source map/];
