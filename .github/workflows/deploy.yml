@@ -1,6 +1,11 @@
 # yaml-language-server: disable
 name: Build & Deploy
 
+permissions:
+  actions: write
+  contents: read
+  security-events: write
+
 on:
   push:
     branches: [main]
