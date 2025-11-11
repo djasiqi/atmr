@@ -4,25 +4,26 @@
 import sys
 from pathlib import Path
 
-# Ajouter le répertoire racine du backend au path
-backend_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(backend_dir))
-
-from ext import db
-from models.invoice import Invoice, InvoiceLine, InvoicePayment, InvoiceReminder
-from models.booking import Booking
-from models.payment import Payment
-from models.ab_test_result import ABTestResult
-from models.rl_suggestion import RLSuggestion
-from models.autonomous_action import AutonomousAction
-from models.ml_prediction import MLPrediction
-from app import create_app
-
-app = create_app()
+# Ajouter le répertoire racine du backend au PYTHONPATH si nécessaire
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 
 
 def delete_all_bookings_and_invoices():
     """Supprime toutes les réservations et factures."""
+    from app import create_app
+    from ext import db
+    from models.ab_test_result import ABTestResult
+    from models.autonomous_action import AutonomousAction
+    from models.booking import Booking
+    from models.invoice import Invoice, InvoiceLine, InvoicePayment, InvoiceReminder
+    from models.ml_prediction import MLPrediction
+    from models.payment import Payment
+    from models.rl_suggestion import RLSuggestion
+
+    app = create_app()
+
     with app.app_context():
         print("🗑️  Suppression de toutes les réservations et factures...")
         
