@@ -5,6 +5,9 @@
 ########## Stage 1: Builder (compilation des wheels et dépendances) ##########
 FROM python:3.11-slim-bookworm AS builder
 
+ARG WITH_RL=true
+ENV WITH_RL=${WITH_RL}
+
 # Variables d'environnement pour optimiser la compilation
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -43,7 +46,11 @@ RUN apt-get update && apt-get upgrade -y && \
 COPY requirements.txt requirements-rl.txt ./
 RUN python -m pip install --upgrade pip setuptools wheel && \
     pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt && \
-    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-rl.txt && \
+    (if [ "$WITH_RL" = "true" ] && [ -f requirements-rl.txt ]; then \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-rl.txt; \
+    else \
+    echo "Skip RL wheels (WITH_RL=$WITH_RL)"; \
+    fi) && \
     (if [ -f requirements-dev.txt ]; then \
     pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-dev.txt; \
     else \
@@ -66,6 +73,9 @@ RUN if command -v grype >/dev/null 2>&1; then \
 
 ########## Stage 2: Runtime optimisé (léger, sécurisé, performant) ##########
 FROM python:3.11-slim-bookworm AS runtime
+
+ARG WITH_RL=true
+ENV WITH_RL=${WITH_RL}
 
 # Variables d'environnement pour la production
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -151,7 +161,11 @@ COPY --from=builder /wheels /wheels
 COPY --from=builder /app/requirements*.txt ./
 RUN python -m pip install --upgrade pip && \
     pip install --no-index --find-links=/wheels -r requirements.txt && \
-    pip install --no-index --find-links=/wheels -r requirements-rl.txt && \
+    (if [ "$WITH_RL" = "true" ] && [ -f requirements-rl.txt ]; then \
+    pip install --no-index --find-links=/wheels -r requirements-rl.txt; \
+    else \
+    echo "Skip RL install (WITH_RL=$WITH_RL)"; \
+    fi) && \
     rm -rf /wheels /root/.cache/pip
 
 # Création d'un utilisateur non-root sécurisé

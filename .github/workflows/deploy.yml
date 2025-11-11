@@ -1,8 +1,9 @@
+# yaml-language-server: disable
 name: Build & Deploy
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "backend/**"
       - "docker-compose.yml"
@@ -47,8 +48,25 @@ jobs:
         with:
           context: ./backend
           file: ./backend/Dockerfile.production
+          build-args: |
+            WITH_RL=false
           push: true
           tags: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+          format: sarif
+          output: trivy-results.sarif
+          ignore-unfixed: true
+          vuln-type: os,library
+
+      - name: Upload Trivy results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
 
       - name: Copy compose files to server
         uses: appleboy/scp-action@v0.1.7
