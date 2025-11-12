@@ -5,6 +5,7 @@ Revises: a8f4c9e2b1d3
 Create Date: 2025-10-17 15:24:09.359623
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -22,15 +23,15 @@ def upgrade():
     les valeurs par défaut étaient en lowercase.
     """
     # Mettre à jour les valeurs existantes en UPPERCASE
-    op.execute("UPDATE company SET dispatch_mode = 'SEMI_AUTO' WHERE dispatch_mode = 'semi_auto'")
-    op.execute("UPDATE company SET dispatch_mode = 'MANUAL' WHERE dispatch_mode = 'manual'")
-    op.execute("UPDATE company SET dispatch_mode = 'FULLY_AUTO' WHERE dispatch_mode = 'fully_auto'")
+    op.execute("UPDATE company SET dispatch_mode = 'SEMI_AUTO' WHERE dispatch_mode::text = 'semi_auto'")
+    op.execute("UPDATE company SET dispatch_mode = 'MANUAL' WHERE dispatch_mode::text = 'manual'")
+    op.execute("UPDATE company SET dispatch_mode = 'FULLY_AUTO' WHERE dispatch_mode::text = 'fully_auto'")
 
 
 def downgrade():
     """
     Revenir aux valeurs lowercase (si nécessaire).
     """
-    op.execute("UPDATE company SET dispatch_mode = 'semi_auto' WHERE dispatch_mode = 'SEMI_AUTO'")
-    op.execute("UPDATE company SET dispatch_mode = 'manual' WHERE dispatch_mode = 'MANUAL'")
-    op.execute("UPDATE company SET dispatch_mode = 'fully_auto' WHERE dispatch_mode = 'FULLY_AUTO'")
+    op.execute("UPDATE company SET dispatch_mode = 'semi_auto' WHERE dispatch_mode::text = 'SEMI_AUTO'")
+    op.execute("UPDATE company SET dispatch_mode = 'manual' WHERE dispatch_mode::text = 'MANUAL'")
+    op.execute("UPDATE company SET dispatch_mode = 'fully_auto' WHERE dispatch_mode::text = 'FULLY_AUTO'")

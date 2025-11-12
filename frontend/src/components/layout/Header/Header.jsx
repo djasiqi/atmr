@@ -10,6 +10,13 @@ const Header = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
+  const handleComingSoon = (event) => {
+    event.preventDefault();
+    alert(
+      "Cette section est en cours de développement. Pour toute assistance, contactez-nous à info@lirie.ch."
+    );
+  };
+
   return (
     <header className={styles.header}>
       {/* Logo */}
@@ -25,27 +32,27 @@ const Header = () => {
           }`}
         >
           <li>
-            <Link to="/services" className={styles.navLink}>
+            <Link to="#" className={styles.navLink} onClick={handleComingSoon}>
               Déplacez-vous
             </Link>
           </li>
           <li>
-            <Link to="/drive" className={styles.navLink}>
+            <Link to="#" className={styles.navLink} onClick={handleComingSoon}>
               Conduire
             </Link>
           </li>
           <li>
-            <Link to="/pro" className={styles.navLink}>
+            <Link to="#" className={styles.navLink} onClick={handleComingSoon}>
               Professionnel
             </Link>
           </li>
           <li>
-            <Link to="/about" className={styles.navLink}>
+            <Link to="#" className={styles.navLink} onClick={handleComingSoon}>
               À propos
             </Link>
           </li>
           <li>
-            <Link to="/help" className={styles.navLink}>
+            <Link to="#" className={styles.navLink} onClick={handleComingSoon}>
               Aide
             </Link>
           </li>

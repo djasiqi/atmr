@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import apiClient from "../../utils/apiClient";
 import styles from "./Signup.module.css";
 
+const SIGNUP_DISABLED =
+  process.env.REACT_APP_SIGNUP_DISABLED === "true" ||
+  process.env.REACT_APP_SIGNUP_DISABLED === "1";
+
 const Signup = () => {
   const [formData, setFormData] = useState({
     username: "",
@@ -15,6 +19,22 @@ const Signup = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const navigate = useNavigate();
+
+  if (SIGNUP_DISABLED) {
+    return (
+      <div className={styles.signupContainer}>
+        <h1 className={styles.title}>Inscriptions temporairement suspendues</h1>
+        <p className={styles.infoMessage}>
+          Cette fonctionnalité est en cours de développement. Pour toute
+          demande d&apos;accès ou d&apos;information, veuillez écrire à{" "}
+          <a href="mailto:info@lirie.ch" className={styles.contactLink}>
+            info@lirie.ch
+          </a>
+          .
+        </p>
+      </div>
+    );
+  }
 
   // Gestion des changements dans les champs du formulaire
   const handleInputChange = (e) => {

@@ -4,7 +4,7 @@ services:
   api:
     image: docker.io/djasiqi/atmr-backend:latest
     env_file: .env.production
-    command: gunicorn wsgi:app -k sync -w 4 -b 0.0.0.0:5000
+    command: gunicorn wsgi:app -k eventlet -w 1 -b 0.0.0.0:5000
     depends_on:
       - postgres
       - redis
@@ -14,6 +14,7 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./migrations:/app/migrations:ro
+      - ./uploads:/app/uploads
     restart: unless-stopped
     networks:
       - traefik_proxy
@@ -65,16 +66,9 @@ services:
       - internal
     healthcheck:
       test:
-        - CMD
-        - celery
-        - -A
-        - celery_app:celery
-        - inspect
-        - ping
-        - -d
-        - celery@$$HOSTNAME
-        - -t
-        - "5"
+        - CMD-SHELL
+        - >
+          celery -A celery_app:celery inspect ping -d celery@$$HOSTNAME -t 5
       interval: 30s
       timeout: 10s
       retries: 3
@@ -95,7 +89,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - test -f /app/celerybeat-schedule.dat && echo 'ok' || exit 1
+        - test -f /app/celerybeat-schedule && echo 'ok' || exit 1
       interval: 1m
       timeout: 5s
       retries: 3
