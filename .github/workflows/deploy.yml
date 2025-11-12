@@ -80,7 +80,7 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          source: "backend/docker-compose.yml backend/.env.production"
+          source: "backend/docker-compose.yml"
           target: "/srv/atmr/backend"
 
       - name: Deploy via SSH
