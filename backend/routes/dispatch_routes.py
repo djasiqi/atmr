@@ -11,6 +11,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import UTC, date, datetime, timedelta
+from enum import Enum
 
 # Constantes pour éviter les valeurs magiques
 from typing import Any, Dict, cast
@@ -209,6 +210,19 @@ class NullableEnum(fields.Raw):
         if value is None:
             return None
         return str(value)
+
+
+def _make_json_safe(value: Any) -> Any:
+    """Convertit récursivement les objets vers des types compatibles JSON."""
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, dict):
+        return {k: _make_json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_make_json_safe(v) for v in value]
+    return value
 
 # ===== Schemas RESTX (complexes) =====
 
@@ -603,8 +617,9 @@ class CompanyDispatchRun(Resource):
                     "has_errors": False,
                     "warnings": validation_result["warnings"]
                 }
-        
-        return result, 200
+
+        safe_result = _make_json_safe(result)
+        return safe_result, 200
 
 @dispatch_ns.route("/status")
 class CompanyDispatchStatus(Resource):
