@@ -25,6 +25,31 @@ services:
       - traefik.http.routers.atmr_api.tls.certresolver=letsencrypt
       - traefik.http.services.atmr_api.loadbalancer.server.port=5000
       - traefik.docker.network=traefik_proxy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import json
+          import sys
+          from urllib.request import urlopen, URLError, HTTPError
+
+          try:
+              with urlopen("http://127.0.0.1:5000/health", timeout=5) as response:
+                  if response.status != 200:
+                      sys.exit(1)
+                  data = json.loads(response.read().decode())
+          except (URLError, HTTPError, TimeoutError):
+              sys.exit(1)
+          else:
+              if data.get("status") == "healthy" and data.get("models_loaded"):
+                  sys.exit(0)
+              sys.exit(1)
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   celery-worker:
     image: docker.io/djasiqi/atmr-backend:latest
