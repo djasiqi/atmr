@@ -131,11 +131,10 @@ jobs:
           npm install --global vercel@latest
           vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
 
-          ENV_ARGS=""
-          if [ -n "$REACT_APP_API_URL" ]; then ENV_ARGS="$ENV_ARGS --env REACT_APP_API_URL=$REACT_APP_API_URL"; fi
-          if [ -n "$REACT_APP_API_BASE_URL" ]; then ENV_ARGS="$ENV_ARGS --env REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL"; fi
-          if [ -n "$REACT_APP_SOCKET_URL" ]; then ENV_ARGS="$ENV_ARGS --env REACT_APP_SOCKET_URL=$REACT_APP_SOCKET_URL"; fi
-          if [ -n "$REACT_APP_SENTRY_DSN" ]; then ENV_ARGS="$ENV_ARGS --env REACT_APP_SENTRY_DSN=$REACT_APP_SENTRY_DSN"; fi
+          if [ -n "$REACT_APP_API_URL" ]; then export REACT_APP_API_URL; fi
+          if [ -n "$REACT_APP_API_BASE_URL" ]; then export REACT_APP_API_BASE_URL; fi
+          if [ -n "$REACT_APP_SOCKET_URL" ]; then export REACT_APP_SOCKET_URL; fi
+          if [ -n "$REACT_APP_SENTRY_DSN" ]; then export REACT_APP_SENTRY_DSN; fi
 
-          vercel build --prod --token "$VERCEL_TOKEN" $ENV_ARGS
+          vercel build --prod --token "$VERCEL_TOKEN"
           vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
