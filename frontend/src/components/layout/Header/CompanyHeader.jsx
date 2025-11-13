@@ -6,35 +6,11 @@ import styles from './CompanyHeader.module.css';
 import useCompanyData from '../../../hooks/useCompanyData';
 import useDispatchDelays from '../../../hooks/useDispatchDelays';
 import { logoutUser } from '../../../utils/apiClient';
-
-const API_BASE = (process.env.REACT_APP_API_BASE_URL || '').replace(/\/$/, '');
+import resolveLogoUrl from '../../../utils/resolveLogoUrl';
 
 function getInitials(name = '') {
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map((p) => p[0]?.toUpperCase() || '').join('') || 'CO';
-}
-
-function resolveLogoUrl(url) {
-  if (!url) return '';
-  if (/^https?:\/\//i.test(url)) return url;
-
-  // ✅ En mode dev (localhost:3000), retourner le chemin relatif pour utiliser le proxy
-  const isDevelopment =
-    typeof window !== 'undefined' &&
-    window.location &&
-    /localhost:3000$/i.test(window.location.host);
-
-  if (url.startsWith('/uploads/') || url.startsWith('/')) {
-    // En dev, utiliser le chemin relatif (proxy)
-    if (isDevelopment) {
-      return url;
-    }
-    // En prod, construire l'URL complète
-    const baseUrl = (process.env.REACT_APP_API_BASE_URL || '').replace(/\/api.*$/, '');
-    return baseUrl ? `${baseUrl}${url}` : url;
-  }
-
-  return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`;
 }
 
 const CompanyHeader = () => {
@@ -58,7 +34,6 @@ const CompanyHeader = () => {
   const logoSrc = useMemo(() => {
     const abs = resolveLogoUrl(company?.logo_url);
     if (!abs) return '';
-    // Ajouter un timestamp pour éviter le cache du navigateur
     const sep = abs.includes('?') ? '&' : '?';
     return `${abs}${sep}v=${Date.now()}`;
   }, [company?.logo_url]);

@@ -11,33 +11,7 @@ import SecurityTab from './tabs/SecurityTab';
 
 import useCompanyData from '../../../hooks/useCompanyData';
 import { updateCompanyInfo, uploadCompanyLogo } from '../../../services/companyService';
-
-// ======== Helpers globaux ========
-const API_BASE = (process.env.REACT_APP_API_BASE_URL || '').replace(/\/+$/, '');
-
-const resolveLogoUrl = (val) => {
-  if (!val) return null;
-  if (/^(https?:|data:)/i.test(val)) return val;
-
-  // ✅ En mode dev (localhost:3000), retourner le chemin relatif pour utiliser le proxy
-  const isDevelopment =
-    typeof window !== 'undefined' &&
-    window.location &&
-    /localhost:3000$/i.test(window.location.host);
-
-  if (val.startsWith('/uploads/') || val.startsWith('/')) {
-    // En dev, utiliser le chemin relatif (proxy)
-    if (isDevelopment) {
-      return val;
-    }
-    // En prod, construire l'URL complète
-    const baseUrl = (process.env.REACT_APP_API_BASE_URL || '').replace(/\/api.*$/, '');
-    return baseUrl ? `${baseUrl}${val}` : val;
-  }
-
-  const path = val.startsWith('/') ? val : `/${val}`;
-  return `${API_BASE}${path}`;
-};
+import resolveLogoUrl from '../../../utils/resolveLogoUrl';
 
 // Validations locales
 const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
