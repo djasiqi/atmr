@@ -1,5 +1,54 @@
 import React, { useState } from "react";
+import toast from "react-hot-toast";
 import styles from "./Footer.module.css";
+
+const COMING_SOON_TOAST_ID = "footer-coming-soon";
+
+const showComingSoonToast = () => {
+  toast.dismiss(COMING_SOON_TOAST_ID);
+  toast.custom(
+    (t) => (
+      <div
+        className={styles.toastCard}
+        role="status"
+        aria-live="polite"
+        data-visible={t.visible}
+      >
+        <div className={styles.toastIcon} aria-hidden="true">
+          🚧
+        </div>
+        <div className={styles.toastBody}>
+          <strong className={styles.toastTitle}>Bientôt disponible</strong>
+          <p className={styles.toastMessage}>
+            Notre équipe finalise cette section. Écrivez-nous à{" "}
+            <a href="mailto:info@lirie.ch" className={styles.toastLink}>
+              info@lirie.ch
+            </a>{" "}
+            pour être informé du lancement.
+          </p>
+        </div>
+        <button
+          type="button"
+          className={styles.toastClose}
+          onClick={() => toast.dismiss(COMING_SOON_TOAST_ID)}
+          aria-label="Fermer"
+        >
+          ×
+        </button>
+      </div>
+    ),
+    {
+      id: COMING_SOON_TOAST_ID,
+      duration: 5000,
+      position: "top-right",
+      style: {
+        padding: 0,
+        background: "transparent",
+        boxShadow: "none",
+      },
+    }
+  );
+};
 
 const Footer = () => {
   const [language, setLanguage] = useState("Français (Suisse)");
@@ -12,9 +61,7 @@ const Footer = () => {
 
   const handleComingSoon = (event) => {
     event.preventDefault();
-    alert(
-      "Cette section est en cours de développement. Pour toute assistance, contactez info@lirie.ch."
-    );
+    showComingSoonToast();
   };
 
   return (
