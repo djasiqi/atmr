@@ -4,7 +4,10 @@ require('dotenv-flow').config();
 module.exports = () => ({
   name: "Liri Opérations",
   slug: "operations-app",
-  version: "1.0.2",
+  version: "1.0.3",
+  runtimeVersion: {
+    policy: "appVersion",
+  },
   // sdkVersion: "53.0.0", // Supprimé : n'est plus nécessaire avec les SDKs récents
   scheme: "liri",
   orientation: "portrait",
@@ -30,7 +33,7 @@ module.exports = () => ({
     package: "ch.liri.operations",
     googleServicesFile:
       process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
-    versionCode: 3,
+    versionCode: 4,
     adaptiveIcon: {
       foregroundImage: "./assets/images/adaptive-icon.png",
       backgroundColor: "#ffffff",
