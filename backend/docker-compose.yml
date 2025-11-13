@@ -21,11 +21,15 @@ services:
       - internal
     labels:
       - traefik.enable=true
-      - traefik.http.routers.atmr_api.rule=Host(`api.lirie.ch`)
+      - traefik.http.routers.atmr_api.rule=Host(`api.lirie.ch`) && (PathPrefix(`/api`) || PathPrefix(`/socket.io`) || PathPrefix(`/uploads`))
       - traefik.http.routers.atmr_api.entrypoints=websecure
       - traefik.http.routers.atmr_api.tls.certresolver=letsencrypt
       - traefik.http.services.atmr_api.loadbalancer.server.port=5000
       - traefik.docker.network=traefik_proxy
+      - traefik.http.routers.atmr_api_uploads.rule=Host(`api.lirie.ch`) && PathPrefix(`/uploads`)
+      - traefik.http.routers.atmr_api_uploads.entrypoints=websecure
+      - traefik.http.routers.atmr_api_uploads.tls.certresolver=letsencrypt
+      - traefik.http.routers.atmr_api_uploads.service=atmr_api
     healthcheck:
       test:
         - CMD

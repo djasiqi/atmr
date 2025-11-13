@@ -157,6 +157,19 @@ const PrivacyPolicy = () => {
         </p>
       </section>
 
+      <section id="data-deletion" className={styles.section}>
+        <h2>12. Suppression des données</h2>
+        <p>
+          Vous pouvez demander la suppression de vos données à tout moment en écrivant à
+          <a href="mailto:info@lirie.ch" className={styles.contactLink}>
+            info@lirie.ch
+          </a>
+          . Nous supprimons ou anonymisons les données dans un délai maximum de 30 jours, sauf
+          obligation légale contraire. Certaines données opérationnelles (facturation, logs de sécurité)
+          peuvent être conservées pendant la durée requise par la loi.
+        </p>
+      </section>
+
       <p className={styles.legalNotice}>
         Pour toute question relative à cette politique, contactez{" "}
         <a href="mailto:info@lirie.ch" className={styles.contactLink}>
