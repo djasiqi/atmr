@@ -47,6 +47,7 @@ const RLMetricsDashboard = lazy(() =>
 );
 const AnalyticsDashboard = lazy(() => import('./pages/company/Analytics/AnalyticsDashboard'));
 const Dashboard = lazy(() => import('./pages/Home/Dashboard'));
+const PrivacyPolicy = lazy(() => import('./pages/Legal/PrivacyPolicy'));
 
 // ──────────────────────────────────────────────────────────
 // Query Client (déclaré hors composant pour éviter recréation)
@@ -198,6 +199,14 @@ const App = () => {
               element={
                 <DefaultLayout>
                   <ResetPassword />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/privacy"
+              element={
+                <DefaultLayout>
+                  <PrivacyPolicy />
                 </DefaultLayout>
               }
             />

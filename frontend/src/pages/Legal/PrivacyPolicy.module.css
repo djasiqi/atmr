@@ -1,0 +1,52 @@
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 48px 24px 64px;
+  line-height: 1.65;
+  color: #0f172a;
+}
+
+.subtitle {
+  color: #475569;
+  font-size: 16px;
+  margin-bottom: 32px;
+}
+
+.section {
+  margin-bottom: 32px;
+}
+
+.section h2 {
+  font-size: 24px;
+  margin-bottom: 12px;
+  color: #0f172a;
+}
+
+.section p,
+.section ul {
+  margin: 0 0 16px;
+}
+
+.section ul {
+  padding-left: 20px;
+}
+
+.card {
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 32px;
+}
+
+.contactLink {
+  color: #0ea5e9;
+  font-weight: 600;
+}
+
+.legalNotice {
+  font-size: 14px;
+  color: #64748b;
+  margin-top: 40px;
+}
+
