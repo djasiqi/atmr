@@ -13,9 +13,9 @@ const PrivacyPolicy = () => {
         </p>
         <div className={styles.card}>
           <p>
-            La présente politique explique comment Liri (ci-après «&nbsp;Liri&nbsp;»,
-            «&nbsp;nous&nbsp;») collecte, utilise et protège les données personnelles
-            dans le cadre de l’application mobile et web «&nbsp;Liri Opérations&nbsp;».
+            La présente politique explique comment Lirie (ci-après « Lirie »,
+            « nous ») collecte, utilise et protège les données personnelles
+            dans le cadre de l’application mobile et web « Lirie Opérations ».
           </p>
         </div>
       </header>
@@ -23,7 +23,7 @@ const PrivacyPolicy = () => {
       <section className={styles.section}>
         <h2>1. Responsable du traitement</h2>
         <p>
-          Liri SA – 12 rue du Rhône, 1204 Genève, Suisse. <br />
+          Lirie – Avenue Ernest-Pictet 9, 1203 Genève, Suisse. <br />
           Contact :{" "}
           <a href="mailto:info@lirie.ch" className={styles.contactLink}>
             info@lirie.ch
@@ -76,7 +76,7 @@ const PrivacyPolicy = () => {
         <h2>4. Base légale</h2>
         <p>
           Le traitement repose sur l’exécution du contrat (gestion des missions)
-          et sur l’intérêt légitime de Liri à assurer la sécurité et la qualité
+          et sur l’intérêt légitime de Lirie à assurer la sécurité et la qualité
           du service. Dans certains cas, votre consentement explicite peut être
           requis (notifications push, collecte de localisation en arrière-plan).
         </p>
@@ -86,7 +86,7 @@ const PrivacyPolicy = () => {
         <h2>5. Destinataires</h2>
         <p>
           Les données sont accessibles uniquement aux personnes autorisées
-          (personnel Liri, entreprises clientes, chauffeurs assignés). Nous
+          (personnel Lirie, entreprises clientes, chauffeurs assignés). Nous
           pouvons recourir à des prestataires certifiés (hébergement, analytics,
           notifications, support). Aucun transfert commercial de données ne
           s’effectue sans votre accord.
@@ -108,8 +108,8 @@ const PrivacyPolicy = () => {
           Conformément à la LPD (Suisse) et au RGPD (UE), vous disposez des droits
           d’accès, de rectification, d’effacement, d’opposition, de limitation et
           de portabilité. Pour exercer vos droits, écrivez à{" "}
-          <a href="mailto:privacy@lirie.ch" className={styles.contactLink}>
-            privacy@lirie.ch
+          <a href="mailto:info@lirie.ch" className={styles.contactLink}>
+            info@lirie.ch
           </a>{" "}
           ou{" "}
           <a href="mailto:info@lirie.ch" className={styles.contactLink}>
@@ -122,7 +122,7 @@ const PrivacyPolicy = () => {
       <section className={styles.section}>
         <h2>8. Sécurité</h2>
         <p>
-          Liri met en œuvre des mesures techniques et organisationnelles
+          Lirie met en œuvre des mesures techniques et organisationnelles
           appropriées : chiffrement TLS, accès restreint, sauvegardes, audit des
           journaux. Nous demandons à nos prestataires de respecter les mêmes
           standards.
