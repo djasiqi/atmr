@@ -1,4 +1,6 @@
-export const API_BASE_URL = 'https://api.yourdomain.com';
+import { baseURL } from '../services/api';
+
+export const API_BASE_URL = baseURL;
 
 export const API_ENDPOINTS = {
   LOGIN: '/auth/login',
