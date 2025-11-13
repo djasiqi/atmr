@@ -4,8 +4,10 @@ import toast from "react-hot-toast";
 import styles from "./Header.module.css";
 
 const SIGNUP_DISABLED =
-  process.env.REACT_APP_SIGNUP_DISABLED === "true" ||
-  process.env.REACT_APP_SIGNUP_DISABLED === "1";
+  typeof process.env.REACT_APP_SIGNUP_DISABLED === "string"
+    ? process.env.REACT_APP_SIGNUP_DISABLED === "true" ||
+      process.env.REACT_APP_SIGNUP_DISABLED === "1"
+    : true;
 const COMING_SOON_TOAST_ID = "global-coming-soon";
 
 const Header = () => {
@@ -122,9 +124,13 @@ const Header = () => {
             S'inscrire
           </button>
         ) : (
-          <Link to="/signup" className={styles.signUp}>
+          <button
+            type="button"
+            className={styles.signUp}
+            onClick={handleComingSoon}
+          >
             S'inscrire
-          </Link>
+          </button>
         )}
         <button
           className={styles.hamburgerButton}
