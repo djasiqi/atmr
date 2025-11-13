@@ -80,11 +80,24 @@ onTTFB(sendWebVitalToSentry);
 window.addEventListener(
   'error',
   (event) => {
+    const message = event.message || '';
+    const chunkFailedRegex = /Loading chunk [\w-]+ failed/i;
+
     if (
-      event.message?.includes('listener indicated an asynchronous response') ||
-      event.message?.includes('message channel closed')
+      message.includes('listener indicated an asynchronous response') ||
+      message.includes('message channel closed')
     ) {
       // Ignorer silencieusement cette erreur (elle vient des extensions)
+      event.preventDefault();
+      return false;
+    }
+
+    if (chunkFailedRegex.test(message)) {
+      // Recharge la page une seule fois pour retenter de charger les chunks
+      if (!window.__RELOADING_FROM_CHUNK_ERROR__) {
+        window.__RELOADING_FROM_CHUNK_ERROR__ = true;
+        window.location.reload();
+      }
       event.preventDefault();
       return false;
     }
@@ -94,11 +107,23 @@ window.addEventListener(
 
 // Gérer aussi les erreurs de promesse non catchées liées aux extensions
 window.addEventListener('unhandledrejection', (event) => {
+  const reasonMessage = event.reason?.message || '';
+  const chunkFailedRegex = /Loading chunk [\w-]+ failed/i;
+
   if (
-    event.reason?.message?.includes('listener indicated an asynchronous response') ||
-    event.reason?.message?.includes('message channel closed')
+    reasonMessage.includes('listener indicated an asynchronous response') ||
+    reasonMessage.includes('message channel closed')
   ) {
     // Ignorer silencieusement cette erreur (elle vient des extensions)
+    event.preventDefault();
+    return;
+  }
+
+  if (chunkFailedRegex.test(reasonMessage)) {
+    if (!window.__RELOADING_FROM_CHUNK_ERROR__) {
+      window.__RELOADING_FROM_CHUNK_ERROR__ = true;
+      window.location.reload();
+    }
     event.preventDefault();
   }
 });
