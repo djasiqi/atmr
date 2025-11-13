@@ -121,9 +121,3 @@ jobs:
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           working-directory: frontend
-          scope: ${{ secrets.VERCEL_ORG_ID }}
-          env: |
-            REACT_APP_API_URL=${{ secrets.REACT_APP_API_URL }}
-            REACT_APP_API_BASE_URL=${{ secrets.REACT_APP_API_BASE_URL }}
-            REACT_APP_SOCKET_URL=${{ secrets.REACT_APP_SOCKET_URL }}
-            REACT_APP_SENTRY_DSN=${{ secrets.REACT_APP_SENTRY_DSN }}
