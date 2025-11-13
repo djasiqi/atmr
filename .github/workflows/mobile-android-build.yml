@@ -24,6 +24,7 @@ jobs:
       SOCKET_PORT: ${{ secrets.MOBILE_SOCKET_PORT }}
       EXPO_PUBLIC_GOOGLE_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_API_KEY }}
       EXPO_PUBLIC_ANDROID_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_ANDROID_MAPS_API_KEY }}
+      HAS_PLAY_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,12 +75,12 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Prepare Play service account
-        if: steps.build.outputs.build_id != '' && secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != ''
+        if: steps.build.outputs.build_id != '' && env.HAS_PLAY_SERVICE_ACCOUNT == 'true'
         run: |
           echo "${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}" > ../service-account.json
 
       - name: Submit to Play Console
-        if: steps.build.outputs.build_id != '' && secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != ''
+        if: steps.build.outputs.build_id != '' && env.HAS_PLAY_SERVICE_ACCOUNT == 'true'
         run: |
           eas submit \
             --platform android \
@@ -91,6 +92,5 @@ jobs:
             --key-source json
 
       - name: Clean Play credentials
-        if: steps.build.outputs.build_id != '' && secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != ''
+        if: steps.build.outputs.build_id != '' && env.HAS_PLAY_SERVICE_ACCOUNT == 'true'
         run: rm -f ../service-account.json
-
