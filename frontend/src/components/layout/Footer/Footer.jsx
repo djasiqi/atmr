@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { showComingSoonToast } from "../../../utils/showComingSoonToast";
 import styles from "./Footer.module.css";
 
@@ -283,13 +284,9 @@ const Footer = () => {
           | <span>{location}</span>
         </div>
         <div className={styles.legal}>
-          <button
-            type="button"
-            className={styles.linkButton}
-            onClick={handleComingSoon}
-          >
+          <Link to="/privacy" className={styles.linkButton}>
             Confidentialité
-          </button>{" "}
+          </Link>{" "}
           |{" "}
           <button
             type="button"
