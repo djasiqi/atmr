@@ -33,7 +33,6 @@ module.exports = () => ({
     package: "ch.liri.operations",
     googleServicesFile:
       process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
-    versionCode: 4,
     adaptiveIcon: {
       foregroundImage: "./assets/images/adaptive-icon.png",
       backgroundColor: "#ffffff",
