@@ -19,13 +19,11 @@ export const resolveLogoUrl = (value) => {
   const normalized = str.startsWith('/') ? str : `/${str}`;
 
   if (normalized.startsWith('/uploads/')) {
-    if (API_ORIGIN) {
-      return `${API_ORIGIN}${normalized}`;
-    }
-    if (typeof window !== 'undefined' && window.location?.origin) {
-      return `${window.location.origin}${normalized}`;
-    }
-    return normalized;
+    const base =
+      API_ORIGIN ||
+      (typeof window !== 'undefined' && `${window.location.origin}`) ||
+      '';
+    return `${base}${normalized}`;
   }
 
   if (API_BASE) {
