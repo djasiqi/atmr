@@ -10,11 +10,24 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Configure environment variables
+   - Copie `env.example` en `.env.development` pour ton environnement local, puis adapte les valeurs (URL backend local, clés Google, etc.).
+   - Pour la production, crée `.env.production` avec les URL et clés de prod (ou configure-les via EAS/GitHub Actions en secrets).
+   - Les fichiers `.env*` sont ignorés par Git afin d’éviter toute fuite de secrets.
+   - Tu peux utiliser `npm run env:generate -- production` (ou `-- development`) pour générer un fichier à partir de `env.example` avec des invites interactives.
+
+3. Start the app
 
    ```bash
     npx expo start
    ```
+
+## Production (EAS / Play Store)
+
+- Crée les secrets GitHub `EXPO_TOKEN`, `MOBILE_API_URL`, `MOBILE_BACKEND_PORT`, `MOBILE_SOCKET_HOST`, `MOBILE_SOCKET_PORT`, `EXPO_PUBLIC_GOOGLE_API_KEY`, `EXPO_PUBLIC_ANDROID_MAPS_API_KEY`. Ils sont injectés dans le workflow `mobile-android-build.yml`.
+- Pour une build locale de prod, copie `env.example` en `.env.production` et renseigne les valeurs prod avant d’exécuter `NODE_ENV=production expo run:android`.
+- Sur EAS, configure les mêmes variables via `eas secret:create --scope project` (ou via l’interface web) pour que les builds cloud aient accès aux secrets.
+- Vérifie que `GOOGLE_SERVICES_JSON` et la clé de service Play Store sont bien fournis dans GitHub Secrets avant d’autoriser la soumission automatique vers le Play Store.
 
 In the output, you'll find options to open the app in a
 

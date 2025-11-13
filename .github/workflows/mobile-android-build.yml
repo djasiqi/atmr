@@ -1,0 +1,96 @@
+name: Build Android Operations App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "mobile/operations-app/**"
+      - ".github/workflows/mobile-android-build.yml"
+  workflow_dispatch:
+
+jobs:
+  android:
+    name: Build Android app bundle
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile/operations-app
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_API_URL: ${{ secrets.MOBILE_API_URL }}
+      EXPO_PUBLIC_BACKEND_PORT: ${{ secrets.MOBILE_BACKEND_PORT }}
+      SOCKET_HOST: ${{ secrets.MOBILE_SOCKET_HOST }}
+      SOCKET_PORT: ${{ secrets.MOBILE_SOCKET_PORT }}
+      EXPO_PUBLIC_GOOGLE_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_API_KEY }}
+      EXPO_PUBLIC_ANDROID_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_ANDROID_MAPS_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: mobile/operations-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Project health check
+        run: npx expo-doctor
+
+      - name: Run unit tests
+        run: npm test -- --watchAll=false
+        continue-on-error: true
+
+      - name: Build Android (AAB)
+        id: build
+        run: |
+          eas build \
+            --platform android \
+            --profile production \
+            --non-interactive \
+            --wait \
+            --output json > ../eas-build.json
+          jq '.' ../eas-build.json
+          artifact_url=$(jq -r '.artifacts.builds[0].artifacts[0].url // empty' ../eas-build.json)
+          build_id=$(jq -r '.artifacts.builds[0].buildId // empty' ../eas-build.json)
+          echo "artifact_url=${artifact_url}" >> "$GITHUB_OUTPUT"
+          echo "build_id=${build_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build summary
+        if: steps.build.outputs.artifact_url != ''
+        run: |
+          {
+            echo "### ✅ Build Android Operations App"
+            echo ""
+            echo "- Build ID: \`${{ steps.build.outputs.build_id }}\`"
+            echo "- Artifact: [Télécharger l'AAB](${{ steps.build.outputs.artifact_url }})"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prepare Play service account
+        if: steps.build.outputs.build_id != '' && secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != ''
+        run: |
+          echo "${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}" > ../service-account.json
+
+      - name: Submit to Play Console
+        if: steps.build.outputs.build_id != '' && secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != ''
+        run: |
+          eas submit \
+            --platform android \
+            --profile production \
+            --non-interactive \
+            --id "${{ steps.build.outputs.build_id }}" \
+            --track production \
+            --key ../service-account.json \
+            --key-source json
+
+      - name: Clean Play credentials
+        if: steps.build.outputs.build_id != '' && secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != ''
+        run: rm -f ../service-account.json
+

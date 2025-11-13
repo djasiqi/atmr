@@ -1,4 +1,6 @@
 // app.config.js
+require('dotenv-flow').config();
+
 module.exports = () => ({
   name: "Liri Opérations",
   slug: "operations-app",
@@ -93,12 +95,10 @@ module.exports = () => ({
   experiments: { typedRoutes: true },
 
   extra: {
-    productionApiUrl: "https://api.monapp.com",
-    publicApiUrl:
-      process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.216:5000",
+    productionApiUrl: "https://api.lirie.ch",
+    publicApiUrl: process.env.EXPO_PUBLIC_API_URL || "http://localhost:5000",
     backendPort: 5000,
-    // 👇 NOUVEAU : configure l’hôte/port Socket via env ou fallback
-    SOCKET_HOST: process.env.SOCKET_HOST || "192.168.1.216",
+    SOCKET_HOST: process.env.SOCKET_HOST || "api.lirie.ch",
     SOCKET_PORT: process.env.SOCKET_PORT || "5000",
     router: {},
     eas: { projectId: "3be107c7-29d2-4987-91a0-8d7c31604891" },
