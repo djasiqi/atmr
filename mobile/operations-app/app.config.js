@@ -4,7 +4,7 @@ require('dotenv-flow').config();
 module.exports = () => ({
   name: "Liri Opérations",
   slug: "operations-app",
-  version: "1.0.1",
+  version: "1.0.2",
   // sdkVersion: "53.0.0", // Supprimé : n'est plus nécessaire avec les SDKs récents
   scheme: "liri",
   orientation: "portrait",
@@ -19,17 +19,18 @@ module.exports = () => ({
   },
 
   ios: {
-    supportsTablet: true,
+    supportsTablet: false,
     bundleIdentifier: "ch.liri.operations",
     buildNumber: "1.0.0",
     // googleServicesFile: process.env.GOOGLE_SERVICES_PLIST ?? "./GoogleService-Info.plist",
   },
 
   android: {
+    enableTablet: false,
     package: "ch.liri.operations",
     googleServicesFile:
       process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
-    versionCode: 2,
+    versionCode: 3,
     adaptiveIcon: {
       foregroundImage: "./assets/images/adaptive-icon.png",
       backgroundColor: "#ffffff",

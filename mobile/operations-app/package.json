@@ -1,7 +1,7 @@
 {
   "name": "liri-operations",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "env:generate": "node ./scripts/generate-env.js",
     "build:dev": "eas build -p android --profile development",
-    "build:prod": "eas build -p android --profile production"
+    "build:prod": "eas build -p android --profile production",
+    "version:patch": "node ./scripts/bump-version.js && git add app.config.js package.json"
   },
   "jest": {
     "preset": "jest-expo"
@@ -48,6 +49,7 @@
     "expo-status-bar": "~2.2.3",
     "expo-symbols": "~0.4.5",
     "expo-system-ui": "~5.0.11",
+    "expo-version": "^1.0.2",
     "expo-web-browser": "~14.2.0",
     "formik": "^2.4.6",
     "react": "19.0.0",
