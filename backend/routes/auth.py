@@ -264,6 +264,7 @@ class Register(Resource):
             client = Client()
             client.user_id = user.id
             client.is_active = True
+            client.contact_email = email
             db.session.add(client)
             db.session.commit()
             app_logger.info("Client créé : user_id=%s, client_id=%s", user.id, client.id)
