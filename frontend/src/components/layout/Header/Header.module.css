@@ -87,74 +87,7 @@
 .signUpDisabled {
   background-color: var(--gray-200);
   color: var(--gray-600);
-  cursor: not-allowed;
   opacity: 0.75;
-  pointer-events: none;
-}
-
-.toastCard {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 18px 20px;
-  background: linear-gradient(135deg, #ffffff 0%, #f5f7fb 100%);
-  border-radius: 16px;
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14),
-    0 4px 18px rgba(15, 23, 42, 0.1);
-  min-width: 280px;
-  max-width: 360px;
-  color: var(--teal-900);
-}
-
-.toastIcon {
-  font-size: 24px;
-  line-height: 1;
-  margin-top: 2px;
-}
-
-.toastBody {
-  flex: 1;
-}
-
-.toastTitle {
-  display: block;
-  font-size: 15px;
-  font-weight: 700;
-  margin-bottom: 6px;
-  color: var(--teal-900);
-}
-
-.toastMessage {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
-  color: #475569;
-}
-
-.toastLink {
-  color: var(--brand-primary);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.toastLink:hover {
-  text-decoration: underline;
-}
-
-.toastClose {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  font-size: 20px;
-  cursor: pointer;
-  margin-left: 8px;
-  line-height: 1;
-  transition: color 0.2s ease;
-}
-
-.toastClose:hover {
-  color: var(--teal-900);
 }
 
 /* Hamburger button */
