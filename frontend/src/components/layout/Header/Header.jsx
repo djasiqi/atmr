@@ -1,7 +1,12 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
 import styles from "./Header.module.css";
 
+const SIGNUP_DISABLED =
+  process.env.REACT_APP_SIGNUP_DISABLED === "true" ||
+  process.env.REACT_APP_SIGNUP_DISABLED === "1";
+const COMING_SOON_TOAST_ID = "global-coming-soon";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -12,8 +17,50 @@ const Header = () => {
 
   const handleComingSoon = (event) => {
     event.preventDefault();
-    alert(
-      "Cette section est en cours de développement. Pour toute assistance, contactez-nous à info@lirie.ch."
+    toast.dismiss(COMING_SOON_TOAST_ID);
+    toast.custom(
+      (t) => (
+        <div
+          className={styles.toastCard}
+          role="status"
+          aria-live="polite"
+          data-visible={t.visible}
+        >
+          <div className={styles.toastIcon} aria-hidden="true">
+            🚧
+          </div>
+          <div className={styles.toastBody}>
+            <strong className={styles.toastTitle}>
+              Bientôt disponible
+            </strong>
+            <p className={styles.toastMessage}>
+              Notre équipe finalise cette section. Écrivez-nous à{" "}
+              <a href="mailto:info@lirie.ch" className={styles.toastLink}>
+                info@lirie.ch
+              </a>{" "}
+              pour être informé du lancement.
+            </p>
+          </div>
+          <button
+            type="button"
+            className={styles.toastClose}
+            onClick={() => toast.dismiss(COMING_SOON_TOAST_ID)}
+            aria-label="Fermer"
+          >
+            ×
+          </button>
+        </div>
+      ),
+      {
+        id: COMING_SOON_TOAST_ID,
+        duration: 5000,
+        position: "top-right",
+        style: {
+          padding: 0,
+          background: "transparent",
+          boxShadow: "none",
+        },
+      }
     );
   };
 
@@ -64,9 +111,21 @@ const Header = () => {
         <Link to="/login" className={styles.login}>
           Connexion
         </Link>
-        <Link to="/signup" className={styles.signUp}>
-          S'inscrire
-        </Link>
+        {SIGNUP_DISABLED ? (
+          <button
+            type="button"
+            className={`${styles.signUp} ${styles.signUpDisabled}`}
+            disabled
+            aria-disabled="true"
+            title="Inscriptions suspendues – contactez info@lirie.ch"
+          >
+            S'inscrire
+          </button>
+        ) : (
+          <Link to="/signup" className={styles.signUp}>
+            S'inscrire
+          </Link>
+        )}
         <button
           className={styles.hamburgerButton}
           onClick={toggleMenu}
