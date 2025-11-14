@@ -1,15 +1,15 @@
 // app.config.js
 require('dotenv-flow').config();
+const pkg = require('./package.json');
 
 const APP_VARIANT = process.env.APP_VARIANT || "prod";
 const isDevVariant = APP_VARIANT === "dev";
+const runtimeBase = pkg.version || "1.0.0";
 
 module.exports = () => ({
   name: isDevVariant ? "Liri Opérations Dev" : "Liri Opérations",
   slug: "operations-app",
-  runtimeVersion: {
-    policy: "appVersion",
-  },
+  runtimeVersion: isDevVariant ? `${runtimeBase}-dev` : runtimeBase,
   // sdkVersion: "53.0.0", // Supprimé : n'est plus nécessaire avec les SDKs récents
   scheme: "liri",
   orientation: "portrait",
