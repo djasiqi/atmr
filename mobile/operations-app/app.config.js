@@ -1,10 +1,12 @@
 // app.config.js
 require('dotenv-flow').config();
 
+const APP_VARIANT = process.env.APP_VARIANT || "prod";
+const isDevVariant = APP_VARIANT === "dev";
+
 module.exports = () => ({
-  name: "Liri Opérations",
+  name: isDevVariant ? "Liri Opérations Dev" : "Liri Opérations",
   slug: "operations-app",
-  version: "1.0.3",
   runtimeVersion: {
     policy: "appVersion",
   },
@@ -23,14 +25,16 @@ module.exports = () => ({
 
   ios: {
     supportsTablet: false,
-    bundleIdentifier: "ch.liri.operations",
+    bundleIdentifier: isDevVariant
+      ? "ch.liri.operations.dev"
+      : "ch.liri.operations",
     buildNumber: "1.0.0",
     // googleServicesFile: process.env.GOOGLE_SERVICES_PLIST ?? "./GoogleService-Info.plist",
   },
 
   android: {
     enableTablet: false,
-    package: "ch.liri.operations",
+    package: isDevVariant ? "ch.liri.operations.dev" : "ch.liri.operations",
     googleServicesFile:
       process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
     adaptiveIcon: {
