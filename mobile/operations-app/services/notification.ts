@@ -1,5 +1,6 @@
 // services/notification.ts
 import { Platform, PermissionsAndroid } from "react-native";
+import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 
 export type PushTokens = {
@@ -87,55 +88,100 @@ export async function initNotifications(
   let device: string | null = null;
   let expo: string | null = null;
 
+  // Détecter si on est en mode dev (via extra config, package name, ou environnement)
+  const expoExtra = Constants.expoConfig?.extra || {};
+  const packageName = Constants.expoConfig?.android?.package || "";
+  const appVariant = expoExtra.APP_VARIANT || process.env.APP_VARIANT || "";
+  const isDevVariant = appVariant === "dev" || packageName.includes(".dev");
+  
+  // Détecter si on est en développement local (pas un build EAS)
+  const isLocalDev = __DEV__ || Constants.executionEnvironment === "storeClient" || Constants.appOwnership === "expo";
+  
+  const shouldSkipFirebase = isDevVariant || isLocalDev;
+  
+  console.log("🔔 Détection variante:", { 
+    packageName, 
+    appVariant, 
+    isDevVariant,
+    isLocalDev,
+    shouldSkipFirebase,
+    hasGoogleServices: !!Constants.expoConfig?.android?.googleServicesFile,
+    executionEnvironment: Constants.executionEnvironment,
+    appOwnership: Constants.appOwnership
+  });
+
+  // Pour la variante dev ou le dev local, ignorer complètement Firebase
+  // Car Expo Push peut aussi essayer Firebase en arrière-plan sur Android
+  if (shouldSkipFirebase && Platform.OS === "android") {
+    console.log("🔔 Mode dev/développement local détecté - Firebase désactivé, utilisation Expo Push uniquement");
+    // Si Expo échoue aussi avec FIS_AUTH_ERROR, on accepte l'échec gracieusement
+  }
+
   // 1. Essayer le token Expo en premier (souvent plus stable)
   if (wantExpo || Platform.OS === 'android') {
     try {
       console.log("🔔 Tentative récupération Expo token...");
-      const expoToken = await Notifications.getExpoPushTokenAsync();
+      const expoToken = await Notifications.getExpoPushTokenAsync({
+        projectId: Constants.expoConfig?.extra?.eas?.projectId,
+      });
       expo = expoToken?.data ?? null;
       console.log("✅ Expo token récupéré:", expo ? "OK" : "VIDE");
     } catch (e: any) {
-      console.warn("⚠️ Expo token échec:", e?.message);
+      const msg = String(e?.message || e);
+      console.warn("⚠️ Expo token échec:", msg);
+      
+      // Si on est en dev/local et que Expo échoue avec FIS_AUTH_ERROR, c'est normal
+      // Firebase n'est pas configuré ou accessible en développement local
+      if (shouldSkipFirebase && msg.includes('FIS_AUTH_ERROR')) {
+        console.log("ℹ️ FIS_AUTH_ERROR en dev/local - Firebase non accessible, c'est normal");
+      }
     }
   }
-
-  // 2. Essayer le device token avec retry
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`🔔 Tentative device token (${attempt + 1}/${maxRetries + 1})...`);
-      
-      // Sur Android, si Firebase échoue, utiliser le token Expo comme fallback
-      if (Platform.OS === 'android' && attempt > 0 && expo) {
-        console.log("🔔 Utilisation du token Expo comme device token (fallback)");
-        device = expo;
-        break;
-      }
-
-      const tokenData = await Notifications.getDevicePushTokenAsync();
-      device = tokenData?.data ?? null;
-      
-      if (device) {
-        console.log("✅ Device token récupéré");
-        break;
-      }
-      
-      throw new Error("Token device vide");
-      
-    } catch (e: any) {
-      const msg = String(e?.message || e);
-      console.warn(`⚠️ Device token échec (${attempt + 1}/${maxRetries + 1}): ${msg}`);
-      
-      // Si c'est une erreur Firebase et qu'on a un token Expo, l'utiliser
-      if (msg.includes('FIS_AUTH_ERROR') && expo) {
-        console.log("🔔 FIS_AUTH_ERROR détecté, utilisation du token Expo");
-        device = expo;
-        break;
-      }
-      
-      if (attempt < maxRetries) {
-        const backoff = 400 * Math.pow(2, attempt);
-        console.log(`⏳ Attente ${backoff}ms avant retry...`);
-        await sleep(backoff);
+  
+  // 2. Essayer le device token avec retry (ignorer Firebase pour la variante dev/local)
+  if (shouldSkipFirebase && Platform.OS === "android") {
+    // Pour la variante dev/local Android, utiliser uniquement le token Expo (Firebase non accessible)
+    console.log("🔔 Mode dev/local - skip Firebase device token, utilisation Expo uniquement");
+    if (expo) {
+      device = expo;
+      console.log("✅ Token Expo utilisé comme device token pour le mode dev/local");
+    } else {
+      console.warn("⚠️ Mode dev/local: aucun token Expo disponible");
+      // Accepter gracieusement l'absence de notifications en dev local
+      console.log("ℹ️ Notifications désactivées en développement local - normal si Firebase non configuré");
+    }
+  } else {
+    // Pour production ou iOS, essayer Firebase/APNs normalement
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔔 Tentative device token (${attempt + 1}/${maxRetries + 1})...`);
+        
+        const tokenData = await Notifications.getDevicePushTokenAsync();
+        device = tokenData?.data ?? null;
+        
+        if (device) {
+          console.log("✅ Device token récupéré");
+          break;
+        }
+        
+        throw new Error("Token device vide");
+        
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        console.warn(`⚠️ Device token échec (${attempt + 1}/${maxRetries + 1}): ${msg}`);
+        
+        // Si c'est une erreur Firebase et qu'on a un token Expo, l'utiliser
+        if (msg.includes('FIS_AUTH_ERROR') && expo) {
+          console.log("🔔 FIS_AUTH_ERROR détecté, utilisation du token Expo");
+          device = expo;
+          break;
+        }
+        
+        if (attempt < maxRetries) {
+          const backoff = 400 * Math.pow(2, attempt);
+          console.log(`⏳ Attente ${backoff}ms avant retry...`);
+          await sleep(backoff);
+        }
       }
     }
   }

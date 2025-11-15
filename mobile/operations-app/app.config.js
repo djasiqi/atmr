@@ -102,6 +102,7 @@ module.exports = () => ({
   experiments: { typedRoutes: true },
 
   extra: {
+    APP_VARIANT: APP_VARIANT, // Passer APP_VARIANT pour détection runtime
     productionApiUrl: "https://api.lirie.ch",
     publicApiUrl: process.env.EXPO_PUBLIC_API_URL || "http://localhost:5000",
     backendPort: 5000,
