@@ -88,24 +88,12 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace 'ch.liri.operations'
-    
-    // Load Google Maps API key from local.properties
-    def localProperties = new Properties()
-    def localPropertiesFile = rootProject.file('local.properties')
-    if (localPropertiesFile.exists()) {
-        localPropertiesFile.withReader('UTF-8') { reader ->
-            localProperties.load(reader)
-        }
-    }
-    def googleMapsApiKey = localProperties.getProperty('GOOGLE_MAPS_API_KEY') ?: ""
-    
     defaultConfig {
         applicationId 'ch.liri.operations'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0.3"
-        manifestPlaceholders = [GOOGLE_MAPS_API_KEY: googleMapsApiKey]
     }
     signingConfigs {
         debug {
