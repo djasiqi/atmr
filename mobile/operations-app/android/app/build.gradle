@@ -177,3 +177,10 @@ dependencies {
 }
 
 apply plugin: 'com.google.gms.google-services'
+
+// Exclure la tâche createDebugUpdatesResources pour éviter l'erreur avec expo/config/paths en workflow bare
+afterEvaluate {
+    tasks.matching { it.name == 'createDebugUpdatesResources' }.configureEach {
+        enabled = false
+    }
+}
