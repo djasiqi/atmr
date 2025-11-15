@@ -1,7 +1,7 @@
-# En bare workflow, android/ et ios/ DOIVENT être inclus car ils contiennent les fichiers natifs
-# On exclut seulement les dossiers de build/cache, pas les fichiers de configuration
-# android/
-# ios/
+# CNG/Prebuild workflow : android/ et ios/ sont régénérés à chaque build depuis app.config.js
+# Cela résout le problème d'autolinking avec React Native 0.79 et Expo SDK 53
+android/
+ios/
 
 # Dépendances (reinstallées sur EAS)
 node_modules/

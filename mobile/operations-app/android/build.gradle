@@ -3,28 +3,15 @@
 buildscript {
   // Définir kotlinVersion dans le scope du buildscript
   def kotlinVersion = "2.0.21"
-  
+
   repositories {
     google()
     mavenCentral()
   }
   
-  // Forcer la version 8.8.2 du plugin Android Gradle pour toutes les configurations
-  configurations.all {
-    resolutionStrategy {
-      force 'com.android.tools.build:gradle:8.8.2'
-      eachDependency { details ->
-        if (details.requested.group == 'com.android.tools.build' && details.requested.name == 'gradle') {
-          details.useVersion '8.8.2'
-          details.because 'Force Android Gradle Plugin 8.8.2 for compatibility'
-        }
-      }
-    }
-  }
-  
   dependencies {
     classpath 'com.google.gms:google-services:4.4.1'
-    classpath('com.android.tools.build:gradle:8.8.2')
+    classpath('com.android.tools.build:gradle')
     classpath('com.facebook.react:react-native-gradle-plugin')
     classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlinVersion}")
   }
@@ -58,43 +45,6 @@ allprojects {
     google()
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
-  }
-  
-  // Forcer la version du plugin Android Gradle pour tous les sous-projets (y compris node_modules)
-  buildscript {
-    configurations.all {
-      resolutionStrategy {
-        force 'com.android.tools.build:gradle:8.8.2'
-        eachDependency { details ->
-          if (details.requested.group == 'com.android.tools.build' && details.requested.name == 'gradle') {
-            details.useVersion '8.8.2'
-            details.because 'Force Android Gradle Plugin 8.8.2 for all subprojects'
-          }
-        }
-      }
-    }
-  }
-  
-  // Exposer les variables ext à tous les sous-projets AVANT l'évaluation
-  beforeEvaluate { project ->
-    project.ext.kotlinVersion = rootProject.ext.kotlinVersion
-    project.ext.buildToolsVersion = rootProject.ext.buildToolsVersion
-    project.ext.minSdkVersion = rootProject.ext.minSdkVersion
-    project.ext.compileSdkVersion = rootProject.ext.compileSdkVersion
-    project.ext.targetSdkVersion = rootProject.ext.targetSdkVersion
-    project.ext.ndkVersion = rootProject.ext.ndkVersion
-  }
-  
-  // Exposer aussi après évaluation au cas où
-  afterEvaluate { project ->
-    if (project.hasProperty('android')) {
-      project.ext.kotlinVersion = rootProject.ext.kotlinVersion
-      project.ext.buildToolsVersion = rootProject.ext.buildToolsVersion
-      project.ext.minSdkVersion = rootProject.ext.minSdkVersion
-      project.ext.compileSdkVersion = rootProject.ext.compileSdkVersion
-      project.ext.targetSdkVersion = rootProject.ext.targetSdkVersion
-      project.ext.ndkVersion = rootProject.ext.ndkVersion
-    }
   }
 }
 
