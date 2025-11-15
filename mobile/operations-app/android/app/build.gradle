@@ -178,9 +178,24 @@ dependencies {
 
 apply plugin: 'com.google.gms.google-services'
 
-// Exclure les tâches create*UpdatesResources pour éviter l'erreur avec expo/config/paths en workflow bare
+// Désactiver complètement les tâches create*UpdatesResources pour éviter l'erreur avec expo/config/paths en workflow bare
+// En bare workflow, ces tâches peuvent échouer car expo/config/paths n'est pas disponible
 afterEvaluate {
-    tasks.matching { it.name.startsWith('create') && it.name.endsWith('UpdatesResources') }.configureEach {
-        enabled = false
+    tasks.matching { it.name.matches(/create.*UpdatesResources/) }.configureEach { task ->
+        // Désactiver la tâche mais créer les répertoires de sortie pour satisfaire les dépendances
+        def outputDirs = []
+        task.outputs.files.each { output ->
+            if (output instanceof File && output.exists()) {
+                outputDirs << output
+            }
+        }
+        task.doFirst {
+            logger.warn("⚠️ ${task.name} est désactivée (workflow bare)")
+            // Créer les répertoires de sortie manuellement
+            outputDirs.each { dir ->
+                dir.mkdirs()
+            }
+        }
+        task.enabled = false
     }
 }
