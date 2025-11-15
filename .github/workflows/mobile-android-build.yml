@@ -49,8 +49,8 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Login to EAS
-        run: eas login --non-interactive
+      - name: Verify EAS authentication
+        run: eas whoami
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
