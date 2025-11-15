@@ -178,24 +178,21 @@ dependencies {
 
 apply plugin: 'com.google.gms.google-services'
 
-// Rendre les tâches create*UpdatesResources no-op pour éviter l'erreur avec expo/config/paths en workflow bare
-// Au lieu de les désactiver, on les rend no-op pour préserver les dépendances de build
+// Désactiver les tâches create*UpdatesResources pour éviter l'erreur avec expo/config/paths en workflow bare
+// En bare workflow, ces tâches échouent car expo/config/paths n'est pas disponible
 afterEvaluate {
     tasks.matching { it.name.matches(/create.*UpdatesResources/) }.configureEach { task ->
-        // Remplacer complètement l'action de la tâche par un no-op
+        // Désactiver la tâche
+        task.enabled = false
+        // Créer les répertoires de sortie avant la désactivation pour satisfaire les dépendances
         task.doFirst {
-            logger.warn("⚠️ ${task.name} est ignorée (workflow bare - expo/config/paths non disponible)")
-        }
-        // Remplacer l'action originale par un no-op qui crée juste les répertoires de sortie
-        task.actions.clear()
-        task.doLast {
-            // Créer les répertoires de sortie pour satisfaire les dépendances
+            logger.warn("⚠️ ${task.name} est désactivée (workflow bare - expo/config/paths non disponible)")
+            // Créer les répertoires de sortie manuellement
             task.outputs.files.each { output ->
                 if (output instanceof File) {
                     output.mkdirs()
                 }
             }
-            logger.info("✅ ${task.name} terminée (no-op)")
         }
     }
 }
