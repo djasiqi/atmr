@@ -177,23 +177,3 @@ dependencies {
 }
 
 apply plugin: 'com.google.gms.google-services'
-
-// Intercepter les erreurs expo/config/paths dans les tâches create*UpdatesResources en workflow bare
-// On intercepte l'exception plutôt que de modifier les tâches pour éviter de casser les dépendances
-afterEvaluate {
-    tasks.matching { it.name.matches(/create.*UpdatesResources/) }.configureEach { task ->
-        task.doFirst {
-            logger.warn("⚠️ ${task.name} - interception pour éviter expo/config/paths (workflow bare)")
-        }
-        
-        // Intercepter toute exception liée à expo/config/paths
-        task.configure {
-            // Créer les répertoires de sortie manuellement si la tâche échoue
-            task.outputs.files.each { output ->
-                if (output instanceof File) {
-                    output.mkdirs()
-                }
-            }
-        }
-    }
-}
