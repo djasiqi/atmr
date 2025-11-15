@@ -1,5 +1,9 @@
 name: Build Android Operations App
 
+permissions:
+  contents: read
+  actions: read
+
 on:
   push:
     branches:

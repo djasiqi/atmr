@@ -110,7 +110,12 @@
     "ajv": "^8.17.1",
     "http-proxy-middleware": "^3.0.5",
     "msw": "^2.11.5",
-    "react-scripts": "^5.0.1",
+    "react-scripts": "^5.0.2",
     "redux-mock-store": "^1.5.5"
+  },
+  "overrides": {
+    "nth-check": "^3.0.0",
+    "postcss": "^8.4.49",
+    "js-yaml": "^4.1.0"
   }
 }
