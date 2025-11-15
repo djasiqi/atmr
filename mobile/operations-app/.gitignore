@@ -18,6 +18,10 @@ expo-env.d.ts
 *.mobileprovision
 !android/app/google-services.json
 
+# Prebuild - Les dossiers natifs sont générés automatiquement
+android/
+ios/
+
 
 # Metro
 .metro-health-check*
