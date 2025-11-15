@@ -182,17 +182,14 @@ apply plugin: 'com.google.gms.google-services'
 // En bare workflow, ces tâches échouent car expo/config/paths n'est pas disponible
 afterEvaluate {
     tasks.matching { it.name.matches(/create.*UpdatesResources/) }.configureEach { task ->
-        // Désactiver la tâche
-        task.enabled = false
-        // Créer les répertoires de sortie avant la désactivation pour satisfaire les dépendances
-        task.doFirst {
-            logger.warn("⚠️ ${task.name} est désactivée (workflow bare - expo/config/paths non disponible)")
-            // Créer les répertoires de sortie manuellement
-            task.outputs.files.each { output ->
-                if (output instanceof File) {
-                    output.mkdirs()
-                }
+        // Créer les répertoires de sortie manuellement pour satisfaire les dépendances
+        task.outputs.files.each { output ->
+            if (output instanceof File) {
+                output.mkdirs()
             }
         }
+        // Désactiver la tâche après avoir créé les répertoires
+        task.enabled = false
+        logger.info("⚠️ ${task.name} est désactivée (workflow bare - expo/config/paths non disponible)")
     }
 }
