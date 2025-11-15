@@ -10,6 +10,9 @@ ext {
   kotlinVersion = "2.0.21"
 }
 
+// Définir kotlinVersion comme variable locale pour l'utiliser dans buildscript
+def kotlinVersion = ext.kotlinVersion
+
 buildscript {
   repositories {
     google()
@@ -33,7 +36,7 @@ buildscript {
     classpath 'com.google.gms:google-services:4.4.1'
     classpath('com.android.tools.build:gradle:8.8.2')
     classpath('com.facebook.react:react-native-gradle-plugin')
-    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${rootProject.ext.kotlinVersion}")
+    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlinVersion}")
   }
 }
 
