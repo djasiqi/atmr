@@ -16,9 +16,16 @@ buildscript {
     mavenCentral()
   }
   
+  // Forcer la version 8.8.2 du plugin Android Gradle pour toutes les configurations
   configurations.all {
     resolutionStrategy {
       force 'com.android.tools.build:gradle:8.8.2'
+      eachDependency { DependencyResolveDetails details ->
+        if (details.requested.group == 'com.android.tools.build' && details.requested.name == 'gradle') {
+          details.useVersion '8.8.2'
+          details.because 'Force Android Gradle Plugin 8.8.2 for compatibility'
+        }
+      }
     }
   }
   
@@ -27,17 +34,6 @@ buildscript {
     classpath('com.android.tools.build:gradle:8.8.2')
     classpath('com.facebook.react:react-native-gradle-plugin')
     classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${rootProject.ext.kotlinVersion}")
-    
-    // Forcer la version 8.8.2 pour toutes les dépendances transitives
-    components.all {
-      allVariants {
-        if (it.group == 'com.android.tools.build' && it.module.name == 'gradle') {
-          withDependencies { deps ->
-            deps.findAll { it.version != '8.8.2' }.each { it.version = '8.8.2' }
-          }
-        }
-      }
-    }
   }
 }
 
