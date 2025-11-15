@@ -1,6 +1,7 @@
-# Forcer Prebuild côté EAS
-android/
-ios/
+# En bare workflow, android/ et ios/ DOIVENT être inclus car ils contiennent les fichiers natifs
+# On exclut seulement les dossiers de build/cache, pas les fichiers de configuration
+# android/
+# ios/
 
 # Dépendances (reinstallées sur EAS)
 node_modules/
