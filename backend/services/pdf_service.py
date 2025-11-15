@@ -172,19 +172,24 @@ class PDFService:
                     # Vérifier si c'est un fichier SVG
                     if logo_path.suffix.lower() == '.svg':
                         # Convertir SVG en drawing ReportLab avec svglib
-                        from svglib.svglib import svg2rlg
-                        drawing = svg2rlg(str(logo_path))
-                        if drawing:
-                            # Redimensionner le drawing
-                            original_width = drawing.width
-                            original_height = drawing.height
-                            if original_width > 0 and original_height > 0:
-                                scale_x = logo_width / original_width
-                                scale_y = logo_height / original_height
-                                drawing.scale(scale_x, scale_y)
-                            logo_img = drawing
-                        else:
-                            app_logger.warning("Impossible de convertir le SVG en drawing: %s", logo_path)
+                        try:
+                            from svglib.svglib import svg2rlg
+                            drawing = svg2rlg(str(logo_path))
+                            if drawing:
+                                # Redimensionner le drawing
+                                original_width = drawing.width
+                                original_height = drawing.height
+                                if original_width > 0 and original_height > 0:
+                                    scale_x = logo_width / original_width
+                                    scale_y = logo_height / original_height
+                                    drawing.scale(scale_x, scale_y)
+                                logo_img = drawing
+                            else:
+                                app_logger.warning("Impossible de convertir le SVG en drawing: %s", logo_path)
+                        except Exception as svg_error:
+                            app_logger.error("Erreur lors de la conversion SVG: %s - %s", logo_path, str(svg_error))
+                            # En cas d'erreur, on continue sans logo plutôt que de faire échouer la génération
+                            logo_img = None
                     else:
                         # Pour les autres formats (PNG, JPG, etc.), utiliser Image directement
                         logo_img = Image(logo_path, width=logo_width, height=logo_height)
