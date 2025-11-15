@@ -4,7 +4,7 @@ services:
   api:
     image: docker.io/djasiqi/atmr-backend:latest
     env_file: .env.production
-    command: gunicorn wsgi:app -k eventlet -w 1 -b 0.0.0.0:5000
+    command: gunicorn wsgi:app -k eventlet -w 1 -b 0.0.0.0:5000 --timeout 120 --graceful-timeout 30
     depends_on:
       - postgres
       - redis
