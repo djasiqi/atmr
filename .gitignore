@@ -76,6 +76,11 @@ frontend/.env.*.local
 .expo-shared/
 **/.expo/
 **/.expo-shared/
+# Google Services (contient des secrets)
+**/google-services.json
+**/GoogleService-Info.plist
+# Android local properties (contient des secrets)
+**/android/local.properties
 
 # ===== IDE / OS =====
 .vscode/

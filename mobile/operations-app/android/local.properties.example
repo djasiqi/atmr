@@ -1,0 +1,5 @@
+# Google Maps API Key
+# Obtenez votre clé depuis : https://console.cloud.google.com/apis/credentials
+# Ajoutez cette clé dans votre fichier local.properties (créer le fichier s'il n'existe pas)
+GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY_HERE
+
