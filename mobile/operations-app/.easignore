@@ -13,10 +13,12 @@ node_modules/
 android/app/build/
 android/build/
 android/.gradle/
+android/.gradle/**
 android/.cxx/
 android/local.properties
 **/.cxx/
 **/.gradle/
+**/.gradle/**
 
 # Builds & caches iOS
 ios/build/
