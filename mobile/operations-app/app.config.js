@@ -1,12 +1,13 @@
 // app.config.js
 require('dotenv-flow').config();
 const pkg = require('./package.json');
+const withAndroidBackButtonMod = require('./prebuild-mods/withAndroidBackButtonMod');
 
 const APP_VARIANT = process.env.APP_VARIANT || "prod";
 const isDevVariant = APP_VARIANT === "dev";
 const runtimeBase = pkg.version || "1.0.0";
 
-module.exports = () => ({
+module.exports = withAndroidBackButtonMod(() => ({
   name: isDevVariant ? "Liri Opérations Dev" : "Liri Opérations",
   slug: "operations-app",
   runtimeVersion: isDevVariant ? `${runtimeBase}-dev` : runtimeBase,
@@ -91,8 +92,8 @@ module.exports = () => ({
       {
         android: {
           classpath: "com.google.gms:google-services:4.4.2",
-          gradlePluginVersion: "8.5.2",
-          gradleVersion: "8.5.2",
+          gradlePluginVersion: "8.8.2",
+          gradleVersion: "8.13",
           kotlinVersion: "2.0.21",
         },
       },
@@ -113,4 +114,4 @@ module.exports = () => ({
   },
 
   owner: "drinjasiqi",
-});
+}));
