@@ -169,7 +169,25 @@ class PDFService:
                     logo_width = 595 * logo_width_percent  # ≈ 89 points
                     logo_height = logo_width / 4.17  # ≈ 21 points
 
-                    logo_img = Image(logo_path, width=logo_width, height=logo_height)
+                    # Vérifier si c'est un fichier SVG
+                    if logo_path.suffix.lower() == '.svg':
+                        # Convertir SVG en drawing ReportLab avec svglib
+                        from svglib.svglib import svg2rlg
+                        drawing = svg2rlg(str(logo_path))
+                        if drawing:
+                            # Redimensionner le drawing
+                            original_width = drawing.width
+                            original_height = drawing.height
+                            if original_width > 0 and original_height > 0:
+                                scale_x = logo_width / original_width
+                                scale_y = logo_height / original_height
+                                drawing.scale(scale_x, scale_y)
+                            logo_img = drawing
+                        else:
+                            app_logger.warning("Impossible de convertir le SVG en drawing: %s", logo_path)
+                    else:
+                        # Pour les autres formats (PNG, JPG, etc.), utiliser Image directement
+                        logo_img = Image(logo_path, width=logo_width, height=logo_height)
             except Exception as e:
                 app_logger.warning("Impossible de charger le logo: %s", e)
 
@@ -182,22 +200,37 @@ class PDFService:
 
         # === LOGO ET COORDONNÉES ENTREPRISE (GAUCHE) ===
         if logo_img:
-            # Utiliser un Paragraph avec alignement à gauche pour forcer l'alignement
-            from reportlab.lib.styles import ParagraphStyle
-            # TA_LEFT déjà importé plus haut (ligne 105)
-
-            logo_style = ParagraphStyle(
-                "LogoStyle",
-                parent=styles["Normal"],
-                alignment=TA_LEFT,
-                leftIndent=0,
-                rightIndent=0,
-                spaceAfter=8
-            )
-
-            # Créer un Paragraph avec le logo
-            logo_para = Paragraph(f'<img src="{logo_path}" width="{logo_width}" height="{logo_height}"/>', logo_style)
-            story.append(logo_para)
+            # Vérifier si c'est un drawing (SVG converti) en vérifiant la présence d'attributs spécifiques
+            # Les drawings de svglib ont des attributs width, height et une méthode scale
+            is_drawing = hasattr(logo_img, 'width') and hasattr(logo_img, 'height') and hasattr(logo_img, 'scale')
+            
+            if is_drawing:
+                # Pour les drawings SVG, créer un tableau pour l'alignement
+                # Table et TableStyle sont déjà importés plus haut
+                logo_table = Table([[logo_img]], colWidths=[logo_width])
+                logo_table.setStyle(TableStyle([
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ]))
+                story.append(logo_table)
+            else:
+                # Pour les images standard (PNG, JPG), utiliser un Paragraph
+                from reportlab.lib.styles import ParagraphStyle
+                logo_style = ParagraphStyle(
+                    "LogoStyle",
+                    parent=styles["Normal"],
+                    alignment=TA_LEFT,
+                    leftIndent=0,
+                    rightIndent=0,
+                    spaceAfter=8
+                )
+                # Créer un Paragraph avec le logo
+                logo_para = Paragraph(f'<img src="{logo_path}" width="{logo_width}" height="{logo_height}"/>', logo_style)
+                story.append(logo_para)
 
         # Coordonnées entreprise alignées à gauche
         company_info_left = f"""

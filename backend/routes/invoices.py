@@ -1,4 +1,5 @@
 import logging
+import traceback
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -655,8 +656,9 @@ class GenerateInvoice(Resource):
             result = {"error": str(e)}
             status_code = 400
         except Exception as e:
+            error_trace = traceback.format_exc()
             app_logger.error(
-                "Erreur lors de la génération de facture: %s", str(e))
+                "Erreur lors de la génération de facture: %s\n%s", str(e), error_trace)
             result = {"error": "Erreur interne du serveur"}
             status_code = 500
 
