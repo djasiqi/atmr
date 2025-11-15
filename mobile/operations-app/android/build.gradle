@@ -20,7 +20,7 @@ buildscript {
   configurations.all {
     resolutionStrategy {
       force 'com.android.tools.build:gradle:8.8.2'
-      eachDependency { DependencyResolveDetails details ->
+      eachDependency { details ->
         if (details.requested.group == 'com.android.tools.build' && details.requested.name == 'gradle') {
           details.useVersion '8.8.2'
           details.because 'Force Android Gradle Plugin 8.8.2 for compatibility'
