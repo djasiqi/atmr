@@ -1,19 +1,9 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
-// Définir kotlinVersion comme variable locale AVANT le bloc ext pour l'utiliser dans buildscript
-def kotlinVersion = "2.0.21"
-
-// Définir les variables au niveau root pour qu'elles soient accessibles dans tous les sous-projets
-ext {
-  buildToolsVersion = "35.0.0"
-  minSdkVersion = 24
-  compileSdkVersion = 35
-  targetSdkVersion = 35
-  ndkVersion = "27.1.12297006"
-  kotlinVersion = kotlinVersion
-}
-
 buildscript {
+  // Définir kotlinVersion dans le scope du buildscript
+  def kotlinVersion = "2.0.21"
+  
   repositories {
     google()
     mavenCentral()
@@ -38,6 +28,16 @@ buildscript {
     classpath('com.facebook.react:react-native-gradle-plugin')
     classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlinVersion}")
   }
+}
+
+// Définir les variables au niveau root pour qu'elles soient accessibles dans tous les sous-projets
+ext {
+  buildToolsVersion = "35.0.0"
+  minSdkVersion = 24
+  compileSdkVersion = 35
+  targetSdkVersion = 35
+  ndkVersion = "27.1.12297006"
+  kotlinVersion = "2.0.21"
 }
 
 def reactNativeAndroidDir = new File(
