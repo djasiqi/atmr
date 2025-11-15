@@ -46,6 +46,14 @@ jobs:
       - name: Install EAS CLI
         run: npm install -g eas-cli@latest
 
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Login to EAS
+        run: eas login --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
       - name: Project health check
         run: npx expo-doctor
 
@@ -66,12 +74,18 @@ jobs:
             --profile production \
             --non-interactive \
             --wait \
-            --output json > ../eas-build.json
-          jq '.' ../eas-build.json
-          artifact_url=$(jq -r '.artifacts.builds[0].artifacts[0].url // empty' ../eas-build.json)
-          build_id=$(jq -r '.artifacts.builds[0].buildId // empty' ../eas-build.json)
+            --json > ../eas-build.json || {
+            echo "Build failed. Checking output..."
+            cat ../eas-build.json 2>/dev/null || true
+            exit 1
+          }
+          cat ../eas-build.json | jq '.'
+          artifact_url=$(cat ../eas-build.json | jq -r '.artifacts[0].url // .buildId // empty')
+          build_id=$(cat ../eas-build.json | jq -r '.id // empty')
           echo "artifact_url=${artifact_url}" >> "$GITHUB_OUTPUT"
           echo "build_id=${build_id}" >> "$GITHUB_OUTPUT"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Upload build summary
         if: steps.build.outputs.artifact_url != ''
