@@ -12,7 +12,8 @@
     "env:generate": "node ./scripts/generate-env.js",
     "build:dev": "eas build -p android --profile development",
     "build:prod": "eas build -p android --profile production",
-    "version:patch": "node ./scripts/bump-version.js && git add app.config.js package.json"
+    "version:patch": "node ./scripts/bump-version.js && git add app.config.js package.json",
+    "test": "jest --watchAll=false"
   },
   "jest": {
     "preset": "jest-expo"
