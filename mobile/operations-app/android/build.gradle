@@ -16,11 +16,28 @@ buildscript {
     mavenCentral()
   }
   
+  configurations.all {
+    resolutionStrategy {
+      force 'com.android.tools.build:gradle:8.8.2'
+    }
+  }
+  
   dependencies {
     classpath 'com.google.gms:google-services:4.4.1'
     classpath('com.android.tools.build:gradle:8.8.2')
     classpath('com.facebook.react:react-native-gradle-plugin')
     classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${rootProject.ext.kotlinVersion}")
+    
+    // Forcer la version 8.8.2 pour toutes les dépendances transitives
+    components.all {
+      allVariants {
+        if (it.group == 'com.android.tools.build' && it.module.name == 'gradle') {
+          withDependencies { deps ->
+            deps.findAll { it.version != '8.8.2' }.each { it.version = '8.8.2' }
+          }
+        }
+      }
+    }
   }
 }
 
