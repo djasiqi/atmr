@@ -177,3 +177,20 @@ dependencies {
 }
 
 apply plugin: 'com.google.gms.google-services'
+
+// Désactiver les tâches create*UpdatesResources si EXPO_NO_UPDATES est défini
+// Cela évite l'erreur expo/config/paths en bare workflow et permet aux modules de se configurer correctement
+afterEvaluate {
+    if (System.getenv('EXPO_NO_UPDATES') == '1' || project.hasProperty('EXPO_NO_UPDATES')) {
+        tasks.matching { it.name.matches(/create.*UpdatesResources/) }.configureEach { task ->
+            task.enabled = false
+            // Créer les répertoires de sortie pour satisfaire les dépendances
+            task.outputs.files.each { output ->
+                if (output instanceof File) {
+                    output.mkdirs()
+                }
+            }
+            logger.info("⚠️ ${task.name} désactivée (EXPO_NO_UPDATES=1)")
+        }
+    }
+}
