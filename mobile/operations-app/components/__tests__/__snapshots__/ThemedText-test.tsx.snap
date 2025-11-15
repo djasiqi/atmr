@@ -11,10 +11,11 @@ exports[`renders correctly 1`] = `
         "fontSize": 16,
         "lineHeight": 24,
       },
-      undefined,
-      undefined,
-      undefined,
-      undefined,
+      false,
+      false,
+      false,
+      false,
+      false,
       undefined,
     ]
   }
