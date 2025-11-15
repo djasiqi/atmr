@@ -12,7 +12,7 @@
     "@mui/material": "^7.1.2",
     "@mui/x-date-pickers": "^8.5.3",
     "@reduxjs/toolkit": "^2.5.0",
-    "@sentry/react": "^10.20.0",
+    "@sentry/react": "^10.25.0",
     "@tanstack/react-query": "^5.67.1",
     "axios": "^1.7.9",
     "browserify-zlib": "^0.2.0",
@@ -110,12 +110,14 @@
     "ajv": "^8.17.1",
     "http-proxy-middleware": "^3.0.5",
     "msw": "^2.11.5",
-    "react-scripts": "^5.0.2",
+    "react-scripts": "^5.0.1",
     "redux-mock-store": "^1.5.5"
   },
   "overrides": {
     "nth-check": "^3.0.0",
     "postcss": "^8.4.49",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "webpack-dev-server": "^5.2.2",
+    "@sentry/browser": "^8.47.0"
   }
 }
