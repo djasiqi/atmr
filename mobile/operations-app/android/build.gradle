@@ -43,6 +43,18 @@ allprojects {
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
   }
+  
+  // Exposer les variables ext à tous les sous-projets (y compris ceux dans node_modules)
+  afterEvaluate { project ->
+    if (project.hasProperty('android')) {
+      project.ext.kotlinVersion = rootProject.ext.kotlinVersion
+      project.ext.buildToolsVersion = rootProject.ext.buildToolsVersion
+      project.ext.minSdkVersion = rootProject.ext.minSdkVersion
+      project.ext.compileSdkVersion = rootProject.ext.compileSdkVersion
+      project.ext.targetSdkVersion = rootProject.ext.targetSdkVersion
+      project.ext.ndkVersion = rootProject.ext.ndkVersion
+    }
+  }
 }
 
 apply plugin: "expo-root-project"
