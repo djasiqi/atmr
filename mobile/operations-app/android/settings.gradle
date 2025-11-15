@@ -1,19 +1,4 @@
 pluginManagement {
-  repositories {
-    google()
-    mavenCentral()
-    gradlePluginPortal()
-  }
-  
-  resolutionStrategy {
-    eachPlugin {
-      if (requested.id.id == 'com.android.library' || requested.id.id == 'com.android.application') {
-        useModule("com.android.tools.build:gradle:8.8.2")
-        useVersion("8.8.2")
-      }
-    }
-  }
-  
   def reactNativeGradlePlugin = new File(
     providers.exec {
       workingDir(rootDir)
@@ -37,14 +22,11 @@ plugins {
   id("expo-autolinking-settings")
 }
 
-extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
-  if (System.getenv('EXPO_USE_COMMUNITY_AUTOLINKING') == '1') {
-    ex.autolinkLibrariesFromCommand()
-  } else {
-    ex.autolinkLibrariesFromCommand(expoAutolinking.rnConfigCommand)
-  }
-}
 expoAutolinking.useExpoModules()
+
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
+  ex.autolinkLibrariesFromCommand(expoAutolinking.rnConfigCommand)
+}
 
 rootProject.name = 'Liri Opérations'
 
