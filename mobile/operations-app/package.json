@@ -30,7 +30,7 @@
     "axios": "^1.7.9",
     "dayjs": "^1.11.13",
     "debug": "^4.4.3",
-    "dotenv-flow": "^3.3.0",
+    "dotenv-flow": "^4.1.0",
     "expo": "^54.0.23",
     "expo-application": "~7.0.7",
     "expo-blur": "~15.0.7",
