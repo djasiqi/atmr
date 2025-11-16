@@ -29,9 +29,21 @@ const ENV_PORT = process.env.EXPO_PUBLIC_BACKEND_PORT;
 const PORT = ENV_PORT || expoExtra.backendPort || "5000";
 const API_PREFIX = "/api/v1/company_mobile";
 
-const baseURL = __DEV__
-  ? `http://${getDevHost()}:${PORT}${API_PREFIX}`
-  : `${(PROD_API_URL || "").replace(/\/$/, "")}${API_PREFIX}`;
+// Utiliser l'URL distante si EXPO_PUBLIC_API_URL est défini, même en dev
+const USE_REMOTE = Boolean(PROD_API_URL && /^https?:\/\//.test(PROD_API_URL));
+const baseURL = USE_REMOTE
+  ? `${(PROD_API_URL || "").replace(/\/$/, "")}${API_PREFIX}`
+  : `http://${getDevHost()}:${PORT}${API_PREFIX}`;
+
+// Debug: log baseURL résolu (non sensible)
+try {
+  // eslint-disable-next-line no-console
+  console.log("[ENT] baseURL:", baseURL, {
+    PROD_API_URL,
+    ENV_API_URL,
+    PORT,
+  });
+} catch {}
 
 export const ENTERPRISE_TOKEN_KEY = "enterprise.token";
 export const ENTERPRISE_REFRESH_KEY = "enterprise.refresh";
@@ -103,7 +115,7 @@ export interface EnterpriseMfaVerifyParams {
 
 export const enterpriseApi = axios.create({
   baseURL,
-  timeout: 10000,
+  timeout: 30000,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -262,11 +274,49 @@ enterpriseApi.interceptors.response.use(
 export const loginEnterprise = async (
   params: EnterpriseLoginParams
 ): Promise<EnterpriseLoginResponse> => {
-  const response = await enterpriseApi.post<EnterpriseLoginResponse>(
-    "/auth/login",
-    params
-  );
-  return response.data;
+  try {
+    // Log léger pour debug (sans secrets)
+    // eslint-disable-next-line no-console
+    console.log("[ENT] login request", { hasEmail: Boolean(params.email), hasPassword: Boolean(params.password) });
+
+    const response = await enterpriseApi.post<EnterpriseLoginResponse>(
+      "/auth/login",
+      params
+    );
+    return response.data;
+  } catch (err: unknown) {
+    const isNetErr =
+      (axios.isAxiosError(err) && (err as any)?.code === "ERR_NETWORK") ||
+      (axios.isAxiosError(err) && err.message?.toLowerCase().includes("network error"));
+
+    if (!isNetErr) {
+      throw err;
+    }
+
+    // Fallback via fetch (30s) pour contourner un éventuel souci Axios natif
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      const res = await fetch(`${baseURL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(`Enterprise login via fetch a échoué (${res.status}): ${text}`);
+      }
+      // eslint-disable-next-line no-console
+      console.log("[ENT] login via fetch OK");
+      return JSON.parse(text) as EnterpriseLoginResponse;
+    } catch (fallbackError) {
+      // eslint-disable-next-line no-console
+      console.warn("[ENT] login fallback (fetch) échec:", fallbackError);
+      throw err;
+    }
+  }
 };
 
 export const verifyEnterpriseMfa = async (

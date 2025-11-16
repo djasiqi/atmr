@@ -7,6 +7,7 @@ type SocketRole = "driver" | "enterprise";
 
 // Flask-SocketIO vit à la racine (/socket.io). On enlève le suffixe /api ou /api/vX.
 const SOCKET_ORIGIN = baseURL.replace(/\/api(?:\/v\d+)?$/, "");
+const IS_SECURE = SOCKET_ORIGIN.startsWith("https://");
 
 // (Optionnel) logs verbeux en dev pour socket.io
 let enableSocketIODebug = () => {};
@@ -32,12 +33,16 @@ function buildOptions(token: string) {
     reconnectionDelayMax: 5000,
     timeout: 20000,
     forceNew: true,
-    transports: ["websocket", "polling"],
+    transports: IS_SECURE ? ["websocket"] : ["websocket", "polling"],
     upgrade: true,
     rememberUpgrade: true,
+    secure: IS_SECURE,
   };
-  // En dev, on garde polling en secours mais on privilégie WebSocket
-  return IS_DEV ? { ...base, transports: ["websocket", "polling"] } : base;
+  // En dev non sécurisé (HTTP), on garde polling en secours
+  if (IS_DEV && !IS_SECURE) {
+    return { ...base, transports: ["websocket", "polling"] };
+  }
+  return base;
 }
 
 export async function connectSocket(
