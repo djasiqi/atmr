@@ -93,7 +93,7 @@ module.exports = withAndroidBackButtonMod(() => ({
         android: {
           // Pin Kotlin and AGP so EAS Prebuild generates matching native config
           kotlinVersion: "2.1.20",
-          gradlePluginVersion: "8.11.0",
+          gradlePluginVersion: "8.13.1",
           // Let EAS choose Gradle version (logs show 8.14.3); don't override here
           // Keep Google Services via plugin in app/build.gradle
           classpath: "com.google.gms:google-services:4.4.2",

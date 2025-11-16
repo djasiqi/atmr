@@ -5,12 +5,6 @@ permissions:
   actions: read
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "mobile/operations-app/**"
-      - ".github/workflows/mobile-android-build.yml"
   workflow_dispatch:
 
 jobs:
@@ -123,8 +117,8 @@ jobs:
             exit 1
           }
           cat ../eas-build-internal.json | jq '.'
-          artifact_url=$(cat ../eas-build-internal.json | jq -r '.artifacts[0].url // .buildId // empty')
-          build_id=$(cat ../eas-build-internal.json | jq -r '.id // empty')
+          artifact_url=$(cat ../eas-build-internal.json | jq -r '.[0].artifacts.buildUrl // .[0].artifacts.applicationArchiveUrl // empty')
+          build_id=$(cat ../eas-build-internal.json | jq -r '.[0].id // empty')
           echo "artifact_url=${artifact_url}" >> "$GITHUB_OUTPUT"
           echo "build_id=${build_id}" >> "$GITHUB_OUTPUT"
         env:
@@ -197,8 +191,8 @@ jobs:
             exit 1
           }
           cat ../eas-build-production.json | jq '.'
-          artifact_url=$(cat ../eas-build-production.json | jq -r '.artifacts[0].url // .buildId // empty')
-          build_id=$(cat ../eas-build-production.json | jq -r '.id // empty')
+          artifact_url=$(cat ../eas-build-production.json | jq -r '.[0].artifacts.buildUrl // .[0].artifacts.applicationArchiveUrl // empty')
+          build_id=$(cat ../eas-build-production.json | jq -r '.[0].id // empty')
           echo "artifact_url=${artifact_url}" >> "$GITHUB_OUTPUT"
           echo "build_id=${build_id}" >> "$GITHUB_OUTPUT"
         env:

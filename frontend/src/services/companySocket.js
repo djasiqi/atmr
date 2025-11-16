@@ -4,6 +4,7 @@ import { getAccessToken } from '../hooks/useAuthToken';
 let socket = null;
 let connectPromise = null;
 const listeners = new Map(); // event -> callback
+let currentCompanyId = null; // company to (re)join on connect/reconnect
 
 // En mode développement (localhost:3000), utiliser le proxy (plus fiable sur Windows/Docker)
 const isDevelopmentLocalhost =
@@ -65,6 +66,12 @@ export function getCompanySocket() {
         socket.on('connect', () => {
           // eslint-disable-next-line no-console
           console.log('✅ WebSocket connecté (company)', socket.id);
+          // Rejoindre automatiquement la room entreprise si connue
+          if (currentCompanyId) {
+            try {
+              socket.emit('join_company', { company_id: currentCompanyId });
+            } catch {}
+          }
           resolve(socket);
         });
 
@@ -104,15 +111,24 @@ export async function ensureCompanySocket() {
 export async function joinCompanyRoom(companyId) {
   const s = await ensureCompanySocket();
   if (!s) return;
-  // Optionnel: si un handler existe côté serveur
-  s.emit('join_company_room', { company_id: companyId });
+  currentCompanyId = companyId;
+  // Compat: certains backends écoutent join_company, d'autres join_company_room
+  try {
+    s.emit('join_company', { company_id: companyId });
+  } catch {}
+  try {
+    s.emit('join_company_room', { company_id: companyId });
+  } catch {}
 }
 
 // ✅ Quitter la room (optionnel si le serveur expose un handler)
 export async function leaveCompanyRoom(companyId) {
   const s = await ensureCompanySocket();
   if (!s) return;
-  s.emit('leave_company_room', { company_id: companyId });
+  try {
+    s.emit('leave_company_room', { company_id: companyId });
+  } catch {}
+  currentCompanyId = null;
 }
 
 // ✅ Écouter les mises à jour de localisation des chauffeurs
