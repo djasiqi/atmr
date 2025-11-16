@@ -14,8 +14,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  android:
-    name: Build Android app bundle
+  setup:
+    name: Setup and Tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -28,7 +28,9 @@ jobs:
       SOCKET_PORT: ${{ secrets.MOBILE_SOCKET_PORT }}
       EXPO_PUBLIC_GOOGLE_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_API_KEY }}
       EXPO_PUBLIC_ANDROID_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_ANDROID_MAPS_API_KEY }}
-      HAS_PLAY_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != '' }}
+    outputs:
+      should-build-internal: ${{ github.ref == 'refs/heads/main' }}
+      should-build-production: ${{ github.ref == 'refs/heads/main' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,7 +68,122 @@ jobs:
           fi
         continue-on-error: true
 
-      - name: Build Android (AAB)
+  build-internal:
+    name: Build Android Internal (APK)
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.should-build-internal == 'true'
+    defaults:
+      run:
+        working-directory: mobile/operations-app
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_API_URL: ${{ secrets.MOBILE_API_URL }}
+      EXPO_PUBLIC_BACKEND_PORT: ${{ secrets.MOBILE_BACKEND_PORT }}
+      SOCKET_HOST: ${{ secrets.MOBILE_SOCKET_HOST }}
+      SOCKET_PORT: ${{ secrets.MOBILE_SOCKET_PORT }}
+      EXPO_PUBLIC_GOOGLE_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_API_KEY }}
+      EXPO_PUBLIC_ANDROID_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_ANDROID_MAPS_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: mobile/operations-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Verify EAS authentication
+        run: eas whoami
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android (APK - Internal Distribution)
+        id: build
+        run: |
+          eas build \
+            --platform android \
+            --profile internal \
+            --non-interactive \
+            --wait \
+            --json > ../eas-build-internal.json || {
+            echo "Build failed. Checking output..."
+            cat ../eas-build-internal.json 2>/dev/null || true
+            exit 1
+          }
+          cat ../eas-build-internal.json | jq '.'
+          artifact_url=$(cat ../eas-build-internal.json | jq -r '.artifacts[0].url // .buildId // empty')
+          build_id=$(cat ../eas-build-internal.json | jq -r '.id // empty')
+          echo "artifact_url=${artifact_url}" >> "$GITHUB_OUTPUT"
+          echo "build_id=${build_id}" >> "$GITHUB_OUTPUT"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Upload build summary (Internal)
+        if: steps.build.outputs.artifact_url != ''
+        run: |
+          {
+            echo "### ✅ Build Android Operations App (Internal Distribution)"
+            echo ""
+            echo "- Build ID: \`${{ steps.build.outputs.build_id }}\`"
+            echo "- Artifact: [Télécharger l'APK](${{ steps.build.outputs.artifact_url }})"
+            echo "- Distribution: Internal (APK)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build-production:
+    name: Build Android Production (AAB)
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.should-build-production == 'true'
+    defaults:
+      run:
+        working-directory: mobile/operations-app
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_API_URL: ${{ secrets.MOBILE_API_URL }}
+      EXPO_PUBLIC_BACKEND_PORT: ${{ secrets.MOBILE_BACKEND_PORT }}
+      SOCKET_HOST: ${{ secrets.MOBILE_SOCKET_HOST }}
+      SOCKET_PORT: ${{ secrets.MOBILE_SOCKET_PORT }}
+      EXPO_PUBLIC_GOOGLE_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_API_KEY }}
+      EXPO_PUBLIC_ANDROID_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_ANDROID_MAPS_API_KEY }}
+      HAS_PLAY_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: mobile/operations-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Verify EAS authentication
+        run: eas whoami
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android (AAB - Play Store)
         id: build
         run: |
           eas build \
@@ -74,27 +191,28 @@ jobs:
             --profile production \
             --non-interactive \
             --wait \
-            --json > ../eas-build.json || {
+            --json > ../eas-build-production.json || {
             echo "Build failed. Checking output..."
-            cat ../eas-build.json 2>/dev/null || true
+            cat ../eas-build-production.json 2>/dev/null || true
             exit 1
           }
-          cat ../eas-build.json | jq '.'
-          artifact_url=$(cat ../eas-build.json | jq -r '.artifacts[0].url // .buildId // empty')
-          build_id=$(cat ../eas-build.json | jq -r '.id // empty')
+          cat ../eas-build-production.json | jq '.'
+          artifact_url=$(cat ../eas-build-production.json | jq -r '.artifacts[0].url // .buildId // empty')
+          build_id=$(cat ../eas-build-production.json | jq -r '.id // empty')
           echo "artifact_url=${artifact_url}" >> "$GITHUB_OUTPUT"
           echo "build_id=${build_id}" >> "$GITHUB_OUTPUT"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Upload build summary
+      - name: Upload build summary (Production)
         if: steps.build.outputs.artifact_url != ''
         run: |
           {
-            echo "### ✅ Build Android Operations App"
+            echo "### ✅ Build Android Operations App (Production - Play Store)"
             echo ""
             echo "- Build ID: \`${{ steps.build.outputs.build_id }}\`"
             echo "- Artifact: [Télécharger l'AAB](${{ steps.build.outputs.artifact_url }})"
+            echo "- Distribution: Store (AAB)"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Prepare Play service account

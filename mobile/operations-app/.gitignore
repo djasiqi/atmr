@@ -16,11 +16,13 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
-!android/app/google-services.json
 
 # Prebuild - Les dossiers natifs sont générés automatiquement
 android/
 ios/
+
+# Google Services - Utilisé via variable d'environnement EAS
+google-services.json
 
 
 # Metro
