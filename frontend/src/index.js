@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import reportWebVitals from './reportWebVitals';
 import * as Sentry from '@sentry/react';
 import { onCLS, onFID, onFCP, onLCP, onTTFB } from 'web-vitals';
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 // ===== SENTRY CONFIGURATION =====
 const SENTRY_DSN = process.env.REACT_APP_SENTRY_DSN;
@@ -165,6 +166,7 @@ root.render(
       )}
     >
       <App />
+      <SpeedInsights />
     </SentryErrorBoundary>
   </React.StrictMode>
 );

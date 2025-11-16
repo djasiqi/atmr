@@ -31,13 +31,34 @@ export const baseURL = __DEV__
       .replace(/\/$/, "")}/api/v1`
   : `${(PROD_API_URL || "").replace(/\/$/, "")}/api/v1`;
 
+// --- Debug: afficher la configuration résolue au démarrage (visible dans Metro/JS Inspector) ---
+try {
+  // On loggue une seule fois au chargement du module
+  // Evite d'imprimer des secrets: uniquement des URLs/ports publics
+  // Visible dans: Dev Menu -> Open JS Inspector ou les logs Metro
+  // Astuce: cherche "[API] baseURL" dans les logs
+  // On garde le log aussi en prod pour diagnostic, mais il ne contient pas de secrets
+  // Désactive si besoin en commentant la ligne ci-dessous
+  // eslint-disable-next-line no-console
+  console.log("[API] baseURL:", baseURL, {
+    ENV_API_URL,
+    DEV_API_URL,
+    PROD_API_URL,
+    ENV_PORT,
+    PORT,
+    APP_VARIANT: (Constants.expoConfig as any)?.extra?.APP_VARIANT,
+  });
+} catch {
+  // ignore
+}
+
 // --- clés stockage ---
 const TOKEN_KEY = "token";
 
 // --- instance axios ---
 export const api = axios.create({
   baseURL,
-  timeout: 10000,
+  timeout: 30000,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -62,7 +83,12 @@ api.interceptors.response.use(
         method: error.config?.method,
         status: error.response?.status,
         data: error.response?.data,
+        code: (error as any)?.code,
+        message: error.message,
       });
+      if ((error as any)?.code === "ECONNABORTED") {
+        console.warn("API Timeout (augmenté à 30s). Vérifiez la latence réseau/serveur.");
+      }
     }
     return Promise.reject(error);
   }
@@ -132,14 +158,49 @@ export const loginDriver = async (
   email: string,
   password: string
 ): Promise<AuthResponse> => {
-  // Ton backend attend exactement { email, password }
-  const response = await api.post<AuthResponse>("/auth/login", {
-    email,
-    password,
-  });
-  const data = response.data;
-  if (data?.token) await AsyncStorage.setItem(TOKEN_KEY, data.token);
-  return data;
+  try {
+    // Appel principal via Axios
+    const response = await api.post<AuthResponse>("/auth/login", {
+      email,
+      password,
+    });
+    const data = response.data;
+    if (data?.token) await AsyncStorage.setItem(TOKEN_KEY, data.token);
+    return data;
+  } catch (err: unknown) {
+    // Repli: si "Network Error", retenter immédiatement via fetch (RN), même endpoint
+    const isAxiosNetErr =
+      isAxiosError(err) &&
+      (err as any)?.code === "ERR_NETWORK" || (isAxiosError(err) && err.message?.toLowerCase().includes("network error"));
+
+    if (!isAxiosNetErr) {
+      throw err;
+    }
+
+    try {
+      // Timeout 30s via AbortController
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      const res = await fetch(`${baseURL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(`Login via fetch a échoué (${res.status}): ${text}`);
+      }
+      const data = JSON.parse(text) as AuthResponse;
+      if (data?.token) await AsyncStorage.setItem(TOKEN_KEY, data.token);
+      return data;
+    } catch (fallbackError) {
+      console.warn("Login fallback (fetch) échec:", fallbackError);
+      throw err; // renvoyer l'erreur Axios originale pour la logique appelante
+    }
+  }
 };
 
 export const fetchUserInfo = async (): Promise<{
