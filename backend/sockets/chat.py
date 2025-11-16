@@ -2,6 +2,7 @@
 """Socket.IO handlers pour le chat et la localisation.
 Les fonctions de handlers sont enregistrées via @socketio.on() et appelées par le framework.
 """
+
 import logging
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -221,18 +222,30 @@ def init_chat_socket(socketio: SocketIO):
                 emit("error", {"error": "Rôle non autorisé pour le chat."})
                 return
 
-            logger.info("📨 [CHAT] Création du message: sender_id=%s, receiver_id=%s, company_id=%s, sender_role=%s, content='%s' (len=%d)", 
-                       sender_id, receiver_id, company_id, sender_role, content[:50], len(content))
+            logger.info(
+                "📨 [CHAT] Création du message: sender_id=%s, receiver_id=%s, company_id=%s, sender_role=%s, content='%s' (len=%d)",
+                sender_id,
+                receiver_id,
+                company_id,
+                sender_role,
+                content[:50],
+                len(content),
+            )
             MessageCtor = cast("Any", Message)
             try:
                 # ✅ Vérifier que le contenu n'est pas vide avant de créer le message
                 content_final = content.strip() if content else ""
-                logger.info("📨 [CHAT] Contenu final avant création: '%s' (len=%d, type=%s)", content_final, len(content_final), type(content_final).__name__)
+                logger.info(
+                    "📨 [CHAT] Contenu final avant création: '%s' (len=%d, type=%s)",
+                    content_final,
+                    len(content_final),
+                    type(content_final).__name__,
+                )
                 if not content_final:
                     logger.error("❌ [CHAT] Contenu vide détecté juste avant création: content='%s'", content)
                     emit("error", {"error": "Le contenu du message ne peut pas être vide."})
                     return
-                
+
                 logger.info("📨 [CHAT] Création de l'objet Message avec content='%s'", content_final[:100])
                 message = MessageCtor(
                     sender_id=sender_id,
@@ -242,12 +255,21 @@ def init_chat_socket(socketio: SocketIO):
                     content=content_final,  # ✅ FIX: Utiliser le contenu réel et s'assurer qu'il est stripé
                     timestamp=timestamp,
                 )
-                logger.info("📨 [CHAT] Message créé avec succès, id=%s, content vérifié='%s'", getattr(message, "id", "N/A"), getattr(message, "content", "N/A")[:50])
+                logger.info(
+                    "📨 [CHAT] Message créé avec succès, id=%s, content vérifié='%s'",
+                    getattr(message, "id", "N/A"),
+                    getattr(message, "content", "N/A")[:50],
+                )
                 logger.info("📨 [CHAT] Message créé, ajout à la session...")
                 db.session.add(message)
                 logger.info("📨 [CHAT] Commit en cours...")
                 db.session.commit()
-                logger.info("✅ [CHAT] Message sauvegardé en DB: id=%s, content='%s', sender_role=%s", message.id, content[:50], sender_role)
+                logger.info(
+                    "✅ [CHAT] Message sauvegardé en DB: id=%s, content='%s', sender_role=%s",
+                    message.id,
+                    content[:50],
+                    sender_role,
+                )
             except Exception as commit_err:
                 db.session.rollback()
                 logger.exception("❌ [CHAT] Erreur lors du commit du message: %s", commit_err)
@@ -259,7 +281,9 @@ def init_chat_socket(socketio: SocketIO):
                 "sender_id": sender_id,
                 "receiver_id": receiver_id,
                 "receiver_name": message.receiver.first_name if message.receiver else None,
-                "sender_role": sender_role.value if hasattr(sender_role, "value") else str(sender_role),  # ✅ S'assurer que c'est une chaîne
+                "sender_role": sender_role.value
+                if hasattr(sender_role, "value")
+                else str(sender_role),  # ✅ S'assurer que c'est une chaîne
                 "sender_name": user.first_name,  # ✅ Utiliser user.first_name directement
                 "content": content,
                 "timestamp": timestamp.isoformat(),
@@ -374,10 +398,7 @@ def init_chat_socket(socketio: SocketIO):
             # Évite l'évaluation booléenne d'une colonne SQLA : on récupère un int ou None
             company_id_val = tcast("int | None", getattr(driver, "company_id", None))
             if (driver is None) or (company_id_val is None):
-                logger.error(
-                    "❌ Driver introuvable: payload_driver_id=%s, user_id=%s",
-                    payload_driver_id, user_id
-                )
+                logger.error("❌ Driver introuvable: payload_driver_id=%s, user_id=%s", payload_driver_id, user_id)
                 emit("error", {"error": "Chauffeur introuvable ou non lié à une entreprise."})
                 return
 
@@ -403,6 +424,36 @@ def init_chat_socket(socketio: SocketIO):
 
             latitude, longitude = lat, lon
 
+            # 6. Persister la dernière position (Redis + DB)
+            now_iso = datetime.now(UTC).isoformat()
+            try:
+                # 🔹 Redis: clé courte pour get_driver_locations()
+                key = f"driver:{driver.id}:loc"
+                redis_client.hset(
+                    key,
+                    mapping={
+                        "lat": str(latitude),
+                        "lon": str(longitude),
+                        "ts": now_iso,
+                    },
+                )
+                # TTL raisonnable (par ex. 24h) pour éviter d'accumuler les clés mortes
+                with suppress(Exception):
+                    redis_client.expire(key, 24 * 3600)
+            except Exception as e_redis:
+                logger.exception("❌ Erreur écriture Redis driver_location pour driver %s: %s", driver.id, e_redis)
+
+            try:
+                # 🔹 DB: stocker aussi sur le modèle Driver (fallback si Redis down)
+                driver.latitude = latitude
+                driver.longitude = longitude
+                db.session.add(driver)
+                db.session.commit()
+            except Exception as e_db:
+                db.session.rollback()
+                logger.exception("❌ Erreur mise à jour DB driver_location pour driver %s: %s", driver.id, e_db)
+
+            # 7. Diffuser la position aux rooms de l'entreprise
             company_room = f"company_{company_id_val}"
             cast("Any", emit)(
                 "driver_location_update",
@@ -411,7 +462,7 @@ def init_chat_socket(socketio: SocketIO):
                     "first_name": getattr(getattr(driver, "user", None), "first_name", None),
                     "latitude": latitude,
                     "longitude": longitude,
-                    "timestamp": datetime.now(UTC).isoformat(),
+                    "timestamp": now_iso,
                 },
                 room=company_room,
             )
@@ -421,130 +472,130 @@ def init_chat_socket(socketio: SocketIO):
             logger.exception("❌ Erreur driver_location : %s", e)
             emit("error", {"error": str(e)})
 
-
-
     @socketio.on("join_company")
     def handle_join_company(data=None):  # noqa: ARG001
-           try:
-               # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
-               sid = _get_sid()
-               sid_data = _SID_INDEX.get(sid, {})
-               user_public_id = sid_data.get("user_public_id")
-               user_role = sid_data.get("role")
+        try:
+            # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
+            sid = _get_sid()
+            sid_data = _SID_INDEX.get(sid, {})
+            user_public_id = sid_data.get("user_public_id")
+            user_role = sid_data.get("role")
 
-               if not user_public_id:
-                   emit("error", {"error": "Session JWT introuvable. Reconnectez-vous."})
-                   return
+            if not user_public_id:
+                emit("error", {"error": "Session JWT introuvable. Reconnectez-vous."})
+                return
 
-               # Récupérer user depuis public_id
-               user = User.query.filter_by(public_id=user_public_id).first()
-               if not user:
-                   emit("error", {"error": "Utilisateur introuvable."})
-                   return
+            # Récupérer user depuis public_id
+            user = User.query.filter_by(public_id=user_public_id).first()
+            if not user:
+                emit("error", {"error": "Utilisateur introuvable."})
+                return
 
-               if user_role == "company":
-                   company = Company.query.filter_by(user_id=user.id).first()
-                   if not company:
-                       emit("error", {"error": "Entreprise introuvable."})
-                       return
+            if user_role == "company":
+                company = Company.query.filter_by(user_id=user.id).first()
+                if not company:
+                    emit("error", {"error": "Entreprise introuvable."})
+                    return
 
-                   room = f"company_{company.id}"
-                   join_room(room)
-                   emit("joined_company", {"company_id": company.id, "room": room})
-                   logger.info("🏢 Company %s joined room: %s", company.id, room)
-               elif user_role == "driver":
-                   driver = Driver.query.filter_by(user_id=user.id).first()
-                   if not driver or not driver.company_id:
-                       emit("error", {"error": "Chauffeur ou entreprise associée introuvable."})
-                       return
+                room = f"company_{company.id}"
+                join_room(room)
+                emit("joined_company", {"company_id": company.id, "room": room})
+                logger.info("🏢 Company %s joined room: %s", company.id, room)
+            elif user_role == "driver":
+                driver = Driver.query.filter_by(user_id=user.id).first()
+                if not driver or not driver.company_id:
+                    emit("error", {"error": "Chauffeur ou entreprise associée introuvable."})
+                    return
 
-                   room = f"company_{driver.company_id}"
-                   join_room(room)
-                   emit("joined_company", {"company_id": driver.company_id, "room": room})
-                   logger.info("🚗 Driver %s joined company room: %s", driver.id, room)
-               else:
-                   emit("error", {"error": "Rôle non autorisé pour rejoindre une room entreprise."})
-           except Exception as e:
-               logger.exception("❌ Error in join_company: %s", e)
-               emit("error", {"error": str(e)})
-
+                room = f"company_{driver.company_id}"
+                join_room(room)
+                emit("joined_company", {"company_id": driver.company_id, "room": room})
+                logger.info("🚗 Driver %s joined company room: %s", driver.id, room)
+            else:
+                emit("error", {"error": "Rôle non autorisé pour rejoindre une room entreprise."})
+        except Exception as e:
+            logger.exception("❌ Error in join_company: %s", e)
+            emit("error", {"error": str(e)})
 
     @socketio.on("get_driver_locations")
     def handle_get_driver_locations():
-           try:
-               # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
-               sid = _get_sid()
-               company_info = _SID_INDEX.get(sid, {})
-               user_public_id = company_info.get("user_public_id")
-               user_role = company_info.get("role")
-               company_id = company_info.get("company_id")
+        try:
+            # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
+            sid = _get_sid()
+            company_info = _SID_INDEX.get(sid, {})
+            user_public_id = company_info.get("user_public_id")
+            user_role = company_info.get("role")
+            company_id = company_info.get("company_id")
 
-               if not user_public_id or user_role != "company":
-                   emit("error", {"error": "Accès non autorisé pour la demande de localisation."})
-                   return
+            if not user_public_id or user_role != "company":
+                emit("error", {"error": "Accès non autorisé pour la demande de localisation."})
+                return
 
-               if not company_id:
-                   emit("error", {"error": "Entreprise non identifiée."})
-                   return
+            if not company_id:
+                emit("error", {"error": "Entreprise non identifiée."})
+                return
 
-               # Get all drivers for this company
-               drivers = Driver.query.filter_by(company_id=company_id).all()
+            # Get all drivers for this company
+            drivers = Driver.query.filter_by(company_id=company_id).all()
 
-               # For each driver, get location from Redis or DB
-               for driver in drivers:
-                   try:
-                       # Try Redis first
-                       key = f"driver:{driver.id}:loc"
-                       h_raw = redis_client.hgetall(key)
-                       # Calme Pylance: redis-py retourne un dict[bytes, bytes]
-                       h: Mapping[bytes, Any] = cast("Mapping[bytes, Any]", h_raw)
+            # For each driver, get location from Redis or DB
+            for driver in drivers:
+                try:
+                    # Try Redis first
+                    key = f"driver:{driver.id}:loc"
+                    h_raw = redis_client.hgetall(key)
+                    # Calme Pylance: redis-py retourne un dict[bytes, bytes]
+                    h: Mapping[bytes, Any] = cast("Mapping[bytes, Any]", h_raw)
 
-                       if h:
-                           # Redis returns bytes -> decode
-                           def _dec(v):
-                               try:
-                                   return v.decode()
-                               except Exception:
-                                   return v
+                    if h:
+                        # Redis returns bytes -> decode
+                        def _dec(v):
+                            try:
+                                return v.decode()
+                            except Exception:
+                                return v
 
-                           loc_data = {
-                               k.decode(): _dec(v)
-                               for k, v in h.items()
-                           }
+                        loc_data = {k.decode(): _dec(v) for k, v in h.items()}
 
-                           # Cast numeric fields
-                           for kf in ("lat","lon","speed","heading","accuracy"):
-                               if kf in loc_data:
-                                   with suppress(Exception):
-                                       loc_data[kf] = float(loc_data[kf])
+                        # Cast numeric fields
+                        for kf in ("lat", "lon", "speed", "heading", "accuracy"):
+                            if kf in loc_data:
+                                with suppress(Exception):
+                                    loc_data[kf] = float(loc_data[kf])
 
-                           # Emit location to the company room
-                           cast("Any", emit)("driver_location_update", {
-                               "driver_id": driver.id,
-                               "first_name": getattr(getattr(driver, "user", None), "first_name", None),
-                               "latitude": loc_data.get("lat"),
-                               "longitude": loc_data.get("lon"),
-                               "timestamp": loc_data.get("ts") or datetime.now(UTC).isoformat(),
-                           })
-                       elif (driver.latitude is not None) and (driver.longitude is not None):
-                           # Fallback to DB if Redis doesnt have data
-                           cast("Any", emit)("driver_location_update", {
-                               "driver_id": driver.id,
-                               "first_name": getattr(getattr(driver, "user", None), "first_name", None),
-                               "latitude": driver.latitude,
-                               "longitude": driver.longitude,
-                               "timestamp": datetime.now(UTC).isoformat(),
-                           })
-                   except Exception as e:
-                       # driver vient du for → devrait exister, mais on défend le log quand même
-                       safe_id = getattr(driver, "id", None)
-                       logger.exception("❌ Error sending driver location for driver %s: %s", safe_id, e)
+                        # Emit location to the company room
+                        cast("Any", emit)(
+                            "driver_location_update",
+                            {
+                                "driver_id": driver.id,
+                                "first_name": getattr(getattr(driver, "user", None), "first_name", None),
+                                "latitude": loc_data.get("lat"),
+                                "longitude": loc_data.get("lon"),
+                                "timestamp": loc_data.get("ts") or datetime.now(UTC).isoformat(),
+                            },
+                        )
+                    elif (driver.latitude is not None) and (driver.longitude is not None):
+                        # Fallback to DB if Redis doesnt have data
+                        cast("Any", emit)(
+                            "driver_location_update",
+                            {
+                                "driver_id": driver.id,
+                                "first_name": getattr(getattr(driver, "user", None), "first_name", None),
+                                "latitude": driver.latitude,
+                                "longitude": driver.longitude,
+                                "timestamp": datetime.now(UTC).isoformat(),
+                            },
+                        )
+                except Exception as e:
+                    # driver vient du for → devrait exister, mais on défend le log quand même
+                    safe_id = getattr(driver, "id", None)
+                    logger.exception("❌ Error sending driver location for driver %s: %s", safe_id, e)
 
-               logger.info("📡 Sent locations for %s drivers to company %s", len(drivers), company_id)
+            logger.info("📡 Sent locations for %s drivers to company %s", len(drivers), company_id)
 
-           except Exception as e:
-               logger.exception("❌ Error in get_driver_locations: %s", e)
-               emit("error", {"error": str(e)})
+        except Exception as e:
+            logger.exception("❌ Error in get_driver_locations: %s", e)
+            emit("error", {"error": str(e)})
 
     @socketio.on("disconnect")
     def handle_disconnect():
@@ -554,8 +605,12 @@ def init_chat_socket(socketio: SocketIO):
 
     # Référencer les handlers pour indiquer qu'ils sont utilisés par Socket.IO
     _registered_handlers = (
-        handle_connect, handle_team_chat, handle_join_driver_room, 
-        handle_driver_location, handle_join_company, 
-        handle_get_driver_locations, handle_disconnect
+        handle_connect,
+        handle_team_chat,
+        handle_join_driver_room,
+        handle_driver_location,
+        handle_join_company,
+        handle_get_driver_locations,
+        handle_disconnect,
     )
     # Les handlers sont enregistrés via @socketio.on() ci-dessus
