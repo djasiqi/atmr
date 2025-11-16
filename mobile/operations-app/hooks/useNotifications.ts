@@ -5,6 +5,7 @@ import type { NotificationBehavior } from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device";
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/services/api";
 import { getErrorMessage, logError } from "@/utils/errorHandler";
@@ -29,6 +30,17 @@ export const useNotifications = () => {
     // Ne rien faire tant que l'utilisateur n'est pas chargé et identifié
     // Et ne rien faire sur web (expo-notifications non supporté)
     if (Platform.OS === "web" || loading || !driver) {
+      return;
+    }
+
+    // Désactiver proprement les notifications en dev/local (évite FIS_AUTH_ERROR)
+    // Dev Client/Bare en local sans config Firebase ne peut pas obtenir de token fiable
+    const isDevEnv = __DEV__ === true;
+    const isBare = Constants.executionEnvironment === "bare";
+    const forceDevPush =
+      String(process.env.EXPO_PUBLIC_ENABLE_PUSH_DEV || "").trim() === "1";
+    if ((isDevEnv || isBare) && !forceDevPush) {
+      console.log("🔔 Notifications désactivées en développement/local - skip registration");
       return;
     }
 
@@ -158,8 +170,13 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
       });
     }
 
-    // ✅ Pas de projectId en dur (Expo SDK récent : OK)
-    const token = await Notifications.getExpoPushTokenAsync();
+    // ✅ Fournir projectId si disponible (SDK récents + Dev Client)
+    const projectId =
+      (Constants as any)?.expoConfig?.extra?.eas?.projectId ||
+      (Constants as any)?.easConfig?.projectId;
+    const token = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined
+    );
 
     console.log("📱 Expo push token:", token.data.substring(0, 50) + "...");
 
