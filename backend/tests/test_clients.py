@@ -1,6 +1,7 @@
 """
 Tests pour les routes clients (CRUD, validation, search).
 """
+
 import pytest
 
 from models import Client, User, UserRole
@@ -32,11 +33,7 @@ def test_create_client(client, auth_headers, db, sample_company):
 def test_client_validation_email_required():
     """Email requis pour clients self-service."""
     # Test unitaire du modèle
-    user = User(
-        username="testclient",
-        email="client@test.com",
-        role=UserRole.client
-    )
+    user = User(username="testclient", email="client@test.com", role=UserRole.client)
 
     # Email est requis
     assert user.email is not None
@@ -95,7 +92,7 @@ def test_company_clients_pagination(client, auth_headers, db, sample_company, sa
             first_name=f"Client{i}",
             last_name=f"Test{i}",
             phone=f"07912345{i:02d}",
-            address=f"Rue Test {i}, 1000 Lausanne"
+            address=f"Rue Test {i}, 1000 Lausanne",
         )
         user.password = bcrypt.generate_password_hash("password123").decode("utf-8")
         db.session.add(user)
@@ -107,7 +104,7 @@ def test_company_clients_pagination(client, auth_headers, db, sample_company, sa
             client_type=ClientType.PRIVATE,  # Pas SELF_SERVICE
             billing_address=f"Rue Test {i}, 1000 Lausanne",
             contact_email=f"client{i}@example.com",
-            contact_phone=f"07912345{i:02d}"
+            contact_phone=f"07912345{i:02d}",
         )
         db.session.add(client_obj)
     db.session.commit()
@@ -143,6 +140,8 @@ def test_company_clients_pagination(client, auth_headers, db, sample_company, sa
 
 def test_company_clients_search_pagination(client, auth_headers, db, sample_company):
     """GET /companies/me/clients?search=Client&page=1&per_page=3 combine recherche et pagination."""
+    from ext import bcrypt
+    from models import ClientType
 
     # Créer 8 clients dont 5 commencent par "Client"
     for i in range(5):
@@ -152,7 +151,7 @@ def test_company_clients_search_pagination(client, auth_headers, db, sample_comp
             role=UserRole.client,
             first_name=f"ClientSearch{i}",
             last_name=f"Test{i}",
-            phone=f"07912346{i:02d}"
+            phone=f"07912346{i:02d}",
         )
         user.password = bcrypt.generate_password_hash("password123").decode("utf-8")
         db.session.add(user)
@@ -164,7 +163,7 @@ def test_company_clients_search_pagination(client, auth_headers, db, sample_comp
             client_type=ClientType.PRIVATE,
             billing_address=f"Rue Test {i}",
             contact_email=f"clientsearch{i}@example.com",
-            contact_phone=f"07912346{i:02d}"
+            contact_phone=f"07912346{i:02d}",
         )
         db.session.add(client_obj)
 
@@ -176,7 +175,7 @@ def test_company_clients_search_pagination(client, auth_headers, db, sample_comp
             role=UserRole.client,
             first_name=f"Other{i}",
             last_name=f"Name{i}",
-            phone=f"07912347{i:02d}"
+            phone=f"07912347{i:02d}",
         )
         user.password = bcrypt.generate_password_hash("password123").decode("utf-8")
         db.session.add(user)
@@ -188,7 +187,7 @@ def test_company_clients_search_pagination(client, auth_headers, db, sample_comp
             client_type=ClientType.PRIVATE,
             billing_address=f"Rue Other {i}",
             contact_email=f"other{i}@example.com",
-            contact_phone=f"07912347{i:02d}"
+            contact_phone=f"07912347{i:02d}",
         )
         db.session.add(client_obj)
 

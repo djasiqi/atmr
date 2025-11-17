@@ -56,7 +56,7 @@ class TestShadowModeManager:
         assert hasattr(shadow_manager, "comparison_history")
         assert hasattr(shadow_manager, "kpi_metrics")
 
-    def test_decision_comparison(self, ____________________________________________________________________________________________________shadow_manager, mock_rl_agent):
+    def test_decision_comparison(self, shadow_manager, mock_rl_agent):
         """Test la comparaison des décisions."""
         # Données de test
         state = [0.1, 0.2, 0.3, 0.4, 0.5]

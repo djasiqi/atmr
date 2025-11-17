@@ -16,7 +16,7 @@ import pytest
 try:
     from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
 except ImportError:
-        NStepBuffer = None
+    NStepBuffer = None
     NStepPrioritizedBuffer = None
 
 

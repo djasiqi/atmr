@@ -1,6 +1,7 @@
 """
 Tests ultra-simplifiés pour hyperparameter_tuner.py - Couverture 95%+
 """
+
 import json
 from unittest.mock import MagicMock, Mock, patch
 
@@ -30,7 +31,7 @@ class TestHyperparameterTuner:
             n_training_episodes=0.500,
             n_eval_episodes=50,
             study_name="custom_study",
-            storage="sqlite:///test.db"
+            storage="sqlite:///test.db",
         )
 
         assert tuner.n_trials == 100
@@ -58,9 +59,15 @@ class TestHyperparameterTuner:
 
         # Vérifier que la configuration contient les clés attendues
         expected_keys = [
-            "learning_rate", "gamma", "epsilon_start", "epsilon_end",
-            "epsilon_decay", "batch_size", "buffer_size", "num_drivers",
-            "max_bookings"
+            "learning_rate",
+            "gamma",
+            "epsilon_start",
+            "epsilon_end",
+            "epsilon_decay",
+            "batch_size",
+            "buffer_size",
+            "num_drivers",
+            "max_bookings",
         ]
         for key in expected_keys:
             assert key in config
@@ -98,30 +105,32 @@ class TestHyperparameterTuner:
         mock_trial.suggest_categorical.side_effect = [128, 100000, True, True, True, True] * 10
         mock_trial.suggest_int.side_effect = [3, 10, 3] * 10
 
-        with patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class:
-            with patch("services.rl.hyperparameter_tuner.ImprovedDQNAgent") as mock_agent_class:
-                # Mock environment
-                mock_env = Mock()
-                mock_env.observation_space.shape = [50]
-                mock_env.action_space.n = 20
-                mock_env.reset.return_value = (Mock(), {})
-                mock_env.step.return_value = (Mock(), 10, False, False, {})
-                mock_env_class.return_value = mock_env
+        with (
+            patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
+            patch("services.rl.hyperparameter_tuner.ImprovedDQNAgent") as mock_agent_class,
+        ):
+            # Mock environment
+            mock_env = Mock()
+            mock_env.observation_space.shape = [50]
+            mock_env.action_space.n = 20
+            mock_env.reset.return_value = (Mock(), {})
+            mock_env.step.return_value = (Mock(), 10, False, False, {})
+            mock_env_class.return_value = mock_env
 
-                # Mock agent
-                mock_agent = Mock()
-                mock_agent.select_action.return_value = 0
-                mock_agent_class.return_value = mock_agent
+            # Mock agent
+            mock_agent = Mock()
+            mock_agent.select_action.return_value = 0
+            mock_agent_class.return_value = mock_agent
 
-                # Exécuter objective
-                reward = tuner.objective(mock_trial)
+            # Exécuter objective
+            reward = tuner.objective(mock_trial)
 
-                # Vérifier que l'environnement et l'agent sont créés
-                mock_env_class.assert_called_once()
-                mock_agent_class.assert_called_once()
+            # Vérifier que l'environnement et l'agent sont créés
+            mock_env_class.assert_called_once()
+            mock_agent_class.assert_called_once()
 
-                # Vérifier que le reward est retourné
-                assert isinstance(reward, float)
+            # Vérifier que le reward est retourné
+            assert isinstance(reward, float)
 
     def test_objective_function_with_pruning(self):
         """Test objective function avec pruning"""
@@ -134,24 +143,26 @@ class TestHyperparameterTuner:
         mock_trial.suggest_int.side_effect = [3, 10, 3] * 10
         mock_trial.should_prune.return_value = True
 
-        with patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class:
-            with patch("services.rl.hyperparameter_tuner.ImprovedDQNAgent") as mock_agent_class:
-                # Mock environment
-                mock_env = Mock()
-                mock_env.observation_space.shape = [50]
-                mock_env.action_space.n = 20
-                mock_env.reset.return_value = (Mock(), {})
-                mock_env.step.return_value = (Mock(), 10, False, False, {})
-                mock_env_class.return_value = mock_env
+        with (
+            patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
+            patch("services.rl.hyperparameter_tuner.ImprovedDQNAgent") as mock_agent_class,
+        ):
+            # Mock environment
+            mock_env = Mock()
+            mock_env.observation_space.shape = [50]
+            mock_env.action_space.n = 20
+            mock_env.reset.return_value = (Mock(), {})
+            mock_env.step.return_value = (Mock(), 10, False, False, {})
+            mock_env_class.return_value = mock_env
 
-                # Mock agent
-                mock_agent = Mock()
-                mock_agent.select_action.return_value = 0
-                mock_agent_class.return_value = mock_agent
+            # Mock agent
+            mock_agent = Mock()
+            mock_agent.select_action.return_value = 0
+            mock_agent_class.return_value = mock_agent
 
-                # Exécuter objective avec pruning
-                with pytest.raises(optuna.TrialPruned):
-                    tuner.objective(mock_trial)
+            # Exécuter objective avec pruning
+            with pytest.raises(optuna.TrialPruned):
+                tuner.objective(mock_trial)
 
     def test_optimize(self):
         """Test optimize method"""
@@ -213,7 +224,7 @@ class TestHyperparameterTuner:
             "batch_size": 128,
             "buffer_size": 100000,
             "num_drivers": 5,
-            "max_bookings": 15
+            "max_bookings": 15,
         }
         mock_study.best_value = 100
         mock_study.best_trial = Mock()
@@ -276,11 +287,7 @@ class TestHyperparameterTuner:
         trials = []
         for i in range(3):
             trial = Mock()
-            trial.params = {
-                "learning_rate": 0.001 + i * 0.0001,
-                "gamma": 0.95,
-                "batch_size": 128
-            }
+            trial.params = {"learning_rate": 0.001 + i * 0.0001, "gamma": 0.95, "batch_size": 128}
             trials.append(trial)
 
         result = tuner._analyze_triplet_gagnant(trials)
@@ -297,7 +304,7 @@ class TestHyperparameterTuner:
             "use_prioritized_replay": True,
             "use_n_step": True,
             "use_dueling": True,
-            "learning_rate": 0.001
+            "learning_rate": 0.001,
         }
 
         features = tuner._extract_features_used(params)
@@ -322,7 +329,7 @@ class TestHyperparameterTuner:
                 "use_prioritized_replay": i % 3 == 0,
                 "use_n_step": i % 4 == 0,
                 "use_dueling": i % 5 == 0,
-                "learning_rate": 0.001 + i * 0.0001
+                "learning_rate": 0.001 + i * 0.0001,
             }
             trial.value = 100 - i * 10
             trials.append(trial)
@@ -393,11 +400,7 @@ class TestHyperparameterTuner:
 
         # Mock trial
         trial = Mock()
-        trial.params = {
-            "learning_rate": 0.001,
-            "gamma": 0.95,
-            "batch_size": 128
-        }
+        trial.params = {"learning_rate": 0.001, "gamma": 0.95, "batch_size": 128}
 
         result = tuner._analyze_triplet_gagnant([trial])
 
@@ -412,11 +415,7 @@ class TestHyperparameterTuner:
         trials = []
         for _i in range(3):
             trial = Mock()
-            trial.params = {
-                "learning_rate": 0.001,
-                "gamma": 0.95,
-                "batch_size": 128
-            }
+            trial.params = {"learning_rate": 0.001, "gamma": 0.95, "batch_size": 128}
             trial.value = 100  # Même valeur
             trials.append(trial)
 

@@ -1,6 +1,7 @@
 """Tests corrects pour shadow_mode_manager.py."""
 
 import json
+import math
 from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
@@ -39,30 +40,14 @@ class TestShadowModeManagerCorrect:
         """Test logging comparaison décisions basique."""
         manager = ShadowModeManager()
 
-        human_decision = {
-            "driver_id": 1,
-            "eta_minutes": 15,
-            "delay_minutes": 0
-        }
+        human_decision = {"driver_id": 1, "eta_minutes": 15, "delay_minutes": 0}
 
-        rl_decision = {
-            "driver_id": 2,
-            "eta_minutes": 12,
-            "delay_minutes": 0
-        }
+        rl_decision = {"driver_id": 2, "eta_minutes": 12, "delay_minutes": 0}
 
-        context = {
-            "booking_id": 1,
-            "pickup_time": datetime.now(),
-            "distance_km": 5.0
-        }
+        context = {"booking_id": 1, "pickup_time": datetime.now(), "distance_km": 5.0}
 
         kpis = manager.log_decision_comparison(
-            company_id="1",
-            booking_id="1",
-            human_decision=human_decision,
-            rl_decision=rl_decision,
-            context=context
+            company_id="1", booking_id="1", human_decision=human_decision, rl_decision=rl_decision, context=context
         )
 
         assert isinstance(kpis, dict)
@@ -76,30 +61,14 @@ class TestShadowModeManagerCorrect:
         """Test logging avec valeurs None."""
         manager = ShadowModeManager()
 
-        human_decision = {
-            "driver_id": 1,
-            "eta_minutes": None,
-            "delay_minutes": None
-        }
+        human_decision = {"driver_id": 1, "eta_minutes": None, "delay_minutes": None}
 
-        rl_decision = {
-            "driver_id": 2,
-            "eta_minutes": None,
-            "delay_minutes": None
-        }
+        rl_decision = {"driver_id": 2, "eta_minutes": None, "delay_minutes": None}
 
-        context = {
-            "booking_id": 1,
-            "pickup_time": datetime.now(),
-            "distance_km": 5.0
-        }
+        context = {"booking_id": 1, "pickup_time": datetime.now(), "distance_km": 5.0}
 
         kpis = manager.log_decision_comparison(
-            company_id="1",
-            booking_id="1",
-            human_decision=human_decision,
-            rl_decision=rl_decision,
-            context=context
+            company_id="1", booking_id="1", human_decision=human_decision, rl_decision=rl_decision, context=context
         )
 
         assert isinstance(kpis, dict)
@@ -110,23 +79,11 @@ class TestShadowModeManagerCorrect:
         """Test calcul KPIs basique."""
         manager = ShadowModeManager()
 
-        human_decision = {
-            "driver_id": 1,
-            "eta_minutes": 15,
-            "delay_minutes": 0
-        }
+        human_decision = {"driver_id": 1, "eta_minutes": 15, "delay_minutes": 0}
 
-        rl_decision = {
-            "driver_id": 2,
-            "eta_minutes": 12,
-            "delay_minutes": 0
-        }
+        rl_decision = {"driver_id": 2, "eta_minutes": 12, "delay_minutes": 0}
 
-        context = {
-            "booking_id": 1,
-            "pickup_time": datetime.now(),
-            "distance_km": 5.0
-        }
+        context = {"booking_id": 1, "pickup_time": datetime.now(), "distance_km": 5.0}
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
 
@@ -293,7 +250,7 @@ class TestShadowModeManagerCorrect:
             "pickup_time": datetime.now(),
             "distance_km": 5.0,
             "traffic_level": "high",
-            "weather": "rain"
+            "weather": "rain",
         }
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
@@ -339,7 +296,7 @@ class TestShadowModeManagerCorrect:
             "eta_minutes": 20,
             "delay_minutes": 5,
             "confidence": 0.8,
-            "reason": "Closest driver"
+            "reason": "Closest driver",
         }
 
         rl_decision = {
@@ -347,7 +304,7 @@ class TestShadowModeManagerCorrect:
             "eta_minutes": 15,
             "delay_minutes": 2,
             "confidence": 0.9,
-            "reason": "Better traffic route"
+            "reason": "Better traffic route",
         }
 
         context = {
@@ -356,7 +313,7 @@ class TestShadowModeManagerCorrect:
             "distance_km": 5.0,
             "traffic_level": "high",
             "weather": "rain",
-            "time_of_day": "rush_hour"
+            "time_of_day": "rush_hour",
         }
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
@@ -536,7 +493,7 @@ class TestShadowModeManagerCorrect:
             "confidence": 0.85,
             "reason": "Driver is closest",
             "traffic_factor": 1.2,
-            "weather_factor": 1.1
+            "weather_factor": 1.1,
         }
 
         rl_decision = {
@@ -546,7 +503,7 @@ class TestShadowModeManagerCorrect:
             "confidence": 0.92,
             "reason": "Better route optimization",
             "traffic_factor": 1.0,
-            "weather_factor": 1.0
+            "weather_factor": 1.0,
         }
 
         context = {
@@ -557,7 +514,7 @@ class TestShadowModeManagerCorrect:
             "weather": "rain",
             "time_of_day": "rush_hour",
             "driver_experience": "expert",
-            "vehicle_type": "sedan"
+            "vehicle_type": "sedan",
         }
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)

@@ -17,27 +17,35 @@ class TestImprovedDQNAgentExtended:
 
     def test_init_with_torch_import_error(self):
         """Test initialisation avec erreur d'import PyTorch"""
-        with patch("services.rl.improved_dqn_agent.torch", None):
-            with pytest.raises(ImportError, match="PyTorch is required"):
-                ImprovedDQNAgent(state_dim=62, action_dim=51)
+        with (
+            patch("services.rl.improved_dqn_agent.torch", None),
+            pytest.raises(ImportError, match="PyTorch is required"),
+        ):
+            ImprovedDQNAgent(state_dim=62, action_dim=51)
 
     def test_init_with_n_step_import_error(self):
         """Test initialisation avec erreur d'import N-step"""
-        with patch("services.rl.improved_dqn_agent.create_n_step_buffer", None):
-            with pytest.raises(ImportError, match="N-step learning"):
-                ImprovedDQNAgent(state_dim=62, action_dim=51, use_n_step=True)
+        with (
+            patch("services.rl.improved_dqn_agent.create_n_step_buffer", None),
+            pytest.raises(ImportError, match="N-step learning"),
+        ):
+            ImprovedDQNAgent(state_dim=62, action_dim=51, use_n_step=True)
 
     def test_init_with_dueling_import_error(self):
         """Test initialisation avec erreur d'import Dueling"""
-        with patch("services.rl.improved_dqn_agent.DuelingQNetwork", None):
-            with pytest.raises(ImportError, match="Dueling DQN"):
-                ImprovedDQNAgent(state_dim=62, action_dim=51, use_dueling=True)
+        with (
+            patch("services.rl.improved_dqn_agent.DuelingQNetwork", None),
+            pytest.raises(ImportError, match="Dueling DQN"),
+        ):
+            ImprovedDQNAgent(state_dim=62, action_dim=51, use_dueling=True)
 
     def test_init_with_per_import_error(self):
         """Test initialisation avec erreur d'import PER"""
-        with patch("services.rl.improved_dqn_agent.PrioritizedReplayBuffer", None):
-            with pytest.raises(ImportError, match="Prioritized Experience Replay"):
-                ImprovedDQNAgent(state_dim=62, action_dim=51, use_prioritized_replay=True)
+        with (
+            patch("services.rl.improved_dqn_agent.PrioritizedReplayBuffer", None),
+            pytest.raises(ImportError, match="Prioritized Experience Replay"),
+        ):
+            ImprovedDQNAgent(state_dim=62, action_dim=51, use_prioritized_replay=True)
 
     def test_select_action_with_rl_logger_import_error(self):
         """Test select_action avec erreur d'import RLLogger"""
@@ -258,7 +266,7 @@ class TestImprovedDQNAgentExtended:
                 "training_step": 0,
                 "episode_count": 0,
                 "losses": [],
-                "config": {}
+                "config": {},
             }
             agent.load("test_model.pth")
             mock_load.assert_called_once()

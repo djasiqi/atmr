@@ -60,7 +60,7 @@ class TestShadowModeManager:
             booking_id="booking_1",
             human_decision=human_decision,
             rl_decision=rl_decision,
-            context=context
+            context=context,
         )
 
         assert isinstance(kpis, dict)
@@ -85,7 +85,7 @@ class TestShadowModeManager:
             booking_id="booking_2",
             human_decision=human_decision,
             rl_decision=rl_decision,
-            context=context
+            context=context,
         )
 
         assert isinstance(kpis, dict)
@@ -107,7 +107,7 @@ class TestShadowModeManager:
             booking_id="booking_3",
             human_decision=human_decision,
             rl_decision=rl_decision,
-            context=context
+            context=context,
         )
 
         assert isinstance(kpis, dict)
@@ -129,7 +129,7 @@ class TestShadowModeManager:
             booking_id="booking_4",
             human_decision=human_decision,
             rl_decision=rl_decision,
-            context=context
+            context=context,
         )
 
         assert isinstance(kpis, dict)
@@ -151,7 +151,7 @@ class TestShadowModeManager:
             booking_id="booking_5",
             human_decision=human_decision,
             rl_decision=rl_decision,
-            context=context
+            context=context,
         )
 
         assert isinstance(kpis, dict)
@@ -173,7 +173,7 @@ class TestShadowModeManager:
             booking_id="booking_8",
             human_decision=human_decision,
             rl_decision=rl_decision,
-            context=context
+            context=context,
         )
 
         assert isinstance(kpis, dict)
@@ -195,7 +195,7 @@ class TestShadowModeManager:
             booking_id="booking_9",
             human_decision=human_decision,
             rl_decision=rl_decision,
-            context=context
+            context=context,
         )
 
         assert isinstance(kpis, dict)
@@ -209,15 +209,17 @@ class TestShadowModeManager:
         manager = ShadowModeManager()
 
         # Mock pour lever une exception
-        with patch.object(manager, "_calculate_kpis", side_effect=Exception("KPI calculation error")):
-            with pytest.raises(Exception):
-                manager.log_decision_comparison(
-                    company_id="company_10",
-                    booking_id="booking_10",
-                    human_decision={"driver_id": "driver_1"},
-                    rl_decision={"driver_id": "driver_2"},
-                    context={"booking_id": "booking_10"}
-                )
+        with (
+            patch.object(manager, "_calculate_kpis", side_effect=Exception("KPI calculation error")),
+            pytest.raises(Exception, match="KPI calculation error"),
+        ):
+            manager.log_decision_comparison(
+                company_id="company_10",
+                booking_id="booking_10",
+                human_decision={"driver_id": "driver_1"},
+                rl_decision={"driver_id": "driver_2"},
+                context={"booking_id": "booking_10"},
+            )
 
     def test_log_decision_comparison_with_large_values(self):
         """Test enregistrement de comparaison avec valeurs importantes."""
@@ -232,7 +234,7 @@ class TestShadowModeManager:
             booking_id="booking_11",
             human_decision=human_decision,
             rl_decision=rl_decision,
-            context=context
+            context=context,
         )
 
         assert isinstance(kpis, dict)
@@ -254,7 +256,7 @@ class TestShadowModeManager:
             booking_id="booking_12",
             human_decision=human_decision,
             rl_decision=rl_decision,
-            context=context
+            context=context,
         )
 
         assert isinstance(kpis, dict)
@@ -290,7 +292,7 @@ class TestShadowModeManager:
         rl_decision = {
             "driver_id": "driver_2",
             "eta_minutes": 12,
-            "alternative_drivers": ["driver_3", "driver_4", "driver_5"]
+            "alternative_drivers": ["driver_3", "driver_4", "driver_5"],
         }
         context = {"booking_id": "booking_1", "company_id": "company_1"}
 

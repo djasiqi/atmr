@@ -116,7 +116,7 @@ class TestModelRegistry:
         assert registry.current_path.exists()
         assert registry.registry_file.exists()
     
-    def test_model_registration(self, ____________________________________________________________________________________________________registry, sample_model, sample_metadata):
+    def test_model_registration(self, registry, sample_model, sample_metadata):
         """Teste l'enregistrement d'un modèle."""
         model_path = registry.register_model(sample_model, sample_metadata)
         
@@ -128,7 +128,7 @@ class TestModelRegistry:
         assert len(versions) == 1
         assert versions[0]["version"] == "v1.00"
     
-    def test_model_versioning(self, ____________________________________________________________________________________________________registry, sample_model):
+    def test_model_versioning(self, registry, sample_model):
         """Teste le versioning des modèles."""
         # Enregistrer plusieurs versions
         for i in range(3):
@@ -153,7 +153,7 @@ class TestModelRegistry:
         assert versions[1]["version"] == "v1.10"
         assert versions[2]["version"] == "v1.00"
     
-    def test_model_promotion(self, ____________________________________________________________________________________________________registry, sample_model, sample_metadata):
+    def test_model_promotion(self, registry, sample_model, sample_metadata):
         """Teste la promotion d'un modèle."""
         # Enregistrer le modèle
         registry.register_model(sample_model, sample_metadata)
@@ -175,7 +175,7 @@ class TestModelRegistry:
         current_model_path = registry.current_path / "test_model_dueling_dqn.pth"
         assert current_model_path.exists()
     
-    def test_model_promotion_kpi_validation(self, ____________________________________________________________________________________________________registry, sample_model):
+    def test_model_promotion_kpi_validation(self, registry, sample_model):
         """Teste la validation KPI lors de la promotion."""
         # Créer des métadonnées avec des métriques faibles
         metadata = ModelMetadata(
@@ -199,7 +199,7 @@ class TestModelRegistry:
         
         assert not success  # Doit échouer à cause des KPIs
     
-    def test_model_rollback(self, ____________________________________________________________________________________________________registry, sample_model):
+    def test_model_rollback(self, registry, sample_model):
         """Teste le rollback d'un modèle."""
         # Enregistrer plusieurs versions
         for i in range(3):
@@ -227,7 +227,7 @@ class TestModelRegistry:
         current_model = registry.get_current_model("test_model", "dueling_dqn")
         assert current_model["version"] == "v1.10"
     
-    def test_model_cleanup(self, ____________________________________________________________________________________________________registry, sample_model):
+    def test_model_cleanup(self, registry, sample_model):
         """Teste le nettoyage des anciennes versions."""
         # Enregistrer plus de versions que le seuil de conservation
         for i in range(7):
@@ -275,7 +275,7 @@ class TestModelPromotionValidator:
         """Crée un modèle de test."""
         return nn.Linear(10, 5)
     
-    def test_validation_success(self, ____________________________________________________________________________________________________validator, registry, sample_model):
+    def test_validation_success(self, validator, registry, sample_model):
         """Teste une validation réussie."""
         # Enregistrer un modèle avec de bonnes métriques
         metadata = ModelMetadata(
@@ -300,7 +300,7 @@ class TestModelPromotionValidator:
         assert is_valid
         assert len(issues) == 0
     
-    def test_validation_failure(self, ____________________________________________________________________________________________________validator, registry, sample_model):
+    def test_validation_failure(self, validator, registry, sample_model):
         """Teste une validation échouée."""
         # Enregistrer un modèle avec de mauvaises métriques
         metadata = ModelMetadata(

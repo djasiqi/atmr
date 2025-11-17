@@ -96,8 +96,8 @@ class TestNoisyLinear:
         layer = NoisyLinear(10, 5)
 
         # Test avec entrée de taille incorrecte
+        x = torch.randn(1, 11)  # Taille incorrecte
         with pytest.raises(RuntimeError):
-            x = torch.randn(1, 11)  # Taille incorrecte
             layer(x)
 
     def test_forward_with_zero_input(self):
@@ -195,12 +195,7 @@ class TestNoisyQNetwork:
 
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés."""
-        network = NoisyQNetwork(
-            state_size=0.100,
-            action_size=50,
-            hidden_sizes=[256, 256, 128],
-            std_init=0.3
-        )
+        network = NoisyQNetwork(state_size=0.100, action_size=50, hidden_sizes=[256, 256, 128], std_init=0.3)
 
         assert network.state_size == 100
         assert network.action_size == 50
@@ -282,8 +277,8 @@ class TestNoisyQNetwork:
         network = NoisyQNetwork(62, 51)
 
         # Test avec état de taille incorrecte
+        state = torch.randn(1, network.state_size + 1)  # Taille incorrecte
         with pytest.raises(RuntimeError):
-            state = torch.randn(1, network.state_size + 1)  # Taille incorrecte
             network(state)
 
     def test_forward_with_zero_input(self):
@@ -394,12 +389,7 @@ class TestNoisyDuelingQNetwork:
 
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés."""
-        network = NoisyDuelingQNetwork(
-            state_size=0.100,
-            action_size=50,
-            hidden_sizes=[256, 256, 128],
-            std_init=0.3
-        )
+        network = NoisyDuelingQNetwork(state_size=0.100, action_size=50, hidden_sizes=[256, 256, 128], std_init=0.3)
 
         assert network.state_size == 100
         assert network.action_size == 50
@@ -481,8 +471,8 @@ class TestNoisyDuelingQNetwork:
         network = NoisyDuelingQNetwork(62, 51)
 
         # Test avec état de taille incorrecte
+        state = torch.randn(1, network.state_size + 1)  # Taille incorrecte
         with pytest.raises(RuntimeError):
-            state = torch.randn(1, network.state_size + 1)  # Taille incorrecte
             network(state)
 
     def test_forward_with_zero_input(self):

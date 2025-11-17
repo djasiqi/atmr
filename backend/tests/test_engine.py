@@ -33,7 +33,7 @@ class TestEnginePublicAPI:
         assert result["meta"]["reason"] == "company_not_found"
         print("✅ Test company not found OK")
 
-    def test_run_no_data(self, ____________________________________________________________________________________________________db, dispatch_scenario):
+    def test_run_no_data(self, db, dispatch_scenario):
         """Test run() avec company valide mais pas de bookings/drivers."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -52,7 +52,7 @@ class TestEnginePublicAPI:
         assert result["meta"]["reason"] == "no_data"
         print("✅ Test no data OK")
 
-    def test_run_with_valid_scenario(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client, mock_ml_predictor):
+    def test_run_with_valid_scenario(self, db, dispatch_scenario, mock_osrm_client, mock_ml_predictor):
         """Test run() avec scénario complet et valide."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -72,7 +72,7 @@ class TestEnginePublicAPI:
 
         print("✅ Test run valide OK: {len(result['assignments'])} assignments")
 
-    def test_run_with_regular_first(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client):
+    def test_run_with_regular_first(self, db, dispatch_scenario, mock_osrm_client):
         """Test run() avec regular_first=True (2 passes)."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -91,7 +91,7 @@ class TestEnginePublicAPI:
         assert "unassigned" in result
         print("✅ Test regular_first OK: {len(result['assignments'])} assignments")
 
-    def test_run_with_overrides(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client):
+    def test_run_with_overrides(self, db, dispatch_scenario, mock_osrm_client):
         """Test run() avec overrides de settings."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -114,7 +114,7 @@ class TestEnginePublicAPI:
         assert isinstance(result["assignments"], list)
         print("✅ Test overrides OK")
 
-    def test_run_heuristic_only_mode(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client):
+    def test_run_heuristic_only_mode(self, db, dispatch_scenario, mock_osrm_client):
         """Test run() en mode heuristic_only."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -130,7 +130,7 @@ class TestEnginePublicAPI:
         assert "debug" in result
         print("✅ Test heuristic_only mode OK")
 
-    def test_run_solver_only_mode(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client):
+    def test_run_solver_only_mode(self, db, dispatch_scenario, mock_osrm_client):
         """Test run() en mode solver_only."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -153,7 +153,7 @@ class TestEnginePublicAPI:
             assert isinstance(result["assignments"], list)
             print("✅ Test solver_only mode OK")
 
-    def test_run_creates_dispatch_run(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client):
+    def test_run_creates_dispatch_run(self, db, dispatch_scenario, mock_osrm_client):
         """Test que run() crée bien un DispatchRun."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -182,7 +182,7 @@ class TestEnginePublicAPI:
 
         print("✅ Test création DispatchRun OK")
 
-    def test_run_reuses_existing_dispatch_run(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client):
+    def test_run_reuses_existing_dispatch_run(self, db, dispatch_scenario, mock_osrm_client):
         """Test que run() réutilise un DispatchRun existant."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -278,7 +278,7 @@ class TestEngineInternalFunctions:
         assert reasons == {}
         print("✅ Test analyze_unassigned_reasons vide OK")
 
-    def test_analyze_unassigned_reasons_no_drivers(self, ____________________________________________________________________________________________________db, simple_booking):
+    def test_analyze_unassigned_reasons_no_drivers(self, db, simple_booking):
         """Test _analyze_unassigned_reasons quand pas de drivers."""
         problem = {
             "bookings": [simple_booking],
@@ -293,7 +293,7 @@ class TestEngineInternalFunctions:
         assert "no_driver_available" in reasons[simple_booking.id]
         print("✅ Test analyze_unassigned_reasons no drivers OK")
 
-    def test_filter_problem(self, ____________________________________________________________________________________________________db, dispatch_scenario):
+    def test_filter_problem(self, db, dispatch_scenario):
         """Test _filter_problem crée bien un sous-problème."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -322,7 +322,7 @@ class TestEngineInternalFunctions:
 
         print("✅ Test _filter_problem OK")
 
-    def test_serialize_assignment(self, ____________________________________________________________________________________________________db, simple_assignment):
+    def test_serialize_assignment(self, db, simple_assignment):
         """Test _serialize_assignment."""
         result = engine._serialize_assignment(simple_assignment)
 
@@ -330,7 +330,7 @@ class TestEngineInternalFunctions:
         assert "booking_id" in result or hasattr(simple_assignment, "to_dict")
         print("✅ Test _serialize_assignment OK")
 
-    def test_serialize_booking(self, ____________________________________________________________________________________________________db, simple_booking):
+    def test_serialize_booking(self, db, simple_booking):
         """Test _serialize_booking."""
         result = engine._serialize_booking(simple_booking)
 
@@ -338,7 +338,7 @@ class TestEngineInternalFunctions:
         assert "id" in result
         print("✅ Test _serialize_booking OK")
 
-    def test_serialize_driver(self, ____________________________________________________________________________________________________db, simple_driver):
+    def test_serialize_driver(self, db, simple_driver):
         """Test _serialize_driver."""
         result = engine._serialize_driver(simple_driver)
 
@@ -350,13 +350,13 @@ class TestEngineInternalFunctions:
 class TestEngineApplyAndEmit:
     """Tests pour _apply_and_emit."""
 
-    def test_apply_and_emit_empty_assignments(self, ____________________________________________________________________________________________________db, sample_company):
+    def test_apply_and_emit_empty_assignments(self,db, sample_company):
         """Test _apply_and_emit avec liste vide."""
         engine._apply_and_emit(sample_company, [], dispatch_run_id=None)
         # Pas d'erreur attendue
         print("✅ Test _apply_and_emit vide OK")
 
-    def test_apply_and_emit_with_assignments(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client):
+    def test_apply_and_emit_with_assignments(self, db, dispatch_scenario, mock_osrm_client):
         """Test _apply_and_emit avec assignments valides."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -398,7 +398,7 @@ class TestEngineApplyAndEmit:
 class TestEngineEdgeCases:
     """Tests pour cas limites et gestion d'erreurs."""
 
-    def test_run_with_invalid_date(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client):
+    def test_run_with_invalid_date(self, db, dispatch_scenario, mock_osrm_client):
         """Test run() avec date invalide (fallback sur today)."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -413,7 +413,7 @@ class TestEngineEdgeCases:
         assert isinstance(result, dict)
         print("✅ Test date invalide OK")
 
-    def test_run_with_concurrent_lock(self, ____________________________________________________________________________________________________db, dispatch_scenario):
+    def test_run_with_concurrent_lock(self, db, dispatch_scenario):
         """Test run() quand verrou Redis est déjà pris."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -438,7 +438,7 @@ class TestEngineEdgeCases:
             # Libérer le verrou
             engine._release_day_lock(company.id, day.isoformat())
 
-    def test_run_handles_db_error_gracefully(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client):
+    def test_run_handles_db_error_gracefully(self, db, dispatch_scenario, mock_osrm_client):
         """Test que run() gère les erreurs DB proprement."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -463,7 +463,7 @@ class TestEngineEdgeCases:
             assert dispatch_run is not None
             print("✅ Test gestion erreur DB OK")
 
-    def test_run_with_empty_problem_bookings(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client):
+    def test_run_with_empty_problem_bookings(self, db, dispatch_scenario, mock_osrm_client):
         """Test run() quand build_problem_data retourne problème sans bookings."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -494,7 +494,7 @@ class TestEngineUtcnow:
 class TestEngineAdditionalCoverage:
     """Tests supplémentaires pour améliorer la couverture engine.py."""
 
-    def test_run_with_different_modes(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client):
+    def test_run_with_different_modes(self, db, dispatch_scenario, mock_osrm_client):
         """Test run() avec tous les modes disponibles."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -509,7 +509,7 @@ class TestEngineAdditionalCoverage:
 
         print("✅ Test modes multiples OK")
 
-    def test_run_with_overrides_dict(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client):
+    def test_run_with_overrides_dict(self, db, dispatch_scenario, mock_osrm_client):
         """Test run() avec dict overrides pour settings."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -530,7 +530,7 @@ class TestEngineAdditionalCoverage:
         assert isinstance(result["assignments"], list)
         print("✅ Test overrides OK")
 
-    def test_run_with_allow_emergency_flag(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client):
+    def test_run_with_allow_emergency_flag(self, db, dispatch_scenario, mock_osrm_client):
         """Test run() avec flag allow_emergency."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -555,7 +555,7 @@ class TestEngineAdditionalCoverage:
 
         print("✅ Test _begin_tx OK")
 
-    def test_analyze_unassigned_with_no_drivers(self, ____________________________________________________________________________________________________db, simple_booking):
+    def test_analyze_unassigned_with_no_drivers(self, db, simple_booking):
         """Test _analyze_unassigned_reasons sans drivers."""
         problem = {
             "bookings": [simple_booking],
@@ -575,7 +575,7 @@ class TestEngineAdditionalCoverage:
 
         print("✅ Test analyze_unassigned sans drivers OK")
 
-    def test_run_with_regular_first_false(self, ____________________________________________________________________________________________________db, dispatch_scenario, mock_osrm_client):
+    def test_run_with_regular_first_false(self, db, dispatch_scenario, mock_osrm_client):
         """Test run() avec regular_first=False."""
         scenario = dispatch_scenario
         company = scenario["company"]
@@ -602,7 +602,7 @@ def mock_redis(monkeypatch):
         def __init__(self):
             self.store = {}
 
-        def set(self, _____________________________________________________________________________________________________key, value, nx=False, ex=None):
+        def set(self, key, value, nx=False, ex=None):
             if nx and key in self.store:
                 return False
             self.store[key] = value

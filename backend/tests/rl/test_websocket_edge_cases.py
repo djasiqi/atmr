@@ -51,22 +51,16 @@ class TestWebSocketEventEdgeCases:
         # Mock d'un échec de connexion
         mock_socketio.emit.side_effect = Exception("Connection failed")
 
-        try:
+        with pytest.raises(Exception, match="Connection failed"):
             mock_socketio.emit("rl_update", {"status": "training"})
-        except Exception as e:
-            # L'erreur de connexion est attendue
-            assert "Connection failed" in str(e)
 
     def test_websocket_message_delivery_failure(self, mock_socketio):
         """Test échec de livraison de message WebSocket."""
         # Mock d'un échec de livraison
         mock_socketio.emit.side_effect = Exception("Message delivery failed")
 
-        try:
+        with pytest.raises(Exception, match="Message delivery failed"):
             mock_socketio.emit("rl_update", {"status": "training"})
-        except Exception as e:
-            # L'erreur de livraison est attendue
-            assert "Message delivery failed" in str(e)
 
     def test_websocket_large_message(self, mock_socketio):
         """Test message WebSocket de grande taille."""
@@ -74,19 +68,15 @@ class TestWebSocketEventEdgeCases:
         large_message = {
             "status": "training",
             "data": "x" * 10000,  # 10KB de données
-            "metadata": {"timestamp": time.time(), "episode": 1000}
+            "metadata": {"timestamp": time.time(), "episode": 1000},
         }
 
         # Mock d'un succès de livraison
         mock_socketio.emit.return_value = None
 
-        try:
-            mock_socketio.emit("rl_update", large_message)
-            # Vérifier que le message est envoyé
-            mock_socketio.emit.assert_called_once_with("rl_update", large_message)
-        except Exception as e:
-            # Les erreurs de taille sont gérées
-            assert isinstance(e, Exception)
+        mock_socketio.emit("rl_update", large_message)
+        # Vérifier que le message est envoyé
+        mock_socketio.emit.assert_called_once_with("rl_update", large_message)
 
     def test_websocket_rapid_messages(self, mock_socketio):
         """Test messages WebSocket rapides."""
@@ -108,7 +98,7 @@ class TestWebSocketEventEdgeCases:
 
         # Simuler plusieurs connexions
         connections = []
-        for i in range(10):
+        for _ in range(10):
             connection = Mock()
             connection.emit = Mock()
             connections.append(connection)
@@ -128,34 +118,25 @@ class TestWebSocketEventEdgeCases:
         non_serializable_message = {
             "status": "training",
             "data": Mock(),  # Objet non sérialisable
-            "metadata": {"timestamp": time.time()}
+            "metadata": {"timestamp": time.time()},
         }
 
         # Mock d'une erreur de sérialisation
         mock_socketio.emit.side_effect = TypeError("Object not serializable")
 
-        try:
+        with pytest.raises(TypeError, match="Object not serializable"):
             mock_socketio.emit("rl_update", non_serializable_message)
-        except TypeError as e:
-            # L'erreur de sérialisation est attendue
-            assert "Object not serializable" in str(e)
 
     def test_websocket_message_validation_error(self, mock_socketio):
         """Test erreur de validation de message WebSocket."""
         # Créer un message invalide
-        invalid_message = {
-            "invalid_field": "invalid_value",
-            "another_invalid_field": 123
-        }
+        invalid_message = {"invalid_field": "invalid_value", "another_invalid_field": 123}
 
         # Mock d'une erreur de validation
         mock_socketio.emit.side_effect = ValueError("Invalid message format")
 
-        try:
+        with pytest.raises(ValueError, match="Invalid message format"):
             mock_socketio.emit("rl_update", invalid_message)
-        except ValueError as e:
-            # L'erreur de validation est attendue
-            assert "Invalid message format" in str(e)
 
     def test_websocket_room_management(self, mock_socketio):
         """Test gestion des salles WebSocket."""
@@ -203,17 +184,11 @@ class TestWebSocketEventEdgeCases:
         mock_rl_event_manager.emit_evaluation_update.side_effect = Exception("Emit failed")
 
         # Tester la gestion d'erreurs
-        try:
+        with pytest.raises(Exception, match="Emit failed"):
             mock_rl_event_manager.emit_training_update({"episode": 100, "reward": 0.5})
-        except Exception as e:
-            # L'erreur est attendue
-            assert "Emit failed" in str(e)
 
-        try:
+        with pytest.raises(Exception, match="Emit failed"):
             mock_rl_event_manager.emit_evaluation_update({"accuracy": 0.95, "f1_score": 0.92})
-        except Exception as e:
-            # L'erreur est attendue
-            assert "Emit failed" in str(e)
 
     def test_websocket_event_manager_performance(self, mock_rl_event_manager):
         """Test performance du gestionnaire d'événements RL."""

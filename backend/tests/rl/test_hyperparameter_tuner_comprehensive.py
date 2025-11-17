@@ -1,6 +1,7 @@
 """
 Tests complets pour hyperparameter_tuner.py - Couverture 95%+
 """
+
 import json
 import tempfile
 from pathlib import Path
@@ -32,7 +33,7 @@ class TestHyperparameterTuner:
             n_training_episodes=0.500,
             n_eval_episodes=50,
             study_name="custom_study",
-            storage="sqlite:///test.db"
+            storage="sqlite:///test.db",
         )
 
         assert tuner.n_trials == 100
@@ -60,9 +61,15 @@ class TestHyperparameterTuner:
 
         # Vérifier que la configuration contient les clés attendues
         expected_keys = [
-            "learning_rate", "gamma", "epsilon_start", "epsilon_end",
-            "epsilon_decay", "batch_size", "buffer_size", "num_drivers",
-            "max_bookings"
+            "learning_rate",
+            "gamma",
+            "epsilon_start",
+            "epsilon_end",
+            "epsilon_decay",
+            "batch_size",
+            "buffer_size",
+            "num_drivers",
+            "max_bookings",
         ]
         for key in expected_keys:
             assert key in config
@@ -100,34 +107,36 @@ class TestHyperparameterTuner:
         mock_trial.suggest_categorical.side_effect = [128, 100000]
         mock_trial.suggest_int.side_effect = [3, 10]
 
-        with patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class:
-            with patch("services.rl.hyperparameter_tuner.ImprovedDQNAgent") as mock_agent_class:
-                # Mock environment
-                mock_env = Mock()
-                mock_env.observation_space.shape = [50]
-                mock_env.action_space.n = 20
-                mock_env.reset.return_value = (Mock(), {})
-                mock_env.step.return_value = (Mock(), 10, False, False, {})
-                mock_env_class.return_value = mock_env
+        with (
+            patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
+            patch("services.rl.hyperparameter_tuner.ImprovedDQNAgent") as mock_agent_class,
+        ):
+            # Mock environment
+            mock_env = Mock()
+            mock_env.observation_space.shape = [50]
+            mock_env.action_space.n = 20
+            mock_env.reset.return_value = (Mock(), {})
+            mock_env.step.return_value = (Mock(), 10, False, False, {})
+            mock_env_class.return_value = mock_env
 
-                # Mock agent
-                mock_agent = Mock()
-                mock_agent.select_action.return_value = 0
-                mock_agent_class.return_value = mock_agent
+            # Mock agent
+            mock_agent = Mock()
+            mock_agent.select_action.return_value = 0
+            mock_agent_class.return_value = mock_agent
 
-                # Exécuter objective
-                reward = tuner.objective(mock_trial)
+            # Exécuter objective
+            reward = tuner.objective(mock_trial)
 
-                # Vérifier que l'environnement et l'agent sont créés
-                mock_env_class.assert_called_once()
-                mock_agent_class.assert_called_once()
+            # Vérifier que l'environnement et l'agent sont créés
+            mock_env_class.assert_called_once()
+            mock_agent_class.assert_called_once()
 
-                # Vérifier que l'entraînement et l'évaluation sont effectués
-                assert mock_env.reset.call_count >= tuner.n_training_episodes + tuner.n_eval_episodes
-                assert mock_env.step.call_count >= tuner.n_training_episodes + tuner.n_eval_episodes
+            # Vérifier que l'entraînement et l'évaluation sont effectués
+            assert mock_env.reset.call_count >= tuner.n_training_episodes + tuner.n_eval_episodes
+            assert mock_env.step.call_count >= tuner.n_training_episodes + tuner.n_eval_episodes
 
-                # Vérifier que le reward est retourné
-                assert isinstance(reward, float)
+            # Vérifier que le reward est retourné
+            assert isinstance(reward, float)
 
     def test_objective_function_with_pruning(self):
         """Test objective function avec pruning"""
@@ -140,24 +149,26 @@ class TestHyperparameterTuner:
         mock_trial.suggest_int.side_effect = [3, 10]
         mock_trial.should_prune.return_value = True
 
-        with patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class:
-            with patch("services.rl.hyperparameter_tuner.ImprovedDQNAgent") as mock_agent_class:
-                # Mock environment
-                mock_env = Mock()
-                mock_env.observation_space.shape = [50]
-                mock_env.action_space.n = 20
-                mock_env.reset.return_value = (Mock(), {})
-                mock_env.step.return_value = (Mock(), 10, False, False, {})
-                mock_env_class.return_value = mock_env
+        with (
+            patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
+            patch("services.rl.hyperparameter_tuner.ImprovedDQNAgent") as mock_agent_class,
+        ):
+            # Mock environment
+            mock_env = Mock()
+            mock_env.observation_space.shape = [50]
+            mock_env.action_space.n = 20
+            mock_env.reset.return_value = (Mock(), {})
+            mock_env.step.return_value = (Mock(), 10, False, False, {})
+            mock_env_class.return_value = mock_env
 
-                # Mock agent
-                mock_agent = Mock()
-                mock_agent.select_action.return_value = 0
-                mock_agent_class.return_value = mock_agent
+            # Mock agent
+            mock_agent = Mock()
+            mock_agent.select_action.return_value = 0
+            mock_agent_class.return_value = mock_agent
 
-                # Exécuter objective avec pruning
-                with pytest.raises(optuna.TrialPruned):
-                    tuner.objective(mock_trial)
+            # Exécuter objective avec pruning
+            with pytest.raises(optuna.TrialPruned):
+                tuner.objective(mock_trial)
 
     def test_optimize(self):
         """Test optimize method"""
@@ -211,19 +222,21 @@ class TestHyperparameterTuner:
             "batch_size": 128,
             "buffer_size": 100000,
             "num_drivers": 5,
-            "max_bookings": 15
+            "max_bookings": 15,
         }
         mock_study.best_value = 100
 
-        with patch("pathlib.Path.mkdir") as mock_mkdir:
-            with patch("builtins.open", patch("builtins.open", create=True)) as mock_file:
-                tuner.save_best_params(mock_study, "test_params.json")
+        with (
+            patch("pathlib.Path.mkdir") as mock_mkdir,
+            patch("builtins.open", patch("builtins.open", create=True)) as mock_file,
+        ):
+            tuner.save_best_params(mock_study, "test_params.json")
 
-                # Vérifier que le répertoire est créé
-                mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
+            # Vérifier que le répertoire est créé
+            mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
 
-                # Vérifier que le fichier est ouvert en écriture
-                mock_file.assert_called_once()
+            # Vérifier que le fichier est ouvert en écriture
+            mock_file.assert_called_once()
 
     def test_save_best_params_with_custom_filename(self):
         """Test save_best_params avec nom de fichier personnalisé"""
@@ -234,12 +247,14 @@ class TestHyperparameterTuner:
         mock_study.best_params = {"learning_rate": 0.001}
         mock_study.best_value = 100
 
-        with patch("pathlib.Path.mkdir"):
-            with patch("builtins.open", patch("builtins.open", create=True)) as mock_file:
-                tuner.save_best_params(mock_study, "custom_params.json")
+        with (
+            patch("pathlib.Path.mkdir"),
+            patch("builtins.open", patch("builtins.open", create=True)) as mock_file,
+        ):
+            tuner.save_best_params(mock_study, "custom_params.json")
 
-                # Vérifier que le fichier est ouvert avec le bon nom
-                mock_file.assert_called_once()
+            # Vérifier que le fichier est ouvert avec le bon nom
+            mock_file.assert_called_once()
 
     def test_load_best_params(self):
         """Test load_best_params method"""
@@ -254,7 +269,7 @@ class TestHyperparameterTuner:
             "batch_size": 128,
             "buffer_size": 100000,
             "num_drivers": 5,
-            "max_bookings": 15
+            "max_bookings": 15,
         }
 
         with patch("builtins.open", patch("builtins.open", create=True)) as mock_file:
@@ -478,7 +493,7 @@ class TestHyperparameterTuner:
             mock_plot.side_effect = Exception("Plot error")
 
             # Vérifier qu'une exception est levée
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="Plot error"):
                 tuner.plot_optimization_history(mock_study)
 
     def test_plot_parameter_importance_with_exception(self):
@@ -493,7 +508,7 @@ class TestHyperparameterTuner:
             mock_plot.side_effect = Exception("Plot error")
 
             # Vérifier qu'une exception est levée
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="Plot error"):
                 tuner.plot_parameter_importance(mock_study)
 
     def test_plot_parallel_coordinate_with_exception(self):
@@ -508,7 +523,7 @@ class TestHyperparameterTuner:
             mock_plot.side_effect = Exception("Plot error")
 
             # Vérifier qu'une exception est levée
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="Plot error"):
                 tuner.plot_parallel_coordinate(mock_study)
 
     def test_plot_slice_with_exception(self):
@@ -523,7 +538,7 @@ class TestHyperparameterTuner:
             mock_plot.side_effect = Exception("Plot error")
 
             # Vérifier qu'une exception est levée
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="Plot error"):
                 tuner.plot_slice(mock_study)
 
     def test_plot_timeline_with_exception(self):
@@ -538,7 +553,7 @@ class TestHyperparameterTuner:
             mock_plot.side_effect = Exception("Plot error")
 
             # Vérifier qu'une exception est levée
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="Plot error"):
                 tuner.plot_timeline(mock_study)
 
     def test_plot_intermediate_values_with_exception(self):
@@ -553,7 +568,7 @@ class TestHyperparameterTuner:
             mock_plot.side_effect = Exception("Plot error")
 
             # Vérifier qu'une exception est levée
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="Plot error"):
                 tuner.plot_intermediate_values(mock_study)
 
     def test_plot_edf_with_exception(self):
@@ -568,7 +583,7 @@ class TestHyperparameterTuner:
             mock_plot.side_effect = Exception("Plot error")
 
             # Vérifier qu'une exception est levée
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="Plot error"):
                 tuner.plot_edf(mock_study)
 
     def test_plot_rank_with_exception(self):
@@ -583,7 +598,7 @@ class TestHyperparameterTuner:
             mock_plot.side_effect = Exception("Plot error")
 
             # Vérifier qu'une exception est levée
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="Plot error"):
                 tuner.plot_rank(mock_study)
 
     def test_plot_contour_with_exception(self):
@@ -598,7 +613,7 @@ class TestHyperparameterTuner:
             mock_plot.side_effect = Exception("Plot error")
 
             # Vérifier qu'une exception est levée
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="Plot error"):
                 tuner.plot_contour(mock_study)
 
     def test_plot_pareto_front_with_exception(self):
@@ -613,7 +628,7 @@ class TestHyperparameterTuner:
             mock_plot.side_effect = Exception("Plot error")
 
             # Vérifier qu'une exception est levée
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="Plot error"):
                 tuner.plot_pareto_front(mock_study)
 
     def test_edge_case_empty_trials(self):
@@ -649,13 +664,15 @@ class TestHyperparameterTuner:
         mock_study.best_params = {"learning_rate": 0.001}
         mock_study.best_value = 100
 
-        with patch("pathlib.Path.mkdir"):
-            with patch("builtins.open", patch("builtins.open", create=True)) as mock_file:
-                mock_file.side_effect = OSError("File error")
+        with (
+            patch("pathlib.Path.mkdir"),
+            patch("builtins.open", patch("builtins.open", create=True)) as mock_file,
+        ):
+            mock_file.side_effect = OSError("File error")
 
-                # Vérifier qu'une exception est levée
-                with pytest.raises(OSError):
-                    tuner.save_best_params(mock_study, "invalid/path/file.json")
+            # Vérifier qu'une exception est levée
+            with pytest.raises(OSError, match="File error"):
+                tuner.save_best_params(mock_study, "invalid/path/file.json")
 
     def test_edge_case_load_nonexistent_file(self):
         """Test chargement de fichier inexistant"""

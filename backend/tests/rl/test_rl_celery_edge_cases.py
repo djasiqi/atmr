@@ -59,13 +59,9 @@ class TestRLCeleryErrorEdgeCases:
 
         for params in invalid_params:
             # La tâche devrait gérer les paramètres invalides
-            try:
-                result = train_rl_model.delay(**params)
-                # Si la tâche est acceptée, vérifier qu'elle gère l'erreur
-                assert result is not None
-            except Exception as e:
-                # Les erreurs sont attendues pour des paramètres invalides
-                assert isinstance(e, (ValueError, TypeError, KeyError))
+            # Les erreurs sont attendues pour des paramètres invalides
+            with pytest.raises((ValueError, TypeError, KeyError)):
+                train_rl_model.delay(**params)
 
     def test_rl_task_with_missing_parameters(self):
         """Test tâche RL avec paramètres manquants."""
@@ -73,13 +69,9 @@ class TestRLCeleryErrorEdgeCases:
             pytest.skip("train_rl_model non disponible")
 
         # Test avec paramètres manquants
-        try:
-            result = train_rl_model.delay()
-            # Si la tâche est acceptée, vérifier qu'elle gère l'erreur
-            assert result is not None
-        except Exception as e:
-            # Les erreurs sont attendues pour des paramètres manquants
-            assert isinstance(e, (ValueError, TypeError, KeyError))
+        # Les erreurs sont attendues pour des paramètres manquants
+        with pytest.raises((ValueError, TypeError, KeyError)):
+            train_rl_model.delay()
 
     def test_rl_task_with_extreme_parameters(self):
         """Test tâche RL avec paramètres extrêmes."""
@@ -97,13 +89,9 @@ class TestRLCeleryErrorEdgeCases:
         ]
 
         for params in extreme_params:
-            try:
-                result = train_rl_model.delay(**params)
-                # Si la tâche est acceptée, vérifier qu'elle gère les paramètres extrêmes
-                assert result is not None
-            except Exception as e:
-                # Certaines erreurs peuvent être attendues pour des paramètres extrêmes
-                assert isinstance(e, (ValueError, TypeError, KeyError))
+            # Certaines erreurs peuvent être attendues pour des paramètres extrêmes
+            with pytest.raises((ValueError, TypeError, KeyError)):
+                train_rl_model.delay(**params)
 
     def test_rl_task_timeout_scenario(self):
         """Test scénario de timeout pour tâche RL."""
@@ -116,12 +104,9 @@ class TestRLCeleryErrorEdgeCases:
             mock_task.delay.return_value.get.return_value = None
             mock_task.delay.return_value.get.side_effect = Exception("Timeout")
 
-            try:
-                result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
+            result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
+            with pytest.raises(Exception, match="Timeout"):
                 result.get(timeout=1)  # Timeout très court
-            except Exception as e:
-                # Les timeouts sont attendus
-                assert "Timeout" in str(e) or isinstance(e, Exception)
 
     def test_rl_task_resource_exhaustion(self):
         """Test épuisement des ressources pour tâche RL."""
@@ -133,12 +118,9 @@ class TestRLCeleryErrorEdgeCases:
             mock_task.delay.return_value = Mock()
             mock_task.delay.return_value.get.side_effect = MemoryError("Out of memory")
 
-            try:
-                result = train_rl_model.delay(episodes=0.1000000, learning_rate=0.0001)
+            result = train_rl_model.delay(episodes=0.1000000, learning_rate=0.0001)
+            with pytest.raises(MemoryError, match="Out of memory"):
                 result.get()
-            except MemoryError as e:
-                # Les erreurs de mémoire sont attendues
-                assert "Out of memory" in str(e)
 
     def test_rl_task_network_failure(self):
         """Test échec réseau pour tâche RL."""
@@ -150,12 +132,9 @@ class TestRLCeleryErrorEdgeCases:
             mock_task.delay.return_value = Mock()
             mock_task.delay.return_value.get.side_effect = ConnectionError("Network error")
 
-            try:
-                result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
+            result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
+            with pytest.raises(ConnectionError, match="Network error"):
                 result.get()
-            except ConnectionError as e:
-                # Les erreurs de réseau sont attendues
-                assert "Network error" in str(e)
 
     def test_rl_task_database_failure(self):
         """Test échec base de données pour tâche RL."""
@@ -167,12 +146,9 @@ class TestRLCeleryErrorEdgeCases:
             mock_task.delay.return_value = Mock()
             mock_task.delay.return_value.get.side_effect = Exception("Database connection failed")
 
-            try:
-                result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
+            result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
+            with pytest.raises(Exception, match="Database connection failed"):
                 result.get()
-            except Exception as e:
-                # Les erreurs de base de données sont attendues
-                assert "Database connection failed" in str(e)
 
     def test_rl_task_concurrent_execution(self):
         """Test exécution concurrente de tâches RL."""
@@ -203,18 +179,12 @@ class TestRLCeleryErrorEdgeCases:
         # Mock d'une tâche qui échoue puis réussit
         with patch("services.tasks.rl_tasks.train_rl_model") as mock_task:
             mock_task.delay.return_value = Mock()
-            mock_task.delay.return_value.get.side_effect = [
-                Exception("Temporary failure"),
-                {"status": "completed"}
-            ]
+            mock_task.delay.return_value.get.side_effect = [Exception("Temporary failure"), {"status": "completed"}]
 
-            try:
-                result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
-                # Premier appel devrait échouer
+            result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
+            # Premier appel devrait échouer
+            with pytest.raises(Exception, match="Temporary failure"):
                 result.get()
-            except Exception as e:
-                # L'erreur temporaire est attendue
-                assert "Temporary failure" in str(e)
 
     def test_rl_task_cancellation(self):
         """Test annulation de tâche RL."""
@@ -270,12 +240,10 @@ class TestRLCeleryErrorEdgeCases:
                 mock_task.delay.return_value = Mock()
                 mock_task.delay.return_value.get.side_effect = error
 
-                try:
-                    result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
+                result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
+                # Vérifier que l'erreur est correctement propagée
+                with pytest.raises(type(error)):
                     result.get()
-                except Exception as e:
-                    # Vérifier que l'erreur est correctement propagée
-                    assert isinstance(e, type(error))
 
     def test_rl_task_result_serialization(self):
         """Test sérialisation des résultats de tâche RL."""
@@ -287,7 +255,7 @@ class TestRLCeleryErrorEdgeCases:
             "model_weights": [1.0, 2.0, 3.0],
             "training_history": {"loss": [0.1, 0.05, 0.01]},
             "performance_metrics": {"accuracy": 0.95, "f1_score": 0.92},
-            "metadata": {"training_time": 3600, "episodes": 1000}
+            "metadata": {"training_time": 3600, "episodes": 1000},
         }
 
         with patch("services.tasks.rl_tasks.train_rl_model") as mock_task:
@@ -315,12 +283,10 @@ class TestRLCeleryErrorEdgeCases:
             mock_task.delay.return_value = Mock()
             mock_task.delay.return_value.get.side_effect = Exception("Dependency service unavailable")
 
-            try:
-                result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
+            result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
+            # Les erreurs de dépendance sont attendues
+            with pytest.raises(Exception, match="Dependency service unavailable"):
                 result.get()
-            except Exception as e:
-                # Les erreurs de dépendance sont attendues
-                assert "Dependency service unavailable" in str(e)
 
     def test_rl_task_graceful_degradation(self):
         """Test dégradation gracieuse pour tâche RL."""
@@ -333,7 +299,7 @@ class TestRLCeleryErrorEdgeCases:
             mock_task.delay.return_value.get.return_value = {
                 "status": "degraded",
                 "message": "Using fallback model",
-                "performance": 0.8
+                "performance": 0.8,
             }
 
             result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)

@@ -2,6 +2,7 @@
 
 # Constantes pour éviter les valeurs magiques
 from pathlib import Path
+
 DRIVERS_ZERO = 0
 REWARD_ZERO = 0
 ACTION_ZERO = 0
@@ -61,7 +62,7 @@ class TestActionMaskingEdges:
             state_dim=0.100,
             action_dim=16,  # 3 drivers * 5 bookings + 1 wait
             learning_rate=0.0001,
-            epsilon_start=0.1
+            epsilon_start=0.1,
         )
 
     def test_zero_drivers_zero_bookings(self, mock_env):
@@ -130,7 +131,7 @@ class TestActionMaskingEdges:
                 "priority": 3,
                 "time_window_end": 100,
                 "time_remaining": 30,
-                "assigned": False
+                "assigned": False,
             }
         ]
 
@@ -151,9 +152,7 @@ class TestActionMaskingEdges:
     def test_impossible_time_windows(self, mock_env):
         """Test avec fenêtres temporelles impossibles."""
         # Créer des bookings avec des fenêtres temporelles impossibles
-        mock_env.drivers = [
-            {"id": 0, "lat": 46.2, "lon": 6.1, "available": True, "load": 0}
-        ]
+        mock_env.drivers = [{"id": 0, "lat": 46.2, "lon": 6.1, "available": True, "load": 0}]
         mock_env.bookings = [
             {
                 "id": 0,
@@ -162,7 +161,7 @@ class TestActionMaskingEdges:
                 "priority": 3,
                 "time_window_end": 0,  # Fenêtre expirée
                 "time_remaining": -10,
-                "assigned": False
+                "assigned": False,
             },
             {
                 "id": 1,
@@ -171,8 +170,8 @@ class TestActionMaskingEdges:
                 "priority": 3,
                 "time_window_end": 5,  # Fenêtre très courte
                 "time_remaining": 5,
-                "assigned": False
-            }
+                "assigned": False,
+            },
         ]
 
         # Tester get_valid_actions
@@ -182,7 +181,9 @@ class TestActionMaskingEdges:
         # Vérifier qu'aucune action d'assignation n'est valide à cause des contraintes
         mask = mock_env._get_valid_actions_mask()
         assignment_actions = [i for i in range(1, mock_env.action_space.n) if mask[i]]
-        assert len(assignment_actions) == 0, f"Pas d'actions d'assignation valides avec fenêtres impossibles, trouvé {assignment_actions}"
+        assert len(assignment_actions) == 0, (
+            f"Pas d'actions d'assignation valides avec fenêtres impossibles, trouvé {assignment_actions}"
+        )
 
         logger.info("✅ Test fenêtres temporelles impossibles réussi")
 
@@ -198,7 +199,7 @@ class TestActionMaskingEdges:
                 "priority": 3,
                 "time_window_end": 100,
                 "time_remaining": 30,
-                "assigned": False
+                "assigned": False,
             }
         ]
 
@@ -256,7 +257,11 @@ class TestActionMaskingEdges:
 
         logger.info("✅ Test agent avec actions invalides réussi")
 
-    def test_edge_case_integration(self, ____________________________________________________________________________________________________mock_env, mock_agent):
+    def test_edge_case_integration(
+        self,
+        mock_env,
+        mock_agent,
+    ):
         """Test d'intégration avec cas limites."""
         if mock_agent is None:
             pytest.skip("ImprovedDQNAgent non disponible")
@@ -265,7 +270,20 @@ class TestActionMaskingEdges:
         test_scenarios = [
             {"drivers": [], "bookings": []},
             {"drivers": [{"id": 0, "lat": 46.2, "lon": 6.1, "available": True, "load": 0}], "bookings": []},
-            {"drivers": [], "bookings": [{"id": 0, "pickup_lat": 46.2, "pickup_lon": 6.1, "priority": 3, "time_window_end": 100, "time_remaining": 30, "assigned": False}]},
+            {
+                "drivers": [],
+                "bookings": [
+                    {
+                        "id": 0,
+                        "pickup_lat": 46.2,
+                        "pickup_lon": 6.1,
+                        "priority": 3,
+                        "time_window_end": 100,
+                        "time_remaining": 30,
+                        "assigned": False,
+                    }
+                ],
+            },
         ]
 
         for i, scenario in enumerate(test_scenarios):
@@ -299,10 +317,7 @@ def test_action_masking_performance():
     # Créer environnement et agent
     env = DispatchEnv(num_drivers=5, max_bookings=10, simulation_hours=1)
     agent = ImprovedDQNAgent(
-        state_dim=env.observation_space.shape[0],
-        action_dim=env.action_space.n,
-        learning_rate=0.0001,
-        epsilon_start=0.1
+        state_dim=env.observation_space.shape[0], action_dim=env.action_space.n, learning_rate=0.0001, epsilon_start=0.1
     )
 
     # Simuler plusieurs épisodes
@@ -328,12 +343,16 @@ def test_action_masking_performance():
                 break
 
     # Calculer le pourcentage d'actions invalides
-    invalid_percentage = (invalid_actions_count / total_actions) * 1 if total_actions > TOTAL_ACTIONS_ZERO else TOTAL_ACTIONS_ZERO
+    invalid_percentage = (
+        (invalid_actions_count / total_actions) * 1 if total_actions > TOTAL_ACTIONS_ZERO else TOTAL_ACTIONS_ZERO
+    )
 
     # Vérifier que le pourcentage est < EST_ONE%
-    assert invalid_percentage < INVALID_PERCENTAGE_ONE, f"Pourcentage d'actions invalides trop élevé: {invalid_percentage"
+    assert invalid_percentage < INVALID_PERCENTAGE_ONE, (
+        f"Pourcentage d'actions invalides trop élevé: {invalid_percentage}"
+    )
 
-    logger.info("✅ Performance test réussi: %s% d'actions invalides", invalid_percentage)
+    logger.info("✅ Performance test réussi: %s%% d'actions invalides", invalid_percentage)
 
 
 if __name__ == "__main__":

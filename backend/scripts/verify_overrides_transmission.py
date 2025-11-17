@@ -9,7 +9,7 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from services.unified_dispatch.settings import Settings, merge_overrides
+from services.unified_dispatch.settings import Settings, merge_overrides  # noqa: E402
 
 # Simuler les overrides depuis le frontend
 test_overrides = {
@@ -39,9 +39,7 @@ test_overrides = {
         "fairness_weight": 0.7,
     },
     "preferred_driver_id": 123,
-    "driver_load_multipliers": {
-        "123": 1.5
-    },
+    "driver_load_multipliers": {"123": 1.5},
     "allow_emergency": True,
     "emergency": {
         "allow_emergency_drivers": True,
@@ -91,10 +89,9 @@ print("✅ preferred_driver_id: Passé dans problem['preferred_driver_id']")
 print("✅ driver_load_multipliers: Passé dans problem['driver_load_multipliers']")
 print("✅ allow_emergency: Passé dans problem['allow_emergency']")
 
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 if all_ok:
     print("✅ Tous les paramètres sont correctement transmis et appliqués!")
 else:
     print("❌ Certains paramètres ne sont pas correctement appliqués")
-print("="*60)
-
+print("=" * 60)

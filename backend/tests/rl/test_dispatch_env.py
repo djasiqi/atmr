@@ -9,6 +9,7 @@ Teste:
 - Calcul de rewards
 - Episodes complets
 """
+
 import numpy as np
 import pytest
 
@@ -243,7 +244,7 @@ class TestDispatchEnvEpisode:
     def test_full_episode_random(self):
         """Test épisode complet avec actions aléatoires."""
         env = DispatchEnv(num_drivers=5, max_bookings=10, simulation_hours=1)
-        obs, _ = env.reset(seed=42)
+        _obs, _ = env.reset(seed=42)
 
         total_reward = 0.0
         steps = 0
@@ -268,7 +269,7 @@ class TestDispatchEnvEpisode:
     def test_full_episode_greedy(self):
         """Test épisode avec stratégie greedy (toujours assigner)."""
         env = DispatchEnv(num_drivers=5, max_bookings=10, simulation_hours=1)
-        obs, _ = env.reset(seed=42)
+        _obs, _ = env.reset(seed=42)
 
         total_reward = 0.0
         steps = 0
@@ -316,18 +317,17 @@ class TestDispatchEnvHelpers:
 
         # Distance Genève centre à Genève aéroport (~5km)
         distance = env._calculate_distance(
-            46.2044, 6.1432,  # Centre
-            46.2381, 6.1090   # Aéroport
+            46.2044,
+            6.1432,  # Centre
+            46.2381,
+            6.1090,  # Aéroport
         )
 
         # Devrait être autour de 4-5 km
         assert 4.0 < distance < 6.0
 
         # Distance nulle (même point)
-        distance_zero = env._calculate_distance(
-            46.2044, 6.1432,
-            46.2044, 6.1432
-        )
+        distance_zero = env._calculate_distance(46.2044, 6.1432, 46.2044, 6.1432)
         assert distance_zero < 0.0001
 
     def test_traffic_density_peaks(self):
@@ -414,18 +414,13 @@ class TestDispatchEnvRender:
 # Test d'intégration complet
 def test_realistic_scenario():
     """Test scénario réaliste complet."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🧪 TEST SCÉNARIO RÉALISTE")
-    print("="*60)
+    print("=" * 60)
 
-    env = DispatchEnv(
-        num_drivers=8,
-        max_bookings=15,
-        simulation_hours=2,
-        render_mode="human"
-    )
+    env = DispatchEnv(num_drivers=8, max_bookings=15, simulation_hours=2, render_mode="human")
 
-    obs, info = env.reset(seed=0.123)
+    _obs, info = env.reset(seed=0.123)
     print("\n✅ Environnement initialisé")
     print("  Drivers: {info['available_drivers']}")
     print("  Bookings: {info['active_bookings']}")
@@ -461,14 +456,10 @@ def test_realistic_scenario():
     print("  Distance totale: {info['episode_stats']['total_distance']")
 
     if info["episode_stats"]["assignments"] > 0:
-        (
-            info["episode_stats"]["total_distance"] /
-            info["episode_stats"]["assignments"]
-        )
+        (info["episode_stats"]["total_distance"] / info["episode_stats"]["assignments"])
         print("  Distance moyenne: {avg_distance")
 
-    print("="*60)
+    print("=" * 60)
 
     assert steps > 0
     assert total_reward != 0
-

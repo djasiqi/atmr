@@ -36,12 +36,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         generator = RLSuggestionGenerator()
         generator.agent = None
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -49,12 +44,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test génération suggestions avec données vides"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -62,12 +52,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test génération suggestions avec exception"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -75,12 +60,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: assignments None"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -88,12 +68,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: drivers None"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -101,12 +76,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: bookings None"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -114,12 +84,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: état vide"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -127,12 +92,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: état None"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -145,7 +105,7 @@ class TestRLSuggestionGeneratorUltraFinal:
             assignments=[],
             drivers=[],
             for_date="2024-0.1-0.1",
-            min_confidence=1.5  # Invalid confidence > 1
+            min_confidence=1.5,  # Invalid confidence > 1
         )
 
         assert isinstance(suggestions, list)
@@ -159,7 +119,7 @@ class TestRLSuggestionGeneratorUltraFinal:
             assignments=[],
             drivers=[],
             for_date="2024-0.1-0.1",
-            max_suggestions=-1  # Invalid negative value
+            max_suggestions=-1,  # Invalid negative value
         )
 
         assert isinstance(suggestions, list)
@@ -168,12 +128,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: données suggestion vides"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -181,12 +136,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: données suggestion None"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -194,12 +144,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: données heuristiques vides"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -207,12 +152,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: coordonnées invalides"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -220,12 +160,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: mêmes coordonnées"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -233,12 +168,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: métriques de performance"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -246,12 +176,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: utilisation mémoire"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -259,12 +184,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: accès concurrent"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -272,12 +192,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: gestion d'erreurs"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -285,12 +200,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: cas limites multiples"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -298,12 +208,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: scénarios multiples"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -311,12 +216,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: toutes les lignes"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -324,12 +224,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: couverture finale"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -337,12 +232,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: ultra final"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -350,12 +240,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: ultimate final"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -363,12 +248,7 @@ class TestRLSuggestionGeneratorUltraFinal:
         """Test cas limite: absolute final"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1"
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
 
         assert isinstance(suggestions, list)
 
@@ -452,7 +332,7 @@ class TestDuelingQNetworkUltraFinal:
             action_dim=20,
             shared_hidden_sizes=(128, 64),
             value_hidden_size=32,
-            advantage_hidden_size=16
+            advantage_hidden_size=16,
         )
         state = torch.randn(1, 100)
         output = network(state)
@@ -485,11 +365,7 @@ class TestDuelingQNetworkUltraFinal:
     def test_forward_with_different_architectures(self):
         """Test forward avec différentes architectures"""
         network = DuelingQNetwork(
-            state_dim=62,
-            action_dim=51,
-            shared_hidden_sizes=(128, 64),
-            value_hidden_size=32,
-            advantage_hidden_size=16
+            state_dim=62, action_dim=51, shared_hidden_sizes=(128, 64), value_hidden_size=32, advantage_hidden_size=16
         )
         state = torch.randn(1, 62)
         output = network(state)
@@ -606,21 +482,13 @@ class TestNoisyQNetworkUltraFinal:
 
     def test_init_with_hidden_sizes(self):
         """Test initialisation avec tailles cachées"""
-        network = NoisyQNetwork(
-            state_size=62,
-            action_size=51,
-            hidden_sizes=[128, 64]
-        )
+        network = NoisyQNetwork(state_size=62, action_size=51, hidden_sizes=[128, 64])
         assert network.state_size == 62
         assert network.action_size == 51
 
     def test_init_with_std_init(self):
         """Test initialisation avec std_init"""
-        network = NoisyQNetwork(
-            state_size=62,
-            action_size=51,
-            std_init=0.1
-        )
+        network = NoisyQNetwork(state_size=62, action_size=51, std_init=0.1)
         assert network.state_size == 62
         assert network.action_size == 51
 
@@ -669,20 +537,13 @@ class TestNoisyDuelingQNetworkUltraFinal:
 
     def test_init_with_hidden_sizes(self):
         """Test initialisation avec tailles cachées"""
-        network = NoisyDuelingQNetwork(
-            state_size=62,
-            action_size=51
-        )
+        network = NoisyDuelingQNetwork(state_size=62, action_size=51)
         assert network.state_size == 62
         assert network.action_size == 51
 
     def test_init_with_std_init(self):
         """Test initialisation avec std_init"""
-        network = NoisyDuelingQNetwork(
-            state_size=62,
-            action_size=51,
-            std_init=0.1
-        )
+        network = NoisyDuelingQNetwork(state_size=62, action_size=51, std_init=0.1)
         assert network.state_size == 62
         assert network.action_size == 51
 
@@ -737,10 +598,7 @@ class TestNoisyDuelingQNetworkUltraFinal:
 
     def test_forward_with_different_parameters(self):
         """Test forward avec différents paramètres"""
-        network = NoisyDuelingQNetwork(
-            state_size=0.100,
-            action_size=20
-        )
+        network = NoisyDuelingQNetwork(state_size=0.100, action_size=20)
         state = torch.randn(1, 100)
         output = network(state)
         assert output.shape == (1, 20)
@@ -791,10 +649,7 @@ class TestRLLoggerUltraFinal:
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés"""
         logger = RLLogger(
-            redis_key_prefix="test:rl",
-            max_redis_logs=0.500,
-            enable_db_logging=False,
-            enable_redis_logging=False
+            redis_key_prefix="test:rl", max_redis_logs=0.500, enable_db_logging=False, enable_redis_logging=False
         )
         assert logger.redis_key_prefix == "test:rl"
         assert logger.max_redis_logs == 500
@@ -833,11 +688,7 @@ class TestRLLoggerUltraFinal:
         latency_ms = 50
 
         result = logger.log_decision(
-            state=state,
-            action=action,
-            q_values=q_values,
-            reward=reward,
-            latency_ms=latency_ms
+            state=state, action=action, q_values=q_values, reward=reward, latency_ms=latency_ms
         )
         # Le résultat peut être False à cause du contexte Flask manquant
         assert isinstance(result, bool)
@@ -862,7 +713,7 @@ class TestRLLoggerUltraFinal:
             latency_ms=latency_ms,
             model_version=model_version,
             constraints=constraints,
-            metadata=metadata
+            metadata=metadata,
         )
         # Le résultat peut être False à cause du contexte Flask manquant
         assert isinstance(result, bool)
@@ -878,11 +729,7 @@ class TestRLLoggerUltraFinal:
 
         # Test avec des paramètres invalides pour déclencher une exception
         result = logger.log_decision(
-            state=state,
-            action=action,
-            q_values=q_values,
-            reward=reward,
-            latency_ms=latency_ms
+            state=state, action=action, q_values=q_values, reward=reward, latency_ms=latency_ms
         )
         # Le résultat peut être False à cause du contexte Flask manquant
         assert isinstance(result, bool)
@@ -921,11 +768,7 @@ class TestRLLoggerUltraFinal:
         # Log multiple fois
         for _ in range(5):
             result = logger.log_decision(
-                state=state,
-                action=action,
-                q_values=q_values,
-                reward=reward,
-                latency_ms=latency_ms
+                state=state, action=action, q_values=q_values, reward=reward, latency_ms=latency_ms
             )
             # Le résultat peut être False à cause du contexte Flask manquant
             assert isinstance(result, bool)
@@ -942,16 +785,12 @@ class TestRLLoggerUltraFinal:
         states = [
             {"feature1": 1.0, "feature2": 2.0},
             {"feature1": 3.0, "feature2": 4.0},
-            {"feature1": 5.0, "feature2": 6.0}
+            {"feature1": 5.0, "feature2": 6.0},
         ]
 
         for state in states:
             result = logger.log_decision(
-                state=state,
-                action=action,
-                q_values=q_values,
-                reward=reward,
-                latency_ms=latency_ms
+                state=state, action=action, q_values=q_values, reward=reward, latency_ms=latency_ms
             )
             # Le résultat peut être False à cause du contexte Flask manquant
             assert isinstance(result, bool)
@@ -969,11 +808,7 @@ class TestRLLoggerUltraFinal:
 
         for action in actions:
             result = logger.log_decision(
-                state=state,
-                action=action,
-                q_values=q_values,
-                reward=reward,
-                latency_ms=latency_ms
+                state=state, action=action, q_values=q_values, reward=reward, latency_ms=latency_ms
             )
             # Le résultat peut être False à cause du contexte Flask manquant
             assert isinstance(result, bool)
@@ -991,11 +826,7 @@ class TestRLLoggerUltraFinal:
 
         for reward in rewards:
             result = logger.log_decision(
-                state=state,
-                action=action,
-                q_values=q_values,
-                reward=reward,
-                latency_ms=latency_ms
+                state=state, action=action, q_values=q_values, reward=reward, latency_ms=latency_ms
             )
             # Le résultat peut être False à cause du contexte Flask manquant
             assert isinstance(result, bool)
@@ -1013,11 +844,7 @@ class TestRLLoggerUltraFinal:
 
         for latency_ms in latencies:
             result = logger.log_decision(
-                state=state,
-                action=action,
-                q_values=q_values,
-                reward=reward,
-                latency_ms=latency_ms
+                state=state, action=action, q_values=q_values, reward=reward, latency_ms=latency_ms
             )
             # Le résultat peut être False à cause du contexte Flask manquant
             assert isinstance(result, bool)
@@ -1093,7 +920,7 @@ class TestOptimalHyperparametersUltraFinal:
             "buffer_size": 10000,
             "alpha": 0.6,
             "beta_start": 0.4,
-            "beta_end": 1.0
+            "beta_end": 1.0,
         }
         result = OptimalHyperparameters.validate_config(valid_config)
         # La méthode peut retourner une liste vide ou True
@@ -1112,7 +939,7 @@ class TestOptimalHyperparametersUltraFinal:
             "buffer_size": 0,  # <= 0
             "alpha": -0.1,  # < 0
             "beta_start": 1.1,  # > 1
-            "beta_end": -0.1  # < 0
+            "beta_end": -0.1,  # < 0
         }
         result = OptimalHyperparameters.validate_config(invalid_config)
         # La méthode peut retourner une liste d'erreurs ou False
@@ -1192,25 +1019,27 @@ class TestHyperparameterTunerUltraFinal:
 
     def test_init_with_params(self):
         """Test initialisation avec paramètres"""
-        tuner = HyperparameterTuner(
-            n_trials=10,
-            study_name="test_study"
-        )
+        tuner = HyperparameterTuner(n_trials=10, study_name="test_study")
         assert tuner is not None
 
     def test_suggest_hyperparameters(self):
         """Test suggestion d'hyperparamètres"""
         tuner = HyperparameterTuner()
+
         # Mock trial object
         class MockTrial:
-            def suggest_float(self, ____________________________________________________________________________________________________name, low, high, log=False):
+            def suggest_float(self, name, low, high, log=False):
                 return 0.0001
-            def suggest_categorical(self, ____________________________________________________________________________________________________name, choices):
+
+            def suggest_categorical(self, name, choices):
                 return choices[0]
-            def suggest_int(self, ____________________________________________________________________________________________________name, low, high):
+
+            def suggest_int(self, name, low, high):
                 return (low + high) // 2
-            def report(self, ____________________________________________________________________________________________________value, step):
+
+            def report(self, value, step):
                 pass
+
             def should_prune(self):
                 return False
 
@@ -1223,7 +1052,6 @@ class TestHyperparameterTunerUltraFinal:
             assert "learning_rate" in params
             assert "batch_size" in params
             assert "gamma" in params
-
 
     def test_objective_function_basic(self):
         """Test fonction objectif - partie basique"""
@@ -1240,45 +1068,61 @@ class TestHyperparameterTunerUltraFinal:
 
     def _create_mock_trial(self):
         """Créer un mock trial pour les tests"""
+
         class MockTrial:
-            def suggest_float(self, ____________________________________________________________________________________________________name, low, high, log=False):
+            def suggest_float(self, name, low, high, log=False):
                 return 0.0001
-            def suggest_categorical(self, ____________________________________________________________________________________________________name, choices):
+
+            def suggest_categorical(self, name, choices):
                 return choices[0]
-            def suggest_int(self, ____________________________________________________________________________________________________name, low, high):
+
+            def suggest_int(self, name, low, high):
                 return (low + high) // 2
-            def report(self, ____________________________________________________________________________________________________value, step):
+
+            def report(self, value, step):
                 pass
+
             def should_prune(self):
                 return False
+
         return MockTrial()
 
     def _create_mock_env(self):
         """Créer un mock environnement pour les tests"""
+
         class MockEnv:
             def __init__(self, **kwargs):
                 self.observation_space = type("obj", (object,), {"shape": [62]})()
                 self.action_space = type("obj", (object,), {"n": 51})()
+
             def reset(self):
                 return np.zeros(62), {}
+
             def step(self, action):
                 return np.zeros(62), 1.0, False, False, {}
+
             def close(self):
                 pass
+
         return MockEnv()
 
     def _create_mock_agent(self):
         """Créer un mock agent pour les tests"""
+
         class MockAgent:
             def __init__(self, **kwargs):
                 self.memory = []
                 self.batch_size = 32
+
             def select_action(self, state):
                 return 0
-            def store_transition(self, ____________________________________________________________________________________________________state, action, reward, next_state, done):
+
+            def store_transition(self, state, action, reward, next_state, done):
                 pass
+
             def learn(self):
                 pass
+
         return MockAgent()
 
     def test_optimize(self):
@@ -1290,10 +1134,13 @@ class TestHyperparameterTunerUltraFinal:
             def __init__(self, **kwargs):
                 self.observation_space = type("obj", (object,), {"shape": [62]})()
                 self.action_space = type("obj", (object,), {"n": 51})()
+
             def reset(self):
                 return np.zeros(62), {}
+
             def step(self, action):
                 return np.zeros(62), 1.0, False, False, {}
+
             def close(self):
                 pass
 
@@ -1301,10 +1148,13 @@ class TestHyperparameterTunerUltraFinal:
             def __init__(self, **kwargs):
                 self.memory = []
                 self.batch_size = 32
+
             def select_action(self, state):
                 return 0
-            def store_transition(self, ____________________________________________________________________________________________________state, action, reward, next_state, done):
+
+            def store_transition(self, state, action, reward, next_state, done):
                 pass
+
             def learn(self):
                 pass
 
@@ -1358,7 +1208,7 @@ class TestShadowModeManagerUltraFinal:
             booking_id="test_booking",
             human_decision={"driver_id": "driver_1", "eta": 15.0},
             rl_decision={"driver_id": "driver_2", "eta": 12.0},
-            context={"priority": "high"}
+            context={"priority": "high"},
         )
         assert isinstance(result, dict)
 
@@ -1370,11 +1220,7 @@ class TestShadowModeManagerUltraFinal:
             booking_id="test_booking_2",
             human_decision={"driver_id": "driver_1", "eta": 15.0, "delay": 2.0},
             rl_decision={"driver_id": "driver_2", "eta": 12.0, "delay": 0.0},
-            context={
-                "eta_delta": 3.0,
-                "delay_delta": 2.0,
-                "rl_confidence": 0.85
-            }
+            context={"eta_delta": 3.0, "delay_delta": 2.0, "rl_confidence": 0.85},
         )
         assert isinstance(result, dict)
 
@@ -1451,7 +1297,7 @@ class TestShadowModeManagerUltraFinal:
                 booking_id=f"booking_{i}",
                 human_decision={"driver_id": f"human_driver_{i}", "eta": 15.0 + i},
                 rl_decision={"driver_id": f"rl_driver_{i}", "eta": 12.0 + i},
-                context={"priority": "normal"}
+                context={"priority": "normal"},
             )
             assert isinstance(result, dict)
 
@@ -1465,21 +1311,13 @@ class TestShadowModeManagerUltraFinal:
 
         # Test avec des valeurs extrêmes
         result = manager.log_decision_comparison(
-            company_id="test_company",
-            booking_id="",
-            human_decision={},
-            rl_decision={},
-            context={}
+            company_id="test_company", booking_id="", human_decision={}, rl_decision={}, context={}
         )
         assert isinstance(result, dict)
 
         # Test avec des valeurs nulles
         result = manager.log_decision_comparison(
-            company_id="test_company",
-            booking_id="test_booking",
-            human_decision={},
-            rl_decision={},
-            context={}
+            company_id="test_company", booking_id="test_booking", human_decision={}, rl_decision={}, context={}
         )
         assert isinstance(result, dict)
 

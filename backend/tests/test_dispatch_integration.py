@@ -67,7 +67,7 @@ class TestDispatchSafetyIntegration:
         return bookings
     
     @pytest.fixture
-    def mock_assignments(self, ____________________________________________________________________________________________________mock_bookings, mock_drivers):
+    def mock_assignments(self, mock_bookings, mock_drivers):
         """Mock des assignations."""
         assignments = []
         for i, booking in enumerate(mock_bookings):
@@ -77,7 +77,7 @@ class TestDispatchSafetyIntegration:
             assignments.append(assignment)
         return assignments
     
-    def test_safe_dispatch_with_rl_optimization(self, ____________________________________________________________________________________________________mock_company, mock_drivers, mock_bookings, mock_assignments):
+    def test_safe_dispatch_with_rl_optimization(self, mock_company, mock_drivers, mock_bookings, mock_assignments):
         """Test un dispatch sûr avec optimisation RL."""
         if SafetyGuards is None or RLDispatchOptimizer is None:
             pytest.skip("Modules non disponibles")
@@ -110,7 +110,7 @@ class TestDispatchSafetyIntegration:
                 assert result["is_safe"] is True
                 assert result["rollback_performed"] is False
     
-    def test_unsafe_dispatch_with_rollback(self, ____________________________________________________________________________________________________mock_company, mock_drivers, mock_bookings, mock_assignments):
+    def test_unsafe_dispatch_with_rollback(self, mock_company, mock_drivers, mock_bookings, mock_assignments):
         """Test un dispatch dangereux avec rollback automatique."""
         if SafetyGuards is None or RLDispatchOptimizer is None:
             pytest.skip("Modules non disponibles")
@@ -164,7 +164,7 @@ class TestDispatchSafetyIntegration:
                     # Vérifier que la notification a été envoyée
                     notification_service.send_alert.assert_called_once()
     
-    def test_rl_optimizer_safety_check(self, ____________________________________________________________________________________________________mock_drivers, mock_bookings, mock_assignments):
+    def test_rl_optimizer_safety_check(self, mock_drivers, mock_bookings, mock_assignments):
         """Test la vérification de sécurité dans l'optimiseur RL."""
         if SafetyGuards is None or RLDispatchOptimizer is None:
             pytest.skip("Modules non disponibles")
@@ -200,7 +200,7 @@ class TestDispatchSafetyIntegration:
                 # Vérifier que le résultat est retourné
                 assert result == mock_assignments
     
-    def test_rollback_scenario_critical_violations(self, ____________________________________________________________________________________________________mock_company, mock_drivers, mock_bookings, mock_assignments):
+    def test_rollback_scenario_critical_violations(self, mock_company, mock_drivers, mock_bookings, mock_assignments):
         """Test le scénario de rollback avec violations critiques."""
         if SafetyGuards is None:
             pytest.skip("SafetyGuards non disponible")
@@ -237,7 +237,7 @@ class TestDispatchSafetyIntegration:
             assert result["rollback_performed"] is True
             assert result["violation_count"] == 8
     
-    def test_notification_service_integration(self, ____________________________________________________________________________________________________mock_company, mock_drivers, mock_bookings, mock_assignments):
+    def test_notification_service_integration(self, mock_company, mock_drivers, mock_bookings, mock_assignments):
         """Test l'intégration avec le service de notification."""
         if SafetyGuards is None:
             pytest.skip("SafetyGuards non disponible")
@@ -274,7 +274,7 @@ class TestDispatchSafetyIntegration:
                 assert call_args[1]["severity"] == "warning"
                 assert "Rollback RL vers heuristique" in call_args[1]["message"]
     
-    def test_error_handling_in_safety_guards(self, ____________________________________________________________________________________________________mock_company, mock_drivers, mock_bookings, mock_assignments):
+    def test_error_handling_in_safety_guards(self, mock_company, mock_drivers, mock_bookings, mock_assignments):
         """Test la gestion d'erreurs dans les Safety Guards."""
         if SafetyGuards is None:
             pytest.skip("SafetyGuards non disponible")
@@ -294,7 +294,7 @@ class TestDispatchSafetyIntegration:
             assert "error" in result
             assert result["error"] == "Safety Guards error"
     
-    def test_performance_under_high_load(self, ____________________________________________________________________________________________________mock_company, mock_drivers, mock_bookings, mock_assignments):
+    def test_performance_under_high_load(self, mock_company, mock_drivers, mock_bookings, mock_assignments):
         """Test les performances sous charge élevée."""
         if SafetyGuards is None:
             pytest.skip("SafetyGuards non disponible")
@@ -322,7 +322,7 @@ class TestDispatchSafetyIntegration:
             avg_time_per_dispatch = total_time / 100
             assert avg_time_per_dispatch < 0.1  # 100ms
     
-    def _simulate_dispatch(self, ____________________________________________________________________________________________________company, drivers, bookings, assignments):
+    def _simulate_dispatch(self, company, drivers, bookings, assignments):
         """Simule un dispatch avec Safety Guards."""
         try:
             # Mock des Safety Guards

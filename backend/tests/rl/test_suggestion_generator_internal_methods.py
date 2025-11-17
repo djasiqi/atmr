@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import torch
 
-from services.rl.suggestion_generator import RLSuggestionGenerator
+from services.rl.suggestion_generator import RLSuggestionGenerator, lazy_import_rl
 
 
 class TestRLSuggestionGeneratorInternalMethods:
@@ -15,12 +15,14 @@ class TestRLSuggestionGeneratorInternalMethods:
 
     def test_lazy_import_rl_success(self):
         """Test import RL réussi."""
-        with patch("services.rl.suggestion_generator._dqn_agent", None), \
-             patch("services.rl.suggestion_generator._dispatch_env", None), \
-             patch("services.rl.suggestion_generator.improved_dqn_agent") as mock_dqn, \
-             patch("services.rl.suggestion_generator.dispatch_env") as mock_env:
-
+        with (
+            patch("services.rl.suggestion_generator._dqn_agent", None),
+            patch("services.rl.suggestion_generator._dispatch_env", None),
+            patch("services.rl.suggestion_generator.improved_dqn_agent") as mock_dqn,
+            patch("services.rl.suggestion_generator.dispatch_env") as mock_env,
+        ):
             from services.rl.suggestion_generator import _lazy_import_rl
+
             _lazy_import_rl()
 
             assert mock_dqn is not None
@@ -28,20 +30,22 @@ class TestRLSuggestionGeneratorInternalMethods:
 
     def test_lazy_import_rl_failure(self):
         """Test import RL échec."""
-        with patch("services.rl.suggestion_generator._dqn_agent", None), \
-             patch("services.rl.suggestion_generator._dispatch_env", None), \
-             patch("services.rl.suggestion_generator.improved_dqn_agent", side_effect=ImportError("Test error")):
-
-            with pytest.raises(ImportError):
-                _lazy_import_rl()
+        with (
+            patch("services.rl.suggestion_generator._dqn_agent", None),
+            patch("services.rl.suggestion_generator._dispatch_env", None),
+            patch("services.rl.suggestion_generator.improved_dqn_agent", side_effect=ImportError("Test error")),
+            pytest.raises(ImportError),
+        ):
+            lazy_import_rl()
 
     def test_load_model_success(self):
         """Test chargement modèle réussi."""
-        with patch("services.rl.suggestion_generator.Path") as mock_path, \
-             patch("services.rl.suggestion_generator.DispatchEnv") as mock_env_class, \
-             patch("services.rl.suggestion_generator.ImprovedDQNAgent") as mock_agent_class, \
-             patch("services.rl.suggestion_generator._lazy_import_rl"):
-
+        with (
+            patch("services.rl.suggestion_generator.Path") as mock_path,
+            patch("services.rl.suggestion_generator.DispatchEnv") as mock_env_class,
+            patch("services.rl.suggestion_generator.ImprovedDQNAgent") as mock_agent_class,
+            patch("services.rl.suggestion_generator._lazy_import_rl"),
+        ):
             # Mock file exists
             mock_file = Mock()
             mock_file.exists.return_value = True
@@ -64,9 +68,10 @@ class TestRLSuggestionGeneratorInternalMethods:
 
     def test_load_model_file_not_exists(self):
         """Test chargement modèle - fichier n'existe pas."""
-        with patch("services.rl.suggestion_generator.Path") as mock_path, \
-             patch("services.rl.suggestion_generator._lazy_import_rl"):
-
+        with (
+            patch("services.rl.suggestion_generator.Path") as mock_path,
+            patch("services.rl.suggestion_generator._lazy_import_rl"),
+        ):
             # Mock file doesn't exist
             mock_file = Mock()
             mock_file.exists.return_value = False
@@ -78,9 +83,10 @@ class TestRLSuggestionGeneratorInternalMethods:
 
     def test_load_model_exception(self):
         """Test chargement modèle - exception."""
-        with patch("services.rl.suggestion_generator.Path") as mock_path, \
-             patch("services.rl.suggestion_generator._lazy_import_rl", side_effect=Exception("Test error")):
-
+        with (
+            patch("services.rl.suggestion_generator.Path") as mock_path,
+            patch("services.rl.suggestion_generator._lazy_import_rl", side_effect=Exception("Test error")),
+        ):
             mock_file = Mock()
             mock_file.exists.return_value = True
             mock_path.return_value = mock_file
@@ -94,20 +100,13 @@ class TestRLSuggestionGeneratorInternalMethods:
         generator = RLSuggestionGenerator()
 
         # Mock assignments et drivers
-        assignments = [
-            {"id": 1, "driver_id": 1, "booking_id": 1},
-            {"id": 2, "driver_id": 2, "booking_id": 2}
-        ]
+        assignments = [{"id": 1, "driver_id": 1, "booking_id": 1}, {"id": 2, "driver_id": 2, "booking_id": 2}]
         drivers = [
             {"id": 1, "lat": 48.8566, "lon": 2.3522, "available": True},
-            {"id": 2, "lat": 48.8606, "lon": 2.3376, "available": True}
+            {"id": 2, "lat": 48.8606, "lon": 2.3376, "available": True},
         ]
 
-        suggestions = generator._generate_basic_suggestions(
-            assignments=assignments,
-            drivers=drivers,
-            max_suggestions=5
-        )
+        suggestions = generator._generate_basic_suggestions(assignments=assignments, drivers=drivers, max_suggestions=5)
 
         assert isinstance(suggestions, list)
         assert len(suggestions) <= 5
@@ -116,11 +115,7 @@ class TestRLSuggestionGeneratorInternalMethods:
         """Test génération suggestions basiques - données vides."""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator._generate_basic_suggestions(
-            assignments=[],
-            drivers=[],
-            max_suggestions=5
-        )
+        suggestions = generator._generate_basic_suggestions(assignments=[], drivers=[], max_suggestions=5)
 
         assert suggestions == []
 
@@ -140,20 +135,14 @@ class TestRLSuggestionGeneratorInternalMethods:
         mock_env.step.return_value = (np.zeros(62), 0.0, False, False, {})
         generator.env = mock_env
 
-        assignments = [
-            {"id": 1, "driver_id": 1, "booking_id": 1},
-            {"id": 2, "driver_id": 2, "booking_id": 2}
-        ]
+        assignments = [{"id": 1, "driver_id": 1, "booking_id": 1}, {"id": 2, "driver_id": 2, "booking_id": 2}]
         drivers = [
             {"id": 1, "lat": 48.8566, "lon": 2.3522, "available": True},
-            {"id": 2, "lat": 48.8606, "lon": 2.3376, "available": True}
+            {"id": 2, "lat": 48.8606, "lon": 2.3376, "available": True},
         ]
 
         suggestions = generator._generate_rl_suggestions(
-            assignments=assignments,
-            drivers=drivers,
-            min_confidence=0.3,
-            max_suggestions=5
+            assignments=assignments, drivers=drivers, min_confidence=0.3, max_suggestions=5
         )
 
         assert isinstance(suggestions, list)
@@ -164,10 +153,7 @@ class TestRLSuggestionGeneratorInternalMethods:
         generator.agent = None
 
         suggestions = generator._generate_rl_suggestions(
-            assignments=[],
-            drivers=[],
-            min_confidence=0.5,
-            max_suggestions=5
+            assignments=[], drivers=[], min_confidence=0.5, max_suggestions=5
         )
 
         assert suggestions == []
@@ -189,11 +175,7 @@ class TestRLSuggestionGeneratorInternalMethods:
         generator = RLSuggestionGenerator()
 
         suggestion = generator._format_suggestion(
-            assignment_id=1,
-            driver_id=2,
-            booking_id=3,
-            confidence=0.8,
-            reason="Test reason"
+            assignment_id=1, driver_id=2, booking_id=3, confidence=0.8, reason="Test reason"
         )
 
         assert isinstance(suggestion, dict)
@@ -209,18 +191,14 @@ class TestRLSuggestionGeneratorInternalMethods:
 
         assignments = [
             {"id": 1, "driver_id": 1, "booking_id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522},
-            {"id": 2, "driver_id": 2, "booking_id": 2, "pickup_lat": 48.8606, "pickup_lon": 2.3376}
+            {"id": 2, "driver_id": 2, "booking_id": 2, "pickup_lat": 48.8606, "pickup_lon": 2.3376},
         ]
         drivers = [
             {"id": 1, "lat": 48.8566, "lon": 2.3522, "available": True},
-            {"id": 2, "lat": 48.8606, "lon": 2.3376, "available": True}
+            {"id": 2, "lat": 48.8606, "lon": 2.3376, "available": True},
         ]
 
-        suggestions = generator._get_heuristic_suggestions(
-            assignments=assignments,
-            drivers=drivers,
-            max_suggestions=5
-        )
+        suggestions = generator._get_heuristic_suggestions(assignments=assignments, drivers=drivers, max_suggestions=5)
 
         assert isinstance(suggestions, list)
 
@@ -228,10 +206,7 @@ class TestRLSuggestionGeneratorInternalMethods:
         """Test calcul distance."""
         generator = RLSuggestionGenerator()
 
-        distance = generator._calculate_distance(
-            lat1=48.8566, lon1=2.3522,
-            lat2=48.8606, lon2=2.3376
-        )
+        distance = generator._calculate_distance(lat1=48.8566, lon1=2.3522, lat2=48.8606, lon2=2.3376)
 
         assert isinstance(distance, float)
         assert distance >= 0

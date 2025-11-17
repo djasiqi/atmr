@@ -1,6 +1,7 @@
 """
 Tests complets pour suggestion_generator.py - Couverture 95%+
 """
+
 import logging
 from unittest.mock import MagicMock, Mock, patch
 
@@ -23,10 +24,7 @@ class TestRLSuggestionGenerator:
 
     def test_init_custom(self):
         """Test initialisation avec paramètres personnalisés"""
-        generator = RLSuggestionGenerator(
-            max_suggestions=10,
-            min_confidence=0.8
-        )
+        generator = RLSuggestionGenerator(max_suggestions=10, min_confidence=0.8)
 
         assert generator.max_suggestions == 10
         assert generator.min_confidence == 0.8
@@ -36,15 +34,17 @@ class TestRLSuggestionGenerator:
         """Test _lazy_import_rl avec succès"""
         generator = RLSuggestionGenerator()
 
-        with patch("services.rl.suggestion_generator.ImprovedDQNAgent") as mock_dqn:
-            with patch("services.rl.suggestion_generator.DispatchEnv") as mock_env:
-                mock_dqn.return_value = Mock()
-                mock_env.return_value = Mock()
+        with (
+            patch("services.rl.suggestion_generator.ImprovedDQNAgent") as mock_dqn,
+            patch("services.rl.suggestion_generator.DispatchEnv") as mock_env,
+        ):
+            mock_dqn.return_value = Mock()
+            mock_env.return_value = Mock()
 
-                result = generator._lazy_import_rl()
+            result = generator._lazy_import_rl()
 
-                assert result is True
-                assert generator.model_loaded is True
+            assert result is True
+            assert generator.model_loaded is True
 
     def test_lazy_import_rl_failure(self):
         """Test _lazy_import_rl avec échec"""
@@ -60,15 +60,17 @@ class TestRLSuggestionGenerator:
         """Test _load_model avec succès"""
         generator = RLSuggestionGenerator()
 
-        with patch.object(generator, "_lazy_import_rl", return_value=True):
-            with patch("pathlib.Path.exists", return_value=True):
-                with patch("torch.load") as mock_load:
-                    mock_load.return_value = {"q_network_state_dict": {}, "optimizer_state_dict": {}}
+        with (
+            patch.object(generator, "_lazy_import_rl", return_value=True),
+            patch("pathlib.Path.exists", return_value=True),
+            patch("torch.load") as mock_load,
+        ):
+            mock_load.return_value = {"q_network_state_dict": {}, "optimizer_state_dict": {}}
 
-                    result = generator._load_model()
+            result = generator._load_model()
 
-                    assert result is True
-                    assert generator.model_loaded is True
+            assert result is True
+            assert generator.model_loaded is True
 
     def test_load_model_failure(self):
         """Test _load_model avec échec"""
@@ -84,12 +86,14 @@ class TestRLSuggestionGenerator:
         """Test _load_model avec fichier non trouvé"""
         generator = RLSuggestionGenerator()
 
-        with patch.object(generator, "_lazy_import_rl", return_value=True):
-            with patch("pathlib.Path.exists", return_value=False):
-                result = generator._load_model()
+        with (
+            patch.object(generator, "_lazy_import_rl", return_value=True),
+            patch("pathlib.Path.exists", return_value=False),
+        ):
+            result = generator._load_model()
 
-                assert result is False
-                assert generator.model_loaded is False
+            assert result is False
+            assert generator.model_loaded is False
 
     def test_generate_suggestions_with_model(self):
         """Test generate_suggestions avec modèle chargé"""
@@ -98,32 +102,34 @@ class TestRLSuggestionGenerator:
         # Mock assignments, drivers, bookings
         assignments = [
             {"id": 1, "booking_id": 1, "driver_id": 1, "status": "assigned"},
-            {"id": 2, "booking_id": 2, "driver_id": 2, "status": "assigned"}
+            {"id": 2, "booking_id": 2, "driver_id": 2, "status": "assigned"},
         ]
         drivers = [
             {"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True},
-            {"id": 2, "name": "Driver 2", "lat": 48.8606, "lon": 2.3376, "available": True}
+            {"id": 2, "name": "Driver 2", "lat": 48.8606, "lon": 2.3376, "available": True},
         ]
         bookings = [
             {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376},
-            {"id": 2, "pickup_lat": 48.8606, "pickup_lon": 2.3376, "dropoff_lat": 48.8566, "dropoff_lon": 2.3522}
+            {"id": 2, "pickup_lat": 48.8606, "pickup_lon": 2.3376, "dropoff_lat": 48.8566, "dropoff_lon": 2.3522},
         ]
 
-        with patch.object(generator, "_load_model", return_value=True):
-            with patch.object(generator, "_get_suggestion_confidence", return_value=0.8):
-                with patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}):
-                    suggestions = generator.generate_suggestions(
-                        company_id=1,
-                        assignments=assignments,
-                        drivers=drivers,
-                        bookings=bookings,
-                        for_date="2025-0.1-0.1",
-                        min_confidence=0.7,
-                        max_suggestions=5
-                    )
+        with (
+            patch.object(generator, "_load_model", return_value=True),
+            patch.object(generator, "_get_suggestion_confidence", return_value=0.8),
+            patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}),
+        ):
+            suggestions = generator.generate_suggestions(
+                company_id=1,
+                assignments=assignments,
+                drivers=drivers,
+                bookings=bookings,
+                for_date="2025-0.1-0.1",
+                min_confidence=0.7,
+                max_suggestions=5,
+            )
 
-                    assert isinstance(suggestions, list)
-                    assert len(suggestions) <= 5
+            assert isinstance(suggestions, list)
+            assert len(suggestions) <= 5
 
     def test_generate_suggestions_without_model(self):
         """Test generate_suggestions sans modèle"""
@@ -131,23 +137,27 @@ class TestRLSuggestionGenerator:
 
         assignments = [{"id": 1, "booking_id": 1, "driver_id": 1, "status": "assigned"}]
         drivers = [{"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True}]
-        bookings = [{"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}]
+        bookings = [
+            {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}
+        ]
 
-        with patch.object(generator, "_load_model", return_value=False):
-            with patch.object(generator, "_get_heuristic_suggestions", return_value=[{"suggestion": "heuristic"}]):
-                suggestions = generator.generate_suggestions(
-                    company_id=1,
-                    assignments=assignments,
-                    drivers=drivers,
-                    bookings=bookings,
-                    for_date="2025-0.1-0.1",
-                    min_confidence=0.7,
-                    max_suggestions=5
-                )
+        with (
+            patch.object(generator, "_load_model", return_value=False),
+            patch.object(generator, "_get_heuristic_suggestions", return_value=[{"suggestion": "heuristic"}]),
+        ):
+            suggestions = generator.generate_suggestions(
+                company_id=1,
+                assignments=assignments,
+                drivers=drivers,
+                bookings=bookings,
+                for_date="2025-0.1-0.1",
+                min_confidence=0.7,
+                max_suggestions=5,
+            )
 
-                assert isinstance(suggestions, list)
-                assert len(suggestions) == 1
-                assert suggestions[0]["suggestion"] == "heuristic"
+            assert isinstance(suggestions, list)
+            assert len(suggestions) == 1
+            assert suggestions[0]["suggestion"] == "heuristic"
 
     def test_generate_suggestions_empty_data(self):
         """Test generate_suggestions avec données vides"""
@@ -160,7 +170,7 @@ class TestRLSuggestionGenerator:
             bookings=[],
             for_date="2025-0.1-0.1",
             min_confidence=0.7,
-            max_suggestions=5
+            max_suggestions=5,
         )
 
         assert isinstance(suggestions, list)
@@ -188,7 +198,7 @@ class TestRLSuggestionGenerator:
             "current_driver_id": 1,
             "suggested_driver_id": 2,
             "confidence": 0.8,
-            "reason": "Better match"
+            "reason": "Better match",
         }
 
         formatted = generator._format_suggestion(suggestion_data)
@@ -206,7 +216,9 @@ class TestRLSuggestionGenerator:
 
         assignments = [{"id": 1, "booking_id": 1, "driver_id": 1, "status": "assigned"}]
         drivers = [{"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True}]
-        bookings = [{"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}]
+        bookings = [
+            {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}
+        ]
 
         suggestions = generator._get_heuristic_suggestions(assignments, drivers, bookings)
 
@@ -268,7 +280,9 @@ class TestRLSuggestionGenerator:
 
         assignments = [{"id": 1, "booking_id": 1, "driver_id": 1, "status": "assigned"}]
         drivers = [{"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True}]
-        bookings = [{"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}]
+        bookings = [
+            {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}
+        ]
 
         with patch.object(generator, "_load_model", side_effect=Exception("Model error")):
             suggestions = generator.generate_suggestions(
@@ -278,7 +292,7 @@ class TestRLSuggestionGenerator:
                 bookings=bookings,
                 for_date="2025-0.1-0.1",
                 min_confidence=0.7,
-                max_suggestions=5
+                max_suggestions=5,
             )
 
             assert isinstance(suggestions, list)
@@ -291,34 +305,36 @@ class TestRLSuggestionGenerator:
         assignments = [
             {"id": 1, "booking_id": 1, "driver_id": 1, "status": "assigned"},
             {"id": 2, "booking_id": 2, "driver_id": 2, "status": "assigned"},
-            {"id": 3, "booking_id": 3, "driver_id": 3, "status": "assigned"}
+            {"id": 3, "booking_id": 3, "driver_id": 3, "status": "assigned"},
         ]
         drivers = [
             {"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True},
             {"id": 2, "name": "Driver 2", "lat": 48.8606, "lon": 2.3376, "available": True},
-            {"id": 3, "name": "Driver 3", "lat": 48.8646, "lon": 2.3226, "available": True}
+            {"id": 3, "name": "Driver 3", "lat": 48.8646, "lon": 2.3226, "available": True},
         ]
         bookings = [
             {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376},
             {"id": 2, "pickup_lat": 48.8606, "pickup_lon": 2.3376, "dropoff_lat": 48.8646, "dropoff_lon": 2.3226},
-            {"id": 3, "pickup_lat": 48.8646, "pickup_lon": 2.3226, "dropoff_lat": 48.8566, "dropoff_lon": 2.3522}
+            {"id": 3, "pickup_lat": 48.8646, "pickup_lon": 2.3226, "dropoff_lat": 48.8566, "dropoff_lon": 2.3522},
         ]
 
-        with patch.object(generator, "_load_model", return_value=True):
-            with patch.object(generator, "_get_suggestion_confidence", return_value=0.8):
-                with patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}):
-                    suggestions = generator.generate_suggestions(
-                        company_id=1,
-                        assignments=assignments,
-                        drivers=drivers,
-                        bookings=bookings,
-                        for_date="2025-0.1-0.1",
-                        min_confidence=0.7,
-                        max_suggestions=2
-                    )
+        with (
+            patch.object(generator, "_load_model", return_value=True),
+            patch.object(generator, "_get_suggestion_confidence", return_value=0.8),
+            patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}),
+        ):
+            suggestions = generator.generate_suggestions(
+                company_id=1,
+                assignments=assignments,
+                drivers=drivers,
+                bookings=bookings,
+                for_date="2025-0.1-0.1",
+                min_confidence=0.7,
+                max_suggestions=2,
+            )
 
-                    assert isinstance(suggestions, list)
-                    assert len(suggestions) <= 2
+            assert isinstance(suggestions, list)
+            assert len(suggestions) <= 2
 
     def test_generate_suggestions_min_confidence(self):
         """Test generate_suggestions avec min_confidence"""
@@ -326,23 +342,27 @@ class TestRLSuggestionGenerator:
 
         assignments = [{"id": 1, "booking_id": 1, "driver_id": 1, "status": "assigned"}]
         drivers = [{"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True}]
-        bookings = [{"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}]
+        bookings = [
+            {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}
+        ]
 
-        with patch.object(generator, "_load_model", return_value=True):
-            with patch.object(generator, "_get_suggestion_confidence", return_value=0.8):  # < 0.9
-                with patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}):
-                    suggestions = generator.generate_suggestions(
-                        company_id=1,
-                        assignments=assignments,
-                        drivers=drivers,
-                        bookings=bookings,
-                        for_date="2025-0.1-0.1",
-                        min_confidence=0.9,
-                        max_suggestions=5
-                    )
+        with (
+            patch.object(generator, "_load_model", return_value=True),
+            patch.object(generator, "_get_suggestion_confidence", return_value=0.8),  # < 0.9
+            patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}),
+        ):
+            suggestions = generator.generate_suggestions(
+                company_id=1,
+                assignments=assignments,
+                drivers=drivers,
+                bookings=bookings,
+                for_date="2025-0.1-0.1",
+                min_confidence=0.9,
+                max_suggestions=5,
+            )
 
-                    assert isinstance(suggestions, list)
-                    # Devrait être vide car confidence < min_confidence
+            assert isinstance(suggestions, list)
+            # Devrait être vide car confidence < min_confidence
 
     def test_edge_case_none_assignments(self):
         """Test avec assignments None"""
@@ -355,7 +375,7 @@ class TestRLSuggestionGenerator:
             bookings=[],
             for_date="2025-0.1-0.1",
             min_confidence=0.7,
-            max_suggestions=5
+            max_suggestions=5,
         )
 
         assert isinstance(suggestions, list)
@@ -372,7 +392,7 @@ class TestRLSuggestionGenerator:
             bookings=[],
             for_date="2025-0.1-0.1",
             min_confidence=0.7,
-            max_suggestions=5
+            max_suggestions=5,
         )
 
         assert isinstance(suggestions, list)
@@ -389,7 +409,7 @@ class TestRLSuggestionGenerator:
             bookings=None,
             for_date="2025-0.1-0.1",
             min_confidence=0.7,
-            max_suggestions=5
+            max_suggestions=5,
         )
 
         assert isinstance(suggestions, list)
@@ -401,22 +421,26 @@ class TestRLSuggestionGenerator:
 
         assignments = [{"id": 1, "booking_id": 1, "driver_id": 1, "status": "assigned"}]
         drivers = [{"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True}]
-        bookings = [{"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}]
+        bookings = [
+            {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}
+        ]
 
-        with patch.object(generator, "_load_model", return_value=True):
-            with patch.object(generator, "_get_suggestion_confidence", return_value=0.8):
-                with patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}):
-                    suggestions = generator.generate_suggestions(
-                        company_id=1,
-                        assignments=assignments,
-                        drivers=drivers,
-                        bookings=bookings,
-                        for_date="2025-0.1-0.1",
-                        min_confidence=-0.1,  # Invalide
-                        max_suggestions=5
-                    )
+        with (
+            patch.object(generator, "_load_model", return_value=True),
+            patch.object(generator, "_get_suggestion_confidence", return_value=0.8),
+            patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}),
+        ):
+            suggestions = generator.generate_suggestions(
+                company_id=1,
+                assignments=assignments,
+                drivers=drivers,
+                bookings=bookings,
+                for_date="2025-0.1-0.1",
+                min_confidence=-0.1,  # Invalide
+                max_suggestions=5,
+            )
 
-                    assert isinstance(suggestions, list)
+            assert isinstance(suggestions, list)
 
     def test_edge_case_invalid_max_suggestions(self):
         """Test avec max_suggestions invalide"""
@@ -424,22 +448,26 @@ class TestRLSuggestionGenerator:
 
         assignments = [{"id": 1, "booking_id": 1, "driver_id": 1, "status": "assigned"}]
         drivers = [{"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True}]
-        bookings = [{"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}]
+        bookings = [
+            {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}
+        ]
 
-        with patch.object(generator, "_load_model", return_value=True):
-            with patch.object(generator, "_get_suggestion_confidence", return_value=0.8):
-                with patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}):
-                    suggestions = generator.generate_suggestions(
-                        company_id=1,
-                        assignments=assignments,
-                        drivers=drivers,
-                        bookings=bookings,
-                        for_date="2025-0.1-0.1",
-                        min_confidence=0.7,
-                        max_suggestions=-1  # Invalide
-                    )
+        with (
+            patch.object(generator, "_load_model", return_value=True),
+            patch.object(generator, "_get_suggestion_confidence", return_value=0.8),
+            patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}),
+        ):
+            suggestions = generator.generate_suggestions(
+                company_id=1,
+                assignments=assignments,
+                drivers=drivers,
+                bookings=bookings,
+                for_date="2025-0.1-0.1",
+                min_confidence=0.7,
+                max_suggestions=-1,  # Invalide
+            )
 
-                    assert isinstance(suggestions, list)
+            assert isinstance(suggestions, list)
 
     def test_edge_case_empty_state(self):
         """Test avec état vide"""

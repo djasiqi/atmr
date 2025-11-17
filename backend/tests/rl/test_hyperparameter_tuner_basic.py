@@ -36,7 +36,7 @@ class TestHyperparameterTuner:
             n_training_episodes=0.300,
             n_eval_episodes=30,
             study_name="custom_study",
-            storage="sqlite:///test.db"
+            storage="sqlite:///test.db",
         )
 
         assert tuner.n_trials == 100
@@ -87,7 +87,7 @@ class TestHyperparameterTuner:
         mock_trial = Mock()
         mock_trial.suggest_float.side_effect = Exception("Trial error")
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="Trial error"):
             tuner._suggest_hyperparameters(mock_trial)
 
     def test_suggest_hyperparameters_with_none_values(self):

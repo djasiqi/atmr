@@ -42,6 +42,8 @@ class TestMLMonitoringService:
 
     def test_update_actual_delay(self):
         """Test mise à jour retard réel."""
+        from db import db
+        from services.ml_monitoring_service import MLMonitoringService
 
         # Log prédiction
         prediction = MLMonitoringService.log_prediction(
@@ -71,6 +73,8 @@ class TestMLMonitoringService:
 
     def test_get_metrics(self):
         """Test calcul métriques."""
+        from db import db
+        from services.ml_monitoring_service import MLMonitoringService
 
         # Créer quelques prédictions
         predictions = []
@@ -152,10 +156,9 @@ class TestMLMonitoringAPI:
 
 if __name__ == "__main__":
     """Exécution directe pour tests rapides."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🧪 TESTS ML MONITORING")
-    print("="*70)
+    print("=" * 70)
 
     print("\nℹ️  Tests nécessitent Flask app context")
     print("   Utiliser: pytest tests/test_ml_monitoring.py")
-

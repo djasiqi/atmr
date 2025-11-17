@@ -1,6 +1,7 @@
 """
 Tests minimaux pour RLSuggestionGenerator - Version corrigée
 """
+
 import os
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, Mock, patch
@@ -11,7 +12,7 @@ from services.rl.suggestion_generator import RLSuggestionGenerator
 
 
 class MockBooking:
-    def __init__(self, ____________________________________________________________________________________________________booking_id, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng):
+    def __init__(self, booking_id, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng):
         self.id = booking_id
         self.pickup_lat = pickup_lat
         self.pickup_lng = pickup_lng
@@ -22,7 +23,7 @@ class MockBooking:
 
 
 class MockDriver:
-    def __init__(self, ____________________________________________________________________________________________________driver_id, lat, lng):
+    def __init__(self, driver_id, lat, lng):
         self.id = driver_id
         self.lat = lat
         self.lng = lng
@@ -31,7 +32,7 @@ class MockDriver:
 
 
 class MockAssignment:
-    def __init__(self, ____________________________________________________________________________________________________assignment_id, booking, driver):
+    def __init__(self, assignment_id, booking, driver):
         self.id = assignment_id
         self.booking = booking
         self.driver = driver
@@ -94,13 +95,14 @@ class TestRLSuggestionGeneratorMinimal:
             generator = RLSuggestionGenerator()
 
             # Mock os.path.exists pour retourner True
-            with patch("os.path.exists", return_value=True):
-                # Mock torch.load pour lever une exception
-                with patch("torch.load", side_effect=Exception("Load error")):
-                    generator._load_model()
+            with (
+                patch("os.path.exists", return_value=True),
+                patch("torch.load", side_effect=Exception("Load error")),
+            ):
+                generator._load_model()
 
-                    # L'agent devrait rester inchangé
-                    assert generator.agent == mock_agent
+                # L'agent devrait rester inchangé
+                assert generator.agent == mock_agent
 
     def test_generate_suggestions_no_model(self):
         """Test génération de suggestions sans modèle"""
@@ -118,10 +120,7 @@ class TestRLSuggestionGeneratorMinimal:
             drivers = [MockDriver(1, 48.8566, 2.3522)]
 
             suggestions = generator.generate_suggestions(
-                company_id=1,
-                assignments=assignments,
-                drivers=drivers,
-                for_date=datetime.now()
+                company_id=1, assignments=assignments, drivers=drivers, for_date=datetime.now()
             )
 
             # Devrait retourner une liste vide
@@ -138,10 +137,7 @@ class TestRLSuggestionGeneratorMinimal:
             # Mock _generate_basic_suggestions pour lever une exception
             with patch.object(generator, "_generate_basic_suggestions", side_effect=Exception("Generation error")):
                 suggestions = generator.generate_suggestions(
-                    company_id=1,
-                    assignments=[],
-                    drivers=[],
-                    for_date=datetime.now()
+                    company_id=1, assignments=[], drivers=[], for_date=datetime.now()
                 )
 
                 # Devrait retourner une liste vide en cas d'erreur
@@ -156,9 +152,7 @@ class TestRLSuggestionGeneratorMinimal:
             generator = RLSuggestionGenerator()
 
             # Mock _generate_basic_suggestions pour retourner des suggestions
-            mock_suggestions = [
-                {"driver_id": 1, "booking_id": 1, "confidence": 0.8}
-            ]
+            mock_suggestions = [{"driver_id": 1, "booking_id": 1, "confidence": 0.8}]
             with patch.object(generator, "_generate_basic_suggestions", return_value=mock_suggestions):
                 suggestions = generator.generate_suggestions(
                     company_id=1,
@@ -166,7 +160,7 @@ class TestRLSuggestionGeneratorMinimal:
                     drivers=[],
                     for_date=datetime.now(),
                     min_confidence=0.7,
-                    max_suggestions=5
+                    max_suggestions=5,
                 )
 
                 assert suggestions == mock_suggestions
@@ -187,10 +181,7 @@ class TestRLSuggestionGeneratorMinimal:
             drivers[0].is_available = False  # Chauffeur non disponible
 
             suggestions = generator.generate_suggestions(
-                company_id=1,
-                assignments=assignments,
-                drivers=drivers,
-                for_date=datetime.now()
+                company_id=1, assignments=assignments, drivers=drivers, for_date=datetime.now()
             )
 
             # Devrait retourner une liste vide
@@ -208,10 +199,7 @@ class TestRLSuggestionGeneratorMinimal:
             assignments = []  # Pas d'assignments non assignés
 
             suggestions = generator.generate_suggestions(
-                company_id=1,
-                assignments=assignments,
-                drivers=[],
-                for_date=datetime.now()
+                company_id=1, assignments=assignments, drivers=[], for_date=datetime.now()
             )
 
             # Devrait retourner une liste vide
@@ -228,15 +216,11 @@ class TestRLSuggestionGeneratorMinimal:
             # Mock _generate_basic_suggestions pour retourner des suggestions
             mock_suggestions = [
                 {"driver_id": 1, "booking_id": 1, "confidence": 0.8},
-                {"driver_id": 2, "booking_id": 2, "confidence": 0.6}
+                {"driver_id": 2, "booking_id": 2, "confidence": 0.6},
             ]
             with patch.object(generator, "_generate_basic_suggestions", return_value=mock_suggestions):
                 suggestions = generator.generate_suggestions(
-                    company_id=1,
-                    assignments=[],
-                    drivers=[],
-                    for_date=datetime.now(),
-                    min_confidence=0.7
+                    company_id=1, assignments=[], drivers=[], for_date=datetime.now(), min_confidence=0.7
                 )
 
                 # Devrait filtrer les suggestions avec confiance < 0.7
@@ -252,17 +236,10 @@ class TestRLSuggestionGeneratorMinimal:
             generator = RLSuggestionGenerator()
 
             # Mock _generate_basic_suggestions pour retourner beaucoup de suggestions
-            mock_suggestions = [
-                {"driver_id": i, "booking_id": i, "confidence": 0.8}
-                for i in range(20)
-            ]
+            mock_suggestions = [{"driver_id": i, "booking_id": i, "confidence": 0.8} for i in range(20)]
             with patch.object(generator, "_generate_basic_suggestions", return_value=mock_suggestions):
                 suggestions = generator.generate_suggestions(
-                    company_id=1,
-                    assignments=[],
-                    drivers=[],
-                    for_date=datetime.now(),
-                    max_suggestions=5
+                    company_id=1, assignments=[], drivers=[], for_date=datetime.now(), max_suggestions=5
                 )
 
                 # Devrait limiter à 5 suggestions
@@ -278,12 +255,7 @@ class TestRLSuggestionGeneratorMinimal:
 
             # Test avec date passée
             past_date = datetime.now() - timedelta(days=1)
-            suggestions = generator.generate_suggestions(
-                company_id=1,
-                assignments=[],
-                drivers=[],
-                for_date=past_date
-            )
+            suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date=past_date)
 
             # Devrait retourner une liste vide pour les dates passées
             assert suggestions == []
@@ -298,10 +270,7 @@ class TestRLSuggestionGeneratorMinimal:
 
             # Test avec company_id négatif
             suggestions = generator.generate_suggestions(
-                company_id=-1,
-                assignments=[],
-                drivers=[],
-                for_date=datetime.now()
+                company_id=-1, assignments=[], drivers=[], for_date=datetime.now()
             )
 
             # Devrait retourner une liste vide pour company_id invalide
@@ -317,12 +286,7 @@ class TestRLSuggestionGeneratorMinimal:
 
             # Test avec paramètres vides
             suggestions = generator.generate_suggestions(
-                company_id=1,
-                assignments=[],
-                drivers=[],
-                for_date=datetime.now(),
-                min_confidence=0,
-                max_suggestions=0
+                company_id=1, assignments=[], drivers=[], for_date=datetime.now(), min_confidence=0, max_suggestions=0
             )
 
             # Devrait retourner une liste vide

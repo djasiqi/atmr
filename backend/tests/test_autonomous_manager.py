@@ -4,6 +4,7 @@ Tests pour services/unified_dispatch/autonomous_manager.py
 Coverage cible : 90%+
 Tests pour les 3 modes de dispatch : MANUAL, SEMI_AUTO, FULLY_AUTO
 """
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -25,7 +26,7 @@ def create_test_suggestion(**kwargs):
         "message": "Test message",
         "auto_applicable": True,
         "booking_id": 1,
-        "driver_id": 2
+        "driver_id": 2,
     }
     defaults.update(kwargs)
     return Suggestion(**defaults)
@@ -47,7 +48,7 @@ class TestAutonomousManagerInit:
 
     def test_init_with_invalid_company(self, db):
         """Test initialisation avec company inexistante."""
-        with pytest.raises(ValueError, match="Company .* not found"):
+        with pytest.raises(ValueError, match=r"Company .* not found"):
             AutonomousDispatchManager(company_id=0.99999)
 
     def test_get_manager_for_company_factory(self, db):
@@ -197,10 +198,7 @@ class TestCanAutoApplySuggestion:
         company = CompanyFactory(dispatch_mode=DispatchMode.FULLY_AUTO)
         manager = AutonomousDispatchManager(company.id)
 
-        suggestion = create_test_suggestion(
-            action="adjust_time",
-            additional_data={"delay_minutes": 5}
-        )
+        suggestion = create_test_suggestion(action="adjust_time", additional_data={"delay_minutes": 5})
 
         # Configurer
         manager.config["safety_limits"]["require_approval_delay_minutes"] = 15
@@ -215,10 +213,7 @@ class TestCanAutoApplySuggestion:
         company = CompanyFactory(dispatch_mode=DispatchMode.FULLY_AUTO)
         manager = AutonomousDispatchManager(company.id)
 
-        suggestion = create_test_suggestion(
-            action="adjust_time",
-            additional_data={"delay_minutes": 30}
-        )
+        suggestion = create_test_suggestion(action="adjust_time", additional_data={"delay_minutes": 30})
 
         # Configurer
         manager.config["safety_limits"]["require_approval_delay_minutes"] = 15
@@ -262,10 +257,7 @@ class TestShouldTriggerReoptimization:
         company = CompanyFactory(dispatch_mode=DispatchMode.MANUAL)
         manager = AutonomousDispatchManager(company.id)
 
-        result = manager.should_trigger_reoptimization(
-            "delay",
-            {"delay_minutes": 30}
-        )
+        result = manager.should_trigger_reoptimization("delay", {"delay_minutes": 30})
 
         assert result is False, "Jamais de reoptimization en MANUAL"
 
@@ -278,18 +270,12 @@ class TestShouldTriggerReoptimization:
         manager.config["re_optimize_triggers"]["delay_threshold_minutes"] = 15
 
         # Retard de 20 min
-        result = manager.should_trigger_reoptimization(
-            "delay",
-            {"delay_minutes": 20}
-        )
+        result = manager.should_trigger_reoptimization("delay", {"delay_minutes": 20})
 
         assert result is True, "Retard > threshold devrait déclencher reoptimization"
 
         # Retard de 10 min
-        result = manager.should_trigger_reoptimization(
-            "delay",
-            {"delay_minutes": 10}
-        )
+        result = manager.should_trigger_reoptimization("delay", {"delay_minutes": 10})
 
         assert result is False, "Retard < threshold ne devrait pas déclencher"
 
@@ -300,10 +286,7 @@ class TestShouldTriggerReoptimization:
 
         manager.config["re_optimize_triggers"]["driver_became_unavailable"] = True
 
-        result = manager.should_trigger_reoptimization(
-            "driver_unavailable",
-            {"driver_id": 123}
-        )
+        result = manager.should_trigger_reoptimization("driver_unavailable", {"driver_id": 123})
 
         assert result is True, "Driver unavailable devrait déclencher reoptimization"
 
@@ -316,18 +299,12 @@ class TestShouldTriggerReoptimization:
         manager.config["re_optimize_triggers"]["better_driver_available_gain_minutes"] = 10
 
         # Gain de 15 min
-        result = manager.should_trigger_reoptimization(
-            "better_driver_available",
-            {"gain_minutes": 15}
-        )
+        result = manager.should_trigger_reoptimization("better_driver_available", {"gain_minutes": 15})
 
         assert result is True, "Gain suffisant devrait déclencher reoptimization"
 
         # Gain de 5 min
-        result = manager.should_trigger_reoptimization(
-            "better_driver_available",
-            {"gain_minutes": 5}
-        )
+        result = manager.should_trigger_reoptimization("better_driver_available", {"gain_minutes": 5})
 
         assert result is False, "Gain insuffisant ne devrait pas déclencher"
 
@@ -401,7 +378,7 @@ class TestProcessOpportunities:
         assert stats["auto_applied"] == 0
 
     @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
-    def test_process_opportunities_with_apply(self, ____________________________________________________________________________________________________mock_apply, db):
+    def test_process_opportunities_with_apply(self, mock_apply, db):
         """Test application réelle de suggestions."""
         company = CompanyFactory(dispatch_mode=DispatchMode.FULLY_AUTO)
         manager = AutonomousDispatchManager(company.id)
@@ -423,7 +400,7 @@ class TestProcessOpportunities:
         mock_apply.assert_called_once()
 
     @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
-    def test_process_opportunities_with_error(self, ____________________________________________________________________________________________________mock_apply, db):
+    def test_process_opportunities_with_error(self, mock_apply, db):
         """Test gestion d'erreur lors de l'application."""
         company = CompanyFactory(dispatch_mode=DispatchMode.FULLY_AUTO)
         manager = AutonomousDispatchManager(company.id)
@@ -442,4 +419,3 @@ class TestProcessOpportunities:
 
         assert stats["errors"] == 1
         assert stats["auto_applied"] == 0
-
