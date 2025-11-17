@@ -432,7 +432,8 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       fitBoundsToMarkers(14);
     };
 
-    socket.on('driver_location', onLoc);
+    // ✅ Écouter les mises à jour de position en temps réel
+    socket.on('driver_location_update', onLoc);
 
     // Explicitly request driver locations when component mounts
     try {
@@ -442,7 +443,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     }
 
     return () => {
-      socket.off('driver_location', onLoc);
+      socket.off('driver_location_update', onLoc);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company?.id]);
