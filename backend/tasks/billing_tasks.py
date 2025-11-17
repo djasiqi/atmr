@@ -289,9 +289,10 @@ def send_invoice_summary():
                 if not invoices:
                     continue
 
-                # Calculer les totaux
+                # Calculer les totaux (exclure les factures annulées)
                 total_issued = sum(
-                    invoice.total_amount for invoice in invoices)
+                    invoice.total_amount for invoice in invoices
+                    if invoice.status != InvoiceStatus.CANCELLED)
                 total_paid = sum(invoice.amount_paid for invoice in invoices)
                 total_balance = sum(
                     invoice.balance_due for invoice in invoices)

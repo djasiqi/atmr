@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import styles from './InvoicesRegistry.module.css';
 import {
   fetchInvoices,
@@ -7,8 +8,6 @@ import {
   postReminder,
   regenerateInvoicePdf,
   cancelInvoice,
-  fetchBillingSettings,
-  updateBillingSettings,
   duplicateInvoice,
 } from '../../../../services/invoiceService';
 import useCompanyData from '../../../../hooks/useCompanyData';
@@ -16,11 +15,11 @@ import Filters from './components/Filters';
 import InvoiceRowActions from './components/InvoiceRowActions';
 import PaymentModal from './components/PaymentModal';
 import ReminderModal from './components/ReminderModal';
-import SettingsDrawer from './components/SettingsDrawer';
 import NewInvoiceModal from './components/NewInvoiceModal';
 
 const InvoicesRegistry = () => {
   const { company } = useCompanyData();
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -47,11 +46,7 @@ const InvoicesRegistry = () => {
     open: false,
     invoice: null,
   });
-  const [settingsDrawer, setSettingsDrawer] = useState({ open: false });
   const [newInvoiceModal, setNewInvoiceModal] = useState({ open: false, invoiceDraft: null });
-
-  // Billing settings
-  const [billingSettings, setBillingSettings] = useState(null);
 
   // Charger les factures
   const loadInvoices = useCallback(async () => {
@@ -72,25 +67,9 @@ const InvoicesRegistry = () => {
     }
   }, [company?.id, filters]);
 
-  // Charger les paramètres de facturation
-  const loadBillingSettings = useCallback(async () => {
-    if (!company?.id) return;
-
-    try {
-      const settings = await fetchBillingSettings(company.id);
-      setBillingSettings(settings);
-    } catch (err) {
-      console.error('Erreur lors du chargement des paramètres:', err);
-    }
-  }, [company?.id]);
-
   useEffect(() => {
     loadInvoices();
   }, [loadInvoices]);
-
-  useEffect(() => {
-    loadBillingSettings();
-  }, [loadBillingSettings]);
 
   // Handlers
   const handleFilterChange = (newFilters) => {
@@ -178,13 +157,9 @@ const InvoicesRegistry = () => {
     }
   };
 
-  const handleUpdateBillingSettings = async (settingsData) => {
-    try {
-      await updateBillingSettings(company.id, settingsData);
-      setBillingSettings((prev) => ({ ...prev, ...settingsData }));
-      setSettingsDrawer({ open: false });
-    } catch (err) {
-      setError(err.message || 'Erreur lors de la mise à jour des paramètres');
+  const handleOpenSettings = () => {
+    if (company?.public_id) {
+      navigate(`/dashboard/company/${company.public_id}/settings#billing`);
     }
   };
 
@@ -251,7 +226,7 @@ const InvoicesRegistry = () => {
           <div className={styles.headerActions}>
             <button
               className={styles.settingsBtn}
-              onClick={() => setSettingsDrawer({ open: true })}
+              onClick={handleOpenSettings}
             >
               ⚙️ Paramètres
             </button>
@@ -411,13 +386,6 @@ const InvoicesRegistry = () => {
         invoice={reminderModal.invoice}
         onClose={() => setReminderModal({ open: false, invoice: null })}
         onReminder={handleReminder}
-      />
-
-      <SettingsDrawer
-        open={settingsDrawer.open}
-        settings={billingSettings}
-        onClose={() => setSettingsDrawer({ open: false })}
-        onSave={handleUpdateBillingSettings}
       />
 
       <NewInvoiceModal

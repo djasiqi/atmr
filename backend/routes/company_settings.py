@@ -1,4 +1,5 @@
 """Routes API pour les paramètres avancés de l'entreprise."""
+
 import logging
 
 from flask import request
@@ -11,43 +12,47 @@ from routes.companies import get_company_from_token
 
 logger = logging.getLogger(__name__)
 
-settings_ns = Namespace(
-    "company-settings",
-    description="Paramètres avancés entreprise")
+settings_ns = Namespace("company-settings", description="Paramètres avancés entreprise")
 
 # ==================== Models API ====================
 
-billing_settings_model = settings_ns.model("BillingSettings", {
-    "id": fields.Integer,
-    "company_id": fields.Integer,
-    "payment_terms_days": fields.Integer(description="Délai de paiement en jours"),
-    "overdue_fee": fields.Float(description="Frais de retard"),
-    "reminder1_fee": fields.Float(description="Frais 1er rappel"),
-    "reminder2_fee": fields.Float(description="Frais 2e rappel"),
-    "reminder3_fee": fields.Float(description="Frais 3e rappel"),
-    "reminder_schedule_days": fields.Raw(description="Planning des rappels"),
-    "auto_reminders_enabled": fields.Boolean(description="Rappels automatiques activés"),
-    "email_sender": fields.String(description="Email expéditeur"),
-    "invoice_number_format": fields.String(description="Format de numérotation"),
-    "invoice_prefix": fields.String(description="Préfixe des factures"),
-    "iban": fields.String(description="IBAN"),
-    "qr_iban": fields.String(description="QR-IBAN"),
-    "esr_ref_base": fields.String(description="Référence ESR"),
-    "invoice_message_template": fields.String(description="Template email facture"),
-    "reminder1_template": fields.String(description="Template 1er rappel"),
-    "reminder2_template": fields.String(description="Template 2e rappel"),
-    "reminder3_template": fields.String(description="Template 3e rappel"),
-    "legal_footer": fields.String(description="Pied de page légal"),
-    "pdf_template_variant": fields.String(description="Variante template PDF"),
-})
+billing_settings_model = settings_ns.model(
+    "BillingSettings",
+    {
+        "id": fields.Integer,
+        "company_id": fields.Integer,
+        "payment_terms_days": fields.Integer(description="Délai de paiement en jours"),
+        "overdue_fee": fields.Float(description="Frais de retard"),
+        "reminder1_fee": fields.Float(description="Frais 1er rappel"),
+        "reminder2_fee": fields.Float(description="Frais 2e rappel"),
+        "reminder3_fee": fields.Float(description="Frais 3e rappel"),
+        "reminder_schedule_days": fields.Raw(description="Planning des rappels"),
+        "auto_reminders_enabled": fields.Boolean(description="Rappels automatiques activés"),
+        "email_sender": fields.String(description="Email expéditeur"),
+        "invoice_number_format": fields.String(description="Format de numérotation"),
+        "invoice_prefix": fields.String(description="Préfixe des factures"),
+        "iban": fields.String(description="IBAN"),
+        "qr_iban": fields.String(description="QR-IBAN"),
+        "esr_ref_base": fields.String(description="Référence ESR"),
+        "invoice_message_template": fields.String(description="Template email facture"),
+        "reminder1_template": fields.String(description="Template 1er rappel"),
+        "reminder2_template": fields.String(description="Template 2e rappel"),
+        "reminder3_template": fields.String(description="Template 3e rappel"),
+        "legal_footer": fields.String(description="Pied de page légal"),
+        "pdf_template_variant": fields.String(description="Variante template PDF"),
+    },
+)
 
-operational_settings_model = settings_ns.model("OperationalSettings", {
-    "service_area": fields.String(description="Zone de service", allow_null=True),
-    "max_daily_bookings": fields.Integer(description="Limite courses/jour"),
-    "dispatch_enabled": fields.Boolean(description="Dispatch automatique activé"),
-    "latitude": fields.Float(description="Latitude du siège", allow_null=True),
-    "longitude": fields.Float(description="Longitude du siège", allow_null=True),
-})
+operational_settings_model = settings_ns.model(
+    "OperationalSettings",
+    {
+        "service_area": fields.String(description="Zone de service", allow_null=True),
+        "max_daily_bookings": fields.Integer(description="Limite courses/jour"),
+        "dispatch_enabled": fields.Boolean(description="Dispatch automatique activé"),
+        "latitude": fields.Float(description="Latitude du siège", allow_null=True),
+        "longitude": fields.Float(description="Longitude du siège", allow_null=True),
+    },
+)
 
 # ==================== Routes ====================
 
@@ -71,7 +76,7 @@ class OperationalSettings(Resource):
                     "dispatch_enabled": company.dispatch_enabled,
                     "latitude": company.latitude,
                     "longitude": company.longitude,
-                }
+                },
             }, 200
         return {"success": False, "error": "Company not found"}, 404
 
@@ -97,16 +102,12 @@ class OperationalSettings(Resource):
             if "dispatch_enabled" in data:
                 company.dispatch_enabled = bool(data["dispatch_enabled"])
             if "latitude" in data:
-                company.latitude = float(
-                    data["latitude"]) if data["latitude"] else None
+                company.latitude = float(data["latitude"]) if data["latitude"] else None
             if "longitude" in data:
-                company.longitude = float(
-                    data["longitude"]) if data["longitude"] else None
+                company.longitude = float(data["longitude"]) if data["longitude"] else None
 
             db.session.commit()
-            logger.info(
-                "[Settings] Operational settings updated for company %s",
-                company.id)
+            logger.info("[Settings] Operational settings updated for company %s", company.id)
 
             return {
                 "success": True,
@@ -117,12 +118,11 @@ class OperationalSettings(Resource):
                     "dispatch_enabled": company.dispatch_enabled,
                     "latitude": company.latitude,
                     "longitude": company.longitude,
-                }
+                },
             }, 200
         except Exception as e:
             db.session.rollback()
-            logger.error(
-                "[Settings] Error updating operational settings: %s", e)
+            logger.error("[Settings] Error updating operational settings: %s", e)
             return {"success": False, "error": str(e)}, 500
 
 
@@ -141,8 +141,7 @@ class BillingSettings(Resource):
         if not company:
             return {"success": False, "error": "Company not found"}, 404
 
-        billing = CompanyBillingSettings.query.filter_by(
-            company_id=company.id).first()
+        billing = CompanyBillingSettings.query.filter_by(company_id=company.id).first()
 
         if not billing:
             # Créer avec valeurs par défaut
@@ -178,8 +177,7 @@ class BillingSettings(Resource):
             return {"success": False, "error": "Company not found"}, 404
 
         try:
-            billing = CompanyBillingSettings.query.filter_by(
-                company_id=company.id).first()
+            billing = CompanyBillingSettings.query.filter_by(company_id=company.id).first()
 
             if not billing:
                 billing = CompanyBillingSettings()
@@ -206,22 +204,40 @@ class BillingSettings(Resource):
                 "reminder2_template",
                 "reminder3_template",
                 "legal_footer",
-                "pdf_template_variant"]
+                "pdf_template_variant",
+            ]
 
             for field in updatable_fields:
                 if field in data:
                     setattr(billing, field, data[field])
 
-            db.session.commit()
-            logger.info(
-                "[Settings] Billing settings updated for company %s",
-                company.id)
+            # Gestion de la TVA
+            if "vat_applicable" in data:
+                billing.vat_applicable = bool(data["vat_applicable"])
 
-            return {
-                "success": True,
-                "message": "Paramètres de facturation mis à jour",
-                "data": billing.to_dict()
-            }, 200
+            if "vat_rate" in data:
+                from decimal import Decimal, InvalidOperation
+
+                rate_value = data.get("vat_rate")
+                if rate_value is None or rate_value == "":
+                    billing.vat_rate = None
+                else:
+                    try:
+                        billing.vat_rate = Decimal(str(rate_value))
+                    except (InvalidOperation, ValueError, TypeError):
+                        logger.warning("Taux TVA invalide: %s", rate_value)
+                        billing.vat_rate = None
+
+            if "vat_label" in data:
+                billing.vat_label = data.get("vat_label") or None
+
+            if "vat_number" in data:
+                billing.vat_number = data.get("vat_number") or None
+
+            db.session.commit()
+            logger.info("[Settings] Billing settings updated for company %s", company.id)
+
+            return {"success": True, "message": "Paramètres de facturation mis à jour", "data": billing.to_dict()}, 200
         except Exception as e:
             db.session.rollback()
             logger.error("[Settings] Error updating billing settings: %s", e)
@@ -241,8 +257,7 @@ class PlanningSettings(Resource):
         if not company:
             return {"success": False, "error": "Company not found"}, 404
 
-        planning = CompanyPlanningSettings.query.filter_by(
-            company_id=company.id).first()
+        planning = CompanyPlanningSettings.query.filter_by(company_id=company.id).first()
 
         if not planning:
             planning = CompanyPlanningSettings()
@@ -251,10 +266,7 @@ class PlanningSettings(Resource):
             db.session.add(planning)
             db.session.commit()
 
-        return {
-            "success": True,
-            "data": planning.settings
-        }, 200
+        return {"success": True, "data": planning.settings}, 200
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -270,8 +282,7 @@ class PlanningSettings(Resource):
             return {"success": False, "error": "Company not found"}, 404
 
         try:
-            planning = CompanyPlanningSettings.query.filter_by(
-                company_id=company.id).first()
+            planning = CompanyPlanningSettings.query.filter_by(company_id=company.id).first()
 
             if not planning:
                 planning = CompanyPlanningSettings()
@@ -282,15 +293,9 @@ class PlanningSettings(Resource):
                 planning.settings = data.get("settings", {})
 
             db.session.commit()
-            logger.info(
-                "[Settings] Planning settings updated for company %s",
-                company.id)
+            logger.info("[Settings] Planning settings updated for company %s", company.id)
 
-            return {
-                "success": True,
-                "message": "Paramètres de planning mis à jour",
-                "data": planning.settings
-            }, 200
+            return {"success": True, "message": "Paramètres de planning mis à jour", "data": planning.settings}, 200
         except Exception as e:
             db.session.rollback()
             logger.error("[Settings] Error updating planning settings: %s", e)
