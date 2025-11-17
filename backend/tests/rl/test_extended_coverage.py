@@ -1,11 +1,19 @@
 """
 Tests supplémentaires pour améliorer la couverture - Méthodes principales
 """
+
 from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
 import torch
+
+from services.rl.dispatch_env import DispatchEnv
+from services.rl.improved_dqn_agent import ImprovedDQNAgent
+from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
+from services.rl.replay_buffer import PrioritizedReplayBuffer
+from services.rl.reward_shaping import RewardShapingConfig
+from services.rl.shadow_mode_manager import ShadowModeManager
 
 
 class TestExtendedCoverage:
@@ -13,8 +21,6 @@ class TestExtendedCoverage:
 
     def test_improved_dqn_agent_select_action(self):
         """Test sélection d'action ImprovedDQNAgent"""
-        from services.rl.improved_dqn_agent import ImprovedDQNAgent
-
         agent = ImprovedDQNAgent(state_dim=10, action_dim=5)
 
         state = np.random.rand(10)
@@ -25,7 +31,6 @@ class TestExtendedCoverage:
 
     def test_improved_dqn_agent_select_action_with_valid_actions(self):
         """Test sélection d'action avec actions valides"""
-
         agent = ImprovedDQNAgent(state_dim=10, action_dim=5)
         agent.epsilon = 0.0  # Mode exploitation
 
@@ -199,7 +204,7 @@ class TestExtendedCoverage:
             "eta_minutes": 15,
             "delay_minutes": 5,
             "distance_km": 10.0,
-            "load_factor": 0.8
+            "load_factor": 0.8,
         }
 
         reward = reward_shaping.calculate_reward(assignment, {})
@@ -282,19 +287,9 @@ class TestExtendedCoverage:
 
         manager = ShadowModeManager()
 
-        human_decision = {
-            "driver_id": 1,
-            "booking_id": 1,
-            "eta_minutes": 15,
-            "delay_minutes": 5
-        }
+        human_decision = {"driver_id": 1, "booking_id": 1, "eta_minutes": 15, "delay_minutes": 5}
 
-        rl_decision = {
-            "driver_id": 2,
-            "booking_id": 1,
-            "eta_minutes": 12,
-            "delay_minutes": 2
-        }
+        rl_decision = {"driver_id": 2, "booking_id": 1, "eta_minutes": 12, "delay_minutes": 2}
 
         # Devrait fonctionner sans erreur
         manager.log_decision_comparison(human_decision, rl_decision)

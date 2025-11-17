@@ -21,12 +21,7 @@ class TestNStepBufferMissingLines:
             # Créer une transition invalide pour déclencher une exception
             with patch.object(buffer, "_process_n_step_transitions", side_effect=Exception("Test error")):
                 buffer.add_transition(
-                    state=np.array([1, 2, 3]),
-                    action=1,
-                    reward=1,
-                    next_state=np.array([4, 5, 6]),
-                    done=False,
-                    info=None
+                    state=np.array([1, 2, 3]), action=1, reward=1, next_state=np.array([4, 5, 6]), done=False, info=None
                 )
 
             # Vérifier que l'erreur a été loggée
@@ -43,7 +38,7 @@ class TestNStepBufferMissingLines:
             reward=1,
             next_state=np.array([4, 5, 6]),
             done=False,
-            info={"test": "info"}
+            info={"test": "info"},
         )
 
         # Vérifier que la transition a été ajoutée au buffer temporaire
@@ -67,33 +62,33 @@ class TestNStepBufferMissingLines:
         buffer = NStepBuffer(capacity=10, n_step=3)
 
         # Ajouter une transition au buffer temporaire
-        buffer.temp_buffer = [{
-            "state": np.array([1, 2, 3]),
-            "action": 1,
-            "reward": 1,
-            "next_state": np.array([4, 5, 6]),
-            "done": False,
-            "info": None
-        }]
+        buffer.temp_buffer = [
+            {
+                "state": np.array([1, 2, 3]),
+                "action": 1,
+                "reward": 1,
+                "next_state": np.array([4, 5, 6]),
+                "done": False,
+                "info": None,
+            }
+        ]
 
         # Mock _calculate_n_step_return pour lever une exception
-        with patch.object(buffer, "_calculate_n_step_return", side_effect=Exception("Test error")):
-            with patch.object(buffer.logger, "error") as mock_error:
-                buffer._process_n_step_transitions()
+        with (
+            patch.object(buffer, "_calculate_n_step_return", side_effect=Exception("Test error")),
+            patch.object(buffer.logger, "error") as mock_error,
+        ):
+            buffer._process_n_step_transitions()
 
-                # Vérifier que l'erreur a été loggée
-                mock_error.assert_called_once()
+            # Vérifier que l'erreur a été loggée
+            mock_error.assert_called_once()
 
     def test_calculate_n_step_return_with_nan_reward(self):
         """Test _calculate_n_step_return avec récompense NaN."""
         buffer = NStepBuffer(capacity=10, n_step=3)
 
         # Buffer temporaire avec récompense NaN
-        buffer.temp_buffer = [
-            {"reward": np.nan},
-            {"reward": 1},
-            {"reward": 2}
-        ]
+        buffer.temp_buffer = [{"reward": np.nan}, {"reward": 1}, {"reward": 2}]
 
         # Ne devrait pas lever d'exception
         result = buffer._calculate_n_step_return(0)
@@ -104,11 +99,7 @@ class TestNStepBufferMissingLines:
         buffer = NStepBuffer(capacity=10, n_step=3)
 
         # Buffer temporaire avec récompense infinie
-        buffer.temp_buffer = [
-            {"reward": np.inf},
-            {"reward": 1},
-            {"reward": 2}
-        ]
+        buffer.temp_buffer = [{"reward": np.inf}, {"reward": 1}, {"reward": 2}]
 
         # Ne devrait pas lever d'exception
         result = buffer._calculate_n_step_return(0)
@@ -119,11 +110,7 @@ class TestNStepBufferMissingLines:
         buffer = NStepBuffer(capacity=10, n_step=3)
 
         # Buffer temporaire avec récompense négative infinie
-        buffer.temp_buffer = [
-            {"reward": -np.inf},
-            {"reward": 1},
-            {"reward": 2}
-        ]
+        buffer.temp_buffer = [{"reward": -np.inf}, {"reward": 1}, {"reward": 2}]
 
         # Ne devrait pas lever d'exception
         result = buffer._calculate_n_step_return(0)
@@ -158,24 +145,26 @@ class TestNStepBufferMissingLines:
         # Ajouter quelques transitions
         for i in range(3):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
+                next_state=np.array([i + 3, i + 4, i + 5]),
                 done=False,
-                info=None
+                info=None,
             )
 
         # Mock random.choices pour lever une exception
-        with patch("random.choices", side_effect=Exception("Test error")):
-            with patch.object(buffer.logger, "error") as mock_error:
-                batch = buffer.sample(2)
+        with (
+            patch("random.choices", side_effect=Exception("Test error")),
+            patch.object(buffer.logger, "error") as mock_error,
+        ):
+            batch = buffer.sample(2)
 
-                # Devrait retourner des listes vides en cas d'erreur
-                assert batch == ([], [])
+            # Devrait retourner des listes vides en cas d'erreur
+            assert batch == ([], [])
 
-                # Vérifier que l'erreur a été loggée
-                mock_error.assert_called_once()
+            # Vérifier que l'erreur a été loggée
+            mock_error.assert_called_once()
 
     def test_get_stats(self):
         """Test get_stats."""
@@ -184,12 +173,12 @@ class TestNStepBufferMissingLines:
         # Ajouter quelques transitions
         for i in range(3):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
+                next_state=np.array([i + 3, i + 4, i + 5]),
                 done=False,
-                info=None
+                info=None,
             )
 
         stats = buffer.get_stats()
@@ -205,15 +194,17 @@ class TestNStepBufferMissingLines:
         buffer = NStepBuffer(capacity=10, n_step=3)
 
         # Mock len pour lever une exception
-        with patch("builtins.len", side_effect=Exception("Test error")):
-            with patch.object(buffer.logger, "error") as mock_error:
-                stats = buffer.get_stats()
+        with (
+            patch("builtins.len", side_effect=Exception("Test error")),
+            patch.object(buffer.logger, "error") as mock_error,
+        ):
+            stats = buffer.get_stats()
 
-                # Devrait retourner des stats par défaut
-                assert isinstance(stats, dict)
+            # Devrait retourner des stats par défaut
+            assert isinstance(stats, dict)
 
-                # Vérifier que l'erreur a été loggée
-                mock_error.assert_called_once()
+            # Vérifier que l'erreur a été loggée
+            mock_error.assert_called_once()
 
     def test_clear(self):
         """Test clear."""
@@ -222,12 +213,12 @@ class TestNStepBufferMissingLines:
         # Ajouter quelques transitions
         for i in range(3):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
+                next_state=np.array([i + 3, i + 4, i + 5]),
                 done=False,
-                info=None
+                info=None,
             )
 
         # Vider le buffer
@@ -252,7 +243,7 @@ class TestNStepPrioritizedBufferMissingLines:
             next_state=np.array([4, 5, 6]),
             done=False,
             info=None,
-            td_error=2
+            td_error=2,
         )
 
         # Vérifier que la priorité a été mise à jour
@@ -264,12 +255,7 @@ class TestNStepPrioritizedBufferMissingLines:
 
         # Ajouter une transition sans td_error
         buffer.add_transition(
-            state=np.array([1, 2, 3]),
-            action=1,
-            reward=1,
-            next_state=np.array([4, 5, 6]),
-            done=False,
-            info=None
+            state=np.array([1, 2, 3]), action=1, reward=1, next_state=np.array([4, 5, 6]), done=False, info=None
         )
 
         # Vérifier que la priorité par défaut a été utilisée
@@ -293,26 +279,28 @@ class TestNStepPrioritizedBufferMissingLines:
         # Ajouter quelques transitions
         for i in range(3):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
+                next_state=np.array([i + 3, i + 4, i + 5]),
                 done=False,
-                info=None
+                info=None,
             )
 
         # Mock random.choices pour lever une exception
-        with patch("random.choices", side_effect=Exception("Test error")):
-            with patch.object(buffer.logger, "error") as mock_error:
-                batch, weights, indices = buffer.sample(2)
+        with (
+            patch("random.choices", side_effect=Exception("Test error")),
+            patch.object(buffer.logger, "error") as mock_error,
+        ):
+            batch, weights, indices = buffer.sample(2)
 
-                # Devrait retourner des listes vides en cas d'erreur
-                assert batch == []
-                assert weights == []
-                assert indices == []
+            # Devrait retourner des listes vides en cas d'erreur
+            assert batch == []
+            assert weights == []
+            assert indices == []
 
-                # Vérifier que l'erreur a été loggée
-                mock_error.assert_called_once()
+            # Vérifier que l'erreur a été loggée
+            mock_error.assert_called_once()
 
     def test_update_priorities(self):
         """Test update_priorities."""
@@ -321,12 +309,12 @@ class TestNStepPrioritizedBufferMissingLines:
         # Ajouter quelques transitions
         for i in range(3):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
+                next_state=np.array([i + 3, i + 4, i + 5]),
                 done=False,
-                info=None
+                info=None,
             )
 
         # Mettre à jour les priorités
@@ -345,12 +333,12 @@ class TestNStepPrioritizedBufferMissingLines:
         # Ajouter quelques transitions
         for i in range(3):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
+                next_state=np.array([i + 3, i + 4, i + 5]),
                 done=False,
-                info=None
+                info=None,
             )
 
         # Vider le buffer
@@ -369,12 +357,12 @@ class TestNStepPrioritizedBufferMissingLines:
         # Ajouter quelques transitions
         for i in range(3):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
+                next_state=np.array([i + 3, i + 4, i + 5]),
                 done=False,
-                info=None
+                info=None,
             )
 
         stats = buffer.get_stats()
@@ -392,26 +380,24 @@ class TestNStepPrioritizedBufferMissingLines:
         buffer = NStepPrioritizedBuffer(capacity=10, n_step=3)
 
         # Mock len pour lever une exception
-        with patch("builtins.len", side_effect=Exception("Test error")):
-            with patch.object(buffer.logger, "error") as mock_error:
-                stats = buffer.get_stats()
+        with (
+            patch("builtins.len", side_effect=Exception("Test error")),
+            patch.object(buffer.logger, "error") as mock_error,
+        ):
+            stats = buffer.get_stats()
 
-                # Devrait retourner des stats par défaut
-                assert isinstance(stats, dict)
+            # Devrait retourner des stats par défaut
+            assert isinstance(stats, dict)
 
-                # Vérifier que l'erreur a été loggée
-                mock_error.assert_called_once()
+            # Vérifier que l'erreur a été loggée
+            mock_error.assert_called_once()
 
     def test_n_step_calculation_with_nan_rewards(self):
         """Test calcul N-step avec récompenses NaN."""
         buffer = NStepPrioritizedBuffer(capacity=10, n_step=3)
 
         # Buffer temporaire avec récompenses NaN
-        buffer.temp_buffer = [
-            {"reward": np.nan},
-            {"reward": np.nan},
-            {"reward": np.nan}
-        ]
+        buffer.temp_buffer = [{"reward": np.nan}, {"reward": np.nan}, {"reward": np.nan}]
 
         # Ne devrait pas lever d'exception
         result = buffer._calculate_n_step_return(0)
@@ -422,11 +408,7 @@ class TestNStepPrioritizedBufferMissingLines:
         buffer = NStepPrioritizedBuffer(capacity=10, n_step=3)
 
         # Buffer temporaire avec récompenses infinies
-        buffer.temp_buffer = [
-            {"reward": np.inf},
-            {"reward": -np.inf},
-            {"reward": np.inf}
-        ]
+        buffer.temp_buffer = [{"reward": np.inf}, {"reward": -np.inf}, {"reward": np.inf}]
 
         # Ne devrait pas lever d'exception
         result = buffer._calculate_n_step_return(0)
@@ -439,12 +421,12 @@ class TestNStepPrioritizedBufferMissingLines:
         # Ajouter plus de transitions que la capacité
         for i in range(5):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
+                next_state=np.array([i + 3, i + 4, i + 5]),
                 done=False,
-                info=None
+                info=None,
             )
 
         # Le buffer ne devrait pas dépasser la capacité
@@ -469,11 +451,7 @@ class TestNStepPrioritizedBufferMissingLines:
         buffer = NStepPrioritizedBuffer(capacity=10, n_step=3)
 
         # Buffer temporaire avec récompenses négatives
-        buffer.temp_buffer = [
-            {"reward": -1},
-            {"reward": -2},
-            {"reward": -3}
-        ]
+        buffer.temp_buffer = [{"reward": -1}, {"reward": -2}, {"reward": -3}]
 
         # Ne devrait pas lever d'exception
         result = buffer._calculate_n_step_return(0)

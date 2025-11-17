@@ -1,11 +1,19 @@
 """
 Tests corrigés pour améliorer la couverture - Version finale
 """
+
 from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
 import torch
+
+from services.rl.dispatch_env import DispatchEnv
+from services.rl.improved_dqn_agent import ImprovedDQNAgent
+from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
+from services.rl.replay_buffer import PrioritizedReplayBuffer
+from services.rl.reward_shaping import RewardShapingConfig
+from services.rl.shadow_mode_manager import ShadowModeManager
 
 
 class TestFinalCoverage:
@@ -13,8 +21,6 @@ class TestFinalCoverage:
 
     def test_improved_dqn_agent_select_action(self):
         """Test sélection d'action ImprovedDQNAgent"""
-        from services.rl.improved_dqn_agent import ImprovedDQNAgent
-
         agent = ImprovedDQNAgent(state_dim=10, action_dim=5)
 
         state = np.random.rand(10)
@@ -281,19 +287,9 @@ class TestFinalCoverage:
 
         manager = ShadowModeManager()
 
-        human_decision = {
-            "driver_id": 1,
-            "booking_id": 1,
-            "eta_minutes": 15,
-            "delay_minutes": 5
-        }
+        human_decision = {"driver_id": 1, "booking_id": 1, "eta_minutes": 15, "delay_minutes": 5}
 
-        rl_decision = {
-            "driver_id": 2,
-            "booking_id": 1,
-            "eta_minutes": 12,
-            "delay_minutes": 2
-        }
+        rl_decision = {"driver_id": 2, "booking_id": 1, "eta_minutes": 12, "delay_minutes": 2}
 
         context = {"timestamp": "2023-0.1-01T10:00:00", "company_id": 1}
         manager.log_decision_comparison("1", "1", human_decision, rl_decision, context)
@@ -426,12 +422,8 @@ class TestFinalCoverage:
         metadata = {}
 
         # Mock les méthodes de logging pour éviter les erreurs DB/Redis
-        with patch.object(logger, "_log_to_redis"), \
-             patch.object(logger, "_log_to_db"):
-
-            logger.log_decision(
-                state, action, q_values, reward, latency_ms, model_version, constraints, metadata
-            )
+        with patch.object(logger, "_log_to_redis"), patch.object(logger, "_log_to_db"):
+            logger.log_decision(state, action, q_values, reward, latency_ms, model_version, constraints, metadata)
 
             # Vérifier que les méthodes ont été appelées
             logger._log_to_redis.assert_called_once()
@@ -449,9 +441,7 @@ class TestFinalCoverage:
             generator = RLSuggestionGenerator()
 
             # Mock _generate_basic_suggestions pour retourner des suggestions
-            mock_suggestions = [
-                {"driver_id": 1, "booking_id": 1, "confidence": 0.8}
-            ]
+            mock_suggestions = [{"driver_id": 1, "booking_id": 1, "confidence": 0.8}]
             with patch.object(generator, "_generate_basic_suggestions", return_value=mock_suggestions):
                 suggestions = generator.generate_suggestions(
                     company_id=1,
@@ -459,7 +449,7 @@ class TestFinalCoverage:
                     drivers=[],
                     for_date=datetime.now(),
                     min_confidence=0.7,
-                    max_suggestions=5
+                    max_suggestions=5,
                 )
 
                 assert suggestions == mock_suggestions

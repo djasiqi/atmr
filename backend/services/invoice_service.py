@@ -223,10 +223,13 @@ class InvoiceService:
             invoice_number = self._generate_invoice_number(company_id, period_year, period_month)
 
             # Préparer la TVA
-            vat_applicable = bool(getattr(billing_settings, "vat_applicable", True))
+            # La TVA est applicable uniquement si vat_applicable est True ET vat_rate est défini
+            vat_applicable_setting = bool(getattr(billing_settings, "vat_applicable", True))
+            vat_rate_setting = getattr(billing_settings, "vat_rate", None)
+            vat_applicable = vat_applicable_setting and (vat_rate_setting is not None)
             default_vat_rate = Decimal("0")
-            if vat_applicable and getattr(billing_settings, "vat_rate", None) is not None:
-                default_vat_rate = Decimal(str(billing_settings.vat_rate)).quantize(Decimal("0.01"))
+            if vat_applicable and vat_rate_setting is not None:
+                default_vat_rate = Decimal(str(vat_rate_setting)).quantize(Decimal("0.01"))
             vat_label = getattr(billing_settings, "vat_label", None)
             vat_number = getattr(billing_settings, "vat_number", None)
 
@@ -269,16 +272,23 @@ class InvoiceService:
                     except (InvalidOperation, ValueError, TypeError):
                         app_logger.warning("Montant override invalide pour réservation %s", reservation.id)
 
-                line_vat_rate = default_vat_rate
-                if override and override.get("vat_rate") is not None:
-                    try:
-                        line_vat_rate = Decimal(str(override["vat_rate"])).quantize(Decimal("0.01"))
-                    except (InvalidOperation, ValueError, TypeError):
-                        app_logger.warning("TVA override invalide pour réservation %s", reservation.id)
+                # Déterminer le taux de TVA pour cette ligne
+                line_vat_rate = Decimal("0")
+                if vat_applicable:
+                    # Si override avec taux TVA, utiliser celui-ci
+                    if override and override.get("vat_rate") is not None:
+                        try:
+                            override_vat_rate = Decimal(str(override["vat_rate"])).quantize(Decimal("0.01"))
+                            # Si le taux override est > 0, l'utiliser
+                            if override_vat_rate > Decimal("0"):
+                                line_vat_rate = override_vat_rate
+                        except (InvalidOperation, ValueError, TypeError):
+                            app_logger.warning("TVA override invalide pour réservation %s", reservation.id)
+                            line_vat_rate = default_vat_rate
+                    else:
+                        # Sinon utiliser le taux par défaut
                         line_vat_rate = default_vat_rate
-
-                if not vat_applicable:
-                    line_vat_rate = Decimal("0")
+                # Si vat_applicable est False, line_vat_rate reste à 0
 
                 vat_amount = (base_amount * line_vat_rate / Decimal("100")).quantize(two_places, rounding=ROUND_HALF_UP)
                 total_with_vat = (base_amount + vat_amount).quantize(two_places, rounding=ROUND_HALF_UP)
@@ -395,16 +405,23 @@ class InvoiceService:
 
         for client_id in client_ids:
             try:
-                # Vérifier qu'une facture n'existe pas déjà pour ce client et cette période
-                existing_invoice = Invoice.query.filter_by(
-                    company_id=company_id,
-                    client_id=client_id,
-                    period_year=period_year,
-                    period_month=period_month
+                # Vérifier qu'une facture non annulée n'existe pas déjà pour ce client et cette période
+                # avec le même bill_to_client_id (même type de facturation)
+                existing_invoice = Invoice.query.filter(
+                    Invoice.company_id == company_id,
+                    Invoice.client_id == client_id,
+                    Invoice.period_year == period_year,
+                    Invoice.period_month == period_month,
+                    Invoice.status != InvoiceStatus.CANCELLED,
+                    # Prendre en compte le bill_to_client_id : None = facturation directe, sinon facturation tierce
+                    Invoice.bill_to_client_id == bill_to_client_id
                 ).first()
 
                 if existing_invoice:
-                    app_logger.warning("Facture déjà existante pour client %s, période %s/%s", client_id, period_month, period_year)
+                    app_logger.warning(
+                        "Facture déjà existante pour client %s, période %s/%s, bill_to_client_id=%s",
+                        client_id, period_month, period_year, bill_to_client_id
+                    )
                     errors.append({
                         "client_id": client_id,
                         "error": "Facture déjà existante pour cette période"

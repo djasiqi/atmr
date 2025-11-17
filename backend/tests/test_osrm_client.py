@@ -1,6 +1,7 @@
 """
 Tests pour le client OSRM (routing, matrice distances, cache).
 """
+
 import pytest
 import requests
 
@@ -49,13 +50,13 @@ def test_osrm_table_mock_success(monkeypatch):
     def mock_requests_get(*args, **kwargs):
         class MockResponse:
             status_code = 200
+
             def json(self):
-                return {
-                    "code": "Ok",
-                    "durations": [[0, 600], [600, 0]]
-                }
+                return {"code": "Ok", "durations": [[0, 600], [600, 0]]}
+
             def raise_for_status(self):
                 pass
+
         return MockResponse()
 
     monkeypatch.setattr(requests, "get", mock_requests_get)
@@ -66,7 +67,7 @@ def test_osrm_table_mock_success(monkeypatch):
         coords=[(46.52, 6.63), (46.20, 6.15)],
         sources=None,
         destinations=None,
-        timeout=5
+        timeout=5,
     )
 
     assert result["code"] == "Ok"
@@ -76,6 +77,7 @@ def test_osrm_table_mock_success(monkeypatch):
 
 def test_osrm_timeout_raises_exception(monkeypatch):
     """Timeout OSRM lève une exception après retries."""
+    from services.osrm_client import _table
 
     def mock_requests_get(*args, **kwargs):
         msg = "Connection timeout"
@@ -90,7 +92,7 @@ def test_osrm_timeout_raises_exception(monkeypatch):
             coords=[(46.52, 6.63), (46.20, 6.15)],
             sources=None,
             destinations=None,
-            timeout=1
+            timeout=1,
         )
 
 
@@ -127,4 +129,3 @@ def test_osrm_eta_fallback():
     # Distance ~50 km à 60 km/h = ~50 minutes = ~3000 secondes
     assert 2000 < eta < 5000
     assert isinstance(eta, int)
-

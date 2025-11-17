@@ -1,6 +1,7 @@
 """
 Tests supplémentaires pour dispatch_env.py - Couverture 95%+
 """
+
 import logging
 from unittest.mock import Mock, patch
 
@@ -82,8 +83,30 @@ class TestDispatchEnvEdgeCases:
         env.reset()
 
         # Simuler une assignation valide
-        env.drivers = [{"id": 1, "available": True, "load": 2, "lat": 48.8566, "lon": 2.3522, "total_distance": 0.0, "completed_bookings": 0, "assigned": False}]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "pickup_lat": 48.8606, "pickup_lon": 2.3376, "time_window_end": 30, "assigned": False, "time_remaining": 30}]
+        env.drivers = [
+            {
+                "id": 1,
+                "available": True,
+                "load": 2,
+                "lat": 48.8566,
+                "lon": 2.3522,
+                "total_distance": 0.0,
+                "completed_bookings": 0,
+                "assigned": False,
+            }
+        ]
+        env.bookings = [
+            {
+                "id": 1,
+                "priority": 3,
+                "time_window": 30,
+                "pickup_lat": 48.8606,
+                "pickup_lon": 2.3376,
+                "time_window_end": 30,
+                "assigned": False,
+                "time_remaining": 30,
+            }
+        ]
 
         # Action pour assigner le booking
         action = 1  # driver_idx = 0, booking_idx = 0
@@ -215,8 +238,27 @@ class TestDispatchEnvEdgeCases:
         env.reset()
 
         # Simuler une assignation qui utilise le reward shaping
-        env.drivers = [{"id": 1, "available": True, "load": 2, "lat": 48.8566, "lon": 2.3522, "total_distance": 0.0, "completed_bookings": 0}]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "pickup_lat": 48.8606, "pickup_lon": 2.3376, "time_window_end": 30}]
+        env.drivers = [
+            {
+                "id": 1,
+                "available": True,
+                "load": 2,
+                "lat": 48.8566,
+                "lon": 2.3522,
+                "total_distance": 0.0,
+                "completed_bookings": 0,
+            }
+        ]
+        env.bookings = [
+            {
+                "id": 1,
+                "priority": 3,
+                "time_window": 30,
+                "pickup_lat": 48.8606,
+                "pickup_lon": 2.3376,
+                "time_window_end": 30,
+            }
+        ]
 
         _obs, reward, _terminated, _truncated, _info = env.step(1)
 
@@ -255,12 +297,12 @@ class TestDispatchEnvEdgeCases:
         env.reset()
 
         # Test 1: Action wait
-        obs, reward, terminated, truncated, info = env.step(0)
+        obs, reward, _terminated, _truncated, _info = env.step(0)
         assert isinstance(obs, np.ndarray)
         assert isinstance(reward, float)
 
         # Test 2: Action invalide
-        obs, reward, terminated, truncated, info = env.step(999)
+        obs, reward, _terminated, _truncated, _info = env.step(999)
         assert isinstance(obs, np.ndarray)
         assert isinstance(reward, float)
 

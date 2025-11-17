@@ -64,7 +64,7 @@ class TestRLIntegration:
         
         return env
 
-    def test_agent_env_interaction(self, ____________________________________________________________________________________________________mock_agent, mock_env):
+    def test_agent_env_interaction(self, mock_agent, mock_env):
         """Test l'interaction entre l'agent et l'environnement."""
         # Mock des méthodes nécessaires
         mock_env.reset.return_value = np.random.rand(20)
@@ -88,7 +88,7 @@ class TestRLIntegration:
         assert isinstance(done, bool)
         assert isinstance(info, dict)
 
-    def test_learning_workflow(self, ____________________________________________________________________________________________________mock_agent, mock_env):
+    def test_learning_workflow(self, mock_agent, mock_env):
         """Test le workflow d'apprentissage complet."""
         # Mock des méthodes d'apprentissage
         mock_agent.store_transition.return_value = None
@@ -122,7 +122,7 @@ class TestRLIntegration:
         assert mock_agent.learn.called
         assert mock_agent.decay_epsilon.called
 
-    def test_reward_shaping_integration(self, ____________________________________________________________________________________________________mock_agent, mock_env):
+    def test_reward_shaping_integration(self, mock_agent, mock_env):
         """Test l'intégration du reward shaping."""
         if AdvancedRewardShaping is None:
             pytest.skip("AdvancedRewardShaping non disponible")
@@ -143,7 +143,7 @@ class TestRLIntegration:
         assert isinstance(shaped_reward, float)
         assert -100 <= shaped_reward <= 100
 
-    def test_action_masking_integration(self, ____________________________________________________________________________________________________mock_agent, mock_env):
+    def test_action_masking_integration(self, mock_agent, mock_env):
         """Test l'intégration de l'action masking."""
         # Mock des actions valides (utilisé pour la validation)
         _valid_actions = [0, 2, 4, 7, 9, 12, 15, 18, 21, 24]
@@ -250,7 +250,7 @@ class TestRLIntegration:
         except ImportError:
             pytest.skip("OptimalHyperparameters non disponible")
 
-    def test_end_to_end_episode(self, ____________________________________________________________________________________________________mock_agent, mock_env):
+    def test_end_to_end_episode(self, mock_agent, mock_env):
         """Test un épisode complet end-to-end."""
         # Configuration des mocks
         mock_env.reset.return_value = np.random.rand(20)
@@ -288,7 +288,7 @@ class TestRLIntegration:
         assert mock_agent.select_action.called
         assert mock_agent.store_transition.called
 
-    def test_performance_metrics(self, ____________________________________________________________________________________________________mock_agent, mock_env):
+    def test_performance_metrics(self, mock_agent, mock_env):
         """Test les métriques de performance."""
         # Métriques typiques pour le système RL
         metrics = {
@@ -308,7 +308,7 @@ class TestRLIntegration:
         assert metrics["q_value_mean"] > 0
         assert metrics["q_value_std"] >= 0
 
-    def test_error_handling(self, ____________________________________________________________________________________________________mock_agent, mock_env):
+    def test_error_handling(self, mock_agent, mock_env):
         """Test la gestion d'erreurs."""
         # Test avec des données invalides
         invalid_states = [

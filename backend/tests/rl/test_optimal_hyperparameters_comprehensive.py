@@ -1,6 +1,7 @@
 """
 Tests complets pour optimal_hyperparameters.py - Couverture 95%+
 """
+
 import json
 import logging
 import tempfile
@@ -24,7 +25,7 @@ class TestOptimalHyperparameters:
         assert config["gamma"] == 0.951
         assert config["batch_size"] == 128
         assert config["epsilon_start"] == 0.850
-        assert config["epsilon_end"] == 055
+        assert config["epsilon_end"] == 0.55
         assert config["epsilon_decay"] == 0.993
         assert config["buffer_size"] == 200000
         assert config["target_update_freq"] == 13
@@ -105,7 +106,7 @@ class TestOptimalHyperparameters:
         train_config = contexts["training"]
         assert train_config["learning_rate"] == 9.32e-05
         assert train_config["epsilon_start"] == 0.85
-        assert train_config["epsilon_end"] == 055
+        assert train_config["epsilon_end"] == 0.55
         assert train_config["epsilon_decay"] == 0.993
         assert train_config["batch_size"] == 128
         assert train_config["buffer_size"] == 200000
@@ -341,7 +342,7 @@ class TestOptimalHyperparameters:
             "epsilon_start": 0.9,
             "epsilon_end": 0.1,
             "epsilon_decay": 0.995,
-            "buffer_size": 100000
+            "buffer_size": 100000,
         }
 
         errors = OptimalHyperparameters.validate_config(config)
@@ -353,7 +354,7 @@ class TestOptimalHyperparameters:
         """Test validate_config avec paramètres manquants"""
         config = {
             "learning_rate": 0.001,
-            "gamma": 0.95
+            "gamma": 0.95,
             # Paramètres manquants
         }
 
@@ -372,7 +373,7 @@ class TestOptimalHyperparameters:
             "epsilon_start": 0.9,
             "epsilon_end": 0.1,
             "epsilon_decay": 0.995,
-            "buffer_size": 100000
+            "buffer_size": 100000,
         }
 
         errors = OptimalHyperparameters.validate_config(config)
@@ -389,7 +390,7 @@ class TestOptimalHyperparameters:
             "epsilon_start": 0.9,
             "epsilon_end": 0.1,
             "epsilon_decay": 0.995,
-            "buffer_size": 100000
+            "buffer_size": 100000,
         }
 
         errors = OptimalHyperparameters.validate_config(config)
@@ -406,7 +407,7 @@ class TestOptimalHyperparameters:
             "epsilon_start": 0.9,
             "epsilon_end": 0.1,
             "epsilon_decay": 0.995,
-            "buffer_size": 100000
+            "buffer_size": 100000,
         }
 
         errors = OptimalHyperparameters.validate_config(config)
@@ -445,6 +446,7 @@ class TestOptimalHyperparameters:
 
     def test_sprint1production_config(self):
         """Test de la configuration SPRINT1"""
+        from services.rl.optimal_hyperparameters import SPRINT1
 
         # Vérifier que c'est la configuration production
         assert SPRINT1["learning_rate"] == 5e-05
@@ -453,6 +455,7 @@ class TestOptimalHyperparameters:
 
     def test_sprint1reward_config(self):
         """Test de la configuration SPRINT1"""
+        from services.rl.optimal_hyperparameters import SPRINT1
 
         # Vérifier que c'est la configuration punctuality_focused
         assert SPRINT1["punctuality_weight"] == 1.5
@@ -463,16 +466,18 @@ class TestOptimalHyperparameters:
 
     def test_main_execution(self):
         """Test de l'exécution du module principal"""
-        with patch("services.rl.optimal_hyperparameters.logging.info") as mock_logging:
-            with patch("services.rl.optimal_hyperparameters.OptimalHyperparameters.save_config") as mock_save:
-                # Simuler l'exécution du module principal
-                import services.rl.optimal_hyperparameters
+        with (
+            patch("services.rl.optimal_hyperparameters.logging.info") as mock_logging,
+            patch("services.rl.optimal_hyperparameters.OptimalHyperparameters.save_config") as mock_save,
+        ):
+            # Simuler l'exécution du module principal
+            import services.rl.optimal_hyperparameters
 
-                # Vérifier que logging.info est appelé (peut être 0 si le module est déjà importé)
-                assert mock_logging.call_count >= 0
+            # Vérifier que logging.info est appelé (peut être 0 si le module est déjà importé)
+            assert mock_logging.call_count >= 0
 
-                # Vérifier que save_config est appelé (peut être 0 si le module est déjà importé)
-                assert mock_save.call_count >= 0
+            # Vérifier que save_config est appelé (peut être 0 si le module est déjà importé)
+            assert mock_save.call_count >= 0
 
     def test_config_copy_behavior(self):
         """Test que les méthodes retournent des copies"""
@@ -541,7 +546,7 @@ class TestOptimalHyperparameters:
             "epsilon_start": 0.9,
             "epsilon_end": 0.1,
             "epsilon_decay": 0.995,
-            "buffer_size": 100000
+            "buffer_size": 100000,
         }
 
         # Vérifier qu'une exception est levée pour les types invalides
@@ -557,7 +562,7 @@ class TestOptimalHyperparameters:
             "epsilon_start": 0.9,
             "epsilon_end": 0.1,
             "epsilon_decay": 0.995,
-            "buffer_size": 100000
+            "buffer_size": 100000,
         }
 
         errors = OptimalHyperparameters.validate_config(config)
@@ -574,7 +579,7 @@ class TestOptimalHyperparameters:
             "epsilon_start": 0.9,
             "epsilon_end": 0.1,
             "epsilon_decay": 0.995,
-            "buffer_size": 100000
+            "buffer_size": 100000,
         }
 
         errors = OptimalHyperparameters.validate_config(config)

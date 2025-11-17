@@ -657,7 +657,7 @@ class TestPerformanceMetrics:
         avg_time = (end_time - start_time) / 100
 
         # Vérifier que l'analyse est rapide (< 10ms en moyenne)
-        assert avg_time < 0.01, f"Temps moyen trop élevé: {avg_time"
+        assert avg_time < 0.01, f"Temps moyen trop élevé: {avg_time}"
 
     def test_memory_usage(self):
         """Test utilisation mémoire."""

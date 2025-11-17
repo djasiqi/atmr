@@ -12,6 +12,7 @@ Auteur: ATMR Project - RL Team
 Date: 24 octobre 2025
 """
 
+import contextlib
 import time
 from unittest.mock import MagicMock, Mock, patch
 
@@ -43,18 +44,19 @@ class TestOSRMFallbackExceptionEdgeCases:
         # Test avec DispatchEnv
         if DispatchEnv is not None:
             env = DispatchEnv(
-                drivers=[{"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}],
-                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}]
+                drivers=[
+                    {"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}
+                ],
+                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}],
             )
 
             # Mock du service OSRM dans l'environnement
-            with patch.object(env, "_get_travel_time", side_effect=requests.exceptions.Timeout("OSRM timeout")):
-                try:
-                    # Essayer de calculer un temps de trajet
-                    env._get_travel_time(46.2044, 6.1432, 46.2044, 6.1432)
-                except requests.exceptions.Timeout:
-                    # Le timeout est attendu
-                    pass
+            with (
+                patch.object(env, "_get_travel_time", side_effect=requests.exceptions.Timeout("OSRM timeout")),
+                contextlib.suppress(requests.exceptions.Timeout),
+            ):
+                # Essayer de calculer un temps de trajet
+                env._get_travel_time(46.2044, 6.1432, 46.2044, 6.1432)
 
     def test_osrm_service_unavailable(self, mock_osrm_service):
         """Test service OSRM indisponible."""
@@ -64,18 +66,21 @@ class TestOSRMFallbackExceptionEdgeCases:
         # Test avec DispatchEnv
         if DispatchEnv is not None:
             env = DispatchEnv(
-                drivers=[{"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}],
-                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}]
+                drivers=[
+                    {"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}
+                ],
+                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}],
             )
 
             # Mock du service OSRM dans l'environnement
-            with patch.object(env, "_get_travel_time", side_effect=requests.exceptions.ConnectionError("OSRM service unavailable")):
-                try:
-                    # Essayer de calculer un temps de trajet
-                    env._get_travel_time(46.2044, 6.1432, 46.2044, 6.1432)
-                except requests.exceptions.ConnectionError:
-                    # L'erreur de connexion est attendue
-                    pass
+            with (
+                patch.object(
+                    env, "_get_travel_time", side_effect=requests.exceptions.ConnectionError("OSRM service unavailable")
+                ),
+                contextlib.suppress(requests.exceptions.ConnectionError),
+            ):
+                # Essayer de calculer un temps de trajet
+                env._get_travel_time(46.2044, 6.1432, 46.2044, 6.1432)
 
     def test_osrm_service_invalid_response(self, mock_osrm_service):
         """Test réponse invalide du service OSRM."""
@@ -85,8 +90,10 @@ class TestOSRMFallbackExceptionEdgeCases:
         # Test avec DispatchEnv
         if DispatchEnv is not None:
             env = DispatchEnv(
-                drivers=[{"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}],
-                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}]
+                drivers=[
+                    {"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}
+                ],
+                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}],
             )
 
             # Mock du service OSRM dans l'environnement
@@ -108,18 +115,21 @@ class TestOSRMFallbackExceptionEdgeCases:
         # Test avec DispatchEnv
         if DispatchEnv is not None:
             env = DispatchEnv(
-                drivers=[{"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}],
-                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}]
+                drivers=[
+                    {"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}
+                ],
+                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}],
             )
 
             # Mock du service OSRM dans l'environnement
-            with patch.object(env, "_get_travel_time", side_effect=requests.exceptions.HTTPError("429 Too Many Requests")):
-                try:
-                    # Essayer de calculer un temps de trajet
-                    env._get_travel_time(46.2044, 6.1432, 46.2044, 6.1432)
-                except requests.exceptions.HTTPError:
-                    # Le rate limit est attendu
-                    pass
+            with (
+                patch.object(
+                    env, "_get_travel_time", side_effect=requests.exceptions.HTTPError("429 Too Many Requests")
+                ),
+                contextlib.suppress(requests.exceptions.HTTPError),
+            ):
+                # Essayer de calculer un temps de trajet
+                env._get_travel_time(46.2044, 6.1432, 46.2044, 6.1432)
 
     def test_osrm_service_server_error(self, mock_osrm_service):
         """Test erreur serveur du service OSRM."""
@@ -129,18 +139,21 @@ class TestOSRMFallbackExceptionEdgeCases:
         # Test avec DispatchEnv
         if DispatchEnv is not None:
             env = DispatchEnv(
-                drivers=[{"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}],
-                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}]
+                drivers=[
+                    {"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}
+                ],
+                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}],
             )
 
             # Mock du service OSRM dans l'environnement
-            with patch.object(env, "_get_travel_time", side_effect=requests.exceptions.HTTPError("500 Internal Server Error")):
-                try:
-                    # Essayer de calculer un temps de trajet
-                    env._get_travel_time(46.2044, 6.1432, 46.2044, 6.1432)
-                except requests.exceptions.HTTPError:
-                    # L'erreur serveur est attendue
-                    pass
+            with (
+                patch.object(
+                    env, "_get_travel_time", side_effect=requests.exceptions.HTTPError("500 Internal Server Error")
+                ),
+                contextlib.suppress(requests.exceptions.HTTPError),
+            ):
+                # Essayer de calculer un temps de trajet
+                env._get_travel_time(46.2044, 6.1432, 46.2044, 6.1432)
 
     def test_osrm_service_data_corruption(self, mock_osrm_service):
         """Test corruption de données du service OSRM."""
@@ -150,8 +163,10 @@ class TestOSRMFallbackExceptionEdgeCases:
         # Test avec DispatchEnv
         if DispatchEnv is not None:
             env = DispatchEnv(
-                drivers=[{"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}],
-                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}]
+                drivers=[
+                    {"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}
+                ],
+                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}],
             )
 
             # Mock du service OSRM dans l'environnement
@@ -170,23 +185,29 @@ class TestOSRMFallbackExceptionEdgeCases:
         # Mock d'un échec partiel OSRM
         mock_osrm_service.get_route.side_effect = [
             {"routes": [{"duration": 100, "distance": 1000}]},  # Succès
-            requests.exceptions.Timeout("OSRM timeout"),      # Échec
-            {"routes": [{"duration": 200, "distance": 2000}]}, # Succès
+            requests.exceptions.Timeout("OSRM timeout"),  # Échec
+            {"routes": [{"duration": 200, "distance": 2000}]},  # Succès
         ]
 
         # Test avec DispatchEnv
         if DispatchEnv is not None:
             env = DispatchEnv(
-                drivers=[{"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}],
-                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}]
+                drivers=[
+                    {"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}
+                ],
+                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}],
             )
 
             # Mock du service OSRM dans l'environnement
-            with patch.object(env, "_get_travel_time", side_effect=[
-                100,  # Succès
-                None, # Échec (fallback)
-                200   # Succès
-            ]):
+            with patch.object(
+                env,
+                "_get_travel_time",
+                side_effect=[
+                    100,  # Succès
+                    None,  # Échec (fallback)
+                    200,  # Succès
+                ],
+            ):
                 # Tester plusieurs appels
                 travel_time_1 = env._get_travel_time(46.2044, 6.1432, 46.2044, 6.1432)
                 travel_time_2 = env._get_travel_time(46.2044, 6.1432, 46.2044, 6.1432)
@@ -205,12 +226,16 @@ class TestOSRMFallbackExceptionEdgeCases:
         # Test avec DispatchEnv
         if DispatchEnv is not None:
             env = DispatchEnv(
-                drivers=[{"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}],
-                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}]
+                drivers=[
+                    {"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}
+                ],
+                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}],
             )
 
             # Mock du service OSRM dans l'environnement
-            with patch.object(env, "_get_travel_time", side_effect=requests.exceptions.ConnectionError("OSRM service unavailable")):
+            with patch.object(
+                env, "_get_travel_time", side_effect=requests.exceptions.ConnectionError("OSRM service unavailable")
+            ):
                 # Tester plusieurs appels concurrents
                 results = []
                 for _ in range(5):
@@ -236,16 +261,22 @@ class TestOSRMFallbackExceptionEdgeCases:
         # Test avec DispatchEnv
         if DispatchEnv is not None:
             env = DispatchEnv(
-                drivers=[{"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}],
-                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}]
+                drivers=[
+                    {"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}
+                ],
+                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}],
             )
 
             # Mock du service OSRM dans l'environnement
-            with patch.object(env, "_get_travel_time", side_effect=[
-                None,  # Échec (fallback)
-                None,  # Échec (fallback)
-                100    # Récupération
-            ]):
+            with patch.object(
+                env,
+                "_get_travel_time",
+                side_effect=[
+                    None,  # Échec (fallback)
+                    None,  # Échec (fallback)
+                    100,  # Récupération
+                ],
+            ):
                 # Tester plusieurs appels
                 travel_time_1 = env._get_travel_time(46.2044, 6.1432, 46.2044, 6.1432)
                 travel_time_2 = env._get_travel_time(46.2044, 6.1432, 46.2044, 6.1432)
@@ -254,7 +285,7 @@ class TestOSRMFallbackExceptionEdgeCases:
                 # Vérifier que la récupération fonctionne
                 assert travel_time_1 is not None  # Fallback utilisé
                 assert travel_time_2 is not None  # Fallback utilisé
-                assert travel_time_3 == 100       # Service récupéré
+                assert travel_time_3 == 100  # Service récupéré
 
     def test_osrm_service_fallback_consistency(self, mock_osrm_service):
         """Test cohérence du fallback OSRM."""
@@ -264,8 +295,10 @@ class TestOSRMFallbackExceptionEdgeCases:
         # Test avec DispatchEnv
         if DispatchEnv is not None:
             env = DispatchEnv(
-                drivers=[{"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}],
-                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}]
+                drivers=[
+                    {"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}
+                ],
+                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}],
             )
 
             # Mock du service OSRM dans l'environnement
@@ -288,8 +321,10 @@ class TestOSRMFallbackExceptionEdgeCases:
         # Test avec DispatchEnv
         if DispatchEnv is not None:
             env = DispatchEnv(
-                drivers=[{"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}],
-                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}]
+                drivers=[
+                    {"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}
+                ],
+                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}],
             )
 
             # Mock du service OSRM dans l'environnement
@@ -312,8 +347,10 @@ class TestOSRMFallbackExceptionEdgeCases:
         # Test avec DispatchEnv
         if DispatchEnv is not None:
             env = DispatchEnv(
-                drivers=[{"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}],
-                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}]
+                drivers=[
+                    {"id": "driver_1", "lat": 46.2044, "lon": 6.1432, "idle_time": 0, "load": 0, "available": True}
+                ],
+                bookings=[{"id": "booking_1", "lat": 46.2044, "lon": 6.1432, "time_window_end": 100}],
             )
 
             # Mock du service OSRM dans l'environnement

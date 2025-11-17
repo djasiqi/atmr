@@ -18,31 +18,34 @@ class TestLazyImport:
 
     def test_lazy_import_success(self):
         """Test import réussi des modules RL."""
-        with patch("services.rl.suggestion_generator._dqn_agent", None), \
-             patch("services.rl.suggestion_generator._dispatch_env", None):
-
+        with (
+            patch("services.rl.suggestion_generator._dqn_agent", None),
+            patch("services.rl.suggestion_generator._dispatch_env", None),
+        ):
             # Mock des imports
             mock_dqn_agent = Mock()
             mock_dispatch_env = Mock()
 
-            with patch("services.rl.suggestion_generator.improved_dqn_agent", mock_dqn_agent), \
-                 patch("services.rl.suggestion_generator.dispatch_env", mock_dispatch_env):
-
+            with (
+                patch("services.rl.suggestion_generator.improved_dqn_agent", mock_dqn_agent),
+                patch("services.rl.suggestion_generator.dispatch_env", mock_dispatch_env),
+            ):
                 _lazy_import_rl()
 
                 from services.rl.suggestion_generator import _dispatch_env, _dqn_agent
+
                 assert _dqn_agent == mock_dqn_agent
                 assert _dispatch_env == mock_dispatch_env
 
     def test_lazy_import_failure(self):
         """Test échec d'import des modules RL."""
-        with patch("services.rl.suggestion_generator._dqn_agent", None), \
-             patch("services.rl.suggestion_generator._dispatch_env", None):
-
-            with patch("services.rl.suggestion_generator.improved_dqn_agent", side_effect=ImportError("Module not found")):
-
-                with pytest.raises(ImportError):
-                    _lazy_import_rl()
+        with (
+            patch("services.rl.suggestion_generator._dqn_agent", None),
+            patch("services.rl.suggestion_generator._dispatch_env", None),
+            patch("services.rl.suggestion_generator.improved_dqn_agent", side_effect=ImportError("Module not found")),
+            pytest.raises(ImportError),
+        ):
+            _lazy_import_rl()
 
 
 class TestRLSuggestionGenerator:
@@ -80,7 +83,7 @@ class TestRLSuggestionGenerator:
 
     @patch("services.rl.suggestion_generator.Path")
     @patch("services.rl.suggestion_generator._lazy_import_rl")
-    def test_load_model_file_exists(self, ____________________________________________________________________________________________________mock_lazy_import, mock_path):
+    def test_load_model_file_exists(self, mock_lazy_import, mock_path):
         """Test chargement de modèle quand le fichier existe."""
         mock_path_instance = Mock()
         mock_path_instance.exists.return_value = True
@@ -90,10 +93,11 @@ class TestRLSuggestionGenerator:
         mock_agent = Mock()
         mock_env = Mock()
 
-        with patch("services.rl.suggestion_generator.ImprovedDQNAgent", return_value=mock_agent), \
-             patch("services.rl.suggestion_generator.DispatchEnv", return_value=mock_env), \
-             patch("torch.load", return_value={"state_dict": {}}):
-
+        with (
+            patch("services.rl.suggestion_generator.ImprovedDQNAgent", return_value=mock_agent),
+            patch("services.rl.suggestion_generator.DispatchEnv", return_value=mock_env),
+            patch("torch.load", return_value={"state_dict": {}}),
+        ):
             generator = RLSuggestionGenerator()
 
             mock_lazy_import.assert_called_once()
@@ -102,7 +106,11 @@ class TestRLSuggestionGenerator:
 
     @patch("services.rl.suggestion_generator.Path")
     @patch("services.rl.suggestion_generator._lazy_import_rl")
-    def test_load_model_torch_load_error(self, ____________________________________________________________________________________________________mock_lazy_import, mock_path):
+    def test_load_model_torch_load_error(
+        self,
+        mock_lazy_import,
+        mock_path,
+    ):
         """Test chargement de modèle avec erreur torch.load."""
         mock_path_instance = Mock()
         mock_path_instance.exists.return_value = True
@@ -124,10 +132,7 @@ class TestRLSuggestionGenerator:
         drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": True}]
 
         suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=assignments,
-            drivers=drivers,
-            for_date="2024-0.1-0.1"
+            company_id=1, assignments=assignments, drivers=drivers, for_date="2024-0.1-0.1"
         )
 
         # Devrait retourner des suggestions basiques
@@ -156,10 +161,7 @@ class TestRLSuggestionGenerator:
         drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": True}]
 
         suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=assignments,
-            drivers=drivers,
-            for_date="2024-0.1-0.1"
+            company_id=1, assignments=assignments, drivers=drivers, for_date="2024-0.1-0.1"
         )
 
         assert isinstance(suggestions, list)
@@ -251,12 +253,7 @@ class TestRLSuggestionGenerator:
         """Test formatage des suggestions."""
         generator = RLSuggestionGenerator()
 
-        suggestion = {
-            "booking_id": 1,
-            "driver_id": 2,
-            "confidence": 0.8,
-            "reason": "Optimization"
-        }
+        suggestion = {"booking_id": 1, "driver_id": 2, "confidence": 0.8, "reason": "Optimization"}
 
         formatted = generator._format_suggestion(suggestion)
 
@@ -272,11 +269,11 @@ class TestRLSuggestionGenerator:
 
         bookings = [
             {"id": 1, "pickup_lat": 46.2, "pickup_lon": 6.1, "assigned": False},
-            {"id": 2, "pickup_lat": 46.3, "pickup_lon": 6.2, "assigned": False}
+            {"id": 2, "pickup_lat": 46.3, "pickup_lon": 6.2, "assigned": False},
         ]
         drivers = [
             {"id": 1, "lat": 46.2, "lon": 6.1, "available": True},
-            {"id": 2, "lat": 46.3, "lon": 6.2, "available": True}
+            {"id": 2, "lat": 46.3, "lon": 6.2, "available": True},
         ]
 
         suggestions = generator._get_heuristic_suggestions(bookings, drivers)
@@ -396,13 +393,9 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         bookings = [
-            {"id": i, "pickup_lat": 46.2 + i*0.1, "pickup_lon": 6.1 + i*0.1, "assigned": False}
-            for i in range(10)
+            {"id": i, "pickup_lat": 46.2 + i * 0.1, "pickup_lon": 6.1 + i * 0.1, "assigned": False} for i in range(10)
         ]
-        drivers = [
-            {"id": i, "lat": 46.2 + i*0.1, "lon": 6.1 + i*0.1, "available": True}
-            for i in range(10)
-        ]
+        drivers = [{"id": i, "lat": 46.2 + i * 0.1, "lon": 6.1 + i * 0.1, "available": True} for i in range(10)]
 
         suggestions = generator.generate_suggestions(bookings, drivers, max_suggestions=3)
 

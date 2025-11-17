@@ -20,6 +20,7 @@ class TestWeatherService:
 
     def test_calculate_weather_factor_ideal(self):
         """Test calcul facteur météo - conditions idéales."""
+        from services.weather_service import WeatherService
 
         # Conditions idéales
         weather_data = {
@@ -39,6 +40,7 @@ class TestWeatherService:
 
     def test_calculate_weather_factor_rain(self):
         """Test calcul facteur météo - pluie."""
+        from services.weather_service import WeatherService
 
         # Pluie modérée
         weather_data = {
@@ -60,6 +62,7 @@ class TestWeatherService:
 
     def test_calculate_weather_factor_snow(self):
         """Test calcul facteur météo - neige."""
+        from services.weather_service import WeatherService
 
         # Neige
         weather_data = {
@@ -81,6 +84,7 @@ class TestWeatherService:
 
     def test_cache_mechanism(self):
         """Test mécanisme de cache."""
+        from services.weather_service import WeatherService
 
         # Clear cache
         WeatherService.clear_cache()
@@ -115,9 +119,9 @@ class TestWeatherService:
 
 if __name__ == "__main__":
     """Exécution directe pour tests rapides."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🧪 TESTS WEATHER SERVICE")
-    print("="*70)
+    print("=" * 70)
 
     test = TestWeatherService()
     try:
@@ -130,15 +134,16 @@ if __name__ == "__main__":
     except Exception:
         print("❌ Erreur: {e}")
         import traceback
+
         traceback.print_exc()
         import sys
+
         sys.exit(1)
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("✅ TOUS LES TESTS RÉUSSIS !")
-    print("="*70)
+    print("=" * 70)
     print("\nℹ️  Note: Tests utilisent default weather (pas d'API key)")
     print("   Pour tester avec vraie API:")
     print("   export OPENWEATHER_API_KEY=your_key")
     print("   pytest tests/test_weather_service.py")
-

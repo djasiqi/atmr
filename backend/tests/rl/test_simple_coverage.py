@@ -1,6 +1,7 @@
 """
 Tests ultra-simples pour améliorer la couverture - Version fonctionnelle
 """
+
 from unittest.mock import Mock, patch
 
 import pytest
@@ -25,6 +26,7 @@ class TestSimpleCoverage:
 
     def test_suggestion_generator_init_with_custom_path(self):
         """Test initialisation avec chemin personnalisé"""
+        from services.rl.suggestion_generator import RLSuggestionGenerator
 
         with patch("services.rl.suggestion_generator.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
@@ -37,6 +39,7 @@ class TestSimpleCoverage:
         """Test génération de suggestions avec données vides"""
         from datetime import datetime
 
+        from services.rl.suggestion_generator import RLSuggestionGenerator
 
         with patch("services.rl.suggestion_generator.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
@@ -44,10 +47,7 @@ class TestSimpleCoverage:
             generator = RLSuggestionGenerator()
 
             suggestions = generator.generate_suggestions(
-                company_id=1,
-                assignments=[],
-                drivers=[],
-                for_date=datetime.now()
+                company_id=1, assignments=[], drivers=[], for_date=datetime.now()
             )
 
             assert suggestions == []
@@ -56,6 +56,7 @@ class TestSimpleCoverage:
         """Test génération de suggestions avec date passée"""
         from datetime import datetime, timedelta
 
+        from services.rl.suggestion_generator import RLSuggestionGenerator
 
         with patch("services.rl.suggestion_generator.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
@@ -63,18 +64,15 @@ class TestSimpleCoverage:
             generator = RLSuggestionGenerator()
 
             past_date = datetime.now() - timedelta(days=1)
-            suggestions = generator.generate_suggestions(
-                company_id=1,
-                assignments=[],
-                drivers=[],
-                for_date=past_date
-            )
+            suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date=past_date)
 
             assert suggestions == []
 
     def test_suggestion_generator_generate_suggestions_invalid_company(self):
         """Test génération de suggestions avec company_id invalide"""
+        from datetime import datetime
 
+        from services.rl.suggestion_generator import RLSuggestionGenerator
 
         with patch("services.rl.suggestion_generator.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
@@ -82,10 +80,7 @@ class TestSimpleCoverage:
             generator = RLSuggestionGenerator()
 
             suggestions = generator.generate_suggestions(
-                company_id=-1,
-                assignments=[],
-                drivers=[],
-                for_date=datetime.now()
+                company_id=-1, assignments=[], drivers=[], for_date=datetime.now()
             )
 
             assert suggestions == []
@@ -103,12 +98,10 @@ class TestSimpleCoverage:
 
     def test_rl_logger_init_custom(self):
         """Test initialisation RLLogger avec paramètres personnalisés"""
+        from services.rl.rl_logger import RLLogger
 
         logger = RLLogger(
-            redis_key_prefix="custom",
-            max_redis_logs=0.500,
-            enable_db_logging=False,
-            enable_redis_logging=False
+            redis_key_prefix="custom", max_redis_logs=0.500, enable_db_logging=False, enable_redis_logging=False
         )
 
         assert logger.redis_key_prefix == "custom"
@@ -118,6 +111,7 @@ class TestSimpleCoverage:
 
     def test_rl_logger_hash_state(self):
         """Test hachage d'état"""
+        from services.rl.rl_logger import RLLogger
 
         logger = RLLogger()
 
@@ -129,6 +123,7 @@ class TestSimpleCoverage:
 
     def test_rl_logger_get_stats(self):
         """Test récupération des statistiques"""
+        from services.rl.rl_logger import RLLogger
 
         logger = RLLogger()
 
@@ -140,6 +135,7 @@ class TestSimpleCoverage:
 
     def test_rl_logger_get_recent_logs(self):
         """Test récupération des logs récents"""
+        from services.rl.rl_logger import RLLogger
 
         logger = RLLogger()
 
@@ -160,6 +156,7 @@ class TestSimpleCoverage:
         """Test forward C51Network"""
         import torch
 
+        from services.rl.distributional_dqn import C51Network
 
         network = C51Network(state_size=10, action_size=5)
 
@@ -179,7 +176,9 @@ class TestSimpleCoverage:
 
     def test_distributional_dqn_qr_forward(self):
         """Test forward QRNetwork"""
+        import torch
 
+        from services.rl.distributional_dqn import QRNetwork
 
         network = QRNetwork(state_size=10, action_size=5)
 

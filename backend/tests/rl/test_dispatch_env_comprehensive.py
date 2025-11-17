@@ -1,6 +1,7 @@
 """
 Tests complets pour dispatch_env.py - Couverture 90%+
 """
+
 from unittest.mock import MagicMock, Mock, patch
 
 import gymnasium as gym
@@ -31,9 +32,10 @@ class TestDispatchEnvComprehensive:
 
     def test_init_with_reward_shaping_success(self):
         """Test initialisation avec reward shaping réussi"""
-        with patch("services.rl.reward_shaping.AdvancedRewardShaping") as mock_reward_shaping, \
-             patch("services.rl.reward_shaping.RewardShapingConfig") as mock_config:
-
+        with (
+            patch("services.rl.reward_shaping.AdvancedRewardShaping") as mock_reward_shaping,
+            patch("services.rl.reward_shaping.RewardShapingConfig") as mock_config,
+        ):
             mock_config.get_profile.return_value = {"punctuality_weight": 1.0}
             mock_reward_shaping.return_value = Mock()
 
@@ -143,12 +145,9 @@ class TestDispatchEnvComprehensive:
         env.drivers = [
             {"id": 1, "available": True, "load": 2},
             {"id": 2, "available": True, "load": 1},
-            {"id": 3, "available": False, "load": 5}
+            {"id": 3, "available": False, "load": 5},
         ]
-        env.bookings = [
-            {"id": 1, "priority": 3, "time_window": 30},
-            {"id": 2, "priority": 1, "time_window": 15}
-        ]
+        env.bookings = [{"id": 1, "priority": 3, "time_window": 30}, {"id": 2, "priority": 1, "time_window": 15}]
 
         valid_actions = env.get_valid_actions()
 
@@ -165,11 +164,9 @@ class TestDispatchEnvComprehensive:
         env.drivers = [
             {"id": 1, "available": False, "load": 5},
             {"id": 2, "available": False, "load": 5},
-            {"id": 3, "available": False, "load": 5}
+            {"id": 3, "available": False, "load": 5},
         ]
-        env.bookings = [
-            {"id": 1, "priority": 3, "time_window": 30}
-        ]
+        env.bookings = [{"id": 1, "priority": 3, "time_window": 30}]
 
         valid_actions = env.get_valid_actions()
 
@@ -182,10 +179,7 @@ class TestDispatchEnvComprehensive:
         env.reset()
 
         # Simuler des chauffeurs disponibles mais pas de bookings
-        env.drivers = [
-            {"id": 1, "available": True, "load": 2},
-            {"id": 2, "available": True, "load": 1}
-        ]
+        env.drivers = [{"id": 1, "available": True, "load": 2}, {"id": 2, "available": True, "load": 1}]
         env.bookings = []
 
         valid_actions = env.get_valid_actions()
@@ -467,7 +461,7 @@ class TestDispatchEnvComprehensive:
         env = DispatchEnv(num_drivers=0, max_bookings=0)
         env.reset()
 
-        state, info = env.reset()
+        state, _info = env.reset()
         assert isinstance(state, np.ndarray)
         assert len(state) == 2  # Seulement contexte (time + traffic)
 
@@ -480,7 +474,7 @@ class TestDispatchEnvComprehensive:
         env = DispatchEnv(num_drivers=1, max_bookings=1)
         env.reset()
 
-        state, info = env.reset()
+        state, _info = env.reset()
         assert isinstance(state, np.ndarray)
         assert len(state) == 1 * 4 + 1 * 4 + 2  # 10 dimensions
 
@@ -493,7 +487,7 @@ class TestDispatchEnvComprehensive:
         env = DispatchEnv(num_drivers=20, max_bookings=50)
         env.reset()
 
-        state, info = env.reset()
+        state, _info = env.reset()
         assert isinstance(state, np.ndarray)
         assert len(state) == 20 * 4 + 50 * 4 + 2  # 282 dimensions
 
@@ -575,7 +569,7 @@ class TestDispatchEnvComprehensive:
             "lon": 2.3522,
             "home_lat": 48.8566,
             "home_lon": 2.3522,
-            "total_distance": 0.0
+            "total_distance": 0.0,
         }
 
         # Ne devrait pas lever d'erreur
@@ -593,7 +587,7 @@ class TestDispatchEnvComprehensive:
             "lat": 48.8566,
             "lon": 2.3522,
             "total_distance": 0.0,
-            "completed_bookings": 0
+            "completed_bookings": 0,
         }
         booking = {
             "id": 1,
@@ -601,7 +595,7 @@ class TestDispatchEnvComprehensive:
             "time_window": 30,
             "pickup_lat": 48.8606,
             "pickup_lon": 2.3376,
-            "time_window_end": 30
+            "time_window_end": 30,
         }
 
         reward = env._assign_booking(driver, booking)

@@ -57,7 +57,7 @@ class TestProactiveAlertsService:
         return predictor
 
     @pytest.fixture
-    def alerts_service(self, ____________________________________________________________________________________________________mock_notification_service, mock_delay_predictor):
+    def alerts_service(self, mock_notification_service, mock_delay_predictor):
         """Crée une instance de ProactiveAlertsService pour les tests."""
         if ProactiveAlertsService is None:
             pytest.skip("ProactiveAlertsService non disponible")
@@ -74,7 +74,7 @@ class TestProactiveAlertsService:
         assert hasattr(alerts_service, "delay_predictor")
         assert hasattr(alerts_service, "alert_history")
 
-    def test_delay_risk_check(self, ____________________________________________________________________________________________________alerts_service, mock_delay_predictor):
+    def test_delay_risk_check(self, alerts_service, mock_delay_predictor):
         """Test la vérification des risques de retard."""
         # Données de test
         booking = {
@@ -140,7 +140,7 @@ class TestProactiveAlertsService:
         can_alert = alerts_service._can_send_alert(booking_id, driver_id)
         assert can_alert is True
 
-    def test_alert_generation(self, ____________________________________________________________________________________________________alerts_service, mock_notification_service):
+    def test_alert_generation(self, alerts_service, mock_notification_service):
         """Test la génération d'alertes."""
         booking = {
             "id": "booking_123",
@@ -267,7 +267,7 @@ class TestProactiveAlertsService:
         assert 0 <= metrics["false_positive_rate"] <= 1
         assert 0 <= metrics["true_positive_rate"] <= 1
 
-    def test_integration_with_existing_services(self, ____________________________________________________________________________________________________alerts_service, mock_notification_service, mock_delay_predictor):
+    def test_integration_with_existing_services(self, alerts_service, mock_notification_service, mock_delay_predictor):
         """Test l'intégration avec les services existants."""
         # Test de l'intégration complète
         booking = {

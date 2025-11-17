@@ -74,12 +74,7 @@ class TestImprovedQNetworkCoverage:
 
     def test_forward_with_different_parameters(self):
         """Test forward avec différents paramètres"""
-        network = ImprovedQNetwork(
-            state_dim=0.100,
-            action_dim=20,
-            hidden_sizes=[128, 64],
-            dropout_rate=0.3
-        )
+        network = ImprovedQNetwork(state_dim=0.100, action_dim=20, hidden_sizes=[128, 64], dropout_rate=0.3)
 
         state = torch.randn(100)
         output = network(state)
@@ -103,18 +98,10 @@ class TestImprovedQNetworkCoverage:
     def test_forward_with_different_architectures(self):
         """Test forward avec différentes architectures"""
         # Architecture simple
-        network1 = ImprovedQNetwork(
-            state_dim=62,
-            action_dim=51,
-            hidden_sizes=[64]
-        )
+        network1 = ImprovedQNetwork(state_dim=62, action_dim=51, hidden_sizes=[64])
 
         # Architecture complexe
-        network2 = ImprovedQNetwork(
-            state_dim=62,
-            action_dim=51,
-            hidden_sizes=[128, 64, 32]
-        )
+        network2 = ImprovedQNetwork(state_dim=62, action_dim=51, hidden_sizes=[128, 64, 32])
 
         state = torch.randn(62)
         output1 = network1(state)
@@ -128,8 +115,8 @@ class TestImprovedQNetworkCoverage:
         network = ImprovedQNetwork(state_dim=62, action_dim=51)
 
         # Test avec état de taille incorrecte
+        wrong_state = torch.randn(50)  # Mauvaise taille
         with pytest.raises(RuntimeError):
-            wrong_state = torch.randn(50)  # Mauvaise taille
             network(wrong_state)
 
     def test_forward_with_zero_input(self):
@@ -227,7 +214,7 @@ class TestDuelingQNetworkCoverage:
             shared_hidden_sizes=[128, 64],
             value_hidden_size=32,
             advantage_hidden_size=16,
-            dropout_rate=0.3
+            dropout_rate=0.3,
         )
 
         state = torch.randn(100)
@@ -264,20 +251,12 @@ class TestDuelingQNetworkCoverage:
         """Test forward avec différentes architectures"""
         # Architecture simple
         network1 = DuelingQNetwork(
-            state_dim=62,
-            action_dim=51,
-            shared_hidden_sizes=[64],
-            value_hidden_size=32,
-            advantage_hidden_size=16
+            state_dim=62, action_dim=51, shared_hidden_sizes=[64], value_hidden_size=32, advantage_hidden_size=16
         )
 
         # Architecture complexe
         network2 = DuelingQNetwork(
-            state_dim=62,
-            action_dim=51,
-            shared_hidden_sizes=[128, 64],
-            value_hidden_size=64,
-            advantage_hidden_size=32
+            state_dim=62, action_dim=51, shared_hidden_sizes=[128, 64], value_hidden_size=64, advantage_hidden_size=32
         )
 
         state = torch.randn(62)
@@ -292,8 +271,8 @@ class TestDuelingQNetworkCoverage:
         network = DuelingQNetwork(state_dim=62, action_dim=51)
 
         # Test avec état de taille incorrecte
+        wrong_state = torch.randn(50)  # Mauvaise taille
         with pytest.raises(RuntimeError):
-            wrong_state = torch.randn(50)  # Mauvaise taille
             network(wrong_state)
 
     def test_forward_with_zero_input(self):

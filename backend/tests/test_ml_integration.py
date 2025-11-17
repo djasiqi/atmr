@@ -4,6 +4,7 @@
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
@@ -11,6 +12,7 @@ import pytest
 # Mock classes for testing
 class MockBooking:
     """Mock Booking pour tests."""
+
     def __init__(self):
         self.id = 123
         self.pickup_lat = 46.2044
@@ -27,6 +29,7 @@ class MockBooking:
 
 class MockDriver:
     """Mock Driver pour tests."""
+
     def __init__(self):
         self.id = 456
         self.assignments = [1] * 150  # Driver avec expérience moyenne
@@ -90,7 +93,7 @@ class TestMLFeatures:
 
         base_features = {
             "time_of_day": 17.0,  # Heure de pointe
-            "day_of_week": 5.0,   # Samedi
+            "day_of_week": 5.0,  # Samedi
         }
 
         temporal = create_temporal_features(base_features)
@@ -124,8 +127,8 @@ class TestMLFeatures:
         # Vérifier présence features critiques
         critical_features = [
             "distance_x_weather",  # Top 1 (34.7%)
-            "traffic_x_weather",   # Top 2 (18.9%)
-            "distance_km",         # Top 3 (7.0%)
+            "traffic_x_weather",  # Top 2 (18.9%)
+            "distance_km",  # Top 3 (7.0%)
         ]
 
         for feat in critical_features:
@@ -157,6 +160,7 @@ class TestMLPredictor:
 
     def test_predict_delay_with_mock_data(self):
         """Test prédiction avec données mock."""
+        from services.unified_dispatch.ml_predictor import DelayMLPredictor
 
         model_path = "data/ml/models/delay_predictor.pkl"
 
@@ -189,6 +193,7 @@ class TestMLPredictor:
         """Test performance temps de prédiction."""
         import time
 
+        from services.unified_dispatch.ml_predictor import DelayMLPredictor
 
         model_path = "data/ml/models/delay_predictor.pkl"
 
@@ -217,9 +222,9 @@ class TestMLPredictor:
 
 if __name__ == "__main__":
     """Exécution directe pour tests rapides."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🧪 TESTS D'INTÉGRATION ML")
-    print("="*70)
+    print("=" * 70)
 
     # Test 1: Features
     print("\n1. Test extraction features...")
@@ -243,10 +248,10 @@ if __name__ == "__main__":
     except Exception:
         print("❌ Erreur: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("✅ TOUS LES TESTS RÉUSSIS !")
-    print("="*70 + "\n")
-
+    print("=" * 70 + "\n")

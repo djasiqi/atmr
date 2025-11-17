@@ -33,12 +33,16 @@ class PDFService:
         """Génère le PDF d'une facture."""
         try:
             # Charger la facture avec toutes les relations
-            invoice = Invoice.query.options(
-                joinedload(Invoice.company),
-                joinedload(Invoice.client).joinedload(Client.user),
-                joinedload(Invoice.lines),
-                joinedload(Invoice.payments)
-            ).filter_by(id=invoice.id).first()
+            invoice = (
+                Invoice.query.options(
+                    joinedload(Invoice.company),
+                    joinedload(Invoice.client).joinedload(Client.user),
+                    joinedload(Invoice.lines),
+                    joinedload(Invoice.payments),
+                )
+                .filter_by(id=invoice.id)
+                .first()
+            )
 
             if not invoice:
                 msg = "Facture non trouvée"
@@ -71,13 +75,17 @@ class PDFService:
         """Génère le PDF d'un rappel."""
         try:
             # Charger la facture avec toutes les relations
-            invoice = Invoice.query.options(
-                joinedload(Invoice.company),
-                joinedload(Invoice.client).joinedload(Client.user),
-                joinedload(Invoice.lines),
-                joinedload(Invoice.payments),
-                joinedload(Invoice.reminders)
-            ).filter_by(id=invoice.id).first()
+            invoice = (
+                Invoice.query.options(
+                    joinedload(Invoice.company),
+                    joinedload(Invoice.client).joinedload(Client.user),
+                    joinedload(Invoice.lines),
+                    joinedload(Invoice.payments),
+                    joinedload(Invoice.reminders),
+                )
+                .filter_by(id=invoice.id)
+                .first()
+            )
 
             if not invoice:
                 msg = "Facture non trouvée"
@@ -87,7 +95,9 @@ class PDFService:
             pdf_content = self._create_reminder_pdf_content(invoice, level)
 
             # Sauvegarder le fichier
-            filename = f"reminder_{invoice.invoice_number}_level{level}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
+            filename = (
+                f"reminder_{invoice.invoice_number}_level{level}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
+            )
             filepath = Path(self.invoices_dir, filename)
 
             with filepath.open("wb") as f:
@@ -118,13 +128,12 @@ class PDFService:
         from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4,
-                              topMargin=2*cm, bottomMargin=2*cm,
-                              leftMargin=2*cm, rightMargin=2*cm)
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4, topMargin=2 * cm, bottomMargin=2 * cm, leftMargin=2 * cm, rightMargin=2 * cm
+        )
 
         # Styles basés sur le design de référence
         styles = getSampleStyleSheet()
-
 
         # Style pour le texte normal
         normal_style = ParagraphStyle(
@@ -134,10 +143,8 @@ class PDFService:
             textColor=colors.black,
             alignment=TA_LEFT,
             spaceAfter=6,
-            fontName="Helvetica"
+            fontName="Helvetica",
         )
-
-
 
         # Contenu
         story = []
@@ -170,10 +177,11 @@ class PDFService:
                     logo_height = logo_width / 4.17  # ≈ 21 points
 
                     # Vérifier si c'est un fichier SVG
-                    if logo_path.suffix.lower() == '.svg':
+                    if logo_path.suffix.lower() == ".svg":
                         # Convertir SVG en drawing ReportLab avec svglib
                         try:
                             from svglib.svglib import svg2rlg
+
                             drawing = svg2rlg(str(logo_path))
                             if drawing:
                                 # Redimensionner le drawing
@@ -207,34 +215,36 @@ class PDFService:
         if logo_img:
             # Vérifier si c'est un drawing (SVG converti) en vérifiant la présence d'attributs spécifiques
             # Les drawings de svglib ont des attributs width, height et une méthode scale
-            is_drawing = hasattr(logo_img, 'width') and hasattr(logo_img, 'height') and hasattr(logo_img, 'scale')
-            
+            is_drawing = hasattr(logo_img, "width") and hasattr(logo_img, "height") and hasattr(logo_img, "scale")
+
             if is_drawing:
                 # Pour les drawings SVG, créer un tableau pour l'alignement
                 # Table et TableStyle sont déjà importés plus haut
                 logo_table = Table([[logo_img]], colWidths=[logo_width])
-                logo_table.setStyle(TableStyle([
-                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                    ("TOPPADDING", (0, 0), (-1, -1), 0),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                ]))
+                logo_table.setStyle(
+                    TableStyle(
+                        [
+                            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                            ("TOPPADDING", (0, 0), (-1, -1), 0),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                        ]
+                    )
+                )
                 story.append(logo_table)
             else:
                 # Pour les images standard (PNG, JPG), utiliser un Paragraph
                 from reportlab.lib.styles import ParagraphStyle
+
                 logo_style = ParagraphStyle(
-                    "LogoStyle",
-                    parent=styles["Normal"],
-                    alignment=TA_LEFT,
-                    leftIndent=0,
-                    rightIndent=0,
-                    spaceAfter=8
+                    "LogoStyle", parent=styles["Normal"], alignment=TA_LEFT, leftIndent=0, rightIndent=0, spaceAfter=8
                 )
                 # Créer un Paragraph avec le logo
-                logo_para = Paragraph(f'<img src="{logo_path}" width="{logo_width}" height="{logo_height}"/>', logo_style)
+                logo_para = Paragraph(
+                    f'<img src="{logo_path}" width="{logo_width}" height="{logo_height}"/>', logo_style
+                )
                 story.append(logo_para)
 
         # Coordonnées entreprise alignées à gauche
@@ -254,11 +264,14 @@ class PDFService:
         if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
             # 🏥 Facturation tierce : afficher l'institution payeuse
             from models import Client as ClientModel
+
             institution = ClientModel.query.get(invoice.bill_to_client_id)
 
             if institution and institution.is_institution:
                 billed_to_name = institution.institution_name or "Institution"
-                billed_to_address = institution.billing_address or institution.contact_address or "Adresse non renseignée"
+                billed_to_address = (
+                    institution.billing_address or institution.contact_address or "Adresse non renseignée"
+                )
             else:
                 # Fallback si l'institution n'est pas trouvée
                 billed_to_name = "Institution"
@@ -266,13 +279,22 @@ class PDFService:
         else:
             # 👤 Facturation directe : afficher le client
             client = invoice.client
-            billed_to_name = f"{client.user.first_name or ''} {client.user.last_name or ''}".strip() or client.user.username or "Client"
+            billed_to_name = (
+                f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
+                or client.user.username
+                or "Client"
+            )
 
             # Adresse du client formatée correctement (sans <br/>)
             billed_to_address = "Adresse non renseignée"
             if hasattr(client, "domicile_address") and client.domicile_address:
                 street_address = client.domicile_address
-                if hasattr(client, "domicile_zip") and hasattr(client, "domicile_city") and client.domicile_zip and client.domicile_city:
+                if (
+                    hasattr(client, "domicile_zip")
+                    and hasattr(client, "domicile_city")
+                    and client.domicile_zip
+                    and client.domicile_city
+                ):
                     billed_to_address = f"{street_address}\n{client.domicile_zip} {client.domicile_city} Suisse"
                 else:
                     billed_to_address = street_address
@@ -294,8 +316,8 @@ class PDFService:
         # === INFORMATIONS FACTURE (GAUCHE) ===
         invoice_info_left = f"""
         <b>Numéro de facture :</b> {invoice.invoice_number}<br/>
-        <b>Date d'émission :</b> {invoice.issued_at.strftime('%d.%m.%Y')}<br/>
-        <b>Date d'échéance :</b> {invoice.due_date.strftime('%d.%m.%Y')}<br/>
+        <b>Date d'émission :</b> {invoice.issued_at.strftime("%d.%m.%Y")}<br/>
+        <b>Date d'échéance :</b> {invoice.due_date.strftime("%d.%m.%Y")}<br/>
         <b>Période :</b> {invoice.period_month:02d}.{invoice.period_year}
         """
 
@@ -312,6 +334,7 @@ class PDFService:
             clean_address = address.replace(", Suisse", "").strip()
             # Supprimer le mot "Trajet" au début
             import re
+
             clean_address = re.sub(r"^Trajet\s+", "", clean_address)
             # Supprimer "Suisse" à la fin
             clean_address = clean_address.replace(" Suisse", "").strip()
@@ -356,6 +379,7 @@ class PDFService:
             if line.type == InvoiceLineType.RIDE and line.reservation_id:
                 # Essayer de récupérer les informations de la réservation
                 from models import Booking
+
                 booking = Booking.query.get(line.reservation_id)
 
                 if booking:
@@ -365,14 +389,22 @@ class PDFService:
                     # Nom du patient (pour facturation tierce)
                     patient_name = ""
                     if is_third_party:
-                        patient_name = booking.customer_name or f"{booking.client.user.first_name or ''} {booking.client.user.last_name or ''}".strip() or "Patient"
+                        patient_name = (
+                            booking.customer_name
+                            or f"{booking.client.user.first_name or ''} {booking.client.user.last_name or ''}".strip()
+                            or "Patient"
+                        )
                         # Tronquer si trop long
                         if len(patient_name) > MAX_PATIENT_NAME_LENGTH:
-                            patient_name = patient_name[:MAX_PATIENT_NAME_LENGTH - 1] + "."
+                            patient_name = patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
 
                     # Supprimer le mot "Trajet" et nettoyer les adresses
-                    departure = format_address_for_table(booking.pickup_location, max_length=20 if is_third_party else 25)
-                    arrival = format_address_for_table(booking.dropoff_location, max_length=20 if is_third_party else 25)
+                    departure = format_address_for_table(
+                        booking.pickup_location, max_length=20 if is_third_party else 25
+                    )
+                    arrival = format_address_for_table(
+                        booking.dropoff_location, max_length=20 if is_third_party else 25
+                    )
                     amount = f"{line.line_total:.2f}"
 
                     # Construire la ligne selon le type de facturation
@@ -387,7 +419,11 @@ class PDFService:
                     if " → " in desc:
                         parts = desc.split(" → ")
                         departure = format_address_for_table(parts[0], max_length=20 if is_third_party else 25)
-                        arrival = format_address_for_table(parts[1], max_length=20 if is_third_party else 25) if len(parts) > 1 else ""
+                        arrival = (
+                            format_address_for_table(parts[1], max_length=20 if is_third_party else 25)
+                            if len(parts) > 1
+                            else ""
+                        )
                     else:
                         departure = format_address_for_table(desc, max_length=20 if is_third_party else 25)
                         arrival = ""
@@ -413,71 +449,130 @@ class PDFService:
 
         # Adapter les largeurs de colonnes selon le type de facturation
         if is_third_party:
-            services_table = Table(table_data, colWidths=[2*cm, 3*cm, 4.5*cm, 4.5*cm, 2.5*cm])
+            services_table = Table(table_data, colWidths=[2 * cm, 3 * cm, 4.5 * cm, 4.5 * cm, 2.5 * cm])
         else:
-            services_table = Table(table_data, colWidths=[2.5*cm, 6*cm, 6*cm, 2.5*cm])
-        services_table.setStyle(TableStyle([
-            # En-têtes
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 10),
-            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-            ("ALIGN", (3, 0), (3, -1), "RIGHT"),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-            ("TOPPADDING", (0, 0), (-1, 0), 8),
-            ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.black),
-            # Corps du tableau
-            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-            ("BOTTOMPADDING", (0, 1), (-1, -1), 8),
-            ("TOPPADDING", (0, 1), (-1, -1), 8),
-            # Lignes de séparation fines entre les lignes
-            ("LINEBELOW", (0, 1), (-1, -2), 0.25, colors.lightgrey),
-        ]))
+            services_table = Table(table_data, colWidths=[2.5 * cm, 6 * cm, 6 * cm, 2.5 * cm])
+        services_table.setStyle(
+            TableStyle(
+                [
+                    # En-têtes
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 10),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("ALIGN", (3, 0), (3, -1), "RIGHT"),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+                    ("TOPPADDING", (0, 0), (-1, 0), 8),
+                    ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.black),
+                    # Corps du tableau
+                    ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                    ("BOTTOMPADDING", (0, 1), (-1, -1), 8),
+                    ("TOPPADDING", (0, 1), (-1, -1), 8),
+                    # Lignes de séparation fines entre les lignes
+                    ("LINEBELOW", (0, 1), (-1, -2), 0.25, colors.lightgrey),
+                ]
+            )
+        )
 
         story.append(services_table)
         story.append(Spacer(1, 15))
 
         # === TOTAL ===
+        subtotal_amount = float(invoice.subtotal_amount)
+        vat_total_amount = float(invoice.vat_total_amount)
         total_amount = float(invoice.total_amount)
 
+        # Vérifier si la TVA est applicable (présente dans les métadonnées ou montant > 0)
+        vat_is_applicable = False
+        vat_label_display = "TVA"
+        if isinstance(invoice.meta, dict) and "vat" in invoice.meta:
+            vat_meta = invoice.meta.get("vat", {})
+            vat_is_applicable = vat_meta.get("applicable", False)
+            if vat_meta.get("label"):
+                vat_label_display = vat_meta.get("label")
+        elif vat_total_amount > 0:
+            # Fallback : si montant TVA > 0, considérer comme applicable
+            vat_is_applicable = True
+
         # Ligne de séparation plus épaisse avant le total
-        total_separator = Table([[""]], colWidths=[16*cm])
-        total_separator.setStyle(TableStyle([
-            ("LINEBELOW", (0, 0), (0, 0), 1, colors.black),
-        ]))
+        total_separator = Table([[""]], colWidths=[16 * cm])
+        total_separator.setStyle(
+            TableStyle(
+                [
+                    ("LINEBELOW", (0, 0), (0, 0), 1, colors.black),
+                ]
+            )
+        )
         story.append(total_separator)
         story.append(Spacer(1, 8))
 
-        # Adapter le tableau du total selon le type de facturation
+        # Adapter le tableau du total selon le type de facturation et si TVA applicable
         if is_third_party:
-            total_data = [
-                ["", "", "", "TOTAL :", f"{total_amount:.2f}"],
-            ]
-            total_table = Table(total_data, colWidths=[2*cm, 3*cm, 4.5*cm, 2*cm, 2.5*cm])
+            if vat_is_applicable:
+                total_data = [
+                    ["", "", "", "Sous-total :", f"{subtotal_amount:.2f}"],
+                    ["", "", "", f"{vat_label_display} :", f"{vat_total_amount:.2f}"],
+                    ["", "", "", "TOTAL :", f"{total_amount:.2f}"],
+                ]
+            else:
+                total_data = [
+                    ["", "", "", "TOTAL :", f"{total_amount:.2f}"],
+                ]
+            total_table = Table(total_data, colWidths=[2 * cm, 3 * cm, 4.5 * cm, 2 * cm, 2.5 * cm])
         else:
-            total_data = [
-                ["", "", "TOTAL :", f"{total_amount:.2f}"],
-            ]
-            total_table = Table(total_data, colWidths=[2.5*cm, 6*cm, 2.5*cm, 2.5*cm])
+            if vat_is_applicable:
+                total_data = [
+                    ["", "", "Sous-total :", f"{subtotal_amount:.2f}"],
+                    ["", "", f"{vat_label_display} :", f"{vat_total_amount:.2f}"],
+                    ["", "", "TOTAL :", f"{total_amount:.2f}"],
+                ]
+            else:
+                total_data = [
+                    ["", "", "TOTAL :", f"{total_amount:.2f}"],
+                ]
+            total_table = Table(total_data, colWidths=[2.5 * cm, 6 * cm, 2.5 * cm, 2.5 * cm])
+
         # Style du tableau du total
         if is_third_party:
-            total_table.setStyle(TableStyle([
+            style_rules = [
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                ("ALIGN", (3, 0), (4, 0), "RIGHT"),  # TOTAL et montant alignés à droite
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+                ("ALIGN", (3, 0), (4, -1), "RIGHT"),  # Labels et montants alignés à droite
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                 ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ]))
+            ]
+            if vat_is_applicable:
+                # Sous-total et TVA en normal, Total en gras
+                style_rules.extend(
+                    [
+                        ("FONTNAME", (0, 0), (-1, -2), "Helvetica"),
+                        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                    ]
+                )
+            else:
+                # Total uniquement en gras
+                style_rules.append(("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"))
+            total_table.setStyle(TableStyle(style_rules))
         else:
-            total_table.setStyle(TableStyle([
+            style_rules = [
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                ("ALIGN", (2, 0), (3, 0), "RIGHT"),  # TOTAL et montant alignés à droite
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+                ("ALIGN", (2, 0), (3, -1), "RIGHT"),  # Labels et montants alignés à droite
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                 ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ]))
+            ]
+            if vat_is_applicable:
+                # Sous-total et TVA en normal, Total en gras
+                style_rules.extend(
+                    [
+                        ("FONTNAME", (0, 0), (-1, -2), "Helvetica"),
+                        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                    ]
+                )
+            else:
+                # Total uniquement en gras
+                style_rules.append(("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"))
+            total_table.setStyle(TableStyle(style_rules))
 
         story.append(total_table)
         story.append(Spacer(1, 30))
@@ -497,6 +592,7 @@ class PDFService:
         # === QR-BILL SUISSE OFFICIEL SUR PAGE SÉPARÉE ===
         # Forcer une nouvelle page pour le QR-Bill (toujours après la facture)
         from reportlab.platypus import PageBreak
+
         story.append(PageBreak())
 
         # Ajouter un espacement pour pousser le QR-Bill vraiment en bas de la page QR-Bill
@@ -517,25 +613,31 @@ class PDFService:
 
                 if drawing:
                     # Redimensionner le drawing pour qu'il s'adapte à la page
-                    drawing.width = 12*cm
-                    drawing.height = 6*cm
-                    drawing.scale(12*cm/drawing.width, 6*cm/drawing.height)
+                    drawing.width = 12 * cm
+                    drawing.height = 6 * cm
+                    drawing.scale(12 * cm / drawing.width, 6 * cm / drawing.height)
 
                     # Centrer le QR-Bill avec un tableau
                     from reportlab.platypus import Table, TableStyle
 
                     # Créer un tableau avec colonne vide pour vraiment aligner à gauche
-                    qr_table = Table([[drawing, ""]], colWidths=[6*cm, 12*cm])  # QR-Bill encore plus petit + colonne vide encore plus grande
-                    qr_table.setStyle(TableStyle([
-                        ("ALIGN", (0, 0), (0, 0), "LEFT"),  # QR-Bill à gauche
-                        ("ALIGN", (1, 0), (1, 0), "LEFT"),   # Colonne vide à droite
-                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                        ("TOPPADDING", (0, 0), (-1, -1), 0),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-                    ]))
+                    qr_table = Table(
+                        [[drawing, ""]], colWidths=[6 * cm, 12 * cm]
+                    )  # QR-Bill encore plus petit + colonne vide encore plus grande
+                    qr_table.setStyle(
+                        TableStyle(
+                            [
+                                ("ALIGN", (0, 0), (0, 0), "LEFT"),  # QR-Bill à gauche
+                                ("ALIGN", (1, 0), (1, 0), "LEFT"),  # Colonne vide à droite
+                                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                            ]
+                        )
+                    )
 
                     # Ajouter le QR-Bill centré au PDF sur la deuxième page
                     story.append(qr_table)
@@ -570,7 +672,7 @@ class PDFService:
             textColor=colors.black,
             alignment=TA_LEFT,
             spaceAfter=2,
-            fontName="Helvetica"
+            fontName="Helvetica",
         )
 
         # Style pour les titres de section
@@ -581,7 +683,7 @@ class PDFService:
             fontName="Helvetica-Bold",
             alignment=TA_LEFT,
             spaceAfter=8,
-            textColor=colors.black
+            textColor=colors.black,
         )
 
         # Style pour les labels
@@ -592,7 +694,7 @@ class PDFService:
             fontName="Helvetica",
             alignment=TA_LEFT,
             spaceAfter=2,
-            textColor=colors.black
+            textColor=colors.black,
         )
 
         # Style pour les valeurs
@@ -603,7 +705,7 @@ class PDFService:
             fontName="Helvetica-Bold",
             alignment=TA_LEFT,
             spaceAfter=4,
-            textColor=colors.black
+            textColor=colors.black,
         )
 
         # === SECTION GAUCHE: EMPFANGSSCHEIN (Reçu) ===
@@ -622,9 +724,13 @@ class PDFService:
 
         # Informations débiteur
         left_section.append(Paragraph("Zahlbar durch", label_style))
-        left_section.append(Paragraph(f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}", normal_style))
+        left_section.append(
+            Paragraph(f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}", normal_style)
+        )
         left_section.append(Paragraph(invoice.client.domicile_address or "Adresse non renseignée", normal_style))
-        left_section.append(Paragraph(f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}", normal_style))
+        left_section.append(
+            Paragraph(f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}", normal_style)
+        )
         left_section.append(Spacer(1, 8))
 
         # Référence
@@ -641,7 +747,11 @@ class PDFService:
         left_section.append(Spacer(1, 20))
 
         # Annahmestelle
-        left_section.append(Paragraph("Annahmestelle", ParagraphStyle("Center", parent=styles["Normal"], fontSize=8, alignment=TA_CENTER)))
+        left_section.append(
+            Paragraph(
+                "Annahmestelle", ParagraphStyle("Center", parent=styles["Normal"], fontSize=8, alignment=TA_CENTER)
+            )
+        )
 
         # === SECTION DROITE: ZAHLTEIL (Partie paiement) ===
         right_section = []
@@ -663,9 +773,13 @@ class PDFService:
 
         # Informations débiteur
         right_section.append(Paragraph("Zahlbar durch", label_style))
-        right_section.append(Paragraph(f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}", normal_style))
+        right_section.append(
+            Paragraph(f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}", normal_style)
+        )
         right_section.append(Paragraph(invoice.client.domicile_address or "Adresse non renseignée", normal_style))
-        right_section.append(Paragraph(f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}", normal_style))
+        right_section.append(
+            Paragraph(f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}", normal_style)
+        )
         right_section.append(Spacer(1, 8))
 
         # Référence
@@ -681,12 +795,12 @@ class PDFService:
         right_section.append(Paragraph(f"{invoice.total_amount:.2f}", value_style))
 
         # === LIGNE DE COUPE ===
-        cut_line = [Paragraph("✂", ParagraphStyle("CutLine", parent=styles["Normal"], fontSize=12, alignment=TA_CENTER))]
+        cut_line = [
+            Paragraph("✂", ParagraphStyle("CutLine", parent=styles["Normal"], fontSize=12, alignment=TA_CENTER))
+        ]
 
         # Retourner les données du tableau
-        return [
-            [left_section, cut_line, right_section]
-        ]
+        return [[left_section, cut_line, right_section]]
 
     def _create_official_swiss_qr_bill(self, invoice, billing_settings, qr_image):
         """Crée un QR-Bill suisse officiel avec le format exact."""
@@ -706,7 +820,7 @@ class PDFService:
             fontName="Helvetica-Bold",
             alignment=TA_LEFT,
             spaceAfter=6,
-            textColor=colors.black
+            textColor=colors.black,
         )
 
         label_style = ParagraphStyle(
@@ -716,7 +830,7 @@ class PDFService:
             fontName="Helvetica",
             alignment=TA_LEFT,
             spaceAfter=1,
-            textColor=colors.black
+            textColor=colors.black,
         )
 
         value_style = ParagraphStyle(
@@ -726,7 +840,7 @@ class PDFService:
             fontName="Helvetica-Bold",
             alignment=TA_LEFT,
             spaceAfter=3,
-            textColor=colors.black
+            textColor=colors.black,
         )
 
         normal_text_style = ParagraphStyle(
@@ -736,7 +850,7 @@ class PDFService:
             fontName="Helvetica",
             alignment=TA_LEFT,
             spaceAfter=1,
-            textColor=colors.black
+            textColor=colors.black,
         )
 
         # === CONSTRUCTION DU QR-BILL ===
@@ -756,9 +870,15 @@ class PDFService:
 
         # Zahlbar durch
         left_content.append(Paragraph("Zahlbar durch", label_style))
-        left_content.append(Paragraph(f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}", normal_text_style))
+        left_content.append(
+            Paragraph(
+                f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}", normal_text_style
+            )
+        )
         left_content.append(Paragraph(invoice.client.domicile_address or "Adresse non renseignée", normal_text_style))
-        left_content.append(Paragraph(f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}", normal_text_style))
+        left_content.append(
+            Paragraph(f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}", normal_text_style)
+        )
         left_content.append(Spacer(1, 6))
 
         # Referenz
@@ -775,7 +895,11 @@ class PDFService:
         left_content.append(Spacer(1, 20))
 
         # Annahmestelle
-        left_content.append(Paragraph("Annahmestelle", ParagraphStyle("Center", parent=styles["Normal"], fontSize=7, alignment=TA_CENTER)))
+        left_content.append(
+            Paragraph(
+                "Annahmestelle", ParagraphStyle("Center", parent=styles["Normal"], fontSize=7, alignment=TA_CENTER)
+            )
+        )
 
         # Section droite - Zahlteil
         right_content = []
@@ -796,9 +920,15 @@ class PDFService:
 
         # Zahlbar durch
         right_content.append(Paragraph("Zahlbar durch", label_style))
-        right_content.append(Paragraph(f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}", normal_text_style))
+        right_content.append(
+            Paragraph(
+                f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}", normal_text_style
+            )
+        )
         right_content.append(Paragraph(invoice.client.domicile_address or "Adresse non renseignée", normal_text_style))
-        right_content.append(Paragraph(f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}", normal_text_style))
+        right_content.append(
+            Paragraph(f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}", normal_text_style)
+        )
         right_content.append(Spacer(1, 6))
 
         # Referenz
@@ -814,31 +944,29 @@ class PDFService:
         right_content.append(Paragraph(f"{invoice.total_amount:.2f}", value_style))
 
         # Créer le tableau avec ligne de coupe
-        qr_bill_data = [
-            [left_content, "", right_content]
-        ]
+        qr_bill_data = [[left_content, "", right_content]]
 
         # Tableau QR-Bill avec ligne de coupe
-        qr_bill_table = Table(qr_bill_data, colWidths=[8.5*cm, 0.3*cm, 8.5*cm])
-        qr_bill_table.setStyle(TableStyle([
-            # Bordures extérieures
-            ("BOX", (0, 0), (-1, -1), 1, colors.black),
-
-            # Ligne de coupe verticale
-            ("LINEBEFORE", (1, 0), (1, -1), 1, colors.black),
-
-            # Alignement
-            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-
-            # Padding
-            ("PADDING", (0, 0), (0, -1), 8),  # Section gauche
-            ("PADDING", (2, 0), (2, -1), 8),  # Section droite
-            ("PADDING", (1, 0), (1, -1), 0),  # Ligne de coupe
-
-            # Fond blanc
-            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-        ]))
+        qr_bill_table = Table(qr_bill_data, colWidths=[8.5 * cm, 0.3 * cm, 8.5 * cm])
+        qr_bill_table.setStyle(
+            TableStyle(
+                [
+                    # Bordures extérieures
+                    ("BOX", (0, 0), (-1, -1), 1, colors.black),
+                    # Ligne de coupe verticale
+                    ("LINEBEFORE", (1, 0), (1, -1), 1, colors.black),
+                    # Alignement
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    # Padding
+                    ("PADDING", (0, 0), (0, -1), 8),  # Section gauche
+                    ("PADDING", (2, 0), (2, -1), 8),  # Section droite
+                    ("PADDING", (1, 0), (1, -1), 0),  # Ligne de coupe
+                    # Fond blanc
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                ]
+            )
+        )
 
         return qr_bill_table
 
@@ -855,7 +983,7 @@ class PDFService:
         from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm)
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2 * cm, bottomMargin=2 * cm)
 
         # Styles
         styles = getSampleStyleSheet()
@@ -865,7 +993,7 @@ class PDFService:
             fontSize=18,
             textColor=colors.red,
             alignment=TA_CENTER,
-            spaceAfter=30
+            spaceAfter=30,
         )
 
         # Contenu
@@ -890,20 +1018,26 @@ class PDFService:
             ["Montant dû:", f"{invoice.balance_due:.2f}"],
         ]
 
-        invoice_table = Table(invoice_info, colWidths=[6*cm, 6*cm])
-        invoice_table.setStyle(TableStyle([
-            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-            ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-            ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
-            ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ]))
+        invoice_table = Table(invoice_info, colWidths=[6 * cm, 6 * cm])
+        invoice_table.setStyle(
+            TableStyle(
+                [
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                    ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ]
+            )
+        )
 
         story.append(invoice_table)
         story.append(Spacer(1, 30))
 
         # Informations du client
         client = invoice.client
-        client_name = f"{client.user.first_name or ''} {client.user.last_name or ''}".strip() or client.user.username or "Client"
+        client_name = (
+            f"{client.user.first_name or ''} {client.user.last_name or ''}".strip() or client.user.username or "Client"
+        )
 
         story.append(Paragraph(f"Cher/Chère {client_name},", styles["Normal"]))
         story.append(Spacer(1, 20))

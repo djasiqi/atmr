@@ -4,13 +4,14 @@ Factories pour générer des données de test avec factory_boy.
 DTZ003/DTZ011 = datetime.utcnow()/date.today() OK dans tests
 reportMissingImports = factory/faker installés dans Docker, pas localement
 """
+
 import uuid
 from datetime import date, datetime, timedelta
 from typing import Any
 
-import factory  # type: ignore[import-untyped]
-from factory import fuzzy  # type: ignore[import-untyped]
-from faker import Faker  # type: ignore[import-untyped]
+import factory
+from factory import fuzzy
+from faker import Faker
 
 from db import db
 from models.ab_test_result import ABTestResult
@@ -45,10 +46,11 @@ class SQLAlchemyModelFactory(factory.alchemy.SQLAlchemyModelFactory):
 
 # ========== USER & COMPANY ==========
 
+
 class UserFactory(SQLAlchemyModelFactory):
     """Factory pour User."""
 
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = User
 
     username = factory.LazyAttribute(lambda _: f"user_{uuid.uuid4().hex[:8]}")
@@ -66,7 +68,7 @@ class UserFactory(SQLAlchemyModelFactory):
 class CompanyFactory(SQLAlchemyModelFactory):
     """Factory pour Company."""
 
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = Company
 
     name = factory.LazyAttribute(lambda _: fake.company())
@@ -91,10 +93,11 @@ class CompanyFactory(SQLAlchemyModelFactory):
 
 # ========== CLIENT ==========
 
+
 class ClientFactory(SQLAlchemyModelFactory):
     """Factory pour Client."""
 
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = Client
 
     user = factory.SubFactory(UserFactory, role="client")
@@ -107,10 +110,11 @@ class ClientFactory(SQLAlchemyModelFactory):
 
 # ========== DRIVER & VEHICLE ==========
 
+
 class DriverFactory(SQLAlchemyModelFactory):
     """Factory pour Driver."""
 
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = Driver
 
     user = factory.SubFactory(UserFactory, role="driver")
@@ -136,7 +140,7 @@ class DriverFactory(SQLAlchemyModelFactory):
 class VehicleFactory(SQLAlchemyModelFactory):
     """Factory pour Vehicle."""
 
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = Vehicle
 
     company = factory.SubFactory(CompanyFactory)
@@ -157,10 +161,11 @@ class VehicleFactory(SQLAlchemyModelFactory):
 
 # ========== BOOKING ==========
 
+
 class BookingFactory(SQLAlchemyModelFactory):
     """Factory pour Booking."""
 
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = Booking
 
     customer_name = factory.LazyAttribute(lambda _: fake.name())
@@ -195,10 +200,11 @@ class BookingFactory(SQLAlchemyModelFactory):
 
 # ========== ASSIGNMENT & DISPATCH ==========
 
+
 class AssignmentFactory(SQLAlchemyModelFactory):
     """Factory pour Assignment."""
 
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = Assignment
 
     booking = factory.SubFactory(BookingFactory)
@@ -220,7 +226,7 @@ class AssignmentFactory(SQLAlchemyModelFactory):
 class DispatchRunFactory(SQLAlchemyModelFactory):
     """Factory pour DispatchRun."""
 
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = DispatchRun
 
     company = factory.SubFactory(CompanyFactory)
@@ -235,10 +241,11 @@ class DispatchRunFactory(SQLAlchemyModelFactory):
 
 # ========== INVOICE & PAYMENT ==========
 
+
 class InvoiceFactory(SQLAlchemyModelFactory):
     """Factory pour Invoice."""
 
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = Invoice
 
     company = factory.SubFactory(CompanyFactory)
@@ -259,10 +266,11 @@ class InvoiceFactory(SQLAlchemyModelFactory):
 
 # ========== ML MODELS ==========
 
+
 class MLPredictionFactory(SQLAlchemyModelFactory):
     """Factory pour MLPrediction."""
 
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = MLPrediction
 
     booking = factory.SubFactory(BookingFactory)
@@ -272,9 +280,7 @@ class MLPredictionFactory(SQLAlchemyModelFactory):
     predicted_delay_minutes = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.0, 15.0), 2))
     confidence = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.5, 0.95), 3))
     risk_level = fuzzy.FuzzyChoice(["low", "medium", "high"])
-    contributing_factors = factory.LazyAttribute(
-        lambda _: '{"distance_x_weather": 0.42, "traffic_x_weather": 0.35}'
-    )
+    contributing_factors = factory.LazyAttribute(lambda _: '{"distance_x_weather": 0.42, "traffic_x_weather": 0.35}')
 
     model_version = "v1.0"
     prediction_time_ms = factory.LazyAttribute(lambda _: round(fake.random.uniform(50.0, 500.0), 1))
@@ -288,7 +294,7 @@ class MLPredictionFactory(SQLAlchemyModelFactory):
 class ABTestResultFactory(SQLAlchemyModelFactory):
     """Factory pour ABTestResult."""
 
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = ABTestResult
 
     booking = factory.SubFactory(BookingFactory)
@@ -304,13 +310,9 @@ class ABTestResultFactory(SQLAlchemyModelFactory):
     heuristic_delay_minutes = factory.LazyAttribute(lambda _: round(fake.random.uniform(5.0, 12.0), 2))
     heuristic_prediction_time_ms = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.0, 1.0), 1))
 
-    difference_minutes = factory.LazyAttribute(
-        lambda obj: abs(obj.ml_delay_minutes - obj.heuristic_delay_minutes)
-    )
+    difference_minutes = factory.LazyAttribute(lambda obj: abs(obj.ml_delay_minutes - obj.heuristic_delay_minutes))
     ml_faster = factory.LazyAttribute(lambda obj: obj.ml_prediction_time_ms < obj.heuristic_prediction_time_ms)
-    speed_advantage_ms = factory.LazyAttribute(
-        lambda obj: obj.heuristic_prediction_time_ms - obj.ml_prediction_time_ms
-    )
+    speed_advantage_ms = factory.LazyAttribute(lambda obj: obj.heuristic_prediction_time_ms - obj.ml_prediction_time_ms)
 
     created_at = factory.LazyFunction(datetime.utcnow)
     updated_at = factory.LazyFunction(datetime.utcnow)
@@ -318,13 +320,14 @@ class ABTestResultFactory(SQLAlchemyModelFactory):
 
 # ========== HELPERS POUR TESTS ==========
 
+
 def create_booking_with_coordinates(
     company: Any | None = None,
     pickup_lat: float = 46.2044,
     pickup_lon: float = 6.1432,
     dropoff_lat: float = 46.2100,
     dropoff_lon: float = 6.1500,
-    **kwargs: Any
+    **kwargs: Any,
 ) -> Booking:
     """Crée un booking avec coordonnées spécifiques."""
     if company is None:
@@ -339,7 +342,7 @@ def create_booking_with_coordinates(
         pickup_lon=pickup_lon,
         dropoff_lat=dropoff_lat,
         dropoff_lon=dropoff_lon,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -348,7 +351,7 @@ def create_driver_with_position(
     latitude: float = 46.2044,
     longitude: float = 6.1432,
     is_available: bool = True,
-    **kwargs: Any
+    **kwargs: Any,
 ) -> Driver:
     """Crée un driver avec position spécifique."""
     if company is None:
@@ -360,15 +363,12 @@ def create_driver_with_position(
         latitude=0.0,
         longitude=0.0,
         is_available=is_available,
-        **kwargs
+        **kwargs,
     )
 
 
 def create_assignment_with_booking_driver(
-    booking: Any | None = None,
-    driver: Any | None = None,
-    company: Any | None = None,
-    **kwargs: Any
+    booking: Any | None = None, driver: Any | None = None, company: Any | None = None, **kwargs: Any
 ) -> Assignment:
     """Crée un assignment avec booking et driver spécifiques."""
     if company is None:
@@ -380,18 +380,11 @@ def create_assignment_with_booking_driver(
     if driver is None:
         driver = create_driver_with_position(company=company)
 
-    return AssignmentFactory(
-        booking=booking,
-        driver=driver,
-        **kwargs
-    )
+    return AssignmentFactory(booking=booking, driver=driver, **kwargs)
 
 
 def create_dispatch_scenario(
-    company: Any | None = None,
-    num_bookings: int = 5,
-    num_drivers: int = 3,
-    dispatch_day: date | None = None
+    company: Any | None = None, num_bookings: int = 5, num_drivers: int = 3, dispatch_day: date | None = None
 ) -> dict[str, Any]:
     """
     Crée un scénario de dispatch complet pour tests.
@@ -405,27 +398,20 @@ def create_dispatch_scenario(
         dispatch_day = date.today()
 
     # Créer drivers
-    drivers = [
-        create_driver_with_position(company=company, is_available=True)
-        for _ in range(num_drivers)
-    ]
+    drivers = [create_driver_with_position(company=company, is_available=True) for _ in range(num_drivers)]
 
     # Créer bookings
     bookings = [
         create_booking_with_coordinates(
             company=company,
             scheduled_time=datetime.combine(dispatch_day, datetime.min.time()) + timedelta(hours=8 + i),
-            status=BookingStatus.PENDING
+            status=BookingStatus.PENDING,
         )
         for i in range(num_bookings)
     ]
 
     # Créer dispatch run
-    dispatch_run = DispatchRunFactory(
-        company=company,
-        day=dispatch_day,
-        status=DispatchStatus.PENDING
-    )
+    dispatch_run = DispatchRunFactory(company=company, day=dispatch_day, status=DispatchStatus.PENDING)
 
     db.session.commit()
 
@@ -435,4 +421,3 @@ def create_dispatch_scenario(
         "bookings": bookings,
         "dispatch_run": dispatch_run,
     }
-

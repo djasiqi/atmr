@@ -1,6 +1,7 @@
 """
 Tests simples et efficaces pour dispatch_env.py - Couverture 95-100%
 """
+
 import logging
 from unittest.mock import Mock, patch
 
@@ -19,7 +20,9 @@ class TestDispatchEnvSimpleEffective:
         env.reset()
 
         # Simuler un environnement avec moins de drivers que prévu
-        env.drivers = [{"id": 1, "available": True, "load": 2, "assigned": False, "idle_time": 0, "lat": 48.8566, "lon": 2.3522}]
+        env.drivers = [
+            {"id": 1, "available": True, "load": 2, "assigned": False, "idle_time": 0, "lat": 48.8566, "lon": 2.3522}
+        ]
         env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "assigned": False, "time_remaining": 30}]
 
         # Action qui pointe vers un driver inexistant (driver_idx >= len(drivers))
@@ -40,8 +43,31 @@ class TestDispatchEnvSimpleEffective:
         env.reset()
 
         # Simuler un booking déjà assigné
-        env.drivers = [{"id": 1, "available": True, "load": 2, "lat": 48.8566, "lon": 2.3522, "total_distance": 0.0, "completed_bookings": 0, "assigned": False, "idle_time": 0}]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "assigned": True, "time_remaining": 30, "pickup_lat": 48.8606, "pickup_lon": 2.3376, "time_window_end": 30}]
+        env.drivers = [
+            {
+                "id": 1,
+                "available": True,
+                "load": 2,
+                "lat": 48.8566,
+                "lon": 2.3522,
+                "total_distance": 0.0,
+                "completed_bookings": 0,
+                "assigned": False,
+                "idle_time": 0,
+            }
+        ]
+        env.bookings = [
+            {
+                "id": 1,
+                "priority": 3,
+                "time_window": 30,
+                "assigned": True,
+                "time_remaining": 30,
+                "pickup_lat": 48.8606,
+                "pickup_lon": 2.3376,
+                "time_window_end": 30,
+            }
+        ]
 
         # Action pour assigner le booking déjà assigné
         action = 1  # driver_idx = 0, booking_idx = 0
@@ -261,8 +287,31 @@ class TestDispatchEnvSimpleEffective:
         env.reset()
 
         # Simuler une assignation valide
-        env.drivers = [{"id": 1, "available": True, "load": 2, "lat": 48.8566, "lon": 2.3522, "total_distance": 0.0, "completed_bookings": 0, "assigned": False, "idle_time": 0}]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "pickup_lat": 48.8606, "pickup_lon": 2.3376, "time_window_end": 30, "assigned": False, "time_remaining": 30}]
+        env.drivers = [
+            {
+                "id": 1,
+                "available": True,
+                "load": 2,
+                "lat": 48.8566,
+                "lon": 2.3522,
+                "total_distance": 0.0,
+                "completed_bookings": 0,
+                "assigned": False,
+                "idle_time": 0,
+            }
+        ]
+        env.bookings = [
+            {
+                "id": 1,
+                "priority": 3,
+                "time_window": 30,
+                "pickup_lat": 48.8606,
+                "pickup_lon": 2.3376,
+                "time_window_end": 30,
+                "assigned": False,
+                "time_remaining": 30,
+            }
+        ]
 
         # Action pour assigner le booking
         action = 1  # driver_idx = 0, booking_idx = 0
@@ -399,8 +448,31 @@ class TestDispatchEnvSimpleEffective:
         env.reset()
 
         # Simuler une assignation qui utilise le reward shaping
-        env.drivers = [{"id": 1, "available": True, "load": 2, "lat": 48.8566, "lon": 2.3522, "total_distance": 0.0, "completed_bookings": 0, "assigned": False, "idle_time": 0}]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "pickup_lat": 48.8606, "pickup_lon": 2.3376, "time_window_end": 30, "assigned": False, "time_remaining": 30}]
+        env.drivers = [
+            {
+                "id": 1,
+                "available": True,
+                "load": 2,
+                "lat": 48.8566,
+                "lon": 2.3522,
+                "total_distance": 0.0,
+                "completed_bookings": 0,
+                "assigned": False,
+                "idle_time": 0,
+            }
+        ]
+        env.bookings = [
+            {
+                "id": 1,
+                "priority": 3,
+                "time_window": 30,
+                "pickup_lat": 48.8606,
+                "pickup_lon": 2.3376,
+                "time_window_end": 30,
+                "assigned": False,
+                "time_remaining": 30,
+            }
+        ]
 
         _obs, reward, _terminated, _truncated, _info = env.step(1)
 
@@ -442,23 +514,36 @@ class TestDispatchEnvSimpleEffective:
         env.reset()
 
         # Test 1: Action wait (ligne 0)
-        obs, reward, terminated, truncated, info = env.step(0)
+        obs, reward, _terminated, _truncated, _info = env.step(0)
         assert isinstance(obs, np.ndarray)
         assert isinstance(reward, float)
 
         # Test 2: Action invalide (lignes 266-270)
-        env.drivers = [{"id": 1, "available": True, "load": 2, "assigned": False, "idle_time": 0, "lat": 48.8566, "lon": 2.3522}]
+        env.drivers = [
+            {"id": 1, "available": True, "load": 2, "assigned": False, "idle_time": 0, "lat": 48.8566, "lon": 2.3522}
+        ]
         env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "assigned": False, "time_remaining": 30}]
 
         with patch("services.rl.dispatch_env.logging") as mock_logging:
-            obs, reward, terminated, truncated, info = env.step(10)
+            obs, reward, _terminated, _truncated, info = env.step(10)
             assert reward == -100.0
             assert info["invalid_action"] is True
             assert info["index_out_of_range"] is True
             mock_logging.warning.assert_called()
 
         # Test 3: Booking déjà assigné (lignes 277-281)
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "assigned": True, "time_remaining": 30, "pickup_lat": 48.8606, "pickup_lon": 2.3376, "time_window_end": 30}]
+        env.bookings = [
+            {
+                "id": 1,
+                "priority": 3,
+                "time_window": 30,
+                "assigned": True,
+                "time_remaining": 30,
+                "pickup_lat": 48.8606,
+                "pickup_lon": 2.3376,
+                "time_window_end": 30,
+            }
+        ]
 
         with patch("services.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(1)

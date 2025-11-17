@@ -1,6 +1,7 @@
 """
 Tests unitaires pour shared/geo_utils.py
 """
+
 import pytest
 
 from shared.geo_utils import (
@@ -69,10 +70,10 @@ class TestHaversineTime:
 
     def test_haversine_minutes_invalid_speed(self):
         """Erreur si vitesse négative ou nulle."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"avg_speed_kmh doit être positif"):
             haversine_minutes(48.8566, 2.3522, 45.7640, 4.8357, avg_speed_kmh=0)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"avg_speed_kmh doit être positif"):
             haversine_minutes(48.8566, 2.3522, 45.7640, 4.8357, avg_speed_kmh=-10)
 
 
@@ -140,12 +141,13 @@ class TestAliases:
     def test_calculate_distance_alias(self):
         """Alias calculate_distance."""
         from shared.geo_utils import calculate_distance
+
         distance = calculate_distance(48.8566, 2.3522, 45.7640, 4.8357)
         assert 390 < distance < 395
 
     def test_compute_haversine_alias(self):
         """Alias compute_haversine."""
         from shared.geo_utils import compute_haversine
+
         distance = compute_haversine(48.8566, 2.3522, 45.7640, 4.8357)
         assert 390 < distance < 395
-

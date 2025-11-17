@@ -20,6 +20,7 @@ class TestFeatureFlags:
 
     def test_enable_disable_ml(self):
         """Test activation/désactivation ML."""
+        from feature_flags import FeatureFlags
 
         FeatureFlags.reset_stats()
 
@@ -42,6 +43,7 @@ class TestFeatureFlags:
 
     def test_traffic_percentage(self):
         """Test pourcentage de trafic."""
+        from feature_flags import FeatureFlags
 
         FeatureFlags.reset_stats()
         FeatureFlags.set_ml_enabled(True)
@@ -60,6 +62,7 @@ class TestFeatureFlags:
 
     def test_stats_recording(self):
         """Test enregistrement statistiques."""
+        from feature_flags import FeatureFlags
 
         FeatureFlags.reset_stats()
         FeatureFlags.set_ml_enabled(True)
@@ -81,12 +84,13 @@ class TestFeatureFlags:
         assert stats["ml_requests"] == 3
         assert stats["ml_successes"] == 2
         assert stats["ml_failures"] == 1
-        assert stats["ml_success_rate"] == 2/3
+        assert stats["ml_success_rate"] == 2 / 3
 
         print("✅ Stats recording OK (success rate: {stats['ml_success_rate']")
 
     def test_get_stats(self):
         """Test récupération statistiques complètes."""
+        from feature_flags import FeatureFlags
 
         FeatureFlags.reset_stats()
 
@@ -118,10 +122,7 @@ class TestFeatureFlagsAPI:
 
     def test_enable_ml(self, client):
         """Test endpoint POST /api/feature-flags/ml/enable."""
-        response = client.post(
-            "/api/feature-flags/ml/enable",
-            json={"percentage": 25}
-        )
+        response = client.post("/api/feature-flags/ml/enable", json={"percentage": 25})
 
         assert response.status_code == 200
         data = response.get_json()
@@ -148,10 +149,7 @@ class TestFeatureFlagsAPI:
 
     def test_set_percentage(self, client):
         """Test endpoint POST /api/feature-flags/ml/percentage."""
-        response = client.post(
-            "/api/feature-flags/ml/percentage",
-            json={"percentage": 75}
-        )
+        response = client.post("/api/feature-flags/ml/percentage", json={"percentage": 75})
 
         assert response.status_code == 200
         data = response.get_json()
@@ -165,7 +163,7 @@ class TestFeatureFlagsAPI:
         """Test validation pourcentage invalide."""
         response = client.post(
             "/api/feature-flags/ml/percentage",
-            json={"percentage": 150}  # Invalide
+            json={"percentage": 150},  # Invalide
         )
 
         assert response.status_code == 400
@@ -208,9 +206,9 @@ class TestFeatureFlagsAPI:
 
 if __name__ == "__main__":
     """Exécution directe pour tests rapides."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🧪 TESTS FEATURE FLAGS")
-    print("="*70)
+    print("=" * 70)
 
     # Tests unitaires
     print("\n1. Tests unitaires feature flags...")
@@ -224,14 +222,15 @@ if __name__ == "__main__":
     except Exception:
         print("❌ Erreur: {e}")
         import traceback
+
         traceback.print_exc()
         import sys
+
         sys.exit(1)
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("✅ TESTS UNITAIRES RÉUSSIS !")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     print("ℹ️ Pour tester les routes API:")
     print("   pytest tests/test_feature_flags.py::TestFeatureFlagsAPI")
-

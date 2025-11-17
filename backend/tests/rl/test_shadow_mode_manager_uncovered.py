@@ -1,6 +1,7 @@
 """Tests pour les méthodes non couvertes de shadow_mode_manager.py."""
 
 import json
+import math
 from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
@@ -22,17 +23,10 @@ class TestShadowModeManagerUncovered:
             "driver_load": 2,
             "respects_time_window": True,
             "driver_available": True,
-            "driver_id": 1
+            "driver_id": 1,
         }
 
-        context = {
-            "avg_eta": 18,
-            "avg_distance": 7.0,
-            "avg_load": 3,
-            "driver_performance": {
-                1: {"rating": 4.5}
-            }
-        }
+        context = {"avg_eta": 18, "avg_distance": 7.0, "avg_load": 3, "driver_performance": {1: {"rating": 4.5}}}
 
         reasons = manager._extract_decision_reasons(rl_decision, context)
 
@@ -54,7 +48,7 @@ class TestShadowModeManagerUncovered:
             "driver_load": 2,
             "respects_time_window": True,
             "driver_available": True,
-            "driver_id": 1
+            "driver_id": 1,
         }
 
         context = {}
@@ -75,17 +69,10 @@ class TestShadowModeManagerUncovered:
             "driver_load": 5,
             "respects_time_window": False,
             "driver_available": False,
-            "driver_id": 2
+            "driver_id": 2,
         }
 
-        context = {
-            "avg_eta": 18,
-            "avg_distance": 7.0,
-            "avg_load": 3,
-            "driver_performance": {
-                2: {"rating": 3.5}
-            }
-        }
+        context = {"avg_eta": 18, "avg_distance": 7.0, "avg_load": 3, "driver_performance": {2: {"rating": 3.5}}}
 
         reasons = manager._extract_decision_reasons(rl_decision, context)
 
@@ -106,12 +93,10 @@ class TestShadowModeManagerUncovered:
             "respects_time_window": True,
             "driver_available": True,
             "passenger_count": 2,
-            "in_service_area": True
+            "in_service_area": True,
         }
 
-        context = {
-            "vehicle_capacity": 4
-        }
+        context = {"vehicle_capacity": 4}
 
         violations = manager._check_constraint_violations(rl_decision, context)
 
@@ -126,12 +111,10 @@ class TestShadowModeManagerUncovered:
             "respects_time_window": False,
             "driver_available": True,
             "passenger_count": 2,
-            "in_service_area": True
+            "in_service_area": True,
         }
 
-        context = {
-            "vehicle_capacity": 4
-        }
+        context = {"vehicle_capacity": 4}
 
         violations = manager._check_constraint_violations(rl_decision, context)
 
@@ -146,12 +129,10 @@ class TestShadowModeManagerUncovered:
             "respects_time_window": True,
             "driver_available": False,
             "passenger_count": 2,
-            "in_service_area": True
+            "in_service_area": True,
         }
 
-        context = {
-            "vehicle_capacity": 4
-        }
+        context = {"vehicle_capacity": 4}
 
         violations = manager._check_constraint_violations(rl_decision, context)
 
@@ -166,12 +147,10 @@ class TestShadowModeManagerUncovered:
             "respects_time_window": True,
             "driver_available": True,
             "passenger_count": 6,
-            "in_service_area": True
+            "in_service_area": True,
         }
 
-        context = {
-            "vehicle_capacity": 4
-        }
+        context = {"vehicle_capacity": 4}
 
         violations = manager._check_constraint_violations(rl_decision, context)
 
@@ -186,12 +165,10 @@ class TestShadowModeManagerUncovered:
             "respects_time_window": True,
             "driver_available": True,
             "passenger_count": 2,
-            "in_service_area": False
+            "in_service_area": False,
         }
 
-        context = {
-            "vehicle_capacity": 4
-        }
+        context = {"vehicle_capacity": 4}
 
         violations = manager._check_constraint_violations(rl_decision, context)
 
@@ -206,12 +183,10 @@ class TestShadowModeManagerUncovered:
             "respects_time_window": False,
             "driver_available": False,
             "passenger_count": 6,
-            "in_service_area": False
+            "in_service_area": False,
         }
 
-        context = {
-            "vehicle_capacity": 4
-        }
+        context = {"vehicle_capacity": 4}
 
         violations = manager._check_constraint_violations(rl_decision, context)
 
@@ -230,7 +205,7 @@ class TestShadowModeManagerUncovered:
             "respects_time_window": True,
             "driver_available": True,
             "passenger_count": 2,
-            "in_service_area": True
+            "in_service_area": True,
         }
 
         context = {}
@@ -259,11 +234,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": 20, "delay_minutes": 5}
         rl_decision = {"eta_minutes": 15, "delay_minutes": 2}
-        context = {
-            "avg_eta": 18,
-            "avg_delay": 3,
-            "total_bookings": 100
-        }
+        context = {"avg_eta": 18, "avg_delay": 3, "total_bookings": 100}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -299,11 +270,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": -5, "delay_minutes": -2}
         rl_decision = {"eta_minutes": -3, "delay_minutes": -1}
-        context = {
-            "avg_eta": -4,
-            "avg_delay": -1.5,
-            "total_bookings": 100
-        }
+        context = {"avg_eta": -4, "avg_delay": -1.5, "total_bookings": 100}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -315,11 +282,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": 1000, "delay_minutes": 100}
         rl_decision = {"eta_minutes": 500, "delay_minutes": 50}
-        context = {
-            "avg_eta": 750,
-            "avg_delay": 75,
-            "total_bookings": 1000
-        }
+        context = {"avg_eta": 750, "avg_delay": 75, "total_bookings": 1000}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -331,11 +294,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": 0, "delay_minutes": 0}
         rl_decision = {"eta_minutes": 0, "delay_minutes": 0}
-        context = {
-            "avg_eta": 0,
-            "avg_delay": 0,
-            "total_bookings": 0
-        }
+        context = {"avg_eta": 0, "avg_delay": 0, "total_bookings": 0}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -347,11 +306,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": 20.5, "delay_minutes": 2.7}
         rl_decision = {"eta_minutes": 15.3, "delay_minutes": 1.8}
-        context = {
-            "avg_eta": 17.9,
-            "avg_delay": 2.25,
-            "total_bookings": 150.5
-        }
+        context = {"avg_eta": 17.9, "avg_delay": 2.25, "total_bookings": 150.5}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -363,11 +318,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": "20", "delay_minutes": "5"}
         rl_decision = {"eta_minutes": "15", "delay_minutes": "2"}
-        context = {
-            "avg_eta": "18",
-            "avg_delay": "3",
-            "total_bookings": "100"
-        }
+        context = {"avg_eta": "18", "avg_delay": "3", "total_bookings": "100"}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -379,11 +330,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": 20, "delay_minutes": "5"}
         rl_decision = {"eta_minutes": "15", "delay_minutes": 2}
-        context = {
-            "avg_eta": 18,
-            "avg_delay": "3",
-            "total_bookings": 100
-        }
+        context = {"avg_eta": 18, "avg_delay": "3", "total_bookings": 100}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -395,11 +342,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": None, "delay_minutes": None}
         rl_decision = {"eta_minutes": None, "delay_minutes": None}
-        context = {
-            "avg_eta": None,
-            "avg_delay": None,
-            "total_bookings": None
-        }
+        context = {"avg_eta": None, "avg_delay": None, "total_bookings": None}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -411,11 +354,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": [20], "delay_minutes": {"value": 5}}
         rl_decision = {"eta_minutes": [15], "delay_minutes": {"value": 2}}
-        context = {
-            "avg_eta": [18],
-            "avg_delay": {"value": 3},
-            "total_bookings": [100]
-        }
+        context = {"avg_eta": [18], "avg_delay": {"value": 3}, "total_bookings": [100]}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -427,11 +366,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": True, "delay_minutes": False}
         rl_decision = {"eta_minutes": False, "delay_minutes": True}
-        context = {
-            "avg_eta": True,
-            "avg_delay": False,
-            "total_bookings": True
-        }
+        context = {"avg_eta": True, "avg_delay": False, "total_bookings": True}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -443,11 +378,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": "", "delay_minutes": ""}
         rl_decision = {"eta_minutes": "", "delay_minutes": ""}
-        context = {
-            "avg_eta": "",
-            "avg_delay": "",
-            "total_bookings": ""
-        }
+        context = {"avg_eta": "", "avg_delay": "", "total_bookings": ""}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -459,11 +390,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": " 20 ", "delay_minutes": " 5 "}
         rl_decision = {"eta_minutes": " 15 ", "delay_minutes": " 2 "}
-        context = {
-            "avg_eta": " 18 ",
-            "avg_delay": " 3 ",
-            "total_bookings": " 100 "
-        }
+        context = {"avg_eta": " 18 ", "avg_delay": " 3 ", "total_bookings": " 100 "}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -475,11 +402,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": 1e2, "delay_minutes": 1e1}
         rl_decision = {"eta_minutes": 5e1, "delay_minutes": 5e0}
-        context = {
-            "avg_eta": 7.5e1,
-            "avg_delay": 7.5e0,
-            "total_bookings": 1e2
-        }
+        context = {"avg_eta": 7.5e1, "avg_delay": 7.5e0, "total_bookings": 1e2}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -493,11 +416,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": math.inf, "delay_minutes": -math.inf}
         rl_decision = {"eta_minutes": math.inf, "delay_minutes": -math.inf}
-        context = {
-            "avg_eta": math.inf,
-            "avg_delay": -math.inf,
-            "total_bookings": math.inf
-        }
+        context = {"avg_eta": math.inf, "avg_delay": -math.inf, "total_bookings": math.inf}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -510,11 +429,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": math.nan, "delay_minutes": math.nan}
         rl_decision = {"eta_minutes": math.nan, "delay_minutes": math.nan}
-        context = {
-            "avg_eta": math.nan,
-            "avg_delay": math.nan,
-            "total_bookings": math.nan
-        }
+        context = {"avg_eta": math.nan, "avg_delay": math.nan, "total_bookings": math.nan}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -526,11 +441,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": 999999, "delay_minutes": 0.0001}
         rl_decision = {"eta_minutes": 0.0001, "delay_minutes": 999999}
-        context = {
-            "avg_eta": 499999.5,
-            "avg_delay": 499999.5,
-            "total_bookings": 999999
-        }
+        context = {"avg_eta": 499999.5, "avg_delay": 499999.5, "total_bookings": 999999}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -542,11 +453,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": 1e-10, "delay_minutes": 1e-15}
         rl_decision = {"eta_minutes": 1e-11, "delay_minutes": 1e-16}
-        context = {
-            "avg_eta": 5.5e-11,
-            "avg_delay": 5.5e-16,
-            "total_bookings": 1e-10
-        }
+        context = {"avg_eta": 5.5e-11, "avg_delay": 5.5e-16, "total_bookings": 1e-10}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -558,11 +465,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": 1e10, "delay_minutes": 1e15}
         rl_decision = {"eta_minutes": 1e9, "delay_minutes": 1e14}
-        context = {
-            "avg_eta": 5.5e9,
-            "avg_delay": 5.5e14,
-            "total_bookings": 1e10
-        }
+        context = {"avg_eta": 5.5e9, "avg_delay": 5.5e14, "total_bookings": 1e10}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -574,11 +477,7 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": 20.123456789, "delay_minutes": 5.987654321}
         rl_decision = {"eta_minutes": 15.111111111, "delay_minutes": 2.999999999}
-        context = {
-            "avg_eta": 17.61728395,
-            "avg_delay": 4.49382716,
-            "total_bookings": 150.555555555
-        }
+        context = {"avg_eta": 17.61728395, "avg_delay": 4.49382716, "total_bookings": 150.555555555}
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
 
@@ -595,7 +494,7 @@ class TestShadowModeManagerUncovered:
             "confidence": 0.85,
             "reason": "Driver is closest",
             "traffic_factor": 1.2,
-            "weather_factor": 1.1
+            "weather_factor": 1.1,
         }
 
         rl_decision = {
@@ -605,7 +504,7 @@ class TestShadowModeManagerUncovered:
             "confidence": 0.92,
             "reason": "Better route optimization",
             "traffic_factor": 1.0,
-            "weather_factor": 1.0
+            "weather_factor": 1.0,
         }
 
         context = {
@@ -619,7 +518,7 @@ class TestShadowModeManagerUncovered:
             "vehicle_type": "sedan",
             "avg_eta": 18.9,
             "avg_delay": 2.9,
-            "total_bookings": 125.7
+            "total_bookings": 125.7,
         }
 
         impact = manager._calculate_performance_impact(human_decision, rl_decision, context)

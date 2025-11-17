@@ -10,7 +10,7 @@ from services.rl.suggestion_generator import RLSuggestionGenerator
 
 
 class MockBooking:
-    def __init__(self, ____________________________________________________________________________________________________id, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng):
+    def __init__(self, _id, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng):
         self.id = id
         self.pickup_lat = pickup_lat
         self.pickup_lng = pickup_lng
@@ -19,7 +19,7 @@ class MockBooking:
 
 
 class MockDriver:
-    def __init__(self, ____________________________________________________________________________________________________id, lat, lng):
+    def __init__(self, _id, lat, lng):
         self.id = id
         self.lat = lat
         self.lng = lng
@@ -28,7 +28,7 @@ class MockDriver:
 
 
 class MockAssignment:
-    def __init__(self, ____________________________________________________________________________________________________id, booking, driver):
+    def __init__(self, _id, booking, driver):
         self.id = id
         self.booking = booking
         self.driver = driver
