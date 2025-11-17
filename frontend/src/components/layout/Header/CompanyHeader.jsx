@@ -28,19 +28,23 @@ const CompanyHeader = () => {
   const companyData = useCompanyData() || {};
   const company = companyData.company || null;
 
-  const [logoOk, setLogoOk] = useState(true);
+  const [logoError, setLogoError] = useState(false);
   const name = company?.name || 'Entreprise';
 
   const logoSrc = useMemo(() => {
     const abs = resolveLogoUrl(company?.logo_url);
     if (!abs) return '';
+    // Ajouter un timestamp pour éviter le cache, mais seulement si c'est une URL relative
+    if (abs.startsWith('http://') || abs.startsWith('https://') || abs.startsWith('data:') || abs.startsWith('blob:')) {
+      return abs;
+    }
     const sep = abs.includes('?') ? '&' : '?';
     return `${abs}${sep}v=${Date.now()}`;
   }, [company?.logo_url]);
 
-  // Reset logoOk quand l'URL change pour permettre un nouveau chargement
+  // Reset logoError quand l'URL change pour permettre un nouveau chargement
   useEffect(() => {
-    setLogoOk(true);
+    setLogoError(false);
   }, [company?.logo_url]);
 
   const homeHref = routePublicId ? `/dashboard/company/${routePublicId}` : '/dashboard/company';
@@ -52,12 +56,16 @@ const CompanyHeader = () => {
     <header className={styles.header} role="banner">
       <Link to={homeHref} className={styles.brand} aria-label="Tableau de bord entreprise">
         <div className={styles.logoWrap}>
-          {logoSrc && logoOk ? (
+          {logoSrc && !logoError ? (
             <img
               src={logoSrc}
-              alt="Logo de l’entreprise"
+              alt="Logo de l'entreprise"
               className={styles.logoImg}
-              onError={() => setLogoOk(false)}
+              onError={() => {
+                console.warn('Erreur de chargement du logo:', logoSrc);
+                setLogoError(true);
+              }}
+              onLoad={() => setLogoError(false)}
               loading="eager"
             />
           ) : (

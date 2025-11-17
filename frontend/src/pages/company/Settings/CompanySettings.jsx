@@ -78,7 +78,8 @@ export default function CompanySettings() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    setLogoPreview(resolveLogoUrl(company?.logo_url));
+    const resolved = resolveLogoUrl(company?.logo_url);
+    setLogoPreview(resolved || null);
   }, [company?.logo_url]);
 
   // -------- Form principal (Général) --------
@@ -256,16 +257,28 @@ export default function CompanySettings() {
     try {
       const result = await uploadCompanyLogo(file);
 
+      // Mettre à jour le preview immédiatement avec le résultat
       if (result?.logo_url) {
-        setLogoPreview(resolveLogoUrl(result.logo_url));
+        const resolved = resolveLogoUrl(result.logo_url);
+        setLogoPreview(resolved || null);
       }
 
+      // Recharger les données de l'entreprise pour synchroniser
       await reloadCompany?.();
+      
+      // Mettre à jour le preview avec les données rechargées (au cas où)
+      if (company?.logo_url) {
+        const resolved = resolveLogoUrl(company.logo_url);
+        setLogoPreview(resolved || null);
+      }
+      
       setMessage('Logo mis à jour avec succès.');
       setLogoUrlEditOpen(false);
     } catch (err) {
       setError(err?.response?.data?.error || err?.message || "Échec de l'upload du logo.");
-      setLogoPreview(resolveLogoUrl(company?.logo_url));
+      // Restaurer le logo précédent en cas d'erreur
+      const resolved = resolveLogoUrl(company?.logo_url);
+      setLogoPreview(resolved || null);
     } finally {
       setLogoBusy(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -282,13 +295,27 @@ export default function CompanySettings() {
     setMessage('');
     try {
       await updateCompanyInfo({ logo_url: logoUrlInput.trim() });
+      
+      // Mettre à jour le preview avec la nouvelle URL
+      const resolved = resolveLogoUrl(logoUrlInput.trim());
+      setLogoPreview(resolved || null);
+      
       await reloadCompany?.();
       setMessage('Logo mis à jour via URL.');
       setLogoUrlEditOpen(false);
+      
+      // S'assurer que le preview est à jour après le reload
+      if (company?.logo_url) {
+        const resolvedAfterReload = resolveLogoUrl(company.logo_url);
+        setLogoPreview(resolvedAfterReload || null);
+      }
     } catch (err) {
       setError(
         err?.response?.data?.error || err?.message || "Impossible d'enregistrer l'URL du logo."
       );
+      // Restaurer le logo précédent en cas d'erreur
+      const resolved = resolveLogoUrl(company?.logo_url);
+      setLogoPreview(resolved || null);
     } finally {
       setLogoBusy(false);
     }
@@ -301,12 +328,19 @@ export default function CompanySettings() {
     setMessage('');
     try {
       await updateCompanyInfo({ logo_url: null });
+      setLogoUrlInput('');
+      setLogoPreview(null);
+      
       await reloadCompany?.();
       setMessage('Logo supprimé.');
-      setLogoUrlInput('');
+      
+      // S'assurer que le preview est null après le reload
       setLogoPreview(null);
     } catch (err) {
       setError(err?.response?.data?.error || err?.message || 'Impossible de supprimer le logo.');
+      // Restaurer le logo précédent en cas d'erreur
+      const resolved = resolveLogoUrl(company?.logo_url);
+      setLogoPreview(resolved || null);
     } finally {
       setLogoBusy(false);
     }

@@ -30,6 +30,11 @@ const BillingTab = () => {
     iban: '',
     qr_iban: '',
     esr_ref_base: '',
+    // TVA
+    vat_applicable: false,
+    vat_rate: null,
+    vat_label: '',
+    vat_number: '',
   });
 
   const [loading, setLoading] = useState(true);
@@ -70,6 +75,11 @@ const BillingTab = () => {
           iban: data.iban || '',
           qr_iban: data.qr_iban || '',
           esr_ref_base: data.esr_ref_base || '',
+          // TVA
+          vat_applicable: data.vat_applicable || false,
+          vat_rate: data.vat_rate || null,
+          vat_label: data.vat_label || '',
+          vat_number: data.vat_number || '',
         });
       }
     } catch (err) {
@@ -503,6 +513,79 @@ const BillingTab = () => {
             <option value="detailed">Détaillé</option>
           </select>
         </div>
+      </section>
+
+      {/* TVA */}
+      <section className={styles.section}>
+        <h2>💰 TVA (Taxe sur la valeur ajoutée)</h2>
+
+        <ToggleField
+          label="TVA applicable"
+          name="vat_applicable"
+          value={form.vat_applicable}
+          onChange={handleToggle}
+          hint="Activez la TVA si votre entreprise est assujettie à la TVA"
+        />
+
+        {form.vat_applicable && (
+          <>
+            <div className={styles.formGroup}>
+              <label htmlFor="vat_rate">Taux de TVA (%)</label>
+              <div className={styles.inputWithUnit}>
+                <input
+                  type="number"
+                  id="vat_rate"
+                  name="vat_rate"
+                  value={form.vat_rate || ''}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  placeholder="7.7"
+                />
+                <span className={styles.unit}>%</span>
+              </div>
+              <small className={styles.hint}>
+                Taux de TVA standard en Suisse: 7.7% (réduit: 2.5%, réduit spécial: 3.7%)
+              </small>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="vat_label">Libellé TVA</label>
+              <input
+                type="text"
+                id="vat_label"
+                name="vat_label"
+                value={form.vat_label}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                placeholder="TVA"
+                maxLength={50}
+              />
+              <small className={styles.hint}>
+                Libellé affiché sur les factures (ex: "TVA", "TVA 7.7%", "TVA incluse")
+              </small>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="vat_number">Numéro de TVA</label>
+              <input
+                type="text"
+                id="vat_number"
+                name="vat_number"
+                value={form.vat_number}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                placeholder="CHE-123.456.789 TVA"
+                maxLength={50}
+              />
+              <small className={styles.hint}>
+                Numéro d'identification TVA de l'entreprise (optionnel)
+              </small>
+            </div>
+          </>
+        )}
       </section>
 
       {/* Informations bancaires */}

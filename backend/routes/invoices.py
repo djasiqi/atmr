@@ -254,8 +254,10 @@ class InvoicesList(Resource):
         # Stats sur l'ensemble filtré (pas seulement la page)
         # Pour efficience on calcule sur la page si volumineux; ici simple sum
         # sur items
+        # Exclure les factures annulées du total émis
         total_issued = sum(float(inv["total_amount"])
-                           for inv in result_invoices)
+                           for inv in result_invoices
+                           if inv["status"] != "cancelled")
         total_paid = sum(float(inv["amount_paid"]) for inv in result_invoices)
         total_balance = sum(float(inv["balance_due"])
                             for inv in result_invoices)

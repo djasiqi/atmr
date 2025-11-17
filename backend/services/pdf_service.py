@@ -159,14 +159,26 @@ class PDFService:
         logo_height = 0.0
         if hasattr(company, "logo_url") and company.logo_url:
             try:
-                # Corriger le chemin du logo (éviter le double /uploads)
-                logo_url_clean = company.logo_url.lstrip("/")
-                if logo_url_clean.startswith("uploads/"):
-                    logo_url_clean = logo_url_clean[8:]  # Supprimer 'uploads/'
+                logo_url = company.logo_url.strip()
 
-                logo_path = Path(Path(Path(__file__).parent.parent), "uploads", logo_url_clean)
+                # Vérifier si c'est une URL externe (http/https)
+                if logo_url.startswith(("http://", "https://")):
+                    # Pour les URLs externes, on ne peut pas les charger directement dans ReportLab
+                    # On pourrait télécharger l'image, mais pour l'instant on ignore
+                    app_logger.info("Logo externe détecté (non supporté pour PDF): %s", logo_url)
+                    logo_path = None
+                else:
+                    # Logo stocké localement : nettoyer le chemin
+                    # Format attendu : /uploads/company_logos/company_{id}.{ext}
+                    logo_url_clean = logo_url.lstrip("/")
+                    if logo_url_clean.startswith("uploads/"):
+                        logo_url_clean = logo_url_clean[8:]  # Supprimer 'uploads/'
 
-                if Path(logo_path).exists():
+                    # Construire le chemin absolu
+                    uploads_dir = Path(Path(Path(__file__).parent.parent), "uploads")
+                    logo_path = uploads_dir / logo_url_clean
+
+                if logo_path and Path(logo_path).exists():
                     # Calculer les proportions du logo original (2251x540)
                     # Ratio largeur/hauteur = 2251/540 ≈ 4.17
                     # Utiliser des pourcentages pour s'adapter à tous les formats

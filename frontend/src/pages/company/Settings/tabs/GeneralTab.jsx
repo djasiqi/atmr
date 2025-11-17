@@ -51,10 +51,17 @@ const GeneralTab = ({
                 className={styles.logoPreview}
                 loading="lazy"
                 onError={(e) => {
-                  e.currentTarget.src = '';
+                  console.warn('Erreur de chargement du logo dans les paramètres:', logoPreview);
+                  e.currentTarget.style.display = 'none';
+                  // Afficher le placeholder si l'image échoue
+                  const placeholder = e.currentTarget.nextElementSibling;
+                  if (placeholder && placeholder.classList.contains(styles.logoPlaceholder)) {
+                    placeholder.style.display = 'flex';
+                  }
                 }}
               />
-            ) : (
+            ) : null}
+            {!logoPreview && (
               <div className={styles.logoPlaceholder}>
                 <span>Pas de logo</span>
               </div>
