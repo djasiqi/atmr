@@ -472,6 +472,125 @@ def init_chat_socket(socketio: SocketIO):
             logger.exception("❌ Erreur driver_location : %s", e)
             emit("error", {"error": str(e)})
 
+    @socketio.on("driver_location_batch")
+    def handle_driver_location_batch(data):
+        """Handler pour la réception de batch de localisations du chauffeur.
+        Traite chaque position du batch et les persiste.
+        """
+        try:
+            current_sid = _get_sid()
+            logger.info(
+                "📍 driver_location_batch reçu, SID=%s, positions_count=%s", current_sid, len(data.get("positions", []))
+            )
+
+            sid_info = _SID_INDEX.get(current_sid, {})
+            user_public_id = sid_info.get("user_public_id")
+            user_role = sid_info.get("role")
+
+            if not user_public_id:
+                logger.warning("⛔ driver_location_batch sans JWT public_id pour SID=%s", current_sid)
+                emit("error", {"error": "Session JWT introuvable"})
+                return
+
+            user = User.query.filter_by(public_id=user_public_id).first()
+            if not user:
+                emit("error", {"error": "Utilisateur introuvable"})
+                return
+
+            payload_driver_id = data.get("driver_id")
+            driver: Driver | None = None
+
+            if payload_driver_id and isinstance(payload_driver_id, (int, str)):
+                try:
+                    candidate_id = int(payload_driver_id)
+                    driver = Driver.query.get(candidate_id)
+                    if driver:
+                        logger.info("✅ Driver trouvé via payload: %s", driver.id)
+                except (ValueError, TypeError):
+                    logger.warning("⚠️ driver_id non convertible: %s", payload_driver_id)
+
+            if not driver and user_role == "driver":
+                driver = Driver.query.filter_by(user_id=user.id).first()
+                if driver:
+                    logger.info("✅ Driver trouvé via user_id: %s", driver.id)
+
+            company_id_val = tcast("int | None", getattr(driver, "company_id", None))
+            if (driver is None) or (company_id_val is None):
+                logger.error(
+                    "❌ Driver introuvable pour driver_location_batch: payload_driver_id=%s, user_id=%s",
+                    payload_driver_id,
+                    user.id,
+                )
+                emit("error", {"error": "Chauffeur introuvable ou non lié à une entreprise."})
+                return
+
+            positions = data.get("positions", [])
+            if not positions:
+                logger.warning("⚠️ driver_location_batch vide")
+                return
+
+            company_room = f"company_{company_id_val}"
+            now_iso = datetime.now(UTC).isoformat()
+
+            # Traiter chaque position du batch
+            for pos in positions:
+                try:
+                    latitude = float(pos.get("latitude", 0))
+                    longitude = float(pos.get("longitude", 0))
+
+                    if not (-LAT_THRESHOLD <= latitude <= LAT_THRESHOLD):
+                        continue
+                    if not (-LON_THRESHOLD <= longitude <= LON_THRESHOLD):
+                        continue
+
+                    # Persister dans Redis
+                    try:
+                        key = f"driver:{driver.id}:loc"
+                        redis_client.hset(
+                            key,
+                            mapping={
+                                "lat": str(latitude),
+                                "lon": str(longitude),
+                                "ts": now_iso,
+                            },
+                        )
+                        redis_client.expire(key, 24 * 3600)
+                    except Exception as e_redis:
+                        logger.exception("❌ Erreur Redis driver_location_batch pour driver %s: %s", driver.id, e_redis)
+
+                    # Persister dans DB (seulement la dernière position du batch)
+                    if pos == positions[-1]:
+                        try:
+                            driver.latitude = latitude
+                            driver.longitude = longitude
+                            db.session.add(driver)
+                            db.session.commit()
+                        except Exception as e_db:
+                            db.session.rollback()
+                            logger.exception("❌ Erreur DB driver_location_batch pour driver %s: %s", driver.id, e_db)
+
+                    # Diffuser chaque position
+                    cast("Any", emit)(
+                        "driver_location_update",
+                        {
+                            "driver_id": driver.id,
+                            "first_name": getattr(getattr(driver, "user", None), "first_name", None),
+                            "latitude": latitude,
+                            "longitude": longitude,
+                            "timestamp": pos.get("timestamp") or now_iso,
+                        },
+                        room=company_room,
+                    )
+                except (TypeError, ValueError) as e:
+                    logger.warning("⚠️ Position invalide dans batch: %s", e)
+                    continue
+
+            logger.info("📡 Batch -> %s (driver %s) %s positions", company_room, driver.id, len(positions))
+
+        except Exception as e:
+            logger.exception("❌ Erreur driver_location_batch : %s", e)
+            emit("error", {"error": str(e)})
+
     @socketio.on("join_company")
     def handle_join_company(data=None):  # noqa: ARG001
         try:
@@ -609,6 +728,7 @@ def init_chat_socket(socketio: SocketIO):
         handle_team_chat,
         handle_join_driver_room,
         handle_driver_location,
+        handle_driver_location_batch,
         handle_join_company,
         handle_get_driver_locations,
         handle_disconnect,

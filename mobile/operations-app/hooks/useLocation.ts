@@ -20,6 +20,8 @@ export const useLocation = () => {
   const lastSentLocation = useRef<{ latitude: number; longitude: number } | null>(null);
   // ✅ PERF: Buffer pour batching des positions
   const positionBuffer = useRef<Location.LocationObject[]>([]);
+  // ✅ Stocker la dernière position reçue pour forcer l'envoi périodique
+  const lastReceivedLocation = useRef<Location.LocationObject | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -98,14 +100,24 @@ export const useLocation = () => {
 
   // ✅ PERF: Flush batch de positions (réduit réseau et batterie)
   const flushPositionBatch = async () => {
-    if (positionBuffer.current.length === 0 || !driver) return;
+    if (positionBuffer.current.length === 0) {
+      console.log("[useLocation] ⚠️ Buffer vide, pas d'envoi");
+      return;
+    }
+    if (!driver) {
+      console.log("[useLocation] ⚠️ Driver non défini, pas d'envoi");
+      return;
+    }
+    if (!socket || !socket.connected) {
+      console.log("[useLocation] ⚠️ Socket non connecté, pas d'envoi", { socket: !!socket, connected: socket?.connected });
+      return;
+    }
     
     const batch = [...positionBuffer.current];
     positionBuffer.current = [];  // Clear buffer
     
     try {
-      // Envoyer batch via Socket.IO (plus efficient)
-      socket?.emit("driver_location_batch", {
+      const payload = {
         positions: batch.map(loc => ({
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
@@ -115,9 +127,14 @@ export const useLocation = () => {
           timestamp: loc.timestamp ?? Date.now(),
         })),
         driver_id: driver.id,
-      });
+      };
       
-      console.log(`📍 Batch envoyé: ${batch.length} positions`);
+      console.log(`📍 [useLocation] Envoi batch: ${batch.length} positions, driver_id=${driver.id}, socket_connected=${socket.connected}`);
+      
+      // Envoyer batch via Socket.IO (plus efficient)
+      socket.emit("driver_location_batch", payload);
+      
+      console.log(`✅ [useLocation] Batch envoyé: ${batch.length} positions`);
       
       // Mettre à jour dernière position
       const lastPos = batch[batch.length - 1];
@@ -126,7 +143,7 @@ export const useLocation = () => {
         longitude: lastPos.coords.longitude
       };
     } catch (error) {
-      console.error("Erreur envoi batch localisation:", error);
+      console.error("❌ [useLocation] Erreur envoi batch localisation:", error);
     }
   };
 
@@ -134,26 +151,45 @@ export const useLocation = () => {
       const { latitude, longitude } = loc.coords;
       if (!driver) return;
 
+      // ✅ Toujours stocker la dernière position reçue (pour forcer l'envoi périodique)
+      lastReceivedLocation.current = loc;
+
       const lastLoc = lastSentLocation.current;
       const movedDistance = lastLoc
         ? getDistanceInMeters(lastLoc.latitude, lastLoc.longitude, latitude, longitude)
         : Infinity;
 
-      // ✅ PERF: Ajouter au buffer au lieu d'envoyer immédiatement
-      if (movedDistance >= 50) {
+      // ✅ Toujours envoyer la première position (même si déplacement faible)
+      // ✅ Réduire le seuil à 20m pour être plus réactif
+      const DISTANCE_THRESHOLD = 20; // Réduit de 50m à 20m
+      
+      if (!lastLoc || movedDistance >= DISTANCE_THRESHOLD) {
         positionBuffer.current.push(loc);
+        console.log(`📍 [useLocation] Position ajoutée au buffer: ${positionBuffer.current.length}/${BATCH_SIZE}, distance=${lastLoc ? movedDistance.toFixed(0) : 'première'}m`);
         
         // Flush si buffer plein
         if (positionBuffer.current.length >= BATCH_SIZE) {
+          console.log(`📍 [useLocation] Buffer plein (${BATCH_SIZE}), flush immédiat`);
           await flushPositionBatch();
         }
+      } else {
+        console.log(`📍 [useLocation] Position ignorée (déplacement < ${DISTANCE_THRESHOLD}m): ${movedDistance.toFixed(0)}m`);
       }
     };
 
     requestLocationPermissions();
 
     // ✅ PERF: Flush périodique du buffer (toutes les 15s)
+    // ✅ Si buffer vide mais position récente disponible, forcer l'envoi de la dernière position
     const flushInterval = setInterval(() => {
+      console.log(`⏰ [useLocation] Flush périodique (buffer=${positionBuffer.current.length})`);
+      
+      // Si buffer vide mais on a une position récente, l'ajouter au buffer
+      if (positionBuffer.current.length === 0 && lastReceivedLocation.current) {
+        console.log(`📍 [useLocation] Buffer vide, ajout de la dernière position reçue pour flush périodique`);
+        positionBuffer.current.push(lastReceivedLocation.current);
+      }
+      
       flushPositionBatch();
     }, BATCH_INTERVAL_MS);
 
