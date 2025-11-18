@@ -94,7 +94,9 @@ jobs:
           cd backend
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install -r requirements-dev.txt
+          if [ -f requirements-dev.txt ]; then
+            pip install -r requirements-dev.txt
+          fi
 
       - name: Run pytest with coverage
         env:
@@ -243,9 +245,9 @@ jobs:
         run: |
           cd backend
           # Générer rapport JSON (ne bloque pas)
-          bandit -r . -f json -o ../artifacts/bandit.json || true
+          bandit -r . -f json -o ../artifacts/bandit.json --severity-level high --confidence-level medium || true
           # Vérifier vulnérabilités high/critical (bloque si trouvées)
-          bandit -r . --severity-level high -q
+          bandit -r . --severity-level high --confidence-level medium -q
         continue-on-error: false
 
       - name: Run Semgrep (OWASP rules)

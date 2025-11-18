@@ -4,9 +4,6 @@
 # Exclure certains dossiers/tests
 exclude_dirs = tests,venv,__pycache__,migrations/versions,htmlcov,node_modules
 
-# Niveau de confiance minimum (0-100)
-confidence = medium
-
 # Seuil de sévérité (low, medium, high)
 severity = medium
 
