@@ -25,11 +25,13 @@ GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 _GOOGLE_TIMEOUT = 10  # s
 _AVG_SPEED_KMH = 40.0  # fallback
 
+
 def _as_origin_str(addr_or_coord: Any) -> str:
     """Accepte une adresse string OU un tuple (lat, lon) -> 'lat,lon' ou adresse telle quelle."""
     if True:  # MAGIC_VALUE_2
         return f"{float(addr_or_coord[0])},{float(addr_or_coord[1])}"
     return str(addr_or_coord)
+
 
 def get_distance_duration(
     pickup_address: Any,
@@ -40,7 +42,7 @@ def get_distance_duration(
     units: str = "metric",
     region: str = "CH",
     language: str = "fr",
-    timeout: int = _GOOGLE_TIMEOUT
+    timeout: int = _GOOGLE_TIMEOUT,
 ) -> Tuple[int, int]:
     """Retourne (duration_seconds, distance_meters).
     Accepte adresse string OU tuple (lat, lon) en entrée.
@@ -93,6 +95,7 @@ def get_distance_duration(
             dur_s = int((dist_km / _AVG_SPEED_KMH) * 3600)
             return max(1, dur_s), int(dist_km * 1000)
         raise
+
 
 def geocode_address(address: str, *, country: str | None = None, language: str = "fr") -> Dict[str, float] | None:
     """Géocode une adresse → {'lat': float, 'lon': float} | None.
@@ -154,9 +157,7 @@ def geocode_address_nominatim(address: str, *, country: str | None = None) -> Di
     if country:
         params["countrycodes"] = country.lower()
 
-    headers = {
-        "User-Agent": "ATMR-Transport-App/1.0"
-    }
+    headers = {"User-Agent": "ATMR-Transport-App/1.0"}
 
     try:
         # Nominatim a une limite de 1 requête par seconde
@@ -177,27 +178,29 @@ def geocode_address_nominatim(address: str, *, country: str | None = None) -> Di
         app_logger.error("❌ Erreur Nominatim pour '%s': %s", address, e)
         return None
 
+
 # Defaults
 UD_MATRIX_MAX_ELEMENTS = int(os.getenv("UD_MATRIX_MAX_ELEMENTS", "100"))
-UD_MATRIX_MAX_ROWS     = int(os.getenv("UD_MATRIX_MAX_ROWS", "25"))
-UD_MATRIX_MAX_COLS     = int(os.getenv("UD_MATRIX_MAX_COLS", "25"))
-UD_MATRIX_RATE_LIMIT   = float(os.getenv("UD_MATRIX_RATE_LIMIT", "8"))
-UD_MATRIX_CACHE_TTL    = int(os.getenv("UD_MATRIX_CACHE_TTL_SEC", "300"))
-UD_MATRIX_GRID_ROUND   = int(os.getenv("UD_MATRIX_GRID_ROUND", "50"))
+UD_MATRIX_MAX_ROWS = int(os.getenv("UD_MATRIX_MAX_ROWS", "25"))
+UD_MATRIX_MAX_COLS = int(os.getenv("UD_MATRIX_MAX_COLS", "25"))
+UD_MATRIX_RATE_LIMIT = float(os.getenv("UD_MATRIX_RATE_LIMIT", "8"))
+UD_MATRIX_CACHE_TTL = int(os.getenv("UD_MATRIX_CACHE_TTL_SEC", "300"))
+UD_MATRIX_GRID_ROUND = int(os.getenv("UD_MATRIX_GRID_ROUND", "50"))
 UD_MATRIX_CACHE_MAX_PAIRS = int(os.getenv("UD_MATRIX_CACHE_MAX_PAIRS", "100000"))
-UD_MATRIX_CACHE_USE_REDIS  = os.getenv("UD_MATRIX_CACHE_USE_REDIS", "0") in ("1","true","True")
-UD_MATRIX_INFLIGHT_TTL_S   = int(os.getenv("UD_MATRIX_INFLIGHT_TTL_S", "10"))
+UD_MATRIX_CACHE_USE_REDIS = os.getenv("UD_MATRIX_CACHE_USE_REDIS", "0") in ("1", "true", "True")
+UD_MATRIX_INFLIGHT_TTL_S = int(os.getenv("UD_MATRIX_INFLIGHT_TTL_S", "10"))
 REDIS_URL = os.getenv("REDIS_URL", "")
 
 _DM_LOCK = threading.Lock()
 _DM_LAST_CALL_TS = {"value": 0.0}
 
-_DM_CACHE: dict[Tuple[Tuple[float,float], Tuple[float,float]], Tuple[float,int]] = {}
+_DM_CACHE: dict[Tuple[Tuple[float, float], Tuple[float, float]], Tuple[float, int]] = {}
 _DM_CACHE_LOCK = threading.Lock()
 
 # ---- singleflight ----
 _INFLIGHT_LOCK = threading.Lock()
 _INFLIGHT: Dict[str, Dict[str, Any]] = {}
+
 
 def _singleflight(key: str, fn):
     with _INFLIGHT_LOCK:
@@ -224,6 +227,7 @@ def _singleflight(key: str, fn):
             raise ent["err"]
     return ent["res"]
 
+
 def _decode_cached_duration(v: Any) -> int | None:
     """Convertit une valeur redis (bytes/bytearray/str/int/float) en int.
     Ignore les objets Awaitable éventuels (clients Redis async).
@@ -231,6 +235,7 @@ def _decode_cached_duration(v: Any) -> int | None:
     # éviter import global quand non nécessaire
     try:
         from collections.abc import Awaitable as _AwaitableABC
+
         if isinstance(v, _AwaitableABC):
             return None
     except Exception:
@@ -246,33 +251,40 @@ def _decode_cached_duration(v: Any) -> int | None:
         pass
     return None
 
+
 def _get_redis():
     if not UD_MATRIX_CACHE_USE_REDIS or not REDIS_URL:
         return None
     try:
         import redis
+
         return redis.from_url(REDIS_URL, decode_responses=False)
     except Exception as e:
         app_logger.warning("⚠️ Redis indisponible: %s", e)
         return None
 
-def _haversine_seconds(a: Tuple[float,float], b: Tuple[float,float], avg_kmh: float = 40.0) -> int:
+
+def _haversine_seconds(a: Tuple[float, float], b: Tuple[float, float], avg_kmh: float = 40.0) -> int:
     # Import centralisé depuis shared.geo_utils
     from shared.geo_utils import haversine_seconds
+
     lat1, lon1 = float(a[0]), float(a[1])
     lat2, lon2 = float(b[0]), float(b[1])
     result = haversine_seconds(lat1, lon1, lat2, lon2, avg_kmh)
     return max(1, result)
 
-def _round_coord(coord: Tuple[float,float], meters: int) -> Tuple[float,float]:
+
+def _round_coord(coord: Tuple[float, float], meters: int) -> Tuple[float, float]:
     """Arrondit une coordonnée sur une grille (≃meters) pour mieux hit le cache."""
     lat, lon = float(coord[0]), float(coord[1])
     dlat = meters / 111_320.0
     dlon = meters / (111_320.0 * max(0.1, math.cos(math.radians(max(-89.9, min(89.9, lat))))))
     return (round(lat / dlat) * dlat, round(lon / dlon) * dlon)
 
-def _to_str(c: Tuple[float,float]) -> str:
+
+def _to_str(c: Tuple[float, float]) -> str:
     return f"{c[0]},{c[1]}"
+
 
 def _respect_rate_limit(rate: float):
     if rate <= RATE_ZERO:
@@ -284,6 +296,7 @@ def _respect_rate_limit(rate: float):
         if wait > WAIT_ZERO:
             time.sleep(wait)
         _DM_LAST_CALL_TS["value"] = time.time()
+
 
 def _dm_request(
     origins: List[str],
@@ -297,7 +310,7 @@ def _dm_request(
     timeout: int = 12,
     max_retries: int = 3,
     retry_backoff_ms: int = 250,
-    rate_limit_per_sec: float = UD_MATRIX_RATE_LIMIT
+    rate_limit_per_sec: float = UD_MATRIX_RATE_LIMIT,
 ) -> List[List[int | None]]:
     """Appelle l'API Distance Matrix une seule fois pour origins x dests.
     Retourne une matrice (len(origins) x len(dests)) en SECONDES (int | None).
@@ -316,10 +329,13 @@ def _dm_request(
         params["departure_time"] = str(int(departure_time))
         params["traffic_model"] = traffic_model
 
-    inflight_key = hashlib.sha1(json.dumps({"o": origins, "d": dests, "p": params}, sort_keys=True).encode("utf-8")).hexdigest()
+    inflight_key = hashlib.sha1(
+        json.dumps({"o": origins, "d": dests, "p": params}, sort_keys=True).encode("utf-8"), usedforsecurity=False
+    ).hexdigest()
 
     def _do() -> List[List[int | None]]:
         """Exécute la requête Distance Matrix avec retry uniformisé."""
+
         def _fetch_matrix() -> List[List[int | None]]:
             resp = requests.get(url, params=params, timeout=timeout)
             resp.raise_for_status()  # Lève exception pour codes HTTP d'erreur
@@ -340,11 +356,11 @@ def _dm_request(
                         row_vals.append(None)
                 while len(row_vals) < len(dests):
                     row_vals.append(None)
-                out.append(row_vals[:len(dests)])
+                out.append(row_vals[: len(dests)])
             while len(out) < len(origins):
                 out.append([None for _ in dests])
-            return out[:len(origins)]
-        
+            return out[: len(origins)]
+
         # ✅ 2.3: Utiliser retry uniformisé avec fallback gracieux
         try:
             return retry_http_request(
@@ -359,10 +375,13 @@ def _dm_request(
 
     start = time.time()
     res = cast("List[List[int | None]]", _singleflight(inflight_key, _do))
-    app_logger.info("[GDM] table_fetch o=%s d=%s duration_ms=%s", len(origins), len(dests), int((time.time()-start)*1000))
+    app_logger.info(
+        "[GDM] table_fetch o=%s d=%s duration_ms=%s", len(origins), len(dests), int((time.time() - start) * 1000)
+    )
     return res
 
-def _all_cached(block_o_idx: List[int], block_d_idx: List[int], qcoords: List[Tuple[float,float]]) -> bool:
+
+def _all_cached(block_o_idx: List[int], block_d_idx: List[int], qcoords: List[Tuple[float, float]]) -> bool:
     now = time.time()
     r = _get_redis()
     for i in block_o_idx:
@@ -388,6 +407,7 @@ def _all_cached(block_o_idx: List[int], block_d_idx: List[int], qcoords: List[Tu
                     return False
     return True
 
+
 def _fill_from_cache(matrix: List[List[int]], block_o_idx: List[int], block_d_idx: List[int], qcoords):
     now = time.time()
     r = _get_redis()
@@ -412,7 +432,10 @@ def _fill_from_cache(matrix: List[List[int]], block_o_idx: List[int], block_d_id
                 if v2 and v2[0] >= now:
                     matrix[i][j] = v2[1]
 
-def _update_cache_from_block(block: List[List[int | None]], block_o_idx: List[int], block_d_idx: List[int], qcoords: List[Tuple[float,float]]) -> None:
+
+def _update_cache_from_block(
+    block: List[List[int | None]], block_o_idx: List[int], block_d_idx: List[int], qcoords: List[Tuple[float, float]]
+) -> None:
     expires = time.time() + UD_MATRIX_CACHE_TTL
     r = _get_redis()
     for ii, i in enumerate(block_o_idx):
@@ -439,8 +462,9 @@ def _update_cache_from_block(block: List[List[int | None]], block_o_idx: List[in
                             except Exception:
                                 break
 
+
 def build_distance_matrix_google(
-    coords: List[Tuple[float,float]],
+    coords: List[Tuple[float, float]],
     *,
     departure_time: int | None = None,
     traffic_model: str = "best_guess",
@@ -488,7 +512,8 @@ def build_distance_matrix_google(
             block: List[List[int | None]]
             if GOOGLE_MAPS_API_KEY:
                 block = _dm_request(
-                    origins, dests,
+                    origins,
+                    dests,
                     departure_time=departure_time,
                     traffic_model=traffic_model,
                     units=units,

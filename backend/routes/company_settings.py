@@ -252,9 +252,17 @@ class BillingSettings(Resource):
                     billing.vat_rate = None
                 else:
                     try:
-                        billing.vat_rate = Decimal(str(rate_value))
-                    except (InvalidOperation, ValueError, TypeError):
-                        logger.warning("Taux TVA invalide: %s", rate_value)
+                        # Convertir en float d'abord pour gérer les NaN, puis en Decimal
+                        float_value = float(rate_value)
+                        MAX_VAT_RATE = 100.0  # Taux TVA maximum (100%)
+                        if float_value <= 0 or float_value > MAX_VAT_RATE:
+                            logger.warning("Taux TVA hors limites (0-%s): %s", MAX_VAT_RATE, rate_value)
+                            billing.vat_rate = None
+                        else:
+                            billing.vat_rate = Decimal(str(rate_value)).quantize(Decimal("0.01"))
+                            logger.info("Taux TVA mis à jour: %s%%", billing.vat_rate)
+                    except (InvalidOperation, ValueError, TypeError) as e:
+                        logger.warning("Taux TVA invalide: %s (erreur: %s)", rate_value, e)
                         billing.vat_rate = None
 
             if "vat_label" in data:

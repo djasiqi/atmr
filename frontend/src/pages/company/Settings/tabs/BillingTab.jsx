@@ -108,7 +108,14 @@ const BillingTab = () => {
           '3': parseInt(formData.reminder_schedule_days['3']) || 0,
         } : { '1': 10, '2': 5, '3': 3 },
         // Convertir les valeurs null en undefined pour les champs optionnels
-        vat_rate: formData.vat_rate === null || formData.vat_rate === '' ? null : parseFloat(formData.vat_rate),
+        // Pour vat_rate, s'assurer que c'est un nombre valide ou null
+        vat_rate: (() => {
+          if (formData.vat_rate === null || formData.vat_rate === '' || formData.vat_rate === undefined) {
+            return null;
+          }
+          const parsed = parseFloat(formData.vat_rate);
+          return isNaN(parsed) || parsed <= 0 ? null : parsed;
+        })(),
         vat_label: formData.vat_label || null,
         vat_number: formData.vat_number || null,
         // Convertir les frais en nombres

@@ -32,9 +32,10 @@ except ImportError:
         enabled = False
         osrm_down = False
         latency_ms = 0
-    
+
     def get_chaos_injector() -> Any:
         return _DummyInjector()
+
 
 # Constantes pour éviter les valeurs magiques
 RATE_PER_SEC_ZERO = 0
@@ -76,8 +77,10 @@ try:
     # Import runtime; on évite l'attribut '.exceptions' que Pylance ne connaît pas toujours
     from redis.exceptions import ConnectionError as _RedisConnError  # type: ignore
 except Exception:  # redis absent ou API inattendue
+
     class _RedisConnError(Exception):
         pass
+
 
 # ------------------------------------------------------------
 # In-flight de-dup (singleflight) process-local
@@ -85,10 +88,11 @@ except Exception:  # redis absent ou API inattendue
 _inflight_lock = threading.Lock()
 _inflight: Dict[str, Dict[str, Any]] = {}
 
+
 def _singleflight_do(key: str, fn: Callable[[], Any], max_wait_seconds: float = 10.0) -> Any:
     """Regroupe les appels concurrents sur la même clé.
     Le premier exécute fn(); les autres attendent le résultat.
-    
+
     Args:
         key: Clé de déduplication
         fn: Fonction à exécuter
@@ -102,7 +106,12 @@ def _singleflight_do(key: str, fn: Callable[[], Any], max_wait_seconds: float = 
         else:
             entry["leader"] = False
     if entry["leader"]:
-        logger.info("[OSRM] Singleflight leader: executing function for key=%s", key[:SINGLEFLIGHT_KEY_MAX_DISPLAY_LENGTH] + "..." if len(key) > SINGLEFLIGHT_KEY_MAX_DISPLAY_LENGTH else key)
+        logger.info(
+            "[OSRM] Singleflight leader: executing function for key=%s",
+            key[:SINGLEFLIGHT_KEY_MAX_DISPLAY_LENGTH] + "..."
+            if len(key) > SINGLEFLIGHT_KEY_MAX_DISPLAY_LENGTH
+            else key,
+        )
         try:
             res = fn()
             entry["result"] = res
@@ -132,6 +141,7 @@ def _singleflight_do(key: str, fn: Callable[[], Any], max_wait_seconds: float = 
             raise entry["error"]
     return entry["result"]
 
+
 # ============================================================
 # Fallback / Helpers (rate-limit, haversine, chunking)
 # ============================================================
@@ -139,6 +149,7 @@ def _singleflight_do(key: str, fn: Callable[[], Any], max_wait_seconds: float = 
 # --- simple per-process rate limiter ---
 _rl_lock = threading.Lock()
 _rl_last_ts = {"value": 0.0}
+
 
 def _rate_limit(rate_per_sec: float | None) -> None:
     """Sleep just enough to respect a per-process rate (req/sec)."""
@@ -151,6 +162,7 @@ def _rate_limit(rate_per_sec: float | None) -> None:
         if wait > WAIT_ZERO:
             time.sleep(wait)
         _rl_last_ts["value"] = time.time()
+
 
 def _fallback_matrix(coords: List[Tuple[float, float]], avg_kmh: float = 25.0) -> List[List[float]]:
     """Fallback durations matrix (seconds) using haversine distance and an average speed.
@@ -169,10 +181,12 @@ def _fallback_matrix(coords: List[Tuple[float, float]], avg_kmh: float = 25.0) -
             M[i][j] = float((km / speed) * 3600.0)
     return M
 
+
 def _fallback_eta_seconds(a: Tuple[float, float], b: Tuple[float, float], avg_kmh: float = 25.0) -> int:
     km = _haversine_km(a, b)
     sec = (km / max(avg_kmh, 1e-3)) * 3600.0
     return int(max(1, round(sec)))
+
 
 def _chunks(indices: Iterable[int], size: int) -> Iterable[list[int]]:
     """Yield consecutive chunks (lists) of indices from any iterable."""
@@ -183,9 +197,11 @@ def _chunks(indices: Iterable[int], size: int) -> Iterable[list[int]]:
             break
         yield block
 
+
 # ============================================================
 # OSRM HTTP helpers (sync)
 # ============================================================
+
 
 def _table(
     base_url: str,
@@ -206,19 +222,24 @@ def _table(
 
     # ✅ 2.3: Utiliser retry uniformisé avec exponential backoff
     from typing import cast
-    return cast(Dict[str, Any], retry_with_backoff(
-        lambda: _table_single_request(base_url, profile, coords, sources, destinations, timeout),
-        max_retries=DEFAULT_RETRY_COUNT,
-        base_delay_ms=250,
-        max_delay_ms=2000,
-        use_jitter=True,
-        retryable_exceptions=(requests.Timeout, requests.ConnectionError, TimeoutError),
-        logger_instance=logger,
-    ))
+
+    return cast(
+        Dict[str, Any],
+        retry_with_backoff(
+            lambda: _table_single_request(base_url, profile, coords, sources, destinations, timeout),
+            max_retries=DEFAULT_RETRY_COUNT,
+            base_delay_ms=250,
+            max_delay_ms=2000,
+            use_jitter=True,
+            retryable_exceptions=(requests.Timeout, requests.ConnectionError, TimeoutError),
+            logger_instance=logger,
+        ),
+    )
+
 
 def _table_single_request(base_url, profile, coords, sources, destinations, timeout):
     """Exécute une seule requête OSRM table (appelé par _table avec retry).
-    
+
     ⚠️ D3: Si chaos injector est activé, peut simuler panne OSRM ou injecter latence.
     Chaos ne doit JAMAIS être activé en production (vérifier CHAOS_ENABLED=false).
     """
@@ -232,18 +253,19 @@ def _table_single_request(base_url, profile, coords, sources, destinations, time
         # ✅ D3: Enregistrer la latence réellement injectée
         try:
             from chaos.metrics import get_chaos_metrics
+
             get_chaos_metrics().record_latency(float(injector.latency_ms))
         except ImportError:
             pass
         time.sleep(injector.latency_ms / 1000.0)
-    
+
     # ✅ D1: Span pour requête OSRM table
     with _tracer.start_as_current_span("osrm.table") as span:
         span.set_attribute("profile", profile)
         span.set_attribute("coords_count", len(coords))
         span.set_attribute("sources_count", len(sources) if sources else len(coords))
         span.set_attribute("destinations_count", len(destinations) if destinations else len(coords))
-        
+
         # 6 décimales pour OSRM; la clé de cache utilisera son propre arrondi.
         coord_str = ";".join(f"{lon},{lat}" for (lat, lon) in coords)
         url = f"{base_url}/table/v1/{profile}/{coord_str}"
@@ -252,17 +274,18 @@ def _table_single_request(base_url, profile, coords, sources, destinations, time
             params["sources"] = ";".join(map(str, sources))
         if destinations is not None:
             params["destinations"] = ";".join(map(str, destinations))
-        
+
         span.set_attribute("http.url", url)
-        
+
         r = requests.get(url, params=params, timeout=timeout)
         r.raise_for_status()
-        
+
         span.set_attribute("http.status_code", r.status_code)
         span.set_attribute("response_duration_ms", int(r.elapsed.total_seconds() * 1000))
-        
+
         data: Any = r.json()
         return cast("Dict[str, Any]", data)
+
 
 def _route(
     base_url: str,
@@ -271,14 +294,14 @@ def _route(
     destination: Tuple[float, float],
     *,
     waypoints: List[Tuple[float, float]] | None = None,
-    overview: str = "false",   # "false" | "simplified" | "full"
+    overview: str = "false",  # "false" | "simplified" | "full"
     geometries: str = "geojson",
     steps: bool = False,
     annotations: bool = False,
     timeout: int | None = None,
 ) -> Dict[str, Any]:
     """Exécute une requête OSRM route.
-    
+
     ⚠️ D3: Si chaos injector est activé, peut simuler panne OSRM ou injecter latence.
     Chaos ne doit JAMAIS être activé en production (vérifier CHAOS_ENABLED=false).
     """
@@ -295,6 +318,7 @@ def _route(
         # ✅ D3: Enregistrer la latence réellement injectée
         try:
             from chaos.metrics import get_chaos_metrics
+
             get_chaos_metrics().record_latency(float(injector.latency_ms))
         except ImportError:
             pass
@@ -304,7 +328,7 @@ def _route(
     with _tracer.start_as_current_span("osrm.route") as span:
         span.set_attribute("profile", profile)
         span.set_attribute("has_waypoints", bool(waypoints))
-        
+
         pts: List[Tuple[float, float]] = [origin]
         if waypoints:
             pts.extend(waypoints)
@@ -318,30 +342,36 @@ def _route(
             "annotations": "true" if annotations else "false",
             # "continue_straight": "true"  # optionnel
         }
-        
+
         span.set_attribute("http.url", url)
         span.set_attribute("waypoints_count", len(waypoints) if waypoints else 0)
-        
+
         r = requests.get(url, params=params, timeout=timeout)
         r.raise_for_status()
-        
+
         span.set_attribute("http.status_code", r.status_code)
         span.set_attribute("response_duration_ms", int(r.elapsed.total_seconds() * 1000))
 
         data: Any = r.json()
         return cast("Dict[str, Any]", data)
 
+
 # ============================================================
 # Cache keys (stable, coord_precision ~ 1m)
 # ============================================================
 
-def _canonical_key_table(coords: List[Tuple[float, float]],
-                         sources: List[int] | None,
-                         destinations: List[int] | None,
-                         *, coord_precision: int = 5) -> str:
+
+def _canonical_key_table(
+    coords: List[Tuple[float, float]],
+    sources: List[int] | None,
+    destinations: List[int] | None,
+    *,
+    coord_precision: int = 5,
+) -> str:
     def _round(t):
         lat, lon = t
         return (round(lat, coord_precision), round(lon, coord_precision))
+
     rounded = [_round(c) for c in coords]
     payload = {
         "coords": rounded,
@@ -349,23 +379,31 @@ def _canonical_key_table(coords: List[Tuple[float, float]],
         "destinations": destinations or "ALL",
     }
     raw = json.dumps(payload, separators=(",", ":"), sort_keys=True)
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    return hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
 
-def _canonical_key_route(origin: Tuple[float, float],
-                         destination: Tuple[float, float],
-                         waypoints: List[Tuple[float, float]] | None = None,
-                         *, coord_precision: int = 5, profile: str = "driving") -> str:
+
+def _canonical_key_route(
+    origin: Tuple[float, float],
+    destination: Tuple[float, float],
+    waypoints: List[Tuple[float, float]] | None = None,
+    *,
+    coord_precision: int = 5,
+    profile: str = "driving",
+) -> str:
     def _round(t):
         lat, lon = t
         return (round(lat, coord_precision), round(lon, coord_precision))
+
     pts = [_round(origin)] + ([_round(w) for w in waypoints] if waypoints else []) + [_round(destination)]
     payload = {"profile": profile, "pts": pts}
     raw = json.dumps(payload, separators=(",", ":"), sort_keys=True)
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    return hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
+
 
 # ============================================================
 # PUBLIC: Matrix (utilisé par data.build_time_matrix)
 # ============================================================
+
 
 def build_distance_matrix_osrm(
     coords: List[Tuple[float, float]],
@@ -390,7 +428,7 @@ def build_distance_matrix_osrm(
         # Timeout adaptatif selon taille (valeurs fixes par seuil)
         base_timeout = 15
         max_timeout = 120  # Maximum 2 minutes pour très grandes matrices
-        
+
         if n > OSRM_TIMEOUT_LARGE_MATRIX_THRESHOLD:
             timeout = max_timeout  # 120s pour grandes matrices
         elif n > OSRM_TIMEOUT_MEDIUM_LARGE_THRESHOLD:
@@ -401,17 +439,11 @@ def build_distance_matrix_osrm(
             timeout = 45  # 45s pour petites-moyennes
         else:
             timeout = base_timeout  # 15s pour petites matrices
-        
-        logger.debug(
-            "[OSRM] Timeout adaptatif: %d points → %ds timeout",
-            n, timeout
-        )
+
+        logger.debug("[OSRM] Timeout adaptatif: %d points → %ds timeout", n, timeout)
 
     n = len(coords)
-    logger.info(
-        "[OSRM] build_distance_matrix_osrm entry: n=%d base_url=%s timeout=%s",
-        n, base_url, timeout
-    )
+    logger.info("[OSRM] build_distance_matrix_osrm entry: n=%d base_url=%s timeout=%s", n, base_url, timeout)
     if n <= N_ONE:
         logger.info("[OSRM] Early return: n=%d <= N_ONE=%d", n, N_ONE)
         return [[0.0] * n for _ in range(n)]
@@ -425,8 +457,7 @@ def build_distance_matrix_osrm(
     adaptive_chunk_size = 40 if n > N_PERCENT else max_sources_per_call
     total_chunks = (n + adaptive_chunk_size - 1) // adaptive_chunk_size
     logger.info(
-        "[OSRM] Starting chunked requests: total_chunks=%d chunk_size=%d n=%d",
-        total_chunks, adaptive_chunk_size, n
+        "[OSRM] Starting chunked requests: total_chunks=%d chunk_size=%d n=%d", total_chunks, adaptive_chunk_size, n
     )
 
     logger.info("[OSRM] Entering chunk loop: adaptive_chunk_size=%d", adaptive_chunk_size)
@@ -435,7 +466,12 @@ def build_distance_matrix_osrm(
         # --- Cache key pour ce sous-bloc ---
         logger.info("[OSRM] Creating cache key for chunk...")
         cache_key = _canonical_key_table(coords, list(src_block), all_dests, coord_precision=coord_precision)
-        logger.info("[OSRM] Cache key created: %s", cache_key[:CACHE_KEY_MAX_DISPLAY_LENGTH] + "..." if len(cache_key) > CACHE_KEY_MAX_DISPLAY_LENGTH else cache_key)
+        logger.info(
+            "[OSRM] Cache key created: %s",
+            cache_key[:CACHE_KEY_MAX_DISPLAY_LENGTH] + "..."
+            if len(cache_key) > CACHE_KEY_MAX_DISPLAY_LENGTH
+            else cache_key,
+        )
         cached = None
         redis_available = True
         if redis_client is not None:
@@ -459,7 +495,7 @@ def build_distance_matrix_osrm(
             except Exception:
                 logger.warning("[OSRM] Redis get failed", exc_info=True)
                 increment_cache_bypass()
-        
+
         logger.info("[OSRM] After Redis check: cached=%s", "present" if cached else "None")
         if cached and "durations" in cached:
             # ✅ A5: Track cache hit (déjà fait plus haut)
@@ -480,13 +516,18 @@ def build_distance_matrix_osrm(
             logger.exception("[OSRM] ERROR in increment_cache_miss: %s (type=%s)", str(e), type(e).__name__)
             # Continue même en cas d'erreur de métriques
         logger.info("[OSRM] Preparing HTTP request to OSRM...")
+
         def _do_request():
             logger.info("[OSRM] _do_request() called, preparing retry logic...")
+
             # ✅ 2.3: Utiliser retry uniformisé
             def _fetch_table_data():
                 logger.info(
                     "[OSRM] 🔵 Requesting table: sources=%d destinations=%d timeout=%ds base_url=%s",
-                    len(src_block), len(all_dests), timeout, base_url
+                    len(src_block),
+                    len(all_dests),
+                    timeout,
+                    base_url,
                 )
                 request_start = time.time()
                 _rate_limit(rate_limit_per_sec)
@@ -502,18 +543,23 @@ def build_distance_matrix_osrm(
                     request_duration_ms = int((time.time() - request_start) * 1000)
                     logger.info(
                         "[OSRM] ✅ Table request successful: duration_ms=%d sources=%d destinations=%d",
-                        request_duration_ms, len(src_block), len(all_dests)
+                        request_duration_ms,
+                        len(src_block),
+                        len(all_dests),
                     )
                     if request_duration_ms > timeout * 1000 * 0.8:  # >80% du timeout
                         logger.warning(
                             "[OSRM] ⚠️ Request took %d ms (close to timeout %ds) - consider increasing timeout",
-                            request_duration_ms, timeout
+                            request_duration_ms,
+                            timeout,
                         )
                 except Exception as req_e:
                     request_duration_ms = int((time.time() - request_start) * 1000)
                     logger.exception(
                         "[OSRM] ❌ Table request FAILED after %d ms: %s (type=%s)",
-                        request_duration_ms, str(req_e), type(req_e).__name__
+                        request_duration_ms,
+                        str(req_e),
+                        type(req_e).__name__,
                     )
                     raise
                 durs = data.get("durations")
@@ -524,7 +570,7 @@ def build_distance_matrix_osrm(
                     msg = "OSRM durations shape mismatch"
                     raise RuntimeError(msg)
                 return data
-            
+
             return retry_with_backoff(
                 _fetch_table_data,
                 max_retries=max_retries,
@@ -545,10 +591,11 @@ def build_distance_matrix_osrm(
         except Exception as e:
             # 🚨 Fallback si toutes les tentatives ont échoué
             logger.warning("[OSRM] All attempts failed, using haversine fallback: %s", e)
-            
+
             # ✅ D3: Enregistrer l'utilisation du fallback haversine
             try:
                 from chaos.metrics import get_chaos_metrics
+
                 metrics = get_chaos_metrics()
                 # Essayer le fallback et enregistrer le résultat
                 fallback_result = _fallback_matrix(coords)
@@ -559,7 +606,9 @@ def build_distance_matrix_osrm(
                 return _fallback_matrix(coords)
         finally:
             dur_ms = int((time.time() - start) * 1000)
-            logger.info("[OSRM] table_fetch block_start=%d size=%d duration_ms=%d", min(src_block), len(src_block), dur_ms)
+            logger.info(
+                "[OSRM] table_fetch block_start=%d size=%d duration_ms=%d", min(src_block), len(src_block), dur_ms
+            )
 
         # Écrit dans le cache
         try:
@@ -588,9 +637,11 @@ def build_distance_matrix_osrm(
         M[i][i] = 0.0
     return M
 
+
 # ============================================================
 # PUBLIC: Route & ETA (sync) + cache optionnel
 # ============================================================
+
 
 def route_info(
     origin: Tuple[float, float],
@@ -633,7 +684,7 @@ def route_info(
         except Exception:
             logger.warning("[OSRM] Redis get failed (route)", exc_info=True)
             increment_cache_bypass()
-    
+
     # ✅ Track cache miss (pas de cache disponible)
     increment_cache_miss(cache_key, cache_type="route")
 
@@ -698,6 +749,7 @@ def route_info(
 
     return res
 
+
 def eta_seconds(
     origin: Tuple[float, float],
     destination: Tuple[float, float],
@@ -712,7 +764,8 @@ def eta_seconds(
 ) -> int:
     """Calcule un ETA (secondes) robuste via OSRM /route, avec cache + fallback haversine."""
     info = route_info(
-        origin, destination,
+        origin,
+        destination,
         base_url=base_url,
         profile=profile,
         waypoints=waypoints,
@@ -759,7 +812,8 @@ class CircuitBreaker:
                     if time_since_last_failure >= self.timeout_duration:
                         logger.info(
                             "[CircuitBreaker] OPEN -> HALF_OPEN (timeout expired: %.1fs >= %ds, allowing test request)",
-                            time_since_last_failure, self.timeout_duration
+                            time_since_last_failure,
+                            self.timeout_duration,
                         )
                         self.state = "HALF_OPEN"
                         # Réinitialiser le compteur pour permettre un test
@@ -804,22 +858,25 @@ class CircuitBreaker:
                     if self.state != "OPEN":
                         logger.warning(
                             "[CircuitBreaker] %s -> OPEN (failures: %d >= threshold: %d, last_error: %s)",
-                            old_state, self.failure_count, self.failure_threshold, str(e)[:100]
+                            old_state,
+                            self.failure_count,
+                            self.failure_threshold,
+                            str(e)[:100],
                         )
                     self.state = "OPEN"
                 elif self.state == "HALF_OPEN":
                     # En HALF_OPEN, un seul échec remet en OPEN
-                    logger.warning(
-                        "[CircuitBreaker] HALF_OPEN -> OPEN (test failed, error: %s)",
-                        str(e)[:100]
-                    )
+                    logger.warning("[CircuitBreaker] HALF_OPEN -> OPEN (test failed, error: %s)", str(e)[:100])
                     self.state = "OPEN"
                 else:
                     logger.debug(
                         "[CircuitBreaker] Échec %d/%d (state: %s, error: %s)",
-                        self.failure_count, self.failure_threshold, self.state, str(e)[:100]
+                        self.failure_count,
+                        self.failure_threshold,
+                        self.state,
+                        str(e)[:100],
                     )
-                
+
                 # ✅ Enregistrer métrique Prometheus après changement d'état
                 if PROMETHEUS_METRICS_AVAILABLE:
                     # On n'a pas company_id ici, utiliser 0 (global)
@@ -834,53 +891,56 @@ _osrm_circuit_breaker = CircuitBreaker(failure_threshold=5, timeout_duration=60)
 # ✅ Import métriques Prometheus pour circuit breaker
 try:
     from services.unified_dispatch.dispatch_prometheus_metrics import record_circuit_breaker_state
+
     PROMETHEUS_METRICS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_METRICS_AVAILABLE = False
+
     def record_circuit_breaker_state(*args, **kwargs):
         pass
 
 
-def build_distance_matrix_osrm_with_cb(
-    coords: List[Tuple[float, float]],
-    **kwargs
-) -> List[List[float]]:
+def build_distance_matrix_osrm_with_cb(coords: List[Tuple[float, float]], **kwargs) -> List[List[float]]:
     """Wrapper de build_distance_matrix_osrm avec circuit-breaker.
     En cas de circuit ouvert, fallback immédiat vers haversine.
     """
     n = len(coords)
     base_url = kwargs.get("base_url", "http://osrm:5000")
     timeout = kwargs.get("timeout")
-    logger.info(
-        "[OSRM] build_distance_matrix_osrm_with_cb entry: n=%d base_url=%s timeout=%s",
-        n, base_url, timeout
-    )
+    logger.info("[OSRM] build_distance_matrix_osrm_with_cb entry: n=%d base_url=%s timeout=%s", n, base_url, timeout)
     try:
         logger.debug("[OSRM] Calling circuit breaker for build_distance_matrix_osrm")
-        result = _osrm_circuit_breaker.call(
-            build_distance_matrix_osrm,
-            coords,
-            **kwargs
-        )
+        result = _osrm_circuit_breaker.call(build_distance_matrix_osrm, coords, **kwargs)
         logger.info(
             "[OSRM] build_distance_matrix_osrm_with_cb success: shape=%dx%d",
-            len(result), len(result[0]) if result else 0
+            len(result),
+            len(result[0]) if result else 0,
         )
         return result
     except Exception as e:
         logger.warning(
             "[OSRM] Circuit-breaker triggered or call failed: %s (type=%s), using haversine fallback",
-            str(e), type(e).__name__,
-            exc_info=True
+            str(e),
+            type(e).__name__,
+            exc_info=True,
         )
         avg_kmh = kwargs.get("avg_speed_kmh_fallback", 25.0)
         return _fallback_matrix(coords, avg_kmh=avg_kmh)
+
+
 # ============================================================
 # Helpers de haut niveau pour distance/temps et matrices
 # ============================================================
 
-def get_distance_time(origin: Tuple[float, float], dest: Tuple[float, float], *, base_url: str | None = None,
-                      profile: str = "driving", redis_client: Any | None = None) -> Dict[str, float]:
+
+def get_distance_time(
+    origin: Tuple[float, float],
+    dest: Tuple[float, float],
+    *,
+    base_url: str | None = None,
+    profile: str = "driving",
+    redis_client: Any | None = None,
+) -> Dict[str, float]:
     """Retourne un dict {"distance": m, "duration": s} en utilisant route_info.
     base_url est requis par les appels existants du module (utiliser OSRM_BASE_URL sinon).
     """
@@ -890,9 +950,14 @@ def get_distance_time(origin: Tuple[float, float], dest: Tuple[float, float], *,
     return {"distance": float(info.get("distance", 0.0)), "duration": float(info.get("duration", 0.0))}
 
 
-def get_matrix(origins: List[Tuple[float, float]], destinations: List[Tuple[float, float]], *,
-               base_url: str | None = None, profile: str = "driving",
-               redis_client: Any | None = None) -> Dict[str, Any]:
+def get_matrix(
+    origins: List[Tuple[float, float]],
+    destinations: List[Tuple[float, float]],
+    *,
+    base_url: str | None = None,
+    profile: str = "driving",
+    redis_client: Any | None = None,
+) -> Dict[str, Any]:
     """Construit une matrice de durées (secondes) entre origines et destinations.
     Retourne {"durations": List[List[float]]}.
     """
@@ -924,9 +989,11 @@ def get_matrix(origins: List[Tuple[float, float]], destinations: List[Tuple[floa
         sub.append(row)
     return {"durations": sub}
 
+
 # ============================================================
 # Cache Redis pour matrices journalières
 # ============================================================
+
 
 def get_distance_time_cached(origin, dest, date_str=None):
     """Récupère la distance et le temps entre deux points avec cache Redis.
@@ -942,15 +1009,17 @@ def get_distance_time_cached(origin, dest, date_str=None):
     """
     if date_str is None:
         from datetime import datetime
+
         date_str = datetime.now(UTC).strftime("%Y-%m-%d")
 
     # Créer une clé de cache plus robuste
-    origin_hash = hashlib.md5(f"{origin[ORIG_ZERO]},{origin[1]}".encode()).hexdigest()[:8]
-    dest_hash = hashlib.md5(f"{dest[0]},{dest[1]}".encode()).hexdigest()[:8]
+    origin_hash = hashlib.md5(f"{origin[ORIG_ZERO]},{origin[1]}".encode(), usedforsecurity=False).hexdigest()[:8]
+    dest_hash = hashlib.md5(f"{dest[0]},{dest[1]}".encode(), usedforsecurity=False).hexdigest()[:8]
     cache_key = f"osrm:cache:{date_str}:{origin_hash}:{dest_hash}"
 
     try:
         from ext import redis_client as rc
+
         raw_any = rc.get(cache_key)
         if raw_any:
             raw = raw_any
@@ -967,11 +1036,13 @@ def get_distance_time_cached(origin, dest, date_str=None):
 
     try:
         from ext import redis_client as rc
+
         rc.setex(cache_key, CACHE_TTL_SECONDS, json.dumps(result))
     except Exception as e:
         logger.warning("[OSRM] Cache write error: %s", e)
 
     return result
+
 
 def get_matrix_cached(origins, destinations, date_str=None):
     """Récupère la matrice de distances/temps avec cache Redis par jour.
@@ -987,16 +1058,18 @@ def get_matrix_cached(origins, destinations, date_str=None):
     """
     if date_str is None:
         from datetime import datetime
+
         date_str = datetime.now(UTC).strftime("%Y-%m-%d")
 
     # Créer une clé de cache pour la matrice
     origins_str = ",".join([f"{o[0]},{o[1]}" for o in origins])
     dests_str = ",".join([f"{d[0]},{d[1]}" for d in destinations])
-    matrix_hash = hashlib.md5(f"{origins_str}|{dests_str}".encode()).hexdigest()[:16]
+    matrix_hash = hashlib.md5(f"{origins_str}|{dests_str}".encode(), usedforsecurity=False).hexdigest()[:16]
     cache_key = f"osrm:matrix:{date_str}:{matrix_hash}"
 
     try:
         from ext import redis_client as rc
+
         raw_any = rc.get(cache_key)
         if raw_any:
             logger.info("[OSRM] Matrix cache hit for %sx%s points", len(origins), len(destinations))
@@ -1014,6 +1087,7 @@ def get_matrix_cached(origins, destinations, date_str=None):
 
     try:
         from ext import redis_client as rc
+
         rc.setex(cache_key, CACHE_TTL_SECONDS, json.dumps(result))
         logger.info("[OSRM] Matrix cached for %sx%s points", len(origins), len(destinations))
     except Exception as e:

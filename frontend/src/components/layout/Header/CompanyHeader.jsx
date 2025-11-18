@@ -40,10 +40,13 @@ const CompanyHeader = () => {
       console.warn('[CompanyHeader] URL logo invalide:', abs);
     }
     
-    // Ajouter un timestamp pour éviter le cache, mais seulement si c'est une URL relative
-    if (abs.startsWith('http://') || abs.startsWith('https://') || abs.startsWith('data:') || abs.startsWith('blob:')) {
+    // Ajouter un timestamp pour éviter le cache uniquement pour les URLs HTTP/HTTPS
+    // Ne pas ajouter pour data: ou blob: car cela casse l'URL
+    if (abs.startsWith('http://') || abs.startsWith('https://')) {
       const sep = abs.includes('?') ? '&' : '?';
-      return `${abs}${sep}v=${Date.now()}`;
+      // Utiliser un timestamp plus stable (seconde) pour éviter trop de requêtes
+      const cacheBuster = Math.floor(Date.now() / 1000);
+      return `${abs}${sep}v=${cacheBuster}`;
     }
     return abs;
   }, [company?.logo_url]);

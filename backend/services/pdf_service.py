@@ -1,7 +1,6 @@
 import logging
 from datetime import UTC, datetime
-
-# Constantes pour éviter les valeurs magiques
+from decimal import Decimal
 from pathlib import Path
 
 from flask import current_app
@@ -591,14 +590,34 @@ class PDFService:
 
         # === PIED DE PAGE - NOTES DE FACTURATION ===
 
-        # Message de facturation (texte exact demandé)
-        message = "En votre aimable règlement net sous 10 jours avec nos remerciements anticipés. En cas de retard de paiement, des frais de rappel d'un montant de CHF 15.- vous seront facturés, conformément à nos conditions générales."
+        # Récupérer les paramètres de facturation pour le message
+        billing_settings = CompanyBillingSettings.query.filter_by(company_id=invoice.company_id).first()
+
+        # Délai de paiement (par défaut 10 jours)
+        payment_terms_days = 10
+        if billing_settings and billing_settings.payment_terms_days:
+            payment_terms_days = int(billing_settings.payment_terms_days)
+
+        # Frais de retard (par défaut 15 CHF)
+        overdue_fee = Decimal("15.00")
+        if billing_settings and billing_settings.overdue_fee:
+            overdue_fee = billing_settings.overdue_fee
+
+        # Message de facturation avec valeurs dynamiques
+        jours_text = "jours" if payment_terms_days > 1 else "jour"
+        message = f"En votre aimable règlement net sous {payment_terms_days} {jours_text} avec nos remerciements anticipés. En cas de retard de paiement, des frais de rappel d'un montant de CHF {overdue_fee:.2f} vous seront facturés, conformément à nos conditions générales."
 
         story.append(Paragraph(message, normal_style))
         story.append(Spacer(1, 8))
 
-        # Informations bancaires (texte exact demandé)
-        banking_info = "Paiement par virement bancaire : IBAN : CH6509000000152631289"
+        # Informations bancaires (récupérer depuis billing_settings)
+        iban_value = "CH6509000000152631289"  # Valeur par défaut
+        if billing_settings and billing_settings.iban:
+            iban_value = billing_settings.iban
+        elif hasattr(company, "iban") and company.iban:
+            iban_value = company.iban
+
+        banking_info = f"Paiement par virement bancaire : IBAN : {iban_value}"
         story.append(Paragraph(banking_info, normal_style))
 
         # === QR-BILL SUISSE OFFICIEL SUR PAGE SÉPARÉE ===
