@@ -34,12 +34,18 @@ const CompanyHeader = () => {
   const logoSrc = useMemo(() => {
     const abs = resolveLogoUrl(company?.logo_url);
     if (!abs) return '';
+    
+    // Debug: log l'URL résolue (à retirer en production si nécessaire)
+    if (abs && !abs.startsWith('http') && !abs.startsWith('data:') && !abs.startsWith('blob:')) {
+      console.warn('[CompanyHeader] URL logo invalide:', abs);
+    }
+    
     // Ajouter un timestamp pour éviter le cache, mais seulement si c'est une URL relative
     if (abs.startsWith('http://') || abs.startsWith('https://') || abs.startsWith('data:') || abs.startsWith('blob:')) {
-      return abs;
+      const sep = abs.includes('?') ? '&' : '?';
+      return `${abs}${sep}v=${Date.now()}`;
     }
-    const sep = abs.includes('?') ? '&' : '?';
-    return `${abs}${sep}v=${Date.now()}`;
+    return abs;
   }, [company?.logo_url]);
 
   // Reset logoError quand l'URL change pour permettre un nouveau chargement

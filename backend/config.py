@@ -66,11 +66,10 @@ class Config:
     """
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Options de base compatibles avec toutes les bases de données
     SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool]] = {
         "pool_pre_ping": True,
         "pool_recycle": 1800,
-        "pool_size": 10,        # ✅ PERF: Connection pooling
-        "max_overflow": 20,     # ✅ PERF: Max connections overflow
     }
 
     # --- JWT (délais par défaut, surclassables par env) ---
@@ -131,6 +130,8 @@ class DevelopmentConfig(Config):
     # ✅ PostgreSQL-specific options pour développement
     SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {  # pyright: ignore[reportIncompatibleVariableOverride]
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
+        "pool_size": 10,        # ✅ PERF: Connection pooling (PostgreSQL uniquement)
+        "max_overflow": 20,     # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
         "connect_args": {"client_encoding": "utf8"}
     }
 
@@ -180,6 +181,8 @@ class ProductionConfig(Config):
     # ✅ PostgreSQL-specific options
     SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {  # pyright: ignore[reportIncompatibleVariableOverride]
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
+        "pool_size": 10,        # ✅ PERF: Connection pooling (PostgreSQL uniquement)
+        "max_overflow": 20,     # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
         "connect_args": {"client_encoding": "utf8"}
     }
     # Cookies plus stricts en prod (peuvent être ajustés via env si reverse proxy HTTP)
@@ -200,11 +203,34 @@ class TestingConfig(Config):
     SECRET_KEY = "test-secret-key"
     JWT_SECRET_KEY = "test-jwt-key"
     MAIL_PASSWORD = "test-mail-password"
-    SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+    # Utiliser DATABASE_URL si disponible (PostgreSQL), sinon SQLite en mémoire
+    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite:///:memory:")
+    # Options de base uniquement (pas de pool_size/max_overflow pour compatibilité SQLite)
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool]] = {
+        "pool_pre_ping": True,
+        "pool_recycle": 1800,
+    }
     WTF_CSRF_ENABLED = False
     RATELIMIT_ENABLED = False
     PDF_BASE_URL = "http://testserver"
     UPLOADS_PUBLIC_BASE = "/uploads"
+    
+    @staticmethod
+    def init_app(app):
+        """Ajuste les options d'engine selon le type de base de données."""
+        # Utiliser DATABASE_URL de l'environnement si disponible (priorité sur valeur par défaut)
+        database_url = os.getenv("DATABASE_URL")
+        if database_url:
+            app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+        
+        # Ajouter options PostgreSQL uniquement si DATABASE_URL pointe vers PostgreSQL
+        db_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+        if db_uri and db_uri.startswith("postgresql"):
+            app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+                **app.config.get("SQLALCHEMY_ENGINE_OPTIONS", {}),
+                "pool_size": 5,        # Pool plus petit pour les tests
+                "max_overflow": 10,     # Overflow plus petit pour les tests
+            }
 
 
 # C'est ce que votre "Application Factory" utilisera

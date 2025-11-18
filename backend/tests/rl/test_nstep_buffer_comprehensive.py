@@ -60,19 +60,21 @@ class TestNStepBufferComprehensive:
     def test_add_transition_with_exception(self, buffer):
         """Test la gestion d'exception lors de l'ajout."""
         # Mock pour provoquer une exception dans _calculate_n_step_return
-        with patch.object(buffer, "_calculate_n_step_return", side_effect=Exception("Test error")):
-            with patch.object(buffer.logger, "error") as mock_error:
-                state = np.array([1, 2, 3])
-                action = 0
-                reward = 0.1
-                next_state = np.array([2, 3, 4])
-                done = True  # Forcer le traitement
-                
-                buffer.add_transition(state, action, reward, next_state, done)
-                
-                # Vérifier que l'erreur est loggée
-                mock_error.assert_called_once()
-                assert "[NStepBuffer] Erreur traitement N-step: Test error" in str(mock_error.call_args)
+        with (
+            patch.object(buffer, "_calculate_n_step_return", side_effect=Exception("Test error")),
+            patch.object(buffer.logger, "error") as mock_error,
+        ):
+            state = np.array([1, 2, 3])
+            action = 0
+            reward = 0.1
+            next_state = np.array([2, 3, 4])
+            done = True  # Forcer le traitement
+            
+            buffer.add_transition(state, action, reward, next_state, done)
+            
+            # Vérifier que l'erreur est loggée
+            mock_error.assert_called_once()
+            assert "[NStepBuffer] Erreur traitement N-step: Test error" in str(mock_error.call_args)
 
     def test_process_n_step_transitions_empty_buffer(self, buffer):
         """Test le traitement avec un buffer temporaire vide."""
@@ -91,13 +93,15 @@ class TestNStepBufferComprehensive:
         })
         
         # Mock pour provoquer une exception
-        with patch.object(buffer, "_calculate_n_step_return", side_effect=Exception("Test error")):
-            with patch.object(buffer.logger, "error") as mock_error:
-                buffer._process_n_step_transitions()
-                
-                # Vérifier que l'erreur est loggée
-                mock_error.assert_called_once()
-                assert "[NStepBuffer] Erreur traitement N-step: Test error" in str(mock_error.call_args)
+        with (
+            patch.object(buffer, "_calculate_n_step_return", side_effect=Exception("Test error")),
+            patch.object(buffer.logger, "error") as mock_error,
+        ):
+            buffer._process_n_step_transitions()
+            
+            # Vérifier que l'erreur est loggée
+            mock_error.assert_called_once()
+            assert "[NStepBuffer] Erreur traitement N-step: Test error" in str(mock_error.call_args)
 
     def test_calculate_n_step_return_normal(self, buffer):
         """Test le calcul normal du retour N-step."""
@@ -315,15 +319,17 @@ class TestNStepPrioritizedBufferComprehensive:
         )
         
         # Mock pour provoquer une exception
-        with patch("numpy.random.choice", side_effect=Exception("Test error")):
-            with patch.object(prioritized_buffer.logger, "error") as mock_error:
-                batch, weights, indices = prioritized_buffer.sample(1)
-                
-                # Vérifier que l'erreur est loggée et que des listes vides sont retournées
-                mock_error.assert_called_once()
-                assert batch == []
-                assert weights == []
-                assert indices == []
+        with (
+            patch("numpy.random.choice", side_effect=Exception("Test error")),
+            patch.object(prioritized_buffer.logger, "error") as mock_error,
+        ):
+            batch, weights, indices = prioritized_buffer.sample(1)
+            
+            # Vérifier que l'erreur est loggée et que des listes vides sont retournées
+            mock_error.assert_called_once()
+            assert batch == []
+            assert weights == []
+            assert indices == []
 
     def test_update_priorities(self, prioritized_buffer):
         """Test la mise à jour des priorités."""

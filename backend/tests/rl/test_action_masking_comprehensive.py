@@ -7,6 +7,7 @@ Améliore la couverture de tests pour le système d'action masking
 implémenté dans les étapes précédentes.
 """
 
+import time
 from unittest.mock import Mock, patch
 
 import numpy as np
