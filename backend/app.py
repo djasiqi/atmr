@@ -418,38 +418,50 @@ def create_app(config_name: str | None = None):
     app.config.setdefault("UPLOADS_DIR", uploads_root)
     app.config.setdefault("UPLOADS_PUBLIC_BASE", "/uploads")
 
-    @app.route("/uploads/<path:filename>")
+    @app.route("/uploads/<path:filename>", methods=["GET", "OPTIONS"])
     def serve_uploads(filename: str): # pyright: ignore[reportUnusedFunction]
+        # Gérer les prérequêtes CORS
+        if request.method == "OPTIONS":
+            response = make_response("", 204)
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+            return response
+        
         base = Path(app.config["UPLOADS_DIR"]).resolve()
         candidate = (base / filename).resolve()
+        
         # anti-path traversal
         if not str(candidate).startswith(str(base)):
+            app.logger.warning("Tentative de path traversal bloquée: %s", filename)
             raise NotFound
         
         # Vérifier que le fichier existe
         if not candidate.exists():
-            app.logger.warning("Fichier upload introuvable: %s (chemin résolu: %s)", filename, candidate)
+            app.logger.warning("Fichier upload introuvable: %s (chemin résolu: %s, base: %s)", filename, candidate, base)
             raise NotFound
         
         directory = str(base)
         fname = str(candidate.relative_to(base)).replace("\\", "/")
         
+        app.logger.debug("Serving upload file: %s -> %s", filename, candidate)
+        
         # Servir le fichier avec les en-têtes appropriés pour les images
+        # send_from_directory définit automatiquement le Content-Type correct
         response = send_from_directory(directory, fname, conditional=True)
         
         # Ajouter les en-têtes CORS pour permettre l'accès depuis le frontend
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Methods', 'GET, OPTIONS')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
         
-        # Définir le type MIME approprié pour les images
-        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp')):
-            if filename.lower().endswith('.svg'):
-                response.headers.add('Content-Type', 'image/svg+xml')
-            elif filename.lower().endswith('.png'):
-                response.headers.add('Content-Type', 'image/png')
-            elif filename.lower().endswith(('.jpg', '.jpeg')):
-                response.headers.add('Content-Type', 'image/jpeg')
+        # S'assurer que le Content-Type est correct pour les images SVG
+        # (send_from_directory peut ne pas le détecter correctement)
+        if filename.lower().endswith(".svg"):
+            response.headers["Content-Type"] = "image/svg+xml"
+        
+        # Ajouter un header Cache-Control pour les images
+        response.headers["Cache-Control"] = "public, max-age=3600"
         
         return response
 
@@ -488,7 +500,7 @@ def create_app(config_name: str | None = None):
             resp.headers["Content-Type"] = "application/json; charset=utf-8"
         # ✅ Force UTF-8 pour les réponses texte également
         elif "text/" in ct and "charset" not in ct:
-            resp.headers["Content-Type"] = f"{resp.headers.get('Content-Type')}; charset=utf-8"
+            resp.headers["Content-Type"] = f"{resp.headers.get(\"Content-Type\")}; charset=utf-8"
         return resp
 
     # 5) CORS

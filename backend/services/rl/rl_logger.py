@@ -54,11 +54,13 @@ class RLLogger:
     - Gestion d'erreurs robuste
     """
 
-    def __init__(self,  # pyright: ignore[reportMissingSuperCall]
-                 redis_key_prefix: str = "rl:decisions",
-                 max_redis_logs: int = 5000,
-                 enable_db_logging: bool = True,
-                 enable_redis_logging: bool = True):
+    def __init__(
+        self,
+        redis_key_prefix: str = "rl:decisions",
+        max_redis_logs: int = 5000,
+        enable_db_logging: bool = True,
+        enable_redis_logging: bool = True,
+    ):
         """Initialise le RLLogger.
 
         Args:
@@ -68,25 +70,18 @@ class RLLogger:
             enable_redis_logging: Activer le logging Redis
 
         """
+        super().__init__()
         self.redis_key_prefix = redis_key_prefix
         self.max_redis_logs = max_redis_logs
         self.enable_db_logging = enable_db_logging
         self.enable_redis_logging = enable_redis_logging
 
         # Statistiques
-        self.stats = {
-            "total_logs": 0,
-            "redis_logs": 0,
-            "db_logs": 0,
-            "errors": 0,
-            "start_time": datetime.now(UTC)
-        }
+        self.stats = {"total_logs": 0, "redis_logs": 0, "db_logs": 0, "errors": 0, "start_time": datetime.now(UTC)}
 
-        logger.info("[RLLogger] Initialisé - Redis: %s, DB: %s",
-                    enable_redis_logging, enable_db_logging)
+        logger.info("[RLLogger] Initialisé - Redis: %s, DB: %s", enable_redis_logging, enable_db_logging)
 
-    def hash_state(
-            self, state: Union[np.ndarray[Any, Any], "torch.Tensor", List[Any], Dict[str, Any]]) -> str:
+    def hash_state(self, state: Union[np.ndarray[Any, Any], "torch.Tensor", List[Any], Dict[str, Any]]) -> str:
         """Génère un hash unique pour l'état donné.
 
         Args:
@@ -126,23 +121,24 @@ class RLLogger:
                     state_bytes = state_str.encode("utf-8")
 
             # Générer le hash SHA-1
-            return hashlib.sha1(state_bytes).hexdigest()
+            return hashlib.sha1(state_bytes, usedforsecurity=False).hexdigest()
 
         except Exception as e:
             logger.error("[RLLogger] Erreur lors du hash de l'état: %s", e)
             # Fallback: hash basé sur le timestamp
-            return hashlib.sha1(str(time.time()).encode()).hexdigest()
+            return hashlib.sha1(str(time.time()).encode(), usedforsecurity=False).hexdigest()
 
-    def log_decision(self,
-                     state: Union[np.ndarray[Any, Any], "torch.Tensor", List[Any], Dict[str, Any]],
-                     action: Union[float, "torch.Tensor"],
-                     q_values: Union[np.ndarray[Any, Any],
-                                     "torch.Tensor", List[Any]] | None = None,
-                     reward: float | None = None,
-                     latency_ms: float | None = None,
-                     model_version: str = "unknown",
-                     constraints: Dict[str, Any] | None = None,
-                     metadata: Dict[str, Any] | None = None) -> bool:
+    def log_decision(
+        self,
+        state: Union[np.ndarray[Any, Any], "torch.Tensor", List[Any], Dict[str, Any]],
+        action: Union[float, "torch.Tensor"],
+        q_values: Union[np.ndarray[Any, Any], "torch.Tensor", List[Any]] | None = None,
+        reward: float | None = None,
+        latency_ms: float | None = None,
+        model_version: str = "unknown",
+        constraints: Dict[str, Any] | None = None,
+        metadata: Dict[str, Any] | None = None,
+    ) -> bool:
         """Enregistre une décision RL avec traçabilité complète.
 
         Args:
@@ -165,9 +161,7 @@ class RLLogger:
 
             # Convertir l'action en int
             try:
-                action_int = int(
-                    action.item()) if isinstance(
-                    action, torch.Tensor) else int(action)  
+                action_int = int(action.item()) if isinstance(action, torch.Tensor) else int(action)
             except ImportError:
                 action_int = int(action)
 
@@ -201,7 +195,7 @@ class RLLogger:
                 "latency_ms": float(latency_ms) if latency_ms is not None else None,
                 "model_version": model_version,
                 "constraints": constraints or {},
-                "metadata": metadata or {}
+                "metadata": metadata or {},
             }
 
             # Logging Redis (rapide)
@@ -221,14 +215,16 @@ class RLLogger:
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug(
                     "[RLLogger] Décision loggée - Hash: %s..., Action: %s, Redis: %s, DB: %s",
-                    state_hash[:8], action_int, redis_success, db_success
+                    state_hash[:8],
+                    action_int,
+                    redis_success,
+                    db_success,
                 )
 
             return redis_success or db_success
 
         except Exception as e:
-            logger.error(
-                "[RLLogger] Erreur lors du logging de la décision: %s", e)
+            logger.error("[RLLogger] Erreur lors du logging de la décision: %s", e)
             self.stats["errors"] += 1
             return False
 
@@ -251,10 +247,7 @@ class RLLogger:
 
             # Stocker dans Redis avec rotation automatique
             redis_client.lpush(f"{self.redis_key_prefix}:latest", record_json)
-            redis_client.ltrim(
-                f"{self.redis_key_prefix}:latest",
-                0,
-                self.max_redis_logs - 1)
+            redis_client.ltrim(f"{self.redis_key_prefix}:latest", 0, self.max_redis_logs - 1)
 
             # TTL de 24h pour les logs Redis
             redis_client.expire(f"{self.redis_key_prefix}:latest", 86400)
@@ -289,7 +282,11 @@ class RLLogger:
             rl_metric.suggested_driver_id = record["metadata"].get("suggested_driver_id", 0)
             rl_metric.confidence = record["constraints"].get("confidence", 0.0)
             rl_metric.expected_gain_minutes = record["constraints"].get("improvement", 0)
-            rl_metric.q_value = record["q_values"][record["action"]] if record["q_values"] and len(record["q_values"]) > record["action"] else None
+            rl_metric.q_value = (
+                record["q_values"][record["action"]]
+                if record["q_values"] and len(record["q_values"]) > record["action"]
+                else None
+            )
             rl_metric.source = "dqn_model"
             rl_metric.additional_data = {
                 "state_hash": record["state_hash"],
@@ -298,7 +295,7 @@ class RLLogger:
                 "reward": record["reward"],
                 "latency_ms": record["latency_ms"],
                 "model_version": record["model_version"],
-                "metadata": record["metadata"]
+                "metadata": record["metadata"],
             }
 
             # Ajouter à la session et commiter
@@ -329,7 +326,7 @@ class RLLogger:
             "errors": self.stats["errors"],
             "uptime_seconds": uptime.total_seconds(),
             "logs_per_second": self.stats["total_logs"] / max(uptime.total_seconds(), 1),
-            "success_rate": (self.stats["total_logs"] - self.stats["errors"]) / max(self.stats["total_logs"], 1)
+            "success_rate": (self.stats["total_logs"] - self.stats["errors"]) / max(self.stats["total_logs"], 1),
         }
 
     def get_recent_logs(self, count: int = 100) -> List[Dict[str, Any]]:
@@ -347,8 +344,7 @@ class RLLogger:
 
         try:
             # Récupérer les logs depuis Redis
-            logs_json = redis_client.lrange(
-                f"{self.redis_key_prefix}:latest", 0, count - 1)
+            logs_json = redis_client.lrange(f"{self.redis_key_prefix}:latest", 0, count - 1)
             # S'assurer que c'est une liste (Redis retourne une liste de bytes)
             if not isinstance(logs_json, list):
                 logs_json = []
@@ -365,12 +361,10 @@ class RLLogger:
             return logs
 
         except Exception as e:
-            logger.error(
-                "[RLLogger] Erreur lors de la récupération des logs: %s", e)
+            logger.error("[RLLogger] Erreur lors de la récupération des logs: %s", e)
             return []
 
-    def clear_logs(self, clear_redis: bool = True,
-                   clear_db: bool = False) -> bool:
+    def clear_logs(self, clear_redis: bool = True, clear_db: bool = False) -> bool:
         """Efface les logs (utilisé pour les tests ou la maintenance).
 
         Args:
@@ -395,8 +389,7 @@ class RLLogger:
             return True
 
         except Exception as e:
-            logger.error(
-                "[RLLogger] Erreur lors de l'effacement des logs: %s", e)
+            logger.error("[RLLogger] Erreur lors de l'effacement des logs: %s", e)
             return False
 
 
@@ -417,8 +410,9 @@ def get_rl_logger() -> RLLogger:
     return _rl_logger_instance
 
 
-def log_rl_decision(state, action, q_values=None, reward=None, latency_ms=None,
-                    model_version="unknown", constraints=None, metadata=None) -> bool:
+def log_rl_decision(
+    state, action, q_values=None, reward=None, latency_ms=None, model_version="unknown", constraints=None, metadata=None
+) -> bool:
     """Fonction de convenance pour logger une décision RL.
 
     Args:
@@ -444,5 +438,5 @@ def log_rl_decision(state, action, q_values=None, reward=None, latency_ms=None,
         latency_ms=latency_ms,
         model_version=model_version,
         constraints=constraints,
-        metadata=metadata
+        metadata=metadata,
     )

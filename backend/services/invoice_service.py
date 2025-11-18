@@ -224,13 +224,44 @@ class InvoiceService:
 
             # Préparer la TVA
             # La TVA est applicable uniquement si vat_applicable est True ET vat_rate est défini
-            vat_applicable_setting = bool(getattr(billing_settings, "vat_applicable", True))
+            vat_applicable_setting = bool(getattr(billing_settings, "vat_applicable", False))
             vat_rate_setting = getattr(billing_settings, "vat_rate", None)
-            vat_applicable = vat_applicable_setting and (vat_rate_setting is not None)
+            
+            # Log pour diagnostic
+            app_logger.debug(
+                "TVA settings pour company %s: applicable=%s, rate=%s (type=%s)",
+                company_id,
+                vat_applicable_setting,
+                vat_rate_setting,
+                type(vat_rate_setting).__name__
+            )
+            
+            # Vérifier que vat_rate_setting est valide (pas None, pas 0, et convertible en Decimal)
+            vat_rate_valid = False
+            if vat_rate_setting is not None:
+                try:
+                    # Convertir en Decimal pour vérifier la validité
+                    test_rate = Decimal(str(vat_rate_setting))
+                    vat_rate_valid = test_rate > Decimal("0")
+                except (InvalidOperation, ValueError, TypeError):
+                    app_logger.warning("Taux TVA invalide pour company %s: %s", company_id, vat_rate_setting)
+                    vat_rate_valid = False
+            
+            vat_applicable = vat_applicable_setting and vat_rate_valid
             default_vat_rate = Decimal("0")
-            if vat_applicable and vat_rate_setting is not None:
-                default_vat_rate = Decimal(str(vat_rate_setting)).quantize(Decimal("0.01"))
-            vat_label = getattr(billing_settings, "vat_label", None)
+            
+            if vat_applicable and vat_rate_valid:
+                try:
+                    default_vat_rate = Decimal(str(vat_rate_setting)).quantize(Decimal("0.01"))
+                    app_logger.info("TVA activée pour company %s avec taux %s%%", company_id, default_vat_rate)
+                except (InvalidOperation, ValueError, TypeError) as e:
+                    app_logger.error("Erreur conversion taux TVA pour company %s: %s", company_id, e)
+                    default_vat_rate = Decimal("0")
+                    vat_applicable = False
+            else:
+                app_logger.debug("TVA désactivée pour company %s (applicable=%s, rate_valid=%s)", company_id, vat_applicable_setting, vat_rate_valid)
+            
+            vat_label = getattr(billing_settings, "vat_label", None) or "TVA"
             vat_number = getattr(billing_settings, "vat_number", None)
 
             two_places = Decimal("0.01")
