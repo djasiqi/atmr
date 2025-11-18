@@ -165,11 +165,16 @@ class DriverProfile(Resource):
     @role_required(UserRole.driver)
     def get(self):
         """Récupère le profil du chauffeur."""
-        driver, error_response, status_code = get_driver_from_token()
-        if error_response:
-            return error_response, status_code
-        driver = cast("Driver", driver)
-        return {"profile": driver.serialize}, 200
+        try:
+            driver, error_response, status_code = get_driver_from_token()
+            if error_response:
+                return error_response, status_code
+            driver = cast("Driver", driver)
+            return {"profile": driver.serialize}, 200
+        except Exception as e:
+            app_logger.error(f"❌ ERREUR get_driver_profile: {type(e).__name__} - {e!s}", exc_info=True)
+            sentry_sdk.capture_exception(e)
+            return {"error": "Une erreur interne est survenue lors de la récupération du profil."}, 500
 
     @jwt_required()
     @role_required(UserRole.driver)

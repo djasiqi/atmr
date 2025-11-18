@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import * as Location from "expo-location";
 import { Alert, Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { sendDriverLocation, getDistanceInMeters } from "@/services/location";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/hooks/useSocket";
@@ -60,10 +61,19 @@ export const useLocation = () => {
 
         locationSubscription.current = watchId;
       } else {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== "granted") {
-          Alert.alert("Permission refusée", "Impossible d’accéder à votre localisation.");
+        // ✅ Demander d'abord les permissions en premier plan
+        const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
+        if (foregroundStatus !== "granted") {
+          Alert.alert("Permission refusée", "Impossible d'accéder à votre localisation.");
           return;
+        }
+
+        // ✅ Demander les permissions en arrière-plan (nécessaire pour le tracking continu)
+        const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
+        if (backgroundStatus !== "granted") {
+          console.warn("⚠️ Permission de localisation en arrière-plan refusée. Le tracking ne fonctionnera qu'en premier plan.");
+        } else {
+          console.log("✅ Permission de localisation en arrière-plan accordée");
         }
 
         try {
@@ -78,6 +88,29 @@ export const useLocation = () => {
           console.error("Erreur récupération position initiale:", error);
         }
 
+        // ✅ Démarrer le tracking en arrière-plan si les permissions sont accordées
+        if (backgroundStatus === "granted" && driver) {
+          try {
+            // Stocker le driver_id pour la tâche en arrière-plan
+            await AsyncStorage.setItem("driver_id", driver.id.toString());
+
+            // Démarrer les mises à jour de localisation en arrière-plan
+            await Location.startLocationUpdatesAsync("background-location-task", {
+              accuracy: Location.Accuracy.Balanced,
+              timeInterval: 10000, // 10 secondes
+              distanceInterval: 50, // 50 mètres
+              foregroundService: {
+                notificationTitle: "Liri Opérations",
+                notificationBody: "Suivi de localisation en cours",
+              },
+            });
+            console.log("✅ Tracking en arrière-plan démarré");
+          } catch (error) {
+            console.error("❌ Erreur démarrage tracking arrière-plan:", error);
+          }
+        }
+
+        // ✅ Tracking en premier plan (pour l'UI)
         try {
           locationSubscription.current = await Location.watchPositionAsync(
             {
@@ -88,9 +121,10 @@ export const useLocation = () => {
               distanceInterval: 50,
             },
             async (loc) => {
-          if (!isMounted) return;
-          setLocation(loc);
-          await handleLocationUpdate(loc);            }
+              if (!isMounted) return;
+              setLocation(loc);
+              await handleLocationUpdate(loc);
+            }
           );
         } catch (error) {
           console.error("Erreur création subscription localisation mobile:", error);
@@ -200,6 +234,13 @@ export const useLocation = () => {
       // Flush final avant cleanup
       if (positionBuffer.current.length > 0) {
         flushPositionBatch();
+      }
+      
+      // ✅ Arrêter le tracking en arrière-plan
+      if (Platform.OS !== "web") {
+        Location.stopLocationUpdatesAsync("background-location-task").catch((error) => {
+          console.error("Erreur arrêt tracking arrière-plan:", error);
+        });
       }
       
       const sub = locationSubscription.current;

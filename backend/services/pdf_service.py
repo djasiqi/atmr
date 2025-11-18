@@ -115,7 +115,23 @@ class PDFService:
             raise
 
     def _create_invoice_pdf_content(self, invoice):
-        """Crée le contenu PDF d'une facture en reproduisant exactement le design de référence."""
+        """Crée le contenu PDF d'une facture selon la variante de template sélectionnée."""
+        # Récupérer la variante de template depuis les paramètres de facturation
+        billing_settings = CompanyBillingSettings.query.filter_by(company_id=invoice.company_id).first()
+        template_variant = "standard"  # Par défaut
+        if billing_settings and billing_settings.pdf_template_variant:
+            template_variant = billing_settings.pdf_template_variant.lower()
+
+        # Router vers la méthode appropriée selon la variante
+        if template_variant == "minimal":
+            return self._create_minimal_invoice_pdf(invoice, billing_settings)
+        if template_variant == "detailed":
+            return self._create_detailed_invoice_pdf(invoice, billing_settings)
+        # standard ou default
+        return self._create_standard_invoice_pdf(invoice, billing_settings)
+
+    def _create_standard_invoice_pdf(self, invoice, billing_settings):
+        """Crée le contenu PDF d'une facture avec le template standard (format actuel)."""
         # Import ici pour éviter les problèmes de dépendances circulaires
         from io import BytesIO
 
@@ -601,8 +617,7 @@ class PDFService:
 
         # === PIED DE PAGE - NOTES DE FACTURATION ===
 
-        # Récupérer les paramètres de facturation pour le message
-        billing_settings = CompanyBillingSettings.query.filter_by(company_id=invoice.company_id).first()
+        # Utiliser billing_settings passé en paramètre (déjà récupéré dans _create_invoice_pdf_content)
 
         # Délai de paiement (par défaut 10 jours)
         payment_terms_days = 10
@@ -624,13 +639,18 @@ class PDFService:
         elif hasattr(company, "iban") and company.iban:
             iban_value = company.iban
 
-        # Message complet centré en pied de page
-        footer_message = (
-            f"En votre aimable règlement net sous {payment_terms_days} {jours_text} avec nos remerciements anticipés. "
-            f"En cas de retard de paiement, des frais de rappel d'un montant de CHF {overdue_fee:.2f} vous seront facturés, "
-            f"conformément à nos conditions générales. "
-            f"Paiement par virement bancaire : IBAN : {iban_value}"
-        )
+        # Message du pied de page : utiliser legal_footer si disponible, sinon message dynamique
+        if billing_settings and billing_settings.legal_footer:
+            # Utiliser le texte légal personnalisé depuis les paramètres
+            footer_message = billing_settings.legal_footer
+        else:
+            # Message dynamique par défaut avec valeurs des paramètres
+            footer_message = (
+                f"En votre aimable règlement net sous {payment_terms_days} {jours_text} avec nos remerciements anticipés. "
+                f"En cas de retard de paiement, des frais de rappel d'un montant de CHF {overdue_fee:.2f} vous seront facturés, "
+                f"conformément à nos conditions générales. "
+                f"Paiement par virement bancaire : IBAN : {iban_value}"
+            )
 
         story.append(Spacer(1, 20))  # Espace avant le pied de page
         story.append(Paragraph(footer_message, centered_style))
@@ -698,6 +718,607 @@ class PDFService:
         doc.build(story)
 
         # Retourner le contenu
+        buffer.seek(0)
+        return buffer.getvalue()
+
+    def _create_minimal_invoice_pdf(self, invoice, billing_settings):
+        """Crée le contenu PDF d'une facture avec le template minimal (version simplifiée)."""
+        from io import BytesIO
+
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import cm
+        from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4, topMargin=1.5 * cm, bottomMargin=1.5 * cm, leftMargin=1.5 * cm, rightMargin=1.5 * cm
+        )
+
+        styles = getSampleStyleSheet()
+        normal_style = ParagraphStyle(
+            "Normal",
+            parent=styles["Normal"],
+            fontSize=9,
+            textColor=colors.black,
+            alignment=TA_LEFT,
+            spaceAfter=4,
+            fontName="Helvetica",
+        )
+        centered_style = ParagraphStyle(
+            "Centered",
+            parent=styles["Normal"],
+            fontSize=9,
+            textColor=colors.black,
+            alignment=TA_CENTER,
+            spaceAfter=4,
+            fontName="Helvetica",
+        )
+
+        story = []
+        company = invoice.company
+
+        # === EN-TÊTE SIMPLIFIÉ (SANS LOGO) ===
+        company_name = company.name or "Emmenez Moi"
+        company_address = company.address or "Route de Chevrens 145, 1247 Anières"
+        company_info = f"{company_name}<br/>{company_address}"
+        story.append(Paragraph(company_info, normal_style))
+        story.append(Spacer(1, 15))
+
+        # === INFORMATIONS CLIENT (SIMPLIFIÉES) ===
+        if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
+            from models import Client as ClientModel
+
+            institution = ClientModel.query.get(invoice.bill_to_client_id)
+            if institution and institution.is_institution:
+                billed_to_name = institution.institution_name or "Institution"
+            else:
+                billed_to_name = "Institution"
+        else:
+            client = invoice.client
+            billed_to_name = (
+                f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
+                or client.user.username
+                or "Client"
+            )
+
+        billed_to_info = f"<b>Facturé à :</b> {billed_to_name}"
+        story.append(Paragraph(billed_to_info, normal_style))
+        story.append(Spacer(1, 10))
+
+        # === INFORMATIONS FACTURE (SIMPLIFIÉES) ===
+        invoice_info = f"<b>Facture {invoice.invoice_number}</b> - {invoice.issued_at.strftime('%d.%m.%Y')} - Échéance: {invoice.due_date.strftime('%d.%m.%Y')}"
+        story.append(Paragraph(invoice_info, normal_style))
+        story.append(Spacer(1, 15))
+
+        # === TABLEAU SIMPLIFIÉ (DATE + MONTANT SEULEMENT) ===
+        is_third_party = invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id
+        table_data = [["Date", "Patient", "Montant"]] if is_third_party else [["Date", "Montant"]]
+
+        for line in invoice.lines:
+            if line.type == InvoiceLineType.RIDE and line.reservation_id:
+                from models import Booking
+
+                booking = Booking.query.get(line.reservation_id)
+                if booking:
+                    date_str = booking.scheduled_time.strftime("%d/%m/%Y") if booking.scheduled_time else ""
+                    amount = f"{line.line_total:.2f}"
+                    if is_third_party:
+                        patient_name = (
+                            booking.customer_name
+                            or f"{booking.client.user.first_name or ''} {booking.client.user.last_name or ''}".strip()
+                            or "Patient"
+                        )
+                        if len(patient_name) > MAX_PATIENT_NAME_LENGTH:
+                            patient_name = patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
+                        table_data.append([date_str, patient_name, amount])
+                    else:
+                        table_data.append([date_str, amount])
+                else:
+                    amount = f"{line.line_total:.2f}"
+                    if is_third_party:
+                        table_data.append(["", "N/A", amount])
+                    else:
+                        table_data.append(["", amount])
+            else:
+                amount = f"{line.line_total:.2f}"
+                if is_third_party:
+                    table_data.append(["", "N/A", amount])
+                else:
+                    table_data.append(["", amount])
+
+        if is_third_party:
+            services_table = Table(table_data, colWidths=[3 * cm, 4 * cm, 2.5 * cm])
+        else:
+            services_table = Table(table_data, colWidths=[4 * cm, 2.5 * cm])
+        services_table.setStyle(
+            TableStyle(
+                [
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 9),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("ALIGN", (-1, 0), (-1, -1), "RIGHT"),
+                    ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.black),
+                    ("LINEBELOW", (0, 1), (-1, -2), 0.25, colors.lightgrey),
+                ]
+            )
+        )
+        story.append(services_table)
+        story.append(Spacer(1, 10))
+
+        # === TOTAL SIMPLIFIÉ ===
+        total_amount = float(invoice.total_amount)
+        total_data = [["TOTAL :", f"{total_amount:.2f} CHF"]]
+        total_table = Table(total_data, colWidths=[4 * cm, 2.5 * cm])
+        total_table.setStyle(
+            TableStyle(
+                [
+                    ("ALIGN", (0, 0), (0, 0), "RIGHT"),
+                    ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                    ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ]
+            )
+        )
+        story.append(total_table)
+        story.append(Spacer(1, 20))
+
+        # === PIED DE PAGE SIMPLIFIÉ ===
+        if billing_settings and billing_settings.legal_footer:
+            footer_message = billing_settings.legal_footer
+        else:
+            footer_message = f"Merci de votre règlement. IBAN: {billing_settings.iban if billing_settings and billing_settings.iban else 'Non configuré'}"
+
+        story.append(Paragraph(footer_message, centered_style))
+
+        # === QR-BILL (SIMPLIFIÉ) ===
+        story.append(PageBreak())
+        story.append(Spacer(1, 545))
+
+        try:
+            qr_bill_service = self.qrbill_service
+            qr_bill_svg_content = qr_bill_service.generate_qr_bill_svg(invoice)
+            if qr_bill_svg_content:
+                from svglib.svglib import svg2rlg
+
+                drawing = svg2rlg(BytesIO(qr_bill_svg_content))
+                if drawing:
+                    drawing.width = 12 * cm
+                    drawing.height = 6 * cm
+                    drawing.scale(12 * cm / drawing.width, 6 * cm / drawing.height)
+                    qr_table = Table([[drawing, ""]], colWidths=[6 * cm, 12 * cm])
+                    qr_table.setStyle(
+                        TableStyle(
+                            [
+                                ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                                ("ALIGN", (1, 0), (1, 0), "LEFT"),
+                                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                            ]
+                        )
+                    )
+                    story.append(qr_table)
+        except Exception as e:
+            app_logger.warning("Impossible de générer le QR-Bill: %s", e)
+
+        doc.build(story)
+        buffer.seek(0)
+        return buffer.getvalue()
+
+    def _create_detailed_invoice_pdf(self, invoice, billing_settings):
+        """Crée le contenu PDF d'une facture avec le template détaillé (version enrichie)."""
+        from io import BytesIO
+
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import cm
+        from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4, topMargin=2 * cm, bottomMargin=2 * cm, leftMargin=2 * cm, rightMargin=2 * cm
+        )
+
+        styles = getSampleStyleSheet()
+        normal_style = ParagraphStyle(
+            "Normal",
+            parent=styles["Normal"],
+            fontSize=10,
+            textColor=colors.black,
+            alignment=TA_LEFT,
+            spaceAfter=6,
+            fontName="Helvetica",
+        )
+        centered_style = ParagraphStyle(
+            "Centered",
+            parent=styles["Normal"],
+            fontSize=10,
+            textColor=colors.black,
+            alignment=TA_CENTER,
+            spaceAfter=6,
+            fontName="Helvetica",
+        )
+        detail_style = ParagraphStyle(
+            "Detail",
+            parent=styles["Normal"],
+            fontSize=9,
+            textColor=colors.darkgrey,
+            alignment=TA_LEFT,
+            spaceAfter=4,
+            fontName="Helvetica",
+        )
+
+        story = []
+        company = invoice.company
+
+        # === EN-TÊTE AVEC LOGO (comme standard) ===
+        logo_img = None
+        logo_path = None
+        logo_width = 0.0
+        logo_height = 0.0
+        if hasattr(company, "logo_url") and company.logo_url:
+            try:
+                logo_url = company.logo_url.strip()
+                if not logo_url.startswith(("http://", "https://")):
+                    logo_url_clean = logo_url.lstrip("/")
+                    if logo_url_clean.startswith("uploads/"):
+                        logo_url_clean = logo_url_clean[8:]
+                    uploads_dir = Path(Path(Path(__file__).parent.parent), "uploads")
+                    logo_path = uploads_dir / logo_url_clean
+                    if logo_path and Path(logo_path).exists():
+                        logo_width_percent = 0.15
+                        logo_width = 595 * logo_width_percent
+                        logo_height = logo_width / 4.17
+                        if logo_path.suffix.lower() == ".svg":
+                            try:
+                                from svglib.svglib import svg2rlg
+
+                                drawing = svg2rlg(str(logo_path))
+                                if drawing:
+                                    original_width = drawing.width
+                                    original_height = drawing.height
+                                    if original_width > 0 and original_height > 0:
+                                        scale_x = logo_width / original_width
+                                        scale_y = logo_height / original_height
+                                        drawing.scale(scale_x, scale_y)
+                                    logo_img = drawing
+                            except Exception:
+                                pass
+                        else:
+                            logo_img = Image(logo_path, width=logo_width, height=logo_height)
+            except Exception:
+                pass
+
+        if logo_img:
+            is_drawing = hasattr(logo_img, "width") and hasattr(logo_img, "height") and hasattr(logo_img, "scale")
+            if is_drawing:
+                logo_table = Table([[logo_img]], colWidths=[logo_width])
+                logo_table.setStyle(
+                    TableStyle(
+                        [
+                            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                        ]
+                    )
+                )
+                story.append(logo_table)
+            else:
+                logo_style = ParagraphStyle(
+                    "LogoStyle", parent=styles["Normal"], alignment=TA_LEFT, leftIndent=0, rightIndent=0, spaceAfter=8
+                )
+                logo_para = Paragraph(
+                    f'<img src="{logo_path}" width="{logo_width}" height="{logo_height}"/>', logo_style
+                )
+                story.append(logo_para)
+
+        # === INFORMATIONS ENTREPRISE DÉTAILLÉES ===
+        company_name = company.name or "Emmenez Moi"
+        company_address = company.address or "Route de Chevrens 145, 1247 Anières"
+        company_phone = company.contact_phone or "0225120203"
+        company_email = company.billing_email or company.contact_email or "info@casa-famiglia.ch"
+        company_uid = company.uid_ide or "CHE-27348.653"
+        company_info_detailed = f"""
+        <b>{company_name}</b><br/>
+        {company_address}<br/>
+        Téléphone: {company_phone}<br/>
+        Email: {company_email}<br/>
+        IDE/UID: {company_uid}
+        """
+        story.append(Paragraph(company_info_detailed, normal_style))
+        story.append(Spacer(1, 20))
+
+        # === INFORMATIONS CLIENT DÉTAILLÉES ===
+        if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
+            from models import Client as ClientModel
+
+            institution = ClientModel.query.get(invoice.bill_to_client_id)
+            if institution and institution.is_institution:
+                billed_to_name = institution.institution_name or "Institution"
+                billed_to_address = (
+                    institution.billing_address or institution.contact_address or "Adresse non renseignée"
+                )
+            else:
+                billed_to_name = "Institution"
+                billed_to_address = "Adresse non renseignée"
+        else:
+            client = invoice.client
+            billed_to_name = (
+                f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
+                or client.user.username
+                or "Client"
+            )
+            billed_to_address = "Adresse non renseignée"
+            if hasattr(client, "domicile_address") and client.domicile_address:
+                street_address = client.domicile_address
+                if (
+                    hasattr(client, "domicile_zip")
+                    and hasattr(client, "domicile_city")
+                    and client.domicile_zip
+                    and client.domicile_city
+                ):
+                    billed_to_address = f"{street_address}\n{client.domicile_zip} {client.domicile_city} Suisse"
+                else:
+                    billed_to_address = street_address
+
+        billed_to_info_detailed = f"""
+        <para align="right">
+        <b>Facturé à :</b><br/>
+        {billed_to_name}<br/>
+        {billed_to_address}
+        </para>
+        """
+        story.append(Paragraph(billed_to_info_detailed, normal_style))
+        story.append(Spacer(1, 20))
+
+        # === INFORMATIONS FACTURE DÉTAILLÉES ===
+        invoice_info_detailed = f"""
+        <b>Numéro de facture :</b> {invoice.invoice_number}<br/>
+        <b>Date d'émission :</b> {invoice.issued_at.strftime("%d.%m.%Y")}<br/>
+        <b>Date d'échéance :</b> {invoice.due_date.strftime("%d.%m.%Y")}<br/>
+        <b>Période de facturation :</b> {invoice.period_month:02d}.{invoice.period_year}<br/>
+        <b>Statut :</b> {invoice.status.value if hasattr(invoice.status, "value") else str(invoice.status)}
+        """
+        story.append(Paragraph(invoice_info_detailed, normal_style))
+        story.append(Spacer(1, 20))
+
+        # === TABLEAU DÉTAILLÉ AVEC NOTES ===
+        is_third_party = invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id
+        if is_third_party:
+            table_data = [["Date", "Patient", "Départ", "Arrivée", "Note", "Montant"]]
+        else:
+            table_data = [["Date", "Départ", "Arrivée", "Note", "Montant"]]
+
+        def format_address_for_table(address, max_length=20):
+            if not address or address == "Adresse inconnue":
+                return "Adresse non renseignée"
+            clean_address = address.replace(", Suisse", "").strip()
+            import re
+
+            clean_address = re.sub(r"^Trajet\s+", "", clean_address)
+            clean_address = clean_address.replace(" Suisse", "").strip()
+            clean_address = clean_address.replace(" · ", " ").replace("·", "")
+            if len(clean_address) <= max_length:
+                return clean_address
+            words = clean_address.split(" ")
+            lines = []
+            current_line = ""
+            for word in words:
+                test_line = current_line + (" " if current_line else "") + word
+                if len(test_line) <= max_length:
+                    current_line = test_line
+                else:
+                    if current_line:
+                        lines.append(current_line)
+                    current_line = word
+            if current_line:
+                lines.append(current_line)
+            return "\n".join(lines[:2])
+
+        for line in invoice.lines:
+            if line.type == InvoiceLineType.RIDE and line.reservation_id:
+                from models import Booking
+
+                booking = Booking.query.get(line.reservation_id)
+                if booking:
+                    date_str = booking.scheduled_time.strftime("%d/%m/%Y") if booking.scheduled_time else ""
+                    departure = format_address_for_table(booking.pickup_location, max_length=18)
+                    arrival = format_address_for_table(booking.dropoff_location, max_length=18)
+                    note = line.note or ""
+                    amount = f"{line.line_total:.2f}"
+                    if is_third_party:
+                        patient_name = (
+                            booking.customer_name
+                            or f"{booking.client.user.first_name or ''} {booking.client.user.last_name or ''}".strip()
+                            or "Patient"
+                        )
+                        if len(patient_name) > MAX_PATIENT_NAME_LENGTH:
+                            patient_name = patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
+                        table_data.append([date_str, patient_name, departure, arrival, note, amount])
+                    else:
+                        table_data.append([date_str, departure, arrival, note, amount])
+                else:
+                    note = line.note or ""
+                    amount = f"{line.line_total:.2f}"
+                    if is_third_party:
+                        table_data.append(["", "N/A", "", "", note, amount])
+                    else:
+                        table_data.append(["", "", "", note, amount])
+            else:
+                note = line.note or ""
+                amount = f"{line.line_total:.2f}"
+                if is_third_party:
+                    table_data.append(["", "N/A", line.description[:30], "", note, amount])
+                else:
+                    table_data.append(["", line.description[:30], "", note, amount])
+
+        if is_third_party:
+            services_table = Table(table_data, colWidths=[2 * cm, 2.5 * cm, 3 * cm, 3 * cm, 2.5 * cm, 2 * cm])
+        else:
+            services_table = Table(table_data, colWidths=[2.5 * cm, 4 * cm, 4 * cm, 2.5 * cm, 2.5 * cm])
+        services_table.setStyle(
+            TableStyle(
+                [
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 9),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("ALIGN", (-1, 0), (-1, -1), "RIGHT"),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.black),
+                    ("LINEBELOW", (0, 1), (-1, -2), 0.25, colors.lightgrey),
+                ]
+            )
+        )
+        story.append(services_table)
+        story.append(Spacer(1, 15))
+
+        # === TOTAL DÉTAILLÉ ===
+        subtotal_amount = float(invoice.subtotal_amount)
+        vat_total_amount = float(invoice.vat_total_amount)
+        total_amount = float(invoice.total_amount)
+
+        vat_is_applicable = False
+        vat_label_display = "TVA"
+        if isinstance(invoice.meta, dict) and "vat" in invoice.meta:
+            vat_meta = invoice.meta.get("vat", {})
+            vat_is_applicable = vat_meta.get("applicable", False)
+            if vat_meta.get("label"):
+                vat_label_display = vat_meta.get("label")
+        elif vat_total_amount > 0:
+            vat_is_applicable = True
+
+        total_separator = Table([[""]], colWidths=[16 * cm])
+        total_separator.setStyle(TableStyle([("LINEBELOW", (0, 0), (0, 0), 1, colors.black)]))
+        story.append(total_separator)
+        story.append(Spacer(1, 8))
+
+        if is_third_party:
+            if vat_is_applicable:
+                total_data = [
+                    ["", "", "", "", "Sous-total :", f"{subtotal_amount:.2f}"],
+                    ["", "", "", "", f"{vat_label_display} :", f"{vat_total_amount:.2f}"],
+                    ["", "", "", "", "TOTAL :", f"{total_amount:.2f}"],
+                ]
+            else:
+                total_data = [["", "", "", "", "TOTAL :", f"{total_amount:.2f}"]]
+            total_table = Table(total_data, colWidths=[2 * cm, 2.5 * cm, 3 * cm, 3 * cm, 2.5 * cm, 2 * cm])
+        else:
+            if vat_is_applicable:
+                total_data = [
+                    ["", "", "", "Sous-total :", f"{subtotal_amount:.2f}"],
+                    ["", "", "", f"{vat_label_display} :", f"{vat_total_amount:.2f}"],
+                    ["", "", "", "TOTAL :", f"{total_amount:.2f}"],
+                ]
+            else:
+                total_data = [["", "", "", "TOTAL :", f"{total_amount:.2f}"]]
+            total_table = Table(total_data, colWidths=[2.5 * cm, 4 * cm, 4 * cm, 2.5 * cm, 2.5 * cm])
+
+        if is_third_party:
+            style_rules = [
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("ALIGN", (4, 0), (5, -1), "RIGHT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ]
+            if vat_is_applicable:
+                style_rules.extend(
+                    [
+                        ("FONTNAME", (0, 0), (-1, -2), "Helvetica"),
+                        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                    ]
+                )
+            else:
+                style_rules.append(("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"))
+            total_table.setStyle(TableStyle(style_rules))
+        else:
+            style_rules = [
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("ALIGN", (3, 0), (4, -1), "RIGHT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ]
+            if vat_is_applicable:
+                style_rules.extend(
+                    [
+                        ("FONTNAME", (0, 0), (-1, -2), "Helvetica"),
+                        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                    ]
+                )
+            else:
+                style_rules.append(("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"))
+            total_table.setStyle(TableStyle(style_rules))
+
+        story.append(total_table)
+        story.append(Spacer(1, 30))
+
+        # === NOTES ET INFORMATIONS SUPPLÉMENTAIRES ===
+        if invoice.notes:
+            story.append(Paragraph("<b>Notes :</b>", normal_style))
+            story.append(Paragraph(invoice.notes, detail_style))
+            story.append(Spacer(1, 15))
+
+        # === PIED DE PAGE DÉTAILLÉ ===
+        payment_terms_days = 10
+        if billing_settings and billing_settings.payment_terms_days:
+            payment_terms_days = int(billing_settings.payment_terms_days)
+
+        overdue_fee = Decimal("15.00")
+        if billing_settings and billing_settings.overdue_fee:
+            overdue_fee = billing_settings.overdue_fee
+
+        jours_text = "jours" if payment_terms_days > 1 else "jour"
+        iban_value = "CH6509000000152631289"
+        if billing_settings and billing_settings.iban:
+            iban_value = billing_settings.iban
+        elif hasattr(company, "iban") and company.iban:
+            iban_value = company.iban
+
+        if billing_settings and billing_settings.legal_footer:
+            footer_message = billing_settings.legal_footer
+        else:
+            footer_message = (
+                f"En votre aimable règlement net sous {payment_terms_days} {jours_text} avec nos remerciements anticipés. "
+                f"En cas de retard de paiement, des frais de rappel d'un montant de CHF {overdue_fee:.2f} vous seront facturés, "
+                f"conformément à nos conditions générales. "
+                f"Paiement par virement bancaire : IBAN : {iban_value}"
+            )
+
+        story.append(Spacer(1, 20))
+        story.append(Paragraph(footer_message, centered_style))
+
+        # === QR-BILL ===
+        story.append(PageBreak())
+        story.append(Spacer(1, 545))
+
+        try:
+            qr_bill_service = self.qrbill_service
+            qr_bill_svg_content = qr_bill_service.generate_qr_bill_svg(invoice)
+            if qr_bill_svg_content:
+                from svglib.svglib import svg2rlg
+
+                drawing = svg2rlg(BytesIO(qr_bill_svg_content))
+                if drawing:
+                    drawing.width = 12 * cm
+                    drawing.height = 6 * cm
+                    drawing.scale(12 * cm / drawing.width, 6 * cm / drawing.height)
+                    qr_table = Table([[drawing, ""]], colWidths=[6 * cm, 12 * cm])
+                    qr_table.setStyle(
+                        TableStyle(
+                            [
+                                ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                                ("ALIGN", (1, 0), (1, 0), "LEFT"),
+                                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                            ]
+                        )
+                    )
+                    story.append(qr_table)
+        except Exception as e:
+            app_logger.warning("Impossible de générer le QR-Bill: %s", e)
+
+        doc.build(story)
         buffer.seek(0)
         return buffer.getvalue()
 

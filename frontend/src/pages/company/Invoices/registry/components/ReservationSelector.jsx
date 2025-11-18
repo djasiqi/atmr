@@ -119,15 +119,6 @@ const ReservationSelector = ({
     }
   };
 
-  const handleVatChange = (reservationId, value) => {
-    if (!onOverrideChange) return;
-    const numeric = parseFloat(value);
-    if (value === '') {
-      onOverrideChange(reservationId, { vat_rate: null });
-    } else if (!Number.isNaN(numeric)) {
-      onOverrideChange(reservationId, { vat_rate: numeric });
-    }
-  };
 
   const handleNoteChange = (reservationId, value) => {
     if (!onOverrideChange) return;
@@ -166,8 +157,7 @@ const ReservationSelector = ({
       );
       const vatRate = vatApplicable
         ? Number(
-            override.vat_rate ??
-              reservation.vat_rate ??
+            reservation.vat_rate ??
               reservation.default_vat_rate ??
               defaultVatRate
           )
@@ -287,7 +277,7 @@ const ReservationSelector = ({
                   <span className={styles.date}>{formatDate(reservation.date)}</span>
                   <div className={styles.amountStack}>
                     <span className={styles.amount}>{formatCurrency(figures.amount)}</span>
-                    {vatApplicable && (
+                    {vatApplicable && figures.vatValue > 0 && (
                       <span className={styles.amountVat}>
                         TVA {figures.vatRate.toFixed(2)}% · {formatCurrency(figures.vatValue)}
                       </span>
@@ -339,24 +329,6 @@ const ReservationSelector = ({
                         />
                       </label>
 
-                      {vatApplicable && (
-                        <label className={styles.field}>
-                          <span>TVA %</span>
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            className={styles.input}
-                            value={
-                              overrides?.[reservation.id]?.vat_rate !== undefined
-                                ? overrides[reservation.id].vat_rate
-                                : ''
-                            }
-                            placeholder={figures.vatRate.toFixed(2)}
-                            onChange={(e) => handleVatChange(reservation.id, e.target.value)}
-                          />
-                        </label>
-                      )}
                     </div>
 
                     <label className={styles.field}>
@@ -374,7 +346,7 @@ const ReservationSelector = ({
                       <span>
                         HT <strong>{formatCurrency(figures.amount)}</strong>
                       </span>
-                      {vatApplicable && (
+                      {vatApplicable && figures.vatValue > 0 && (
                         <span>
                           TVA <strong>{formatCurrency(figures.vatValue)}</strong>
                         </span>
@@ -400,7 +372,7 @@ const ReservationSelector = ({
             <span>
               HT : <strong>{formatCurrency(summaryTotals.base)}</strong>
             </span>
-            {vatApplicable && (
+            {vatApplicable && summaryTotals.vat > 0 && (
               <span>
                 TVA : <strong>{formatCurrency(summaryTotals.vat)}</strong>
               </span>
