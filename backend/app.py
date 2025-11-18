@@ -14,14 +14,15 @@ try:
     from typing import TypeAlias, override
 except ImportError:  # pragma: no cover
     from typing_extensions import TypeAlias
-    
-    # Import override if available  
+
+    # Import override if available
     try:
         from typing_extensions import override  # type: ignore[assignment]
     except ImportError:
         # Fallback si override n'est pas disponible
         def override(func: Any) -> Any:
             return func
+
 
 # --- Imports de libs tiers (tous en haut pour Ruff E402) ---
 import sentry_sdk
@@ -44,13 +45,14 @@ load_dotenv(BASE_DIR / ".env", override=True)
 # ---------- Types ----------
 AsyncMode: TypeAlias = Literal["threading", "eventlet", "gevent", "gevent_uwsgi"]
 
+
 # ---------- Validation variables d'environnement critiques ----------
 def validate_required_env_vars(config_name: str) -> None:
     """Valide toutes les variables d'environnement critiques.
-    
+
     Args:
         config_name: Nom de la configuration (development, testing, production)
-        
+
     Raises:
         RuntimeError: Si des variables critiques sont manquantes
     """
@@ -59,7 +61,7 @@ def validate_required_env_vars(config_name: str) -> None:
         "SECRET_KEY",
         "JWT_SECRET_KEY",
     }
-    
+
     # Variables optionnelles mais nécessaires si l'une est manquante
     # Au moins une clé secrète est requise
     if not (os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY")):
@@ -67,7 +69,7 @@ def validate_required_env_vars(config_name: str) -> None:
             "JWT_SECRET_KEY ou SECRET_KEY manquant(e). "
             + "Ajoutez au moins l'une de ces variables dans backend/.env puis redémarrez."
         )
-    
+
     # Variables critiques pour production
     if config_name == "production":
         production_vars = {
@@ -80,27 +82,29 @@ def validate_required_env_vars(config_name: str) -> None:
             "PDF_BASE_URL",
         }
         required_vars.update(production_vars)
-        
+
         missing = []
         for var in required_vars:
             if not os.getenv(var):
                 missing.append(var)
-        
+
         if missing:
             raise RuntimeError(
                 f"Variables d'environnement manquantes pour production: {', '.join(missing)}\n"
                 + "Ajoutez-les dans backend/.env puis redémarrez."
             )
-        
+
         # Vérifier variables recommandées et avertir si manquantes
         missing_recommended = [var for var in recommended_vars if not os.getenv(var)]
         if missing_recommended:
             import logging
+
             logger = logging.getLogger(__name__)
             logger.warning(
                 "Variables recommandées manquantes pour production: %s. L'application fonctionnera mais certaines fonctionnalités peuvent être limitées.",
-                ", ".join(missing_recommended)
+                ", ".join(missing_recommended),
             )
+
 
 # ---------- JSON encoder/provider ----------
 class CustomJSONEncoder(json.JSONEncoder):
@@ -114,7 +118,7 @@ class CustomJSONEncoder(json.JSONEncoder):
 def create_app(config_name: str | None = None):
     if config_name is None:
         config_name = os.getenv("FLASK_CONFIG", "development")
-    
+
     # Valider variables d'environnement critiques avant de continuer
     validate_required_env_vars(config_name)
 
@@ -160,7 +164,7 @@ def create_app(config_name: str | None = None):
 
     if app.config.get("RATELIMIT_ENABLED", True):
         limiter.init_app(app)
-    
+
     # ✅ 2.9: Setup OpenTelemetry avec instrumentation complète
     try:
         from shared.otel_setup import (
@@ -169,15 +173,15 @@ def create_app(config_name: str | None = None):
             instrument_sqlalchemy,
             setup_opentelemetry,
         )
-        
+
         # Configurer OpenTelemetry (doit être fait avant les instrumentations)
         service_name = os.getenv("OTEL_SERVICE_NAME", "atmr-backend")
         service_version = os.getenv("OTEL_SERVICE_VERSION", "1.0")
         setup_opentelemetry(service_name=service_name, service_version=service_version)
-        
+
         # Instrumenter Flask (requêtes HTTP)
         instrument_flask(app)
-        
+
         # Instrumenter SQLAlchemy (requêtes DB)
         # Flask-SQLAlchemy expose get_engine() ou .engine selon la version
         try:
@@ -203,8 +207,9 @@ def create_app(config_name: str | None = None):
                             instrument_sqlalchemy(db_engine)
                     except Exception as e:
                         app.logger.warning("[2.9] Échec instrumentation DB différée: %s", e)
+
                 engine = None
-            
+
             if engine:
                 instrument_sqlalchemy(engine)
         except Exception as e:
@@ -217,6 +222,7 @@ def create_app(config_name: str | None = None):
     # ✅ 2.7: Setup DB Profiler pour détecter N+1 (activable via ENABLE_DB_PROFILING=true)
     try:
         from ext import setup_db_profiler
+
         setup_db_profiler(app)
     except Exception as e:
         app.logger.warning("[DB Profiler] Échec initialisation: %s", e)
@@ -224,6 +230,7 @@ def create_app(config_name: str | None = None):
     # Prometheus middleware pour métriques HTTP (latence p50/p95/p99)
     try:
         from middleware.metrics import prom_middleware
+
         app = prom_middleware(app)
     except ImportError as e:
         app.logger.warning("[Prometheus] Middleware non disponible: %s", e)
@@ -232,14 +239,16 @@ def create_app(config_name: str | None = None):
     celery_app = None
     try:
         from celery_app import init_app as init_celery
+
         celery_app = init_celery(app)
         app.logger.info("Celery initialized successfully")
-        
+
         # ✅ 2.9: Instrumenter Celery après initialisation (avec contexte OpenTelemetry)
         if celery_app:
             try:
                 # Importer depuis otel_setup (déjà configuré plus haut)
                 from shared.otel_setup import instrument_celery
+
                 instrument_celery(celery_app)
             except Exception as e:
                 app.logger.warning("[2.9] Échec instrumentation Celery: %s", e)
@@ -249,17 +258,13 @@ def create_app(config_name: str | None = None):
     # --- Socket.IO ---
     # ✅ Skip Socket.IO pour les scripts (évite blocage)
     skip_socketio = os.getenv("SKIP_SOCKETIO", "false").lower() == "true"
-    
+
     # Définir cors_origins même si Socket.IO est désactivé (nécessaire pour CORS plus bas)
     if config_name == "development":
         cors_origins: str | list[str] = "*"  # dev permissif
     else:
-        cors_origins = (
-            os.getenv("SOCKETIO_CORS_ORIGINS", "").split(",")
-            if os.getenv("SOCKETIO_CORS_ORIGINS")
-            else []
-        )
-    
+        cors_origins = os.getenv("SOCKETIO_CORS_ORIGINS", "").split(",") if os.getenv("SOCKETIO_CORS_ORIGINS") else []
+
     if skip_socketio:
         app.logger.info("⏭️  Socket.IO désactivé (SKIP_SOCKETIO=1)")
     else:
@@ -293,15 +298,15 @@ def create_app(config_name: str | None = None):
             "✅ Socket.IO initialisé: async_mode=%s, cors=%s, allow_upgrades=%s",
             async_mode,
             "*" if cors_origins == "*" else "restricted",
-            allow_ws_upgrades
+            allow_ws_upgrades,
         )
 
     # ✅ 2.9: Injection trace_id dans logs pour corrélation (une seule fois au démarrage)
     try:
         from shared.otel_setup import inject_trace_id_to_logs
-        
+
         old_factory = logging.getLogRecordFactory()
-        
+
         def record_factory_with_trace(*args, **kwargs):
             """Factory enrichissant les LogRecord avec trace_id/span_id."""
             record = old_factory(*args, **kwargs)
@@ -314,16 +319,16 @@ def create_app(config_name: str | None = None):
                 record.trace_id = ""
                 record.span_id = ""
             return record
-        
+
         logging.setLogRecordFactory(record_factory_with_trace)
         app.logger.info("[2.9] Logging enrichi avec trace_id/span_id")
     except Exception as e:
         app.logger.warning("[2.9] Échec enrichissement logs: %s", e)
-    
+
     # Log léger pour les requêtes Socket.IO
     @app.before_request
     def _log_socketio_requests():  # pyright: ignore[reportUnusedFunction]
-        p = (request.path or "")
+        p = request.path or ""
         if p.startswith("/socket.io"):
             app.logger.debug("📡 SIO %s %s from %s", request.method, request.full_path, request.remote_addr)
 
@@ -336,24 +341,19 @@ def create_app(config_name: str | None = None):
             # Permettre les healthchecks même en maintenance
             if request.path in ["/health", "/api/health"]:
                 return None
-            return jsonify({
-                "error": "Service en maintenance",
-                "message": "Merci de réessayer plus tard"
-            }), 503
-        
+            return jsonify({"error": "Service en maintenance", "message": "Merci de réessayer plus tard"}), 503
+
         # Vérifier fichier flag (pour killswitch ChatOps)
         try:
             from pathlib import Path
+
             flag_file = Path("/tmp/atmr_maintenance_mode.flag")
             if flag_file.exists():
                 reason = flag_file.read_text().strip()
                 # Permettre les healthchecks même en maintenance
                 if request.path in ["/health", "/api/health"]:
                     return None
-                return jsonify({
-                    "error": "Service en maintenance",
-                    "message": reason
-                }), 503
+                return jsonify({"error": "Service en maintenance", "message": reason}), 503
         except Exception:
             # Si erreur de lecture du flag, continuer normalement
             pass
@@ -362,7 +362,7 @@ def create_app(config_name: str | None = None):
     @app.before_request
     def _check_db_read_only():  # pyright: ignore[reportUnusedFunction]
         """Vérifie si la DB est en read-only (via chaos injector).
-        
+
         ⚠️ Chaos ne doit JAMAIS être activé en production (vérifier CHAOS_ENABLED=false).
         Les requêtes GET/HEAD sont toujours autorisées, seules les écritures (POST/PUT/PATCH/DELETE)
         sont bloquées.
@@ -370,20 +370,23 @@ def create_app(config_name: str | None = None):
         # Ne bloquer que les méthodes d'écriture
         if request.method not in ["POST", "PUT", "PATCH", "DELETE"]:
             return None
-        
+
         # Permettre les healthchecks même en read-only
         if request.path in ["/health", "/api/health"]:
             return None
-        
+
         try:
             from chaos.injectors import get_chaos_injector
+
             injector = get_chaos_injector()
             if injector.enabled and injector.db_read_only:
                 app.logger.warning("[CHAOS] DB read-only: blocking %s %s", request.method, request.path)
-                return jsonify({
-                    "error": "Database is in read-only mode",
-                    "message": "Writes are temporarily disabled. Please try again later."
-                }), 503
+                return jsonify(
+                    {
+                        "error": "Database is in read-only mode",
+                        "message": "Writes are temporarily disabled. Please try again later.",
+                    }
+                ), 503
         except ImportError:
             # Si module chaos non disponible, continuer normalement
             pass
@@ -391,7 +394,7 @@ def create_app(config_name: str | None = None):
             # En cas d'erreur inattendue, continuer (ne pas bloquer le système)
             app.logger.warning("[CHAOS] Error checking DB read-only status", exc_info=True)
             pass
-        
+
         return None
 
     # à l'initialisation Flask
@@ -399,11 +402,10 @@ def create_app(config_name: str | None = None):
     def shutdown_session(exception=None):  # pyright: ignore[reportUnusedFunction]  # noqa: ARG001
         db.session.remove()
 
-
     # Gestion d'erreurs réseau (Bad file descriptor, etc.)
     # Constantes pour les codes d'erreur système
     BAD_FILE_DESCRIPTOR = 9
-    
+
     @app.errorhandler(OSError)
     def handle_os_error(e: OSError):  # pyright: ignore[reportUnusedFunction]
         err = getattr(e, "errno", None)
@@ -419,7 +421,7 @@ def create_app(config_name: str | None = None):
     app.config.setdefault("UPLOADS_PUBLIC_BASE", "/uploads")
 
     @app.route("/uploads/<path:filename>", methods=["GET", "OPTIONS"])
-    def serve_uploads(filename: str): # pyright: ignore[reportUnusedFunction]
+    def serve_uploads(filename: str):  # pyright: ignore[reportUnusedFunction]
         # Gérer les prérequêtes CORS
         if request.method == "OPTIONS":
             response = make_response("", 204)
@@ -427,42 +429,44 @@ def create_app(config_name: str | None = None):
             response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
             response.headers["Access-Control-Allow-Headers"] = "Content-Type"
             return response
-        
+
         base = Path(app.config["UPLOADS_DIR"]).resolve()
         candidate = (base / filename).resolve()
-        
+
         # anti-path traversal
         if not str(candidate).startswith(str(base)):
             app.logger.warning("Tentative de path traversal bloquée: %s", filename)
             raise NotFound
-        
+
         # Vérifier que le fichier existe
         if not candidate.exists():
-            app.logger.warning("Fichier upload introuvable: %s (chemin résolu: %s, base: %s)", filename, candidate, base)
+            app.logger.warning(
+                "Fichier upload introuvable: %s (chemin résolu: %s, base: %s)", filename, candidate, base
+            )
             raise NotFound
-        
+
         directory = str(base)
         fname = str(candidate.relative_to(base)).replace("\\", "/")
-        
+
         app.logger.debug("Serving upload file: %s -> %s", filename, candidate)
-        
+
         # Servir le fichier avec les en-têtes appropriés pour les images
         # send_from_directory définit automatiquement le Content-Type correct
         response = send_from_directory(directory, fname, conditional=True)
-        
+
         # Ajouter les en-têtes CORS pour permettre l'accès depuis le frontend
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-        
+
         # S'assurer que le Content-Type est correct pour les images SVG
         # (send_from_directory peut ne pas le détecter correctement)
         if filename.lower().endswith(".svg"):
             response.headers["Content-Type"] = "image/svg+xml"
-        
+
         # Ajouter un header Cache-Control pour les images
         response.headers["Cache-Control"] = "public, max-age=3600"
-        
+
         return response
 
     # 4) Sécurité (CSP)
@@ -510,7 +514,12 @@ def create_app(config_name: str | None = None):
         resources={r"/*": {"origins": "*" if cors_origins == "*" else cors_origins}},
         supports_credentials=True,
         expose_headers=["Content-Type", "Authorization"],
-        allow_headers=["Content-Type", "Authorization", "Cache-Control", "Pragma"],  # ✅ Ajout Cache-Control et Pragma pour les requêtes avec no-cache
+        allow_headers=[
+            "Content-Type",
+            "Authorization",
+            "Cache-Control",
+            "Pragma",
+        ],  # ✅ Ajout Cache-Control et Pragma pour les requêtes avec no-cache
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     )
 
@@ -534,6 +543,7 @@ def create_app(config_name: str | None = None):
     # ✅ Ajout filtre PII si activé
     if os.getenv("MASK_PII_LOGS", "true").lower() == "true":
         from shared.logging_utils import PIIFilter
+
         pii_filter = PIIFilter()
         app.logger.addFilter(pii_filter)
         logging.getLogger("werkzeug").addFilter(pii_filter)
@@ -541,27 +551,30 @@ def create_app(config_name: str | None = None):
 
     # 8) Unified dispatch queue
     from services.unified_dispatch import queue as ud_queue
+
     ud_queue.init_app(app)
 
     # 9) Routes / sockets / handlers
     # ✅ Skip routes initialization pour les scripts (évite blocage)
     skip_routes_init = os.getenv("SKIP_ROUTES_INIT", "false").lower() == "true"
-    
+
     if not skip_routes_init:
         app.logger.info("🔧 [INIT] Enregistrement des routes et handlers Socket.IO...")
     else:
         app.logger.info("⏭️  Initialisation des routes désactivée (SKIP_ROUTES_INIT=1)")
-    
+
     with app.app_context():
         from sqlalchemy.orm import configure_mappers
 
         import models
+
         _ = models  # Force l'import pour enregistrer les mappers
 
         configure_mappers()
-        
+
         if not skip_routes_init:
             from routes_api import init_namespaces
+
             init_namespaces(app)
 
         if not skip_routes_init:
@@ -595,7 +608,7 @@ def create_app(config_name: str | None = None):
                     response.headers["Sunset"] = "Wed, 01 Jan 2025 00:00:00 GMT"  # Date estimée de suppression
                     response.headers["Link"] = '<https://docs.atmr.ch/api/v2>; rel="successor-version"'
                 return response
-            
+
             # ✅ 3.2: Ajouter header Deprecation sur routes legacy /api/* (si activées)
             @app.after_request
             def _add_deprecation_header_legacy(response):  # pyright: ignore[reportUnusedFunction]
@@ -618,6 +631,7 @@ def create_app(config_name: str | None = None):
                         return make_response("", 204)
                     try:
                         from routes.auth import Login
+
                         return Login().post()
                     except Exception:
                         # Laisse la suite normale (404 si absent)
@@ -650,8 +664,8 @@ def create_app(config_name: str | None = None):
                 path = request.path or "/"
                 if path == "/api" or path.startswith("/api/"):
                     return None
-                if (
-                    path in {"/", "/health", "/config", "/docs", "/favicon.ico", "/robots.txt"} or path.startswith(("/swaggerui/", "/static/", "/uploads/", "/socket.io"))
+                if path in {"/", "/health", "/config", "/docs", "/favicon.ico", "/robots.txt"} or path.startswith(
+                    ("/swaggerui/", "/static/", "/uploads/", "/socket.io")
                 ):
                     return None
 
@@ -664,9 +678,7 @@ def create_app(config_name: str | None = None):
                     environ = request.environ
                     environ["ORIGINAL_PATH_INFO"] = path
                     environ["PATH_INFO"] = new_path
-                    current_app.logger.info(
-                        "Legacy shim internal reroute %s %s -> %s", request.method, path, new_path
-                    )
+                    current_app.logger.info("Legacy shim internal reroute %s %s -> %s", request.method, path, new_path)
                     return None
                 return None
 
@@ -688,6 +700,7 @@ def create_app(config_name: str | None = None):
                 return make_response("", 204)
             try:
                 from routes.geocode import GeocodeAutocomplete
+
                 res = GeocodeAutocomplete()
                 return res.get()
             except Exception as err:
@@ -696,7 +709,7 @@ def create_app(config_name: str | None = None):
 
         # Compat: accès direct au login (certains environnements/proxy peuvent rater la déclaration RESTX)
         from routes.auth import Login  # Import au niveau module
-        
+
         @app.route("/api/auth/login", methods=["POST", "OPTIONS"])
         def _compat_auth_login():  # pyright: ignore[reportUnusedFunction]
             if request.method == "OPTIONS":
@@ -718,7 +731,7 @@ def create_app(config_name: str | None = None):
 
         # --- Compat: endpoints companies les plus utilisés (évite 404 si RESTX rate) ---
         from routes.companies import CompanyDriversList, CompanyMe
-        
+
         @app.route("/api/companies/me", methods=["GET", "PUT", "OPTIONS"])
         def _compat_companies_me():  # pyright: ignore[reportUnusedFunction]
             if request.method == "OPTIONS":
@@ -757,10 +770,12 @@ def create_app(config_name: str | None = None):
         def health():  # pyright: ignore[reportUnusedFunction]
             # Endpoint utilisé par les healthchecks Docker : renvoie explicitement
             # le statut attendu (healthy + models_loaded).
-            return jsonify({
-                "status": "healthy",
-                "models_loaded": True,
-            }), 200
+            return jsonify(
+                {
+                    "status": "healthy",
+                    "models_loaded": True,
+                }
+            ), 200
 
         @app.route("/config")
         def show_config():  # pyright: ignore[reportUnusedFunction]
