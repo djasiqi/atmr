@@ -1,4 +1,5 @@
 """Génération de rapports quotidiens pour l'agent dispatch."""
+
 from __future__ import annotations
 
 import logging
@@ -24,9 +25,7 @@ def generate_daily_report(company_id: int) -> Dict[str, Any]:
     """
     with current_app.app_context():
         # Date du jour
-        today_start = datetime.now(timezone.utc).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
         # Récupérer toutes les actions de la journée
         actions = (
@@ -42,19 +41,16 @@ def generate_daily_report(company_id: int) -> Dict[str, Any]:
         # KPIs
         LATE_THRESHOLD_MINUTES = -5
         P95_THRESHOLD = 20
-        
+
         total_actions = len(actions)
         assigned = len([a for a in actions if a.action_type == "assign" and a.success])
-        reassigned = len(
-            [a for a in actions if a.action_type in ["assign", "reassign"] and a.success]
-        )
+        reassigned = len([a for a in actions if a.action_type in ["assign", "reassign"] and a.success])
 
         # Retards >5min (approximation depuis les actions)
         late_actions = [
             a
             for a in actions
-            if a.expected_improvement_minutes
-            and a.expected_improvement_minutes < LATE_THRESHOLD_MINUTES
+            if a.expected_improvement_minutes and a.expected_improvement_minutes < LATE_THRESHOLD_MINUTES
         ]
         late_5min = len(late_actions)
 
@@ -75,11 +71,7 @@ def generate_daily_report(company_id: int) -> Dict[str, Any]:
 
         # Qualité & SLA (approximation)
         # ETA p50/p95 : calculer depuis execution_time_ms si disponible
-        execution_times = [
-            a.execution_time_ms
-            for a in actions
-            if a.execution_time_ms and a.execution_time_ms > 0
-        ]
+        execution_times = [a.execution_time_ms for a in actions if a.execution_time_ms and a.execution_time_ms > 0]
         if execution_times:
             sorted_times = sorted(execution_times)
             p50 = sorted_times[len(sorted_times) // 2]
@@ -93,14 +85,8 @@ def generate_daily_report(company_id: int) -> Dict[str, Any]:
         driver_counts: Dict[int, int] = {}
         for action in actions:
             if action.driver_id and action.success:
-                driver_counts[action.driver_id] = (
-                    driver_counts.get(action.driver_id, 0) + 1
-                )
-        max_gap = (
-            max(driver_counts.values()) - min(driver_counts.values())
-            if driver_counts
-            else 0
-        )
+                driver_counts[action.driver_id] = driver_counts.get(action.driver_id, 0) + 1
+        max_gap = max(driver_counts.values()) - min(driver_counts.values()) if driver_counts else 0
 
         # Incidents & remédiations
         incidents = []
@@ -139,4 +125,3 @@ def generate_daily_report(company_id: int) -> Dict[str, Any]:
             "incidents_remediations": incidents,
             "prochaines_actions": next_actions,
         }
-

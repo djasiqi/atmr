@@ -19,30 +19,27 @@ from ext import db
 
 class ProfilingMetrics(db.Model):
     """✅ 3.4: Métriques de profiling hebdomadaire.
-    
+
     Stocke les résultats du profiling automatique pour analyse historique
     et identification des fonctions chaudes récurrentes.
     """
-    
+
     __tablename__ = "profiling_metrics"
-    
+
     # Clé primaire
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    
+
     # Date/heure du profiling
     profiling_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        index=True
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True
     )
-    
+
     # Durée du profiling (secondes)
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
-    
+
     # Nombre de requêtes effectuées pendant le profiling
     request_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    
+
     # Top N fonctions chaudes (JSON)
     top_functions = db.Column(JSONB, nullable=True)
     """
@@ -59,7 +56,7 @@ class ProfilingMetrics(db.Model):
         ...
     ]
     """
-    
+
     # Métriques système avant profiling (JSON)
     system_metrics_before = db.Column(JSONB, nullable=True)
     """
@@ -72,10 +69,10 @@ class ProfilingMetrics(db.Model):
         "psutil_available": true
     }
     """
-    
+
     # Métriques système après profiling (JSON)
     system_metrics_after = db.Column(JSONB, nullable=True)
-    
+
     # Statistiques totales (JSON)
     total_stats = db.Column(JSONB, nullable=True)
     """
@@ -85,18 +82,15 @@ class ProfilingMetrics(db.Model):
         "primitive_calls": 9876
     }
     """
-    
+
     # Rapport textuel (optionnel, pour consultation rapide)
     report_text = db.Column(Text, nullable=True)
-    
+
     # Métadonnées
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        server_default=func.now()
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=func.now()
     )
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convertit en dictionnaire pour export."""
         return {
@@ -110,4 +104,3 @@ class ProfilingMetrics(db.Model):
             "total_stats": self.total_stats or {},
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
-

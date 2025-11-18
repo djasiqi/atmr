@@ -61,6 +61,7 @@ def format_datetime(dt: datetime) -> str:
 def handle_error(e: Exception):
     return jsonify({"error": str(e)}), 500
 
+
 # -------------------------
 # API
 # -------------------------
@@ -77,8 +78,7 @@ class GenerateQR(Resource):
         if not data:
             return {"error": "Aucune donnée fournie."}, 400
         if len(data) > MAX_QR_DATA_LENGTH:
-            return {
-                "error": f"Données trop volumineuses (max {MAX_QR_DATA_LENGTH} caractères)."}, 413
+            return {"error": f"Données trop volumineuses (max {MAX_QR_DATA_LENGTH} caractères)."}, 413
 
         try:
             b64_png = generate_qr_code(data)

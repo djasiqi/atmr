@@ -23,9 +23,9 @@ class TestDuelingQNetwork:
         """Test l'initialisation du réseau Dueling."""
         state_dim = 20
         action_dim = 5
-        
+
         network = DuelingQNetwork(state_dim, action_dim)
-        
+
         assert network.state_dim == state_dim
         assert network.action_dim == action_dim
         assert network.shared_fc1.in_features == state_dim
@@ -37,15 +37,15 @@ class TestDuelingQNetwork:
         batch_size = 32
         state_dim = 20
         action_dim = 5
-        
+
         network = DuelingQNetwork(state_dim, action_dim)
-        
+
         # Input batch
         x = torch.randn(batch_size, state_dim)
-        
+
         # Forward pass
         q_values = network(x)
-        
+
         # Vérifier les shapes
         assert q_values.shape == (batch_size, action_dim)
         assert q_values.dtype == torch.float32
@@ -55,17 +55,17 @@ class TestDuelingQNetwork:
         batch_size = 16
         state_dim = 15
         action_dim = 4
-        
+
         network = DuelingQNetwork(state_dim, action_dim)
         x = torch.randn(batch_size, state_dim)
-        
+
         # Obtenir Value et Advantage séparément
         value, advantage = network.get_value_and_advantage(x)
-        
+
         # Vérifier les shapes
         assert value.shape == (batch_size, 1)
         assert advantage.shape == (batch_size, action_dim)
-        
+
         # Vérifier que les valeurs sont différentes
         assert not torch.allclose(value, torch.zeros_like(value))
         assert not torch.allclose(advantage, torch.zeros_like(advantage))
@@ -75,18 +75,18 @@ class TestDuelingQNetwork:
         batch_size = 8
         state_dim = 10
         action_dim = 3
-        
+
         network = DuelingQNetwork(state_dim, action_dim)
         x = torch.randn(batch_size, state_dim)
-        
+
         # Calculer Q-values via forward
         q_values_forward = network(x)
-        
+
         # Calculer manuellement
         value, advantage = network.get_value_and_advantage(x)
         advantage_mean = advantage.mean(dim=1, keepdim=True)
         q_values_manual = value + advantage - advantage_mean
-        
+
         # Vérifier que les résultats sont identiques
         assert torch.allclose(q_values_forward, q_values_manual, atol=1e-6)
 
@@ -95,19 +95,19 @@ class TestDuelingQNetwork:
         batch_size = 4
         state_dim = 12
         action_dim = 6
-        
+
         network = DuelingQNetwork(state_dim, action_dim)
         x = torch.randn(batch_size, state_dim)
-        
+
         q_values = network(x)
-        
+
         # Calculer la moyenne des Q-values par batch
         q_mean = q_values.mean(dim=1)
-        
+
         # La moyenne devrait être proche de la valeur d'état
         value, _ = network.get_value_and_advantage(x)
         value_mean = value.mean(dim=1)
-        
+
         # Vérifier que les moyennes sont proches (à cause de la soustraction)
         assert torch.allclose(q_mean, value_mean, atol=1e-5)
 
@@ -115,23 +115,23 @@ class TestDuelingQNetwork:
         """Test que les gradients circulent correctement."""
         state_dim = 8
         action_dim = 3
-        
+
         network = DuelingQNetwork(state_dim, action_dim)
         x = torch.randn(4, state_dim, requires_grad=True)
-        
+
         # Forward pass
         q_values = network(x)
-        
+
         # Loss simple
         loss = q_values.sum()
-        
+
         # Backward pass
         loss.backward()
-        
+
         # Vérifier que les gradients existent
         assert x.grad is not None
         assert not torch.allclose(x.grad, torch.zeros_like(x.grad))
-        
+
         # Vérifier les gradients des paramètres
         for param in network.parameters():
             if param.requires_grad:
@@ -142,24 +142,24 @@ class TestDuelingQNetwork:
         batch_size = 16
         state_dim = 20
         action_dim = 5
-        
+
         # Créer les deux réseaux
         dueling_net = DuelingQNetwork(state_dim, action_dim)
         standard_net = ImprovedQNetwork(state_dim, action_dim)
-        
+
         x = torch.randn(batch_size, state_dim)
-        
+
         # Forward pass
         dueling_q = dueling_net(x)
         standard_q = standard_net(x)
-        
+
         # Vérifier les shapes
         assert dueling_q.shape == standard_q.shape
-        
+
         # Vérifier que les architectures sont différentes
         dueling_params = sum(p.numel() for p in dueling_net.parameters())
         standard_params = sum(p.numel() for p in standard_net.parameters())
-        
+
         # Dueling devrait avoir plus de paramètres (streams séparés)
         assert dueling_params > standard_params
 
@@ -167,14 +167,14 @@ class TestDuelingQNetwork:
         """Test la cohérence du réseau Dueling."""
         state_dim = 15
         action_dim = 4
-        
+
         network = DuelingQNetwork(state_dim, action_dim)
-        
+
         # Test avec différents batch sizes
         for batch_size in [1, 2, 8, 16]:
             x = torch.randn(batch_size, state_dim)
             q_values = network(x)
-            
+
             assert q_values.shape == (batch_size, action_dim)
             assert not torch.any(torch.isnan(q_values))
             assert not torch.any(torch.isinf(q_values))
@@ -183,13 +183,13 @@ class TestDuelingQNetwork:
         """Test la compatibilité avec différents devices."""
         state_dim = 10
         action_dim = 3
-        
+
         # Test CPU
         network_cpu = DuelingQNetwork(state_dim, action_dim).to("cpu")
         x_cpu = torch.randn(4, state_dim)
         q_cpu = network_cpu(x_cpu)
         assert q_cpu.device.type == "cpu"
-        
+
         # Test CUDA si disponible
         if torch.cuda.is_available():
             network_cuda = DuelingQNetwork(state_dim, action_dim).to("cuda")
@@ -201,13 +201,13 @@ class TestDuelingQNetwork:
         """Test l'initialisation des poids."""
         state_dim = 12
         action_dim = 5
-        
+
         network = DuelingQNetwork(state_dim, action_dim)
-        
+
         # Vérifier que les poids ne sont pas tous nuls
         for name, param in network.named_parameters():
             assert not torch.allclose(param, torch.zeros_like(param))
-            
+
             # Vérifier que les poids sont dans une plage raisonnable
             if "weight" in name:
                 assert param.abs().max() < 10.0  # Pas trop grands
@@ -221,25 +221,25 @@ class TestDuelingIntegration:
         """Test avec différentes tailles de couches cachées."""
         state_dim = 20
         action_dim = 6
-        
+
         configs = [
             ((256, 128), 64, 64),  # Plus petit
             ((512, 256), 128, 128),  # Standard
             ((1024, 512), 256, 256),  # Plus grand
         ]
-        
+
         for shared_sizes, value_size, advantage_size in configs:
             network = DuelingQNetwork(
                 state_dim=state_dim,
                 action_dim=action_dim,
                 shared_hidden_sizes=shared_sizes,
                 value_hidden_size=value_size,
-                advantage_hidden_size=advantage_size
+                advantage_hidden_size=advantage_size,
             )
-            
+
             x = torch.randn(8, state_dim)
             q_values = network(x)
-            
+
             assert q_values.shape == (8, action_dim)
             assert not torch.any(torch.isnan(q_values))
 
@@ -247,21 +247,21 @@ class TestDuelingIntegration:
         """Test le comportement du dropout."""
         state_dim = 15
         action_dim = 4
-        
+
         # Test avec et sans dropout
         _ = DuelingQNetwork(state_dim, action_dim, dropout_rate=0.0)
         network_with_dropout = DuelingQNetwork(state_dim, action_dim, dropout_rate=0.5)
-        
+
         x = torch.randn(16, state_dim)
-        
+
         # En mode training, les résultats peuvent différer
         network_with_dropout.train()
         q_values_train = network_with_dropout(x)
-        
+
         # En mode eval, dropout est désactivé
         network_with_dropout.eval()
         q_values_eval = network_with_dropout(x)
-        
+
         # Les résultats devraient être cohérents
         assert q_values_train.shape == q_values_eval.shape
         assert not torch.any(torch.isnan(q_values_train))
@@ -271,14 +271,14 @@ class TestDuelingIntegration:
 def run_dueling_tests():
     """Exécute tous les tests Dueling."""
     print("🧪 Exécution des tests DuelingQNetwork...")
-    
+
     # Tests unitaires
     test_class = TestDuelingQNetwork()
     test_methods = [method for method in dir(test_class) if method.startswith("test_")]
-    
+
     passed = 0
     failed = 0
-    
+
     for method_name in test_methods:
         try:
             method = getattr(test_class, method_name)
@@ -288,11 +288,11 @@ def run_dueling_tests():
         except Exception:
             print("   ❌ {method_name}: {e}")
             failed += 1
-    
+
     # Tests d'intégration
     integration_class = TestDuelingIntegration()
     integration_methods = [method for method in dir(integration_class) if method.startswith("test_")]
-    
+
     for method_name in integration_methods:
         try:
             method = getattr(integration_class, method_name)
@@ -302,7 +302,7 @@ def run_dueling_tests():
         except Exception:
             print("   ❌ {method_name}: {e}")
             failed += 1
-    
+
     print("\n📊 Résultats: {passed} réussis, {failed} échoués")
     return failed == 0
 

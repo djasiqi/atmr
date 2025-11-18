@@ -16,16 +16,13 @@ logger = logging.getLogger(__name__)
 # Config (aligne avec .env)
 # =========================
 # Priorité aux variables déjà présentes dans ton .env
-OSRM_BASE_URL = (
-    os.getenv("UD_OSRM_BASE_URL")
-    or os.getenv("OSRM_URL")
-    or "https://router.project-osrm.org"
-)
+OSRM_BASE_URL = os.getenv("UD_OSRM_BASE_URL") or os.getenv("OSRM_URL") or "https://router.project-osrm.org"
 PHOTON_BASE_URL = os.getenv("PHOTON_BASE_URL") or os.getenv("PHOTON_URL") or "https://photon.komoot.io"
 OSRM_TIMEOUT = int(os.getenv("UD_OSRM_TIMEOUT_SEC") or 12)
 
 # Constantes pour éviter les valeurs magiques
 MIN_ADDRESS_LENGTH = 5
+
 
 # -------------------------------------------------------------------
 # Géocodage avec Photon
@@ -50,6 +47,7 @@ def geocode_address(address: str):
         logger.warning("⚠️ Erreur Photon: %s", e)
         return None
 
+
 # -------------------------------------------------------------------
 # Routing avec OSRM
 # -------------------------------------------------------------------
@@ -73,11 +71,13 @@ def osrm_route(lat1, lon1, lat2, lon2):
         logger.error("Erreur OSRM: %s", e)
         return None
 
+
 # -------------------------------------------------------------------
 # API publiques
 # -------------------------------------------------------------------
 def is_valid_address(address: str) -> bool:
     return geocode_address(address) is not None
+
 
 def get_optimized_route(pickup: str, dropoff: str):
     a = geocode_address(pickup)
@@ -89,6 +89,7 @@ def get_optimized_route(pickup: str, dropoff: str):
         return {"error": "Pas d'itinéraire disponible."}
     # Le front attend une polyline (decode côté React via @mapbox/polyline)
     return route
+
 
 def find_best_driver(pickup_address: str, company_id: int):
     try:
@@ -113,6 +114,7 @@ def find_best_driver(pickup_address: str, company_id: int):
         logger.error("Erreur find_best_driver: %s", e)
         return None
 
+
 def assign_driver_to_booking(booking_id: int):
     try:
         booking = Booking.query.get(booking_id)
@@ -129,6 +131,7 @@ def assign_driver_to_booking(booking_id: int):
         logger.error("Erreur assign_driver_to_booking: %s", e)
         return None
 
+
 def predict_travel_time(pickup: str, dropoff: str):
     try:
         a = geocode_address(pickup)
@@ -142,6 +145,7 @@ def predict_travel_time(pickup: str, dropoff: str):
     except Exception as e:
         logger.error("Erreur predict_travel_time: %s", e)
         return {"error": "Erreur interne."}
+
 
 def get_recommended_routes(company_id: int):
     """Retourne le format attendu par le front:

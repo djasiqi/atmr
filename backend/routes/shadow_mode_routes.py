@@ -17,10 +17,7 @@ from ext import redis_client
 from services.rl.shadow_mode_manager import ShadowModeManager
 
 # Créer le blueprint
-shadow_mode_bp = Blueprint(
-    "shadow_mode",
-    __name__,
-    url_prefix="/api/shadow-mode")
+shadow_mode_bp = Blueprint("shadow_mode", __name__, url_prefix="/api/shadow-mode")
 
 # Créer l'API RESTX
 api = Api(shadow_mode_bp, doc="/docs/", title="Shadow Mode API")
@@ -34,33 +31,42 @@ kpis_ns = Namespace("kpis", description="KPIs Shadow Mode")
 api.add_namespace(kpis_ns)
 
 # Modèles de données pour la documentation API
-decision_model = api.model("Decision", {
-    "company_id": fields.String(required=True, description="ID de l'entreprise"),
-    "booking_id": fields.String(required=True, description="ID de la réservation"),
-    "human_decision": fields.Raw(required=True, description="Décision humaine"),
-    "rl_decision": fields.Raw(required=True, description="Décision RL"),
-    "context": fields.Raw(description="Contexte de la décision")
-})
+decision_model = api.model(
+    "Decision",
+    {
+        "company_id": fields.String(required=True, description="ID de l'entreprise"),
+        "booking_id": fields.String(required=True, description="ID de la réservation"),
+        "human_decision": fields.Raw(required=True, description="Décision humaine"),
+        "rl_decision": fields.Raw(required=True, description="Décision RL"),
+        "context": fields.Raw(description="Contexte de la décision"),
+    },
+)
 
-daily_report_model = api.model("DailyReport", {
-    "company_id": fields.String(description="ID de l'entreprise"),
-    "date": fields.String(description="Date du rapport"),
-    "total_decisions": fields.Integer(description="Nombre total de décisions"),
-    "statistics": fields.Raw(description="Statistiques quotidiennes"),
-    "kpis_summary": fields.Raw(description="Résumé des KPIs"),
-    "top_insights": fields.List(fields.String, description="Insights principaux"),
-    "recommendations": fields.List(fields.String, description="Recommandations")
-})
+daily_report_model = api.model(
+    "DailyReport",
+    {
+        "company_id": fields.String(description="ID de l'entreprise"),
+        "date": fields.String(description="Date du rapport"),
+        "total_decisions": fields.Integer(description="Nombre total de décisions"),
+        "statistics": fields.Raw(description="Statistiques quotidiennes"),
+        "kpis_summary": fields.Raw(description="Résumé des KPIs"),
+        "top_insights": fields.List(fields.String, description="Insights principaux"),
+        "recommendations": fields.List(fields.String, description="Recommandations"),
+    },
+)
 
-company_summary_model = api.model("CompanySummary", {
-    "company_id": fields.String(description="ID de l'entreprise"),
-    "period_days": fields.Integer(description="Période analysée (jours)"),
-    "total_decisions": fields.Integer(description="Total des décisions"),
-    "avg_decisions_per_day": fields.Float(description="Moyenne décisions/jour"),
-    "avg_agreement_rate": fields.Float(description="Taux d'accord moyen"),
-    "avg_eta_improvement": fields.Float(description="Amélioration ETA moyenne"),
-    "trend_analysis": fields.Raw(description="Analyse des tendances")
-})
+company_summary_model = api.model(
+    "CompanySummary",
+    {
+        "company_id": fields.String(description="ID de l'entreprise"),
+        "period_days": fields.Integer(description="Période analysée (jours)"),
+        "total_decisions": fields.Integer(description="Total des décisions"),
+        "avg_decisions_per_day": fields.Float(description="Moyenne décisions/jour"),
+        "avg_agreement_rate": fields.Float(description="Taux d'accord moyen"),
+        "avg_eta_improvement": fields.Float(description="Amélioration ETA moyenne"),
+        "trend_analysis": fields.Raw(description="Analyse des tendances"),
+    },
+)
 
 # Initialiser le gestionnaire shadow mode
 shadow_manager = ShadowModeManager()
@@ -254,8 +260,11 @@ class DailyReport(Resource):
         try:
             # Récupérer la date depuis les paramètres
             date_str = request.args.get("date")
-            date = datetime.strptime(date_str, "%Y-%m-%d").replace(
-                tzinfo=UTC).date() if date_str else datetime.now(UTC).date()
+            date = (
+                datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC).date()
+                if date_str
+                else datetime.now(UTC).date()
+            )
 
             # Générer le rapport
             report = shadow_manager.generate_daily_report(company_id, date)
@@ -286,13 +295,10 @@ class DailyReport(Resource):
                 booking_id=data["booking_id"],
                 human_decision=data["human_decision"],
                 rl_decision=data["rl_decision"],
-                context=data.get("context", {})
+                context=data.get("context", {}),
             )
 
-            return {
-                "message": "Décision enregistrée avec succès",
-                "kpis": kpis
-            }, 201
+            return {"message": "Décision enregistrée avec succès", "kpis": kpis}, 201
 
         except Exception as e:
             return {"error": f"Erreur lors de l'enregistrement: {e}"}, 500
@@ -345,10 +351,7 @@ class KPIMetrics(Resource):
             summary = shadow_manager.get_company_summary(company_id, days)
 
             if summary.get("total_decisions", 0) == 0:
-                return {
-                    "company_id": company_id,
-                    "message": "Aucune donnée disponible pour cette période"
-                }, 200
+                return {"company_id": company_id, "message": "Aucune donnée disponible pour cette période"}, 200
 
             # Filtrer par métrique si spécifiée
             if metric:
@@ -359,36 +362,26 @@ class KPIMetrics(Resource):
                 metric_data = []
                 for i in range(days):
                     date = start_date + timedelta(days=i)
-                    company_data = shadow_manager._filter_data_by_company_and_date(
-                        company_id, date)
+                    company_data = shadow_manager._filter_data_by_company_and_date(company_id, date)
 
                     for kpi in company_data["kpis"]:
                         if metric in kpi:
-                            metric_data.append({
-                                "date": date.isoformat(),
-                                "value": kpi[metric]
-                            })
+                            metric_data.append({"date": date.isoformat(), "value": kpi[metric]})
 
-                return {
-                    "company_id": company_id,
-                    "metric": metric,
-                    "period_days": days,
-                    "data": metric_data
-                }, 200
+                return {"company_id": company_id, "metric": metric, "period_days": days, "data": metric_data}, 200
 
             # Retourner toutes les métriques
             return {
                 "company_id": company_id,
                 "period_days": days,
                 "summary": summary,
-                "available_metrics": list(shadow_manager.kpi_metrics.keys())
+                "available_metrics": list(shadow_manager.kpi_metrics.keys()),
             }, 200
 
         except ValueError as e:
             return {"error": f"Paramètre invalide: {e}"}, 400
         except Exception as e:
-            return {
-                "error": f"Erreur lors de la récupération des métriques: {e}"}, 500
+            return {"error": f"Erreur lors de la récupération des métriques: {e}"}, 500
 
 
 @kpis_ns.route("/export/<string:company_id>")
@@ -419,9 +412,7 @@ class ExportData(Resource):
                     reports.append(report)
 
             if not reports:
-                return {
-                    "message": "Aucune donnée à exporter pour cette période"
-                }, 200
+                return {"message": "Aucune donnée à exporter pour cette période"}, 200
 
             # Préparer la réponse selon le format
             if export_format == "csv":
@@ -433,45 +424,21 @@ class ExportData(Resource):
                             "company_id": report["company_id"],
                             "date": report["date"],
                             "total_decisions": report["total_decisions"],
-                            "agreement_rate": report.get(
-                                "statistics",
-                                {}).get(
-                                "agreement_rate",
-                                0),
-                            "avg_eta_delta": report.get(
-                                "statistics",
-                                {}).get(
-                                "eta_delta",
-                                {}).get(
-                                "mean",
-                                0),
-                            "avg_delay_delta": report.get(
-                                "statistics",
-                                {}).get(
-                                    "delay_delta",
-                                    {}).get(
-                                        "mean",
-                                        0),
-                            "rl_confidence": report.get(
-                                "statistics",
-                                {}).get(
-                                "rl_confidence",
-                                {}).get(
-                                "mean",
-                                0)})
+                            "agreement_rate": report.get("statistics", {}).get("agreement_rate", 0),
+                            "avg_eta_delta": report.get("statistics", {}).get("eta_delta", {}).get("mean", 0),
+                            "avg_delay_delta": report.get("statistics", {}).get("delay_delta", {}).get("mean", 0),
+                            "rl_confidence": report.get("statistics", {}).get("rl_confidence", {}).get("mean", 0),
+                        }
+                    )
 
-                return {
-                    "format": "csv",
-                    "data": csv_data,
-                    "message": "Données prêtes pour conversion CSV"
-                }, 200
+                return {"format": "csv", "data": csv_data, "message": "Données prêtes pour conversion CSV"}, 200
 
             if export_format == "both":
                 return {
                     "format": "both",
                     "reports": reports,
                     "csv_data": self._prepare_csv_data(reports),
-                    "message": "Données exportées en JSON et CSV"
+                    "message": "Données exportées en JSON et CSV",
                 }, 200
 
             # json
@@ -479,7 +446,7 @@ class ExportData(Resource):
                 "format": "json",
                 "reports": reports,
                 "total_reports": len(reports),
-                "message": "Données exportées en JSON"
+                "message": "Données exportées en JSON",
             }, 200
 
         except ValueError as e:
@@ -487,8 +454,7 @@ class ExportData(Resource):
         except Exception as e:
             return {"error": f"Erreur lors de l'export: {e}"}, 500
 
-    def _prepare_csv_data(
-            self, reports: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _prepare_csv_data(self, reports: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Prépare les données pour l'export CSV."""
         csv_data = []
         for report in reports:
@@ -497,55 +463,29 @@ class ExportData(Resource):
                     "company_id": report["company_id"],
                     "date": report["date"],
                     "total_decisions": report["total_decisions"],
-                    "agreement_rate": report.get(
-                        "statistics",
-                        {}).get(
-                        "agreement_rate",
-                        0),
-                    "avg_eta_delta": report.get(
-                        "statistics",
-                        {}).get(
-                        "eta_delta",
-                        {}).get(
-                            "mean",
-                            0),
-                    "avg_delay_delta": report.get(
-                        "statistics",
-                        {}).get(
-                        "delay_delta",
-                        {}).get(
-                        "mean",
-                        0),
-                    "rl_confidence": report.get(
-                        "statistics",
-                        {}).get(
-                        "rl_confidence",
-                        {}).get(
-                        "mean",
-                        0),
-                    "eta_improvement_rate": report.get(
-                        "kpis_summary",
-                        {}).get(
-                        "eta_improvement_rate",
-                        0),
-                    "violation_rate": report.get(
-                        "kpis_summary",
-                        {}).get(
-                        "violation_rate",
-                        0)})
+                    "agreement_rate": report.get("statistics", {}).get("agreement_rate", 0),
+                    "avg_eta_delta": report.get("statistics", {}).get("eta_delta", {}).get("mean", 0),
+                    "avg_delay_delta": report.get("statistics", {}).get("delay_delta", {}).get("mean", 0),
+                    "rl_confidence": report.get("statistics", {}).get("rl_confidence", {}).get("mean", 0),
+                    "eta_improvement_rate": report.get("kpis_summary", {}).get("eta_improvement_rate", 0),
+                    "violation_rate": report.get("kpis_summary", {}).get("violation_rate", 0),
+                }
+            )
         return csv_data
 
 
 @shadow_mode_bp.route("/health")
 def health_check():
     """Endpoint de santé pour le shadow mode."""
-    return jsonify({
-        "status": "healthy",
-        "service": "shadow_mode",
-        "timestamp": datetime.now(UTC).isoformat(),
-        "data_dir": str(shadow_manager.data_dir),
-        "total_decisions": len(shadow_manager.decision_metadata["timestamp"])
-    })
+    return jsonify(
+        {
+            "status": "healthy",
+            "service": "shadow_mode",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "data_dir": str(shadow_manager.data_dir),
+            "total_decisions": len(shadow_manager.decision_metadata["timestamp"]),
+        }
+    )
 
 
 @shadow_mode_bp.route("/companies")
@@ -559,21 +499,19 @@ def list_companies():
         company_stats = []
         for company_id in companies:
             summary = shadow_manager.get_company_summary(company_id, 7)
-            company_stats.append({
-                "company_id": company_id,
-                "total_decisions_7d": summary.get("total_decisions", 0),
-                "avg_agreement_rate": summary.get("avg_agreement_rate", 0),
-                "avg_eta_improvement": summary.get("avg_eta_improvement", 0)
-            })
+            company_stats.append(
+                {
+                    "company_id": company_id,
+                    "total_decisions_7d": summary.get("total_decisions", 0),
+                    "avg_agreement_rate": summary.get("avg_agreement_rate", 0),
+                    "avg_eta_improvement": summary.get("avg_eta_improvement", 0),
+                }
+            )
 
-        return jsonify({
-            "companies": company_stats,
-            "total_companies": len(companies)
-        }), 200
+        return jsonify({"companies": company_stats, "total_companies": len(companies)}), 200
 
     except Exception as e:
-        return jsonify(
-            {"error": f"Erreur lors de la récupération des entreprises: {e}"}), 500
+        return jsonify({"error": f"Erreur lors de la récupération des entreprises: {e}"}), 500
 
 
 def register_shadow_mode_routes(app):

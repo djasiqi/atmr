@@ -36,8 +36,12 @@ class NStepBuffer:
 
     """
 
-    def __init__(self, capacity: int = 100000, # pyright: ignore[reportMissingSuperCall]
-                 n_step: int = 3, gamma: float = 0.99):  
+    def __init__(
+        self,
+        capacity: int = 100000,  # pyright: ignore[reportMissingSuperCall]
+        n_step: int = 3,
+        gamma: float = 0.99,
+    ):
         self.capacity = capacity
         self.n_step = n_step
         self.gamma = gamma
@@ -55,11 +59,7 @@ class NStepBuffer:
         # Logging
         self.logger = logging.getLogger(__name__)
 
-        self.logger.info(
-            "[NStepBuffer] Initialisé - capacité: %s, n_step: %s, gamma: %s",
-            capacity,
-            n_step,
-            gamma)
+        self.logger.info("[NStepBuffer] Initialisé - capacité: %s, n_step: %s, gamma: %s", capacity, n_step, gamma)
 
     def add_transition(
         self,
@@ -68,7 +68,7 @@ class NStepBuffer:
         reward: float,
         next_state: np.ndarray[Any, np.dtype[np.float32]],
         done: bool,
-        info: Dict[str, Any] | None = None
+        info: Dict[str, Any] | None = None,
     ) -> None:
         """Ajoute une transition au buffer temporaire et calcule les retours N-step.
 
@@ -90,7 +90,7 @@ class NStepBuffer:
                 "next_state": next_state.copy(),
                 "done": done,
                 "info": info or {},
-                "timestamp": self.total_added
+                "timestamp": self.total_added,
             }
 
             # Ajouter au buffer temporaire
@@ -112,7 +112,7 @@ class NStepBuffer:
         reward: float,
         next_state: np.ndarray[Any, np.dtype[np.float32]],
         done: bool,
-        info: Dict[str, Any] | None = None
+        info: Dict[str, Any] | None = None,
     ) -> None:
         """Méthode de compatibilité qui appelle add_transition().
 
@@ -147,7 +147,7 @@ class NStepBuffer:
                     "done": transition["done"],
                     "n_step": min(self.n_step, len(self.temp_buffer) - i),
                     "info": transition["info"],
-                    "timestamp": transition["timestamp"]
+                    "timestamp": transition["timestamp"],
                 }
 
                 # Ajouter au buffer principal
@@ -174,8 +174,7 @@ class NStepBuffer:
             n_step_return = 0
 
             # Calculer la somme des récompenses avec discount
-            for i in range(min(self.n_step, len(
-                    self.temp_buffer) - start_idx)):
+            for i in range(min(self.n_step, len(self.temp_buffer) - start_idx)):
                 transition = self.temp_buffer[start_idx + i]
                 reward = transition["reward"]
 
@@ -185,7 +184,7 @@ class NStepBuffer:
                 elif np.isinf(reward):
                     reward = 1.0 if reward > REWARD_ZERO else -1.0
 
-                n_step_return += (self.gamma ** i) * reward
+                n_step_return += (self.gamma**i) * reward
 
                 # Si l'épisode se termine, arrêter le calcul
                 if transition["done"]:
@@ -194,8 +193,7 @@ class NStepBuffer:
             return n_step_return
 
         except Exception as e:
-            self.logger.error(
-                "[NStepBuffer] Erreur calcul retour N-step: %s", e)
+            self.logger.error("[NStepBuffer] Erreur calcul retour N-step: %s", e)
             return 0
 
     def _get_final_next_state(self, start_idx: int) -> np.ndarray[Any, np.dtype[np.float32]] | None:
@@ -209,8 +207,7 @@ class NStepBuffer:
 
         """
         try:
-            final_idx = min(start_idx + self.n_step - 1,
-                            len(self.temp_buffer) - 1)
+            final_idx = min(start_idx + self.n_step - 1, len(self.temp_buffer) - 1)
 
             return self.temp_buffer[final_idx]["next_state"].copy()
 
@@ -219,8 +216,7 @@ class NStepBuffer:
             # Retourner None si on ne peut pas récupérer l'état
             return None
 
-    def sample(
-            self, batch_size: int) -> Tuple[List[Dict[str, Any]], List[float]]:
+    def sample(self, batch_size: int) -> Tuple[List[Dict[str, Any]], List[float]]:
         """Échantillonne un batch de transitions N-step.
 
         Args:
@@ -234,8 +230,7 @@ class NStepBuffer:
             batch_size = min(batch_size, len(self.buffer))
 
             # Échantillonnage uniforme
-            indices = np.random.choice(
-                len(self.buffer), batch_size, replace=False)
+            indices = np.random.choice(len(self.buffer), batch_size, replace=False)
 
             batch = [self.buffer[i] for i in indices]
             # Poids uniformes pour compatibilité PER
@@ -257,7 +252,7 @@ class NStepBuffer:
             "capacity": self.capacity,
             "n_step": self.n_step,
             "gamma": self.gamma,
-            "completion_rate": self.total_completed / max(1, self.total_added)
+            "completion_rate": self.total_completed / max(1, self.total_added),
         }
 
     def clear(self) -> None:
@@ -281,7 +276,7 @@ class NStepBuffer:
                 "total_completed": self.total_completed,
                 "capacity": self.capacity,
                 "n_step": self.n_step,
-                "gamma": self.gamma
+                "gamma": self.gamma,
             }
         except Exception as e:
             self.logger.error("[NStepBuffer] Erreur stats: %s", e)
@@ -302,7 +297,7 @@ class NStepPrioritizedBuffer(NStepBuffer):
         alpha: float = 0.6,
         beta_start: float = 0.4,
         beta_end: float = 1,
-        beta_increment: float = 0.001
+        beta_increment: float = 0.001,
     ):
         super().__init__(capacity, n_step, gamma)
 
@@ -318,10 +313,8 @@ class NStepPrioritizedBuffer(NStepBuffer):
         self.max_priority = 1
 
         self.logger.info(
-            "[NStepPrioritizedBuffer] Initialisé avec PER - alpha: %s, beta: %s-%s",
-            alpha,
-            beta_start,
-            beta_end)
+            "[NStepPrioritizedBuffer] Initialisé avec PER - alpha: %s, beta: %s-%s", alpha, beta_start, beta_end
+        )
 
     def clear(self) -> None:  # type: ignore[override]
         """Vide le buffer priorisé."""
@@ -339,7 +332,7 @@ class NStepPrioritizedBuffer(NStepBuffer):
         next_state: np.ndarray[Any, np.dtype[np.float32]],
         done: bool,
         info: Dict[str, Any] | None = None,
-        td_error: float | None = None
+        td_error: float | None = None,
     ) -> None:
         """Ajoute une transition avec priorité basée sur l'erreur TD.
 
@@ -381,8 +374,7 @@ class NStepPrioritizedBuffer(NStepBuffer):
                 self.priorities[len(self.buffer) - 1] = priority
 
         except Exception as e:
-            self.logger.error(
-                "[NStepPrioritizedBuffer] Erreur mise à jour priorité: %s", e)
+            self.logger.error("[NStepPrioritizedBuffer] Erreur mise à jour priorité: %s", e)
 
     def _update_priority_with_value(self, priority: float) -> None:
         """Met à jour la priorité avec une valeur donnée."""
@@ -394,10 +386,9 @@ class NStepPrioritizedBuffer(NStepBuffer):
                 self.priorities[len(self.buffer) - 1] = priority
 
         except Exception as e:
-            self.logger.error(
-                "[NStepPrioritizedBuffer] Erreur mise à jour priorité avec valeur: %s", e)
+            self.logger.error("[NStepPrioritizedBuffer] Erreur mise à jour priorité avec valeur: %s", e)
 
-    def add( # type: ignore[override]
+    def add(  # type: ignore[override]
         self,
         state: np.ndarray[Any, np.dtype[np.float32]],
         action: int,
@@ -405,8 +396,8 @@ class NStepPrioritizedBuffer(NStepBuffer):
         next_state: np.ndarray[Any, np.dtype[np.float32]],
         done: bool,
         info: Dict[str, Any] | None = None,
-        td_error: float | None = None
-    ) -> None: 
+        td_error: float | None = None,
+    ) -> None:
         """Méthode de compatibilité qui appelle add_transition().
 
         Args:
@@ -419,17 +410,11 @@ class NStepPrioritizedBuffer(NStepBuffer):
             td_error: Erreur TD pour calculer la priorité
 
         """
-        self.add_transition(
-            state,
-            action,
-            reward,
-            next_state,
-            done,
-            info,
-            td_error)
+        self.add_transition(state, action, reward, next_state, done, info, td_error)
 
-    def sample( # type: ignore[override]
-            self, batch_size: int) -> Tuple[List[Dict[str, Any]], List[float], List[int]]:
+    def sample(  # type: ignore[override]
+        self, batch_size: int
+    ) -> Tuple[List[Dict[str, Any]], List[float], List[int]]:
         """Échantillonne un batch avec priorités.
 
         Returns:
@@ -440,18 +425,16 @@ class NStepPrioritizedBuffer(NStepBuffer):
             batch_size = min(batch_size, len(self.buffer))
 
             # Calculer les probabilités de sélection
-            priorities = self.priorities[:len(self.buffer)]
+            priorities = self.priorities[: len(self.buffer)]
             probabilities = priorities / priorities.sum()
 
             # Échantillonnage basé sur les priorités
-            indices = np.random.choice(
-                len(self.buffer), batch_size, replace=False, p=probabilities)
+            indices = np.random.choice(len(self.buffer), batch_size, replace=False, p=probabilities)
 
             # Calculer les poids d'importance
             weights = []
             for idx in indices:
-                weight = (len(self.buffer) *
-                          probabilities[idx]) ** (-self.beta)
+                weight = (len(self.buffer) * probabilities[idx]) ** (-self.beta)
                 weights.append(weight)
 
             # Normaliser les poids
@@ -465,12 +448,10 @@ class NStepPrioritizedBuffer(NStepBuffer):
             return batch, weights, list(indices)
 
         except Exception as e:
-            self.logger.error(
-                "[NStepPrioritizedBuffer] Erreur échantillonnage priorisé: %s", e)
+            self.logger.error("[NStepPrioritizedBuffer] Erreur échantillonnage priorisé: %s", e)
             return [], [], []
 
-    def update_priorities(
-            self, indices: List[int], td_errors: List[float]) -> None:
+    def update_priorities(self, indices: List[int], td_errors: List[float]) -> None:
         """Met à jour les priorités pour les transitions spécifiées."""
         try:
             for idx, td_error in zip(indices, td_errors, strict=False):
@@ -480,19 +461,20 @@ class NStepPrioritizedBuffer(NStepBuffer):
                     self.max_priority = max(self.max_priority, priority)
 
         except Exception as e:
-            self.logger.error(
-                "[NStepPrioritizedBuffer] Erreur mise à jour priorités: %s", e)
+            self.logger.error("[NStepPrioritizedBuffer] Erreur mise à jour priorités: %s", e)
 
     def get_stats(self) -> Dict[str, Any]:  # type: ignore[override]
         """Retourne les statistiques du buffer priorisé."""
         try:
             stats = super().get_stats()
-            stats.update({
-                "alpha": self.alpha,
-                "beta_start": self.beta_start,
-                "beta_end": self.beta_end,
-                "max_priority": self.max_priority
-            })
+            stats.update(
+                {
+                    "alpha": self.alpha,
+                    "beta_start": self.beta_start,
+                    "beta_end": self.beta_end,
+                    "max_priority": self.max_priority,
+                }
+            )
             return stats
         except Exception as e:
             self.logger.error("[NStepPrioritizedBuffer] Erreur stats: %s", e)
@@ -501,11 +483,7 @@ class NStepPrioritizedBuffer(NStepBuffer):
 
 # Fonction utilitaire pour créer le buffer approprié
 def create_n_step_buffer(
-    buffer_type: str = "n_step",
-    capacity: int = 100000,
-    n_step: int = 3,
-    gamma: float = 0.99,
-    **kwargs
+    buffer_type: str = "n_step", capacity: int = 100000, n_step: int = 3, gamma: float = 0.99, **kwargs
 ) -> NStepBuffer:
     """Crée un buffer N-step du type spécifié.
 
@@ -537,7 +515,7 @@ if __name__ == "__main__":
         action = np.random.randint(0, 5)
         reward = np.random.randn()
         next_state = np.random.randn(10).astype(np.float32)
-        done = (i == I_THRESHOLD)  # Terminer à la 10ème transition
+        done = i == I_THRESHOLD  # Terminer à la 10ème transition
 
         buffer.add_transition(state, action, reward, next_state, done)
 

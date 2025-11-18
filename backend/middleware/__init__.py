@@ -3,4 +3,3 @@
 from middleware.metrics import prom_middleware
 
 __all__ = ["prom_middleware"]
-

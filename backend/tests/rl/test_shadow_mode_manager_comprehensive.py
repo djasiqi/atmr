@@ -38,30 +38,14 @@ class TestShadowModeManagerComprehensive:
         """Test logging comparaison décisions basique."""
         manager = ShadowModeManager()
 
-        human_decision = {
-            "driver_id": 1,
-            "eta_minutes": 15,
-            "delay_minutes": 0
-        }
+        human_decision = {"driver_id": 1, "eta_minutes": 15, "delay_minutes": 0}
 
-        rl_decision = {
-            "driver_id": 2,
-            "eta_minutes": 12,
-            "delay_minutes": 0
-        }
+        rl_decision = {"driver_id": 2, "eta_minutes": 12, "delay_minutes": 0}
 
-        context = {
-            "booking_id": 1,
-            "pickup_time": datetime.now(),
-            "distance_km": 5.0
-        }
+        context = {"booking_id": 1, "pickup_time": datetime.now(), "distance_km": 5.0}
 
         manager.log_decision_comparison(
-            company_id=1,
-            booking_id=1,
-            human_decision=human_decision,
-            rl_decision=rl_decision,
-            context=context
+            company_id=1, booking_id=1, human_decision=human_decision, rl_decision=rl_decision, context=context
         )
 
         assert len(manager.decision_logs) == 1
@@ -75,30 +59,14 @@ class TestShadowModeManagerComprehensive:
         """Test logging avec valeurs None."""
         manager = ShadowModeManager()
 
-        human_decision = {
-            "driver_id": 1,
-            "eta_minutes": 0,
-            "delay_minutes": 0
-        }
+        human_decision = {"driver_id": 1, "eta_minutes": 0, "delay_minutes": 0}
 
-        rl_decision = {
-            "driver_id": 2,
-            "eta_minutes": 0,
-            "delay_minutes": 0
-        }
+        rl_decision = {"driver_id": 2, "eta_minutes": 0, "delay_minutes": 0}
 
-        context = {
-            "booking_id": 1,
-            "pickup_time": datetime.now(),
-            "distance_km": 5.0
-        }
+        context = {"booking_id": 1, "pickup_time": datetime.now(), "distance_km": 5.0}
 
         manager.log_decision_comparison(
-            company_id=1,
-            booking_id=1,
-            human_decision=human_decision,
-            rl_decision=rl_decision,
-            context=context
+            company_id=1, booking_id=1, human_decision=human_decision, rl_decision=rl_decision, context=context
         )
 
         assert len(manager.decision_logs) == 1
@@ -118,7 +86,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 12,
                 "human_delay_minutes": 0,
                 "rl_delay_minutes": 0,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             },
             {
                 "company_id": 1,
@@ -129,8 +97,8 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 18,
                 "human_delay_minutes": 5,
                 "rl_delay_minutes": 2,
-                "timestamp": datetime.now()
-            }
+                "timestamp": datetime.now(),
+            },
         ]
 
         kpis = manager._calculate_kpis()
@@ -173,7 +141,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 15,  # Égalité
                 "human_delay_minutes": 0,
                 "rl_delay_minutes": 0,  # Égalité
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -199,7 +167,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 15,  # RL meilleur
                 "human_delay_minutes": 5,
                 "rl_delay_minutes": 2,  # RL meilleur
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             },
             {
                 "company_id": 1,
@@ -210,8 +178,8 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 20,  # RL meilleur
                 "human_delay_minutes": 8,
                 "rl_delay_minutes": 3,  # RL meilleur
-                "timestamp": datetime.now()
-            }
+                "timestamp": datetime.now(),
+            },
         ]
 
         kpis = manager._calculate_kpis()
@@ -236,7 +204,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 20,  # Humain meilleur
                 "human_delay_minutes": 2,
                 "rl_delay_minutes": 5,  # Humain meilleur
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -262,7 +230,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 15,  # RL meilleur
                 "human_delay_minutes": 5,
                 "rl_delay_minutes": 2,  # RL meilleur
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             },
             {
                 "company_id": 1,
@@ -273,8 +241,8 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 20,  # Humain meilleur
                 "human_delay_minutes": 2,
                 "rl_delay_minutes": 5,  # Humain meilleur
-                "timestamp": datetime.now()
-            }
+                "timestamp": datetime.now(),
+            },
         ]
 
         kpis = manager._calculate_kpis()
@@ -299,7 +267,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 0,
                 "human_delay_minutes": 0,
                 "rl_delay_minutes": 0,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -326,7 +294,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": -3,
                 "human_delay_minutes": -2,
                 "rl_delay_minutes": -1,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -353,7 +321,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 500,
                 "human_delay_minutes": 100,
                 "rl_delay_minutes": 50,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -376,7 +344,7 @@ class TestShadowModeManagerComprehensive:
                 "booking_id": 1,
                 "human_driver_id": 1,
                 "rl_driver_id": 2,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
                 # Champs eta_minutes et delay_minutes manquants
             }
         ]
@@ -404,7 +372,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": None,
                 "human_delay_minutes": None,
                 "rl_delay_minutes": None,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -431,7 +399,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": "12",
                 "human_delay_minutes": "0",
                 "rl_delay_minutes": "0",
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -458,7 +426,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 12.3,
                 "human_delay_minutes": 2.7,
                 "rl_delay_minutes": 1.8,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -485,7 +453,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 12,
                 "human_delay_minutes": 0,
                 "rl_delay_minutes": 0,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             },
             {
                 "company_id": 2,
@@ -496,8 +464,8 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 18,
                 "human_delay_minutes": 5,
                 "rl_delay_minutes": 2,
-                "timestamp": datetime.now()
-            }
+                "timestamp": datetime.now(),
+            },
         ]
 
         kpis = manager._calculate_kpis()
@@ -523,7 +491,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 12,
                 "human_delay_minutes": 0,
                 "rl_delay_minutes": 0,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -548,7 +516,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 15,  # Même ETA
                 "human_delay_minutes": 5,
                 "rl_delay_minutes": 2,  # Délai différent
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -573,7 +541,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 15,  # ETA différent
                 "human_delay_minutes": 2,
                 "rl_delay_minutes": 2,  # Même délai
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -598,7 +566,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 15,  # Valeurs identiques
                 "human_delay_minutes": 2,
                 "rl_delay_minutes": 2,  # Valeurs identiques
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -623,7 +591,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 0.0001,
                 "human_delay_minutes": 999999,
                 "rl_delay_minutes": 0.0001,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -648,7 +616,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": "12",
                 "human_delay_minutes": 0,
                 "rl_delay_minutes": None,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -675,7 +643,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": "",
                 "human_delay_minutes": "",
                 "rl_delay_minutes": "",
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -702,7 +670,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": False,
                 "human_delay_minutes": True,
                 "rl_delay_minutes": False,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -729,7 +697,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": [12],
                 "human_delay_minutes": [0],
                 "rl_delay_minutes": [0],
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -756,7 +724,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": {"value": 12},
                 "human_delay_minutes": {"value": 0},
                 "rl_delay_minutes": {"value": 0},
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             }
         ]
 
@@ -783,7 +751,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 15,
                 "human_delay_minutes": 5,
                 "rl_delay_minutes": 2,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             },
             {
                 "company_id": 1,
@@ -794,7 +762,7 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 20,
                 "human_delay_minutes": 2,
                 "rl_delay_minutes": 5,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
             },
             {
                 "company_id": 1,
@@ -805,8 +773,8 @@ class TestShadowModeManagerComprehensive:
                 "rl_eta_minutes": 18,
                 "human_delay_minutes": 3,
                 "rl_delay_minutes": 3,
-                "timestamp": datetime.now()
-            }
+                "timestamp": datetime.now(),
+            },
         ]
 
         kpis = manager._calculate_kpis()
@@ -814,7 +782,7 @@ class TestShadowModeManagerComprehensive:
         assert kpis["total_decisions"] == 3
         assert kpis["rl_wins"] == 1
         assert kpis["human_wins"] == 1
-        assert kpis["rl_win_rate"] == 1/3
+        assert kpis["rl_win_rate"] == 1 / 3
         assert kpis["avg_human_eta"] == 17.67  # (20+15+18)/3
         assert kpis["avg_rl_eta"] == 17.67  # (15+20+18)/3
         assert kpis["avg_human_delay"] == 3.33  # (5+2+3)/3

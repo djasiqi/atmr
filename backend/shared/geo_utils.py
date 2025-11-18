@@ -2,6 +2,7 @@
 Ce module centralise toutes les fonctions géographiques utilisées
 dans l'application pour éviter la duplication de code.
 """
+
 from math import asin, atan2, cos, radians, sin, sqrt
 from typing import Tuple
 
@@ -12,12 +13,7 @@ LON_MIN = -180
 LON_MAX = 180
 
 
-def haversine_distance(
-    lat1: float,
-    lon1: float,
-    lat2: float,
-    lon2: float
-) -> float:
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calcule la distance Haversine entre deux points GPS en kilomètres.
     La formule de Haversine donne la distance orthodromique (plus court chemin)
     entre deux points sur une sphère à partir de leurs coordonnées GPS.
@@ -54,20 +50,14 @@ def haversine_distance(
     dlon = lon2rad - lon1rad
 
     # Formule de Haversine
-    a = sin(dlat / 2)**2 + cos(lat1rad) * cos(lat2rad) * sin(dlon / 2)**2
+    a = sin(dlat / 2) ** 2 + cos(lat1rad) * cos(lat2rad) * sin(dlon / 2) ** 2
     c = 2 * asin(sqrt(a))
 
     # Distance
     return R * c
 
 
-
-def haversine_distance_meters(
-    lat1: float,
-    lon1: float,
-    lat2: float,
-    lon2: float
-) -> float:
+def haversine_distance_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calcule la distance Haversine en mètres.
 
     Args:
@@ -101,13 +91,7 @@ def haversine_tuple(coord1: Tuple[float, float], coord2: Tuple[float, float]) ->
     return haversine_distance(coord1[0], coord1[1], coord2[0], coord2[1])
 
 
-def haversine_minutes(
-    lat1: float,
-    lon1: float,
-    lat2: float,
-    lon2: float,
-    avg_speed_kmh: float = 40
-) -> float:
+def haversine_minutes(lat1: float, lon1: float, lat2: float, lon2: float, avg_speed_kmh: float = 40) -> float:
     """Calcule le temps de trajet estimé en minutes basé sur la distance Haversine.
 
     Args:
@@ -132,13 +116,7 @@ def haversine_minutes(
     return (distance_km / avg_speed_kmh) * 60
 
 
-def haversine_seconds(
-    lat1: float,
-    lon1: float,
-    lat2: float,
-    lon2: float,
-    avg_speed_kmh: float = 40
-) -> int:
+def haversine_seconds(lat1: float, lon1: float, lat2: float, lon2: float, avg_speed_kmh: float = 40) -> int:
     """Calcule le temps de trajet estimé en secondes basé sur la distance Haversine.
 
     Args:
@@ -173,12 +151,7 @@ def validate_coordinates(lat: float, lon: float) -> bool:
     return (-LAT_THRESHOLD <= lat <= LAT_THRESHOLD) and (LON_MIN <= lon <= LON_MAX)
 
 
-def get_bearing(
-    lat1: float,
-    lon1: float,
-    lat2: float,
-    lon2: float
-) -> float:
+def get_bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calcule le bearing (cap/direction) du point 1 vers le point 2.
 
     Args:
@@ -204,11 +177,9 @@ def get_bearing(
     return (initial_bearing * 180 / 3.14159265359 + 360) % 360
 
 
-
 # Alias pour compatibilité avec ancien code
 calculate_distance = haversine_distance
 compute_haversine = haversine_distance
 _haversine_km = haversine_tuple  # Pour maps.py et osrm_client.py
 _haversine_distance = haversine_distance  # Pour heuristics.py
 _haversine_seconds = haversine_seconds  # Pour maps.py
-

@@ -1,6 +1,7 @@
 """Utilitaires pour masquer les données sensibles (PII) dans les logs
 Conformité GDPR-like.
 """
+
 import logging
 import re
 from typing import Any
@@ -22,6 +23,7 @@ GPS_PATTERN = re.compile(r"\b(\d+\.\d{6,}),\s*(\d+\.\d{6,})\b")
 MIN_PHONE_LENGTH = 4
 MIN_IBAN_LENGTH = 8
 
+
 def mask_email(email: str) -> str:
     """Masque email: john.doe@example.com → j***@e***.com."""
     if not email or "@" not in email:
@@ -36,6 +38,7 @@ def mask_email(email: str) -> str:
 
     return f"{masked_local}@{masked_domain}"
 
+
 def mask_phone(phone: str) -> str:
     """Masque téléphone: +41 22 123 45 67 → +41 ** *** ** 67."""
     if not phone:
@@ -48,12 +51,14 @@ def mask_phone(phone: str) -> str:
     # Garder préfixe pays + 2 derniers chiffres
     return f"{phone[:3]} ** *** ** {digits[-2:]}"
 
+
 def mask_iban(iban: str) -> str:
     """Masque IBAN: CH65 0900 0000 1234 5678 9 → CH** **** **** **** **89."""
     if not iban or len(iban) < MIN_IBAN_LENGTH:
         return iban
 
     return f"{iban[:2]}** **** **** **** **{iban[-2:]}"
+
 
 def mask_gps_coords(lat: str, lon: str) -> str:
     """Réduit précision GPS de 6+ décimales à 4 décimales.
@@ -69,6 +74,7 @@ def mask_gps_coords(lat: str, lon: str) -> str:
         return f"{lat_float:.4f}, {lon_float:.4f} [GPS_APPROX]"
     except (ValueError, TypeError):
         return f"{lat}, {lon} [GPS_REDACTED]"
+
 
 def sanitize_log_data(data: Any) -> Any:
     """Nettoie récursivement les données sensibles dans dict/str."""
@@ -94,8 +100,8 @@ def sanitize_log_data(data: Any) -> Any:
         sanitized = PHONE_PATTERN.sub(lambda m: mask_phone(m.group(0)), sanitized)
         return IBAN_PATTERN.sub(lambda m: mask_iban(m.group(0)), sanitized)
 
-
     return data
+
 
 class PIIFilter(logging.Filter):
     """Filtre logging pour masquer PII automatiquement."""
@@ -110,4 +116,3 @@ class PIIFilter(logging.Filter):
             record.args = tuple(sanitize_log_data(arg) for arg in record.args)
 
         return True
-

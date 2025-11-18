@@ -25,11 +25,7 @@ class TestNStepBufferSimple:
         """Test ajout de transition basique"""
         buffer = NStepBuffer(capacity=0.100, n_step=3, gamma=0.99)
         buffer.add_transition(
-            state=np.array([1, 2, 3]),
-            action=1,
-            reward=10.0,
-            next_state=np.array([4, 5, 6]),
-            done=False
+            state=np.array([1, 2, 3]), action=1, reward=10.0, next_state=np.array([4, 5, 6]), done=False
         )
         # Le buffer N-step stocke temporairement les transitions
         assert len(buffer.temp_buffer) == 1
@@ -41,11 +37,11 @@ class TestNStepBufferSimple:
         # Ajouter quelques transitions
         for i in range(5):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
-                done=False
+                next_state=np.array([i + 3, i + 4, i + 5]),
+                done=False,
             )
 
         batch, indices = buffer.sample(batch_size=3)
@@ -71,11 +67,7 @@ class TestNStepBufferSimple:
         """Test nettoyage du buffer"""
         buffer = NStepBuffer(capacity=0.100, n_step=3, gamma=0.99)
         buffer.add_transition(
-            state=np.array([1, 2, 3]),
-            action=1,
-            reward=10.0,
-            next_state=np.array([4, 5, 6]),
-            done=False
+            state=np.array([1, 2, 3]), action=1, reward=10.0, next_state=np.array([4, 5, 6]), done=False
         )
         buffer.clear()
         assert len(buffer.buffer) == 0
@@ -87,12 +79,7 @@ class TestNStepPrioritizedBufferSimple:
     def test_init_basic(self):
         """Test initialisation basique"""
         buffer = NStepPrioritizedBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.99,
-            alpha=0.6,
-            beta_start=0.4,
-            beta_increment=0.0001
+            capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_increment=0.0001
         )
         assert buffer.capacity == 100
         assert buffer.n_step == 3
@@ -104,19 +91,10 @@ class TestNStepPrioritizedBufferSimple:
     def test_add_transition_basic(self):
         """Test ajout de transition basique"""
         buffer = NStepPrioritizedBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.99,
-            alpha=0.6,
-            beta_start=0.4,
-            beta_increment=0.0001
+            capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_increment=0.0001
         )
         buffer.add_transition(
-            state=np.array([1, 2, 3]),
-            action=1,
-            reward=10.0,
-            next_state=np.array([4, 5, 6]),
-            done=False
+            state=np.array([1, 2, 3]), action=1, reward=10.0, next_state=np.array([4, 5, 6]), done=False
         )
         # Le buffer N-step stocke temporairement les transitions
         assert len(buffer.temp_buffer) == 1
@@ -124,22 +102,17 @@ class TestNStepPrioritizedBufferSimple:
     def test_sample_basic(self):
         """Test échantillonnage basique"""
         buffer = NStepPrioritizedBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.99,
-            alpha=0.6,
-            beta_start=0.4,
-            beta_increment=0.0001
+            capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_increment=0.0001
         )
 
         # Ajouter quelques transitions
         for i in range(5):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
-                done=False
+                next_state=np.array([i + 3, i + 4, i + 5]),
+                done=False,
             )
 
         batch, weights, indices = buffer.sample(batch_size=3)
@@ -150,12 +123,7 @@ class TestNStepPrioritizedBufferSimple:
     def test_sample_empty(self):
         """Test échantillonnage avec buffer vide"""
         buffer = NStepPrioritizedBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.99,
-            alpha=0.6,
-            beta_start=0.4,
-            beta_increment=0.0001
+            capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_increment=0.0001
         )
         batch, weights, indices = buffer.sample(batch_size=3)
         assert len(batch) == 0
@@ -165,22 +133,17 @@ class TestNStepPrioritizedBufferSimple:
     def test_update_priorities(self):
         """Test mise à jour des priorités"""
         buffer = NStepPrioritizedBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.99,
-            alpha=0.6,
-            beta_start=0.4,
-            beta_increment=0.0001
+            capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_increment=0.0001
         )
 
         # Ajouter quelques transitions et forcer le calcul N-step
         for i in range(5):  # Plus que n_step pour déclencher le calcul
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
-                done=False
+                next_state=np.array([i + 3, i + 4, i + 5]),
+                done=False,
             )
 
         # Mettre à jour les priorités
@@ -190,12 +153,7 @@ class TestNStepPrioritizedBufferSimple:
     def test_get_stats(self):
         """Test statistiques"""
         buffer = NStepPrioritizedBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.99,
-            alpha=0.6,
-            beta_start=0.4,
-            beta_increment=0.0001
+            capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_increment=0.0001
         )
         stats = buffer.get_stats()
         assert isinstance(stats, dict)
@@ -205,19 +163,10 @@ class TestNStepPrioritizedBufferSimple:
     def test_clear(self):
         """Test nettoyage du buffer"""
         buffer = NStepPrioritizedBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.99,
-            alpha=0.6,
-            beta_start=0.4,
-            beta_increment=0.0001
+            capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_increment=0.0001
         )
         buffer.add_transition(
-            state=np.array([1, 2, 3]),
-            action=1,
-            reward=10.0,
-            next_state=np.array([4, 5, 6]),
-            done=False
+            state=np.array([1, 2, 3]), action=1, reward=10.0, next_state=np.array([4, 5, 6]), done=False
         )
         buffer.clear()
         assert len(buffer.buffer) == 0
@@ -231,11 +180,7 @@ class TestNStepBufferEdgeCases:
         """Test avec n_step=1"""
         buffer = NStepBuffer(capacity=0.100, n_step=1, gamma=0.99)
         buffer.add_transition(
-            state=np.array([1, 2, 3]),
-            action=1,
-            reward=10.0,
-            next_state=np.array([4, 5, 6]),
-            done=False
+            state=np.array([1, 2, 3]), action=1, reward=10.0, next_state=np.array([4, 5, 6]), done=False
         )
         batch, _indices = buffer.sample(batch_size=1)
         assert len(batch) == 1
@@ -244,11 +189,7 @@ class TestNStepBufferEdgeCases:
         """Test avec transition terminée"""
         buffer = NStepBuffer(capacity=0.100, n_step=3, gamma=0.99)
         buffer.add_transition(
-            state=np.array([1, 2, 3]),
-            action=1,
-            reward=10.0,
-            next_state=np.array([4, 5, 6]),
-            done=True
+            state=np.array([1, 2, 3]), action=1, reward=10.0, next_state=np.array([4, 5, 6]), done=True
         )
         batch, _indices = buffer.sample(batch_size=1)
         assert len(batch) == 1
@@ -260,11 +201,11 @@ class TestNStepBufferEdgeCases:
         # Ajouter plus que la capacité
         for i in range(5):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
-                done=False
+                next_state=np.array([i + 3, i + 4, i + 5]),
+                done=False,
             )
 
         # Le buffer ne devrait pas dépasser la capacité
@@ -274,20 +215,16 @@ class TestNStepBufferEdgeCases:
         """Test avec récompenses négatives"""
         buffer = NStepBuffer(capacity=0.100, n_step=3, gamma=0.99)
         buffer.add_transition(
-            state=np.array([1, 2, 3]),
-            action=1,
-            reward=-10.0,
-            next_state=np.array([4, 5, 6]),
-            done=False
+            state=np.array([1, 2, 3]), action=1, reward=-10.0, next_state=np.array([4, 5, 6]), done=False
         )
         # Ajouter plus de transitions pour déclencher le calcul N-step
         for i in range(3):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
-                done=False
+                next_state=np.array([i + 3, i + 4, i + 5]),
+                done=False,
             )
         batch, _indices = buffer.sample(batch_size=1)
         assert len(batch) == 1
@@ -299,21 +236,16 @@ class TestNStepPrioritizedBufferEdgeCases:
     def test_zero_priority(self):
         """Test avec priorité zéro"""
         buffer = NStepPrioritizedBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.99,
-            alpha=0.6,
-            beta_start=0.4,
-            beta_increment=0.0001
+            capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_increment=0.0001
         )
         # Ajouter des transitions pour avoir des priorités
         for i in range(5):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
-                done=False
+                next_state=np.array([i + 3, i + 4, i + 5]),
+                done=False,
             )
         buffer.update_priorities([0], [0.0])
         assert buffer.priorities[0] > 0  # Devrait être corrigé à epsilon
@@ -321,21 +253,16 @@ class TestNStepPrioritizedBufferEdgeCases:
     def test_negative_priority(self):
         """Test avec priorité négative"""
         buffer = NStepPrioritizedBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.99,
-            alpha=0.6,
-            beta_start=0.4,
-            beta_increment=0.0001
+            capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_increment=0.0001
         )
         # Ajouter des transitions pour avoir des priorités
         for i in range(5):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
                 reward=float(i),
-                next_state=np.array([i+3, i+4, i+5]),
-                done=False
+                next_state=np.array([i + 3, i + 4, i + 5]),
+                done=False,
             )
         buffer.update_priorities([0], [-0.1])
         assert buffer.priorities[0] > 0  # Devrait être corrigé à epsilon
@@ -343,19 +270,10 @@ class TestNStepPrioritizedBufferEdgeCases:
     def test_nan_priority(self):
         """Test avec priorité NaN"""
         buffer = NStepPrioritizedBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.99,
-            alpha=0.6,
-            beta_start=0.4,
-            beta_increment=0.0001
+            capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_increment=0.0001
         )
         buffer.add_transition(
-            state=np.array([1, 2, 3]),
-            action=1,
-            reward=10.0,
-            next_state=np.array([4, 5, 6]),
-            done=False
+            state=np.array([1, 2, 3]), action=1, reward=10.0, next_state=np.array([4, 5, 6]), done=False
         )
         buffer.update_priorities([0], [float("nan")])
         assert not np.isnan(buffer.priorities[0])  # Devrait être corrigé
@@ -363,19 +281,10 @@ class TestNStepPrioritizedBufferEdgeCases:
     def test_inf_priority(self):
         """Test avec priorité infinie"""
         buffer = NStepPrioritizedBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.99,
-            alpha=0.6,
-            beta_start=0.4,
-            beta_increment=0.0001
+            capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_increment=0.0001
         )
         buffer.add_transition(
-            state=np.array([1, 2, 3]),
-            action=1,
-            reward=10.0,
-            next_state=np.array([4, 5, 6]),
-            done=False
+            state=np.array([1, 2, 3]), action=1, reward=10.0, next_state=np.array([4, 5, 6]), done=False
         )
         buffer.update_priorities([0], [float("inf")])
         assert not np.isinf(buffer.priorities[0])  # Devrait être corrigé

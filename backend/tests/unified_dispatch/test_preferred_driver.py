@@ -5,6 +5,7 @@ Tests pour la fonctionnalité "chauffeur préféré" dans le dispatch.
 Valide que preferred_driver_id est correctement propagé depuis les overrides
 jusqu'à la sélection des chauffeurs éligibles dans l'heuristique.
 """
+
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict
@@ -36,7 +37,7 @@ def mock_drivers():
     for i in range(3):
         driver = Mock()
         driver.id = i + 1
-        driver.first_name = f"Driver{i+1}"
+        driver.first_name = f"Driver{i + 1}"
         driver.last_name = "Test"
         driver.is_active = True
         driver.is_available = True
@@ -63,7 +64,7 @@ def mock_bookings():
         booking.dropoff_lat = 46.2080 + i * 0.01
         booking.dropoff_lon = 6.1600 + i * 0.01
         booking.scheduled_time = base_time + timedelta(minutes=30 + i * 30)
-        booking.customer_name = f"Client {i+1}"
+        booking.customer_name = f"Client {i + 1}"
         booking.status = "ACCEPTED"
         booking.is_return = False
         booking.medical_facility = False
@@ -88,7 +89,7 @@ class TestPreferredDriverPropagation:
         mock_company,
         mock_drivers,
         mock_bookings,
-        app
+        app,
     ):
         """Test: preferred_driver_id présent dans overrides → présent dans problem."""
         # Setup mocks
@@ -96,29 +97,22 @@ class TestPreferredDriverPropagation:
         mock_get_drivers.return_value = (mock_drivers, [])
         # Utiliser un MagicMock pour éviter le problème de contexte Flask
         from unittest.mock import MagicMock
+
         mock_query = MagicMock()
         mock_query.get.return_value = mock_company
         mock_company_query.__get__ = lambda self, obj, objtype: mock_query
-        
+
         # Mock de la matrice de temps
         n = len(mock_bookings) + len(mock_drivers)
         mock_matrix = [[0 if i == j else 10 for j in range(n)] for i in range(n)]
         mock_build_matrix.return_value = (mock_matrix, [])
 
         # Overrides avec preferred_driver_id
-        overrides = {
-            "preferred_driver_id": 2,
-            "driver_load_multipliers": {"2": 1.5}
-        }
+        overrides = {"preferred_driver_id": 2, "driver_load_multipliers": {"2": 1.5}}
 
         # Appel build_problem_data dans un contexte Flask
         with app.app_context():
-            problem = data.build_problem_data(
-                company_id=1,
-                settings=Settings(),
-                for_date=None,
-                overrides=overrides
-            )
+            problem = data.build_problem_data(company_id=1, settings=Settings(), for_date=None, overrides=overrides)
 
         # Vérifications
         assert "preferred_driver_id" in problem
@@ -138,7 +132,7 @@ class TestPreferredDriverPropagation:
         mock_company,
         mock_drivers,
         mock_bookings,
-        app
+        app,
     ):
         """Test: pas de preferred_driver_id dans overrides → None dans problem."""
         # Setup mocks
@@ -146,10 +140,11 @@ class TestPreferredDriverPropagation:
         mock_get_drivers.return_value = (mock_drivers, [])
         # Utiliser un MagicMock pour éviter le problème de contexte Flask
         from unittest.mock import MagicMock
+
         mock_query = MagicMock()
         mock_query.get.return_value = mock_company
         mock_company_query.__get__ = lambda self, obj, objtype: mock_query
-        
+
         n = len(mock_bookings) + len(mock_drivers)
         mock_matrix = [[0 if i == j else 10 for j in range(n)] for i in range(n)]
         mock_build_matrix.return_value = (mock_matrix, [])
@@ -159,12 +154,7 @@ class TestPreferredDriverPropagation:
 
         # Appel build_problem_data dans un contexte Flask
         with app.app_context():
-            problem = data.build_problem_data(
-                company_id=1,
-                settings=Settings(),
-                for_date=None,
-                overrides=overrides
-            )
+            problem = data.build_problem_data(company_id=1, settings=Settings(), for_date=None, overrides=overrides)
 
         assert "preferred_driver_id" in problem
         assert problem["preferred_driver_id"] is None
@@ -182,7 +172,7 @@ class TestPreferredDriverPropagation:
         mock_company,
         mock_drivers,
         mock_bookings,
-        app
+        app,
     ):
         """Test: preferred_driver_id invalide (0, négatif, None) → ignoré."""
         # Setup mocks
@@ -190,10 +180,11 @@ class TestPreferredDriverPropagation:
         mock_get_drivers.return_value = (mock_drivers, [])
         # Utiliser un MagicMock pour éviter le problème de contexte Flask
         from unittest.mock import MagicMock
+
         mock_query = MagicMock()
         mock_query.get.return_value = mock_company
         mock_company_query.__get__ = lambda self, obj, objtype: mock_query
-        
+
         n = len(mock_bookings) + len(mock_drivers)
         mock_matrix = [[0 if i == j else 10 for j in range(n)] for i in range(n)]
         mock_build_matrix.return_value = (mock_matrix, [])
@@ -201,23 +192,13 @@ class TestPreferredDriverPropagation:
         # Test avec valeur 0
         overrides = {"preferred_driver_id": 0}
         with app.app_context():
-            problem = data.build_problem_data(
-                company_id=1,
-                settings=Settings(),
-                for_date=None,
-                overrides=overrides
-            )
+            problem = data.build_problem_data(company_id=1, settings=Settings(), for_date=None, overrides=overrides)
         assert problem["preferred_driver_id"] is None
 
         # Test avec None
         overrides = {"preferred_driver_id": None}
         with app.app_context():
-            problem = data.build_problem_data(
-                company_id=1,
-                settings=Settings(),
-                for_date=None,
-                overrides=overrides
-            )
+            problem = data.build_problem_data(company_id=1, settings=Settings(), for_date=None, overrides=overrides)
         assert problem["preferred_driver_id"] is None
 
     @patch("services.unified_dispatch.data.get_bookings_for_dispatch")
@@ -233,7 +214,7 @@ class TestPreferredDriverPropagation:
         mock_company,
         mock_drivers,
         mock_bookings,
-        app
+        app,
     ):
         """Test: preferred_driver_id non présent dans la liste des drivers disponibles → ignoré."""
         # Setup mocks
@@ -241,10 +222,11 @@ class TestPreferredDriverPropagation:
         mock_get_drivers.return_value = (mock_drivers, [])
         # Utiliser un MagicMock pour éviter le problème de contexte Flask
         from unittest.mock import MagicMock
+
         mock_query = MagicMock()
         mock_query.get.return_value = mock_company
         mock_company_query.__get__ = lambda self, obj, objtype: mock_query
-        
+
         n = len(mock_bookings) + len(mock_drivers)
         mock_matrix = [[0 if i == j else 10 for j in range(n)] for i in range(n)]
         mock_build_matrix.return_value = (mock_matrix, [])
@@ -254,12 +236,7 @@ class TestPreferredDriverPropagation:
         overrides = {"preferred_driver_id": 999}
 
         with app.app_context():
-            problem = data.build_problem_data(
-                company_id=1,
-                settings=Settings(),
-                for_date=None,
-                overrides=overrides
-            )
+            problem = data.build_problem_data(company_id=1, settings=Settings(), for_date=None, overrides=overrides)
 
         # Le preferred_driver_id devrait être None car le driver 999 n'existe pas
         assert problem["preferred_driver_id"] is None
@@ -290,7 +267,7 @@ class TestPreferredDriverInHeuristics:
 
         # Vérifier qu'au moins une assignation existe
         assert len(result.assignments) >= 0  # Peut être 0 si contraintes non respectées
-        
+
         # Si une assignation existe, vérifier qu'elle utilise le driver préféré
         if result.assignments:
             assigned_driver_id = result.assignments[0].driver_id

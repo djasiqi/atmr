@@ -82,23 +82,18 @@ def _safe_emit(
             kwargs = {"namespace": namespace, "room": room}
             cast("Any", socketio).emit(event, payload, **kwargs)
         except Exception as e:
-            app_logger.error(
-                "[socketio] emit failed (compat) event=%s room=%s err=%s", event, room, e
-            )
+            app_logger.error("[socketio] emit failed (compat) event=%s room=%s err=%s", event, room, e)
     except Exception as e:
         app_logger.error("[socketio] emit failed event=%s room=%s err=%s", event, room, e)
+
 
 # ---------------------------------------------------------------------------
 # Helpers "métier" d'émission
 # ---------------------------------------------------------------------------
-def notify_driver_new_booking(
-    driver_id: int, booking: Booking, *, namespace: str = DEFAULT_NAMESPACE
-) -> None:
+def notify_driver_new_booking(driver_id: int, booking: Booking, *, namespace: str = DEFAULT_NAMESPACE) -> None:
     """Émet 'new_booking' vers la room du chauffeur correspondant."""
     try:
-        data = booking.to_dict() if hasattr(booking, "to_dict") else {
-            "id": getattr(booking, "id", None)
-        }
+        data = booking.to_dict() if hasattr(booking, "to_dict") else {"id": getattr(booking, "id", None)}
     except Exception:
         # fallback minimal en cas de serialization tricky
         data = {"id": getattr(booking, "id", None)}
@@ -218,17 +213,13 @@ def emit_assignment_created(
         "booking_id": booking_id,
         "driver_id": driver_id,
     }
-    emit_company_event(
-        company_id, "dispatch:assignment:created", company_payload, namespace=namespace
-    )
+    emit_company_event(company_id, "dispatch:assignment:created", company_payload, namespace=namespace)
 
     driver_payload = {
         "assignment_id": assignment_id,
         "booking_id": booking_id,
     }
-    emit_driver_event(
-        driver_id, "driver:assignment:received", driver_payload, namespace=namespace
-    )
+    emit_driver_event(driver_id, "driver:assignment:received", driver_payload, namespace=namespace)
 
 
 def emit_assignment_updated(
@@ -246,12 +237,8 @@ def emit_assignment_updated(
         "driver_id": driver_id,
         "fields": fields,
     }
-    emit_company_event(
-        company_id, "dispatch:assignment:updated", payload, namespace=namespace
-    )
-    emit_driver_event(
-        driver_id, "driver:assignment:updated", payload, namespace=namespace
-    )
+    emit_company_event(company_id, "dispatch:assignment:updated", payload, namespace=namespace)
+    emit_driver_event(driver_id, "driver:assignment:updated", payload, namespace=namespace)
 
 
 def emit_assignment_cancelled(
@@ -267,12 +254,8 @@ def emit_assignment_cancelled(
         "booking_id": booking_id,
         "driver_id": driver_id,
     }
-    emit_company_event(
-        company_id, "dispatch:assignment:cancelled", payload, namespace=namespace
-    )
-    emit_driver_event(
-        driver_id, "driver:assignment:cancelled", payload, namespace=namespace
-    )
+    emit_company_event(company_id, "dispatch:assignment:cancelled", payload, namespace=namespace)
+    emit_driver_event(driver_id, "driver:assignment:cancelled", payload, namespace=namespace)
 
 
 def emit_delay_detected(
@@ -313,9 +296,7 @@ def join_company_room(sid: str, company_id: int, namespace: str = DEFAULT_NAMESP
     try:
         cast("Any", socketio).enter_room(sid, get_company_room(company_id), namespace=namespace)
     except Exception as e:
-        app_logger.error(
-            "[socketio] enter_room failed sid=%s company=%s err=%s", sid, company_id, e
-        )
+        app_logger.error("[socketio] enter_room failed sid=%s company=%s err=%s", sid, company_id, e)
 
 
 def leave_company_room(sid: str, company_id: int, namespace: str = DEFAULT_NAMESPACE) -> None:
@@ -323,9 +304,7 @@ def leave_company_room(sid: str, company_id: int, namespace: str = DEFAULT_NAMES
     try:
         cast("Any", socketio).leave_room(sid, get_company_room(company_id), namespace=namespace)
     except Exception as e:
-        app_logger.error(
-            "[socketio] leave_room failed sid=%s company=%s err=%s", sid, company_id, e
-        )
+        app_logger.error("[socketio] leave_room failed sid=%s company=%s err=%s", sid, company_id, e)
 
 
 def join_date_room(sid: str, date_str: str, namespace: str = DEFAULT_NAMESPACE) -> None:
@@ -333,9 +312,7 @@ def join_date_room(sid: str, date_str: str, namespace: str = DEFAULT_NAMESPACE) 
     try:
         cast("Any", socketio).enter_room(sid, get_date_room(date_str), namespace=namespace)
     except Exception as e:
-        app_logger.error(
-            "[socketio] enter_room(date) failed sid=%s date=%s err=%s", sid, date_str, e
-        )
+        app_logger.error("[socketio] enter_room(date) failed sid=%s date=%s err=%s", sid, date_str, e)
 
 
 def leave_date_room(sid: str, date_str: str, namespace: str = DEFAULT_NAMESPACE) -> None:
@@ -343,9 +320,7 @@ def leave_date_room(sid: str, date_str: str, namespace: str = DEFAULT_NAMESPACE)
     try:
         cast("Any", socketio).leave_room(sid, get_date_room(date_str), namespace=namespace)
     except Exception as e:
-        app_logger.error(
-            "[socketio] leave_room(date) failed sid=%s date=%s err=%s", sid, date_str, e
-        )
+        app_logger.error("[socketio] leave_room(date) failed sid=%s date=%s err=%s", sid, date_str, e)
 
 
 # ---------------------------------------------------------------------------

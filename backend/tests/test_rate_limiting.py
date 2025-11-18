@@ -16,7 +16,7 @@ class TestRateLimitingBookings:
         # Désactiver temporairement le limiter global pour ce test spécifique
         # Flask-Limiter utilise get_remote_address par défaut donc tous les appels
         # depuis le même client apparaissent comme le même IP
-        
+
         # Faire 51 tentatives de création (devrait échouer à la 51ème)
         for i in range(51):
             response = client.post(
@@ -30,7 +30,7 @@ class TestRateLimitingBookings:
                 },
                 headers=auth_headers,
             )
-            
+
             if i < 50:
                 # Les 50 premières devraient passer (ou échouer pour autre raison)
                 assert response.status_code in (201, 400, 403, 404)  # Pas de 429
@@ -43,7 +43,7 @@ class TestRateLimitingBookings:
         # Faire 301 tentatives
         for i in range(301):
             response = client.get("/api/bookings/", headers=auth_headers)
-            
+
             if i < 300:
                 assert response.status_code in (200, 401, 403)  # Pas de 429
             else:
@@ -58,7 +58,7 @@ class TestRateLimitingAdmin:
         # Faire 101 tentatives
         for i in range(101):
             response = client.get("/api/admin/stats", headers=auth_headers)
-            
+
             if i < 100:
                 assert response.status_code in (200, 401, 403)  # Pas de 429
             else:
@@ -72,7 +72,7 @@ class TestRateLimitingAdmin:
                 "/api/admin/users/1/reset-password",
                 headers=auth_headers,
             )
-            
+
             if i < 10:
                 assert response.status_code in (200, 404, 401, 403)  # Pas de 429
             else:
@@ -100,7 +100,7 @@ class TestRateLimitingCompanies:
                 },
                 headers=auth_headers,
             )
-            
+
             if i < 20:
                 assert response.status_code in (201, 400, 401, 403, 409)  # Pas de 429
             else:
@@ -120,7 +120,7 @@ class TestRateLimitingCompanies:
                 },
                 headers=auth_headers,
             )
-            
+
             if i < 50:
                 assert response.status_code in (201, 400, 401, 403)  # Pas de 429
             else:
@@ -141,9 +141,8 @@ class TestRateLimitingAuth:
                     "password": "wrongpassword",
                 },
             )
-            
+
             if i < 5:
                 assert response.status_code in (401, 404)  # Pas de 429
             else:
                 assert response.status_code == 429, f"Expected 429, got {response.status_code}"
-

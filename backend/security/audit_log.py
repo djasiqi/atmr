@@ -18,52 +18,52 @@ logger = logging.getLogger(__name__)
 
 class AuditLog(db.Model):
     """✅ D2: Modèle d'audit append-only (pas de UPDATE/DELETE).
-    
+
     Note: Les enregistrements ne sont jamais modifiés/supprimés.
     """
-    
+
     __tablename__ = "audit_logs"
-    
+
     # Identifiant unique (auto-incrémental)
     id = db.Column(BigInteger, primary_key=True)
-    
+
     # Timestamp de création (immutable)
     created_at = db.Column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
-    
+
     # Utilisateur/Système
     user_id = db.Column(Integer, nullable=True)  # NULL pour actions système
     user_type = db.Column(String(50), nullable=False)  # 'admin', 'operator', 'system', etc.
-    
+
     # Action effectuée
     action_type = db.Column(String(100), nullable=False)  # 'dispatch', 'booking_update', 'driver_assign', etc.
     action_category = db.Column(String(50), nullable=False)  # 'dispatch', 'security', 'data_access', etc.
-    
+
     # Détails de l'action (JSON)
     action_details = db.Column(Text, nullable=False)  # JSON string
-    
+
     # Résultat
     result_status = db.Column(String(50), nullable=False)  # 'success', 'failure', 'partial'
     result_message = db.Column(Text, nullable=True)
-    
+
     # Contexte
     company_id = db.Column(Integer, nullable=True)
     booking_id = db.Column(Integer, nullable=True)
     driver_id = db.Column(Integer, nullable=True)
-    
+
     # Sécurité
     ip_address = db.Column(String(45), nullable=True)  # IPv4 ou IPv6
     user_agent = db.Column(Text, nullable=True)
-    
+
     # Métadonnées
     additional_metadata = db.Column(Text, nullable=True)  # JSON string supplémentaire
-    
+
     def __repr__(self) -> str:  # type: ignore[override]
         return f"<AuditLog {self.id}: {self.action_type} by {self.user_type} at {self.created_at}>"
 
 
 class AuditLogger:
     """✅ D2: Logger pour audit append-only."""
-    
+
     @staticmethod
     def log_action(
         action_type: str,
@@ -81,7 +81,7 @@ class AuditLogger:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> AuditLog:
         """✅ D2: Enregistre une action d'audit (insert-only).
-        
+
         Args:
             action_type: Type d'action (ex: 'dispatch_complete')
             action_category: Catégorie (ex: 'dispatch', 'security')
@@ -96,12 +96,12 @@ class AuditLogger:
             ip_address: Adresse IP (optionnel)
             user_agent: User-Agent (optionnel)
             metadata: Métadonnées supplémentaires (optionnel)
-            
+
         Returns:
             AuditLog créé
         """
         import json
-        
+
         # SQLAlchemy crée dynamiquement les paramètres via métaclasse
         audit_log = AuditLog()
         audit_log.user_id = user_id
@@ -118,7 +118,7 @@ class AuditLogger:
         audit_log.user_agent = user_agent
         audit_log.additional_metadata = json.dumps(metadata or {})
         audit_log.created_at = datetime.now(UTC)
-        
+
         try:
             db.session.add(audit_log)
             db.session.commit()
@@ -127,9 +127,9 @@ class AuditLogger:
             logger.error("[D2] Échec création audit log: %s", e)
             db.session.rollback()
             raise
-        
+
         return audit_log
-    
+
     @staticmethod
     def log_dispatch_action(
         dispatch_run_id: int,
@@ -156,7 +156,7 @@ class AuditLogger:
             },
             company_id=company_id,
         )
-    
+
     @staticmethod
     def log_data_access(
         user_id: int,
@@ -180,7 +180,7 @@ class AuditLogger:
             company_id=company_id,
             ip_address=ip_address,
         )
-    
+
     @staticmethod
     def log_security_event(
         event_type: str,
@@ -198,4 +198,3 @@ class AuditLogger:
             action_details=details or {},
             ip_address=ip_address,
         )
-

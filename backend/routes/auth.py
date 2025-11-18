@@ -18,29 +18,37 @@ from schemas.validation_utils import handle_validation_error, validate_request
 
 app_logger = logging.getLogger("app")
 
-auth_ns = Namespace(
-    "auth",
-    description="Opérations liées à l'authentification")
+auth_ns = Namespace("auth", description="Opérations liées à l'authentification")
 
 # Modèle Swagger pour la connexion (login)
-login_model = auth_ns.model("Login", {
-    "email": fields.String(required=True, description="L'adresse email de l'utilisateur (format email valide)"),
-    "password": fields.String(required=True, description="Le mot de passe de l'utilisateur", min_length=6)
-})
+login_model = auth_ns.model(
+    "Login",
+    {
+        "email": fields.String(required=True, description="L'adresse email de l'utilisateur (format email valide)"),
+        "password": fields.String(required=True, description="Le mot de passe de l'utilisateur", min_length=6),
+    },
+)
 
 # Modèle Swagger pour l'inscription (register)
-register_model = auth_ns.model("Register", {
-    "username": fields.String(required=True, description="Le nom d'utilisateur", min_length=3, max_length=50),
-    "email": fields.String(required=True, description="L'adresse email de l'utilisateur (format email valide)"),
-    "password": fields.String(required=True, description="Le mot de passe de l'utilisateur", min_length=6),
-    "first_name": fields.String(description="Prénom", default=None, max_length=100),
-    "last_name": fields.String(description="Nom", default=None, max_length=100),
-    "phone": fields.String(description="Numéro de téléphone", default=None, max_length=20),
-    "address": fields.String(description="Adresse", default=None, max_length=500),
-    "birth_date": fields.String(description="Date de naissance (YYYY-MM-DD)", default=None, pattern="^\\d{4}-\\d{2}-\\d{2}$"),
-    "gender": fields.String(description="Genre (male|female|other)", default=None, enum=["male", "female", "other"]),
-    "profile_image": fields.String(description="URL ou données base64 de l'image de profil", default=None)
-})
+register_model = auth_ns.model(
+    "Register",
+    {
+        "username": fields.String(required=True, description="Le nom d'utilisateur", min_length=3, max_length=50),
+        "email": fields.String(required=True, description="L'adresse email de l'utilisateur (format email valide)"),
+        "password": fields.String(required=True, description="Le mot de passe de l'utilisateur", min_length=6),
+        "first_name": fields.String(description="Prénom", default=None, max_length=100),
+        "last_name": fields.String(description="Nom", default=None, max_length=100),
+        "phone": fields.String(description="Numéro de téléphone", default=None, max_length=20),
+        "address": fields.String(description="Adresse", default=None, max_length=500),
+        "birth_date": fields.String(
+            description="Date de naissance (YYYY-MM-DD)", default=None, pattern="^\\d{4}-\\d{2}-\\d{2}$"
+        ),
+        "gender": fields.String(
+            description="Genre (male|female|other)", default=None, enum=["male", "female", "other"]
+        ),
+        "profile_image": fields.String(description="URL ou données base64 de l'image de profil", default=None),
+    },
+)
 
 # Schéma Marshmallow pour valider les données d'inscription
 
@@ -73,13 +81,13 @@ class Login(Resource):
         """Authentifie un utilisateur et renvoie un token d'accès."""
         try:
             data = request.get_json() or {}
-            
+
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
             try:
                 validated_data = validate_request(LoginSchema(), data)
             except ValidationError as e:
                 return handle_validation_error(e)
-            
+
             email = validated_data["email"]
             password = validated_data["password"]
 
@@ -99,14 +107,11 @@ class Login(Resource):
                 identity=str(user.public_id),
                 # ⚠️ ID numérique attendu par dispatch_routes
                 additional_claims=claims,
-                expires_delta=timedelta(hours=1)
+                expires_delta=timedelta(hours=1),
             )
 
             # Création du refresh token (valide 30 jours)
-            refresh_token = create_refresh_token(
-                identity=str(user.public_id),
-                expires_delta=timedelta(days=30)
-            )
+            refresh_token = create_refresh_token(identity=str(user.public_id), expires_delta=timedelta(days=30))
 
             return {
                 "message": "Connexion réussie",
@@ -118,16 +123,13 @@ class Login(Resource):
                     "username": user.username,
                     "email": user.email,
                     "role": user.role.value,
-                    "force_password_change": user.force_password_change
-                }
+                    "force_password_change": user.force_password_change,
+                },
             }, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR login: %s - %s",
-                type(e).__name__,
-                str(e))
+            app_logger.error("❌ ERREUR login: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -155,18 +157,13 @@ class RefreshToken(Resource):
                 "aud": "atmr-api",  # Audience claim pour sécurité
             }
             new_token = create_access_token(
-                identity=str(user.public_id),
-                additional_claims=claims,
-                expires_delta=timedelta(hours=1)
+                identity=str(user.public_id), additional_claims=claims, expires_delta=timedelta(hours=1)
             )
             return {"access_token": new_token}, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR refresh_token: %s - %s",
-                type(e).__name__,
-                str(e))
+            app_logger.error("❌ ERREUR refresh_token: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -189,15 +186,12 @@ class UserInfo(Resource):
                 "public_id": user.public_id,
                 "username": user.username,
                 "email": user.email,
-                "role": user.role.value
+                "role": user.role.value,
             }, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR get_user_info: %s - %s",
-                type(e).__name__,
-                str(e))
+            app_logger.error("❌ ERREUR get_user_info: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -229,13 +223,12 @@ class Register(Resource):
                 validated_data = validate_request(RegisterSchema(), data, strict=False)
             except ValidationError as e:
                 return handle_validation_error(e)
-            
+
             app_logger.info("Données validées : %s", validated_data)
 
             email: str = cast("str", validated_data.get("email"))
             if User.query.filter_by(email=email).first():
-                app_logger.warning(
-                    "Utilisateur déjà existant pour l'email : %s", email)
+                app_logger.warning("Utilisateur déjà existant pour l'email : %s", email)
                 return {"error": "User already exists"}, 409
 
             # Création de l'utilisateur
@@ -243,6 +236,7 @@ class Register(Resource):
             password: str = cast("str", validated_data.get("password"))
             # NB: birth_date vient déjà en objet date (schéma marshmallow)
             import uuid
+
             user = User()
             user.username = username
             user.email = email
@@ -269,13 +263,11 @@ class Register(Resource):
             db.session.commit()
             app_logger.info("Client créé : user_id=%s, client_id=%s", user.id, client.id)
 
-            app_logger.info(
-                "Utilisateur et client enregistrés avec succès : %s",
-                user.id)
+            app_logger.info("Utilisateur et client enregistrés avec succès : %s", user.id)
             return {
                 "message": "User registered successfully!",
                 "user_id": user.public_id,
-                "username": user.username
+                "username": user.username,
             }, 201
 
         except ValidationError as e:
@@ -285,10 +277,7 @@ class Register(Resource):
             sentry_sdk.capture_exception(e)
             # Utiliser repr() pour éviter les problèmes de formatage avec %
             exception_message = repr(e) if "%" in str(e) else str(e)
-            app_logger.exception(
-                "❌ ERREUR register_user: %s - %s",
-                type(e).__name__,
-                exception_message)
+            app_logger.exception("❌ ERREUR register_user: %s - %s", type(e).__name__, exception_message)
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -316,23 +305,21 @@ class ForgotPassword(Resource):
                 return {"error": "Configuration error: SECRET_KEY not set"}, 500
 
             serializer = URLSafeTimedSerializer(secret_key)
-            reset_token = serializer.dumps(
-                user.email, salt="password-reset-salt")
+            reset_token = serializer.dumps(user.email, salt="password-reset-salt")
 
             msg = Message(
                 subject="Réinitialisation de votre mot de passe",
                 recipients=[email],
-                body=f"Cliquez sur ce lien pour réinitialiser votre mot de passe : http://localhost:3000/reset-password/{reset_token}")
+                body=f"Cliquez sur ce lien pour réinitialiser votre mot de passe : http://localhost:3000/reset-password/{reset_token}",
+            )
             mail.send(msg)
             return {"message": "Password reset email sent successfully"}, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR forgot_password: %s - %s",
-                type(e).__name__,
-                str(e))
+            app_logger.error("❌ ERREUR forgot_password: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500
+
 
 # ========================
 # 6. Réinitialisation via Lien
@@ -360,8 +347,5 @@ class ResetPassword(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR reset_password: %s - %s",
-                type(e).__name__,
-                str(e))
+            app_logger.error("❌ ERREUR reset_password: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500

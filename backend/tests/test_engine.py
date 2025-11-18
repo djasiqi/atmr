@@ -8,6 +8,7 @@ Objectif: 70% coverage minimum.
 DTZ003/DTZ011 = datetime.utcnow()/date.today() OK dans tests
 T201 = print() OK dans tests
 """
+
 from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, Mock, patch
 
@@ -40,6 +41,7 @@ class TestEnginePublicAPI:
 
         # Supprimer les bookings et drivers
         from db import db as _db
+
         for booking in scenario["bookings"]:
             _db.session.delete(booking)
         for driver in scenario["drivers"]:
@@ -58,11 +60,7 @@ class TestEnginePublicAPI:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        result = engine.run(
-            company_id=company.id,
-            for_date=day.isoformat(),
-            mode="heuristic_only"
-        )
+        result = engine.run(company_id=company.id, for_date=day.isoformat(), mode="heuristic_only")
 
         # Vérifier qu'on a des assignments
         assert isinstance(result["assignments"], list)
@@ -83,7 +81,7 @@ class TestEnginePublicAPI:
             for_date=day.isoformat(),
             regular_first=True,
             allow_emergency=True,
-            mode="heuristic_only"
+            mode="heuristic_only",
         )
 
         assert isinstance(result["assignments"], list)
@@ -97,19 +95,9 @@ class TestEnginePublicAPI:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        overrides = {
-            "features": {
-                "enable_heuristics": True,
-                "enable_solver": False
-            }
-        }
+        overrides = {"features": {"enable_heuristics": True, "enable_solver": False}}
 
-        result = engine.run(
-            company_id=company.id,
-            for_date=day.isoformat(),
-            overrides=overrides,
-            mode="heuristic_only"
-        )
+        result = engine.run(company_id=company.id, for_date=day.isoformat(), overrides=overrides, mode="heuristic_only")
 
         assert isinstance(result["assignments"], list)
         print("✅ Test overrides OK")
@@ -120,11 +108,7 @@ class TestEnginePublicAPI:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        result = engine.run(
-            company_id=company.id,
-            for_date=day.isoformat(),
-            mode="heuristic_only"
-        )
+        result = engine.run(company_id=company.id, for_date=day.isoformat(), mode="heuristic_only")
 
         assert isinstance(result["assignments"], list)
         assert "debug" in result
@@ -139,16 +123,10 @@ class TestEnginePublicAPI:
         # Mock solver pour éviter calcul lourd
         with patch("services.unified_dispatch.engine.solver") as mock_solver:
             mock_solver.solve.return_value = Mock(
-                assignments=[],
-                unassigned_booking_ids=[b.id for b in scenario["bookings"]],
-                debug={}
+                assignments=[], unassigned_booking_ids=[b.id for b in scenario["bookings"]], debug={}
             )
 
-            result = engine.run(
-                company_id=company.id,
-                for_date=day.isoformat(),
-                mode="solver_only"
-            )
+            result = engine.run(company_id=company.id, for_date=day.isoformat(), mode="solver_only")
 
             assert isinstance(result["assignments"], list)
             print("✅ Test solver_only mode OK")
@@ -163,11 +141,7 @@ class TestEnginePublicAPI:
         DispatchRun.query.filter_by(company_id=company.id, day=day).delete()
         db.session.commit()
 
-        result = engine.run(
-            company_id=company.id,
-            for_date=day.isoformat(),
-            mode="heuristic_only"
-        )
+        result = engine.run(company_id=company.id, for_date=day.isoformat(), mode="heuristic_only")
 
         # Vérifier le résultat de base
         assert isinstance(result["assignments"], list)
@@ -188,11 +162,7 @@ class TestEnginePublicAPI:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        result = engine.run(
-            company_id=company.id,
-            for_date=day.isoformat(),
-            mode="heuristic_only"
-        )
+        result = engine.run(company_id=company.id, for_date=day.isoformat(), mode="heuristic_only")
 
         # Vérifier le résultat de base
         assert isinstance(result["assignments"], list)
@@ -280,10 +250,7 @@ class TestEngineInternalFunctions:
 
     def test_analyze_unassigned_reasons_no_drivers(self, db, simple_booking):
         """Test _analyze_unassigned_reasons quand pas de drivers."""
-        problem = {
-            "bookings": [simple_booking],
-            "drivers": []
-        }
+        problem = {"bookings": [simple_booking], "drivers": []}
         assignments = []
         unassigned_ids = [simple_booking.id]
 
@@ -306,7 +273,7 @@ class TestEngineInternalFunctions:
             "company_id": company.id,
             "company": company,
             "for_date": "2025-0.1-15",
-            "dispatch_run_id": 123
+            "dispatch_run_id": 123,
         }
 
         s = settings.for_company(company)
@@ -350,7 +317,7 @@ class TestEngineInternalFunctions:
 class TestEngineApplyAndEmit:
     """Tests pour _apply_and_emit."""
 
-    def test_apply_and_emit_empty_assignments(self,db, sample_company):
+    def test_apply_and_emit_empty_assignments(self, db, sample_company):
         """Test _apply_and_emit avec liste vide."""
         engine._apply_and_emit(sample_company, [], dispatch_run_id=None)
         # Pas d'erreur attendue
@@ -366,6 +333,7 @@ class TestEngineApplyAndEmit:
 
         # Créer un mock assignment
         from services.unified_dispatch.solver import SolverAssignment
+
         base_time = datetime.utcnow()
         assignment = SolverAssignment(
             booking_id=booking.id,
@@ -374,22 +342,20 @@ class TestEngineApplyAndEmit:
             estimated_pickup_min=30,  # 30 minutes depuis base_time
             estimated_dropoff_min=60,  # 60 minutes depuis base_time
             base_time=base_time,
-            dispatch_run_id=dispatch_run.id
+            dispatch_run_id=dispatch_run.id,
         )
 
         # Mock notifications pour éviter erreurs
         with (
             patch("services.unified_dispatch.engine.notify_booking_assigned"),
-            patch("services.unified_dispatch.engine.notify_dispatch_run_completed")
+            patch("services.unified_dispatch.engine.notify_dispatch_run_completed"),
         ):
             engine._apply_and_emit(company, [assignment], dispatch_run_id=dispatch_run.id)
 
         # Vérifier que l'assignment a été créé en DB
         from models.dispatch import Assignment
-        db_assignment = Assignment.query.filter_by(
-            booking_id=booking.id,
-            driver_id=driver.id
-        ).first()
+
+        db_assignment = Assignment.query.filter_by(booking_id=booking.id, driver_id=driver.id).first()
 
         assert db_assignment is not None
         print("✅ Test _apply_and_emit avec assignments OK")
@@ -403,11 +369,7 @@ class TestEngineEdgeCases:
         scenario = dispatch_scenario
         company = scenario["company"]
 
-        result = engine.run(
-            company_id=company.id,
-            for_date="invalid-date",
-            mode="heuristic_only"
-        )
+        result = engine.run(company_id=company.id, for_date="invalid-date", mode="heuristic_only")
 
         # Devrait fallback sur today et continuer
         assert isinstance(result, dict)
@@ -425,10 +387,7 @@ class TestEngineEdgeCases:
         try:
             if lock_acquired:
                 # Tenter un 2e run (devrait être bloqué)
-                result = engine.run(
-                    company_id=company.id,
-                    for_date=day.isoformat()
-                )
+                result = engine.run(company_id=company.id, for_date=day.isoformat())
 
                 assert result["meta"]["reason"] == "locked"
                 print("✅ Test concurrent lock OK")
@@ -446,18 +405,12 @@ class TestEngineEdgeCases:
 
         # Mock data.build_problem_data pour lever une exception
         with patch("services.unified_dispatch.engine.data.build_problem_data", side_effect=Exception("DB Error")):
-            result = engine.run(
-                company_id=company.id,
-                for_date=day.isoformat()
-            )
+            result = engine.run(company_id=company.id, for_date=day.isoformat())
 
             assert result["meta"]["reason"] == "problem_build_failed"
 
             # Vérifier que le dispatch_run est marqué FAILED
-            dispatch_run = DispatchRun.query.filter_by(
-                company_id=company.id,
-                day=day
-            ).first()
+            dispatch_run = DispatchRun.query.filter_by(company_id=company.id, day=day).first()
 
             # Le status peut être FAILED ou COMPLETED selon le timing
             assert dispatch_run is not None
@@ -470,11 +423,10 @@ class TestEngineEdgeCases:
         day = scenario["dispatch_run"].day
 
         # Mock pour retourner problem vide
-        with patch("services.unified_dispatch.engine.data.build_problem_data", return_value={"bookings": [], "drivers": []}):
-            result = engine.run(
-                company_id=company.id,
-                for_date=day.isoformat()
-            )
+        with patch(
+            "services.unified_dispatch.engine.data.build_problem_data", return_value={"bookings": [], "drivers": []}
+        ):
+            result = engine.run(company_id=company.id, for_date=day.isoformat())
 
             assert result["meta"]["reason"] == "no_data"
             print("✅ Test problem vide OK")
@@ -515,17 +467,9 @@ class TestEngineAdditionalCoverage:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        overrides = {
-            "features": {"enable_heuristics": True},
-            "solver": {"max_bookings_per_driver": 10}
-        }
+        overrides = {"features": {"enable_heuristics": True}, "solver": {"max_bookings_per_driver": 10}}
 
-        result = engine.run(
-            company_id=company.id,
-            for_date=day.isoformat(),
-            overrides=overrides,
-            mode="heuristic_only"
-        )
+        result = engine.run(company_id=company.id, for_date=day.isoformat(), overrides=overrides, mode="heuristic_only")
 
         assert isinstance(result["assignments"], list)
         print("✅ Test overrides OK")
@@ -537,10 +481,7 @@ class TestEngineAdditionalCoverage:
         day = scenario["dispatch_run"].day
 
         result = engine.run(
-            company_id=company.id,
-            for_date=day.isoformat(),
-            allow_emergency=True,
-            mode="heuristic_only"
+            company_id=company.id, for_date=day.isoformat(), allow_emergency=True, mode="heuristic_only"
         )
 
         assert isinstance(result["assignments"], list)
@@ -560,14 +501,10 @@ class TestEngineAdditionalCoverage:
         problem = {
             "bookings": [simple_booking],
             "drivers": [],  # Pas de drivers
-            "company": simple_booking.company
+            "company": simple_booking.company,
         }
 
-        reasons = engine._analyze_unassigned_reasons(
-            problem,
-            assignments=[],
-            unassigned_ids=[simple_booking.id]
-        )
+        reasons = engine._analyze_unassigned_reasons(problem, assignments=[], unassigned_ids=[simple_booking.id])
 
         assert isinstance(reasons, dict)
         if simple_booking.id in reasons:
@@ -581,12 +518,7 @@ class TestEngineAdditionalCoverage:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        result = engine.run(
-            company_id=company.id,
-            for_date=day.isoformat(),
-            regular_first=False,
-            mode="heuristic_only"
-        )
+        result = engine.run(company_id=company.id, for_date=day.isoformat(), regular_first=False, mode="heuristic_only")
 
         assert isinstance(result["assignments"], list)
         assert "unassigned" in result
@@ -595,9 +527,11 @@ class TestEngineAdditionalCoverage:
 
 # ========== FIXTURES HELPERS ==========
 
+
 @pytest.fixture
 def mock_redis(monkeypatch):
     """Mock Redis pour tests de verrou."""
+
     class MockRedis:
         def __init__(self):
             self.store = {}
@@ -615,4 +549,3 @@ def mock_redis(monkeypatch):
     mock = MockRedis()
     monkeypatch.setattr("ext.redis_client", mock)
     return mock
-

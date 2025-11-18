@@ -19,8 +19,7 @@ logger = logging.getLogger(__name__)
 class ReportGenerator:
     """Générateur de rapports analytics."""
 
-    def generate_daily_report(self, company_id: int,
-                              day: date) -> Dict[str, Any]:
+    def generate_daily_report(self, company_id: int, day: date) -> Dict[str, Any]:
         """Génère un rapport quotidien.
 
         Args:
@@ -56,14 +55,13 @@ class ReportGenerator:
                 "total_bookings": daily_data.get("bookings", 0),
                 "on_time_rate": daily_data.get("on_time_rate", 0),
                 "avg_delay": daily_data.get("avg_delay", 0),
-                "quality_score": daily_data.get("quality_score", 0)
+                "quality_score": daily_data.get("quality_score", 0),
             },
             "insights": insights,
-            "summary": self._generate_daily_summary(daily_data)
+            "summary": self._generate_daily_summary(daily_data),
         }
 
-    def generate_weekly_report(
-            self, company_id: int, week_start: date) -> Dict[str, Any]:
+    def generate_weekly_report(self, company_id: int, week_start: date) -> Dict[str, Any]:
         """Génère un rapport hebdomadaire.
 
         Args:
@@ -102,11 +100,11 @@ class ReportGenerator:
                 "total_bookings": summary.get("total_bookings", 0),
                 "avg_on_time_rate": summary.get("avg_on_time_rate", 0),
                 "avg_delay": summary.get("avg_delay_minutes", 0),
-                "avg_quality": summary.get("avg_quality_score", 0)
+                "avg_quality": summary.get("avg_quality_score", 0),
             },
             "insights": analytics.get("insights", {}),
             "trends": analytics.get("trends", []),
-            "recommendations": self._generate_weekly_recommendations(analytics, insights)
+            "recommendations": self._generate_weekly_recommendations(analytics, insights),
         }
 
     def _generate_daily_summary(self, daily_data: Dict[str, Any]) -> str:
@@ -135,9 +133,7 @@ class ReportGenerator:
         )
 
     def _generate_weekly_recommendations(
-        self,
-        analytics: Dict[str, Any],
-        insights: list[Dict[str, Any]]
+        self, analytics: Dict[str, Any], insights: list[Dict[str, Any]]
     ) -> list[Dict[str, Any]]:
         """Génère des recommandations hebdomadaires."""
         recommendations = []
@@ -147,33 +143,37 @@ class ReportGenerator:
 
         # Recommandation sur la ponctualité
         if on_time_rate < ON_TIME_RATE_THRESHOLD:
-            recommendations.append({
-                "priority": "high",
-                "title": "Améliorer la ponctualité",
-                "description": "Le taux de ponctualité est faible. Analysez les causes récurrentes de retards."
-            })
+            recommendations.append(
+                {
+                    "priority": "high",
+                    "title": "Améliorer la ponctualité",
+                    "description": "Le taux de ponctualité est faible. Analysez les causes récurrentes de retards.",
+                }
+            )
 
         # Recommandations des insights
         for insight in insights:
-            if insight.get("priority") == "critical" or insight.get(
-                    "priority") == "high":
-                recommendations.append({
-                    "priority": insight.get("priority"),
-                    "title": insight.get("title"),
-                    "description": insight.get("message")
-                })
+            if insight.get("priority") == "critical" or insight.get("priority") == "high":
+                recommendations.append(
+                    {
+                        "priority": insight.get("priority"),
+                        "title": insight.get("title"),
+                        "description": insight.get("message"),
+                    }
+                )
 
         if not recommendations:
-            recommendations.append({
-                "priority": "low",
-                "title": "Maintenir la performance",
-                "description": "Continuez sur cette lancée ! Aucune action urgente requise."
-            })
+            recommendations.append(
+                {
+                    "priority": "low",
+                    "title": "Maintenir la performance",
+                    "description": "Continuez sur cette lancée ! Aucune action urgente requise.",
+                }
+            )
 
         return recommendations
 
-    def generate_email_content(
-            self, report: Dict[str, Any], report_type: str = "daily") -> Dict[str, str]:
+    def generate_email_content(self, report: Dict[str, Any], report_type: str = "daily") -> Dict[str, str]:
         """Génère le contenu d'un email à partir d'un rapport.
 
         Args:
@@ -215,7 +215,7 @@ class ReportGenerator:
                         <strong>Total Courses</strong>
                     </td>
                     <td style="padding: 10px; border-bottom: 1px solid #e5e5e5;">
-                        {metrics.get('total_bookings', 0)}
+                        {metrics.get("total_bookings", 0)}
                     </td>
                 </tr>
                 <tr>
@@ -223,7 +223,7 @@ class ReportGenerator:
                         <strong>Taux de ponctualité</strong>
                     </td>
                     <td style="padding: 10px; border-bottom: 1px solid #e5e5e5;">
-                        {metrics.get('on_time_rate', 0):.1f}%
+                        {metrics.get("on_time_rate", 0):.1f}%
                     </td>
                 </tr>
                 <tr>
@@ -231,7 +231,7 @@ class ReportGenerator:
                         <strong>Retard moyen</strong>
                     </td>
                     <td style="padding: 10px; border-bottom: 1px solid #e5e5e5;">
-                        {metrics.get('avg_delay', 0):.1f} min
+                        {metrics.get("avg_delay", 0):.1f} min
                     </td>
                 </tr>
                 <tr>
@@ -239,7 +239,7 @@ class ReportGenerator:
                         <strong>Score de qualité</strong>
                     </td>
                     <td style="padding: 10px;">
-                        {metrics.get('quality_score', 0):.0f}/100
+                        {metrics.get("quality_score", 0):.0f}/100
                     </td>
                 </tr>
             </table>
@@ -270,8 +270,8 @@ class ReportGenerator:
             emoji = "🔴" if priority == "critical" else "⚠️" if priority == "high" else "ℹ️"
             reco_html += f"""
             <li style="margin-bottom: 10px;">
-                {emoji} <strong>{reco.get('title', '')}</strong><br>
-                <span style="color: #666; font-size: 14px;">{reco.get('description', '')}</span>
+                {emoji} <strong>{reco.get("title", "")}</strong><br>
+                <span style="color: #666; font-size: 14px;">{reco.get("description", "")}</span>
             </li>
             """
 
@@ -288,7 +288,7 @@ class ReportGenerator:
                         <strong>Total Courses</strong>
                     </td>
                     <td style="padding: 10px; border-bottom: 1px solid #e5e5e5;">
-                        {summary.get('total_bookings', 0)}
+                        {summary.get("total_bookings", 0)}
                     </td>
                 </tr>
                 <tr>
@@ -296,7 +296,7 @@ class ReportGenerator:
                         <strong>Taux de ponctualité moyen</strong>
                     </td>
                     <td style="padding: 10px; border-bottom: 1px solid #e5e5e5;">
-                        {summary.get('avg_on_time_rate', 0):.1f}%
+                        {summary.get("avg_on_time_rate", 0):.1f}%
                     </td>
                 </tr>
                 <tr>
@@ -304,7 +304,7 @@ class ReportGenerator:
                         <strong>Retard moyen</strong>
                     </td>
                     <td style="padding: 10px; border-bottom: 1px solid #e5e5e5;">
-                        {summary.get('avg_delay', 0):.1f} min
+                        {summary.get("avg_delay", 0):.1f} min
                     </td>
                 </tr>
                 <tr>
@@ -312,7 +312,7 @@ class ReportGenerator:
                         <strong>Score de qualité moyen</strong>
                     </td>
                     <td style="padding: 10px;">
-                        {summary.get('avg_quality', 0):.0f}/100
+                        {summary.get("avg_quality", 0):.0f}/100
                     </td>
                 </tr>
             </table>
@@ -341,13 +341,11 @@ def generate_daily_report(company_id: int, day: date) -> Dict[str, Any]:
     return _report_generator.generate_daily_report(company_id, day)
 
 
-def generate_weekly_report(
-        company_id: int, week_start: date) -> Dict[str, Any]:
+def generate_weekly_report(company_id: int, week_start: date) -> Dict[str, Any]:
     """Helper function."""
     return _report_generator.generate_weekly_report(company_id, week_start)
 
 
-def generate_email_content(
-        report: Dict[str, Any], report_type: str = "daily") -> Dict[str, str]:
+def generate_email_content(report: Dict[str, Any], report_type: str = "daily") -> Dict[str, str]:
     """Helper function."""
     return _report_generator.generate_email_content(report, report_type)

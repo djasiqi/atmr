@@ -31,8 +31,10 @@ if TYPE_CHECKING:
 try:
     from app import sentry_sdk
 except Exception:
+
     class _S:
         def capture_exception(*a, **k): ...
+
     sentry_sdk = _S()
 
 driver_ns = Namespace("driver", description="Gestion des chauffeurs")
@@ -40,47 +42,65 @@ driver_ns = Namespace("driver", description="Gestion des chauffeurs")
 # ---------------------------
 # Modèles Swagger
 # ---------------------------
-driver_profile_model = driver_ns.model("DriverProfileUpdate", {
-    "first_name": fields.String(description="Prénom", min_length=1, max_length=100),
-    "last_name": fields.String(description="Nom", min_length=1, max_length=100),
-    "phone": fields.String(description="Téléphone", max_length=20),
-    "status": fields.String(description="Statut", enum=["disponible", "hors service"]),
-    # HR fields
-    "contract_type": fields.String(description="Type de contrat (max 50 caractères)", max_length=50),
-    "weekly_hours": fields.Integer(description="Heures contrat / semaine (0-168)", minimum=0, maximum=168),
-    "hourly_rate_cents": fields.Integer(description="Taux horaire (centimes, >= 0)", minimum=0),
-    "employment_start_date": fields.String(description="Date de début (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"),
-    "employment_end_date": fields.String(description="Date de fin (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"),
-    "license_categories": fields.List(fields.String(description="Catégorie de permis", max_length=10), description="Ex: ['B','C1'] (max 10 catégories)"),
-    "license_valid_until": fields.String(description="Validité permis (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"),
-    "trainings": fields.List(fields.Raw(description="Formation: {name, valid_until}"), description="Formations (max 50)"),
-    "medical_valid_until": fields.String(description="Validité médicale (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"),
-})
+driver_profile_model = driver_ns.model(
+    "DriverProfileUpdate",
+    {
+        "first_name": fields.String(description="Prénom", min_length=1, max_length=100),
+        "last_name": fields.String(description="Nom", min_length=1, max_length=100),
+        "phone": fields.String(description="Téléphone", max_length=20),
+        "status": fields.String(description="Statut", enum=["disponible", "hors service"]),
+        # HR fields
+        "contract_type": fields.String(description="Type de contrat (max 50 caractères)", max_length=50),
+        "weekly_hours": fields.Integer(description="Heures contrat / semaine (0-168)", minimum=0, maximum=168),
+        "hourly_rate_cents": fields.Integer(description="Taux horaire (centimes, >= 0)", minimum=0),
+        "employment_start_date": fields.String(
+            description="Date de début (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"
+        ),
+        "employment_end_date": fields.String(description="Date de fin (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"),
+        "license_categories": fields.List(
+            fields.String(description="Catégorie de permis", max_length=10),
+            description="Ex: ['B','C1'] (max 10 catégories)",
+        ),
+        "license_valid_until": fields.String(
+            description="Validité permis (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"
+        ),
+        "trainings": fields.List(
+            fields.Raw(description="Formation: {name, valid_until}"), description="Formations (max 50)"
+        ),
+        "medical_valid_until": fields.String(
+            description="Validité médicale (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"
+        ),
+    },
+)
 
-photo_model = driver_ns.model("DriverPhoto", {
-    "photo": fields.String(required=True, description="Photo en Base64 ou URL")
-})
+photo_model = driver_ns.model(
+    "DriverPhoto", {"photo": fields.String(required=True, description="Photo en Base64 ou URL")}
+)
 
-location_model = driver_ns.model("DriverLocation", {
-    "latitude": fields.Float(required=True, description="Latitude"),
-    "longitude": fields.Float(required=True, description="Longitude"),
-    "speed": fields.Float(required=False, description="Vitesse m/s"),
-    "heading": fields.Float(required=False, description="Cap en degrés"),
-    "accuracy": fields.Float(required=False, description="Précision en mètres"),
-    "ts": fields.String(required=False, description="Horodatage ISO8601")
-})
+location_model = driver_ns.model(
+    "DriverLocation",
+    {
+        "latitude": fields.Float(required=True, description="Latitude"),
+        "longitude": fields.Float(required=True, description="Longitude"),
+        "speed": fields.Float(required=False, description="Vitesse m/s"),
+        "heading": fields.Float(required=False, description="Cap en degrés"),
+        "accuracy": fields.Float(required=False, description="Précision en mètres"),
+        "ts": fields.String(required=False, description="Horodatage ISO8601"),
+    },
+)
 
-booking_status_model = driver_ns.model("BookingStatusUpdate", {
-    "status": fields.String(
-        required=True,
-        description="Nouveau statut (en_route, in_progress, completed, return_completed)"
-    )
-})
+booking_status_model = driver_ns.model(
+    "BookingStatusUpdate",
+    {
+        "status": fields.String(
+            required=True, description="Nouveau statut (en_route, in_progress, completed, return_completed)"
+        )
+    },
+)
 
 availability_model = driver_ns.model(
-    "DriverAvailability", {
-        "is_available": fields.Boolean(
-            required=True, description="Disponibilité du chauffeur")})
+    "DriverAvailability", {"is_available": fields.Boolean(required=True, description="Disponibilité du chauffeur")}
+)
 
 # ---------------------------
 # Helpers
@@ -102,8 +122,7 @@ def get_driver_from_token() -> tuple[Driver | None, dict[str, Any] | None, int |
     app_logger.info(f"User details: id={user.id}, role={user.role}")
 
     if user.role != UserRole.driver:
-        app_logger.error(
-            f"User {getattr(user, 'username', user.id)} n'a pas le rôle 'driver'")
+        app_logger.error(f"User {getattr(user, 'username', user.id)} n'a pas le rôle 'driver'")
         return None, {"error": "Driver not found"}, 404
 
     driver = Driver.query.filter_by(user_id=user.id).one_or_none()
@@ -111,8 +130,7 @@ def get_driver_from_token() -> tuple[Driver | None, dict[str, Any] | None, int |
         app_logger.error("Driver not found for user ID: {user.id}")
         return None, {"error": "Driver not found"}, 404
 
-    app_logger.info(
-        f"Driver found: {driver.id} for user {getattr(user, 'username', user.id)}")
+    app_logger.info(f"Driver found: {driver.id} for user {getattr(user, 'username', user.id)}")
     return driver, None, None
 
 
@@ -120,8 +138,7 @@ def notify_driver_new_booking(driver_id: int, booking: Booking) -> None:
     """Notifie le chauffeur d'une nouvelle mission assignée."""
     room = f"driver_{driver_id}"
     socketio.emit("new_booking", booking.to_dict(), to=room)
-    app_logger.info(
-        f"📤 new_booking émis vers {room} pour booking_id={booking.id}")
+    app_logger.info(f"📤 new_booking émis vers {room} pour booking_id={booking.id}")
 
 
 def notify_booking_update(driver_id: int, booking: Booking) -> None:
@@ -129,13 +146,13 @@ def notify_booking_update(driver_id: int, booking: Booking) -> None:
     room = f"driver_{driver_id}"
     # ✅ FIX: Émettre "new_booking" au lieu de "booking_updated" pour cohérence avec le mobile
     socketio.emit("new_booking", booking.to_dict(), to=room)
-    app_logger.info(
-        f"📤 new_booking (update) émis vers {room} pour booking_id={booking.id}")
+    app_logger.info(f"📤 new_booking (update) émis vers {room} pour booking_id={booking.id}")
 
 
 def notify_booking_cancelled(driver_id: int, booking_id: int) -> None:
     room = f"driver_{driver_id}"
     socketio.emit("booking_cancelled", {"id": booking_id}, to=room)
+
 
 # ---------------------------
 # Routes
@@ -165,18 +182,18 @@ class DriverProfile(Resource):
         driver = cast("Driver", driver)
 
         data = request.get_json() or {}
-        
+
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
         from marshmallow import ValidationError
 
         from schemas.driver_schemas import DriverProfileUpdateSchema
         from schemas.validation_utils import handle_validation_error, validate_request
-        
+
         try:
             validated_data = validate_request(DriverProfileUpdateSchema(), data, strict=False)
         except ValidationError as e:
             return handle_validation_error(e)
-        
+
         app_logger.info(f"Payload reçu pour mise à jour du profil: {validated_data}")
         if not driver.user:
             return {"error": "Aucun utilisateur associé au driver"}, 500
@@ -205,7 +222,7 @@ class DriverProfile(Resource):
                 driver.weekly_hours = validated_data["weekly_hours"]
             if validated_data.get("hourly_rate_cents") is not None:
                 driver.hourly_rate_cents = validated_data["hourly_rate_cents"]
-            
+
             # Dates (déjà validées par Marshmallow comme Date)
             if validated_data.get("employment_start_date"):
                 driver.employment_start_date = validated_data["employment_start_date"]
@@ -215,7 +232,7 @@ class DriverProfile(Resource):
                 driver.license_valid_until = validated_data["license_valid_until"]
             if validated_data.get("medical_valid_until"):
                 driver.medical_valid_until = validated_data["medical_valid_until"]
-            
+
             # Listes
             if validated_data.get("license_categories"):
                 driver.license_categories = [str(cat) for cat in validated_data["license_categories"]]
@@ -223,16 +240,12 @@ class DriverProfile(Resource):
                 driver.trainings = validated_data["trainings"]
 
             db.session.commit()
-            app_logger.info(
-                f"Profil du driver {driver.id} mis à jour avec succès")
-            return {"profile": driver.serialize,
-                    "message": "Profil mis à jour avec succès"}, 200
+            app_logger.info(f"Profil du driver {driver.id} mis à jour avec succès")
+            return {"profile": driver.serialize, "message": "Profil mis à jour avec succès"}, 200
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                f"❌ ERREUR update_driver_profile: {type(e).__name__} - {e!s}",
-                exc_info=True)
+            app_logger.error(f"❌ ERREUR update_driver_profile: {type(e).__name__} - {e!s}", exc_info=True)
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -260,16 +273,12 @@ class DriverPhoto(Resource):
         driver.driver_photo = photo_data
         try:
             db.session.commit()
-            app_logger.info(
-                f"Photo du driver {driver.id} mise à jour avec succès")
-            return {"profile": driver.serialize,
-                    "message": "Photo mise à jour avec succès"}, 200
+            app_logger.info(f"Photo du driver {driver.id} mise à jour avec succès")
+            return {"profile": driver.serialize, "message": "Photo mise à jour avec succès"}, 200
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                f"❌ ERREUR update_driver_photo: {type(e).__name__} - {e!s}",
-                exc_info=True)
+            app_logger.error(f"❌ ERREUR update_driver_photo: {type(e).__name__} - {e!s}", exc_info=True)
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -285,40 +294,39 @@ class DriverUpcomingBookings(Resource):
 
         # 🔍 LOG : Vérifier quel chauffeur charge ses missions
         driver_name = f"{driver.user.first_name} {driver.user.last_name}" if driver.user else f"#{driver.id}"
-        app_logger.info(
-            f"📱 [Driver Bookings] Driver {driver_name} (ID: {driver.id}) loading bookings")
+        app_logger.info(f"📱 [Driver Bookings] Driver {driver_name} (ID: {driver.id}) loading bookings")
 
         from datetime import date
 
         from shared.time_utils import day_local_bounds
 
         # ✅ Récupérer les courses d'AUJOURD'HUI (passées et futures) tant qu'elles ne sont pas terminées
-        today_start, today_end = day_local_bounds(
-            date.today().strftime("%Y-%m-%d"))
-        
+        today_start, today_end = day_local_bounds(date.today().strftime("%Y-%m-%d"))
+
         # S'assurer que ce sont des objets datetime pour SQLAlchemy
         from datetime import datetime
+
         today_start = datetime.fromisoformat(str(today_start))
         today_end = datetime.fromisoformat(str(today_end))
 
-        status_pred = Booking.status.in_([
-            BookingStatus.ASSIGNED,
-            BookingStatus.EN_ROUTE,
-            BookingStatus.IN_PROGRESS
-        ])
+        status_pred = Booking.status.in_([BookingStatus.ASSIGNED, BookingStatus.EN_ROUTE, BookingStatus.IN_PROGRESS])
 
-            
-        bookings = Booking.query.filter_by(driver_id=driver.id).filter(
-            Booking.scheduled_time >= today_start,
-            Booking.scheduled_time < today_end
-        ).filter(status_pred).order_by(Booking.scheduled_time.asc()).all()
+        bookings = (
+            Booking.query.filter_by(driver_id=driver.id)
+            .filter(Booking.scheduled_time >= today_start, Booking.scheduled_time < today_end)
+            .filter(status_pred)
+            .order_by(Booking.scheduled_time.asc())
+            .all()
+        )
 
         # 🔍 LOG : Afficher les courses trouvées
         app_logger.info(
-            f"📱 [Driver Bookings] Found {len(bookings)} bookings for driver {driver_name} (ID: {driver.id})")
+            f"📱 [Driver Bookings] Found {len(bookings)} bookings for driver {driver_name} (ID: {driver.id})"
+        )
         for b in bookings:
             app_logger.info(
-                f"   - Booking #{b.id}: driver_id={b.driver_id}, client={b.customer_name}, time={b.scheduled_time}")
+                f"   - Booking #{b.id}: driver_id={b.driver_id}, client={b.customer_name}, time={b.scheduled_time}"
+            )
 
         return [b.serialize for b in bookings], 200
 
@@ -340,20 +348,17 @@ class DriverBookingsETA(Resource):
         from shared.time_utils import day_local_bounds, now_local
 
         # Récupérer les courses d'aujourd'hui (non terminées)
-        today_start, today_end = day_local_bounds(
-            date.today().strftime("%Y-%m-%d"))
+        today_start, today_end = day_local_bounds(date.today().strftime("%Y-%m-%d"))
 
-        status_pred = Booking.status.in_([
-            BookingStatus.ASSIGNED,
-            BookingStatus.EN_ROUTE,
-            BookingStatus.IN_PROGRESS
-        ])
+        status_pred = Booking.status.in_([BookingStatus.ASSIGNED, BookingStatus.EN_ROUTE, BookingStatus.IN_PROGRESS])
 
-            
-        bookings = Booking.query.filter_by(driver_id=driver.id).filter(
-            Booking.scheduled_time >= today_start,
-            Booking.scheduled_time < today_end
-        ).filter(status_pred).order_by(Booking.scheduled_time.asc()).all()
+        bookings = (
+            Booking.query.filter_by(driver_id=driver.id)
+            .filter(Booking.scheduled_time >= today_start, Booking.scheduled_time < today_end)
+            .filter(status_pred)
+            .order_by(Booking.scheduled_time.asc())
+            .all()
+        )
 
         # Position actuelle du chauffeur
         driver_lat = getattr(driver, "latitude", None)
@@ -364,12 +369,9 @@ class DriverBookingsETA(Resource):
             return {
                 "has_gps": False,
                 "bookings": [
-                    {
-                        "id": b.id,
-                        "duration_seconds": b.duration_seconds,
-                        "distance_meters": b.distance_meters
-                    } for b in bookings
-                ]
+                    {"id": b.id, "duration_seconds": b.duration_seconds, "distance_meters": b.distance_meters}
+                    for b in bookings
+                ],
             }, 200
 
         driver_pos = (float(driver_lat), float(driver_lon))
@@ -399,8 +401,7 @@ class DriverBookingsETA(Resource):
                         pickup_to_dropoff = calc_eta(pickup_pos, dropoff_pos)
                         total_duration = pickup_to_dropoff
                 except Exception as e:
-                    app_logger.warning(
-                        f"ETA calculation failed for booking {booking.id}: {e}")
+                    app_logger.warning(f"ETA calculation failed for booking {booking.id}: {e}")
 
             results.append(
                 {
@@ -408,16 +409,13 @@ class DriverBookingsETA(Resource):
                     "eta_to_pickup_seconds": eta_to_pickup,
                     "duration_seconds": total_duration,
                     "distance_meters": booking.distance_meters,
-                    "estimated_arrival": (
-                        current_time +
-                        timedelta(
-                            seconds=eta_to_pickup)).isoformat() if eta_to_pickup else None})
+                    "estimated_arrival": (current_time + timedelta(seconds=eta_to_pickup)).isoformat()
+                    if eta_to_pickup
+                    else None,
+                }
+            )
 
-        return {
-            "has_gps": True,
-            "driver_position": {"lat": driver_lat, "lon": driver_lon},
-            "bookings": results
-        }, 200
+        return {"has_gps": True, "driver_position": {"lat": driver_lat, "lon": driver_lon}, "bookings": results}, 200
 
 
 @driver_ns.route("/me/location")
@@ -451,11 +449,13 @@ class DriverLocation(Resource):
                 try:
                     lat = float(p["latitude"])
                     lon = float(p["longitude"])
-                    
-                    if result is None and ((not (-LAT_THRESHOLD <= lat <= LAT_THRESHOLD)) or not (-LON_THRESHOLD <= lon <= LON_THRESHOLD)):
+
+                    if result is None and (
+                        (not (-LAT_THRESHOLD <= lat <= LAT_THRESHOLD)) or not (-LON_THRESHOLD <= lon <= LON_THRESHOLD)
+                    ):
                         result = {"error": "Coordinates out of valid range"}
                         status_code = 400
-                    
+
                     if result is None:
                         speed = float(p.get("speed", 0.0) or 0.0)
                         heading = float(p.get("heading", 0.0) or 0.0)
@@ -470,10 +470,7 @@ class DriverLocation(Resource):
 
                         # 1) Snap sur chaussée la plus proche
                         try:
-                            r = requests.get(
-                                f"{OSRM}/nearest/v1/driving/{lon},{lat}",
-                                params={"number": 1}, timeout=2
-                            )
+                            r = requests.get(f"{OSRM}/nearest/v1/driving/{lon},{lat}", params={"number": 1}, timeout=2)
                             if r.ok:
                                 loc = r.json()["waypoints"][0]["location"]
                                 lon, lat = float(loc[0]), float(loc[1])
@@ -481,12 +478,7 @@ class DriverLocation(Resource):
                         except Exception:
                             pass
 
-                        point = {
-                            "ts": ts,
-                            "lat": lat,
-                            "lon": lon,
-                            "speed": speed,
-                            "heading": heading}
+                        point = {"ts": ts, "lat": lat, "lon": lon, "speed": speed, "heading": heading}
 
                         # 2) Ring buffer pour /match
                         try:
@@ -501,22 +493,19 @@ class DriverLocation(Resource):
                         # 3) Lissage map-matching si on a assez de points
                         try:
                             redis_match: Any = redis_client
-                            pts_raw = redis_match.lrange(
-                                f"driver:{driver.id}:ring", 0, MATCH_WINDOW - 1)
+                            pts_raw = redis_match.lrange(f"driver:{driver.id}:ring", 0, MATCH_WINDOW - 1)
                             pts = [json.loads(x) for x in pts_raw] if pts_raw else []
                             if len(pts) >= MIN_POINTS_FOR_MATCHING:
-                                coords = ";".join(
-                                    f'{pp["lon"]:.6f},{pp["lat"]:.6f}' for pp in reversed(pts))
+                                coords = ";".join(f"{pp['lon']:.6f},{pp['lat']:.6f}" for pp in reversed(pts))
                                 r2 = requests.get(
                                     f"{OSRM}/match/v1/driving/{coords}",
-                                    params={"tidy": "true", "overview": "false"}, timeout=3
+                                    params={"tidy": "true", "overview": "false"},
+                                    timeout=3,
                                 )
                                 if r2.ok and r2.json().get("matchings"):
                                     tp = r2.json()["tracepoints"][-1]
                                     if tp and tp.get("location"):
-                                        lon, lat = float(
-                                            tp["location"][0]), float(
-                                            tp["location"][1])
+                                        lon, lat = float(tp["location"][0]), float(tp["location"][1])
                                         source = "osrm_match"
                         except Exception:
                             pass
@@ -533,12 +522,19 @@ class DriverLocation(Resource):
                         try:
                             redis_loc: Any = redis_client
                             key = f"driver:{driver.id}:loc"
-                            redis_loc.hset(key, mapping={
-                                "company_id": driver.company_id,
-                                "lat": lat, "lon": lon,
-                                "speed": speed, "heading": heading,
-                                "accuracy": accuracy, "ts": ts, "source": source
-                            })
+                            redis_loc.hset(
+                                key,
+                                mapping={
+                                    "company_id": driver.company_id,
+                                    "lat": lat,
+                                    "lon": lon,
+                                    "speed": speed,
+                                    "heading": heading,
+                                    "accuracy": accuracy,
+                                    "ts": ts,
+                                    "source": source,
+                                },
+                            )
                             redis_loc.expire(key, TTL)
                         except Exception:
                             pass
@@ -546,28 +542,32 @@ class DriverLocation(Resource):
                         # 5) Diffusion temps réel à la room entreprise
                         try:
                             room = f"company_{driver.company_id}"
-                            socketio.emit("driver_location", {
-                                "driver_id": driver.id,
-                                "company_id": driver.company_id,
-                                "lat": lat, "lon": lon,
-                                "speed": speed, "heading": heading,
-                                "accuracy": accuracy, "ts": ts, "source": source,
-                            }, to=room)
+                            socketio.emit(
+                                "driver_location",
+                                {
+                                    "driver_id": driver.id,
+                                    "company_id": driver.company_id,
+                                    "lat": lat,
+                                    "lon": lon,
+                                    "speed": speed,
+                                    "heading": heading,
+                                    "accuracy": accuracy,
+                                    "ts": ts,
+                                    "source": source,
+                                },
+                                to=room,
+                            )
                         except Exception:
                             pass
 
-                        result = {"ok": True, "source": source,
-                                 "message": "Location updated"}
+                        result = {"ok": True, "source": source, "message": "Location updated"}
                 except (ValueError, TypeError):
                     result = {"error": "Invalid coordinate format"}
                     status_code = 400
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ Unexpected error in location update: %s",
-                e,
-                exc_info=True)
+            app_logger.error("❌ Unexpected error in location update: %s", e, exc_info=True)
             app_logger.error("❌ Request data: %s", request.get_data())
             result = {"error": f"Internal error: {e!s}"}
             status_code = 500
@@ -586,8 +586,7 @@ class BookingDetails(Resource):
                 return error_response, status_code
             driver = cast("Driver", driver)
 
-            booking = Booking.query.filter_by(
-                id=booking_id, driver_id=driver.id).one_or_none()
+            booking = Booking.query.filter_by(id=booking_id, driver_id=driver.id).one_or_none()
             if not booking:
                 return {"error": "Booking not found"}, 404
 
@@ -610,9 +609,7 @@ class BookingDetails(Resource):
             }, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                f"❌ ERREUR get_booking_details: {type(e).__name__} - {e!s}",
-                exc_info=True)
+            app_logger.error(f"❌ ERREUR get_booking_details: {type(e).__name__} - {e!s}", exc_info=True)
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -638,6 +635,7 @@ class CompanyLiveLocations(Resource):
                         return v.decode()
                     except Exception:
                         return v
+
                 # h peut être dict[bytes, bytes] ; on force le cast pour
                 # Pylance
                 rec = {(_dec(k)): _dec(v) for k, v in cast("dict[str, str]", h).items()}
@@ -654,8 +652,7 @@ class CompanyLiveLocations(Resource):
             return {"items": []}, 200
 
 
-@driver_ns.route("/me/bookings/<int:booking_id>/status",
-                 methods=["PUT", "OPTIONS"])
+@driver_ns.route("/me/bookings/<int:booking_id>/status", methods=["PUT", "OPTIONS"])
 class UpdateBookingStatus(Resource):
     @jwt_required()
     @role_required(UserRole.driver)
@@ -664,7 +661,7 @@ class UpdateBookingStatus(Resource):
         # Variables pour stocker le résultat
         result = None
         status_code = 200
-        
+
         if request.method == "OPTIONS":
             result = {}
             status_code = 200
@@ -675,9 +672,7 @@ class UpdateBookingStatus(Resource):
             try:
                 driver, error_response, status_code = get_driver_from_token()
                 if error_response:
-                    app_logger.error(
-                        "Driver not found for token: %s",
-                        get_jwt_identity())
+                    app_logger.error("Driver not found for token: %s", get_jwt_identity())
                     result = error_response
                 else:
                     driver = cast("Driver", driver)
@@ -697,11 +692,7 @@ class UpdateBookingStatus(Resource):
                         status_code = 400
                     else:
                         new_status_str = data.get("status")
-                        valid_statuses = [
-                            "en_route",
-                            "in_progress",
-                            "completed",
-                            "return_completed"]
+                        valid_statuses = ["en_route", "in_progress", "completed", "return_completed"]
                         if new_status_str not in valid_statuses:
                             result = {"error": "Invalid status"}
                             status_code = 400
@@ -769,11 +760,7 @@ class UpdateBookingStatus(Resource):
 
             except Exception as e:
                 sentry_sdk.capture_exception(e)
-                app_logger.error(
-                    "❌ ERREUR update_booking_status: %s - %s",
-                    type(e).__name__,
-                    str(e),
-                    exc_info=True)
+                app_logger.error("❌ ERREUR update_booking_status: %s - %s", type(e).__name__, str(e), exc_info=True)
                 result = {"error": "Une erreur interne est survenue."}
                 status_code = 500
 
@@ -788,13 +775,11 @@ class RejectBooking(Resource):
         """Réjette une réservation assignée."""
         try:
             current_user_id = get_jwt_identity()
-            driver = Driver.query.filter_by(
-                user_id=current_user_id).one_or_none()
+            driver = Driver.query.filter_by(user_id=current_user_id).one_or_none()
             if not driver:
                 return {"error": "Unauthorized: Driver not found"}, 403
 
-            booking = Booking.query.filter_by(
-                id=booking_id, driver_id=driver.id).one_or_none()
+            booking = Booking.query.filter_by(id=booking_id, driver_id=driver.id).one_or_none()
             if not booking:
                 return {"error": "Booking not found"}, 404
             if booking.status != BookingStatus.ASSIGNED:
@@ -809,9 +794,7 @@ class RejectBooking(Resource):
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                f"❌ ERREUR reject_booking: {type(e).__name__} - {e!s}",
-                exc_info=True)
+            app_logger.error(f"❌ ERREUR reject_booking: {type(e).__name__} - {e!s}", exc_info=True)
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -824,8 +807,7 @@ class UpdateAvailability(Resource):
         """Met à jour la disponibilité du chauffeur."""
         try:
             current_user_id = get_jwt_identity()
-            driver = Driver.query.filter_by(
-                user_id=current_user_id).one_or_none()
+            driver = Driver.query.filter_by(user_id=current_user_id).one_or_none()
             if not driver:
                 return {"error": "Unauthorized: Driver not found"}, 403
 
@@ -841,9 +823,7 @@ class UpdateAvailability(Resource):
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                f"❌ ERREUR update_availability: {type(e).__name__} - {e!s}",
-                exc_info=True)
+            app_logger.error(f"❌ ERREUR update_availability: {type(e).__name__} - {e!s}", exc_info=True)
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -873,8 +853,7 @@ class ReportBookingIssue(Resource):
             return error_response, status_code
         driver = cast("Driver", driver)
 
-        booking = Booking.query.filter_by(
-            id=booking_id, driver_id=driver.id).one_or_none()
+        booking = Booking.query.filter_by(id=booking_id, driver_id=driver.id).one_or_none()
         if not booking:
             return {"error": "Booking not found"}, 404
 
@@ -900,7 +879,7 @@ class SavePushToken(Resource):
         # Variables pour stocker le résultat
         result = None
         status_code = 200
-        
+
         try:
             # Log & typage strict
             payload_raw = request.get_json(force=True) or {}
@@ -908,8 +887,7 @@ class SavePushToken(Resource):
             payload: dict[str, Any] = tcast("dict[str, Any]", payload_raw)
 
             # token (expo/fcm) requis
-            token_any: Any = payload.get("token") or payload.get(
-                "expo_token") or payload.get("push_token")
+            token_any: Any = payload.get("token") or payload.get("expo_token") or payload.get("push_token")
             if not isinstance(token_any, str) or len(token_any) < MIN_TOKEN_LENGTH:
                 result = {"error": "Token FCM/Expo invalide ou manquant."}
                 status_code = 400
@@ -924,18 +902,15 @@ class SavePushToken(Resource):
                         # Convertir en float d'abord pour gérer les nombres
                         # décimaux, puis en int
                         driver_id = int(float(raw_id))
-                        app_logger.info(
-                            f"[push-token] driver_id extrait du payload: {driver_id}")
+                        app_logger.info(f"[push-token] driver_id extrait du payload: {driver_id}")
                     except (ValueError, TypeError) as e:
-                        app_logger.warning(
-                            f"[push-token] Impossible de convertir driver_id={raw_id}: {e}")
+                        app_logger.warning(f"[push-token] Impossible de convertir driver_id={raw_id}: {e}")
                         result = {"error": f"Format de driverId invalide: {raw_id}"}
                         status_code = 400
 
                 # 2) sinon on déduit depuis le JWT (user -> driver)
                 if result is None and driver_id is None:
-                    app_logger.info(
-                        "[push-token] driver_id absent du payload, déduction depuis JWT")
+                    app_logger.info("[push-token] driver_id absent du payload, déduction depuis JWT")
                     user_pid = get_jwt_identity()
                     if not user_pid:
                         result = {"error": "Token JWT invalide ou expiré."}
@@ -952,15 +927,13 @@ class SavePushToken(Resource):
                                 status_code = 404
                             else:
                                 driver_id = int(drv.id)
-                                app_logger.info(
-                                    f"[push-token] driver_id déduit du JWT: {driver_id}")
-                
+                                app_logger.info(f"[push-token] driver_id déduit du JWT: {driver_id}")
+
                 # 3) Validation finale et enregistrement
                 if result is None:
                     driver = Driver.query.get(driver_id)
                     if not driver:
-                        app_logger.error(
-                            f"[push-token] Driver introuvable pour driver_id={driver_id}")
+                        app_logger.error(f"[push-token] Driver introuvable pour driver_id={driver_id}")
                         result = {"error": f"Chauffeur introuvable pour l'ID {driver_id}."}
                         status_code = 404
                     else:
@@ -968,16 +941,12 @@ class SavePushToken(Resource):
                         driver.push_token = token
                         db.session.commit()
 
-                        app_logger.info(
-                            f"[push-token] ✅ Token enregistré avec succès pour driver_id={driver_id}")
-                        result = {"message": "✅ Push token enregistré avec succès.",
-                                "driver_id": driver_id}
+                        app_logger.info(f"[push-token] ✅ Token enregistré avec succès pour driver_id={driver_id}")
+                        result = {"message": "✅ Push token enregistré avec succès.", "driver_id": driver_id}
 
         except Exception as e:
             db.session.rollback()
-            app_logger.error(
-                f"[push-token] ❌ Erreur serveur: {e!s}",
-                exc_info=True)
+            app_logger.error(f"[push-token] ❌ Erreur serveur: {e!s}", exc_info=True)
             traceback.print_exc()
             result = {"error": f"Erreur serveur : {e!s}"}
             status_code = 500
@@ -994,8 +963,7 @@ class UpdateDriverProfile(Resource):
             return {"error": "Chauffeur non trouvé."}, 404
 
         data = request.get_json() or {}
-        driver.vehicle_assigned = data.get(
-            "vehicle_assigned", driver.vehicle_assigned)
+        driver.vehicle_assigned = data.get("vehicle_assigned", driver.vehicle_assigned)
         driver.brand = data.get("brand", driver.brand)
         driver.license_plate = data.get("license_plate", driver.license_plate)
         driver.driver_photo = data.get("photo", driver.driver_photo)
@@ -1011,21 +979,13 @@ class CompletedTrips(Resource):
     @jwt_required()
     def get(self, driver_id: int):
         # Chaque clause est castée en ColumnElement[bool] pour Pylance
-        drv_clause: ColumnElement[bool] = tcast(
-            "ColumnElement[bool]", Booking.driver_id == driver_id)
+        drv_clause: ColumnElement[bool] = tcast("ColumnElement[bool]", Booking.driver_id == driver_id)
 
-        st_completed: ColumnElement[bool] = tcast(
-            "ColumnElement[bool]", Booking.status == BookingStatus.COMPLETED
-        )
+        st_completed: ColumnElement[bool] = tcast("ColumnElement[bool]", Booking.status == BookingStatus.COMPLETED)
         st_return_completed: ColumnElement[bool] = tcast(
-            "ColumnElement[bool]", Booking.status == BookingStatus.RETURN_COMPLETED)
+            "ColumnElement[bool]", Booking.status == BookingStatus.RETURN_COMPLETED
+        )
         status_clause = or_(st_completed, st_return_completed)
 
-        trips = (
-            Booking.query
-            .filter(drv_clause)
-            .filter(status_clause)
-            .order_by(Booking.scheduled_time.desc())
-            .all()
-        )
+        trips = Booking.query.filter(drv_clause).filter(status_clause).order_by(Booking.scheduled_time.desc()).all()
         return [trip.serialize for trip in trips], 200

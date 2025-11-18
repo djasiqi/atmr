@@ -1,6 +1,7 @@
 """
 Tests simplifiés pour dispatch_env.py - Couverture 95%+
 """
+
 from unittest.mock import Mock, patch
 
 import numpy as np

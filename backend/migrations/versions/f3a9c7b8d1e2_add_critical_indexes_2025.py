@@ -5,6 +5,7 @@ Revises: e252718b5271
 Create Date: 2025-10-15 10:00:00.000000
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -13,6 +14,7 @@ revision = "f3a9c7b8d1e2"
 down_revision = "d8a4d7185c60"
 branch_labels = None
 depends_on = None
+
 
 def upgrade():
     """
@@ -28,26 +30,18 @@ def upgrade():
         "booking",
         ["invoice_line_id"],
         unique=False,
-        postgresql_where=sa.text("invoice_line_id IS NOT NULL")
+        postgresql_where=sa.text("invoice_line_id IS NOT NULL"),
     )
 
     # 2. Composite pour filtres company + status + date
     op.create_index(
-        "ix_booking_company_status_scheduled",
-        "booking",
-        ["company_id", "status", "scheduled_time"],
-        unique=False
+        "ix_booking_company_status_scheduled", "booking", ["company_id", "status", "scheduled_time"], unique=False
     )
 
     # ========== INVOICE ==========
 
     # 3. Composite company + status + due_date (rapports factures en retard)
-    op.create_index(
-        "ix_invoice_company_status_due",
-        "invoices",
-        ["company_id", "status", "due_date"],
-        unique=False
-    )
+    op.create_index("ix_invoice_company_status_due", "invoices", ["company_id", "status", "due_date"], unique=False)
 
     # ========== ASSIGNMENT ==========
 
@@ -57,7 +51,7 @@ def upgrade():
         "assignment",
         ["dispatch_run_id"],
         unique=False,
-        postgresql_where=sa.text("dispatch_run_id IS NOT NULL")
+        postgresql_where=sa.text("dispatch_run_id IS NOT NULL"),
     )
 
     # ========== DRIVER_STATUS ==========
@@ -68,18 +62,14 @@ def upgrade():
         "driver_status",
         ["current_assignment_id"],
         unique=False,
-        postgresql_where=sa.text("current_assignment_id IS NOT NULL")
+        postgresql_where=sa.text("current_assignment_id IS NOT NULL"),
     )
 
     # ========== REALTIME_EVENT ==========
 
     # 6. Timestamp pour requêtes historiques
-    op.create_index(
-        "ix_realtime_event_timestamp",
-        "realtime_event",
-        ["timestamp"],
-        unique=False
-    )
+    op.create_index("ix_realtime_event_timestamp", "realtime_event", ["timestamp"], unique=False)
+
 
 def downgrade():
     """Rollback: supprime tous les index créés"""
@@ -89,4 +79,3 @@ def downgrade():
     op.drop_index("ix_assignment_dispatch_run", table_name="assignment")
     op.drop_index("ix_driver_status_assignment", table_name="driver_status")
     op.drop_index("ix_realtime_event_timestamp", table_name="realtime_event")
-

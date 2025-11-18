@@ -10,39 +10,19 @@ from models import MedicalEstablishment, MedicalService, db
 
 # --- Namespace et Parsers ---
 
-medical_ns = Namespace(
-    "medical",
-    description="Recherche d'établissements et services médicaux")
+medical_ns = Namespace("medical", description="Recherche d'établissements et services médicaux")
 
 # Parser pour l'endpoint /establishments
 establishments_parser = reqparse.RequestParser()
-establishments_parser.add_argument(
-    "q",
-    type=str,
-    required=False,
-    help="Texte à rechercher",
-    location="args")
-establishments_parser.add_argument(
-    "limit",
-    type=int,
-    default=8,
-    help="Nombre max de résultats",
-    location="args")
+establishments_parser.add_argument("q", type=str, required=False, help="Texte à rechercher", location="args")
+establishments_parser.add_argument("limit", type=int, default=8, help="Nombre max de résultats", location="args")
 
 # Parser pour l'endpoint /services
 services_parser = reqparse.RequestParser()
 services_parser.add_argument(
-    "establishment_id",
-    type=int,
-    required=True,
-    help="ID de l'établissement est requis",
-    location="args")
-services_parser.add_argument(
-    "q",
-    type=str,
-    required=False,
-    help="Texte pour filtrer les services",
-    location="args")
+    "establishment_id", type=int, required=True, help="ID de l'établissement est requis", location="args"
+)
+services_parser.add_argument("q", type=str, required=False, help="Texte pour filtrer les services", location="args")
 
 
 def _like_ci(col: Any, like_query: str):
@@ -51,6 +31,7 @@ def _like_ci(col: Any, like_query: str):
 
 
 # --- Routes ---
+
 
 @medical_ns.route("/establishments")
 class Establishments(Resource):
@@ -61,7 +42,7 @@ class Establishments(Resource):
 
         from schemas.medical_schemas import MedicalEstablishmentQuerySchema
         from schemas.validation_utils import validate_request
-        
+
         args_dict = dict(request.args)
         try:
             validated_args = validate_request(MedicalEstablishmentQuerySchema(), args_dict, strict=False)
@@ -92,25 +73,23 @@ class Establishments(Resource):
                 )
             )
 
-        rows = (
-            qr.order_by(cast("Any", MedicalEstablishment.display_name).asc())
-              .limit(limit)
-              .all()
-        )
+        rows = qr.order_by(cast("Any", MedicalEstablishment.display_name).asc()).limit(limit).all()
 
         items: list[dict[str, Any]] = []
         for r in rows:
-            items.append({
-                "id": r.id,
-                "source": "establishment",
-                "type": getattr(r, "type", None),
-                "name": getattr(r, "name", None),
-                "label": getattr(r, "display_name", None),
-                "address": getattr(r, "address", None),
-                "lat": getattr(r, "lat", None),
-                "lon": getattr(r, "lon", None),
-                "aliases": r.alias_list() if hasattr(r, "alias_list") else [],
-            })
+            items.append(
+                {
+                    "id": r.id,
+                    "source": "establishment",
+                    "type": getattr(r, "type", None),
+                    "name": getattr(r, "name", None),
+                    "label": getattr(r, "display_name", None),
+                    "address": getattr(r, "address", None),
+                    "lat": getattr(r, "lat", None),
+                    "lon": getattr(r, "lon", None),
+                    "aliases": r.alias_list() if hasattr(r, "alias_list") else [],
+                }
+            )
         return items, 200
 
 
@@ -124,7 +103,7 @@ class Services(Resource):
 
         from schemas.medical_schemas import MedicalServiceQuerySchema
         from schemas.validation_utils import handle_validation_error, validate_request
-        
+
         args_dict = dict(request.args)
         try:
             validated_args = validate_request(MedicalServiceQuerySchema(), args_dict)
@@ -142,9 +121,7 @@ class Services(Resource):
                 # Si reqparse échoue aussi, retourner 400
                 return {"error": "establishment_id is required", "message": str(fallback_err)}, 400
 
-        query = db.session.query(MedicalService).filter(
-            cast("Any", MedicalService.establishment_id) == estab_id
-        )
+        query = db.session.query(MedicalService).filter(cast("Any", MedicalService.establishment_id) == estab_id)
 
         # active = True si la colonne existe
         svc_active_col = getattr(MedicalService, "active", None)
@@ -160,24 +137,19 @@ class Services(Resource):
                 )
             )
 
-        rows = (
-            query.order_by(
-                cast("Any", MedicalService.category).asc(),
-                cast("Any", MedicalService.name).asc()
-            )
-            .all()
-        )
+        rows = query.order_by(cast("Any", MedicalService.category).asc(), cast("Any", MedicalService.name).asc()).all()
 
-        current_app.logger.info(
-            "✅ Found %s services for establishment %s with query '%s'",
-            len(rows), estab_id, q)
+        current_app.logger.info("✅ Found %s services for establishment %s with query '%s'", len(rows), estab_id, q)
 
-        result = [{
-            "id": r.id,
-            "establishment_id": r.establishment_id,
-            "category": getattr(r, "category", None),
-            "name": getattr(r, "name", None),
-            "active": True if svc_active_col is None else bool(getattr(r, "active", True)),
-        } for r in rows]
+        result = [
+            {
+                "id": r.id,
+                "establishment_id": r.establishment_id,
+                "category": getattr(r, "category", None),
+                "name": getattr(r, "name", None),
+                "active": True if svc_active_col is None else bool(getattr(r, "active", True)),
+            }
+            for r in rows
+        ]
 
         return result, 200

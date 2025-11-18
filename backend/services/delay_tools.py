@@ -21,6 +21,7 @@ from typing import Dict, Tuple
 # Basic helpers (stateless)
 # -----------------------------
 
+
 def delay_minutes(current_eta: datetime, scheduled_time: datetime) -> float:
     """Returns ETA - scheduled in minutes (negative if early).
     Works with naive or tz-aware datetimes as long as they are comparable.
@@ -53,6 +54,7 @@ class SeverityThresholds:
     med_max: float = 10.0
     high_max: float = 20.0
 
+
 def severity_label(delay_min: float, thresholds: SeverityThresholds | None = None) -> str:
     """Map a delay in minutes to a severity bucket.
     Negative (early) returns 'low' by convention.
@@ -72,15 +74,16 @@ def severity_label(delay_min: float, thresholds: SeverityThresholds | None = Non
 # Anti-flap confirmation
 # -----------------------------
 
+
 @dataclass
 class AntiFlapConfig:
     """Require 'confirm_hits' consecutive TRUE detections inside 'window_sec'
     to confirm a delay. Resets when a FALSE is observed or when the window is exceeded.
     """
 
-    confirm_hits: int = 3          # how many consecutive hits required
-    window_sec: int = 90           # time budget for those hits
-    max_idle_sec: int = 600        # auto-gc entries idle longer than this
+    confirm_hits: int = 3  # how many consecutive hits required
+    window_sec: int = 90  # time budget for those hits
+    max_idle_sec: int = 600  # auto-gc entries idle longer than this
 
 
 class AntiFlapDelayChecker:
@@ -161,6 +164,7 @@ class AntiFlapDelayChecker:
 # -----------------------------
 # Convenience facade
 # -----------------------------
+
 
 class DelayDecider:
     """Small facade to combine the helpers:

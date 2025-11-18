@@ -14,7 +14,14 @@ class PrioritizedReplayBuffer:
     Utilise un arbre binaire pour un échantillonnage efficace O(log n).
     """
 
-    def __init__(self, capacity: int, alpha: float = 0.6, beta_start: float = 0.4, beta_end: float = 1.0, beta_increment: float = 0.0001):  # pyright: ignore[reportMissingSuperCall]
+    def __init__(
+        self,
+        capacity: int,
+        alpha: float = 0.6,
+        beta_start: float = 0.4,
+        beta_end: float = 1.0,
+        beta_increment: float = 0.0001,
+    ):  # pyright: ignore[reportMissingSuperCall]
         self.capacity = capacity
         self.alpha = alpha  # Exposant de priorité
         self.beta_start = beta_start  # Début importance sampling
@@ -37,8 +44,15 @@ class PrioritizedReplayBuffer:
         self.position = 0
         self.size = 0
 
-    def add(self, state: np.ndarray[Any, np.dtype[np.float32]], action: int, reward: float,
-            next_state: np.ndarray[Any, np.dtype[np.float32]], done: bool, priority: float | None = None) -> None:
+    def add(
+        self,
+        state: np.ndarray[Any, np.dtype[np.float32]],
+        action: int,
+        reward: float,
+        next_state: np.ndarray[Any, np.dtype[np.float32]],
+        done: bool,
+        priority: float | None = None,
+    ) -> None:
         """Ajoute une transition avec priorité."""
         if priority is None:
             priority = self.max_priority
@@ -48,8 +62,7 @@ class PrioritizedReplayBuffer:
             self.buffer.append((state, action, reward, next_state, done))
             self.priorities.append(priority)
         else:
-            self.buffer[self.position] = (
-                state, action, reward, next_state, done)
+            self.buffer[self.position] = (state, action, reward, next_state, done)
             self.priorities[self.position] = priority
 
         # Mettre à jour l'arbre
@@ -69,8 +82,7 @@ class PrioritizedReplayBuffer:
             raise ValueError(msg)
 
         # Calculer beta actuel
-        beta = self.beta_start + \
-            (self.beta_end - self.beta_start) * (self.size / self.capacity)
+        beta = self.beta_start + (self.beta_end - self.beta_start) * (self.size / self.capacity)
 
         # Échantillonnage proportionnel aux priorités
         indices = []
@@ -95,24 +107,19 @@ class PrioritizedReplayBuffer:
         # Normaliser les poids pour qu'ils soient dans [0, 1]
         if weights:
             max_weight = max(weights)
-            weights = [
-                w / max_weight for w in weights] if max_weight > 0 else [1.0] * len(weights)
+            weights = [w / max_weight for w in weights] if max_weight > 0 else [1.0] * len(weights)
         else:
             weights = [1.0] * len(weights)
 
         # Incrémenter beta
-        self.beta_start = min(
-            self.beta_end,
-            self.beta_start +
-            self.beta_increment)
+        self.beta_start = min(self.beta_end, self.beta_start + self.beta_increment)
 
         # Extraire les transitions
         batch = [self.buffer[i] for i in indices]
 
         return batch, indices, weights
 
-    def update_priorities(
-            self, indices: List[int], priorities: List[float]) -> None:
+    def update_priorities(self, indices: List[int], priorities: List[float]) -> None:
         """Met à jour les priorités des transitions échantillonnées."""
         for index, original_priority in zip(indices, priorities, strict=False):
             # Vérifier que l'index est valide
@@ -137,15 +144,14 @@ class PrioritizedReplayBuffer:
     def _update_tree(self, index: int, priority: float) -> None:
         """Met à jour l'arbre binaire."""
         tree_index = index + self.tree_size - 1
-        self.tree[tree_index] = priority ** self.alpha
+        self.tree[tree_index] = priority**self.alpha
 
         # Remonter l'arbre
         while tree_index > 0:
             tree_index = (tree_index - 1) // 2
             left_child = 2 * tree_index + 1
             right_child = 2 * tree_index + 2
-            self.tree[tree_index] = self.tree[left_child] + \
-                self.tree[right_child]
+            self.tree[tree_index] = self.tree[left_child] + self.tree[right_child]
 
     def _sample_index(self) -> int:
         """Sélectionne un index basé sur les priorités."""
@@ -170,8 +176,7 @@ class PrioritizedReplayBuffer:
     @property
     def beta(self) -> float:
         """Retourne la valeur beta actuelle."""
-        return self.beta_start + \
-            (self.beta_end - self.beta_start) * (self.size / self.capacity)
+        return self.beta_start + (self.beta_end - self.beta_start) * (self.size / self.capacity)
 
     def clear(self) -> None:
         """Vide le buffer."""

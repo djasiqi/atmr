@@ -4,6 +4,7 @@
 Mesure les temps d'exécution par étape (data→heuristics→solver→persist)
 et exporte les métriques pour observabilité (Prometheus/StatsD compatible).
 """
+
 from __future__ import annotations
 
 import logging
@@ -133,7 +134,7 @@ class DispatchPerformanceMetrics:
         if total == 0:
             return 0.0
         return self.cache_hits / total
-    
+
     def _osrm_cache_hit_rate(self) -> float:
         """Calcule le taux de succès du cache OSRM (A5)."""
         total = self.osrm_cache_hits + self.osrm_cache_misses
@@ -155,10 +156,7 @@ class DispatchMetricsCollector(object):
         super().__init__()
         self.company_id = company_id
         self.dispatch_run_id = dispatch_run_id
-        self.metrics = DispatchPerformanceMetrics(
-            dispatch_run_id=dispatch_run_id,
-            company_id=company_id
-        )
+        self.metrics = DispatchPerformanceMetrics(dispatch_run_id=dispatch_run_id, company_id=company_id)
         self._timers: Dict[str, float] = {}
         self._start_times: Dict[str, float] = {}
 
@@ -231,7 +229,9 @@ class DispatchMetricsCollector(object):
         else:
             logger.warning("[PerformanceMetrics] Compteur %s inconnu", counter_name)
 
-    def finalize(self, algorithm_used: str = "auto", feature_flags: Dict[str, bool] | None = None) -> DispatchPerformanceMetrics:
+    def finalize(
+        self, algorithm_used: str = "auto", feature_flags: Dict[str, bool] | None = None
+    ) -> DispatchPerformanceMetrics:
         """Finalise les métriques et retourne le résultat.
 
         Args:
@@ -261,10 +261,14 @@ class DispatchMetricsCollector(object):
         # Log final
         logger.info(
             "[PerformanceMetrics] Dispatch %s terminé: %.3fs total (data=%.3fs, heur=%.3fs, solver=%.3fs, persist=%.3fs, SQL=%d, conflits=%d)",
-            self.dispatch_run_id or "?", self.metrics.total_time,
-            self.metrics.data_collection_time, self.metrics.heuristics_time,
-            self.metrics.solver_time, self.metrics.persistence_time,
-            self.metrics.sql_queries_count, self.metrics.temporal_conflicts_count
+            self.dispatch_run_id or "?",
+            self.metrics.total_time,
+            self.metrics.data_collection_time,
+            self.metrics.heuristics_time,
+            self.metrics.solver_time,
+            self.metrics.persistence_time,
+            self.metrics.sql_queries_count,
+            self.metrics.temporal_conflicts_count,
         )
 
         return self.metrics
@@ -277,27 +281,28 @@ class DispatchMetricsCollector(object):
 # Instance globale pour tracking SQL queries (à intégrer avec SQLAlchemy events)
 class SQLCounter(object):
     """Compteur SQL thread-safe."""
-    _instance: 'SQLCounter | None' = None
-    
+
+    _instance: "SQLCounter | None" = None
+
     def __init__(self):
         super().__init__()
         self._counter = defaultdict(int)
-    
+
     @classmethod
-    def get_instance(cls) -> 'SQLCounter':
+    def get_instance(cls) -> "SQLCounter":
         """Retourne l'instance singleton."""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
-    
+
     def reset(self) -> None:
         """Réinitialise le compteur."""
         self._counter.clear()
-    
+
     def get_count(self) -> int:
         """Retourne le nombre total de requêtes."""
         return sum(self._counter.values())
-    
+
     def increment(self, query_type: str = "SELECT") -> None:
         """Incrémente le compteur."""
         self._counter[query_type] += 1

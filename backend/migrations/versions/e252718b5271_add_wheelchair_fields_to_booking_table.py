@@ -5,6 +5,7 @@ Revises: 0b7f8736876a
 Create Date: 2025-10-11 00:07:12.184913
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -17,8 +18,12 @@ depends_on = None
 
 def upgrade():
     # Ajouter les colonnes wheelchair_client_has et wheelchair_need à la table booking
-    op.add_column("booking", sa.Column("wheelchair_client_has", sa.Boolean(), nullable=False, server_default=sa.text("false")))
-    op.add_column("booking", sa.Column("wheelchair_need", sa.Boolean(), nullable=False, server_default=sa.text("false")))
+    op.add_column(
+        "booking", sa.Column("wheelchair_client_has", sa.Boolean(), nullable=False, server_default=sa.text("false"))
+    )
+    op.add_column(
+        "booking", sa.Column("wheelchair_need", sa.Boolean(), nullable=False, server_default=sa.text("false"))
+    )
 
 
 def downgrade():

@@ -1,4 +1,3 @@
-
 # Constantes pour éviter les valeurs magiques
 from datetime import datetime, timezone
 from typing import Any
@@ -33,16 +32,8 @@ class MLPrediction(db.Model):
     id = db.Column(Integer, primary_key=True)
 
     # Identifiants
-    booking_id = db.Column(
-        Integer,
-        db.ForeignKey("booking.id"),
-        nullable=False,
-        index=True)
-    driver_id = db.Column(
-        Integer,
-        db.ForeignKey("driver.id"),
-        nullable=True,
-        index=True)
+    booking_id = db.Column(Integer, db.ForeignKey("booking.id"), nullable=False, index=True)
+    driver_id = db.Column(Integer, db.ForeignKey("driver.id"), nullable=True, index=True)
     request_id = db.Column(String(100), nullable=True, index=True)
 
     # Prédiction ML
@@ -68,24 +59,17 @@ class MLPrediction(db.Model):
     is_accurate = db.Column(db.Boolean, nullable=True)
 
     # Métadonnées
-    created_at = db.Column(
-        db.DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
-        index=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
     updated_at = db.Column(
         db.DateTime,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False)
+        nullable=False,
+    )
 
     # Relations
-    booking = db.relationship(
-        "Booking", backref=db.backref(
-            "ml_predictions", lazy="dynamic"))
-    driver = db.relationship(
-        "Driver", backref=db.backref(
-            "ml_predictions", lazy="dynamic"))
+    booking = db.relationship("Booking", backref=db.backref("ml_predictions", lazy="dynamic"))
+    driver = db.relationship("Driver", backref=db.backref("ml_predictions", lazy="dynamic"))
 
     @override
     def __repr__(self) -> str:
@@ -103,8 +87,7 @@ class MLPrediction(db.Model):
 
         """
         self.actual_delay_minutes = actual_delay
-        self.prediction_error = abs(
-            self.predicted_delay_minutes - actual_delay)
+        self.prediction_error = abs(self.predicted_delay_minutes - actual_delay)
         # Seuil: PREDICTION_ERROR_THRESHOLD min
         self.is_accurate = self.prediction_error < PREDICTION_ERROR_THRESHOLD
 

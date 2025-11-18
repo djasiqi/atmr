@@ -39,22 +39,34 @@ class TestRollbackTransactionnel:
         """Test : Échec partiel → rollback complet."""
         # Préparer des assignations
         assignments = [
-            type("Assignment", (), {
-                "booking_id": bookings[0].id,
-                "driver_id": driver.id,
-                "score": 1.0,
-            })(),
-            type("Assignment", (), {
-                "booking_id": bookings[1].id,
-                "driver_id": driver.id,
-                "score": 1.0,
-            })(),
+            type(
+                "Assignment",
+                (),
+                {
+                    "booking_id": bookings[0].id,
+                    "driver_id": driver.id,
+                    "score": 1.0,
+                },
+            )(),
+            type(
+                "Assignment",
+                (),
+                {
+                    "booking_id": bookings[1].id,
+                    "driver_id": driver.id,
+                    "score": 1.0,
+                },
+            )(),
             # Troisième booking avec un driver_id invalide pour provoquer une erreur
-            type("Assignment", (), {
-                "booking_id": bookings[2].id,
-                "driver_id": 99999,  # Driver inexistant
-                "score": 1.0,
-            })(),
+            type(
+                "Assignment",
+                (),
+                {
+                    "booking_id": bookings[2].id,
+                    "driver_id": 99999,  # Driver inexistant
+                    "score": 1.0,
+                },
+            )(),
         ]
 
         # Tenter l'application
@@ -86,11 +98,16 @@ class TestRollbackTransactionnel:
         """Test : Atomicité sur un batch d'assignations."""
         # Préparer des assignations valides
         assignments = [
-            type("Assignment", (), {
-                "booking_id": b.id,
-                "driver_id": driver.id,
-                "score": 1.0,
-            })() for b in bookings
+            type(
+                "Assignment",
+                (),
+                {
+                    "booking_id": b.id,
+                    "driver_id": driver.id,
+                    "score": 1.0,
+                },
+            )()
+            for b in bookings
         ]
 
         # Appliquer les assignations
@@ -109,9 +126,7 @@ class TestRollbackTransactionnel:
         assert bookings[2].driver_id == driver.id
 
         # Vérifier que les assignments sont créés
-        assignments_db = Assignment.query.filter(
-            Assignment.booking_id.in_([b.id for b in bookings])
-        ).all()
+        assignments_db = Assignment.query.filter(Assignment.booking_id.in_([b.id for b in bookings])).all()
         assert len(assignments_db) == 3
 
         # Vérifier le résultat
@@ -131,17 +146,25 @@ class TestRollbackTransactionnel:
 
         # Préparer des assignations, dont une qui crée un conflit
         assignments = [
-            type("Assignment", (), {
-                "booking_id": bookings[0].id,  # Conflit potentiel
-                "driver_id": driver.id,
-                "dispatch_run_id": 1,  # Même dispatch_run_id
-                "score": 1.0,
-            })(),
-            type("Assignment", (), {
-                "booking_id": bookings[1].id,
-                "driver_id": driver.id,
-                "score": 1.0,
-            })(),
+            type(
+                "Assignment",
+                (),
+                {
+                    "booking_id": bookings[0].id,  # Conflit potentiel
+                    "driver_id": driver.id,
+                    "dispatch_run_id": 1,  # Même dispatch_run_id
+                    "score": 1.0,
+                },
+            )(),
+            type(
+                "Assignment",
+                (),
+                {
+                    "booking_id": bookings[1].id,
+                    "driver_id": driver.id,
+                    "score": 1.0,
+                },
+            )(),
         ]
 
         # Appliquer (devrait gérer le conflit avec ON CONFLICT DO NOTHING)
@@ -168,11 +191,16 @@ class TestRollbackTransactionnel:
         """Test : État cohérent après crash simulé."""
         # Simuler un crash en levant une exception pendant l'application
         assignments = [
-            type("Assignment", (), {
-                "booking_id": b.id,
-                "driver_id": driver.id,
-                "score": 1.0,
-            })() for b in bookings
+            type(
+                "Assignment",
+                (),
+                {
+                    "booking_id": b.id,
+                    "driver_id": driver.id,
+                    "score": 1.0,
+                },
+            )()
+            for b in bookings
         ]
 
         # Mock une exception pour simuler un crash
@@ -213,11 +241,16 @@ class TestRollbackTransactionnel:
         # Simuler un appel depuis engine.run() qui a déjà une transaction
         # En utilisant _begin_tx(), un savepoint devrait être créé
         assignments = [
-            type("Assignment", (), {
-                "booking_id": b.id,
-                "driver_id": driver.id,
-                "score": 1.0,
-            })() for b in bookings
+            type(
+                "Assignment",
+                (),
+                {
+                    "booking_id": b.id,
+                    "driver_id": driver.id,
+                    "score": 1.0,
+                },
+            )()
+            for b in bookings
         ]
 
         # Démarrer une transaction externe (simule engine.run())
@@ -242,4 +275,3 @@ class TestRollbackTransactionnel:
         assert bookings[0].driver_id == driver.id
         assert bookings[1].driver_id == driver.id
         assert bookings[2].driver_id == driver.id
-

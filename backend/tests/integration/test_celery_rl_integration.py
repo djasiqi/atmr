@@ -25,36 +25,31 @@ class TestCeleryRLIntegration:
     def test_celery_rl_training_task(self):
         """Test de la tâche Celery pour l'entraînement RL."""
         print("🧪 Test de la tâche Celery RL training...")
-        
+
         # Mock des dépendances Celery
         with patch("celery.Celery") as mock_celery:
             # Configuration du mock
             mock_app = Mock()
             mock_celery.return_value = mock_app
-            
+
             # Test de création de la tâche (mock)
             train_rl_model_task = Mock()
-            
+
             # Vérifier que la tâche existe
             assert train_rl_model_task is not None
             print("  ✅ Tâche Celery RL training trouvée")
-            
+
             # Test des paramètres de la tâche
             task_params = {
                 "model_name": "test_dqn",
                 "episodes": 100,
-                "hyperparameters": {
-                    "learning_rate": 0.0001,
-                    "gamma": 0.99,
-                    "epsilon_start": 1.0,
-                    "epsilon_end": 0.01
-                }
+                "hyperparameters": {"learning_rate": 0.0001, "gamma": 0.99, "epsilon_start": 1.0, "epsilon_end": 0.01},
             }
-            
+
             # Mock de l'exécution de la tâche
             with patch("tasks.rl_training.train_rl_model_task.delay") as mock_delay:
                 mock_delay.return_value = Mock()
-                
+
                 # Simuler l'appel de la tâche
                 result = mock_delay(task_params)
                 assert result is not None
@@ -63,31 +58,31 @@ class TestCeleryRLIntegration:
     def test_celery_rl_suggestion_task(self):
         """Test de la tâche Celery pour la génération de suggestions RL."""
         print("🧪 Test de la tâche Celery RL suggestion...")
-        
+
         # Mock des dépendances Celery
         with patch("celery.Celery") as mock_celery:
             mock_app = Mock()
             mock_celery.return_value = mock_app
-            
+
             # Test de création de la tâche (mock)
             generate_rl_suggestion_task = Mock()
-            
+
             # Vérifier que la tâche existe
             assert generate_rl_suggestion_task is not None
             print("  ✅ Tâche Celery RL suggestion trouvée")
-            
+
             # Test des paramètres de la tâche
             suggestion_params = {
                 "company_id": 1,
                 "booking_id": 123,
                 "state": [0.1, 0.2, 0.3, 0.4, 0.5],
-                "available_drivers": [1, 2, 3]
+                "available_drivers": [1, 2, 3],
             }
-            
+
             # Mock de l'exécution de la tâche
             with patch("tasks.rl_suggestion.generate_rl_suggestion_task.delay") as mock_delay:
                 mock_delay.return_value = Mock()
-                
+
                 # Simuler l'appel de la tâche
                 result = mock_delay(suggestion_params)
                 assert result is not None
@@ -96,7 +91,7 @@ class TestCeleryRLIntegration:
     def test_celery_rl_async_training(self):
         """Test de l'entraînement RL asynchrone via Celery."""
         print("🧪 Test de l'entraînement RL asynchrone...")
-        
+
         # Mock des dépendances
         with patch("tasks.rl_training.train_rl_model_task") as mock_task:
             # Configuration du mock
@@ -104,23 +99,20 @@ class TestCeleryRLIntegration:
             mock_result.id = "test_task_id"
             mock_result.status = "PENDING"
             mock_task.delay.return_value = mock_result
-            
+
             # Test de l'entraînement asynchrone (mock)
             train_rl_model_async = Mock()
-            
+
             # Paramètres de test
             training_params = {
                 "model_name": "test_dqn_async",
                 "episodes": 50,
-                "hyperparameters": {
-                    "learning_rate": 0.0001,
-                    "gamma": 0.99
-                }
+                "hyperparameters": {"learning_rate": 0.0001, "gamma": 0.99},
             }
-            
+
             # Exécution asynchrone
             result = train_rl_model_async(training_params)
-            
+
             # Vérifications
             assert result is not None
             assert hasattr(result, "id")
@@ -130,29 +122,22 @@ class TestCeleryRLIntegration:
     def test_celery_rl_result_handling(self):
         """Test de la gestion des résultats Celery pour RL."""
         print("🧪 Test de la gestion des résultats Celery RL...")
-        
+
         # Mock des résultats Celery
         mock_result = Mock()
         mock_result.status = "SUCCESS"
         mock_result.result = {
             "model_path": "/app/models/test_dqn.pth",
-            "training_metrics": {
-                "episodes": 100,
-                "final_reward": 500.0,
-                "loss": 0.1
-            },
-            "hyperparameters": {
-                "learning_rate": 0.0001,
-                "gamma": 0.99
-            }
+            "training_metrics": {"episodes": 100, "final_reward": 500.0, "loss": 0.1},
+            "hyperparameters": {"learning_rate": 0.0001, "gamma": 0.99},
         }
-        
+
         # Test de la gestion des résultats (mock)
         handle_training_result = Mock()
-        
+
         # Exécution du handler
         result = handle_training_result(mock_result)
-        
+
         # Vérifications
         assert result is not None
         assert "model_path" in result
@@ -162,18 +147,18 @@ class TestCeleryRLIntegration:
     def test_celery_rl_error_handling(self):
         """Test de la gestion d'erreurs Celery pour RL."""
         print("🧪 Test de la gestion d'erreurs Celery RL...")
-        
+
         # Mock d'une erreur Celery
         mock_result = Mock()
         mock_result.status = "FAILURE"
         mock_result.result = Exception("Training failed")
-        
+
         # Test de la gestion d'erreurs (mock)
         handle_training_error = Mock()
-        
+
         # Exécution du handler d'erreur
         error_info = handle_training_error(mock_result)
-        
+
         # Vérifications
         assert error_info is not None
         assert "error" in error_info
@@ -183,20 +168,20 @@ class TestCeleryRLIntegration:
     def test_celery_rl_monitoring(self):
         """Test du monitoring Celery pour RL."""
         print("🧪 Test du monitoring Celery RL...")
-        
+
         # Mock des tâches Celery
         mock_tasks = [
             {"id": "task1", "status": "PENDING", "name": "train_rl_model"},
             {"id": "task2", "status": "SUCCESS", "name": "generate_suggestion"},
-            {"id": "task3", "status": "FAILURE", "name": "train_rl_model"}
+            {"id": "task3", "status": "FAILURE", "name": "train_rl_model"},
         ]
-        
+
         # Test du monitoring (mock)
         monitor_rl_tasks = Mock()
-        
+
         # Exécution du monitoring
         status = monitor_rl_tasks(mock_tasks)
-        
+
         # Vérifications
         assert status is not None
         assert "pending" in status
@@ -207,19 +192,19 @@ class TestCeleryRLIntegration:
     def test_celery_rl_cleanup(self):
         """Test du nettoyage des tâches Celery RL."""
         print("🧪 Test du nettoyage Celery RL...")
-        
+
         # Mock des tâches à nettoyer
         mock_old_tasks = [
             {"id": "old_task1", "created_at": "2025-0.1-0.1"},
-            {"id": "old_task2", "created_at": "2025-0.1-02"}
+            {"id": "old_task2", "created_at": "2025-0.1-02"},
         ]
-        
+
         # Test du nettoyage (mock)
         cleanup_old_rl_tasks = Mock()
-        
+
         # Exécution du nettoyage
         cleaned_count = cleanup_old_rl_tasks(mock_old_tasks)
-        
+
         # Vérifications
         assert cleaned_count >= 0
         print("  ✅ Nettoyage Celery RL: {cleaned_count} tâches nettoyées")
@@ -231,21 +216,21 @@ class TestCeleryRLPerformance:
     def test_celery_rl_latency(self):
         """Test de latence des tâches Celery RL."""
         print("🧪 Test de latence Celery RL...")
-        
+
         # Mock des tâches avec timing
         _start_time = time.time()
-        
+
         with patch("tasks.rl_training.train_rl_model_task") as mock_task:
             mock_result = Mock()
             mock_result.status = "SUCCESS"
             mock_task.delay.return_value = mock_result
-            
+
             # Test de latence (mock)
             measure_rl_task_latency = Mock()
-            
+
             # Exécution du test de latence
             latency = measure_rl_task_latency()
-            
+
             # Vérifications
             assert latency is not None
             assert latency >= 0
@@ -254,16 +239,16 @@ class TestCeleryRLPerformance:
     def test_celery_rl_throughput(self):
         """Test de débit des tâches Celery RL."""
         print("🧪 Test de débit Celery RL...")
-        
+
         # Mock des tâches multiples
         mock_tasks = [Mock() for _ in range(10)]
-        
+
         # Test de débit (mock)
         measure_rl_task_throughput = Mock()
-        
+
         # Exécution du test de débit
         throughput = measure_rl_task_throughput(mock_tasks)
-        
+
         # Vérifications
         assert throughput is not None
         assert throughput >= 0
@@ -272,20 +257,20 @@ class TestCeleryRLPerformance:
     def test_celery_rl_memory_usage(self):
         """Test d'utilisation mémoire des tâches Celery RL."""
         print("🧪 Test d'utilisation mémoire Celery RL...")
-        
+
         # Mock de l'utilisation mémoire
         _mock_memory_usage = {
             "rss": 1024 * 1024 * 100,  # 100 MB
             "vms": 1024 * 1024 * 200,  # 200 MB
-            "peak": 1024 * 1024 * 150   # 150 MB
+            "peak": 1024 * 1024 * 150,  # 150 MB
         }
-        
+
         # Test d'utilisation mémoire (mock)
         monitor_rl_memory_usage = Mock()
-        
+
         # Exécution du monitoring mémoire
         memory_info = monitor_rl_memory_usage()
-        
+
         # Vérifications
         assert memory_info is not None
         assert "rss" in memory_info
@@ -297,9 +282,9 @@ if __name__ == "__main__":
     # Exécution des tests
     print("🚀 TESTS D'INTÉGRATION CELERY ↔ RL")
     print("=" * 50)
-    
+
     test_instance = TestCeleryRLIntegration()
-    
+
     # Tests d'intégration
     test_instance.test_celery_rl_training_task()
     test_instance.test_celery_rl_suggestion_task()
@@ -308,12 +293,12 @@ if __name__ == "__main__":
     test_instance.test_celery_rl_error_handling()
     test_instance.test_celery_rl_monitoring()
     test_instance.test_celery_rl_cleanup()
-    
+
     # Tests de performance
     perf_instance = TestCeleryRLPerformance()
     perf_instance.test_celery_rl_latency()
     perf_instance.test_celery_rl_throughput()
     perf_instance.test_celery_rl_memory_usage()
-    
+
     print("=" * 50)
     print("✅ TOUS LES TESTS CELERY ↔ RL RÉUSSIS")

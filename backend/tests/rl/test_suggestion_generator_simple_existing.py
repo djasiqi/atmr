@@ -31,12 +31,7 @@ class TestRLSuggestionGeneratorSimple:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1",
-            min_confidence=0.5,
-            max_suggestions=5
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1", min_confidence=0.5, max_suggestions=5
         )
 
         assert isinstance(suggestions, list)
@@ -64,7 +59,7 @@ class TestRLSuggestionGeneratorSimple:
             drivers=[mock_driver],
             for_date="2024-0.1-0.1",
             min_confidence=0.5,
-            max_suggestions=5
+            max_suggestions=5,
         )
 
         assert isinstance(suggestions, list)
@@ -75,12 +70,7 @@ class TestRLSuggestionGeneratorSimple:
         generator.agent = None
 
         suggestions = generator._generate_rl_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date="2024-0.1-0.1",
-            min_confidence=0.5,
-            max_suggestions=5
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1", min_confidence=0.5, max_suggestions=5
         )
 
         assert suggestions == []
@@ -115,7 +105,7 @@ class TestRLSuggestionGeneratorSimple:
             drivers=[mock_driver],
             for_date="2024-0.1-0.1",
             min_confidence=0.5,
-            max_suggestions=5
+            max_suggestions=5,
         )
 
         assert isinstance(suggestions, list)
@@ -205,9 +195,7 @@ class TestRLSuggestionGeneratorSimple:
             mock_driver.available = True
             mock_drivers.append(mock_driver)
 
-        suggestions = generator._generate_basic_suggestions(
-            mock_assignments, mock_drivers, 0.5, 5
-        )
+        suggestions = generator._generate_basic_suggestions(mock_assignments, mock_drivers, 0.5, 5)
 
         assert isinstance(suggestions, list)
 
@@ -215,9 +203,7 @@ class TestRLSuggestionGeneratorSimple:
         """Test génération suggestions basiques - données vides."""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator._generate_basic_suggestions(
-            [], [], 0.5, 5
-        )
+        suggestions = generator._generate_basic_suggestions([], [], 0.5, 5)
 
         assert suggestions == []
 
@@ -243,7 +229,7 @@ class TestRLSuggestionGeneratorSimple:
             drivers=[],
             for_date="2024-0.1-0.1",
             min_confidence=0.5,
-            max_suggestions=5
+            max_suggestions=5,
         )
 
         # Devrait fallback vers suggestions basiques

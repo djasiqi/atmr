@@ -2,6 +2,7 @@
 
 Vérifie les limites de sécurité avant actions.
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,9 +30,7 @@ class SafetyPolicy:
         super().__init__()
         self.company_id = company_id
 
-    def check_action(
-        self, action_type: str, context: Dict[str, Any]
-    ) -> Tuple[bool, str]:
+    def check_action(self, action_type: str, context: Dict[str, Any]) -> Tuple[bool, str]:
         """Vérifie si une action peut être effectuée.
 
         Args:
@@ -58,9 +57,7 @@ class SafetyPolicy:
         if action_type in ["assign", "reassign"] and booking_id:
             driver_id = context.get("driver_id")
             if driver_id:
-                can_proceed, reason = self._check_reassignment_limits(
-                    booking_id, int(driver_id)
-                )
+                can_proceed, reason = self._check_reassignment_limits(booking_id, int(driver_id))
                 if not can_proceed:
                     return False, reason
 
@@ -88,9 +85,7 @@ class SafetyPolicy:
         }
 
         # Vérifier limite globale horaire
-        current_hour_count = AutonomousAction.count_actions_last_hour(
-            self.company_id
-        )
+        current_hour_count = AutonomousAction.count_actions_last_hour(self.company_id)
         if current_hour_count >= max_per_hour:
             return False, (
                 f"Limite horaire globale atteinte: {current_hour_count}/{max_per_hour} actions/h. "
@@ -112,19 +107,14 @@ class SafetyPolicy:
             type_limit_day = limits.get("per_day")
 
             if type_limit_hour:
-                type_count_hour = AutonomousAction.count_actions_last_hour(
-                    self.company_id, action_type
-                )
+                type_count_hour = AutonomousAction.count_actions_last_hour(self.company_id, action_type)
                 if type_count_hour >= type_limit_hour:
                     return False, (
-                        f"Limite horaire pour '{action_type}' atteinte: "
-                        f"{type_count_hour}/{type_limit_hour} actions/h."
+                        f"Limite horaire pour '{action_type}' atteinte: {type_count_hour}/{type_limit_hour} actions/h."
                     )
 
             if type_limit_day:
-                type_count_day = AutonomousAction.count_actions_today(
-                    self.company_id, action_type
-                )
+                type_count_day = AutonomousAction.count_actions_today(self.company_id, action_type)
                 if type_count_day >= type_limit_day:
                     return False, (
                         f"Limite journalière pour '{action_type}' atteinte: "
@@ -155,25 +145,21 @@ class SafetyPolicy:
 
                 # Vérifier si client VIP (marqué is_vip ou client hospitalier)
                 # Note: À adapter selon votre modèle Client
-                is_vip = getattr(client, "is_vip", False) or getattr(
-                    client, "is_hospital", False
-                )
+                is_vip = getattr(client, "is_vip", False) or getattr(client, "is_hospital", False)
 
                 if is_vip:
-                    return False, (
-                        f"Client VIP (ID: {client.id}) - Approbation manuelle requise"
-                    )
+                    return False, (f"Client VIP (ID: {client.id}) - Approbation manuelle requise")
 
                 return True, "OK"
             except Exception as e:
-                logger.warning(
-                    "[SafetyPolicy] Error checking VIP client: %s", e
-                )
+                logger.warning("[SafetyPolicy] Error checking VIP client: %s", e)
                 # En cas d'erreur, autoriser (sécurité par défaut)
                 return True, "OK"
 
     def _check_reassignment_limits(
-        self, booking_id: int, driver_id: int  # noqa: ARG002
+        self,
+        booking_id: int,
+        driver_id: int,  # noqa: ARG002
     ) -> Tuple[bool, str]:
         """Vérifie les limites de réassignation pour un client.
 
@@ -197,16 +183,13 @@ class SafetyPolicy:
                 # Compter réassignations pour ce client dans les 30 dernières minutes
                 thirty_min_ago = datetime.now(timezone.utc) - timedelta(minutes=30)
 
-                recent_reassignments = (
-                    AutonomousAction.query.filter(
-                        AutonomousAction.company_id == self.company_id,
-                        AutonomousAction.booking_id == booking_id,
-                        AutonomousAction.action_type.in_(["assign", "reassign"]),
-                        AutonomousAction.created_at >= thirty_min_ago,
-                        AutonomousAction.success == True,  # noqa: E712
-                    )
-                    .count()
-                )
+                recent_reassignments = AutonomousAction.query.filter(
+                    AutonomousAction.company_id == self.company_id,
+                    AutonomousAction.booking_id == booking_id,
+                    AutonomousAction.action_type.in_(["assign", "reassign"]),
+                    AutonomousAction.created_at >= thirty_min_ago,
+                    AutonomousAction.success == True,  # noqa: E712
+                ).count()
 
                 max_reassignments_per_30min = 3
                 if recent_reassignments >= max_reassignments_per_30min:
@@ -217,9 +200,6 @@ class SafetyPolicy:
 
                 return True, "OK"
             except Exception as e:
-                logger.warning(
-                    "[SafetyPolicy] Error checking reassignment limits: %s", e
-                )
+                logger.warning("[SafetyPolicy] Error checking reassignment limits: %s", e)
                 # En cas d'erreur, autoriser (sécurité par défaut)
                 return True, "OK"
-

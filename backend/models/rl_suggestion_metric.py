@@ -36,11 +36,7 @@ class RLSuggestionMetric(db.Model):
     # Identifiants
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     company_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    suggestion_id = Column(
-        String(100),
-        unique=True,
-        nullable=False,
-        index=True)
+    suggestion_id = Column(String(100), unique=True, nullable=False, index=True)
 
     # Contexte suggestion
     booking_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
@@ -56,11 +52,7 @@ class RLSuggestionMetric(db.Model):
     source: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # Événements
-    generated_at = Column(
-        DateTime,
-        nullable=False,
-        default=func.now(),
-        index=True)
+    generated_at = Column(DateTime, nullable=False, default=func.now(), index=True)
     applied_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     rejected_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 

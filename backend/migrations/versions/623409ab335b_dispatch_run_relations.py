@@ -4,6 +4,7 @@ Revision ID: 623409ab335b
 Revises: 19fc92c2ba30
 Create Date: 2025-10-07 10:34:08.865530
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -17,16 +18,10 @@ depends_on = None
 def upgrade():
     # --- assignment.dispatch_run_id : nullable + FK SET NULL ---
     with op.batch_alter_table("assignment", schema=None) as batch_op:
-        batch_op.alter_column("dispatch_run_id",
-                              existing_type=sa.INTEGER(),
-                              nullable=True)
+        batch_op.alter_column("dispatch_run_id", existing_type=sa.INTEGER(), nullable=True)
         batch_op.drop_constraint("assignment_dispatch_run_id_fkey", type_="foreignkey")
         batch_op.create_foreign_key(
-            "fk_assignment_dispatch_run_id",
-            "dispatch_run",
-            ["dispatch_run_id"],
-            ["id"],
-            ondelete="SET NULL"
+            "fk_assignment_dispatch_run_id", "dispatch_run", ["dispatch_run_id"], ["id"], ondelete="SET NULL"
         )
 
     # --- dispatch_run.status : drop ancien CHECK (lowercase), uppercasing des données, passage à Enum UPPER ---
@@ -43,15 +38,10 @@ def upgrade():
         batch_op.alter_column(
             "status",
             existing_type=sa.VARCHAR(length=20),
-            type_=sa.Enum("PENDING", "RUNNING", "COMPLETED", "FAILED",
-                          name="dispatch_status", native_enum=False),
-            existing_nullable=False
+            type_=sa.Enum("PENDING", "RUNNING", "COMPLETED", "FAILED", name="dispatch_status", native_enum=False),
+            existing_nullable=False,
         )
-        batch_op.create_index(
-            "ix_dispatch_run_company_status_day",
-            ["company_id", "status", "day"],
-            unique=False
-        )
+        batch_op.create_index("ix_dispatch_run_company_status_day", ["company_id", "status", "day"], unique=False)
 
 
 def downgrade():
@@ -60,10 +50,11 @@ def downgrade():
         batch_op.drop_index("ix_dispatch_run_company_status_day")
         batch_op.alter_column(
             "status",
-            existing_type=sa.Enum("PENDING", "RUNNING", "COMPLETED", "FAILED",
-                                  name="dispatch_status", native_enum=False),
+            existing_type=sa.Enum(
+                "PENDING", "RUNNING", "COMPLETED", "FAILED", name="dispatch_status", native_enum=False
+            ),
             type_=sa.VARCHAR(length=20),
-            existing_nullable=False
+            existing_nullable=False,
         )
 
     # Valeurs de nouveau en lowercase pour satisfaire le vieux CHECK
@@ -71,21 +62,13 @@ def downgrade():
 
     # Remet l'ancien CHECK (lowercase)
     op.create_check_constraint(
-        "ck_dispatch_run_status",
-        "dispatch_run",
-        "status IN ('pending','running','completed','failed')"
+        "ck_dispatch_run_status", "dispatch_run", "status IN ('pending','running','completed','failed')"
     )
 
     # --- assignment.dispatch_run_id : NOT NULL + FK CASCADE (état antérieur) ---
     with op.batch_alter_table("assignment", schema=None) as batch_op:
         batch_op.drop_constraint("fk_assignment_dispatch_run_id", type_="foreignkey")
         batch_op.create_foreign_key(
-            "assignment_dispatch_run_id_fkey",
-            "dispatch_run",
-            ["dispatch_run_id"],
-            ["id"],
-            ondelete="CASCADE"
+            "assignment_dispatch_run_id_fkey", "dispatch_run", ["dispatch_run_id"], ["id"], ondelete="CASCADE"
         )
-        batch_op.alter_column("dispatch_run_id",
-                              existing_type=sa.INTEGER(),
-                              nullable=False)
+        batch_op.alter_column("dispatch_run_id", existing_type=sa.INTEGER(), nullable=False)

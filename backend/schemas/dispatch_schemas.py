@@ -3,6 +3,7 @@
 Utilise Marshmallow pour une sérialisation cohérente et typée.
 Remplace les méthodes .serialize() et .to_dict() dispersées dans les modèles.
 """
+
 from marshmallow import Schema, fields
 
 
@@ -248,4 +249,3 @@ suggestions_schema = DispatchSuggestionSchema(many=True)
 # Problème & Résultat
 dispatch_problem_schema = DispatchProblemSchema()
 dispatch_result_schema = DispatchResultSchema()
-

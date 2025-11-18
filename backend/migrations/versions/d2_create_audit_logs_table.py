@@ -5,6 +5,7 @@ Revises: add_decision_explanation
 Create Date: 2025-01-28 10:00:00.000000
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -36,7 +37,7 @@ def upgrade():
         sa.Column("metadata", sa.Text(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    
+
     # Indexes pour performance de requêtes d'audit
     op.create_index("ix_audit_logs_created_at", "audit_logs", ["created_at"])
     op.create_index("ix_audit_logs_user_id", "audit_logs", ["user_id"])
@@ -56,7 +57,6 @@ def downgrade():
     op.drop_index("ix_audit_logs_action_type", table_name="audit_logs")
     op.drop_index("ix_audit_logs_user_id", table_name="audit_logs")
     op.drop_index("ix_audit_logs_created_at", table_name="audit_logs")
-    
+
     # Supprimer la table
     op.drop_table("audit_logs")
-

@@ -6,6 +6,7 @@ ACTION_DIM_THRESHOLD = 115
 
 """Résolution des équations pour trouver les paramètres corrects."""
 
+
 def solve_dimensions():
     """Résout les équations pour trouver drivers et bookings."""
     print("Résolution des équations:")
@@ -33,6 +34,7 @@ def solve_dimensions():
             action_dim = drivers * bookings + 1
             print("drivers={drivers}, bookings={bookings} → state={state_dim}, actions={action_dim}")
     return None
+
 
 if __name__ == "__main__":
     solve_dimensions()

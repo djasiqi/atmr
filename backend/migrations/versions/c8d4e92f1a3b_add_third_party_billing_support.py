@@ -5,6 +5,7 @@ Revises: b15c01673cc4
 Create Date: 2025-10-10 14:30:00.000000
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -47,4 +48,3 @@ def downgrade():
         batch_op.drop_column("is_institution")
 
     # ### end Alembic commands ###
-

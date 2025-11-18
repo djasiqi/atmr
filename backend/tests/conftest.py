@@ -1,6 +1,7 @@
 """
 Fixtures pytest pour les tests backend ATMR.
 """
+
 import os
 
 # Mock JSONB → JSON AVANT tout import (SQLite ne supporte pas JSONB)
@@ -35,19 +36,18 @@ def app() -> Flask:
     # ✅ FIX: Utiliser la DB PostgreSQL du docker-compose pour les tests
     # Évite les problèmes d'enums, contraintes nommées, et JSONB
     # Les tests utilisent des savepoints (transactions nested) donc pas de risque pour les données
-    database_url = os.getenv(
-        "DATABASE_URL",
-        "postgresql+psycopg://atmr:atmr@postgres:5432/atmr"
-    )
+    database_url = os.getenv("DATABASE_URL", "postgresql+psycopg://atmr:atmr@postgres:5432/atmr")
 
-    app.config.update({
-        "TESTING": True,
-        "SQLALCHEMY_DATABASE_URI": database_url,
-        "WTF_CSRF_ENABLED": False,
-        "JWT_SECRET_KEY": "test-secret-key",
-        "SECRET_KEY": "test-secret-key",
-        "SQLALCHEMY_ECHO": False,  # Pas de logs SQL verbeux en tests
-    })
+    app.config.update(
+        {
+            "TESTING": True,
+            "SQLALCHEMY_DATABASE_URI": database_url,
+            "WTF_CSRF_ENABLED": False,
+            "JWT_SECRET_KEY": "test-secret-key",
+            "SECRET_KEY": "test-secret-key",
+            "SQLALCHEMY_ECHO": False,  # Pas de logs SQL verbeux en tests
+        }
+    )
     return app
 
 
@@ -81,7 +81,7 @@ def sample_company(db, sample_user):
     existing_company = Company.query.filter_by(user_id=sample_user.id).first()
     if existing_company:
         return existing_company
-    
+
     company = Company()
     company.name = "Test Transport SA"
     company.address = "Rue de Test 1, 1000 Lausanne"
@@ -138,10 +138,12 @@ def auth_headers(client, sample_user):
 
 # ========== FIXTURES AVANCÉES AVEC FACTORIES ==========
 
+
 @pytest.fixture
 def factory_company(db):
     """Factory pour créer des companies de test."""
     from tests.factories import CompanyFactory
+
     return CompanyFactory
 
 
@@ -149,6 +151,7 @@ def factory_company(db):
 def factory_driver(db):
     """Factory pour créer des drivers de test."""
     from tests.factories import DriverFactory
+
     return DriverFactory
 
 
@@ -156,6 +159,7 @@ def factory_driver(db):
 def factory_booking(db):
     """Factory pour créer des bookings de test."""
     from tests.factories import BookingFactory
+
     return BookingFactory
 
 
@@ -163,6 +167,7 @@ def factory_booking(db):
 def factory_assignment(db):
     """Factory pour créer des assignments de test."""
     from tests.factories import AssignmentFactory
+
     return AssignmentFactory
 
 
@@ -170,6 +175,7 @@ def factory_assignment(db):
 def factory_client(db):
     """Factory pour créer des clients de test."""
     from tests.factories import ClientFactory
+
     return ClientFactory
 
 
@@ -177,10 +183,12 @@ def factory_client(db):
 def factory_user(db):
     """Factory pour créer des users de test."""
     from tests.factories import UserFactory
+
     return UserFactory
 
 
 # ========== FIXTURES POUR SCÉNARIOS DISPATCH ==========
+
 
 @pytest.fixture
 def dispatch_scenario(db):
@@ -190,6 +198,7 @@ def dispatch_scenario(db):
         dict avec company, drivers, bookings, dispatch_run
     """
     from tests.factories import create_dispatch_scenario
+
     return create_dispatch_scenario(num_bookings=5, num_drivers=3)
 
 
@@ -197,12 +206,9 @@ def dispatch_scenario(db):
 def simple_booking(db, sample_company):
     """Crée un booking simple avec coordonnées valides."""
     from tests.factories import create_booking_with_coordinates
+
     return create_booking_with_coordinates(
-        company=sample_company,
-        pickup_lat=46.2044,
-        pickup_lon=6.1432,
-        dropoff_lat=46.2100,
-        dropoff_lon=6.1500
+        company=sample_company, pickup_lat=46.2044, pickup_lon=6.1432, dropoff_lat=46.2100, dropoff_lon=6.1500
     )
 
 
@@ -210,22 +216,17 @@ def simple_booking(db, sample_company):
 def simple_driver(db, sample_company):
     """Crée un driver simple avec position valide."""
     from tests.factories import create_driver_with_position
-    return create_driver_with_position(
-        company=sample_company,
-        latitude=46.2044,
-        longitude=6.1432,
-        is_available=True
-    )
+
+    return create_driver_with_position(company=sample_company, latitude=46.2044, longitude=6.1432, is_available=True)
 
 
 @pytest.fixture
 def simple_assignment(db, simple_booking, simple_driver):
     """Crée un assignment simple avec booking et driver."""
     from tests.factories import create_assignment_with_booking_driver
+
     return create_assignment_with_booking_driver(
-        booking=simple_booking,
-        driver=simple_driver,
-        company=simple_booking.company
+        booking=simple_booking, driver=simple_driver, company=simple_booking.company
     )
 
 
@@ -236,7 +237,7 @@ def sample_client(db, sample_company):
     from models.client import Client
     from models.enums import UserRole
     from models.user import User
-    
+
     user = User()
     user.username = "clientuser"
     user.email = "client@example.com"
@@ -249,7 +250,7 @@ def sample_client(db, sample_company):
     user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash  # type: ignore[unnecessary-isinstance]
     db.session.add(user)
     db.session.flush()
-    
+
     client = Client()
     client.user_id = user.id
     client.company_id = sample_company.id
@@ -263,30 +264,26 @@ def sample_client(db, sample_company):
 
 # ========== FIXTURES POUR MOCKS ==========
 
+
 @pytest.fixture
 def mock_osrm_client(monkeypatch):
     """Mock osrm_client fonctions pour éviter appels réseau."""
+
     def mock_get_distance_time(origin, dest, **kwargs):
         return (15.0, 1800.0)  # 15km, 1800 secondes (30 min)
 
     def mock_get_matrix(origins, destinations, **kwargs):
         n, m = len(origins), len(destinations)
-        return {
-            "durations": [[1800.0] * m for _ in range(n)],
-            "distances": [[15000.0] * m for _ in range(n)]
-        }
+        return {"durations": [[1800.0] * m for _ in range(n)], "distances": [[15000.0] * m for _ in range(n)]}
 
     def mock_eta_seconds(origin, dest, **kwargs):
         return 1800
 
     def mock_route_info(origin, dest, **kwargs):
-        return {
-            "duration_s": 1800.0,
-            "distance_m": 15000.0,
-            "geometry": "mock_geometry"
-        }
+        return {"duration_s": 1800.0, "distance_m": 15000.0, "geometry": "mock_geometry"}
 
     from services import osrm_client
+
     monkeypatch.setattr(osrm_client, "get_distance_time", mock_get_distance_time)
     monkeypatch.setattr(osrm_client, "get_matrix", mock_get_matrix)
     monkeypatch.setattr(osrm_client, "eta_seconds", mock_eta_seconds)
@@ -297,21 +294,24 @@ def mock_osrm_client(monkeypatch):
 @pytest.fixture
 def mock_ml_predictor(monkeypatch):
     """Mock MLPredictor pour tests rapides."""
+
     class MockMLPredictor:
         def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
             self.is_trained = True
 
         def predict_delay(self, booking, driver, current_time=None):
             from services.unified_dispatch.ml_predictor import DelayPrediction
+
             return DelayPrediction(
                 booking_id=booking.id,
                 predicted_delay_minutes=5.0,
                 confidence=0.85,
                 risk_level="medium",
-                contributing_factors={"distance_x_weather": 0.42}
+                contributing_factors={"distance_x_weather": 0.42},
             )
 
     from services.unified_dispatch import ml_predictor
+
     monkeypatch.setattr(ml_predictor, "DelayMLPredictor", MockMLPredictor)
     return MockMLPredictor()
 
@@ -319,25 +319,24 @@ def mock_ml_predictor(monkeypatch):
 @pytest.fixture
 def mock_weather_service(monkeypatch):
     """Mock WeatherService pour éviter appels API."""
+
     class MockWeatherService:
         @staticmethod
         def get_weather(lat, lon):
-            return {
-                "temperature": 20.0,
-                "weather_factor": 0.5,
-                "is_default": False
-            }
+            return {"temperature": 20.0, "weather_factor": 0.5, "is_default": False}
 
         @staticmethod
         def get_weather_factor(lat, lon):
             return 0.5
 
     from services import weather_service
+
     monkeypatch.setattr(weather_service, "WeatherService", MockWeatherService)
     return MockWeatherService
 
 
 # ========== FIXTURES HELPERS ==========
+
 
 @pytest.fixture
 def cleanup_db(db):
@@ -350,19 +349,21 @@ def cleanup_db(db):
 
 # ========== FIXTURES D3 - CHAOS ENGINEERING ==========
 
+
 @pytest.fixture
 def reset_chaos():
     """Reset automatique du chaos injector après chaque test.
-    
+
     ✅ D3: Garantit que le chaos est toujours désactivé après un test,
     même si le test échoue.
     """
     try:
         from chaos.injectors import get_chaos_injector
+
         injector = get_chaos_injector()
-        
+
         yield injector
-        
+
     except ImportError:
         # Module chaos non disponible, continuer normalement
         yield None
@@ -370,6 +371,7 @@ def reset_chaos():
         # Reset automatique après le test
         try:
             from chaos.injectors import get_chaos_injector
+
             injector = get_chaos_injector()
             injector.enabled = False
             injector.osrm_down = False
@@ -384,9 +386,9 @@ def reset_chaos():
 @pytest.fixture
 def chaos_injector():
     """Fixture pour obtenir l'injecteur de chaos avec reset automatique.
-    
+
     ✅ D3: Retourne l'injecteur de chaos et garantit le reset après le test.
-    
+
     Usage:
         def test_something(chaos_injector):
             chaos_injector.enable()
@@ -395,15 +397,16 @@ def chaos_injector():
     """
     try:
         from chaos.injectors import get_chaos_injector
+
         injector = get_chaos_injector()
-        
+
         # S'assurer que le chaos est désactivé au départ
         injector.disable()
         injector.set_osrm_down(False)
         injector.set_db_read_only(False)
-        
+
         yield injector
-        
+
     except ImportError:
         # Module chaos non disponible, continuer normalement
         pytest.skip("Chaos injector module not available")
@@ -411,6 +414,7 @@ def chaos_injector():
         # Reset automatique après le test
         try:
             from chaos.injectors import get_chaos_injector, reset_chaos
+
             reset_chaos()
         except ImportError:
             pass
@@ -419,9 +423,9 @@ def chaos_injector():
 @pytest.fixture
 def mock_osrm_down():
     """Fixture pour activer/désactiver automatiquement OSRM down.
-    
+
     ✅ D3: Active OSRM down au début du test et le désactive à la fin.
-    
+
     Usage:
         def test_with_osrm_down(mock_osrm_down):
             # OSRM down est automatiquement activé
@@ -431,21 +435,22 @@ def mock_osrm_down():
     # Initialiser les variables pour éviter les erreurs de linter
     initial_enabled = False
     initial_osrm_down = False
-    
+
     try:
         from chaos.injectors import get_chaos_injector
+
         injector = get_chaos_injector()
-        
+
         # Sauvegarder l'état initial
         initial_enabled = injector.enabled
         initial_osrm_down = injector.osrm_down
-        
+
         # Activer OSRM down
         injector.enable()
         injector.set_osrm_down(True)
-        
+
         yield injector
-        
+
     except ImportError:
         # Module chaos non disponible, continuer normalement
         pytest.skip("Chaos injector module not available")
@@ -453,6 +458,7 @@ def mock_osrm_down():
         # Restaurer l'état initial
         try:
             from chaos.injectors import get_chaos_injector
+
             injector = get_chaos_injector()
             injector.set_osrm_down(initial_osrm_down)
             if not initial_enabled:
@@ -464,9 +470,9 @@ def mock_osrm_down():
 @pytest.fixture
 def mock_db_read_only():
     """Fixture pour activer/désactiver automatiquement DB read-only.
-    
+
     ✅ D3: Active DB read-only au début du test et le désactive à la fin.
-    
+
     Usage:
         def test_with_db_readonly(mock_db_read_only):
             # DB read-only est automatiquement activé
@@ -476,21 +482,22 @@ def mock_db_read_only():
     # Initialiser les variables pour éviter les erreurs de linter
     initial_enabled = False
     initial_db_read_only = False
-    
+
     try:
         from chaos.injectors import get_chaos_injector
+
         injector = get_chaos_injector()
-        
+
         # Sauvegarder l'état initial
         initial_enabled = injector.enabled
         initial_db_read_only = injector.db_read_only
-        
+
         # Activer DB read-only
         injector.enable()
         injector.set_db_read_only(True)
-        
+
         yield injector
-        
+
     except ImportError:
         # Module chaos non disponible, continuer normalement
         pytest.skip("Chaos injector module not available")
@@ -498,6 +505,7 @@ def mock_db_read_only():
         # Restaurer l'état initial
         try:
             from chaos.injectors import get_chaos_injector
+
             injector = get_chaos_injector()
             injector.set_db_read_only(initial_db_read_only)
             if not initial_enabled:

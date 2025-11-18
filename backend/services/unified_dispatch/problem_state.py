@@ -3,6 +3,7 @@
 Élimine la duplication de code dans heuristics.py, solver.py et data.py
 en centralisant la logique de gestion de l'état des chauffeurs.
 """
+
 from __future__ import annotations
 
 import logging
@@ -27,8 +28,7 @@ class ProblemState:
     proposed_load: Dict[int, int] = field(default_factory=dict)
 
     @classmethod
-    def from_problem(cls, problem: Dict[str, Any],
-                     drivers: List[Any]) -> ProblemState:
+    def from_problem(cls, problem: Dict[str, Any], drivers: List[Any]) -> ProblemState:
         """Crée un ProblemState à partir d'un dict problem et d'une liste de drivers.
 
         Args:
@@ -49,20 +49,16 @@ class ProblemState:
 
         state = cls(
             busy_until={did: previous_busy.get(did, 0) for did in driver_ids},
-            scheduled_times={
-                did: list(
-                    previous_times.get(
-                        did,
-                        [])) for did in driver_ids},
-            proposed_load={
-                did: previous_load.get(
-                    did, 0) for did in driver_ids}
+            scheduled_times={did: list(previous_times.get(did, [])) for did in driver_ids},
+            proposed_load={did: previous_load.get(did, 0) for did in driver_ids},
         )
 
         if previous_busy or previous_times or previous_load:
             logger.debug(
                 "[ProblemState] État récupéré: %d busy_until, %d scheduled_times, %d proposed_load",
-                len(previous_busy), len(previous_times), len(previous_load)
+                len(previous_busy),
+                len(previous_times),
+                len(previous_load),
             )
 
         return state
@@ -77,7 +73,7 @@ class ProblemState:
         return {
             "busy_until": dict(self.busy_until),
             "driver_scheduled_times": {k: list(v) for k, v in self.scheduled_times.items()},
-            "proposed_load": dict(self.proposed_load)
+            "proposed_load": dict(self.proposed_load),
         }
 
     def update_problem(self, problem: Dict[str, Any]) -> None:
@@ -102,12 +98,7 @@ class ProblemState:
         """
         return time_min < self.busy_until.get(driver_id, 0)
 
-    def has_time_conflict(
-        self,
-        driver_id: int,
-        time_min: int,
-        min_gap_minutes: int = 30
-    ) -> bool:
+    def has_time_conflict(self, driver_id: int, time_min: int, min_gap_minutes: int = 30) -> bool:
         """Vérifie si l'ajout d'une course à time_min crée un conflit avec les courses existantes.
 
         Args:
@@ -125,18 +116,17 @@ class ProblemState:
             if abs(time_min - existing_time) < min_gap_minutes:
                 logger.debug(
                     "[ProblemState] Conflit détecté pour driver #%d: course à %dmin vs nouvelle à %dmin (écart: %dmin < %dmin)",
-                    driver_id, existing_time, time_min, abs(time_min - existing_time), min_gap_minutes
+                    driver_id,
+                    existing_time,
+                    time_min,
+                    abs(time_min - existing_time),
+                    min_gap_minutes,
                 )
                 return True
 
         return False
 
-    def assign_booking(
-        self,
-        driver_id: int,
-        start_time_min: int,
-        end_time_min: int
-    ) -> None:
+    def assign_booking(self, driver_id: int, start_time_min: int, end_time_min: int) -> None:
         """Enregistre l'assignation d'une course à un chauffeur.
 
         Met à jour :
@@ -151,10 +141,7 @@ class ProblemState:
 
         """
         # Mettre à jour busy_until
-        self.busy_until[driver_id] = max(
-            self.busy_until.get(driver_id, 0),
-            end_time_min
-        )
+        self.busy_until[driver_id] = max(self.busy_until.get(driver_id, 0), end_time_min)
 
         # Ajouter le scheduled_time
         if driver_id not in self.scheduled_times:
@@ -162,19 +149,18 @@ class ProblemState:
         self.scheduled_times[driver_id].append(start_time_min)
 
         # Incrémenter le load
-        self.proposed_load[driver_id] = self.proposed_load.get(
-            driver_id, 0) + 1
+        self.proposed_load[driver_id] = self.proposed_load.get(driver_id, 0) + 1
 
         logger.debug(
             "[ProblemState] Driver #%d assigné: start=%d, end=%d, busy_until=%d, load=%d",
-            driver_id, start_time_min, end_time_min, self.busy_until[driver_id], self.proposed_load[driver_id]
+            driver_id,
+            start_time_min,
+            end_time_min,
+            self.busy_until[driver_id],
+            self.proposed_load[driver_id],
         )
 
-    def get_driver_load(
-        self,
-        driver_id: int,
-        fairness_counts: Dict[int, int] | None = None
-    ) -> int:
+    def get_driver_load(self, driver_id: int, fairness_counts: Dict[int, int] | None = None) -> int:
         """Retourne la charge totale d'un chauffeur (proposée + déjà assignée).
 
         Args:
@@ -195,7 +181,7 @@ class ProblemState:
         start_time_min: int,
         max_bookings_per_driver: int,
         fairness_counts: Dict[int, int] | None = None,
-        min_gap_minutes: int = 30
+        min_gap_minutes: int = 30,
     ) -> tuple[bool, str | None]:
         """Vérifie si on peut assigner une nouvelle course à un chauffeur.
 
@@ -257,10 +243,10 @@ class ProblemState:
             "total_drivers": len(self.proposed_load),
             "avg_load": total_assignments / max(active_drivers, 1),
             "max_load": max(self.proposed_load.values(), default=0),
-            "busy_drivers": len([v for v in self.busy_until.values() if v > 0])
+            "busy_drivers": len([v for v in self.busy_until.values() if v > 0]),
         }
 
-    def __repr__(self) -> str: # pyright: ignore[reportImplicitOverride]
+    def __repr__(self) -> str:  # pyright: ignore[reportImplicitOverride]
         """Représentation string pour le debug."""
         summary = self.get_summary()
         return (
@@ -272,16 +258,14 @@ class ProblemState:
 
 
 # Fonctions helper pour la compatibilité avec le code existant
-def extract_state_from_problem(
-        problem: Dict[str, Any], drivers: List[Any]) -> ProblemState:
+def extract_state_from_problem(problem: Dict[str, Any], drivers: List[Any]) -> ProblemState:
     """Fonction helper pour extraire un ProblemState depuis un dict problem.
     Alias de ProblemState.from_problem() pour compatibilité.
     """
     return ProblemState.from_problem(problem, drivers)
 
 
-def inject_state_into_problem(
-        state: ProblemState, problem: Dict[str, Any]) -> None:
+def inject_state_into_problem(state: ProblemState, problem: Dict[str, Any]) -> None:
     """Fonction helper pour injecter un ProblemState dans un dict problem.
     Alias de state.update_problem() pour compatibilité.
     """

@@ -23,5 +23,3 @@ def emit_shift_deleted(company_id: int, payload: dict[str, Any]) -> None:
 def init_planning_socket(socketio: SocketIO) -> None:  # noqa: ARG001
     # Pas d'events à écouter côté serveur pour l'instant (uniquement émission côté HTTP)
     return None
-
-

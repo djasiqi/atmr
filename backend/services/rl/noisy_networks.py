@@ -6,7 +6,6 @@ Ce module implémente les Noisy Networks qui remplacent l'ε-greedy par une
 exploration paramétrique plus sophistiquée, réduisant la stagnation tardive.
 """
 
-
 import math
 
 import torch
@@ -21,13 +20,7 @@ class NoisyLinear(nn.Module):
     tout en maintenant une exploration efficace.
     """
 
-    def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        std_init: float = 0.5,
-        device: torch.device | None = None
-    ):
+    def __init__(self, in_features: int, out_features: int, std_init: float = 0.5, device: torch.device | None = None):
         """Initialise la couche NoisyLinear.
 
         Args:
@@ -46,17 +39,14 @@ class NoisyLinear(nn.Module):
 
         # Poids moyens (μ)
         self.weight_mu = nn.Parameter(torch.empty(out_features, in_features))
-        self.weight_sigma = nn.Parameter(
-            torch.empty(out_features, in_features))
+        self.weight_sigma = nn.Parameter(torch.empty(out_features, in_features))
 
         # Biais moyens (μ)
         self.bias_mu = nn.Parameter(torch.empty(out_features))
         self.bias_sigma = nn.Parameter(torch.empty(out_features))
 
         # Variables de bruit (ε)
-        self.register_buffer(
-            "weight_epsilon", torch.empty(
-                out_features, in_features))
+        self.register_buffer("weight_epsilon", torch.empty(out_features, in_features))
         self.register_buffer("bias_epsilon", torch.empty(out_features))
 
         self.reset_parameters()
@@ -68,8 +58,7 @@ class NoisyLinear(nn.Module):
 
         # Initialiser les poids moyens
         self.weight_mu.data.uniform_(-mu_range, mu_range)
-        self.weight_sigma.data.fill_(
-            self.std_init / math.sqrt(self.in_features))
+        self.weight_sigma.data.fill_(self.std_init / math.sqrt(self.in_features))
 
         # Initialiser les biais moyens
         self.bias_mu.data.uniform_(-mu_range, mu_range)
@@ -134,7 +123,7 @@ class NoisyQNetwork(nn.Module):
         action_size: int,
         hidden_sizes: list[int] | None = None,
         std_init: float = 0.5,
-        device: torch.device | None = None
+        device: torch.device | None = None,
     ):
         """Initialise le réseau Q avec bruit.
 
@@ -157,21 +146,14 @@ class NoisyQNetwork(nn.Module):
         layers = []
 
         # Première couche
-        layers.append(
-            NoisyLinear(
-                state_size,
-                self.hidden_sizes[0],
-                std_init,
-                device))
+        layers.append(NoisyLinear(state_size, self.hidden_sizes[0], std_init, device))
 
         # Couches cachées
         for i in range(len(self.hidden_sizes) - 1):
-            layers.append(NoisyLinear(
-                self.hidden_sizes[i], self.hidden_sizes[i + 1], std_init, device))
+            layers.append(NoisyLinear(self.hidden_sizes[i], self.hidden_sizes[i + 1], std_init, device))
 
         # Couche de sortie
-        layers.append(NoisyLinear(
-            self.hidden_sizes[-1], action_size, std_init, device))
+        layers.append(NoisyLinear(self.hidden_sizes[-1], action_size, std_init, device))
 
         self.layers = nn.ModuleList(layers)
 
@@ -212,7 +194,7 @@ class NoisyQNetwork(nn.Module):
             "avg_weight_noise": 0.0,
             "avg_bias_noise": 0.0,
             "max_weight_noise": 0.0,
-            "max_bias_noise": 0.0
+            "max_bias_noise": 0.0,
         }
 
         weight_noises = []
@@ -221,22 +203,17 @@ class NoisyQNetwork(nn.Module):
         for layer in self.layers:
             if isinstance(layer, NoisyLinear):
                 # Compter les paramètres de bruit
-                noise_stats["total_noise_params"] += (
-                    layer.weight_sigma.numel() + layer.bias_sigma.numel()
-                )
+                noise_stats["total_noise_params"] += layer.weight_sigma.numel() + layer.bias_sigma.numel()
 
                 # Collecter les valeurs de bruit
-                weight_noise = (
-                    layer.weight_sigma *
-                    layer.weight_epsilon).abs()
+                weight_noise = (layer.weight_sigma * layer.weight_epsilon).abs()
                 bias_noise = (layer.bias_sigma * layer.bias_epsilon).abs()
 
                 weight_noises.extend(weight_noise.flatten().tolist())
                 bias_noises.extend(bias_noise.flatten().tolist())
 
         if weight_noises:
-            noise_stats["avg_weight_noise"] = sum(
-                weight_noises) / len(weight_noises)
+            noise_stats["avg_weight_noise"] = sum(weight_noises) / len(weight_noises)
             noise_stats["max_weight_noise"] = max(weight_noises)
 
         if bias_noises:
@@ -259,7 +236,7 @@ class NoisyDuelingQNetwork(nn.Module):
         action_size: int,
         hidden_sizes: list[int] | None = None,
         std_init: float = 0.5,
-        device: torch.device | None = None
+        device: torch.device | None = None,
     ):
         """Initialise le réseau Dueling Q avec bruit.
 
@@ -282,25 +259,17 @@ class NoisyDuelingQNetwork(nn.Module):
         self.shared_layers = nn.ModuleList()
 
         # Première couche partagée
-        self.shared_layers.append(
-            NoisyLinear(
-                state_size,
-                self.hidden_sizes[0],
-                std_init,
-                device))
+        self.shared_layers.append(NoisyLinear(state_size, self.hidden_sizes[0], std_init, device))
 
         # Couches cachées partagées
         for i in range(len(self.hidden_sizes) - 1):
-            self.shared_layers.append(NoisyLinear(
-                self.hidden_sizes[i], self.hidden_sizes[i + 1], std_init, device))
+            self.shared_layers.append(NoisyLinear(self.hidden_sizes[i], self.hidden_sizes[i + 1], std_init, device))
 
         # Branche Value (V)
-        self.value_layer = NoisyLinear(
-            self.hidden_sizes[-1], 1, std_init, device)
+        self.value_layer = NoisyLinear(self.hidden_sizes[-1], 1, std_init, device)
 
         # Branche Advantage (A)
-        self.advantage_layer = NoisyLinear(
-            self.hidden_sizes[-1], action_size, std_init, device)
+        self.advantage_layer = NoisyLinear(self.hidden_sizes[-1], action_size, std_init, device)
 
     def forward(self, state: torch.Tensor) -> torch.Tensor:
         """Forward pass du réseau Dueling Q avec bruit.
@@ -346,7 +315,7 @@ class NoisyDuelingQNetwork(nn.Module):
             "avg_weight_noise": 0.0,
             "avg_bias_noise": 0.0,
             "max_weight_noise": 0.0,
-            "max_bias_noise": 0.0
+            "max_bias_noise": 0.0,
         }
 
         weight_noises = []
@@ -355,13 +324,9 @@ class NoisyDuelingQNetwork(nn.Module):
         # Couches partagées
         for layer in self.shared_layers:
             if isinstance(layer, NoisyLinear):
-                noise_stats["total_noise_params"] += (
-                    layer.weight_sigma.numel() + layer.bias_sigma.numel()
-                )
+                noise_stats["total_noise_params"] += layer.weight_sigma.numel() + layer.bias_sigma.numel()
 
-                weight_noise = (
-                    layer.weight_sigma *
-                    layer.weight_epsilon).abs()
+                weight_noise = (layer.weight_sigma * layer.weight_epsilon).abs()
                 bias_noise = (layer.bias_sigma * layer.bias_epsilon).abs()
 
                 weight_noises.extend(weight_noise.flatten().tolist())
@@ -369,9 +334,7 @@ class NoisyDuelingQNetwork(nn.Module):
 
         # Couches Value et Advantage
         for layer in [self.value_layer, self.advantage_layer]:
-            noise_stats["total_noise_params"] += (
-                layer.weight_sigma.numel() + layer.bias_sigma.numel()
-            )
+            noise_stats["total_noise_params"] += layer.weight_sigma.numel() + layer.bias_sigma.numel()
 
             weight_noise = (layer.weight_sigma * layer.weight_epsilon).abs()
             bias_noise = (layer.bias_sigma * layer.bias_epsilon).abs()
@@ -380,8 +343,7 @@ class NoisyDuelingQNetwork(nn.Module):
             bias_noises.extend(bias_noise.flatten().tolist())
 
         if weight_noises:
-            noise_stats["avg_weight_noise"] = sum(
-                weight_noises) / len(weight_noises)
+            noise_stats["avg_weight_noise"] = sum(weight_noises) / len(weight_noises)
             noise_stats["max_weight_noise"] = max(weight_noises)
 
         if bias_noises:
@@ -397,7 +359,7 @@ def create_noisy_network(
     action_size: int,
     hidden_sizes: list[int] | None = None,
     std_init: float = 0.5,
-    device: torch.device | None = None
+    device: torch.device | None = None,
 ) -> nn.Module:
     """Factory function pour créer des réseaux avec bruit.
 
@@ -420,20 +382,15 @@ def create_noisy_network(
         hidden_sizes = [128, 128]
 
     if network_type.lower() == "q":
-        return NoisyQNetwork(state_size, action_size,
-                             hidden_sizes, std_init, device)
+        return NoisyQNetwork(state_size, action_size, hidden_sizes, std_init, device)
     if network_type.lower() == "dueling":
-        return NoisyDuelingQNetwork(
-            state_size, action_size, hidden_sizes, std_init, device)
+        return NoisyDuelingQNetwork(state_size, action_size, hidden_sizes, std_init, device)
     msg = f"Type de réseau non supporté: {network_type}"
     raise ValueError(msg)
 
 
 def compare_noisy_vs_standard(
-    noisy_network: nn.Module,
-    standard_network: nn.Module,
-    state: torch.Tensor,
-    num_samples: int = 10
+    noisy_network: nn.Module, standard_network: nn.Module, state: torch.Tensor, num_samples: int = 10
 ) -> dict[str, float]:
     """Compare les performances entre un réseau avec bruit et un réseau standard.
 
@@ -476,5 +433,5 @@ def compare_noisy_vs_standard(
         "standard_std": standard_tensor.std().item(),
         "noisy_variance": noisy_tensor.var().item(),
         "standard_variance": standard_tensor.var().item(),
-        "exploration_gain": noisy_tensor.std().item() / standard_tensor.std().item()
+        "exploration_gain": noisy_tensor.std().item() / standard_tensor.std().item(),
     }

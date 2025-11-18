@@ -14,6 +14,7 @@ Revises: b559b3ef7a75
 Create Date: 2025-10-20 17:46:34.413500
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -29,41 +30,34 @@ def upgrade():
     op.create_table(
         "ml_prediction",
         sa.Column("id", sa.Integer(), nullable=False),
-
         # Identifiants
         sa.Column("booking_id", sa.Integer(), nullable=False),
         sa.Column("driver_id", sa.Integer(), nullable=True),
         sa.Column("request_id", sa.String(length=100), nullable=True),
-
         # Prédiction ML
         sa.Column("predicted_delay_minutes", sa.Float(), nullable=False),
         sa.Column("confidence", sa.Float(), nullable=False),
         sa.Column("risk_level", sa.String(length=20), nullable=False),
         sa.Column("contributing_factors", sa.Text(), nullable=True),
-
         # Contexte prédiction
         sa.Column("model_version", sa.String(length=50), nullable=True),
         sa.Column("prediction_time_ms", sa.Float(), nullable=True),
         sa.Column("feature_flag_enabled", sa.Boolean(), nullable=True),
         sa.Column("traffic_percentage", sa.Integer(), nullable=True),
-
         # Résultat réel
         sa.Column("actual_delay_minutes", sa.Float(), nullable=True),
         sa.Column("actual_pickup_at", sa.DateTime(), nullable=True),
         sa.Column("actual_dropoff_at", sa.DateTime(), nullable=True),
-
         # Métriques calculées
         sa.Column("prediction_error", sa.Float(), nullable=True),
         sa.Column("is_accurate", sa.Boolean(), nullable=True),
-
         # Métadonnées
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
-
         # Clés
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["booking_id"], ["booking.id"] ),
-        sa.ForeignKeyConstraint(["driver_id"], ["driver.id"] ),
+        sa.ForeignKeyConstraint(["booking_id"], ["booking.id"]),
+        sa.ForeignKeyConstraint(["driver_id"], ["driver.id"]),
     )
 
     # Index pour performance
@@ -74,10 +68,7 @@ def upgrade():
 
     # Index composite pour queries fréquentes
     op.create_index(
-        "ix_ml_prediction_created_actual",
-        "ml_prediction",
-        ["created_at", "actual_delay_minutes"],
-        unique=False
+        "ix_ml_prediction_created_actual", "ml_prediction", ["created_at", "actual_delay_minutes"], unique=False
     )
 
 

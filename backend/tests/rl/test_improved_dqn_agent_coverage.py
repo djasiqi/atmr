@@ -113,7 +113,7 @@ class TestImprovedDQNAgentCoverage:
             "step_count": 1000,
             "training_step": 500,
             "episode_count": 100,
-            "losses": [0.1, 0.2, 0.3]
+            "losses": [0.1, 0.2, 0.3],
         }
 
         with patch("torch.load", return_value=mock_checkpoint):

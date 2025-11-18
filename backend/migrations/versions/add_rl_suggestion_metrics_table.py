@@ -5,6 +5,7 @@ Revises:
 Create Date: 2025-10-21
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
@@ -38,7 +39,7 @@ def upgrade():
         sa.Column("was_successful", sa.Boolean(), nullable=True),
         sa.Column("additional_data", sa.JSON(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("suggestion_id")
+        sa.UniqueConstraint("suggestion_id"),
     )
 
     # Créer index pour performance
@@ -55,4 +56,3 @@ def downgrade():
     op.drop_index("ix_rl_suggestion_metrics_suggestion_id", table_name="rl_suggestion_metrics")
     op.drop_index("ix_rl_suggestion_metrics_company_id", table_name="rl_suggestion_metrics")
     op.drop_table("rl_suggestion_metrics")
-

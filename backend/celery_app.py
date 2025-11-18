@@ -50,7 +50,6 @@ celery.conf.update(
     task_acks_late=True,  # Acknowledge task after execution
     task_reject_on_worker_lost=True,  # Requeue task if worker dies
     broker_connection_retry_on_startup=True,  # important avec Docker
-    
     # ✅ A3: Configuration des queues (default, realtime, dlq)
     task_routes={
         "tasks.dispatch_tasks.*": {"queue": "default"},
@@ -63,11 +62,9 @@ celery.conf.update(
     task_create_missing_queues=True,
     task_default_exchange="default",
     task_default_exchange_type="direct",
-    
     # ✅ DLQ: Configuration pour envoi en DLQ après échecs répétés
     task_default_rate_limit=None,
     task_ignore_result=False,  # Garder les résultats pour debugging
-    
     # ✅ DLQ: Configuration queue DLQ explicite
     task_routes_dlq={
         # Toutes les tâches échouées après max_retries iront en DLQ
@@ -170,7 +167,7 @@ celery.conf.beat_schedule = {
             "jitter": 7200,  # ✅ 2.6: Jitter jusqu'à 2 heures (tasks mensuelles)
         },
     },
-        # ✅ 3.4: Profiling automatique hebdomadaire
+    # ✅ 3.4: Profiling automatique hebdomadaire
     "profiling-weekly": {
         "task": "tasks.profiling_tasks.run_weekly_profiling",
         "schedule": 7 * 24 * 3600,  # 1 semaine
@@ -220,10 +217,12 @@ celery.conf.beat_schedule = {
 # Initialize Flask app for Celery workers
 _flask_app = {}
 
+
 def get_flask_app():
     """Get or create Flask app instance for Celery workers."""
     if "app" not in _flask_app:
         from app import create_app
+
         config_name = os.getenv("FLASK_CONFIG", "production")
         # ✅ Désactiver l'initialisation des routes API dans le contexte Celery
         # pour éviter l'erreur Flask-RESTX "View function mapping is overwriting an existing endpoint function: specs"
@@ -259,12 +258,14 @@ def init_app(app: Flask) -> Celery:
 
     logger.info(
         "Celery initialized with broker=%s, backend=%s, timezone=%s",
-        CELERY_BROKER_URL, CELERY_RESULT_BACKEND, CELERY_TIMEZONE
+        CELERY_BROKER_URL,
+        CELERY_RESULT_BACKEND,
+        CELERY_TIMEZONE,
     )
-    
+
     # ✅ A3: Enregistrer les handlers pour DLQ
     _register_dlq_handlers()
-    
+
     return celery
 
 
@@ -272,22 +273,24 @@ def init_app(app: Flask) -> Celery:
 def _register_dlq_handlers():
     """Enregistre les handlers pour capturer les échecs et les stocker en DLQ."""
     from celery.signals import task_failure, task_retry, task_success
-    
+
     @task_failure.connect
     def task_failed_handler(sender=None, task_id=None, exception=None, traceback=None, _einfo=None, **kwargs):  # pyright: ignore[reportUnusedFunction]
         """Gère les tâches échouées après max_retries."""
         task_name = getattr(sender, "name", None) if sender else "unknown"
         retries = kwargs.get("request", {}).get("retries", 0)
         max_retries = getattr(sender, "max_retries", 3) if sender else 3
-        
+
         # ✅ DLQ: Enregistrer métrique Prometheus
         try:
             from services.unified_dispatch.dispatch_prometheus_metrics import (
                 PROMETHEUS_AVAILABLE,
             )
+
             if PROMETHEUS_AVAILABLE:
                 try:
                     from prometheus_client import Counter
+
                     dlq_counter = Counter(
                         "celery_dlq_failures_total",
                         "Nombre total de tâches envoyées en DLQ",
@@ -298,10 +301,13 @@ def _register_dlq_handlers():
                     pass
         except Exception:
             pass  # Ne pas bloquer si métriques échouent
-        
+
         logger.error(
             "[Celery DLQ] Task %s failed permanently after %d/%d retries: %s",
-            task_id, retries, max_retries, str(exception)[:200],
+            task_id,
+            retries,
+            max_retries,
+            str(exception)[:200],
             extra={
                 "task_id": task_id,
                 "task_name": task_name,
@@ -309,9 +315,9 @@ def _register_dlq_handlers():
                 "traceback": traceback,
                 "retries": retries,
                 "max_retries": max_retries,
-            }
+            },
         )
-        
+
         # ✅ DLQ: Stocker en DB pour visibilité et monitoring
         if task_id:
             try:
@@ -325,16 +331,13 @@ def _register_dlq_handlers():
                 )
             except Exception as db_err:
                 logger.exception("[Celery DLQ] Failed to store task failure in DB: %s", db_err)
-    
+
     @task_retry.connect
     def task_retry_handler(_sender=None, task_id=None, reason=None, **kwargs):  # pyright: ignore[reportUnusedFunction]
         """Log les retries."""
         retries = kwargs.get("request", {}).get("retries", 0)
-        logger.warning(
-            "[Celery] Task %s retry #%d: %s",
-            task_id, retries + 1, reason
-        )
-    
+        logger.warning("[Celery] Task %s retry #%d: %s", task_id, retries + 1, reason)
+
     @task_success.connect
     def task_succeeded_handler(sender=None, **_kwargs):  # pyright: ignore[reportUnusedFunction]
         """Log les succès."""
@@ -355,10 +358,10 @@ def _store_task_failure_in_db(
 
         from ext import db
         from models import TaskFailure
-        
+
         # Vérifier si la tâche existe déjà (pour éviter doublon)
         existing = TaskFailure.query.filter_by(task_id=task_id).first()
-        
+
         if existing:
             # Incrémenter le compteur et mettre à jour last_seen
             existing.failure_count += 1
@@ -381,12 +384,12 @@ def _store_task_failure_in_db(
                 "failure_count": 1,
             }
             failure = TaskFailure(**failure_data)
-            
+
             db.session.add(failure)
             db.session.commit()
-            
+
             logger.info("[Celery DLQ] Stored new task failure: task_id=%s, task_name=%s", task_id, task_name)
-        
+
     except Exception as e:
         logger.exception("[Celery DLQ] Failed to store failure in DB: %s", e)
         # Continue sans erreur critique (ne bloque pas le worker)

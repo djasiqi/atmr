@@ -2,6 +2,7 @@
 """Service pour l'intégration avec Google Places API et Geocoding API.
 Gère l'autocomplete d'adresses et le géocodage avec validation des résultats.
 """
+
 import logging
 import os
 from typing import Any, Dict, List
@@ -28,7 +29,6 @@ class GooglePlacesError(Exception):
     """Exception levée lors d'erreurs avec l'API Google Places."""
 
 
-
 def autocomplete_address(
     query: str,
     *,
@@ -37,7 +37,7 @@ def autocomplete_address(
     location: Dict[str, float] | None = None,
     radius: int = GENEVA_RADIUS,
     types: str = "(regions)",  # noqa: ARG001
-    limit: int = 5
+    limit: int = 5,
 ) -> List[Dict[str, Any]]:
     """Autocomplete d'adresses avec Google Places API (Autocomplete).
 
@@ -106,13 +106,15 @@ def autocomplete_address(
         # Formater les résultats
         results = []
         for pred in predictions[:limit]:
-            results.append({
-                "place_id": pred.get("place_id"),
-                "description": pred.get("description"),
-                "main_text": pred.get("structured_formatting", {}).get("main_text", ""),
-                "secondary_text": pred.get("structured_formatting", {}).get("secondary_text", ""),
-                "types": pred.get("types", []),
-            })
+            results.append(
+                {
+                    "place_id": pred.get("place_id"),
+                    "description": pred.get("description"),
+                    "main_text": pred.get("structured_formatting", {}).get("main_text", ""),
+                    "secondary_text": pred.get("structured_formatting", {}).get("secondary_text", ""),
+                    "types": pred.get("types", []),
+                }
+            )
 
         return results
 
@@ -123,10 +125,7 @@ def autocomplete_address(
 
 
 def get_place_details(
-    place_id: str,
-    *,
-    language: str = DEFAULT_LANGUAGE,
-    fields: List[str] | None = None
+    place_id: str, *, language: str = DEFAULT_LANGUAGE, fields: List[str] | None = None
 ) -> Dict[str, Any]:
     """Récupère les détails complets d'un lieu via son place_id.
 
@@ -160,14 +159,7 @@ def get_place_details(
 
     # Champs par défaut optimisés pour les adresses
     if fields is None:
-        fields = [
-            "formatted_address",
-            "geometry",
-            "address_components",
-            "place_id",
-            "types",
-            "name"
-        ]
+        fields = ["formatted_address", "geometry", "address_components", "place_id", "types", "name"]
 
     params = {
         "place_id": place_id,
@@ -206,10 +198,7 @@ def get_place_details(
 
 
 def geocode_address_google(
-    address: str,
-    *,
-    country: str | None = DEFAULT_COUNTRY,
-    language: str = DEFAULT_LANGUAGE
+    address: str, *, country: str | None = DEFAULT_COUNTRY, language: str = DEFAULT_LANGUAGE
 ) -> Dict[str, Any] | None:
     """Géocode une adresse avec Google Geocoding API.
 
@@ -290,9 +279,7 @@ def geocode_address_google(
         raise GooglePlacesError(msg) from e
 
 
-def extract_address_components(
-    address_components: List[Dict[str, Any]]
-) -> Dict[str, str]:
+def extract_address_components(address_components: List[Dict[str, Any]]) -> Dict[str, str]:
     """Extrait les composants utiles d'une adresse Google.
 
     Args:
@@ -332,10 +319,7 @@ def extract_address_components(
 
 
 def geocode_and_validate(
-    address: str,
-    *,
-    country: str = DEFAULT_COUNTRY,
-    require_street_number: bool = False
+    address: str, *, country: str = DEFAULT_COUNTRY, require_street_number: bool = False
 ) -> Dict[str, Any] | None:
     """Géocode une adresse et valide qu'elle est suffisamment précise.
 
@@ -356,9 +340,7 @@ def geocode_and_validate(
     # Vérifier la précision de la géolocalisation
     location_type = result.get("location_type", "")
     if location_type not in ("ROOFTOP", "RANGE_INTERPOLATED", "GEOMETRIC_CENTER"):
-        app_logger.warning(
-            "⚠️ Géolocalisation imprécise (%s) pour: %s", location_type, address
-        )
+        app_logger.warning("⚠️ Géolocalisation imprécise (%s) pour: %s", location_type, address)
 
     # Extraire les composants
     components = extract_address_components(result.get("address_components", []))
@@ -374,4 +356,3 @@ def geocode_and_validate(
 
 # Alias pour compatibilité avec l'ancien code
 geocode_address = geocode_address_google
-

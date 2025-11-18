@@ -7,6 +7,7 @@ Revises: d2_audit_logs
 Create Date: 2025-10-29 13:00:00.000000
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -25,4 +26,3 @@ def upgrade():
 def downgrade():
     # Renommer back vers metadata
     op.alter_column("audit_logs", "additional_metadata", new_column_name="metadata")
-

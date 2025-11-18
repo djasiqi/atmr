@@ -48,7 +48,7 @@ class ImprovedDQNAgent:
         - Epsilon decay adaptatif
     """
 
-    def __init__( # pyright: ignore[reportMissingSuperCall]
+    def __init__(  # pyright: ignore[reportMissingSuperCall]
         self,
         state_dim: int,
         action_dim: int,
@@ -71,7 +71,7 @@ class ImprovedDQNAgent:
         n_step: int = 3,  # Nombre d'étapes pour N-step
         n_step_gamma: float = 0.99,  # Gamma pour N-step
         use_dueling: bool = False,  # Dueling DQN
-    ):  
+    ):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.learning_rate = learning_rate
@@ -95,20 +95,17 @@ class ImprovedDQNAgent:
             raise ImportError(msg)
 
         # Vérifier que N-step est disponible si demandé
-        if use_n_step and (
-                NStepBuffer is None or NStepPrioritizedBuffer is None):
+        if use_n_step and (NStepBuffer is None or NStepPrioritizedBuffer is None):
             msg = "N-step buffers are required but not available"
             raise ImportError(msg)
 
         # Réseaux de neurones (Dueling ou standard)
         if use_dueling:
             self.q_network = DuelingQNetwork(state_dim, action_dim).to(device)
-            self.target_network = DuelingQNetwork(
-                state_dim, action_dim).to(device)
+            self.target_network = DuelingQNetwork(state_dim, action_dim).to(device)
         else:
             self.q_network = ImprovedQNetwork(state_dim, action_dim).to(device)
-            self.target_network = ImprovedQNetwork(
-                state_dim, action_dim).to(device)
+            self.target_network = ImprovedQNetwork(state_dim, action_dim).to(device)
 
         self.target_network.load_state_dict(self.q_network.state_dict())
 
@@ -116,11 +113,8 @@ class ImprovedDQNAgent:
         if optim is None:
             msg = "PyTorch optim is required but not available"
             raise ImportError(msg)
-        self.optimizer = optim.Adam(
-            self.q_network.parameters(),
-            lr=learning_rate)
-        self.scheduler = optim.lr_scheduler.StepLR(
-            self.optimizer, step_size=5000, gamma=0.9)
+        self.optimizer = optim.Adam(self.q_network.parameters(), lr=learning_rate)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=5000, gamma=0.9)
 
         # Replay buffer (N-step ou standard)
         if use_n_step:
@@ -128,23 +122,11 @@ class ImprovedDQNAgent:
                 msg = "N-step buffers are required but not available"
                 raise ImportError(msg)
             if use_prioritized_replay:
-                self.memory = NStepPrioritizedBuffer(
-                    buffer_size,
-                    n_step,
-                    n_step_gamma,
-                    alpha,
-                    beta_start,
-                    beta_end
-                )
+                self.memory = NStepPrioritizedBuffer(buffer_size, n_step, n_step_gamma, alpha, beta_start, beta_end)
             else:
-                self.memory = NStepBuffer(
-                    buffer_size,
-                    n_step,
-                    n_step_gamma
-                )
+                self.memory = NStepBuffer(buffer_size, n_step, n_step_gamma)
         elif use_prioritized_replay:
-            self.memory = PrioritizedReplayBuffer(
-                buffer_size, alpha, beta_start, beta_end)
+            self.memory = PrioritizedReplayBuffer(buffer_size, alpha, beta_start, beta_end)
         else:
             self.memory = deque(maxlen=buffer_size)
 
@@ -157,15 +139,15 @@ class ImprovedDQNAgent:
         print("✅ Agent DQN amélioré créé:")
         print("   State dim: {state_dim}")
         print("   Action dim: {action_dim}")
-        print(
-            f"   Paramètres Q-Network: {sum(p.numel() for p in self.q_network.parameters()):,}")
+        print(f"   Paramètres Q-Network: {sum(p.numel() for p in self.q_network.parameters()):,}")
         print("   Double DQN: {use_double_dqn}")
         print("   Prioritized Replay: {use_prioritized_replay}")
         print("   N-step Learning: {use_n_step} (n={n_step})")
         print("   Dueling DQN: {use_dueling}")
 
-    def select_action(self, state: np.ndarray[Any, np.dtype[np.float32]],
-                      valid_actions: list[int] | None = None) -> int:
+    def select_action(
+        self, state: np.ndarray[Any, np.dtype[np.float32]], valid_actions: list[int] | None = None
+    ) -> int:
         """Sélectionne une action avec epsilon-greedy et masquage optionnel.
 
         Args:
@@ -177,11 +159,13 @@ class ImprovedDQNAgent:
 
         """
         import time
+
         start_time = time.time()
 
         # Import conditionnel du RLLogger
         try:
             from services.rl.rl_logger import get_rl_logger
+
             rl_logger = get_rl_logger()
             enable_logging = True
         except ImportError:
@@ -201,8 +185,7 @@ class ImprovedDQNAgent:
                 if torch is None:
                     msg = "PyTorch is required but not available"
                     raise ImportError(msg)
-                state_tensor = torch.FloatTensor(
-                    state).unsqueeze(0).to(self.device)
+                state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
                 with torch.no_grad():
                     q_values = self.q_network(state_tensor)
                 action = q_values.argmax().item()
@@ -213,8 +196,7 @@ class ImprovedDQNAgent:
             # Fallback de sécurité : action 0 (wait)
             action = 0
             is_exploration = True
-            logging.warning(
-                "[ImprovedDQNAgent] valid_actions vide, fallback vers action 0")
+            logging.warning("[ImprovedDQNAgent] valid_actions vide, fallback vers action 0")
         elif random.random() < self.epsilon:
             # Exploration : choisir une action valide aléatoire
             action = random.choice(valid_actions)
@@ -224,8 +206,7 @@ class ImprovedDQNAgent:
             if torch is None:
                 msg = "PyTorch is required but not available"
                 raise ImportError(msg)
-            state_tensor = torch.FloatTensor(
-                state).unsqueeze(0).to(self.device)
+            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             with torch.no_grad():
                 q_values = self.q_network(state_tensor)
 
@@ -248,7 +229,7 @@ class ImprovedDQNAgent:
                     "epsilon": self.epsilon,
                     "is_exploration": is_exploration,
                     "valid_actions": valid_actions,
-                    "confidence": 1.0 - self.epsilon if not is_exploration else 0.0
+                    "confidence": 1.0 - self.epsilon if not is_exploration else 0.0,
                 }
 
                 metadata = {
@@ -256,7 +237,7 @@ class ImprovedDQNAgent:
                     "use_double_dqn": self.use_double_dqn,
                     "use_prioritized_replay": self.use_prioritized_replay,
                     "use_n_step": self.use_n_step,
-                    "use_dueling": self.use_dueling
+                    "use_dueling": self.use_dueling,
                 }
 
                 rl_logger.log_decision(
@@ -266,7 +247,7 @@ class ImprovedDQNAgent:
                     latency_ms=latency_ms,
                     model_version=f"dqn_v1_{self.state_dim}_{self.action_dim}",
                     constraints=constraints,
-                    metadata=metadata
+                    metadata=metadata,
                 )
             except Exception:
                 # Ne pas faire échouer la sélection d'action si le logging
@@ -292,46 +273,32 @@ class ImprovedDQNAgent:
                 if torch is None:
                     msg = "PyTorch is required but not available"
                     raise ImportError(msg)
-                state_tensor = torch.FloatTensor(
-                    state).unsqueeze(0).to(self.device)
+                state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
                 with torch.no_grad():
                     q_value = self.q_network(state_tensor)[0][action]
-                    next_state_tensor = torch.FloatTensor(
-                        next_state).unsqueeze(0).to(self.device)
+                    next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0).to(self.device)
                     next_q_value = self.target_network(next_state_tensor).max()
-                    td_error = abs(reward + self.gamma *
-                                   next_q_value * (1 - done) - q_value.item())
+                    td_error = abs(reward + self.gamma * next_q_value * (1 - done) - q_value.item())
 
-                self.memory.add_transition(
-                    state, action, reward, next_state, done, info)
+                self.memory.add_transition(state, action, reward, next_state, done, info)
             else:
-                self.memory.add_transition(
-                    state, action, reward, next_state, done, info)
+                self.memory.add_transition(state, action, reward, next_state, done, info)
         # Mode standard (1-step)
         elif self.use_prioritized_replay:
             # Priorité initiale basée sur l'erreur TD
             if torch is None:
                 msg = "PyTorch is required but not available"
                 raise ImportError(msg)
-            state_tensor = torch.FloatTensor(
-                state).unsqueeze(0).to(self.device)
+            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             with torch.no_grad():
                 q_value = self.q_network(state_tensor)[0][action]
-                next_state_tensor = torch.FloatTensor(
-                    next_state).unsqueeze(0).to(self.device)
+                next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0).to(self.device)
                 next_q_value = self.target_network(next_state_tensor).max()
-                td_error = abs(reward + self.gamma *
-                               next_q_value * (1 - done) - q_value.item())
+                td_error = abs(reward + self.gamma * next_q_value * (1 - done) - q_value.item())
                 priority = td_error + 1e-6  # Éviter les priorités nulles
 
             if isinstance(self.memory, PrioritizedReplayBuffer):
-                self.memory.add(
-                    state,
-                    action,
-                    reward,
-                    next_state,
-                    done,
-                    priority)
+                self.memory.add(state, action, reward, next_state, done, priority)
         elif isinstance(self.memory, deque):
             self.memory.append((state, action, reward, next_state, done))
 
@@ -355,16 +322,11 @@ class ImprovedDQNAgent:
             if torch is None:
                 msg = "PyTorch is required but not available"
                 raise ImportError(msg)
-            states = torch.FloatTensor([t["state"]
-                                       for t in batch]).to(self.device)
-            actions = torch.LongTensor([t["action"]
-                                       for t in batch]).to(self.device)
-            n_step_rewards = torch.FloatTensor(
-                [t["n_step_return"] for t in batch]).to(self.device)
-            next_states = torch.FloatTensor(
-                [t["next_state"] for t in batch]).to(self.device)
-            dones = torch.BoolTensor([t["done"]
-                                     for t in batch]).to(self.device)
+            states = torch.FloatTensor([t["state"] for t in batch]).to(self.device)
+            actions = torch.LongTensor([t["action"] for t in batch]).to(self.device)
+            n_step_rewards = torch.FloatTensor([t["n_step_return"] for t in batch]).to(self.device)
+            next_states = torch.FloatTensor([t["next_state"] for t in batch]).to(self.device)
+            dones = torch.BoolTensor([t["done"] for t in batch]).to(self.device)
             weights = torch.FloatTensor(weights).to(self.device)
             # Variables pour compatibilité
             rewards = n_step_rewards  # Utiliser n_step_rewards comme rewards
@@ -372,8 +334,7 @@ class ImprovedDQNAgent:
         elif self.use_prioritized_replay and isinstance(self.memory, PrioritizedReplayBuffer):
             # Buffer PER standard
             batch, indices, weights = self.memory.sample(self.batch_size)
-            states, actions, rewards, next_states, dones = zip(
-                *batch, strict=False)
+            states, actions, rewards, next_states, dones = zip(*batch, strict=False)
             if torch is None:
                 msg = "PyTorch is required but not available"
                 raise ImportError(msg)
@@ -385,15 +346,14 @@ class ImprovedDQNAgent:
             weights = torch.FloatTensor(weights).to(self.device)
             # Variables pour compatibilité
             n_step_rewards = rewards  # Utiliser rewards comme n_step_rewards
-            
+
             # Stocker indices pour mise à jour des priorités après calcul de la loss
             per_indices = indices
 
         # Buffer standard (deque)
         elif isinstance(self.memory, deque):
             batch = random.sample(list(self.memory), self.batch_size)
-            states, actions, rewards, next_states, dones = zip(
-                *batch, strict=False)
+            states, actions, rewards, next_states, dones = zip(*batch, strict=False)
             if torch is None:
                 msg = "PyTorch is required but not available"
                 raise ImportError(msg)
@@ -409,8 +369,7 @@ class ImprovedDQNAgent:
             return 0.0
 
         # Calcul des Q-values actuelles
-        current_q_values = self.q_network(
-            states).gather(1, actions.unsqueeze(1))
+        current_q_values = self.q_network(states).gather(1, actions.unsqueeze(1))
 
         # Calcul des Q-values cibles
         with torch.no_grad():
@@ -418,38 +377,31 @@ class ImprovedDQNAgent:
                 # Double DQN: utiliser le réseau principal pour sélectionner
                 # l'action
                 next_actions = self.q_network(next_states).argmax(1)
-                next_q_values = self.target_network(
-                    next_states).gather(1, next_actions.unsqueeze(1))
+                next_q_values = self.target_network(next_states).gather(1, next_actions.unsqueeze(1))
             else:
                 # DQN standard
-                next_q_values = self.target_network(
-                    next_states).max(1)[0].unsqueeze(1)
+                next_q_values = self.target_network(next_states).max(1)[0].unsqueeze(1)
 
             if self.use_n_step:
                 # Pour N-step, utiliser les retours N-step calculés
-                target_q_values = n_step_rewards.unsqueeze(
-                    1) + (self.gamma ** self.n_step * next_q_values * ~dones.unsqueeze(1))
+                target_q_values = n_step_rewards.unsqueeze(1) + (
+                    self.gamma**self.n_step * next_q_values * ~dones.unsqueeze(1)
+                )
             else:
                 # Mode standard (1-step)
-                target_q_values = rewards.unsqueeze(
-                    1) + (self.gamma * next_q_values * ~dones.unsqueeze(1))
+                target_q_values = rewards.unsqueeze(1) + (self.gamma * next_q_values * ~dones.unsqueeze(1))
 
         # Calcul de la loss
         if F is None:
             msg = "PyTorch F is required but not available"
             raise ImportError(msg)
         td_errors = current_q_values - target_q_values
-        loss = (
-            weights.unsqueeze(1) *
-            F.mse_loss(
-                current_q_values,
-                target_q_values,
-                reduction="none")).mean()
+        loss = (weights.unsqueeze(1) * F.mse_loss(current_q_values, target_q_values, reduction="none")).mean()
 
         # Mise à jour des priorités
         if self.use_prioritized_replay:
             priorities = torch.abs(td_errors).detach().cpu().numpy().flatten() + 1e-6
-            
+
             if self.use_n_step and hasattr(self.memory, "update_priorities"):
                 # Buffer N-step priorisé
                 indices = list(range(len(batch)))
@@ -463,8 +415,7 @@ class ImprovedDQNAgent:
         loss.backward()
 
         # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(
-            self.q_network.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=1.0)
 
         self.optimizer.step()
         self.scheduler.step()
@@ -481,9 +432,9 @@ class ImprovedDQNAgent:
     def _soft_update_target_network(self) -> None:
         """Mise à jour douce du réseau cible."""
         for target_param, local_param in zip(
-                self.target_network.parameters(), self.q_network.parameters(), strict=False):
-            target_param.data.copy_(
-                self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
+            self.target_network.parameters(), self.q_network.parameters(), strict=False
+        ):
+            target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
 
     def decay_epsilon(self) -> None:
         """Réduit epsilon progressivement."""
@@ -495,41 +446,40 @@ class ImprovedDQNAgent:
         if torch is None:
             msg = "PyTorch is required but not available"
             raise ImportError(msg)
-        torch.save({
-            "q_network_state_dict": self.q_network.state_dict(),
-            "target_network_state_dict": self.target_network.state_dict(),
-            "optimizer_state_dict": self.optimizer.state_dict(),
-            "epsilon": self.epsilon,
-            "training_step": self.training_step,
-            "episode_count": self.episode_count,
-            "losses": self.losses,
-            "config": {
-                "state_dim": self.state_dim,
-                "action_dim": self.action_dim,
-                "learning_rate": self.learning_rate,
-                "gamma": self.gamma,
-                "epsilon_end": self.epsilon_end,
-                "epsilon_decay": self.epsilon_decay,
-                "batch_size": self.batch_size,
-                "target_update_freq": self.target_update_freq,
-                "use_double_dqn": self.use_double_dqn,
-                "use_prioritized_replay": self.use_prioritized_replay,
-                "tau": self.tau,
-            }
-        }, filepath)
+        torch.save(
+            {
+                "q_network_state_dict": self.q_network.state_dict(),
+                "target_network_state_dict": self.target_network.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "epsilon": self.epsilon,
+                "training_step": self.training_step,
+                "episode_count": self.episode_count,
+                "losses": self.losses,
+                "config": {
+                    "state_dim": self.state_dim,
+                    "action_dim": self.action_dim,
+                    "learning_rate": self.learning_rate,
+                    "gamma": self.gamma,
+                    "epsilon_end": self.epsilon_end,
+                    "epsilon_decay": self.epsilon_decay,
+                    "batch_size": self.batch_size,
+                    "target_update_freq": self.target_update_freq,
+                    "use_double_dqn": self.use_double_dqn,
+                    "use_prioritized_replay": self.use_prioritized_replay,
+                    "tau": self.tau,
+                },
+            },
+            filepath,
+        )
 
     def load(self, filepath: str) -> None:
         """Charge le modèle."""
         if torch is None:
             msg = "PyTorch is required but not available"
             raise ImportError(msg)
-        checkpoint = torch.load(
-            filepath,
-            map_location=self.device,
-            weights_only=False)
+        checkpoint = torch.load(filepath, map_location=self.device, weights_only=False)
         self.q_network.load_state_dict(checkpoint["q_network_state_dict"])
-        self.target_network.load_state_dict(
-            checkpoint["target_network_state_dict"])
+        self.target_network.load_state_dict(checkpoint["target_network_state_dict"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.epsilon = checkpoint["epsilon"]
         self.training_step = checkpoint["training_step"]

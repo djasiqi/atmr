@@ -6,6 +6,7 @@ Fonctionnalités:
 - Détection anomalies
 - Export rapports
 """
+
 # pyright: reportAttributeAccessIssue=false
 # datetime.utcnow() intentionnel, SQLAlchemy dynamic backref
 import json
@@ -74,10 +75,7 @@ class MLMonitoringService:
             db.session.add(prediction)
             db.session.commit()
 
-            logger.debug(
-                "[MLMonitoring] Logged prediction for booking %s: %s",
-                booking_id, predicted_delay
-            )
+            logger.debug("[MLMonitoring] Logged prediction for booking %s: %s", booking_id, predicted_delay)
 
             return prediction
 
@@ -98,10 +96,7 @@ class MLMonitoringService:
         try:
             # Récupérer la dernière prédiction pour ce booking
             prediction = (
-                MLPrediction.query
-                .filter_by(booking_id=booking_id)
-                .order_by(MLPrediction.created_at.desc())
-                .first()
+                MLPrediction.query.filter_by(booking_id=booking_id).order_by(MLPrediction.created_at.desc()).first()
             )
 
             if prediction:
@@ -110,13 +105,13 @@ class MLMonitoringService:
 
                 logger.info(
                     "[MLMonitoring] Updated actual delay for booking %s: predicted=%s actual=%s error=%s",
-                    booking_id, prediction.predicted_delay_minutes, actual_delay, prediction.prediction_error
+                    booking_id,
+                    prediction.predicted_delay_minutes,
+                    actual_delay,
+                    prediction.prediction_error,
                 )
             else:
-                logger.warning(
-                    "[MLMonitoring] No prediction found for booking %s",
-                    booking_id
-                )
+                logger.warning("[MLMonitoring] No prediction found for booking %s", booking_id)
 
         except Exception as e:
             logger.error("[MLMonitoring] Failed to update actual delay: %s", e)
@@ -138,8 +133,7 @@ class MLMonitoringService:
 
             # Récupérer prédictions avec résultats réels
             predictions = (
-                MLPrediction.query
-                .filter(MLPrediction.created_at >= cutoff)
+                MLPrediction.query.filter(MLPrediction.created_at >= cutoff)
                 .filter(MLPrediction.actual_delay_minutes.isnot(None))
                 .all()
             )
@@ -209,15 +203,13 @@ class MLMonitoringService:
 
                 # Prédictions de ce jour avec résultats réels
                 predictions = (
-                    MLPrediction.query
-                    .filter(MLPrediction.created_at >= day_start)
+                    MLPrediction.query.filter(MLPrediction.created_at >= day_start)
                     .filter(MLPrediction.created_at < day_end)
                     .filter(MLPrediction.actual_delay_minutes.isnot(None))
                     .all()
                 )
 
                 if predictions:
-
                     predicted = np.array([p.predicted_delay_minutes for p in predictions])
                     actual = np.array([p.actual_delay_minutes for p in predictions])
                     errors = np.abs(predicted - actual)
@@ -228,21 +220,25 @@ class MLMonitoringService:
                     ss_tot = np.sum((actual - np.mean(actual)) ** 2)
                     r2 = float(1 - (ss_res / ss_tot)) if ss_tot > 0 else 0.0
 
-                    daily_metrics.append({
-                        "date": day_start.date().isoformat(),
-                        "count": len(predictions),
-                        "mae": round(mae, 2),
-                        "r2": round(r2, 4),
-                        "accuracy_rate": sum(1 for p in predictions if p.is_accurate) / len(predictions),
-                    })
+                    daily_metrics.append(
+                        {
+                            "date": day_start.date().isoformat(),
+                            "count": len(predictions),
+                            "mae": round(mae, 2),
+                            "r2": round(r2, 4),
+                            "accuracy_rate": sum(1 for p in predictions if p.is_accurate) / len(predictions),
+                        }
+                    )
                 else:
-                    daily_metrics.append({
-                        "date": day_start.date().isoformat(),
-                        "count": 0,
-                        "mae": None,
-                        "r2": None,
-                        "accuracy_rate": None,
-                    })
+                    daily_metrics.append(
+                        {
+                            "date": day_start.date().isoformat(),
+                            "count": 0,
+                            "mae": None,
+                            "r2": None,
+                            "accuracy_rate": None,
+                        }
+                    )
 
             return daily_metrics
 
@@ -262,12 +258,7 @@ class MLMonitoringService:
 
         """
         try:
-            predictions = (
-                MLPrediction.query
-                .order_by(MLPrediction.created_at.desc())
-                .limit(limit)
-                .all()
-            )
+            predictions = MLPrediction.query.order_by(MLPrediction.created_at.desc()).limit(limit).all()
 
             return [p.to_dict() for p in predictions]
 
@@ -288,8 +279,7 @@ class MLMonitoringService:
         """
         try:
             anomalies = (
-                MLPrediction.query
-                .filter(MLPrediction.prediction_error > threshold_mae)
+                MLPrediction.query.filter(MLPrediction.prediction_error > threshold_mae)
                 .filter(MLPrediction.created_at >= now_utc() - timedelta(hours=24))
                 .order_by(MLPrediction.prediction_error.desc())
                 .limit(50)
@@ -348,4 +338,3 @@ class MLMonitoringService:
         except Exception as e:
             logger.error("[MLMonitoring] Failed to get summary: %s", e)
             return {"error": str(e)}
-

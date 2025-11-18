@@ -24,13 +24,16 @@ app = create_app(config_name)
 
 # --- Création de l'interface en ligne de commande avec Click ---
 
+
 @click.group()
 def cli():
     """Point d'entrée principal pour les commandes de gestion."""
 
+
 @cli.group(name="db")
 def dbcli():
     """Commandes pour les migrations de base de données."""
+
 
 # ...
 @dbcli.command()
@@ -40,6 +43,7 @@ def init():
         _init()
     click.echo("Dossier des migrations initialisé.")
 
+
 @dbcli.command()
 @click.option("-m", "--message", required=True, help="Message de description pour la migration.")
 def migrate(message):
@@ -48,12 +52,14 @@ def migrate(message):
         _migrate(message=message)
     click.echo("Script de migration généré.")
 
+
 @dbcli.command()
 def upgrade():
     """Applique les migrations à la base de données."""
     with app.app_context():
         _upgrade()
     click.echo("Migrations appliquées à la base de données.")
+
 
 @dbcli.command()
 @click.argument("revision", default="head")

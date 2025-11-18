@@ -48,20 +48,13 @@ class Client(db.Model):
         UniqueConstraint("user_id", "company_id", name="uq_user_company"),
         Index("ix_client_company_active", "company_id", "is_active"),
         Index("ix_client_company_user", "company_id", "user_id"),
-        Index("uq_client_user_no_company", "user_id", unique=True,
-              postgresql_where=text("company_id IS NULL")),
+        Index("uq_client_user_no_company", "user_id", unique=True, postgresql_where=text("company_id IS NULL")),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("user.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
     company_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("company.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True
+        ForeignKey("company.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     client_type = Column(
@@ -95,16 +88,8 @@ class Client(db.Model):
     gp_phone: Mapped[str] = mapped_column(String(50), nullable=True)
 
     # Préférences de facturation par défaut
-    default_billed_to_type = Column(
-        String(50),
-        nullable=False,
-        server_default="patient")
-    default_billed_to_company_id = Column(
-        Integer,
-        ForeignKey(
-            "company.id",
-            ondelete="SET NULL"),
-        nullable=True)
+    default_billed_to_type = Column(String(50), nullable=False, server_default="patient")
+    default_billed_to_company_id = Column(Integer, ForeignKey("company.id", ondelete="SET NULL"), nullable=True)
     default_billed_to_contact: Mapped[str] = mapped_column(String(120), nullable=True)
 
     # Support institutions
@@ -119,11 +104,7 @@ class Client(db.Model):
     preferential_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
 
     is_active = Column(Boolean, nullable=False, server_default="true")
-    created_at = Column(
-        DateTime(
-            timezone=True),
-        server_default=func.now(),
-        nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # ✅ D2: Colonnes chiffrées
     contact_phone_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -134,25 +115,12 @@ class Client(db.Model):
 
     # Relations
     user = relationship("User", back_populates="clients", passive_deletes=True)
-    company = relationship(
-        "Company",
-        back_populates="clients",
-        foreign_keys=[company_id],
-        passive_deletes=True)
+    company = relationship("Company", back_populates="clients", foreign_keys=[company_id], passive_deletes=True)
     default_billed_to_company = relationship(
-        "Company",
-        back_populates="billed_clients",
-        foreign_keys=[default_billed_to_company_id])
-    bookings = relationship(
-        "Booking",
-        back_populates="client",
-        passive_deletes=True,
-        lazy=True)
-    payments = relationship(
-        "Payment",
-        back_populates="client",
-        passive_deletes=True,
-        lazy=True)
+        "Company", back_populates="billed_clients", foreign_keys=[default_billed_to_company_id]
+    )
+    bookings = relationship("Booking", back_populates="client", passive_deletes=True, lazy=True)
+    payments = relationship("Payment", back_populates="client", passive_deletes=True, lazy=True)
 
     # Validators
     @validates("contact_email")
@@ -204,10 +172,11 @@ class Client(db.Model):
 
     # ✅ D2: Propriétés hybrides pour chiffrement/déchiffrement automatique
     @hybrid_property
-    def contact_phone_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+    def contact_phone_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
         """Téléphone de contact déchiffré."""
         try:
             from security.crypto import get_encryption_service
+
             is_migrated = bool(getattr(self, "encryption_migrated", False))
             encrypted_val = getattr(self, "contact_phone_encrypted", None)
             if is_migrated and encrypted_val:
@@ -219,12 +188,13 @@ class Client(db.Model):
             return cast(Optional[str], getattr(self, "contact_phone", None))
         except ImportError:
             return cast(Optional[str], getattr(self, "contact_phone", None))
-    
+
     @contact_phone_secure.setter
     def contact_phone_secure(self, value: Optional[str]):
         """Chiffre le téléphone de contact."""
         try:
             from security.crypto import get_encryption_service
+
             if value:
                 self.contact_phone_encrypted = get_encryption_service().encrypt_field(value)
                 self.encryption_migrated = True
@@ -234,12 +204,13 @@ class Client(db.Model):
                 self.contact_phone = None
         except ImportError:
             self.contact_phone = value
-    
+
     @hybrid_property
-    def gp_name_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+    def gp_name_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
         """Nom du médecin traitant déchiffré."""
         try:
             from security.crypto import get_encryption_service
+
             is_migrated = bool(getattr(self, "encryption_migrated", False))
             encrypted_val = getattr(self, "gp_name_encrypted", None)
             if is_migrated and encrypted_val:
@@ -250,12 +221,13 @@ class Client(db.Model):
             return cast(Optional[str], getattr(self, "gp_name", None))
         except ImportError:
             return cast(Optional[str], getattr(self, "gp_name", None))
-    
+
     @gp_name_secure.setter
     def gp_name_secure(self, value: Optional[str]):
         """Chiffre le nom du médecin traitant."""
         try:
             from security.crypto import get_encryption_service
+
             if value:
                 self.gp_name_encrypted = get_encryption_service().encrypt_field(value)
                 self.encryption_migrated = True
@@ -263,12 +235,13 @@ class Client(db.Model):
                 self.gp_name_encrypted = None
         except ImportError:
             self.gp_name = value
-    
-    @hybrid_property 
-    def gp_phone_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+
+    @hybrid_property
+    def gp_phone_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
         """Téléphone du médecin traitant déchiffré."""
         try:
             from security.crypto import get_encryption_service
+
             is_migrated = bool(getattr(self, "encryption_migrated", False))
             encrypted_val = getattr(self, "gp_phone_encrypted", None)
             if is_migrated and encrypted_val:
@@ -279,12 +252,13 @@ class Client(db.Model):
             return cast(Optional[str], getattr(self, "gp_phone", None))
         except ImportError:
             return cast(Optional[str], getattr(self, "gp_phone", None))
-    
+
     @gp_phone_secure.setter
     def gp_phone_secure(self, value: Optional[str]):
         """Chiffre le téléphone du médecin traitant."""
         try:
             from security.crypto import get_encryption_service
+
             if value:
                 self.gp_phone_encrypted = get_encryption_service().encrypt_field(value)
                 self.encryption_migrated = True
@@ -294,12 +268,13 @@ class Client(db.Model):
                 self.gp_phone = None
         except ImportError:
             self.gp_phone = value
-    
+
     @hybrid_property
-    def billing_address_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+    def billing_address_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
         """Adresse de facturation déchiffrée."""
         try:
             from security.crypto import get_encryption_service
+
             is_migrated = bool(getattr(self, "encryption_migrated", False))
             encrypted_val = getattr(self, "billing_address_encrypted", None)
             if is_migrated and encrypted_val:
@@ -310,12 +285,13 @@ class Client(db.Model):
             return cast(Optional[str], getattr(self, "billing_address", None))
         except ImportError:
             return cast(Optional[str], getattr(self, "billing_address", None))
-    
+
     @billing_address_secure.setter
     def billing_address_secure(self, value: Optional[str]):
         """Chiffre l'adresse de facturation."""
         try:
             from security.crypto import get_encryption_service
+
             if value:
                 self.billing_address_encrypted = get_encryption_service().encrypt_field(value)
                 self.encryption_migrated = True
@@ -332,8 +308,7 @@ class Client(db.Model):
         last_name = getattr(user, "last_name", "") or ""
         username = getattr(user, "username", "") or ""
         phone_user = getattr(user, "phone", "") or ""
-        full_name = (f"{first_name} {last_name}".strip()
-                     or username or "Nom non renseigné")
+        full_name = f"{first_name} {last_name}".strip() or username or "Nom non renseigné"
 
         return {
             "id": self.id,
@@ -366,8 +341,9 @@ class Client(db.Model):
             },
             "default_billing": {
                 "billed_to_type": (self.default_billed_to_type or "patient"),
-                "billed_to_company": (self.default_billed_to_company.serialize
-                                      if self.default_billed_to_company else None),
+                "billed_to_company": (
+                    self.default_billed_to_company.serialize if self.default_billed_to_company else None
+                ),
                 "billed_to_contact": self.default_billed_to_contact,
             },
             "is_institution": _as_bool(self.is_institution),

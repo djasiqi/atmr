@@ -11,6 +11,7 @@ DEFAULT_ANNUAL_VACATION_DAYS = 20
 # 0=Lundi, 1=Mardi, 2=Mercredi, 3=Jeudi, 4=Vendredi, 5=Samedi, 6=Dimanche
 WEEKDAY_FRIDAY = 4  # dernier jour ouvrable
 
+
 def count_working_days_in_period(start_date: date, end_date: date) -> int:
     # Calcule le nombre de jours ouvrables, hors fériés genevois
     if end_date < start_date:
@@ -23,6 +24,7 @@ def count_working_days_in_period(start_date: date, end_date: date) -> int:
             total_days += 1
         current += timedelta(days=1)
     return total_days
+
 
 def create_vacation(
     driver,  # int id ou objet avec .id

@@ -2,6 +2,7 @@
 """Model Payment - Gestion des paiements.
 Extrait depuis models.py (lignes ~1644-1762).
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -27,27 +28,10 @@ class Payment(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     amount: Mapped[float] = mapped_column(Float, nullable=False)
 
-    date = Column(
-        DateTime(
-            timezone=True),
-        nullable=False,
-        server_default=func.now())
-    updated_at = Column(
-        DateTime(
-            timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now())
+    date = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
-    method = Column(
-        SAEnum(
-            "credit_card",
-            "paypal",
-            "bank_transfer",
-            "cash",
-            name="payment_method"),
-        nullable=False
-    )
+    method = Column(SAEnum("credit_card", "paypal", "bank_transfer", "cash", name="payment_method"), nullable=False)
     status = Column(
         SAEnum(PaymentStatus, name="payment_status"),
         nullable=False,
@@ -55,37 +39,13 @@ class Payment(db.Model):
         server_default=PaymentStatus.PENDING.value,
     )
 
-    user_id = Column(
-        Integer,
-        ForeignKey(
-            "user.id",
-            ondelete="CASCADE"),
-        nullable=False,
-        index=True)
-    client_id = Column(
-        Integer,
-        ForeignKey(
-            "client.id",
-            ondelete="CASCADE"),
-        nullable=False,
-        index=True)
-    booking_id = Column(
-        Integer,
-        ForeignKey(
-            "booking.id",
-            ondelete="CASCADE"),
-        nullable=False,
-        index=True)
+    user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    client_id = Column(Integer, ForeignKey("client.id", ondelete="CASCADE"), nullable=False, index=True)
+    booking_id = Column(Integer, ForeignKey("booking.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Relations
-    client = relationship(
-        "Client",
-        back_populates="payments",
-        passive_deletes=True)
-    booking = relationship(
-        "Booking",
-        back_populates="payments",
-        passive_deletes=True)
+    client = relationship("Client", back_populates="payments", passive_deletes=True)
+    booking = relationship("Booking", back_populates="payments", passive_deletes=True)
 
     @property
     def serialize(self):
@@ -104,7 +64,7 @@ class Payment(db.Model):
                 "pickup_location": bk.pickup_location if bk else None,
                 "dropoff_location": bk.dropoff_location if bk else None,
                 "scheduled_time": _iso(bk.scheduled_time) if bk else None,
-            }
+            },
         }
 
     # Validations

@@ -137,17 +137,15 @@ def _driver_display_name(driver: Driver) -> str:
             return full
         if user.username:
             return user.username
-    return getattr(driver, "name", None) or f"Chauffeur #{driver.id if getattr(driver, 'id', None) is not None else '?'}"
+    return (
+        getattr(driver, "name", None) or f"Chauffeur #{driver.id if getattr(driver, 'id', None) is not None else '?'}"
+    )
 
 
 def _serialize_driver(driver: Optional[Driver]) -> Optional[Dict[str, Any]]:
     if not driver:
         return None
-    driver_type = (
-        driver.driver_type.value
-        if isinstance(driver.driver_type, DriverType)
-        else str(driver.driver_type)
-    )
+    driver_type = driver.driver_type.value if isinstance(driver.driver_type, DriverType) else str(driver.driver_type)
     is_emergency = str(driver_type).upper() == DriverType.EMERGENCY.value
     return {
         "id": str(driver.id),
@@ -184,9 +182,7 @@ def _build_ride_summary(booking: Booking) -> Dict[str, Any]:
         drop_eta = _format_datetime(active_assignment.eta_dropoff_at)
 
     delay_seconds = getattr(active_assignment, "delay_seconds", 0) if active_assignment else 0
-    risk_delay = bool(booking.is_urgent) or (
-        isinstance(delay_seconds, (int, float)) and delay_seconds > 15 * 60
-    )
+    risk_delay = bool(booking.is_urgent) or (isinstance(delay_seconds, (int, float)) and delay_seconds > 15 * 60)
 
     distance_meters = getattr(booking, "distance_meters", None)
     distance_km = round(distance_meters / 1000.0, 1) if isinstance(distance_meters, (int, float)) else None
@@ -261,9 +257,7 @@ def _compute_driver_suggestions(company_id: int, booking: Booking) -> List[Dict[
 
         score = round(1.0 / (1.0 + distance_km), 4)
         driver_type = (
-            driver.driver_type.value
-            if isinstance(driver.driver_type, DriverType)
-            else str(driver.driver_type)
+            driver.driver_type.value if isinstance(driver.driver_type, DriverType) else str(driver.driver_type)
         )
         suggestions.append(
             {
@@ -329,9 +323,7 @@ def _build_ride_conflicts(booking: Booking) -> List[Dict[str, Any]]:
     ]
 
 
-def _log_mobile_action(
-    tools: AgentTools, kind: str, payload: Dict[str, Any], reasoning: str
-) -> Optional[str]:
+def _log_mobile_action(tools: AgentTools, kind: str, payload: Dict[str, Any], reasoning: str) -> Optional[str]:
     try:
         result = tools.log_action(kind=kind, payload=payload, reasoning_brief=reasoning)
         return result.get("event_id")
@@ -340,9 +332,7 @@ def _log_mobile_action(
         return None
 
 
-def _execute_assignment_action(
-    company_id: int, booking_id: int, driver_id: int, action_kind: str
-) -> Dict[str, Any]:
+def _execute_assignment_action(company_id: int, booking_id: int, driver_id: int, action_kind: str) -> Dict[str, Any]:
     tools = AgentTools(company_id)
     assign_result = tools.assign(job_id=booking_id, driver_id=driver_id)
 
@@ -357,9 +347,7 @@ def _execute_assignment_action(
     booking = (
         Booking.query.options(
             selectinload(Booking.driver).selectinload(Driver.user),
-            selectinload(Booking.assignments)
-            .selectinload(Assignment.driver)
-            .selectinload(Driver.user),
+            selectinload(Booking.assignments).selectinload(Assignment.driver).selectinload(Driver.user),
         )
         .filter(Booking.id == booking_id, Booking.company_id == company_id)
         .first()
@@ -374,16 +362,19 @@ def _execute_assignment_action(
         db.session.add(booking)
         db.session.commit()
 
-    event_id = _log_mobile_action(
-        tools,
-        action_kind,
-        payload={
-            "booking_id": booking_id,
-            "driver_id": driver_id,
-            "source": "mobile_enterprise",
-        },
-        reasoning=f"{action_kind} {booking_id} -> {driver_id}",
-    ) or ""
+    event_id = (
+        _log_mobile_action(
+            tools,
+            action_kind,
+            payload={
+                "booking_id": booking_id,
+                "driver_id": driver_id,
+                "source": "mobile_enterprise",
+            },
+            reasoning=f"{action_kind} {booking_id} -> {driver_id}",
+        )
+        or ""
+    )
 
     scheduled_time = booking.scheduled_time.isoformat() if booking.scheduled_time else None
     diff = assign_result.get("diff", {})
@@ -440,9 +431,7 @@ class MobileDispatchStatus(Resource):
 
             total_bookings = bookings_query.count()
             assigned_bookings = bookings_query.filter(Booking.driver_id.isnot(None)).count()
-            assignment_rate = (
-                assigned_bookings / total_bookings if total_bookings > 0 else 0.0
-            )
+            assignment_rate = assigned_bookings / total_bookings if total_bookings > 0 else 0.0
             at_risk_count = bookings_query.filter(Booking.is_urgent.is_(True)).count()
 
             kpis = {
@@ -527,9 +516,7 @@ class MobileDispatchStatus(Resource):
                     if last_check and interval_seconds:
                         try:
                             last_check_dt = datetime.fromisoformat(last_check)
-                            next_window_iso = (
-                                last_check_dt + timedelta(seconds=int(interval_seconds))
-                            ).isoformat()
+                            next_window_iso = (last_check_dt + timedelta(seconds=int(interval_seconds))).isoformat()
                         except (ValueError, TypeError):
                             next_window_iso = last_check
 
@@ -559,9 +546,7 @@ class MobileDispatchStatus(Resource):
                 company_id,
                 exc,
             )
-            company_mobile_dispatch_ns.abort(
-                500, "Impossible de récupérer le statut dispatch mobile."
-            )
+            company_mobile_dispatch_ns.abort(500, "Impossible de récupérer le statut dispatch mobile.")
 
 
 @company_mobile_dispatch_ns.route("/v1/rides")
@@ -607,24 +592,19 @@ class MobileDispatchRides(Resource):
             BookingStatus.RETURN_COMPLETED,
         ]
 
-        bookings_query = (
-            Booking.query.options(
-                selectinload(Booking.driver).selectinload(Driver.user),
-                selectinload(Booking.assignments)
-                .selectinload(Assignment.driver)
-                .selectinload(Driver.user),
-            )
-            .filter(
-                Booking.company_id == company_id,
-                or_(
-                    Booking.scheduled_time.is_(None),
-                    and_(
-                        Booking.scheduled_time >= window_start,
-                        Booking.scheduled_time < window_end,
-                    ),
+        bookings_query = Booking.query.options(
+            selectinload(Booking.driver).selectinload(Driver.user),
+            selectinload(Booking.assignments).selectinload(Assignment.driver).selectinload(Driver.user),
+        ).filter(
+            Booking.company_id == company_id,
+            or_(
+                Booking.scheduled_time.is_(None),
+                and_(
+                    Booking.scheduled_time >= window_start,
+                    Booking.scheduled_time < window_end,
                 ),
-                Booking.status.in_(ACTIVE_BOOKING_STATUSES),
-            )
+            ),
+            Booking.status.in_(ACTIVE_BOOKING_STATUSES),
         )
 
         if status_filter == "assigned":
@@ -644,9 +624,7 @@ class MobileDispatchRides(Resource):
         elif status_filter == "urgent":
             bookings_query = bookings_query.filter(Booking.is_urgent.is_(True))
         elif status_filter == "cancelled":
-            bookings_query = bookings_query.filter(
-                Booking.status.in_([BookingStatus.CANCELED])
-            )
+            bookings_query = bookings_query.filter(Booking.status.in_([BookingStatus.CANCELED]))
 
         if search_query:
             like_value = f"%{search_query}%"
@@ -697,9 +675,7 @@ class MobileRideDetail(Resource):
         booking: Booking | None = (
             Booking.query.options(
                 selectinload(Booking.driver).selectinload(Driver.user),
-                selectinload(Booking.assignments)
-                .selectinload(Assignment.driver)
-                .selectinload(Driver.user),
+                selectinload(Booking.assignments).selectinload(Assignment.driver).selectinload(Driver.user),
             )
             .filter(
                 Booking.id == booking_id,
@@ -822,9 +798,7 @@ class MobileRideSchedule(Resource):
         delta_minutes_raw = payload.get("delta_minutes")
 
         if pickup_at_raw is None and delta_minutes_raw is None:
-            company_mobile_dispatch_ns.abort(
-                400, "Il faut fournir soit pickup_at, soit delta_minutes."
-            )
+            company_mobile_dispatch_ns.abort(400, "Il faut fournir soit pickup_at, soit delta_minutes.")
             raise AssertionError("Schedule payload invalid") from None
 
         new_datetime: Optional[datetime] = None
@@ -845,9 +819,7 @@ class MobileRideSchedule(Resource):
             except (TypeError, ValueError) as exc:
                 company_mobile_dispatch_ns.abort(400, "delta_minutes doit être un entier")
                 raise AssertionError("delta parse error") from exc
-            booking = Booking.query.filter(
-                Booking.id == booking_id, Booking.company_id == company_id
-            ).first()
+            booking = Booking.query.filter(Booking.id == booking_id, Booking.company_id == company_id).first()
             if booking is None:
                 company_mobile_dispatch_ns.abort(404, "Course introuvable")
                 raise AssertionError("Booking not found") from None
@@ -857,9 +829,7 @@ class MobileRideSchedule(Resource):
             company_mobile_dispatch_ns.abort(400, "Paramètres planning invalides")
             raise AssertionError("Invalid scheduling parameters") from None
 
-        booking = Booking.query.filter(
-            Booking.id == booking_id, Booking.company_id == company_id
-        ).first()
+        booking = Booking.query.filter(Booking.id == booking_id, Booking.company_id == company_id).first()
         if booking is None:
             company_mobile_dispatch_ns.abort(404, "Course introuvable")
             raise AssertionError("Booking not found") from None
@@ -869,16 +839,19 @@ class MobileRideSchedule(Resource):
         db.session.commit()
 
         tools = AgentTools(company_id)
-        event_id = _log_mobile_action(
-            tools,
-            "mobile_schedule",
-            payload={
-                "booking_id": booking_id,
-                "scheduled_time": booking.scheduled_time.isoformat() if booking.scheduled_time else None,
-                "source": "mobile_enterprise",
-            },
-            reasoning=f"Planification mobile {booking_id} -> {booking.scheduled_time.isoformat() if booking.scheduled_time else 'None'}",
-        ) or ""
+        event_id = (
+            _log_mobile_action(
+                tools,
+                "mobile_schedule",
+                payload={
+                    "booking_id": booking_id,
+                    "scheduled_time": booking.scheduled_time.isoformat() if booking.scheduled_time else None,
+                    "source": "mobile_enterprise",
+                },
+                reasoning=f"Planification mobile {booking_id} -> {booking.scheduled_time.isoformat() if booking.scheduled_time else 'None'}",
+            )
+            or ""
+        )
 
         return {
             "ride_id": str(booking_id),
@@ -910,9 +883,7 @@ class MobileRideUrgent(Resource):
             company_mobile_dispatch_ns.abort(400, "extra_delay_minutes doit être un entier")
             raise AssertionError("extra delay parse error") from exc
 
-        booking = Booking.query.filter(
-            Booking.id == booking_id, Booking.company_id == company_id
-        ).first()
+        booking = Booking.query.filter(Booking.id == booking_id, Booking.company_id == company_id).first()
         if booking is None:
             company_mobile_dispatch_ns.abort(404, "Course introuvable")
             raise AssertionError("Booking not found") from None
@@ -925,17 +896,20 @@ class MobileRideUrgent(Resource):
         db.session.commit()
 
         tools = AgentTools(company_id)
-        event_id = _log_mobile_action(
-            tools,
-            "mobile_mark_urgent",
-            payload={
-                "booking_id": booking_id,
-                "reason": reason,
-                "extra_delay_minutes": extra_delay_minutes,
-                "source": "mobile_enterprise",
-            },
-            reasoning=f"Marquage urgent mobile {booking_id} (+{extra_delay_minutes} min)",
-        ) or ""
+        event_id = (
+            _log_mobile_action(
+                tools,
+                "mobile_mark_urgent",
+                payload={
+                    "booking_id": booking_id,
+                    "reason": reason,
+                    "extra_delay_minutes": extra_delay_minutes,
+                    "source": "mobile_enterprise",
+                },
+                reasoning=f"Marquage urgent mobile {booking_id} (+{extra_delay_minutes} min)",
+            )
+            or ""
+        )
 
         return {
             "ride_id": str(booking_id),
@@ -973,9 +947,7 @@ class MobileDispatchMode(Resource):
         try:
             target_mode = DispatchMode(new_mode)
         except ValueError as exc:
-            company_mobile_dispatch_ns.abort(
-                400, "Mode invalide. Utilisez manual, semi_auto ou fully_auto."
-            )
+            company_mobile_dispatch_ns.abort(400, "Mode invalide. Utilisez manual, semi_auto ou fully_auto.")
             raise AssertionError("Invalid dispatch mode") from exc
 
         previous_mode = getattr(company.dispatch_mode, "value", None)
@@ -992,9 +964,7 @@ class MobileDispatchMode(Resource):
 
         try:
             if target_mode.value == "fully_auto":
-                agent = get_agent_for_company(
-                    company_id, app=current_app._get_current_object()
-                )
+                agent = get_agent_for_company(company_id, app=current_app._get_current_object())
                 if not agent.state.running:
                     agent.start()
                     logger.info(
@@ -1024,9 +994,7 @@ class MobileDispatchMode(Resource):
                 "[Dispatch-Mobile] Échec mise à jour mode dispatch pour company %s",
                 company_id,
             )
-            company_mobile_dispatch_ns.abort(
-                500, f"Impossible de mettre à jour le mode dispatch: {exc}"
-            )
+            company_mobile_dispatch_ns.abort(500, f"Impossible de mettre à jour le mode dispatch: {exc}")
             raise AssertionError("Commit failed") from exc
 
         logger.info(
@@ -1222,11 +1190,8 @@ class MobileDispatchRun(Resource):
                     )
                     company_mobile_dispatch_ns.abort(400, message)
             except ValueError as exc:
-                logger.exception(
-                    "[MobileDispatch] Validation overrides échouée: %s", exc)
-                company_mobile_dispatch_ns.abort(
-                    400, "Paramètres overrides invalides."
-                )
+                logger.exception("[MobileDispatch] Validation overrides échouée: %s", exc)
+                company_mobile_dispatch_ns.abort(400, "Paramètres overrides invalides.")
             params["overrides"] = dispatch_overrides
             params.pop("dispatch_overrides", None)
 
@@ -1264,9 +1229,7 @@ class MobileOptimizerRun(Resource):
                 company_mobile_dispatch_ns.abort(400, "Format de date invalide (YYYY-MM-DD).")
                 raise AssertionError("Invalid optimizer date should abort") from exc
 
-        opportunities = check_opportunities_manual(
-            company_id, target_date, app=current_app._get_current_object()
-        )
+        opportunities = check_opportunities_manual(company_id, target_date, app=current_app._get_current_object())
         payload = [opp.to_dict() for opp in opportunities]
 
         tools = AgentTools(company_id)
@@ -1479,10 +1442,7 @@ class MobileDispatchChat(Resource):
                 company_mobile_dispatch_ns.abort(400, "Paramètre before invalide (ISO8601 attendu).")
                 raise AssertionError("Invalid before timestamp should abort") from exc
 
-        query = (
-            Message.query.filter(Message.company_id == company_id)
-            .order_by(Message.timestamp.desc())
-        )
+        query = Message.query.filter(Message.company_id == company_id).order_by(Message.timestamp.desc())
         if before_dt:
             query = query.filter(Message.timestamp < before_dt)
 

@@ -2,6 +2,7 @@
 """Model User - Gestion des utilisateurs (tous rôles).
 Extrait depuis models.py (lignes 249-418).
 """
+
 from __future__ import annotations
 
 import logging
@@ -31,13 +32,7 @@ class User(db.Model):
     __tablename__ = "user"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    public_id = Column(
-        String(36),
-        default=lambda: str(
-            uuid.uuid4()),
-        unique=True,
-        nullable=False,
-        index=True)
+    public_id = Column(String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False, index=True)
     username = Column(String(100), nullable=False, unique=True, index=True)
     first_name: Mapped[str] = mapped_column(String(100), nullable=True)
     last_name: Mapped[str] = mapped_column(String(100), nullable=True)
@@ -74,27 +69,16 @@ class User(db.Model):
     encryption_migrated = Column(Boolean, default=False, nullable=False)
 
     # ✅ Ajout de l'index sur `public_id` pour optimiser les recherches
-    __table_args__ = (
-        Index("idx_public_id", "public_id"),
-    )
+    __table_args__ = (Index("idx_public_id", "public_id"),)
 
     # ✅ Relations bidirectionnelles avec suppression en cascade
-    clients = relationship(
-        "Client",
-        back_populates="user",
-        cascade="all, delete-orphan")
+    clients = relationship("Client", back_populates="user", cascade="all, delete-orphan")
     driver = relationship(
-        "Driver",
-        back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
-        passive_deletes=True)
+        "Driver", back_populates="user", uselist=False, cascade="all, delete-orphan", passive_deletes=True
+    )
     company = relationship(
-        "Company",
-        back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
-        passive_deletes=True)
+        "Company", back_populates="user", uselist=False, cascade="all, delete-orphan", passive_deletes=True
+    )
 
     # 🔒 Gestion des mots de passe
     def set_password(self, password, force_change=False):
@@ -157,7 +141,7 @@ class User(db.Model):
             raise ValueError(msg)
         return name
 
-     # 📌 Vérification du genre
+    # 📌 Vérification du genre
     @validates("gender")
     def validate_gender(self, _key, gender_value):
         """Valide/convertit la valeur vers GenderEnum.
@@ -195,10 +179,11 @@ class User(db.Model):
 
     # ✅ D2: Propriétés hybrides pour chiffrement/déchiffrement automatique
     @hybrid_property
-    def phone_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+    def phone_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
         """Récupère le téléphone déchiffré."""
         try:
             from security.crypto import get_encryption_service
+
             # Vérifier si migration effectuée et données chiffrées
             is_migrated = bool(getattr(self, "encryption_migrated", False))
             encrypted_val = getattr(self, "phone_encrypted", None)
@@ -212,12 +197,13 @@ class User(db.Model):
             return getattr(self, "phone", None)
         except ImportError:
             return getattr(self, "phone", None)
-    
+
     @phone_secure.setter
     def phone_secure(self, value: Optional[str]):
         """Chiffre et stocke le téléphone."""
         try:
             from security.crypto import get_encryption_service
+
             if value:
                 self.phone_encrypted = get_encryption_service().encrypt_field(value)
                 self.encryption_migrated = True
@@ -229,12 +215,13 @@ class User(db.Model):
         except ImportError:
             # Fallback si le service n'est pas disponible
             self.phone = value
-    
+
     @hybrid_property
-    def email_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+    def email_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
         """Récupère l'email déchiffré."""
         try:
             from security.crypto import get_encryption_service
+
             is_migrated = bool(getattr(self, "encryption_migrated", False))
             encrypted_val = getattr(self, "email_encrypted", None)
             if is_migrated and encrypted_val:
@@ -245,12 +232,13 @@ class User(db.Model):
             return cast(Optional[str], getattr(self, "email", None))
         except ImportError:
             return cast(Optional[str], getattr(self, "email", None))
-    
+
     @email_secure.setter
     def email_secure(self, value: Optional[str]):
         """Chiffre et stocke l'email."""
         try:
             from security.crypto import get_encryption_service
+
             if value:
                 self.email_encrypted = get_encryption_service().encrypt_field(value)
                 self.encryption_migrated = True
@@ -258,12 +246,13 @@ class User(db.Model):
                 self.email_encrypted = None
         except ImportError:
             self.email = value
-    
+
     @hybrid_property
-    def first_name_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+    def first_name_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
         """Récupère le prénom déchiffré."""
         try:
             from security.crypto import get_encryption_service
+
             is_migrated = bool(getattr(self, "encryption_migrated", False))
             encrypted_val = getattr(self, "first_name_encrypted", None)
             if is_migrated and encrypted_val:
@@ -274,12 +263,13 @@ class User(db.Model):
             return cast(Optional[str], getattr(self, "first_name", None))
         except ImportError:
             return cast(Optional[str], getattr(self, "first_name", None))
-    
+
     @first_name_secure.setter
     def first_name_secure(self, value: Optional[str]):
         """Chiffre et stocke le prénom."""
         try:
             from security.crypto import get_encryption_service
+
             if value:
                 self.first_name_encrypted = get_encryption_service().encrypt_field(value)
                 self.encryption_migrated = True
@@ -287,12 +277,13 @@ class User(db.Model):
                 self.first_name_encrypted = None
         except ImportError:
             self.first_name = value
-    
+
     @hybrid_property
-    def last_name_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+    def last_name_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
         """Récupère le nom déchiffré."""
         try:
             from security.crypto import get_encryption_service
+
             is_migrated = bool(getattr(self, "encryption_migrated", False))
             encrypted_val = getattr(self, "last_name_encrypted", None)
             if is_migrated and encrypted_val:
@@ -303,12 +294,13 @@ class User(db.Model):
             return cast(Optional[str], getattr(self, "last_name", None))
         except ImportError:
             return cast(Optional[str], getattr(self, "last_name", None))
-    
+
     @last_name_secure.setter
     def last_name_secure(self, value: Optional[str]):
         """Chiffre et stocke le nom."""
         try:
             from security.crypto import get_encryption_service
+
             if value:
                 self.last_name_encrypted = get_encryption_service().encrypt_field(value)
                 self.encryption_migrated = True
@@ -316,12 +308,13 @@ class User(db.Model):
                 self.last_name_encrypted = None
         except ImportError:
             self.last_name = value
-    
+
     @hybrid_property
-    def address_secure(self) -> Optional[str]: # pyright: ignore[reportRedeclaration]
+    def address_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
         """Récupère l'adresse déchiffrée."""
         try:
             from security.crypto import get_encryption_service
+
             is_migrated = bool(getattr(self, "encryption_migrated", False))
             encrypted_val = getattr(self, "address_encrypted", None)
             if is_migrated and encrypted_val:
@@ -332,12 +325,13 @@ class User(db.Model):
             return cast(Optional[str], getattr(self, "address", None))
         except ImportError:
             return cast(Optional[str], getattr(self, "address", None))
-    
+
     @address_secure.setter
     def address_secure(self, value: Optional[str]):
         """Chiffre et stocke l'adresse."""
         try:
             from security.crypto import get_encryption_service
+
             if value:
                 self.address_encrypted = get_encryption_service().encrypt_field(value)
                 self.encryption_migrated = True
@@ -367,7 +361,7 @@ class User(db.Model):
             "zip_code": self.zip_code or "Non spécifié",
             "city": self.city or "Non spécifié",
             "created_at": _iso(self.created_at),
-            "force_password_change": self.force_password_change
+            "force_password_change": self.force_password_change,
         }
 
     @property

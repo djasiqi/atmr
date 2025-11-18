@@ -40,7 +40,7 @@ class TestProactiveAlertsService:
             "pickup_time": (datetime.now(UTC) + timedelta(minutes=20)).isoformat(),
             "priority": 3,
             "is_outbound": True,
-            "estimated_duration": 30
+            "estimated_duration": 30,
         }
 
         self.test_driver = {
@@ -50,7 +50,7 @@ class TestProactiveAlertsService:
             "current_bookings": 2,
             "load": 0,
             "type": "REGULAR",
-            "available": True
+            "available": True,
         }
 
     def test_service_initialization(self):
@@ -62,10 +62,7 @@ class TestProactiveAlertsService:
 
     def test_check_delay_risk_basic(self):
         """Test analyse de risque de retard basique."""
-        result = self.alerts_service.check_delay_risk(
-            booking=self.test_booking,
-            driver=self.test_driver
-        )
+        result = self.alerts_service.check_delay_risk(booking=self.test_booking, driver=self.test_driver)
 
         assert "delay_probability" in result
         assert "risk_level" in result
@@ -87,10 +84,7 @@ class TestProactiveAlertsService:
         far_driver["lat"] = 46.3000  # Plus loin
         far_driver["lon"] = 6.2000
 
-        result = self.alerts_service.check_delay_risk(
-            booking=high_risk_booking,
-            driver=far_driver
-        )
+        result = self.alerts_service.check_delay_risk(booking=high_risk_booking, driver=far_driver)
 
         assert result["delay_probability"] > 0.5
         assert result["risk_level"] in ["medium", "high"]
@@ -107,10 +101,7 @@ class TestProactiveAlertsService:
         close_driver["lat"] = 46.2045  # Très proche
         close_driver["lon"] = 6.1433
 
-        result = self.alerts_service.check_delay_risk(
-            booking=low_risk_booking,
-            driver=close_driver
-        )
+        result = self.alerts_service.check_delay_risk(booking=low_risk_booking, driver=close_driver)
 
         assert result["delay_probability"] < 0.5
         assert result["risk_level"] in ["minimal", "low"]
@@ -124,38 +115,27 @@ class TestProactiveAlertsService:
             {
                 "booking": {**self.test_booking, "pickup_time": (datetime.now(UTC) + timedelta(minutes=5)).isoformat()},
                 "driver": self.test_driver,
-                "expected_min": 0.3
+                "expected_min": 0.3,
             },
             # Distance importante
             {
                 "booking": self.test_booking,
                 "driver": {**self.test_driver, "lat": 46.3000, "lon": 6.2000},
-                "expected_min": 0.2
+                "expected_min": 0.2,
             },
             # Charge élevée
-            {
-                "booking": self.test_booking,
-                "driver": {**self.test_driver, "current_bookings": 4},
-                "expected_min": 0.2
-            }
+            {"booking": self.test_booking, "driver": {**self.test_driver, "current_bookings": 4}, "expected_min": 0.2},
         ]
 
         for scenario in scenarios:
             prob = self.alerts_service._heuristic_delay_probability(
-                scenario["booking"],
-                scenario["driver"],
-                datetime.now(UTC)
+                scenario["booking"], scenario["driver"], datetime.now(UTC)
             )
             assert prob >= scenario["expected_min"]
 
     def test_determine_risk_level(self):
         """Test détermination du niveau de risque."""
-        test_cases = [
-            (0.9, "high"),
-            (0.7, "medium"),
-            (0.4, "low"),
-            (0.1, "minimal")
-        ]
+        test_cases = [(0.9, "high"), (0.7, "medium"), (0.4, "low"), (0.1, "minimal")]
 
         for probability, expected_level in test_cases:
             level = self.alerts_service._determine_risk_level(probability)
@@ -164,10 +144,7 @@ class TestProactiveAlertsService:
     def test_generate_explanation(self):
         """Test génération d'explication."""
         explanation = self.alerts_service._generate_explanation(
-            booking=self.test_booking,
-            driver=self.test_driver,
-            probability=0.7,
-            risk_level="medium"
+            booking=self.test_booking, driver=self.test_driver, probability=0.7, risk_level="medium"
         )
 
         assert "risk_level" in explanation
@@ -182,10 +159,7 @@ class TestProactiveAlertsService:
 
     def test_analyze_risk_factors(self):
         """Test analyse des facteurs de risque."""
-        factors = self.alerts_service._analyze_risk_factors(
-            self.test_booking,
-            self.test_driver
-        )
+        factors = self.alerts_service._analyze_risk_factors(self.test_booking, self.test_driver)
 
         assert isinstance(factors, list)
         for factor in factors:
@@ -197,9 +171,7 @@ class TestProactiveAlertsService:
     def test_generate_recommendations(self):
         """Test génération de recommandations."""
         recommendations = self.alerts_service._generate_recommendations(
-            booking=self.test_booking,
-            driver=self.test_driver,
-            probability=0.8
+            booking=self.test_booking, driver=self.test_driver, probability=0.8
         )
 
         assert isinstance(recommendations, list)
@@ -211,10 +183,7 @@ class TestProactiveAlertsService:
 
     def test_suggest_alternative_drivers(self):
         """Test suggestion de chauffeurs alternatifs."""
-        alternatives = self.alerts_service._suggest_alternative_drivers(
-            self.test_booking,
-            self.test_driver
-        )
+        alternatives = self.alerts_service._suggest_alternative_drivers(self.test_booking, self.test_driver)
 
         assert isinstance(alternatives, list)
         for alt in alternatives:
@@ -232,13 +201,12 @@ class TestProactiveAlertsService:
             "risk_level": "high",
             "should_alert": True,
             "explanation": {"test": "explanation"},
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         with patch.object(self.alerts_service, "_send_alert_notification", return_value=True):
             success = self.alerts_service.send_proactive_alert(
-                analysis_result=analysis_result,
-                company_id="test_company"
+                analysis_result=analysis_result, company_id="test_company"
             )
 
             assert success is True
@@ -253,22 +221,20 @@ class TestProactiveAlertsService:
             "risk_level": "high",
             "should_alert": True,
             "explanation": {"test": "explanation"},
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         # Premier envoi
         with patch.object(self.alerts_service, "_send_alert_notification", return_value=True):
             success1 = self.alerts_service.send_proactive_alert(
-                analysis_result=analysis_result,
-                company_id="test_company"
+                analysis_result=analysis_result, company_id="test_company"
             )
             assert success1 is True
 
         # Deuxième envoi immédiat (doit être debounced)
         with patch.object(self.alerts_service, "_send_alert_notification", return_value=True) as mock_send:
             success2 = self.alerts_service.send_proactive_alert(
-                analysis_result=analysis_result,
-                company_id="test_company"
+                analysis_result=analysis_result, company_id="test_company"
             )
             assert success2 is False
             mock_send.assert_not_called()
@@ -282,22 +248,17 @@ class TestProactiveAlertsService:
             "risk_level": "high",
             "should_alert": True,
             "explanation": {"test": "explanation"},
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         # Premier envoi
         with patch.object(self.alerts_service, "_send_alert_notification", return_value=True):
-            self.alerts_service.send_proactive_alert(
-                analysis_result=analysis_result,
-                company_id="test_company"
-            )
+            self.alerts_service.send_proactive_alert(analysis_result=analysis_result, company_id="test_company")
 
         # Envoi forcé
         with patch.object(self.alerts_service, "_send_alert_notification", return_value=True) as mock_send:
             success = self.alerts_service.send_proactive_alert(
-                analysis_result=analysis_result,
-                company_id="test_company",
-                force_send=True
+                analysis_result=analysis_result, company_id="test_company", force_send=True
             )
             assert success is True
             mock_send.assert_called_once()
@@ -310,13 +271,11 @@ class TestProactiveAlertsService:
             "reward_components": {"punctuality": 0.7, "distance": 0.3},
             "constraints_applied": ["time_window", "capacity"],
             "reward_profile": "PUNCTUALITY_FOCUSED",
-            "action_masked": True
+            "action_masked": True,
         }
 
         explanation = self.alerts_service.get_explanation_for_decision(
-            booking_id="test_123",
-            driver_id="driver_456",
-            rl_decision=rl_decision
+            booking_id="test_123", driver_id="driver_456", rl_decision=rl_decision
         )
 
         assert explanation["decision_type"] == "rl_assignment"
@@ -332,12 +291,12 @@ class TestProactiveAlertsService:
         self.alerts_service.alert_history["booking_1"] = {
             "last_alert_time": datetime.now(UTC),
             "last_risk_level": "medium",
-            "total_alerts": 1
+            "total_alerts": 1,
         }
         self.alerts_service.alert_history["booking_2"] = {
             "last_alert_time": datetime.now(UTC),
             "last_risk_level": "high",
-            "total_alerts": 2
+            "total_alerts": 2,
         }
 
         # Nettoyer un booking spécifique
@@ -355,12 +314,12 @@ class TestProactiveAlertsService:
         self.alerts_service.alert_history["booking_1"] = {
             "last_alert_time": datetime.now(UTC),
             "last_risk_level": "medium",
-            "total_alerts": 1
+            "total_alerts": 1,
         }
         self.alerts_service.alert_history["booking_2"] = {
             "last_alert_time": datetime.now(UTC),
             "last_risk_level": "high",
-            "total_alerts": 2
+            "total_alerts": 2,
         }
 
         stats = self.alerts_service.get_alert_statistics()
@@ -429,13 +388,11 @@ class TestSocketIOIntegration:
             "driver_id": "driver_456",
             "delay_probability": 0.8,
             "risk_level": "high",
-            "explanation": {"test": "explanation"}
+            "explanation": {"test": "explanation"},
         }
 
         success = broadcast_delay_alert(
-            company_id="test_company",
-            analysis_result=analysis_result,
-            socketio=self.socketio
+            company_id="test_company", analysis_result=analysis_result, socketio=self.socketio
         )
 
         assert success is True
@@ -449,14 +406,10 @@ class TestSocketIOIntegration:
             "booking_id": "test_123",
             "driver_id": "driver_456",
             "decision_factors": [],
-            "alternative_options": []
+            "alternative_options": [],
         }
 
-        success = broadcast_rl_explanation(
-            company_id="test_company",
-            explanation=explanation,
-            socketio=self.socketio
-        )
+        success = broadcast_rl_explanation(company_id="test_company", explanation=explanation, socketio=self.socketio)
 
         assert success is True
         self.socketio.emit.assert_called_once()
@@ -490,14 +443,13 @@ class TestDebounceSystem:
             "risk_level": "high",
             "should_alert": True,
             "explanation": {"test": "explanation"},
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         # Premier envoi
         with patch.object(self.alerts_service, "_send_alert_notification", return_value=True):
             success1 = self.alerts_service.send_proactive_alert(
-                analysis_result=analysis_result,
-                company_id="test_company"
+                analysis_result=analysis_result, company_id="test_company"
             )
             assert success1 is True
 
@@ -511,8 +463,7 @@ class TestDebounceSystem:
         # Deuxième envoi (doit encore être debounced)
         with patch.object(self.alerts_service, "_send_alert_notification", return_value=True) as mock_send:
             success2 = self.alerts_service.send_proactive_alert(
-                analysis_result=analysis_result,
-                company_id="test_company"
+                analysis_result=analysis_result, company_id="test_company"
             )
             assert success2 is False
             mock_send.assert_not_called()
@@ -523,8 +474,7 @@ class TestDebounceSystem:
         # Troisième envoi (doit passer)
         with patch.object(self.alerts_service, "_send_alert_notification", return_value=True) as mock_send:
             success3 = self.alerts_service.send_proactive_alert(
-                analysis_result=analysis_result,
-                company_id="test_company"
+                analysis_result=analysis_result, company_id="test_company"
             )
             assert success3 is True
             mock_send.assert_called_once()
@@ -538,7 +488,7 @@ class TestDebounceSystem:
             "risk_level": "high",
             "should_alert": True,
             "explanation": {"test": "explanation"},
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         analysis_result_2 = {
@@ -548,21 +498,19 @@ class TestDebounceSystem:
             "risk_level": "high",
             "should_alert": True,
             "explanation": {"test": "explanation"},
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         with patch.object(self.alerts_service, "_send_alert_notification", return_value=True):
             # Premier booking
             success1 = self.alerts_service.send_proactive_alert(
-                analysis_result=analysis_result_1,
-                company_id="test_company"
+                analysis_result=analysis_result_1, company_id="test_company"
             )
             assert success1 is True
 
             # Deuxième booking (doit passer car booking différent)
             success2 = self.alerts_service.send_proactive_alert(
-                analysis_result=analysis_result_2,
-                company_id="test_company"
+                analysis_result=analysis_result_2, company_id="test_company"
             )
             assert success2 is True
 
@@ -583,10 +531,7 @@ class TestErrorHandling:
         # Booking invalide
         invalid_booking = None
 
-        result = self.alerts_service.check_delay_risk(
-            booking=invalid_booking or {},
-            driver={}
-        )
+        result = self.alerts_service.check_delay_risk(booking=invalid_booking or {}, driver={})
 
         assert result["delay_probability"] == 0.0
         assert result["risk_level"] == "unknown"
@@ -598,10 +543,7 @@ class TestErrorHandling:
         invalid_analysis = None
 
         with pytest.raises((Exception, TypeError)):
-            self.alerts_service.send_proactive_alert(
-                analysis_result=invalid_analysis or {},
-                company_id="test_company"
-            )
+            self.alerts_service.send_proactive_alert(analysis_result=invalid_analysis or {}, company_id="test_company")
 
     def test_explanation_error_handling(self):
         """Test gestion d'erreur dans get_explanation_for_decision."""
@@ -609,9 +551,7 @@ class TestErrorHandling:
         invalid_rl_decision = None
 
         explanation = self.alerts_service.get_explanation_for_decision(
-            booking_id="test_123",
-            driver_id="driver_456",
-            rl_decision=invalid_rl_decision or {}
+            booking_id="test_123", driver_id="driver_456", rl_decision=invalid_rl_decision or {}
         )
 
         assert "error" in explanation
@@ -633,7 +573,7 @@ class TestPerformanceMetrics:
             "pickup_time": (datetime.now(UTC) + timedelta(minutes=30)).isoformat(),
             "priority": 3,
             "is_outbound": True,
-            "estimated_duration": 30
+            "estimated_duration": 30,
         }
 
         driver = {
@@ -643,7 +583,7 @@ class TestPerformanceMetrics:
             "current_bookings": 1,
             "load": 0,
             "type": "REGULAR",
-            "available": True
+            "available": True,
         }
 
         # Mesurer le temps d'exécution
@@ -675,13 +615,10 @@ class TestPerformanceMetrics:
                 "risk_level": "medium",
                 "should_alert": True,
                 "explanation": {"test": f"explanation_{i}"},
-                "timestamp": datetime.now(UTC).isoformat()
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
-            self.alerts_service.send_proactive_alert(
-                analysis_result=analysis_result,
-                company_id="test_company"
-            )
+            self.alerts_service.send_proactive_alert(analysis_result=analysis_result, company_id="test_company")
 
         # Vérifier que la mémoire n'explose pas
         final_objects = len(gc.get_objects()) if "gc" in globals() else 0

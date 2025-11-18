@@ -1,6 +1,7 @@
 """Gestionnaire central pour le dispatch autonome.
 Gère les 3 modes et orchestre les actions automatiques.
 """
+
 from __future__ import annotations
 
 import logging
@@ -40,10 +41,7 @@ class AutonomousDispatchManager:
         self.mode = self.company.dispatch_mode
         self.config = self.company.get_autonomous_config()
 
-        logger.debug(
-            "[AutonomousManager] Initialized for company %s with mode: %s",
-            company_id, self.mode.value
-        )
+        logger.debug("[AutonomousManager] Initialized for company %s with mode: %s", company_id, self.mode.value)
 
     def should_run_autorun(self) -> bool:
         """Détermine si le dispatch automatique périodique doit s'exécuter.
@@ -87,7 +85,7 @@ class AutonomousDispatchManager:
 
         """
         result = False
-        
+
         # Seulement en mode fully auto
         if self.mode != DispatchMode.FULLY_AUTO:
             return result
@@ -104,8 +102,7 @@ class AutonomousDispatchManager:
             result = rules.get("customer_notifications", True)
         elif suggestion.action == "adjust_time":
             # Ajustements de temps : uniquement si en dessous du seuil de sécurité
-            delay = suggestion.additional_data.get(
-                "delay_minutes", 0) if suggestion.additional_data else 0
+            delay = suggestion.additional_data.get("delay_minutes", 0) if suggestion.additional_data else 0
             threshold = self.config["safety_limits"]["require_approval_delay_minutes"]
 
             # Si retard > seuil : validation manuelle requise
@@ -123,11 +120,7 @@ class AutonomousDispatchManager:
 
         return result
 
-    def should_trigger_reoptimization(
-        self,
-        trigger_type: str,
-        context: Dict[str, Any]
-    ) -> bool:
+    def should_trigger_reoptimization(self, trigger_type: str, context: Dict[str, Any]) -> bool:
         """Détermine si une ré-optimisation automatique doit être déclenchée.
 
         Args:
@@ -157,8 +150,7 @@ class AutonomousDispatchManager:
         if trigger_type == "better_driver_available":
             # Meilleur chauffeur disponible : vérifier le gain minimal
             gain_minutes = context.get("gain_minutes", 0)
-            threshold = triggers_config.get(
-                "better_driver_available_gain_minutes", 10)
+            threshold = triggers_config.get("better_driver_available_gain_minutes", 10)
             return gain_minutes >= threshold
 
         return False
@@ -185,9 +177,7 @@ class AutonomousDispatchManager:
 
         # 1. Vérifier limite globale horaire
         max_per_hour = limits.get("max_auto_actions_per_hour", 50)
-        current_hour_count = AutonomousAction.count_actions_last_hour(
-            self.company_id
-        )
+        current_hour_count = AutonomousAction.count_actions_last_hour(self.company_id)
 
         if current_hour_count >= max_per_hour:
             return False, (
@@ -197,9 +187,7 @@ class AutonomousDispatchManager:
 
         # 2. Vérifier limite globale journalière
         max_per_day = limits.get("max_auto_actions_per_day", 500)
-        current_day_count = AutonomousAction.count_actions_today(
-            self.company_id
-        )
+        current_day_count = AutonomousAction.count_actions_today(self.company_id)
 
         if current_day_count >= max_per_day:
             return False, (
@@ -213,23 +201,16 @@ class AutonomousDispatchManager:
         if action_type in action_limits:
             type_limit_hour = action_limits[action_type].get("per_hour")
             if type_limit_hour:
-                type_count_hour = AutonomousAction.count_actions_last_hour(
-                    self.company_id,
-                    action_type
-                )
+                type_count_hour = AutonomousAction.count_actions_last_hour(self.company_id, action_type)
 
                 if type_count_hour >= type_limit_hour:
                     return False, (
-                        f"Limite horaire pour '{action_type}' atteinte: "
-                        f"{type_count_hour}/{type_limit_hour} actions/h."
+                        f"Limite horaire pour '{action_type}' atteinte: {type_count_hour}/{type_limit_hour} actions/h."
                     )
 
             type_limit_day = action_limits[action_type].get("per_day")
             if type_limit_day:
-                type_count_day = AutonomousAction.count_actions_today(
-                    self.company_id,
-                    action_type
-                )
+                type_count_day = AutonomousAction.count_actions_today(self.company_id, action_type)
 
                 if type_count_day >= type_limit_day:
                     return False, (
@@ -240,11 +221,7 @@ class AutonomousDispatchManager:
         # Toutes les vérifications passées
         return True, "OK"
 
-    def process_opportunities(
-        self,
-        opportunities: List[Any],
-        dry_run: bool = False
-    ) -> Dict[str, Any]:
+    def process_opportunities(self, opportunities: List[Any], dry_run: bool = False) -> Dict[str, Any]:
         """Traite une liste d'opportunités d'optimisation.
         Applique automatiquement celles qui sont autorisées selon le mode et la config
         Args:
@@ -261,7 +238,7 @@ class AutonomousDispatchManager:
             "manual_required": 0,
             "blocked_by_limits": 0,
             "errors": 0,
-            "actions": []
+            "actions": [],
         }
 
         for opp in opportunities:
@@ -271,18 +248,21 @@ class AutonomousDispatchManager:
                     stats["manual_required"] += 1
                     logger.info(
                         "[AutonomousManager] Suggestion requires manual approval: %s (company=%s, mode=%s)",
-                        suggestion.action, self.company_id, self.mode.value
+                        suggestion.action,
+                        self.company_id,
+                        self.mode.value,
                     )
                     continue
 
                 # Vérifier les limites de sécurité
-                can_proceed, reason = self.check_safety_limits(
-                    suggestion.action)
+                can_proceed, reason = self.check_safety_limits(suggestion.action)
                 if not can_proceed:
                     stats["blocked_by_limits"] += 1
                     logger.warning(
                         "[AutonomousManager] Action blocked by safety limit: %s (company=%s, reason=%s)",
-                        suggestion.action, self.company_id, reason
+                        suggestion.action,
+                        self.company_id,
+                        reason,
                     )
                     continue
 
@@ -295,38 +275,46 @@ class AutonomousDispatchManager:
                         from db import db as database
 
                         start_time = time.time()
-                        result = apply_suggestion(
-                            suggestion, self.company_id, dry_run=False)
+                        result = apply_suggestion(suggestion, self.company_id, dry_run=False)
                         execution_time_ms = (time.time() - start_time) * 1000
 
                         if result.get("success"):
                             stats["auto_applied"] += 1
-                            stats["actions"].append({
-                                "action": suggestion.action,
-                                "booking_id": suggestion.booking_id,
-                                "driver_id": suggestion.driver_id,
-                                "applied_at": now_local().isoformat(),
-                                "result": "success",
-                                "message": suggestion.message
-                            })
+                            stats["actions"].append(
+                                {
+                                    "action": suggestion.action,
+                                    "booking_id": suggestion.booking_id,
+                                    "driver_id": suggestion.driver_id,
+                                    "applied_at": now_local().isoformat(),
+                                    "result": "success",
+                                    "message": suggestion.message,
+                                }
+                            )
                             logger.info(
                                 "[AutonomousManager] ✅ Auto-applied: %s for booking %s (company=%s)",
-                                suggestion.action, suggestion.booking_id, self.company_id
+                                suggestion.action,
+                                suggestion.booking_id,
+                                self.company_id,
                             )
 
                             # Logger l'action dans la table autonomous_action
                             # (audit trail)
                             from models.autonomous_action import AutonomousAction
+
                             action_record = AutonomousAction()
                             action_record.company_id = self.company_id
                             action_record.booking_id = suggestion.booking_id
                             action_record.driver_id = suggestion.driver_id
                             action_record.action_type = suggestion.action
                             action_record.action_description = suggestion.message
-                            action_record.action_data = json.dumps({
-                                "suggestion": suggestion.to_dict() if hasattr(suggestion, "to_dict") else str(suggestion),
-                                "result": result
-                            })
+                            action_record.action_data = json.dumps(
+                                {
+                                    "suggestion": suggestion.to_dict()
+                                    if hasattr(suggestion, "to_dict")
+                                    else str(suggestion),
+                                    "result": result,
+                                }
+                            )
                             action_record.success = True
                             action_record.execution_time_ms = execution_time_ms
                             action_record.confidence_score = getattr(suggestion, "confidence", None)
@@ -339,21 +327,27 @@ class AutonomousDispatchManager:
                             stats["errors"] += 1
                             logger.error(
                                 "[AutonomousManager] ❌ Failed to apply: %s (error=%s)",
-                                suggestion.action, result.get("error")
+                                suggestion.action,
+                                result.get("error"),
                             )
 
                             # Logger l'échec aussi (pour monitoring)
                             from models.autonomous_action import AutonomousAction
+
                             action_record = AutonomousAction()
                             action_record.company_id = self.company_id
                             action_record.booking_id = suggestion.booking_id
                             action_record.driver_id = suggestion.driver_id
                             action_record.action_type = suggestion.action
                             action_record.action_description = suggestion.message
-                            action_record.action_data = json.dumps({
-                                "suggestion": suggestion.to_dict() if hasattr(suggestion, "to_dict") else str(suggestion),
-                                "error": result.get("error")
-                            })
+                            action_record.action_data = json.dumps(
+                                {
+                                    "suggestion": suggestion.to_dict()
+                                    if hasattr(suggestion, "to_dict")
+                                    else str(suggestion),
+                                    "error": result.get("error"),
+                                }
+                            )
                             action_record.success = False
                             action_record.error_message = result.get("error")
                             action_record.execution_time_ms = execution_time_ms
@@ -363,14 +357,16 @@ class AutonomousDispatchManager:
                         stats["auto_applied"] += 1
                         logger.info(
                             "[AutonomousManager] [DRY RUN] Would auto-apply: %s (company=%s)",
-                            suggestion.action, self.company_id
+                            suggestion.action,
+                            self.company_id,
                         )
 
                 except Exception:
                     stats["errors"] += 1
                     logger.exception(
                         "[AutonomousManager] Exception while applying suggestion: %s (company=%s)",
-                        suggestion.action, self.company_id
+                        suggestion.action,
+                        self.company_id,
                     )
 
         logger.info(
@@ -380,7 +376,7 @@ class AutonomousDispatchManager:
             stats["auto_applied"],
             stats["manual_required"],
             stats["blocked_by_limits"],
-            stats["errors"]
+            stats["errors"],
         )
 
         return stats

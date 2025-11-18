@@ -1,5 +1,6 @@
 # models/base.py
 """Helpers et utilitaires partagés par tous les models."""
+
 from __future__ import annotations
 
 import base64
@@ -28,8 +29,7 @@ def _load_encryption_key() -> bytes:
             raise RuntimeError(msg)
         return key
 
-    legacy_hex = (os.getenv("ENCRYPTION_KEY_HEX")
-                  or os.getenv("ENCRYPTION_KEY") or "").strip()
+    legacy_hex = (os.getenv("ENCRYPTION_KEY_HEX") or os.getenv("ENCRYPTION_KEY") or "").strip()
     if legacy_hex:
         if legacy_hex.lower().startswith("0x"):
             legacy_hex = legacy_hex[2:]
@@ -87,10 +87,12 @@ def _as_dt(value):  # pyright: ignore[reportUnusedFunction]
     if value is None:
         return None
     from datetime import datetime
+
     if isinstance(value, datetime):
         return value
     if isinstance(value, str):
         from dateutil import parser
+
         return parser.parse(value)
     return value
 

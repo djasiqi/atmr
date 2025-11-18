@@ -2,6 +2,7 @@
 """Tous les enums utilisés dans les models.
 Extrait depuis models.py (lignes 121-243).
 """
+
 from enum import Enum as PyEnum
 
 
@@ -25,16 +26,20 @@ class BookingStatus(str, PyEnum):
     COMPLETED = "COMPLETED"
     RETURN_COMPLETED = "RETURN_COMPLETED"
     CANCELED = "CANCELED"
+
     @classmethod
-    def choices(cls): return [e.value for e in cls]
+    def choices(cls):
+        return [e.value for e in cls]
 
 
 class PaymentStatus(str, PyEnum):
     PENDING = "PENDING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+
     @classmethod
-    def choices(cls): return [e.value for e in cls]
+    def choices(cls):
+        return [e.value for e in cls]
 
 
 class GenderEnum(str, PyEnum):
@@ -59,8 +64,10 @@ class InvoiceStatus(str, PyEnum):
     PAID = "paid"
     OVERDUE = "overdue"
     CANCELLED = "cancelled"
+
     @classmethod
-    def choices(cls): return [e.value for e in cls]
+    def choices(cls):
+        return [e.value for e in cls]
 
 
 class InvoiceLineType(str, PyEnum):
@@ -68,8 +75,10 @@ class InvoiceLineType(str, PyEnum):
     LATE_FEE = "late_fee"
     REMINDER_FEE = "reminder_fee"
     CUSTOM = "custom"
+
     @classmethod
-    def choices(cls): return [e.value for e in cls]
+    def choices(cls):
+        return [e.value for e in cls]
 
 
 class PaymentMethod(str, PyEnum):
@@ -77,8 +86,10 @@ class PaymentMethod(str, PyEnum):
     CASH = "cash"
     CARD = "card"
     ADJUSTMENT = "adjustment"
+
     @classmethod
-    def choices(cls): return [e.value for e in cls]
+    def choices(cls):
+        return [e.value for e in cls]
 
 
 class DriverType(PyEnum):
@@ -140,6 +151,7 @@ class DispatchStatus(str, PyEnum):
 
 
 # ========== ENUMS PLANNING / DRIVER ==========
+
 
 class ShiftType(str, PyEnum):
     REGULAR = "regular"

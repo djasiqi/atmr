@@ -29,8 +29,7 @@ Analyse les tendances et génère des recommandations.
 logger = logging.getLogger(__name__)
 
 
-def generate_insights(
-        company_id: int, analytics: Dict[str, Any]) -> List[Dict[str, Any]]:
+def generate_insights(company_id: int, analytics: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Génère des insights intelligents basés sur les analytics.
 
     Args:
@@ -52,35 +51,41 @@ def generate_insights(
     # Insight 1: Taux de ponctualité
     on_time_rate = summary.get("avg_on_time_rate", 0)
     if on_time_rate < ON_TIME_RATE_THRESHOLD:
-        insights.append({
-            "type": "warning",
-            "category": "punctuality",
-            "priority": "high",
-            "title": "Taux de ponctualité faible",
-            "message": f"Votre taux de ponctualité ({on_time_rate:.1f}%) est en dessous du seuil recommandé. Recommandation : Analysez les causes de retards récurrents.",
-            "action": "view_delays"
-        })
+        insights.append(
+            {
+                "type": "warning",
+                "category": "punctuality",
+                "priority": "high",
+                "title": "Taux de ponctualité faible",
+                "message": f"Votre taux de ponctualité ({on_time_rate:.1f}%) est en dessous du seuil recommandé. Recommandation : Analysez les causes de retards récurrents.",
+                "action": "view_delays",
+            }
+        )
     elif on_time_rate >= ON_TIME_RATE_THRESHOLD:
-        insights.append({
-            "type": "success",
-            "category": "punctuality",
-            "priority": "low",
-            "title": "Excellente ponctualité",
-            "message": f"Votre taux de ponctualité ({on_time_rate:.1f}%) est excellent !",
-            "action": None
-        })
+        insights.append(
+            {
+                "type": "success",
+                "category": "punctuality",
+                "priority": "low",
+                "title": "Excellente ponctualité",
+                "message": f"Votre taux de ponctualité ({on_time_rate:.1f}%) est excellent !",
+                "action": None,
+            }
+        )
 
     # Insight 2: Retard moyen
     avg_delay = summary.get("avg_delay_minutes", 0)
     if avg_delay > AVG_DELAY_THRESHOLD:
-        insights.append({
-            "type": "warning",
-            "category": "delays",
-            "priority": "high",
-            "title": "Retard moyen élevé",
-            "message": f"Le retard moyen est de {avg_delay:.1f} minutes. Cela impacte la satisfaction client.",
-            "action": "optimize_planning"
-        })
+        insights.append(
+            {
+                "type": "warning",
+                "category": "delays",
+                "priority": "high",
+                "title": "Retard moyen élevé",
+                "message": f"Le retard moyen est de {avg_delay:.1f} minutes. Cela impacte la satisfaction client.",
+                "action": "optimize_planning",
+            }
+        )
 
     # Insight 3: Tendances (évolution sur la période)
     if len(trends) >= MIN_WEEK_DATA_POINTS:  # Au moins une semaine de données
@@ -91,43 +96,49 @@ def generate_insights(
             recent_avg = sum(recent_quality) / len(recent_quality)
             previous_avg = sum(previous_quality) / len(previous_quality)
             evolution = (
-                (recent_avg -
-                 previous_avg) /
-                previous_avg *
-                1) if previous_avg > PREVIOUS_AVG_ZERO else PREVIOUS_AVG_ZERO
+                ((recent_avg - previous_avg) / previous_avg * 1)
+                if previous_avg > PREVIOUS_AVG_ZERO
+                else PREVIOUS_AVG_ZERO
+            )
 
             if evolution > EVOLUTION_THRESHOLD:
-                insights.append({
-                    "type": "success",
-                    "category": "trend",
-                    "priority": "medium",
-                    "title": "Amélioration continue",
-                    "message": f"Votre score de qualité s'améliore (+{evolution:.1f}%)",
-                    "action": None
-                })
+                insights.append(
+                    {
+                        "type": "success",
+                        "category": "trend",
+                        "priority": "medium",
+                        "title": "Amélioration continue",
+                        "message": f"Votre score de qualité s'améliore (+{evolution:.1f}%)",
+                        "action": None,
+                    }
+                )
             elif evolution < EVOLUTION_DEGRADATION_THRESHOLD:
-                insights.append({
-                    "type": "warning",
-                    "category": "trend",
-                    "priority": "high",
-                    "title": "Dégradation de la qualité",
-                    "message": f"Votre score de qualité diminue ({evolution:.1f}%)",
-                    "action": "review_operations"
-                })
+                insights.append(
+                    {
+                        "type": "warning",
+                        "category": "trend",
+                        "priority": "high",
+                        "title": "Dégradation de la qualité",
+                        "message": f"Votre score de qualité diminue ({evolution:.1f}%)",
+                        "action": "review_operations",
+                    }
+                )
 
     # Insight 4: Jours problématiques
     if trends:
         # Identifier les jours avec le plus de retards
         high_delay_days = [t for t in trends if t["avg_delay"] > RETARDS_THRESHOLD]
         if len(high_delay_days) > len(trends) / 3:  # Plus d'1/3 des jours
-            insights.append({
-                "type": "info",
-                "category": "pattern",
-                "priority": "medium",
-                "title": "Retards fréquents",
-                "message": f"{len(high_delay_days)} jours sur {len(trends)} ont des retards >{RETARDS_THRESHOLD} min. Analysez les patterns (jour de la semaine, heure, etc.)",
-                "action": "analyze_patterns"
-            })
+            insights.append(
+                {
+                    "type": "info",
+                    "category": "pattern",
+                    "priority": "medium",
+                    "title": "Retards fréquents",
+                    "message": f"{len(high_delay_days)} jours sur {len(trends)} ont des retards >{RETARDS_THRESHOLD} min. Analysez les patterns (jour de la semaine, heure, etc.)",
+                    "action": "analyze_patterns",
+                }
+            )
 
     # Insight 5: Volume de courses
     total_bookings = summary.get("total_bookings", 0)
@@ -135,55 +146,59 @@ def generate_insights(
     if days_count > DAYS_COUNT_ZERO:
         avg_daily_bookings = total_bookings / days_count
         if avg_daily_bookings < AVG_DAILY_BOOKINGS_THRESHOLD:
-            insights.append({
-                "type": "info",
-                "category": "volume",
-                "priority": "low",
-                "title": "Volume faible",
-                "message": f"Moyenne de {avg_daily_bookings:.1f} courses/jour. Opportunité de croissance.",
-                "action": None
-            })
+            insights.append(
+                {
+                    "type": "info",
+                    "category": "volume",
+                    "priority": "low",
+                    "title": "Volume faible",
+                    "message": f"Moyenne de {avg_daily_bookings:.1f} courses/jour. Opportunité de croissance.",
+                    "action": None,
+                }
+            )
         elif avg_daily_bookings > AVG_DAILY_BOOKINGS_THRESHOLD:
-            insights.append({
-                "type": "success",
-                "category": "volume",
-                "priority": "low",
-                "title": "Volume élevé",
-                "message": f"Moyenne de {avg_daily_bookings:.1f} courses/jour. Excellent volume !",
-                "action": None
-            })
+            insights.append(
+                {
+                    "type": "success",
+                    "category": "volume",
+                    "priority": "low",
+                    "title": "Volume élevé",
+                    "message": f"Moyenne de {avg_daily_bookings:.1f} courses/jour. Excellent volume !",
+                    "action": None,
+                }
+            )
 
     # Insight 6: Score de qualité global
     quality_score = summary.get("avg_quality_score", 0)
     if quality_score >= QUALITY_SCORE_THRESHOLD:
-        insights.append({
-            "type": "success",
-            "category": "quality",
-            "priority": "low",
-            "title": "Score de qualité excellent",
-            "message": f"Score global de {quality_score:.1f}/100. Excellent travail !",
-            "action": None
-        })
+        insights.append(
+            {
+                "type": "success",
+                "category": "quality",
+                "priority": "low",
+                "title": "Score de qualité excellent",
+                "message": f"Score global de {quality_score:.1f}/100. Excellent travail !",
+                "action": None,
+            }
+        )
     elif quality_score < QUALITY_SCORE_THRESHOLD:
-        insights.append({
-            "type": "warning",
-            "category": "quality",
-            "priority": "critical",
-            "title": "Score de qualité faible",
-            "message": f"Score global de {quality_score:.1f}/100. Plan d'amélioration nécessaire.",
-            "action": "improvement_plan"
-        })
+        insights.append(
+            {
+                "type": "warning",
+                "category": "quality",
+                "priority": "critical",
+                "title": "Score de qualité faible",
+                "message": f"Score global de {quality_score:.1f}/100. Plan d'amélioration nécessaire.",
+                "action": "improvement_plan",
+            }
+        )
 
-    logger.info(
-        "[Insights] Generated %s insights for company %s",
-        len(insights),
-        company_id)
+    logger.info("[Insights] Generated %s insights for company %s", len(insights), company_id)
 
     return insights
 
 
-def detect_patterns(
-        company_id: int, lookback_days: int = 30) -> Dict[str, Any]:
+def detect_patterns(company_id: int, lookback_days: int = 30) -> Dict[str, Any]:
     """Détecte des patterns récurrents dans les données (jour de la semaine, etc.).
 
     Args:
@@ -198,36 +213,20 @@ def detect_patterns(
     start_date = end_date - timedelta(days=lookback_days)
 
     stats = DailyStats.query.filter(
-        and_(
-            DailyStats.company_id == company_id,
-            DailyStats.date >= start_date,
-            DailyStats.date <= end_date
-        )
+        and_(DailyStats.company_id == company_id, DailyStats.date >= start_date, DailyStats.date <= end_date)
     ).all()
 
     if not stats:
-        return {"patterns": [],
-                "message": "Pas assez de données pour détecter des patterns"}
+        return {"patterns": [], "message": "Pas assez de données pour détecter des patterns"}
 
     # Grouper par jour de la semaine (0=lundi, 6=dimanche)
     by_weekday = {i: [] for i in range(7)}
     for s in stats:
         weekday = s.date.weekday()
-        by_weekday[weekday].append({
-            "delay": s.avg_delay,
-            "on_time_rate": s.on_time_rate,
-            "bookings": s.total_bookings
-        })
+        by_weekday[weekday].append({"delay": s.avg_delay, "on_time_rate": s.on_time_rate, "bookings": s.total_bookings})
 
     # Calculer les moyennes par jour
-    weekday_names = [
-        "Lundi",
-        "Mardi",
-        "Mercredi",
-        "Jeudi",
-        "Vendredi",
-        "Samedi",
-        "Dimanche"]
+    weekday_names = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
     weekday_analysis = []
 
     for weekday, data in by_weekday.items():
@@ -238,14 +237,16 @@ def detect_patterns(
         avg_on_time = sum(d["on_time_rate"] for d in data) / len(data)
         avg_bookings = sum(d["bookings"] for d in data) / len(data)
 
-        weekday_analysis.append({
-            "weekday": weekday,
-            "weekday_name": weekday_names[weekday],
-            "avg_delay": round(avg_delay, 2),
-            "avg_on_time_rate": round(avg_on_time, 2),
-            "avg_bookings": round(avg_bookings, 1),
-            "sample_size": len(data)
-        })
+        weekday_analysis.append(
+            {
+                "weekday": weekday,
+                "weekday_name": weekday_names[weekday],
+                "avg_delay": round(avg_delay, 2),
+                "avg_on_time_rate": round(avg_on_time, 2),
+                "avg_bookings": round(avg_bookings, 1),
+                "sample_size": len(data),
+            }
+        )
 
     # Identifier les patterns
     patterns = []
@@ -254,22 +255,23 @@ def detect_patterns(
     if weekday_analysis:
         worst_day = max(weekday_analysis, key=lambda x: x["avg_delay"])
         if worst_day["avg_delay"] > PATTERN_DELAY_THRESHOLD:
-            patterns.append({
-                "type": "high_delay_day",
-                "message": f"{worst_day['weekday_name']} a systématiquement plus de retards (moy: {worst_day['avg_delay']:.1f} min)",
-                "recommendation": f"Ajoutez du temps buffer ou des chauffeurs supplémentaires le {worst_day['weekday_name']}"
-            })
+            patterns.append(
+                {
+                    "type": "high_delay_day",
+                    "message": f"{worst_day['weekday_name']} a systématiquement plus de retards (moy: {worst_day['avg_delay']:.1f} min)",
+                    "recommendation": f"Ajoutez du temps buffer ou des chauffeurs supplémentaires le {worst_day['weekday_name']}",
+                }
+            )
 
         # Jour avec le plus de courses
         busiest_day = max(weekday_analysis, key=lambda x: x["avg_bookings"])
         if busiest_day["avg_bookings"] > 0:
-            patterns.append({
-                "type": "busy_day",
-                "message": f"{busiest_day['weekday_name']} est le jour le plus chargé (moy: {busiest_day['avg_bookings']:.1f} courses)",
-                "recommendation": "Assurez-vous d'avoir assez de chauffeurs disponibles"
-            })
+            patterns.append(
+                {
+                    "type": "busy_day",
+                    "message": f"{busiest_day['weekday_name']} est le jour le plus chargé (moy: {busiest_day['avg_bookings']:.1f} courses)",
+                    "recommendation": "Assurez-vous d'avoir assez de chauffeurs disponibles",
+                }
+            )
 
-    return {
-        "patterns": patterns,
-        "weekday_analysis": weekday_analysis
-    }
+    return {"patterns": patterns, "weekday_analysis": weekday_analysis}

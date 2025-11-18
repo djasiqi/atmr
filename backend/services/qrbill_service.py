@@ -28,9 +28,7 @@ class QRBillService:
         """Génère un QR-Bill SVG pour une facture."""
         try:
             # Récupérer les paramètres de facturation
-            billing_settings = CompanyBillingSettings.query.filter_by(
-                company_id=invoice.company_id
-            ).first()
+            billing_settings = CompanyBillingSettings.query.filter_by(company_id=invoice.company_id).first()
 
             if not billing_settings or not billing_settings.iban:
                 app_logger.warning("Pas d'IBAN configuré pour l'entreprise %s", invoice.company_id)
@@ -44,11 +42,14 @@ class QRBillService:
             if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
                 # 🏥 Facturation tierce : débiteur = institution payeuse
                 from models import Client as ClientModel
+
                 institution = ClientModel.query.get(invoice.bill_to_client_id)
 
                 if institution and institution.is_institution:
                     debtor_name = institution.institution_name or "Institution"
-                    debtor_street = institution.billing_address or institution.contact_address or "Adresse non renseignée"
+                    debtor_street = (
+                        institution.billing_address or institution.contact_address or "Adresse non renseignée"
+                    )
                     # Extraire code postal et ville de l'adresse si possible
                     debtor_pcode = "1200"
                     debtor_city = "Genève"
@@ -59,7 +60,11 @@ class QRBillService:
                     debtor_city = "Genève"
             else:
                 # 👤 Facturation directe : débiteur = client (avec même logique que le PDF)
-                debtor_name = f"{client.user.first_name or ''} {client.user.last_name or ''}".strip() or client.user.username or "Client"
+                debtor_name = (
+                    f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
+                    or client.user.username
+                    or "Client"
+                )
 
                 # Récupérer l'adresse avec priorités multiples
                 debtor_street = "Adresse non renseignée"
@@ -74,7 +79,9 @@ class QRBillService:
                     if hasattr(client, "domicile_city") and client.domicile_city:
                         debtor_city = client.domicile_city
                 # Priorité 2: Adresse de l'utilisateur
-                elif hasattr(client, "user") and client.user and hasattr(client.user, "address") and client.user.address:
+                elif (
+                    hasattr(client, "user") and client.user and hasattr(client.user, "address") and client.user.address
+                ):
                     full_address = client.user.address
                     # Format: "Allée de la Pépinière, 41, 74160, Archamps, France"
                     parts = [p.strip() for p in full_address.split(",")]
@@ -96,20 +103,20 @@ class QRBillService:
                     "street": company.address or "Route de Chevrens 145",
                     "pcode": "1247",
                     "city": "Anières",
-                    "country": "CH"
+                    "country": "CH",
                 },
                 debtor={
                     "name": debtor_name,
                     "street": debtor_street,
                     "pcode": debtor_pcode,
                     "city": debtor_city,
-                    "country": "CH"
+                    "country": "CH",
                 },
                 amount=str(invoice.total_amount),
                 currency="CHF",
                 reference_number=None,  # Pas de référence QR pour l'instant
                 additional_information=f"Facture {invoice.invoice_number} - Période: {invoice.period_month:02d}.{invoice.period_year}",
-                language="de"
+                language="de",
             )
 
             # Générer le SVG du QR-Bill
@@ -134,9 +141,7 @@ class QRBillService:
         """Génère un QR-Bill pour une facture."""
         try:
             # Récupérer les paramètres de facturation
-            billing_settings = CompanyBillingSettings.query.filter_by(
-                company_id=invoice.company_id
-            ).first()
+            billing_settings = CompanyBillingSettings.query.filter_by(company_id=invoice.company_id).first()
 
             if not billing_settings or not billing_settings.iban:
                 app_logger.warning("Pas d'IBAN configuré pour l'entreprise %s", invoice.company_id)
@@ -150,11 +155,14 @@ class QRBillService:
             if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
                 # 🏥 Facturation tierce : débiteur = institution payeuse
                 from models import Client as ClientModel
+
                 institution = ClientModel.query.get(invoice.bill_to_client_id)
 
                 if institution and institution.is_institution:
                     debtor_name = institution.institution_name or "Institution"
-                    debtor_street = institution.billing_address or institution.contact_address or "Adresse non renseignée"
+                    debtor_street = (
+                        institution.billing_address or institution.contact_address or "Adresse non renseignée"
+                    )
                     # Extraire code postal et ville de l'adresse si possible
                     debtor_pcode = "1200"
                     debtor_city = "Genève"
@@ -165,7 +173,11 @@ class QRBillService:
                     debtor_city = "Genève"
             else:
                 # 👤 Facturation directe : débiteur = client (avec même logique que le PDF)
-                debtor_name = f"{client.user.first_name or ''} {client.user.last_name or ''}".strip() or client.user.username or "Client"
+                debtor_name = (
+                    f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
+                    or client.user.username
+                    or "Client"
+                )
 
                 # Récupérer l'adresse avec priorités multiples
                 debtor_street = "Adresse non renseignée"
@@ -180,7 +192,9 @@ class QRBillService:
                     if hasattr(client, "domicile_city") and client.domicile_city:
                         debtor_city = client.domicile_city
                 # Priorité 2: Adresse de l'utilisateur
-                elif hasattr(client, "user") and client.user and hasattr(client.user, "address") and client.user.address:
+                elif (
+                    hasattr(client, "user") and client.user and hasattr(client.user, "address") and client.user.address
+                ):
                     full_address = client.user.address
                     # Format: "Allée de la Pépinière, 41, 74160, Archamps, France"
                     parts = [p.strip() for p in full_address.split(",")]
@@ -202,20 +216,20 @@ class QRBillService:
                     "street": company.address or "Route de Chevrens 145",
                     "pcode": "1247",
                     "city": "Anières",
-                    "country": "CH"
+                    "country": "CH",
                 },
                 debtor={
                     "name": debtor_name,
                     "street": debtor_street,
                     "pcode": debtor_pcode,
                     "city": debtor_city,
-                    "country": "CH"
+                    "country": "CH",
                 },
                 amount=str(invoice.total_amount),
                 currency="CHF",
                 reference_number=None,  # Pas de référence QR pour l'instant
                 additional_information=f"Facture {invoice.invoice_number} - Période: {invoice.period_month:02d}.{invoice.period_year}",
-                language="de"
+                language="de",
             )
 
             # Générer le PDF du QR-Bill

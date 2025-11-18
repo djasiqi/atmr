@@ -5,6 +5,7 @@ Revises: c8d4e92f1a3b
 Create Date: 2025-10-10 15:00:00.000000
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -22,7 +23,9 @@ def upgrade():
     # Cela permet de marquer une réservation comme déjà facturée
     with op.batch_alter_table("booking", schema=None) as batch_op:
         batch_op.add_column(sa.Column("invoice_line_id", sa.Integer(), nullable=True))
-        batch_op.create_foreign_key("fk_booking_invoice_line", "invoice_lines", ["invoice_line_id"], ["id"], ondelete="SET NULL")
+        batch_op.create_foreign_key(
+            "fk_booking_invoice_line", "invoice_lines", ["invoice_line_id"], ["id"], ondelete="SET NULL"
+        )
         batch_op.create_index("ix_booking_invoice_line_id", ["invoice_line_id"], unique=False)
 
     # ### end Alembic commands ###
@@ -37,4 +40,3 @@ def downgrade():
         batch_op.drop_column("invoice_line_id")
 
     # ### end Alembic commands ###
-

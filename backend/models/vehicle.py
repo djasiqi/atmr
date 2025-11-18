@@ -38,27 +38,14 @@ Extrait depuis models.py (lignes ~607-688).
 class Vehicle(db.Model):
     __tablename__ = "vehicle"
     __table_args__ = (
-        UniqueConstraint(
-            "company_id",
-            "license_plate",
-            name="uq_company_plate"),
-        CheckConstraint(
-            "year IS NULL OR year BETWEEN 1950 AND 2100",
-            name="chk_vehicle_year"),
-        CheckConstraint(
-            "seats IS NULL OR seats >= SEATS_ZERO",
-            name="chk_vehicle_seats"),
+        UniqueConstraint("company_id", "license_plate", name="uq_company_plate"),
+        CheckConstraint("year IS NULL OR year BETWEEN 1950 AND 2100", name="chk_vehicle_year"),
+        CheckConstraint("seats IS NULL OR seats >= SEATS_ZERO", name="chk_vehicle_seats"),
         Index("ix_vehicle_company_active", "company_id", "is_active"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id = Column(
-        Integer,
-        ForeignKey(
-            "company.id",
-            ondelete="CASCADE"),
-        nullable=False,
-        index=True)
+    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Infos véhicule
     model: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -68,36 +55,28 @@ class Vehicle(db.Model):
 
     # Capacités
     seats: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    wheelchair_accessible = Column(
-        Boolean, nullable=False, server_default="false")
+    wheelchair_accessible = Column(Boolean, nullable=False, server_default="false")
 
     # Suivi administratif
     insurance_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     inspection_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     is_active = Column(Boolean, nullable=False, server_default="true")
-    created_at = Column(
-        DateTime(
-            timezone=True),
-        nullable=False,
-        server_default=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     # Relations
-    company = relationship(
-        "Company",
-        back_populates="vehicles",
-        passive_deletes=True)
+    company = relationship("Company", back_populates="vehicles", passive_deletes=True)
 
     # Validations
     @validates("model")
-    def _v_model(self,_key, value):
+    def _v_model(self, _key, value):
         if not value or not value.strip():
             msg = "Le modèle ne peut pas être vide."
             raise ValueError(msg)
         return value.strip()
 
     @validates("license_plate")
-    def _v_license_plate(self,_key, plate):
+    def _v_license_plate(self, _key, plate):
         if not plate or len(plate.strip()) < MIN_PLATE_LENGTH:
             msg = "Numéro de plaque invalide."
             raise ValueError(msg)

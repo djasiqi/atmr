@@ -165,9 +165,23 @@ def create_aggregated_features(features: dict[str, float]) -> dict[str, float]:
     # Moyennes par heure (basées sur training data)
     # Ces valeurs devraient être chargées depuis un fichier de configuration
     hour_delays = {
-        6: 6.16, 7: 7.45, 8: 7.68, 9: 5.97, 10: 5.12, 11: 5.34,
-        12: 5.42, 13: 5.89, 14: 5.67, 15: 5.34, 16: 6.11, 17: 7.49,
-        18: 7.31, 19: 6.38, 20: 5.78, 21: 5.45, 22: 5.23
+        6: 6.16,
+        7: 7.45,
+        8: 7.68,
+        9: 5.97,
+        10: 5.12,
+        11: 5.34,
+        12: 5.42,
+        13: 5.89,
+        14: 5.67,
+        15: 5.34,
+        16: 6.11,
+        17: 7.49,
+        18: 7.31,
+        19: 6.38,
+        20: 5.78,
+        21: 5.45,
+        22: 5.23,
     }
     aggregated["delay_by_hour"] = hour_delays.get(int(features["time_of_day"]), 6.28)
 
@@ -257,11 +271,7 @@ def engineer_features(booking: Any, driver: Any) -> dict[str, float]:
     }
 
 
-
-def normalize_features(
-    features: dict[str, float],
-    scaler_params: dict[str, Any]
-) -> dict[str, float]:
+def normalize_features(features: dict[str, float], scaler_params: dict[str, Any]) -> dict[str, float]:
     """Normalise les features avec StandardScaler (paramètres pré-calculés).
 
     Args:
@@ -287,10 +297,7 @@ def normalize_features(
     return normalized
 
 
-def features_to_dataframe(
-    features: dict[str, float],
-    feature_order: list[str]
-) -> pd.DataFrame:
+def features_to_dataframe(features: dict[str, float], feature_order: list[str]) -> pd.DataFrame:
     """Convertit dict de features en DataFrame avec bon ordre de colonnes.
 
     Args:
@@ -305,4 +312,3 @@ def features_to_dataframe(
     row_data = {col: features.get(col, 0) for col in feature_order}
 
     return pd.DataFrame([row_data])
-

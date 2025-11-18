@@ -164,7 +164,7 @@ class TestAssignmentSchema:
             "driver_id": 789,
             "created_at": datetime(2025, 10, 20, 10, 0, 0),
             "status": "pending",
-            "confirmed": False
+            "confirmed": False,
         }
 
         result = cast("dict[str, Any]", assignment_schema.dump(data))
@@ -199,7 +199,7 @@ class TestAssignmentSchema:
                 "last_name": "Dupont",
                 "is_available": True,
                 "is_active": True,
-            }
+            },
         }
 
         result = cast("dict[str, Any]", assignment_schema.dump(data))
@@ -347,9 +347,7 @@ class TestDispatchResultSchema:
             "quality_score": 90.0,
             "solver_time_seconds": 8.5,
             "total_time_seconds": 12.0,
-            "suggestions": [
-                {"action": "notify", "assignment_id": 1, "priority": "low"}
-            ]
+            "suggestions": [{"action": "notify", "assignment_id": 1, "priority": "low"}],
         }
 
         result = cast("dict[str, Any]", dispatch_result_schema.dump(data))
@@ -368,11 +366,7 @@ class TestSchemaValidation:
     def test_assignment_requires_booking_and_driver(self):
         """Assignment nécessite booking_id et driver_id."""
         # Données invalides (manque booking_id)
-        data = {
-            "driver_id": 789,
-            "status": "pending",
-            "confirmed": False
-        }
+        data = {"driver_id": 789, "status": "pending", "confirmed": False}
 
         result = cast("dict[str, Any]", assignment_schema.dump(data))
         # Dump ne valide pas, juste sérialise ce qui est là
@@ -434,4 +428,3 @@ class TestSchemaOrdering:
 
         # ID doit être en premier
         assert keys[0] == "id"
-

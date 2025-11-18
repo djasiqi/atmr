@@ -33,9 +33,7 @@ from routes.prometheus_metrics import prometheus_metrics_ns
 from routes.shadow_mode_routes import shadow_mode_bp  # Shadow Mode RL
 from routes.utils import utils_ns
 
-authorizations = {
-    "BearerAuth": {"type": "apiKey", "in": "header", "name": "Authorization"}
-}
+authorizations = {"BearerAuth": {"type": "apiKey", "in": "header", "name": "Authorization"}}
 
 # ✅ 3.2: Configuration versioning API
 API_PREFIX = os.getenv("API_PREFIX", "/api").rstrip("/") or "/api"
@@ -130,6 +128,7 @@ api_v1.add_namespace(dispatch_health_ns, path="/company_dispatch_health")
 api_v1.add_namespace(company_mobile_auth_ns, path="/company_mobile/auth")
 api_v1.add_namespace(company_mobile_dispatch_ns, path="/company_mobile/dispatch")
 
+
 # Prometheus metrics export
 # Ajouter une représentation personnalisée pour text/plain qui accepte les objets Response
 @api_v1.representation("text/plain")
@@ -147,6 +146,7 @@ def output_text_plain(data, code, headers=None):
     resp = make_response(str(data), code)
     resp.headers.update(headers or {})
     return resp
+
 
 api_v1.add_namespace(prometheus_metrics_ns, path="/prometheus")
 
@@ -179,7 +179,7 @@ if _keep_legacy_api:
         validate=True,
         default_mediatype="application/json",
     )
-    
+
     # Dupliquer tous les namespaces vers API legacy pour compatibilité
     api_legacy.add_namespace(auth_ns, path="/auth")
     api_legacy.add_namespace(clients_ns, path="/clients")
@@ -216,29 +216,30 @@ def init_namespaces(app):
     # ✅ Enregistrer les handlers Socket.IO pour alertes proactives
     from ext import socketio
     from sockets.proactive_alerts import register_proactive_alerts_sockets
+
     register_proactive_alerts_sockets(socketio)
 
     # ✅ 3.2: Initialiser API v1 (routes existantes)
     api_v1.init_app(app)
     app.logger.info("[api] ✅ API v1 initialisée: %s/v1", API_PREFIX)
-    
+
     # ✅ 3.2: Initialiser API v2 seulement quand des routes seront ajoutées
     # Pour l'instant, api_v2 est vide donc on ne l'initialise pas pour éviter conflit /specs
     # Quand des routes seront ajoutées, décommenter:
     # api_v2.init_app(app)
     # app.logger.info("[api] ✅ API v2 initialisée: %s/v2", API_PREFIX)
     app.logger.info("[api] ℹ️  API v2 prête mais non initialisée (vide pour l'instant)")
-    
+
     # ✅ 3.2: Initialiser API legacy si activée (compatibilité)
     if api_legacy:
         api_legacy.init_app(app)
         app.logger.info("[api] ⚠️  API legacy initialisée: %s (dépréciée - utiliser /v1 ou /v2)", API_PREFIX)
     else:
         app.logger.info("[api] ℹ️  API legacy désactivée (API_LEGACY_ENABLED=false)")
-    
+
     app.logger.info(
         "[api] Documentation: v1=%s, v2=%s, legacy=%s",
         API_DOCS if API_DOCS else "disabled",
         API_DOCS if API_DOCS else "disabled",
-        API_DOCS if (API_DOCS and api_legacy) else "disabled"
+        API_DOCS if (API_DOCS and api_legacy) else "disabled",
     )

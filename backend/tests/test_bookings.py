@@ -1,6 +1,7 @@
 """
 Tests pour les routes de réservations (bookings).
 """
+
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -12,6 +13,7 @@ from models import Booking, BookingStatus, Client, User, UserRole
 def sample_client(db, sample_company):
     """Crée un client de test."""
     from ext import bcrypt
+
     user = User(
         username="clientuser",
         email="client@example.com",
@@ -19,7 +21,7 @@ def sample_client(db, sample_company):
         first_name="Jean",
         last_name="Dupont",
         phone="0791234567",
-        address="Rue Client 1, 1000 Lausanne"
+        address="Rue Client 1, 1000 Lausanne",
     )
     user.password = bcrypt.generate_password_hash("password123").decode("utf-8")
     db.session.add(user)
@@ -30,7 +32,7 @@ def sample_client(db, sample_company):
         company_id=sample_company.id,
         billing_address="Rue Client 1, 1000 Lausanne",
         contact_email="client@example.com",
-        contact_phone="0791234567"
+        contact_phone="0791234567",
     )
     db.session.add(client)
     db.session.commit()
@@ -67,7 +69,7 @@ def test_list_bookings_pagination(client, auth_headers, db, sample_user, sample_
             status=BookingStatus.PENDING,
             amount=50.0,
             distance_meters=0.5000,
-            duration_seconds=0.900
+            duration_seconds=0.900,
         )
         db.session.add(booking)
     db.session.commit()
@@ -96,7 +98,7 @@ def test_get_booking_details(client, auth_headers, db, sample_user, sample_clien
         status=BookingStatus.PENDING,
         amount=50.0,
         distance_meters=0.5000,
-        duration_seconds=0.900
+        duration_seconds=0.900,
     )
     db.session.add(booking)
     db.session.commit()
@@ -106,4 +108,3 @@ def test_get_booking_details(client, auth_headers, db, sample_user, sample_clien
     data = response.get_json()
     assert data["customer_name"] == "Jean Dupont"
     assert data["pickup_location"] == "Lausanne Gare"
-

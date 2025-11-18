@@ -11,15 +11,15 @@ from marshmallow.validate import Length
 
 def validate_request(schema: Schema, data: Dict[str, Any], strict: bool = True) -> Dict[str, Any]:
     """Valide les données de requête avec un schema Marshmallow.
-    
+
     Args:
         schema: Schema Marshmallow à utiliser pour la validation
         data: Données à valider (dict)
         strict: Si True, rejette les champs inconnus (défaut: True)
-        
+
     Returns:
         Dict validé et nettoyé
-        
+
     Raises:
         ValidationError: Si la validation échoue (avec détails par champ)
     """
@@ -36,7 +36,7 @@ def validate_request(schema: Schema, data: Dict[str, Any], strict: bool = True) 
 
 def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
     """Formate les erreurs de validation en structure standardisée.
-    
+
     Structure retournée:
     {
         "message": "Erreur de validation",
@@ -45,18 +45,15 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
             ...
         }
     }
-    
+
     Args:
         errors: Messages d'erreur bruts de Marshmallow
-        
+
     Returns:
         Dict formaté avec structure standardisée
     """
-    formatted = {
-        "message": "Erreur de validation des données",
-        "errors": {}
-    }
-    
+    formatted = {"message": "Erreur de validation des données", "errors": {}}
+
     for field, messages in errors.items():
         # ⚡ Ignorer les clés spéciales de Marshmallow (_schema, _nested, etc.)
         # qui ne sont pas des champs de formulaire
@@ -65,7 +62,7 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
             if field == "_schema" and isinstance(messages, list):
                 formatted["message"] = messages[0] if messages else "Erreur de validation des données"
             continue
-        
+
         # Si c'est une liste de messages, prendre directement
         if isinstance(messages, list):
             formatted["errors"][field] = messages
@@ -90,22 +87,22 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
         # Sinon, convertir en liste
         else:
             formatted["errors"][field] = [str(messages)]
-    
+
     return formatted
 
 
 def handle_validation_error(error: ValidationError):
     """Gère une ValidationError et retourne une réponse Flask 400.
-    
+
     Usage:
         try:
             data = validate_request(schema, request.get_json())
         except ValidationError as e:
             return handle_validation_error(e)
-    
+
     Args:
         error: Exception ValidationError de Marshmallow
-        
+
     Returns:
         Tuple (response_json, status_code) pour Flask
     """
@@ -123,4 +120,3 @@ PHONE_VALIDATOR = Length(min=10, max=20, error="Téléphone doit faire entre 10 
 # Formats de validation courants
 ISO8601_DATE_REGEX = r"^\d{4}-\d{2}-\d{2}$"
 ISO8601_DATETIME_REGEX = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})?$"
-

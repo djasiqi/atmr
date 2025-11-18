@@ -7,6 +7,7 @@ Create Date: 2025-10-18 23:30:00.000000
 Ajoute des noms aux contraintes FK circulaires entre booking et invoice_lines
 pour permettre le DROP en tests.
 """
+
 from contextlib import suppress
 
 import sqlalchemy as sa
@@ -71,4 +72,3 @@ def upgrade():
 def downgrade():
     """Rollback: remettre les noms automatiques (optionnel)"""
     # En pratique, garder les noms est mieux (pas de downgrade nécessaire)
-

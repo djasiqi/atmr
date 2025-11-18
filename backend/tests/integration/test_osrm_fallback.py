@@ -32,7 +32,7 @@ class TestOSRMFallback:
             mock_client.return_value.get_route.return_value = {
                 "distance": 1000,
                 "duration": 300,
-                "geometry": "encoded_polyline"
+                "geometry": "encoded_polyline",
             }
 
             # Test du service principal (mock)
@@ -82,7 +82,7 @@ class TestOSRMFallback:
                 "distance": 1200,  # Légèrement plus long
                 "duration": 360,  # Légèrement plus long
                 "method": "heuristic",
-                "confidence": 0.8
+                "confidence": 0.8,
             }
 
             # Test du routage heuristique (mock)
@@ -110,7 +110,7 @@ class TestOSRMFallback:
                 "distance": 1000,
                 "duration": 300,
                 "geometry": "cached_polyline",
-                "cached_at": "2025-0.1-01T00:00:00Z"
+                "cached_at": "2025-0.1-01T00:00:00Z",
             }
         }
 
@@ -141,10 +141,10 @@ class TestOSRMFallback:
             mock_fallback.return_value.fallback_active.return_value = True
             mock_fallback.return_value.get_offline_route.return_value = {
                 "distance": 1500,  # Plus long que l'optimal
-                "duration": 450,   # Plus long que l'optimal
+                "duration": 450,  # Plus long que l'optimal
                 "method": "offline",
                 "confidence": 0.6,
-                "warning": "Offline routing - accuracy reduced"
+                "warning": "Offline routing - accuracy reduced",
             }
 
             # Test du routage hors ligne (mock)
@@ -203,7 +203,7 @@ class TestOSRMFallback:
             "offline_routing_time": 0.2,
             "service_recovery_time": 2.0,
             "fallback_usage_count": 15,
-            "primary_service_uptime": 0.95
+            "primary_service_uptime": 0.95,
         }
 
         with patch("services.routing.osrm_fallback.OSRMFallbackManager") as mock_fallback:
@@ -234,7 +234,7 @@ class TestOSRMFallback:
                 "error": "Routing failed",
                 "fallback_method": "heuristic",
                 "recovery_attempted": True,
-                "fallback_successful": True
+                "fallback_successful": True,
             }
 
             # Test de la gestion d'erreurs (mock)
@@ -263,13 +263,9 @@ class TestOSRMFallbackIntegration:
         with patch("services.unified_dispatch.dispatch_manager.DispatchManager") as mock_dispatch:
             mock_dispatch.return_value.use_osrm_fallback.return_value = True
             mock_dispatch.return_value.get_route_with_fallback.return_value = {
-                "route": {
-                    "distance": 1000,
-                    "duration": 300,
-                    "method": "fallback"
-                },
+                "route": {"distance": 1000, "duration": 300, "method": "fallback"},
                 "fallback_used": True,
-                "confidence": 0.8
+                "confidence": 0.8,
             }
 
             # Test de l'intégration (mock)
@@ -296,7 +292,7 @@ class TestOSRMFallbackIntegration:
             mock_env.return_value.get_fallback_state.return_value = {
                 "state": [0.1, 0.2, 0.3, 0.4, 0.5],
                 "fallback_active": True,
-                "routing_method": "heuristic"
+                "routing_method": "heuristic",
             }
 
             # Test de l'intégration RL (mock)
@@ -324,7 +320,7 @@ class TestOSRMFallbackIntegration:
                 "fallback_status": "active",
                 "fallback_method": "heuristic",
                 "last_recovery_attempt": "2025-0.1-01T00:00:00Z",
-                "uptime_percentage": 95.0
+                "uptime_percentage": 95.0,
             }
 
             # Test du monitoring (mock)

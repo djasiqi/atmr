@@ -24,16 +24,16 @@ PAGE_ONE = 1
 app_logger = logging.getLogger("app")
 
 # Création du Namespace pour les réservations
-bookings_ns = Namespace(
-    "bookings",
-    description="Opérations relatives aux réservations")
+bookings_ns = Namespace("bookings", description="Opérations relatives aux réservations")
 
 # Modèle Swagger (ajout is_round_trip)
 booking_create_model = bookings_ns.model(
     "BookingCreate",
     {
         "customer_name": fields.String(required=True, min_length=1, max_length=200, description="Nom du client"),
-        "pickup_location": fields.String(required=True, min_length=1, max_length=500, description="Lieu de prise en charge"),
+        "pickup_location": fields.String(
+            required=True, min_length=1, max_length=500, description="Lieu de prise en charge"
+        ),
         "dropoff_location": fields.String(required=True, min_length=1, max_length=500, description="Lieu de dépose"),
         "scheduled_time": fields.String(required=True, description="ISO 8601 (ex: 2024-01-15T14:30:00)"),
         "amount": fields.Float(required=True, min=0, description="Montant de la réservation"),
@@ -81,16 +81,12 @@ def _queue_trigger(company_id: int | None, action: str) -> None:
     except Exception as e:
         app_logger.warning("⚠️ _queue_trigger failed: %s", e)
 
+
 # -----------------------------------------------------
 # Helper: construit les liens de pagination RFC 5988
 
 
-def _build_pagination_links(
-        page: int,
-        per_page: int,
-        total: int,
-        endpoint: str,
-        **kwargs):
+def _build_pagination_links(page: int, per_page: int, total: int, endpoint: str, **kwargs):
     """Construit les liens de pagination conformes RFC 5988.
 
     Returns:
@@ -101,16 +97,12 @@ def _build_pagination_links(
     links = []
 
     if page > PAGE_ONE:
-        links.append(
-            f'<{url_for(endpoint, page=page-1, per_page=per_page, **kwargs, _external=True)}>; rel="prev"')
+        links.append(f'<{url_for(endpoint, page=page - 1, per_page=per_page, **kwargs, _external=True)}>; rel="prev"')
     if page < total_pages:
-        links.append(
-            f'<{url_for(endpoint, page=page+1, per_page=per_page, **kwargs, _external=True)}>; rel="next"')
+        links.append(f'<{url_for(endpoint, page=page + 1, per_page=per_page, **kwargs, _external=True)}>; rel="next"')
 
-    links.append(
-        f'<{url_for(endpoint, page=1, per_page=per_page, **kwargs, _external=True)}>; rel="first"')
-    links.append(
-        f'<{url_for(endpoint, page=total_pages, per_page=per_page, **kwargs, _external=True)}>; rel="last"')
+    links.append(f'<{url_for(endpoint, page=1, per_page=per_page, **kwargs, _external=True)}>; rel="first"')
+    links.append(f'<{url_for(endpoint, page=total_pages, per_page=per_page, **kwargs, _external=True)}>; rel="last"')
 
     return {
         "Link": ", ".join(links),
@@ -124,11 +116,11 @@ def _build_pagination_links(
 # =====================================================
 # 🔐 SECURITY: Ownership Check Helper (CWE-284)
 # =====================================================
-def _check_booking_ownership(booking: Booking,  # noqa: PLR0911
-                             user: User,
-                             action: str = "access") -> tuple[bool,
-                                                              tuple[dict[str, str],
-                                                                    int] | None]:
+def _check_booking_ownership(
+    booking: Booking,  # noqa: PLR0911
+    user: User,
+    action: str = "access",
+) -> tuple[bool, tuple[dict[str, str], int] | None]:
     """Vérifie si l'utilisateur a le droit d'accéder/modifier ce booking.
 
     Args:
@@ -153,6 +145,7 @@ def _check_booking_ownership(booking: Booking,  # noqa: PLR0911
     # Company a accès à tous ses bookings
     if user_role_value == UserRole.company.value:
         from models import Company
+
         company = Company.query.filter_by(user_id=user.id).first()
         if company and company.id == booking.company_id:
             return True, None
@@ -161,9 +154,7 @@ def _check_booking_ownership(booking: Booking,  # noqa: PLR0911
     if user_role_value == UserRole.client.value:
         client = Client.query.filter_by(user_id=user.id).first()
         if not client:
-            app_logger.warning(
-                "⚠️ User %s has client role but no Client record",
-                user.public_id)
+            app_logger.warning("⚠️ User %s has client role but no Client record", user.public_id)
             return False, ({"error": f"Accès non autorisé ({action})"}, 403)
 
         if client.id == booking.client_id:
@@ -172,9 +163,13 @@ def _check_booking_ownership(booking: Booking,  # noqa: PLR0911
         # IDOR attempt détecté
         app_logger.warning(
             "🚨 IDOR blocked: user=%s (client_id=%s) tried to %s booking_id=%s (owner_client_id=%s)",
-            user.public_id, client.id, action, booking.id, booking.client_id)
-        return False, ({
-            "error": "Accès non autorisé à cette réservation"}, 403)
+            user.public_id,
+            client.id,
+            action,
+            booking.id,
+            booking.client_id,
+        )
+        return False, ({"error": "Accès non autorisé à cette réservation"}, 403)
 
     # Driver assigné (read-only access)
     if user_role_value == UserRole.driver.value and action == "read":
@@ -195,11 +190,11 @@ def _validate_user_and_client(public_id: str) -> tuple[User | None, Client | Non
     user = User.query.filter_by(public_id=jwt_public_id).one_or_none()
     if not user:
         return None, None, ({"message": "Utilisateur non authentifié"}, 401)
-    
+
     client = Client.query.join(User).filter(User.public_id == public_id).one_or_none()
     if not client or client.user_id != user.id:
         return None, None, ({"message": "Client non trouvé ou non associé à cet utilisateur"}, 403)
-    
+
     return user, client, None
 
 
@@ -213,14 +208,15 @@ class CreateBooking(Resource):
         """Créer une réservation pour un client (statut PENDING)."""
         try:
             data = request.get_json() or {}
-            
+
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
             from marshmallow import ValidationError
+
             try:
                 validated_data = validate_request(BookingCreateSchema(), data)
             except ValidationError as e:
                 return handle_validation_error(e)
-            
+
             # Validation utilisateur et client
             user, client, auth_error = _validate_user_and_client(public_id)
             if auth_error:
@@ -230,12 +226,13 @@ class CreateBooking(Resource):
 
             # Horaire et distance
             from shared.time_utils import parse_local_naive
+
             try:
                 scheduled_time = parse_local_naive(validated_data["scheduled_time"])
             except Exception as date_error:
                 app_logger.error("Erreur de conversion scheduled_time: %s", date_error)
                 return {"error": "Invalid scheduled_time format"}, 400
-            
+
             try:
                 duration_seconds, distance_meters = get_distance_duration(
                     validated_data["pickup_location"], validated_data["dropoff_location"]
@@ -267,8 +264,7 @@ class CreateBooking(Resource):
             # Géocodage (best effort, pas bloquant)
             try:
                 # Géocoder l'adresse de départ
-                pickup_coords = geocode_address(
-                    validated_data["pickup_location"], country="CH")
+                pickup_coords = geocode_address(validated_data["pickup_location"], country="CH")
                 if pickup_coords:
                     new_booking.pickup_lat = pickup_coords.get("lat")
                     new_booking.pickup_lon = pickup_coords.get("lon")
@@ -276,15 +272,15 @@ class CreateBooking(Resource):
                         "✅ Adresse de départ géocodée: %s -> (%s, %s)",
                         validated_data["pickup_location"],
                         pickup_coords.get("lat"),
-                        pickup_coords.get("lon"))
+                        pickup_coords.get("lon"),
+                    )
                 else:
                     app_logger.warning(
-                        "⚠️ Impossible de géocoder l'adresse de départ: %s",
-                        validated_data["pickup_location"])
+                        "⚠️ Impossible de géocoder l'adresse de départ: %s", validated_data["pickup_location"]
+                    )
 
                 # Géocoder l'adresse d'arrivée
-                dropoff_coords = geocode_address(
-                    validated_data["dropoff_location"], country="CH")
+                dropoff_coords = geocode_address(validated_data["dropoff_location"], country="CH")
                 if dropoff_coords:
                     new_booking.dropoff_lat = dropoff_coords.get("lat")
                     new_booking.dropoff_lon = dropoff_coords.get("lon")
@@ -292,11 +288,10 @@ class CreateBooking(Resource):
                         "✅ Adresse d'arrivée géocodée: %s -> (%s, %s)",
                         data["dropoff_location"],
                         dropoff_coords.get("lat"),
-                        dropoff_coords.get("lon"))
+                        dropoff_coords.get("lon"),
+                    )
                 else:
-                    app_logger.warning(
-                        "⚠️ Impossible de géocoder l'adresse d'arrivée: %s",
-                        data["dropoff_location"])
+                    app_logger.warning("⚠️ Impossible de géocoder l'adresse d'arrivée: %s", data["dropoff_location"])
             except Exception as e:
                 app_logger.warning("⚠️ Géocodage best-effort échoué: %s", e)
 
@@ -331,18 +326,13 @@ class CreateBooking(Resource):
             db.session.commit()
 
             # ⚠️ Pas de dispatch ici (PENDING seulement). L'entreprise acceptera -> ACCEPTED.
-            return {
-                "message": "Réservation créée avec succès",
-                "booking_id": getattr(new_booking, "id", None)
-            }, 201
+            return {"message": "Réservation créée avec succès", "booking_id": getattr(new_booking, "id", None)}, 201
 
         except Exception as e:
             db.session.rollback()
-            app_logger.error(
-                "❌ ERREUR create_booking: %s - %s",
-                type(e).__name__,
-                e)
+            app_logger.error("❌ ERREUR create_booking: %s - %s", type(e).__name__, e)
             return {"error": "Une erreur interne est survenue."}, 500
+
 
 # =====================================================
 # Récupération, mise à jour et annulation d'une réservation
@@ -364,8 +354,7 @@ class BookingResource(Resource):
 
             # ✅ FIX N+1: Charger driver, client, user relations en une query
             booking = (
-                Booking.query
-                .filter_by(id=booking_id)
+                Booking.query.filter_by(id=booking_id)
                 .options(
                     selectinload(Booking.driver).selectinload(Driver.user),
                     selectinload(Booking.client).selectinload(Client.user),
@@ -377,19 +366,14 @@ class BookingResource(Resource):
                 return {"error": "Réservation introuvable"}, 404
 
             # 🔐 SECURITY: Vérification ownership explicite (CWE-284)
-            has_access, error = _check_booking_ownership(
-                booking, user, action="read")
+            has_access, error = _check_booking_ownership(booking, user, action="read")
             if not has_access:
                 return error
 
             return booking.serialize, 200
 
         except Exception as e:
-
-            app_logger.error(
-                "❌ ERREUR get_booking: %s - %s",
-                type(e).__name__,
-                e)
+            app_logger.error("❌ ERREUR get_booking: %s - %s", type(e).__name__, e)
             return {"error": "Une erreur interne est survenue."}, 500
 
     @jwt_required()
@@ -408,28 +392,26 @@ class BookingResource(Resource):
                 return {"error": "Réservation introuvable"}, 404
 
             # 🔐 SECURITY: Vérification ownership explicite (CWE-284)
-            has_access, error = _check_booking_ownership(
-                booking, user, action="modify")
+            has_access, error = _check_booking_ownership(booking, user, action="modify")
             if not has_access:
                 return error
 
             if booking.status != BookingStatus.PENDING:
-                return {
-                    "error": "Seules les réservations en attente peuvent être modifiées"}, 400
+                return {"error": "Seules les réservations en attente peuvent être modifiées"}, 400
 
             data = request.get_json() or {}
-            
+
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
             from marshmallow import ValidationError
 
             from schemas.booking_schemas import BookingUpdateSchema
             from schemas.validation_utils import handle_validation_error, validate_request
-            
+
             try:
                 validated_data = validate_request(BookingUpdateSchema(), data, strict=False)
             except ValidationError as e:
                 return handle_validation_error(e)
-            
+
             # Utilise données validées
             if "pickup_location" in validated_data:
                 booking.pickup_location = validated_data["pickup_location"]
@@ -456,10 +438,7 @@ class BookingResource(Resource):
 
         except Exception as e:
             db.session.rollback()
-            app_logger.error(
-                "❌ ERREUR update_booking: %s - %s",
-                type(e).__name__,
-                e)
+            app_logger.error("❌ ERREUR update_booking: %s - %s", type(e).__name__, e)
             return {"error": "Une erreur interne est survenue."}, 500
 
     @jwt_required()
@@ -477,16 +456,12 @@ class BookingResource(Resource):
                 return {"error": "Réservation introuvable"}, 404
 
             # 🔐 SECURITY: Vérification ownership explicite (CWE-284)
-            has_access, error = _check_booking_ownership(
-                booking, user, action="delete")
+            has_access, error = _check_booking_ownership(booking, user, action="delete")
             if not has_access:
                 return error
 
-            if booking.status not in {
-                    BookingStatus.PENDING,
-                    BookingStatus.ASSIGNED}:
-                return {
-                    "error": "Seules les réservations en attente ou confirmées peuvent être annulées"}, 400
+            if booking.status not in {BookingStatus.PENDING, BookingStatus.ASSIGNED}:
+                return {"error": "Seules les réservations en attente ou confirmées peuvent être annulées"}, 400
 
             company_id = booking.company_id
             booking.status = BookingStatus.CANCELED
@@ -504,23 +479,23 @@ class BookingResource(Resource):
 
         except Exception as e:
             db.session.rollback()
-            app_logger.error(
-                "❌ ERREUR cancel_booking: %s - %s",
-                type(e).__name__,
-                e)
+            app_logger.error("❌ ERREUR cancel_booking: %s - %s", type(e).__name__, e)
             return {"error": "Une erreur interne est survenue."}, 500
+
 
 # =====================================================
 # Liste selon le rôle (admin / client)
 # =====================================================
 
 
-def _get_admin_bookings(page: int, per_page: int, status_filter: str | None) -> tuple[dict[str, Any], int, dict[str, str]]:
+def _get_admin_bookings(
+    page: int, per_page: int, status_filter: str | None
+) -> tuple[dict[str, Any], int, dict[str, str]]:
     """Helper pour récupérer les réservations pour un admin."""
     query = Booking.query.options(
         selectinload(Booking.driver).selectinload(Driver.user),
         selectinload(Booking.client).selectinload(Client.user),
-        selectinload(Booking.company)
+        selectinload(Booking.company),
     )
     if status_filter:
         query = query.filter_by(status=status_filter)
@@ -532,21 +507,27 @@ def _get_admin_bookings(page: int, per_page: int, status_filter: str | None) -> 
     return {"bookings": result, "total": total}, 200, headers
 
 
-def _get_client_bookings(user: User, page: int, per_page: int, status_filter: str | None) -> tuple[dict[str, Any], int, dict[str, str]] | None:
+def _get_client_bookings(
+    user: User, page: int, per_page: int, status_filter: str | None
+) -> tuple[dict[str, Any], int, dict[str, str]] | None:
     """Helper pour récupérer les réservations pour un client. Retourne None si erreur."""
     client = Client.query.filter_by(user_id=user.id).one_or_none()
     if not client:
         return None
-    
-    query = Booking.query.options(
-        joinedload(Booking.client).joinedload(Client.user),
-        joinedload(Booking.driver).joinedload(Driver.user),
-        joinedload(Booking.company)
-    ).filter_by(client_id=client.id).order_by(Booking.scheduled_time.desc())
-    
+
+    query = (
+        Booking.query.options(
+            joinedload(Booking.client).joinedload(Client.user),
+            joinedload(Booking.driver).joinedload(Driver.user),
+            joinedload(Booking.company),
+        )
+        .filter_by(client_id=client.id)
+        .order_by(Booking.scheduled_time.desc())
+    )
+
     if status_filter:
         query = query.filter_by(status=status_filter)
-    
+
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     total = pagination.total or 0
     bookings = pagination.items
@@ -560,8 +541,20 @@ class ListBookings(Resource):
     @jwt_required()
     @limiter.limit("300 per hour")  # ✅ 2.8: Rate limiting liste réservations
     @bookings_ns.param("page", "Numéro de page (défaut: 1, min: 1)", type="integer", default=1, minimum=1)
-    @bookings_ns.param("per_page", "Résultats par page (défaut: 100, min: 1, max: 500)", type="integer", default=100, minimum=1, maximum=500)
-    @bookings_ns.param("status", "Filtre par statut (pending|confirmed|in_progress|completed|cancelled)", type="string", enum=["pending", "confirmed", "in_progress", "completed", "cancelled"])
+    @bookings_ns.param(
+        "per_page",
+        "Résultats par page (défaut: 100, min: 1, max: 500)",
+        type="integer",
+        default=100,
+        minimum=1,
+        maximum=500,
+    )
+    @bookings_ns.param(
+        "status",
+        "Filtre par statut (pending|confirmed|in_progress|completed|cancelled)",
+        type="string",
+        enum=["pending", "confirmed", "in_progress", "completed", "cancelled"],
+    )
     @bookings_ns.param("from_date", "Date de début (YYYY-MM-DD)", type="string", pattern="^\\d{4}-\\d{2}-\\d{2}$")
     @bookings_ns.param("to_date", "Date de fin (YYYY-MM-DD)", type="string", pattern="^\\d{4}-\\d{2}-\\d{2}$")
     def get(self):
@@ -585,7 +578,7 @@ class ListBookings(Resource):
 
             from schemas.booking_schemas import BookingListSchema
             from schemas.validation_utils import handle_validation_error, validate_request
-            
+
             args_dict = dict(request.args)
             try:
                 validated_args = validate_request(BookingListSchema(), args_dict, strict=False)
@@ -598,17 +591,18 @@ class ListBookings(Resource):
             # Traitement selon le rôle
             if user.role == UserRole.admin:
                 return _get_admin_bookings(page, per_page, status_filter)
-            
+
             if user.role == UserRole.client:
                 client_result = _get_client_bookings(user, page, per_page, status_filter)
-                return client_result if client_result is not None else ({"error": "Unauthorized: No client profile found"}, 403)
-            
+                return (
+                    client_result
+                    if client_result is not None
+                    else ({"error": "Unauthorized: No client profile found"}, 403)
+                )
+
             return {"error": "Unauthorized: You don't have permission"}, 403
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                "❌ ERREUR list_bookings: %s - %s",
-                type(e).__name__,
-                e)
+            app_logger.error("❌ ERREUR list_bookings: %s - %s", type(e).__name__, e)
             return {"error": "Une erreur interne est survenue."}, 500

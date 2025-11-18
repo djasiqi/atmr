@@ -3,6 +3,7 @@
 Tests tous les endpoints validés avec des payloads valides/invalides pour vérifier
 que la validation Marshmallow fonctionne correctement.
 """
+
 import uuid
 from datetime import UTC, date, datetime, timedelta
 
@@ -19,19 +20,14 @@ class TestSchemaValidationE2E:
 
     def test_login_valid_schema(self, client, sample_user):
         """Test POST /api/v1/auth/login avec payload valide."""
-        response = client.post("/api/v1/auth/login", json={
-            "email": sample_user.email,
-            "password": "password123"
-        })
+        response = client.post("/api/v1/auth/login", json={"email": sample_user.email, "password": "password123"})
         assert response.status_code in [200, 400, 404, 429, 500]
         data = response.get_json() or {}
         assert ("token" in data) or ("message" in data) or ("errors" in data) or ("error" in data)
 
     def test_login_invalid_schema(self, client):
         """Test POST /api/v1/auth/login avec payload invalide (email manquant)."""
-        response = client.post("/api/v1/auth/login", json={
-            "password": "password123"
-        })
+        response = client.post("/api/v1/auth/login", json={"password": "password123"})
         assert response.status_code in [400, 404, 500]
         data = response.get_json() or {}
         assert ("message" in data) or ("errors" in data) or ("error" in data) or (response.status_code == 404)
@@ -39,28 +35,40 @@ class TestSchemaValidationE2E:
     def test_register_valid_schema(self, client, db):
         """Test POST /api/v1/auth/register avec payload valide."""
         unique_email = f"test-{uuid.uuid4().hex[:8]}@example.com"
-        response = client.post("/api/v1/auth/register", json={
-            "username": f"testuser_{uuid.uuid4().hex[:6]}",
-            "email": unique_email,
-            "password": "SecurePass123!",
-            "first_name": "Test",
-            "last_name": "User",
-            "phone": "+41211234567",
-            "address": "Rue de Test 1, 1000 Lausanne"
-        })
+        response = client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": f"testuser_{uuid.uuid4().hex[:6]}",
+                "email": unique_email,
+                "password": "SecurePass123!",
+                "first_name": "Test",
+                "last_name": "User",
+                "phone": "+41211234567",
+                "address": "Rue de Test 1, 1000 Lausanne",
+            },
+        )
         assert response.status_code in [200, 201, 400, 404, 500]
         data = response.get_json() or {}
-        assert ("token" in data) or ("user" in data) or ("message" in data) or ("error" in data) or (response.status_code in [404, 500])
+        assert (
+            ("token" in data)
+            or ("user" in data)
+            or ("message" in data)
+            or ("error" in data)
+            or (response.status_code in [404, 500])
+        )
 
     def test_register_invalid_schema(self, client):
         """Test POST /api/v1/auth/register avec payload invalide (email invalide)."""
-        response = client.post("/api/v1/auth/register", json={
-            "username": "testuser",
-            "email": "invalid-email",
-            "password": "password123",
-            "first_name": "Test",
-            "last_name": "User"
-        })
+        response = client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": "testuser",
+                "email": "invalid-email",
+                "password": "password123",
+                "first_name": "Test",
+                "last_name": "User",
+            },
+        )
         assert response.status_code in [400, 404, 500]
         data = response.get_json() or {}
         assert ("message" in data) or ("errors" in data) or ("error" in data) or (response.status_code == 404)
@@ -78,6 +86,7 @@ class TestSchemaValidationE2E:
         client_user.role = UserRole.client
         client_user.public_id = str(uuid.uuid4())
         from ext import bcrypt
+
         password_hash = bcrypt.generate_password_hash("password123")
         client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
         db.session.add(client_user)
@@ -85,13 +94,16 @@ class TestSchemaValidationE2E:
 
         test_client = Client()
         test_client.user_id = client_user.id
-        test_client.company_id = sample_user.company.id if hasattr(sample_user, "company") and sample_user.company else None
+        test_client.company_id = (
+            sample_user.company.id if hasattr(sample_user, "company") and sample_user.company else None
+        )
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
         db.session.commit()
 
         # Générer un JWT client directement
         from flask_jwt_extended import create_access_token
+
         client_claims = {
             "role": UserRole.client.value,
             "company_id": None,
@@ -111,9 +123,9 @@ class TestSchemaValidationE2E:
                 "pickup_location": "Rue de la Gare 1, 1000 Lausanne",
                 "dropoff_location": "Avenue de la Plage 10, 1000 Lausanne",
                 "scheduled_time": future_time,
-                "amount": 50.0
+                "amount": 50.0,
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code in [201, 400, 404, 500]  # 400 si géocodage échoue
 
@@ -127,6 +139,7 @@ class TestSchemaValidationE2E:
         client_user.role = UserRole.client
         client_user.public_id = str(uuid.uuid4())
         from ext import bcrypt
+
         password_hash = bcrypt.generate_password_hash("password123")
         client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
         db.session.add(client_user)
@@ -134,12 +147,15 @@ class TestSchemaValidationE2E:
 
         test_client = Client()
         test_client.user_id = client_user.id
-        test_client.company_id = sample_user.company.id if hasattr(sample_user, "company") and sample_user.company else None
+        test_client.company_id = (
+            sample_user.company.id if hasattr(sample_user, "company") and sample_user.company else None
+        )
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
         db.session.commit()
 
         from flask_jwt_extended import create_access_token
+
         client_claims = {
             "role": UserRole.client.value,
             "company_id": None,
@@ -156,7 +172,7 @@ class TestSchemaValidationE2E:
                 "customer_name": "Test Customer"
                 # pickup_location, dropoff_location, scheduled_time manquants
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code in [400, 500]
         data = response.get_json()
@@ -213,6 +229,7 @@ class TestSchemaValidationE2E:
 
         # Générer un JWT client directement
         from flask_jwt_extended import create_access_token
+
         client_claims = {
             "role": UserRole.client.value,
             "company_id": None,
@@ -235,9 +252,9 @@ class TestSchemaValidationE2E:
                 "status": "confirmed",
                 "medical_facility": "Hôpital Cantonal",
                 "doctor_name": "Dr. Test",
-                "notes_medical": "Notes médicales de test"
+                "notes_medical": "Notes médicales de test",
             },
-            headers=client_headers
+            headers=client_headers,
         )
         # Peut être 200 (succès) ou 400 si géocodage échoue
         assert response.status_code in [200, 400]
@@ -284,6 +301,7 @@ class TestSchemaValidationE2E:
         db.session.commit()
 
         from flask_jwt_extended import create_access_token
+
         client_claims = {
             "role": UserRole.client.value,
             "company_id": None,
@@ -296,11 +314,7 @@ class TestSchemaValidationE2E:
 
         # Test avec format date invalide (scheduled_time)
         response = client.put(
-            f"/api/v1/bookings/{booking.id}",
-            json={
-                "scheduled_time": "invalid-date-format"
-            },
-            headers=client_headers
+            f"/api/v1/bookings/{booking.id}", json={"scheduled_time": "invalid-date-format"}, headers=client_headers
         )
         assert response.status_code in [400, 500]
         data = response.get_json()
@@ -311,11 +325,7 @@ class TestSchemaValidationE2E:
 
         # Test avec statut invalide
         response = client.put(
-            f"/api/v1/bookings/{booking.id}",
-            json={
-                "status": "invalid_status"
-            },
-            headers=client_headers
+            f"/api/v1/bookings/{booking.id}", json={"status": "invalid_status"}, headers=client_headers
         )
         assert response.status_code in [400, 500]
         data = response.get_json()
@@ -325,13 +335,7 @@ class TestSchemaValidationE2E:
         assert "status" in error_str or "errors" in error_str
 
         # Test avec amount négatif
-        response = client.put(
-            f"/api/v1/bookings/{booking.id}",
-            json={
-                "amount": -10.0
-            },
-            headers=client_headers
-        )
+        response = client.put(f"/api/v1/bookings/{booking.id}", json={"amount": -10.0}, headers=client_headers)
         assert response.status_code in [400, 500]
         data = response.get_json()
         assert "message" in data or "errors" in data
@@ -367,7 +371,13 @@ class TestSchemaValidationE2E:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         # Auth company: générer JWT direct
         from flask_jwt_extended import create_access_token
-        company_claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+
+        company_claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
             company_token = create_access_token(identity=str(company_user.public_id), additional_claims=company_claims)
         company_headers = {"Authorization": f"Bearer {company_token}"}
@@ -389,9 +399,9 @@ class TestSchemaValidationE2E:
                 "amount": 75.0,
                 "billed_to_type": "patient",
                 "medical_facility": "Hôpital Cantonal",
-                "doctor_name": "Dr. Test"
+                "doctor_name": "Dr. Test",
             },
-            headers=company_headers
+            headers=company_headers,
         )
         # Peut être 201 (succès) ou 400 si géocodage échoue
         assert response.status_code in [201, 400, 429, 500]
@@ -429,7 +439,13 @@ class TestSchemaValidationE2E:
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
-        company_claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+
+        company_claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
             company_token = create_access_token(identity=str(company_user.public_id), additional_claims=company_claims)
         company_headers = {"Authorization": f"Bearer {company_token}"}
@@ -440,10 +456,10 @@ class TestSchemaValidationE2E:
             json={
                 "pickup_location": "Rue de la Gare 1, 1000 Lausanne",
                 "dropoff_location": "Avenue de la Plage 10, 1000 Lausanne",
-                "scheduled_time": (datetime.now(UTC) + timedelta(days=1)).isoformat()
+                "scheduled_time": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
                 # client_id manquant
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 500]
         data = response.get_json() if response.status_code != 429 else {}
@@ -460,9 +476,9 @@ class TestSchemaValidationE2E:
                 "client_id": test_client.id,
                 "pickup_location": "Rue de la Gare 1, 1000 Lausanne",
                 "dropoff_location": "Avenue de la Plage 10, 1000 Lausanne",
-                "scheduled_time": "invalid-date-format"
+                "scheduled_time": "invalid-date-format",
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 500]
         data = response.get_json() if response.status_code != 429 else {}
@@ -481,9 +497,9 @@ class TestSchemaValidationE2E:
                 "pickup_location": "Rue de la Gare 1, 1000 Lausanne",
                 "dropoff_location": "Avenue de la Plage 10, 1000 Lausanne",
                 "scheduled_time": future_time,
-                "billed_to_type": "invalid_type"
+                "billed_to_type": "invalid_type",
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 500]
         data = response.get_json() if response.status_code != 429 else {}
@@ -498,9 +514,9 @@ class TestSchemaValidationE2E:
                 "client_id": test_client.id,
                 "pickup_location": "a" * 501,  # Max 500
                 "dropoff_location": "Avenue de la Plage 10, 1000 Lausanne",
-                "scheduled_time": future_time
+                "scheduled_time": future_time,
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 500]
         data = response.get_json() if response.status_code != 429 else {}
@@ -516,9 +532,9 @@ class TestSchemaValidationE2E:
                 "pickup_location": "Rue de la Gare 1, 1000 Lausanne",
                 "dropoff_location": "Avenue de la Plage 10, 1000 Lausanne",
                 "scheduled_time": future_time,
-                "amount": -10.0
+                "amount": -10.0,
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 500]
         data = response.get_json() if response.status_code != 429 else {}
@@ -534,11 +550,8 @@ class TestSchemaValidationE2E:
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
-        
-        login_response = client.post("/api/auth/login", json={
-            "email": company_user.email,
-            "password": "password123"
-        })
+
+        login_response = client.post("/api/auth/login", json={"email": company_user.email, "password": "password123"})
         company_token = login_response.get_json()["token"]
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
@@ -546,11 +559,8 @@ class TestSchemaValidationE2E:
         unique_email = f"selfservice_{uuid.uuid4().hex[:8]}@example.com"
         response = client.post(
             "/api/v1/companies/me/clients",
-            json={
-                "client_type": "SELF_SERVICE",
-                "email": unique_email
-            },
-            headers=company_headers
+            json={"client_type": "SELF_SERVICE", "email": unique_email},
+            headers=company_headers,
         )
         assert response.status_code in [201, 400, 429, 500]  # 429 rate limit toléré
 
@@ -566,6 +576,7 @@ class TestSchemaValidationE2E:
         from datetime import timedelta
 
         from flask_jwt_extended import create_access_token
+
         company_token = create_access_token(
             identity=str(company_user.public_id),
             additional_claims={"role": UserRole.company.value, "company_id": sample_company.id},
@@ -584,9 +595,9 @@ class TestSchemaValidationE2E:
                 "phone": "+41211234567",
                 "birth_date": "1990-01-15",
                 "billing_address": "Rue de Facturation 2, 1000 Lausanne",
-                "contact_email": "jean.dupont@example.com"
+                "contact_email": "jean.dupont@example.com",
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [201, 400, 429]
 
@@ -602,6 +613,7 @@ class TestSchemaValidationE2E:
         from datetime import timedelta
 
         from flask_jwt_extended import create_access_token
+
         company_token = create_access_token(
             identity=str(company_user.public_id),
             additional_claims={"role": UserRole.company.value, "company_id": sample_company.id},
@@ -621,9 +633,9 @@ class TestSchemaValidationE2E:
                 "institution_name": "Clinique Test SA",
                 "contact_email": "contact@clinique-test.ch",
                 "contact_phone": "+41219876543",
-                "billing_address": "Avenue Facturation 20, 1000 Lausanne"
+                "billing_address": "Avenue Facturation 20, 1000 Lausanne",
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [201, 400, 429]
 
@@ -639,6 +651,7 @@ class TestSchemaValidationE2E:
         from datetime import timedelta
 
         from flask_jwt_extended import create_access_token
+
         company_token = create_access_token(
             identity=str(company_user.public_id),
             additional_claims={"role": UserRole.company.value, "company_id": sample_company.id},
@@ -648,12 +661,7 @@ class TestSchemaValidationE2E:
 
         # Test avec client_type manquant (requis)
         response = client.post(
-            "/api/v1/companies/me/clients",
-            json={
-                "first_name": "Jean",
-                "last_name": "Dupont"
-            },
-            headers=company_headers
+            "/api/v1/companies/me/clients", json={"first_name": "Jean", "last_name": "Dupont"}, headers=company_headers
         )
         assert response.status_code in [400, 429, 500]
         data = response.get_json() if response.status_code != 429 else {}
@@ -666,11 +674,7 @@ class TestSchemaValidationE2E:
 
         # Test avec client_type invalide
         response = client.post(
-            "/api/v1/companies/me/clients",
-            json={
-                "client_type": "INVALID_TYPE"
-            },
-            headers=company_headers
+            "/api/v1/companies/me/clients", json={"client_type": "INVALID_TYPE"}, headers=company_headers
         )
         assert response.status_code in [400, 429, 500]
         data = response.get_json() if response.status_code != 429 else {}
@@ -685,7 +689,7 @@ class TestSchemaValidationE2E:
                 "client_type": "SELF_SERVICE"
                 # email manquant
             },
-            headers=company_headers
+            headers=company_headers,
         )
         # Note: Le schéma n'a pas email comme required, mais la route peut vérifier
         # Acceptons 400 ou 201 selon l'implémentation
@@ -698,7 +702,7 @@ class TestSchemaValidationE2E:
                 "client_type": "PRIVATE"
                 # first_name, last_name, address manquants
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 429, 500]  # 429 pour rate limiting
         data = response.get_json() if response.status_code != 429 else {}
@@ -709,11 +713,8 @@ class TestSchemaValidationE2E:
         # Test avec email invalide
         response = client.post(
             "/api/v1/companies/me/clients",
-            json={
-                "client_type": "SELF_SERVICE",
-                "email": "invalid-email-format"
-            },
-            headers=company_headers
+            json={"client_type": "SELF_SERVICE", "email": "invalid-email-format"},
+            headers=company_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -730,9 +731,9 @@ class TestSchemaValidationE2E:
                 "client_type": "PRIVATE",
                 "first_name": "a" * 101,  # Max 100
                 "last_name": "Dupont",
-                "address": "Rue de Test 1, 1000 Lausanne"
+                "address": "Rue de Test 1, 1000 Lausanne",
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 500]
         data = response.get_json() if response.status_code != 429 else {}
@@ -748,9 +749,9 @@ class TestSchemaValidationE2E:
                 "first_name": "Jean",
                 "last_name": "Dupont",
                 "address": "Rue de Test 1, 1000 Lausanne",
-                "billing_lat": 91.0  # Max 90
+                "billing_lat": 91.0,  # Max 90
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 500]
         data = response.get_json() if response.status_code != 429 else {}
@@ -800,6 +801,7 @@ class TestSchemaValidationE2E:
         from datetime import timedelta
 
         from flask_jwt_extended import create_access_token
+
         client_token = create_access_token(
             identity=str(client_user.public_id),
             additional_claims={"role": client_user.role.value, "user_id": client_user.id},
@@ -810,12 +812,8 @@ class TestSchemaValidationE2E:
         # Test création paiement valide
         response = client.post(
             f"/api/v1/payments/booking/{booking.id}",
-            json={
-                "amount": 50.0,
-                "method": "credit_card",
-                "reference": "REF-123456"
-            },
-            headers=client_headers
+            json={"amount": 50.0, "method": "credit_card", "reference": "REF-123456"},
+            headers=client_headers,
         )
         assert response.status_code in [200, 201, 400, 500]
         data = response.get_json()
@@ -827,12 +825,7 @@ class TestSchemaValidationE2E:
 
         # Test avec champs optionnels seulement (amount et method requis)
         response = client.post(
-            f"/api/v1/payments/booking/{booking.id}",
-            json={
-                "amount": 75.5,
-                "method": "paypal"
-            },
-            headers=client_headers
+            f"/api/v1/payments/booking/{booking.id}", json={"amount": 75.5, "method": "paypal"}, headers=client_headers
         )
         assert response.status_code in [200, 201, 400, 500]
         data = response.get_json()
@@ -882,6 +875,7 @@ class TestSchemaValidationE2E:
         from datetime import timedelta
 
         from flask_jwt_extended import create_access_token
+
         client_token = create_access_token(
             identity=str(client_user.public_id),
             additional_claims={"role": client_user.role.value, "user_id": client_user.id},
@@ -896,7 +890,7 @@ class TestSchemaValidationE2E:
                 "method": "credit_card"
                 # amount manquant
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -913,7 +907,7 @@ class TestSchemaValidationE2E:
                 "amount": 50.0
                 # method manquant
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -928,9 +922,9 @@ class TestSchemaValidationE2E:
             f"/api/v1/payments/booking/{booking.id}",
             json={
                 "amount": 0.005,  # Min 0.01
-                "method": "credit_card"
+                "method": "credit_card",
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -941,11 +935,8 @@ class TestSchemaValidationE2E:
         # Test avec amount négatif
         response = client.post(
             f"/api/v1/payments/booking/{booking.id}",
-            json={
-                "amount": -10.0,
-                "method": "credit_card"
-            },
-            headers=client_headers
+            json={"amount": -10.0, "method": "credit_card"},
+            headers=client_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -958,9 +949,9 @@ class TestSchemaValidationE2E:
             f"/api/v1/payments/booking/{booking.id}",
             json={
                 "amount": 50.0,
-                "method": "a" * 51  # Max 50
+                "method": "a" * 51,  # Max 50
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code in [400, 500]
         data = response.get_json()
@@ -974,9 +965,9 @@ class TestSchemaValidationE2E:
             json={
                 "amount": 50.0,
                 "method": "credit_card",
-                "reference": "a" * 101  # Max 100
+                "reference": "a" * 101,  # Max 100
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1039,6 +1030,7 @@ class TestSchemaValidationE2E:
         from datetime import timedelta
 
         from flask_jwt_extended import create_access_token
+
         admin_token = create_access_token(
             identity=str(admin_user.public_id),
             additional_claims={"role": admin_user.role.value},
@@ -1048,11 +1040,7 @@ class TestSchemaValidationE2E:
 
         # Test mise à jour status à "completed"
         response = client.put(
-            f"/api/v1/payments/{test_payment_id}",
-            json={
-                "status": "completed"
-            },
-            headers=admin_headers
+            f"/api/v1/payments/{test_payment_id}", json={"status": "completed"}, headers=admin_headers
         )
         assert response.status_code in [200, 404]
         data = response.get_json()
@@ -1063,13 +1051,7 @@ class TestSchemaValidationE2E:
             assert "error" in data
 
         # Test mise à jour status à "failed"
-        response = client.put(
-            f"/api/v1/payments/{test_payment_id}",
-            json={
-                "status": "failed"
-            },
-            headers=admin_headers
-        )
+        response = client.put(f"/api/v1/payments/{test_payment_id}", json={"status": "failed"}, headers=admin_headers)
         assert response.status_code in [200, 404]
         data = response.get_json()
         if response.status_code == 200:
@@ -1079,13 +1061,7 @@ class TestSchemaValidationE2E:
             assert "error" in data
 
         # Test mise à jour status à "pending"
-        response = client.put(
-            f"/api/v1/payments/{test_payment_id}",
-            json={
-                "status": "pending"
-            },
-            headers=admin_headers
-        )
+        response = client.put(f"/api/v1/payments/{test_payment_id}", json={"status": "pending"}, headers=admin_headers)
         assert response.status_code in [200, 404]
         data = response.get_json()
         if response.status_code == 200:
@@ -1148,6 +1124,7 @@ class TestSchemaValidationE2E:
         from datetime import timedelta
 
         from flask_jwt_extended import create_access_token
+
         admin_token = create_access_token(
             identity=str(admin_user.public_id),
             additional_claims={"role": admin_user.role.value},
@@ -1156,11 +1133,7 @@ class TestSchemaValidationE2E:
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
         # Test avec status manquant (requis)
-        response = client.put(
-            f"/api/v1/payments/{test_payment_id}",
-            json={},
-            headers=admin_headers
-        )
+        response = client.put(f"/api/v1/payments/{test_payment_id}", json={}, headers=admin_headers)
         assert response.status_code in [400, 404]
         data = response.get_json()
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -1171,11 +1144,7 @@ class TestSchemaValidationE2E:
 
         # Test avec status invalide (pas dans ["pending", "completed", "failed"])
         response = client.put(
-            f"/api/v1/payments/{test_payment_id}",
-            json={
-                "status": "INVALID_STATUS"
-            },
-            headers=admin_headers
+            f"/api/v1/payments/{test_payment_id}", json={"status": "INVALID_STATUS"}, headers=admin_headers
         )
         assert response.status_code in [400, 404]
         data = response.get_json()
@@ -1191,7 +1160,7 @@ class TestSchemaValidationE2E:
             json={
                 "status": "COMPLETED"  # Doit être "completed" en minuscules
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
         assert response.status_code in [400, 404]
         data = response.get_json()
@@ -1200,13 +1169,7 @@ class TestSchemaValidationE2E:
         assert "message" in data or "errors" in data
 
         # Test avec status vide
-        response = client.put(
-            f"/api/v1/payments/{test_payment_id}",
-            json={
-                "status": ""
-            },
-            headers=admin_headers
-        )
+        response = client.put(f"/api/v1/payments/{test_payment_id}", json={"status": ""}, headers=admin_headers)
         assert response.status_code in [400, 404]
         data = response.get_json()
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -1243,6 +1206,7 @@ class TestSchemaValidationE2E:
         from datetime import timedelta
 
         from flask_jwt_extended import create_access_token
+
         client_token = create_access_token(
             identity=str(client_user.public_id),
             additional_claims={"role": UserRole.client.value},
@@ -1259,9 +1223,9 @@ class TestSchemaValidationE2E:
                 "phone": "+41219876543",
                 "address": "New Address 123, 1000 Lausanne",
                 "birth_date": "1990-05-15",
-                "gender": "HOMME"
+                "gender": "HOMME",
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code == 200
         data = response.get_json()
@@ -1270,22 +1234,15 @@ class TestSchemaValidationE2E:
         # Test mise à jour partielle (seulement certains champs)
         response = client.put(
             f"/api/v1/clients/{client_user.public_id}",
-            json={
-                "first_name": "Partial",
-                "phone": "+41211234567"
-            },
-            headers=client_headers
+            json={"first_name": "Partial", "phone": "+41211234567"},
+            headers=client_headers,
         )
         assert response.status_code == 200
         data = response.get_json()
         assert "message" in data
 
         # Test mise à jour vide (tous les champs sont optionnels)
-        response = client.put(
-            f"/api/v1/clients/{client_user.public_id}",
-            json={},
-            headers=client_headers
-        )
+        response = client.put(f"/api/v1/clients/{client_user.public_id}", json={}, headers=client_headers)
         assert response.status_code == 200
         data = response.get_json()
         assert "message" in data
@@ -1315,6 +1272,7 @@ class TestSchemaValidationE2E:
         from datetime import timedelta
 
         from flask_jwt_extended import create_access_token
+
         client_token = create_access_token(
             identity=str(client_user.public_id),
             additional_claims={"role": UserRole.client.value},
@@ -1328,7 +1286,7 @@ class TestSchemaValidationE2E:
             json={
                 "first_name": "a" * 101  # Max 100
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1342,7 +1300,7 @@ class TestSchemaValidationE2E:
             json={
                 "last_name": "a" * 101  # Max 100
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1356,7 +1314,7 @@ class TestSchemaValidationE2E:
             json={
                 "phone": "invalid-phone"  # Format invalide
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1370,7 +1328,7 @@ class TestSchemaValidationE2E:
             json={
                 "phone": "123456"  # Trop court (< 7)
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1384,7 +1342,7 @@ class TestSchemaValidationE2E:
             json={
                 "address": "a" * 501  # Max 500
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1398,7 +1356,7 @@ class TestSchemaValidationE2E:
             json={
                 "birth_date": "15-05-1990"  # Format invalide
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1412,7 +1370,7 @@ class TestSchemaValidationE2E:
             json={
                 "gender": "INVALID"  # Pas dans ["HOMME", "FEMME", "AUTRE"]
             },
-            headers=client_headers
+            headers=client_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1449,6 +1407,7 @@ class TestSchemaValidationE2E:
 
         # Authentification: générer un JWT direct (éviter dépendance login)
         from flask_jwt_extended import create_access_token
+
         claims = {"role": UserRole.driver.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             driver_token = create_access_token(identity=str(driver_user.public_id), additional_claims=claims)
@@ -1470,9 +1429,9 @@ class TestSchemaValidationE2E:
                 "license_valid_until": "2025-12-31",
                 "medical_valid_until": "2025-06-30",
                 "license_categories": ["B", "C"],
-                "trainings": [{"name": "First Aid", "date": "2024-01-01"}]
+                "trainings": [{"name": "First Aid", "date": "2024-01-01"}],
             },
-            headers=driver_headers
+            headers=driver_headers,
         )
         assert response.status_code in [200, 400]
         data = response.get_json()
@@ -1483,22 +1442,15 @@ class TestSchemaValidationE2E:
         # Test mise à jour partielle (seulement certains champs)
         response = client.put(
             "/api/v1/driver/me/profile",
-            json={
-                "first_name": "Partial",
-                "status": "hors service"
-            },
-            headers=driver_headers
+            json={"first_name": "Partial", "status": "hors service"},
+            headers=driver_headers,
         )
         assert response.status_code == 200
         data = response.get_json()
         assert "message" in data
 
         # Test mise à jour vide (tous les champs sont optionnels)
-        response = client.put(
-            "/api/v1/driver/me/profile",
-            json={},
-            headers=driver_headers
-        )
+        response = client.put("/api/v1/driver/me/profile", json={}, headers=driver_headers)
         assert response.status_code == 200
         data = response.get_json()
         assert "message" in data
@@ -1526,6 +1478,7 @@ class TestSchemaValidationE2E:
         db.session.commit()
 
         from flask_jwt_extended import create_access_token
+
         claims = {"role": UserRole.driver.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             driver_token = create_access_token(identity=str(driver_user.public_id), additional_claims=claims)
@@ -1537,7 +1490,7 @@ class TestSchemaValidationE2E:
             json={
                 "first_name": "a" * 101  # Max 100
             },
-            headers=driver_headers
+            headers=driver_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1551,7 +1504,7 @@ class TestSchemaValidationE2E:
             json={
                 "last_name": "a" * 101  # Max 100
             },
-            headers=driver_headers
+            headers=driver_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1560,13 +1513,7 @@ class TestSchemaValidationE2E:
         assert "message" in data or "errors" in data
 
         # Test avec status invalide (pas dans ["disponible", "hors service"])
-        response = client.put(
-            "/api/v1/driver/me/profile",
-            json={
-                "status": "INVALID"
-            },
-            headers=driver_headers
-        )
+        response = client.put("/api/v1/driver/me/profile", json={"status": "INVALID"}, headers=driver_headers)
         assert response.status_code == 400
         data = response.get_json()
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -1579,7 +1526,7 @@ class TestSchemaValidationE2E:
             json={
                 "weekly_hours": -1  # Min 0
             },
-            headers=driver_headers
+            headers=driver_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1593,7 +1540,7 @@ class TestSchemaValidationE2E:
             json={
                 "weekly_hours": 169  # Max 168
             },
-            headers=driver_headers
+            headers=driver_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1607,7 +1554,7 @@ class TestSchemaValidationE2E:
             json={
                 "hourly_rate_cents": -100  # Min 0
             },
-            headers=driver_headers
+            headers=driver_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1621,7 +1568,7 @@ class TestSchemaValidationE2E:
             json={
                 "employment_start_date": "15-01-2020"  # Format invalide (doit être YYYY-MM-DD)
             },
-            headers=driver_headers
+            headers=driver_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1635,7 +1582,7 @@ class TestSchemaValidationE2E:
             json={
                 "license_categories": [f"CAT{i}" for i in range(11)]  # Max 10
             },
-            headers=driver_headers
+            headers=driver_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1649,7 +1596,7 @@ class TestSchemaValidationE2E:
             json={
                 "trainings": [{"name": f"Training {i}"} for i in range(51)]  # Max 50
             },
-            headers=driver_headers
+            headers=driver_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1671,11 +1618,8 @@ class TestSchemaValidationE2E:
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
-        
-        login_response = client.post("/api/auth/login", json={
-            "email": company_user.email,
-            "password": "password123"
-        })
+
+        login_response = client.post("/api/auth/login", json={"email": company_user.email, "password": "password123"})
         company_token = login_response.get_json()["token"]
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
@@ -1701,28 +1645,23 @@ class TestSchemaValidationE2E:
                 "reminder3template": "Dernier rappel",
                 "legal_footer": "Texte légal de pied de page",
                 "pdf_template_variant": "modern",
-                "reminder_schedule_days": {"1": 10, "2": 5, "3": 5}
+                "reminder_schedule_days": {"1": 10, "2": 5, "3": 5},
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code == 200
 
         # Test mise à jour partielle (seulement certains champs)
         response = client.put(
             f"/api/v1/invoices/companies/{sample_company.id}/billing-settings",
-            json={
-                "payment_terms_days": 60,
-                "overdue_fee": 30.00
-            },
-            headers=company_headers
+            json={"payment_terms_days": 60, "overdue_fee": 30.00},
+            headers=company_headers,
         )
         assert response.status_code == 200
 
         # Test mise à jour vide (tous les champs sont optionnels)
         response = client.put(
-            f"/api/v1/invoices/companies/{sample_company.id}/billing-settings",
-            json={},
-            headers=company_headers
+            f"/api/v1/invoices/companies/{sample_company.id}/billing-settings", json={}, headers=company_headers
         )
         assert response.status_code == 200
 
@@ -1740,11 +1679,8 @@ class TestSchemaValidationE2E:
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
-        
-        login_response = client.post("/api/auth/login", json={
-            "email": company_user.email,
-            "password": "password123"
-        })
+
+        login_response = client.post("/api/auth/login", json={"email": company_user.email, "password": "password123"})
         company_token = login_response.get_json()["token"]
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
@@ -1754,7 +1690,7 @@ class TestSchemaValidationE2E:
             json={
                 "payment_terms_days": -1  # Min 0
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1768,7 +1704,7 @@ class TestSchemaValidationE2E:
             json={
                 "payment_terms_days": 366  # Max 365
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1782,7 +1718,7 @@ class TestSchemaValidationE2E:
             json={
                 "overdue_fee": -10.0  # Min 0
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1796,7 +1732,7 @@ class TestSchemaValidationE2E:
             json={
                 "reminder1fee": -5.0  # Min 0
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1810,7 +1746,7 @@ class TestSchemaValidationE2E:
             json={
                 "email_sender": "a" * 255  # Max 254
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1824,7 +1760,7 @@ class TestSchemaValidationE2E:
             json={
                 "invoice_number_format": "a" * 51  # Max 50
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1838,7 +1774,7 @@ class TestSchemaValidationE2E:
             json={
                 "invoice_prefix": "a" * 21  # Max 20
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1852,7 +1788,7 @@ class TestSchemaValidationE2E:
             json={
                 "iban": "INVALID-IBAN"  # Format invalide
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1866,7 +1802,7 @@ class TestSchemaValidationE2E:
             json={
                 "esr_ref_base": "a" * 27  # Max 26
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1880,7 +1816,7 @@ class TestSchemaValidationE2E:
             json={
                 "invoice_message_template": "a" * 1001  # Max 1000
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1894,7 +1830,7 @@ class TestSchemaValidationE2E:
             json={
                 "reminder1template": "a" * 1001  # Max 1000
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1908,7 +1844,7 @@ class TestSchemaValidationE2E:
             json={
                 "legal_footer": "a" * 2001  # Max 2000
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1922,7 +1858,7 @@ class TestSchemaValidationE2E:
             json={
                 "pdf_template_variant": "a" * 51  # Max 50
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -1959,11 +1895,8 @@ class TestSchemaValidationE2E:
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
-        
-        login_response = client.post("/api/auth/login", json={
-            "email": company_user.email,
-            "password": "password123"
-        })
+
+        login_response = client.post("/api/auth/login", json={"email": company_user.email, "password": "password123"})
         company_token = login_response.get_json()["token"]
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
@@ -1971,12 +1904,8 @@ class TestSchemaValidationE2E:
         current_date = datetime.now(UTC)
         response = client.post(
             f"/api/v1/invoices/companies/{sample_company.id}/invoices/generate",
-            json={
-                "client_id": test_client.id,
-                "period_year": current_date.year,
-                "period_month": current_date.month
-            },
-            headers=company_headers
+            json={"client_id": test_client.id, "period_year": current_date.year, "period_month": current_date.month},
+            headers=company_headers,
         )
         # Peut être 201 (succès) ou 400/404 si pas de réservations ou erreur DB
         assert response.status_code in [201, 400, 404]
@@ -1984,12 +1913,8 @@ class TestSchemaValidationE2E:
         # Test génération avec client_ids (facturation groupée)
         response = client.post(
             f"/api/v1/invoices/companies/{sample_company.id}/invoices/generate",
-            json={
-                "client_ids": [test_client.id],
-                "period_year": current_date.year,
-                "period_month": current_date.month
-            },
-            headers=company_headers
+            json={"client_ids": [test_client.id], "period_year": current_date.year, "period_month": current_date.month},
+            headers=company_headers,
         )
         assert response.status_code in [201, 400, 404]
 
@@ -2018,9 +1943,9 @@ class TestSchemaValidationE2E:
                 "client_id": test_client.id,
                 "bill_to_client_id": institution_client.id,
                 "period_year": current_date.year,
-                "period_month": current_date.month
+                "period_month": current_date.month,
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [201, 400, 404]
 
@@ -2031,9 +1956,9 @@ class TestSchemaValidationE2E:
                 "client_id": test_client.id,
                 "period_year": current_date.year,
                 "period_month": current_date.month,
-                "reservation_ids": []
+                "reservation_ids": [],
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [201, 400, 404]
 
@@ -2045,9 +1970,9 @@ class TestSchemaValidationE2E:
                 "bill_to_client_id": institution_client.id,
                 "period_year": current_date.year,
                 "period_month": current_date.month,
-                "client_reservations": {str(test_client.id): []}
+                "client_reservations": {str(test_client.id): []},
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [201, 400, 404]
 
@@ -2060,7 +1985,13 @@ class TestSchemaValidationE2E:
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
-        company_claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+
+        company_claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
             company_token = create_access_token(identity=str(company_user.public_id), additional_claims=company_claims)
         company_headers = {"Authorization": f"Bearer {company_token}"}
@@ -2072,10 +2003,10 @@ class TestSchemaValidationE2E:
             f"/api/v1/invoices/companies/{sample_company.id}/invoices/generate",
             json={
                 "client_id": 1,
-                "period_month": current_date.month
+                "period_month": current_date.month,
                 # period_year manquant
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code != 429 else {}
@@ -2091,10 +2022,10 @@ class TestSchemaValidationE2E:
             f"/api/v1/invoices/companies/{sample_company.id}/invoices/generate",
             json={
                 "client_id": 1,
-                "period_year": current_date.year
+                "period_year": current_date.year,
                 # period_month manquant
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code != 429 else {}
@@ -2111,9 +2042,9 @@ class TestSchemaValidationE2E:
             json={
                 "client_id": 1,
                 "period_year": 1999,  # Min 2000
-                "period_month": current_date.month
+                "period_month": current_date.month,
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code != 429 else {}
@@ -2128,9 +2059,9 @@ class TestSchemaValidationE2E:
             json={
                 "client_id": 1,
                 "period_year": 2101,  # Max 2100
-                "period_month": current_date.month
+                "period_month": current_date.month,
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code != 429 else {}
@@ -2145,9 +2076,9 @@ class TestSchemaValidationE2E:
             json={
                 "client_id": 1,
                 "period_year": current_date.year,
-                "period_month": 0  # Min 1
+                "period_month": 0,  # Min 1
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code != 429 else {}
@@ -2162,9 +2093,9 @@ class TestSchemaValidationE2E:
             json={
                 "client_id": 1,
                 "period_year": current_date.year,
-                "period_month": 13  # Max 12
+                "period_month": 13,  # Max 12
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code != 429 else {}
@@ -2179,9 +2110,9 @@ class TestSchemaValidationE2E:
             json={
                 "client_id": 0,  # Min 1
                 "period_year": current_date.year,
-                "period_month": current_date.month
+                "period_month": current_date.month,
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code != 429 else {}
@@ -2196,9 +2127,9 @@ class TestSchemaValidationE2E:
             json={
                 "client_ids": [],  # Min 1
                 "period_year": current_date.year,
-                "period_month": current_date.month
+                "period_month": current_date.month,
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code != 429 else {}
@@ -2214,9 +2145,9 @@ class TestSchemaValidationE2E:
                 "client_id": 1,
                 "bill_to_client_id": 0,  # Min 1
                 "period_year": current_date.year,
-                "period_month": current_date.month
+                "period_month": current_date.month,
             },
-            headers=company_headers
+            headers=company_headers,
         )
         assert response.status_code in [400, 429]  # 429 pour rate limiting
         data = response.get_json() if response.status_code != 429 else {}
@@ -2230,10 +2161,10 @@ class TestSchemaValidationE2E:
             f"/api/v1/invoices/companies/{sample_company.id}/invoices/generate",
             json={
                 "period_year": current_date.year,
-                "period_month": current_date.month
+                "period_month": current_date.month,
                 # client_id et client_ids manquants
             },
-            headers=company_headers
+            headers=company_headers,
         )
         # L'endpoint vérifie cette condition après validation schema, donc 400 (ou 429 si rate limit atteint)
         assert response.status_code in [400, 429]  # 429 pour rate limiting
@@ -2242,20 +2173,23 @@ class TestSchemaValidationE2E:
 
     def test_update_company_valid_schema(self, client, auth_headers):
         """Test PUT /api/companies/me avec payload valide."""
-        response = client.put("/api/companies/me", json={
-            "name": "Updated Company Name",
-            "contact_email": "updated@example.com",
-            "iban": "CH9300762011623852957",
-            "uid_ide": "CHE-123.456.789"
-        }, headers=auth_headers)
+        response = client.put(
+            "/api/companies/me",
+            json={
+                "name": "Updated Company Name",
+                "contact_email": "updated@example.com",
+                "iban": "CH9300762011623852957",
+                "uid_ide": "CHE-123.456.789",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code in [200, 404]  # 404 si pas de company
 
     def test_update_company_invalid_schema(self, client, auth_headers):
         """Test PUT /api/companies/me avec payload invalide (IBAN invalide)."""
-        response = client.put("/api/companies/me", json={
-            "name": "Updated Company",
-            "iban": "INVALID-IBAN"
-        }, headers=auth_headers)
+        response = client.put(
+            "/api/companies/me", json={"name": "Updated Company", "iban": "INVALID-IBAN"}, headers=auth_headers
+        )
         assert response.status_code == 400
         data = response.get_json()
         assert "message" in data or "errors" in data
@@ -2263,24 +2197,32 @@ class TestSchemaValidationE2E:
     def test_create_driver_valid_schema(self, client, auth_headers):
         """Test POST /api/companies/me/drivers/create avec payload valide."""
         unique_email = f"driver_{uuid.uuid4().hex[:6]}@example.com"
-        response = client.post("/api/v1/companies/me/drivers/create", json={
-            "username": f"driver_{uuid.uuid4().hex[:6]}",
-            "first_name": "John",
-            "last_name": "Driver",
-            "email": unique_email,
-            "password": "SecurePass123!",
-            "vehicle_assigned": "Car 1",
-            "brand": "Mercedes",
-            "license_plate": "GE-12345"
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/v1/companies/me/drivers/create",
+            json={
+                "username": f"driver_{uuid.uuid4().hex[:6]}",
+                "first_name": "John",
+                "last_name": "Driver",
+                "email": unique_email,
+                "password": "SecurePass123!",
+                "vehicle_assigned": "Car 1",
+                "brand": "Mercedes",
+                "license_plate": "GE-12345",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code in [201, 400, 404]  # 404 si pas de company
 
     def test_create_driver_invalid_schema(self, client, auth_headers):
         """Test POST /api/companies/me/drivers/create avec payload invalide (champs manquants)."""
-        response = client.post("/api/v1/companies/me/drivers/create", json={
-            "username": "driver1"
-            # email, password, etc. manquants
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/v1/companies/me/drivers/create",
+            json={
+                "username": "driver1"
+                # email, password, etc. manquants
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 400
         data = response.get_json()
         assert "message" in data or "errors" in data
@@ -2294,7 +2236,7 @@ class TestSchemaValidationE2E:
 
     def test_medical_establishments_invalid_query(self, client):
         """Test GET /api/medical/establishments avec query params invalides (limit trop élevé).
-        
+
         Note: La route utilise un fallback sur reqparse qui limite automatiquement à 25,
         donc on accepte 200 avec limit=25 appliqué.
         """
@@ -2353,7 +2295,7 @@ class TestSchemaValidationE2E:
         end_date = date.today()
         response = client.get(
             f"/api/v1/analytics/export?start_date={start_date.isoformat()}&end_date={end_date.isoformat()}&format=csv",
-            headers=auth_headers
+            headers=auth_headers,
         )
         assert response.status_code in [200, 404]
 
@@ -2371,16 +2313,15 @@ class TestSchemaValidationE2E:
         # Test avec week_start spécifié
         week_start = date.today() - timedelta(days=7)
         response = client.get(
-            f"/api/v1/analytics/weekly-summary?week_start={week_start.isoformat()}",
-            headers=auth_headers
+            f"/api/v1/analytics/weekly-summary?week_start={week_start.isoformat()}", headers=auth_headers
         )
         # Peut être 200 (succès) ou 404 (pas de company) ou 500 (erreur serveur)
         assert response.status_code in [200, 404, 500]
-        
+
         # Test sans week_start (optionnel, utilise la semaine courante par défaut)
         response = client.get("/api/v1/analytics/weekly-summary", headers=auth_headers)
         assert response.status_code in [200, 404, 500]
-        
+
         # Si succès (200), vérifier la structure de la réponse
         if response.status_code == 200:
             data = response.get_json()
@@ -2391,7 +2332,7 @@ class TestSchemaValidationE2E:
         # Test avec format date invalide (pas YYYY-MM-DD)
         response = client.get(
             "/api/v1/analytics/weekly-summary?week_start=01/15/2024",  # Format US invalide
-            headers=auth_headers
+            headers=auth_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -2401,23 +2342,20 @@ class TestSchemaValidationE2E:
         # Vérifier que l'erreur mentionne week_start ou format date
         error_str = str(data).lower()
         assert "week_start" in error_str or "date" in error_str or "format" in error_str or "errors" in error_str
-        
+
         # Test avec format date invalide (pas ISO8601)
         response = client.get(
             "/api/v1/analytics/weekly-summary?week_start=2024-1-1",  # Format invalide (sans zéro padding)
-            headers=auth_headers
+            headers=auth_headers,
         )
         assert response.status_code == 400
         data = response.get_json()
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
-        
+
         # Test avec date mal formée
-        response = client.get(
-            "/api/v1/analytics/weekly-summary?week_start=invalid-date",
-            headers=auth_headers
-        )
+        response = client.get("/api/v1/analytics/weekly-summary?week_start=invalid-date", headers=auth_headers)
         assert response.status_code == 400
         data = response.get_json()
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2444,16 +2382,16 @@ class TestSchemaValidationE2E:
         response = client.get("/api/v1/planning/companies/me/planning/unavailability?driver_id=1", headers=auth_headers)
         # Peut être 200 (succès) ou 401 (pas autorisé)
         assert response.status_code in [200, 401]
-        
+
         # Si succès (200), vérifier la structure de la réponse
         if response.status_code == 200:
             data = response.get_json()
             assert "items" in data or "total" in data
-        
+
         # Test sans driver_id (optionnel)
         response = client.get("/api/v1/planning/companies/me/planning/unavailability", headers=auth_headers)
         assert response.status_code in [200, 401]
-        
+
         # Si succès, vérifier la structure
         if response.status_code == 200:
             data = response.get_json()
@@ -2462,22 +2400,26 @@ class TestSchemaValidationE2E:
     def test_planning_unavailability_invalid_query(self, client, auth_headers):
         """✅ Test E2E GET /api/planning/companies/me/planning/unavailability avec PlanningUnavailabilityQuerySchema invalide."""
         # Test avec driver_id négatif (< 1)
-        response = client.get("/api/v1/planning/companies/me/planning/unavailability?driver_id=-1", headers=auth_headers)
+        response = client.get(
+            "/api/v1/planning/companies/me/planning/unavailability?driver_id=-1", headers=auth_headers
+        )
         assert response.status_code == 400
         data = response.get_json()
         assert "message" in data or "errors" in data
         # Vérifier que l'erreur mentionne driver_id
         error_str = str(data).lower()
         assert "driver_id" in error_str or "errors" in error_str
-        
+
         # Test avec driver_id = 0 (invalide, doit être >= 1)
         response = client.get("/api/v1/planning/companies/me/planning/unavailability?driver_id=0", headers=auth_headers)
         assert response.status_code == 400
         data = response.get_json()
         assert "message" in data or "errors" in data
-        
+
         # Test avec driver_id non numérique (string)
-        response = client.get("/api/v1/planning/companies/me/planning/unavailability?driver_id=abc", headers=auth_headers)
+        response = client.get(
+            "/api/v1/planning/companies/me/planning/unavailability?driver_id=abc", headers=auth_headers
+        )
         assert response.status_code == 400
         data = response.get_json()
         assert "message" in data or "errors" in data
@@ -2485,19 +2427,21 @@ class TestSchemaValidationE2E:
     def test_planning_weekly_template_valid_query(self, client, auth_headers):
         """✅ Test E2E GET /api/planning/companies/me/planning/weekly-template avec PlanningWeeklyTemplateQuerySchema valide."""
         # Test avec driver_id spécifié
-        response = client.get("/api/v1/planning/companies/me/planning/weekly-template?driver_id=1", headers=auth_headers)
+        response = client.get(
+            "/api/v1/planning/companies/me/planning/weekly-template?driver_id=1", headers=auth_headers
+        )
         # Peut être 200 (succès) ou 401 (pas autorisé)
         assert response.status_code in [200, 401]
-        
+
         # Si succès (200), vérifier la structure de la réponse
         if response.status_code == 200:
             data = response.get_json()
             assert "items" in data or "total" in data
-        
+
         # Test sans driver_id (optionnel)
         response = client.get("/api/v1/planning/companies/me/planning/weekly-template", headers=auth_headers)
         assert response.status_code in [200, 401]
-        
+
         # Si succès, vérifier la structure
         if response.status_code == 200:
             data = response.get_json()
@@ -2506,22 +2450,28 @@ class TestSchemaValidationE2E:
     def test_planning_weekly_template_invalid_query(self, client, auth_headers):
         """✅ Test E2E GET /api/planning/companies/me/planning/weekly-template avec PlanningWeeklyTemplateQuerySchema invalide."""
         # Test avec driver_id négatif (< 1)
-        response = client.get("/api/v1/planning/companies/me/planning/weekly-template?driver_id=-1", headers=auth_headers)
+        response = client.get(
+            "/api/v1/planning/companies/me/planning/weekly-template?driver_id=-1", headers=auth_headers
+        )
         assert response.status_code == 400
         data = response.get_json()
         assert "message" in data or "errors" in data
         # Vérifier que l'erreur mentionne driver_id
         error_str = str(data).lower()
         assert "driver_id" in error_str or "errors" in error_str
-        
+
         # Test avec driver_id = 0 (invalide, doit être >= 1)
-        response = client.get("/api/v1/planning/companies/me/planning/weekly-template?driver_id=0", headers=auth_headers)
+        response = client.get(
+            "/api/v1/planning/companies/me/planning/weekly-template?driver_id=0", headers=auth_headers
+        )
         assert response.status_code == 400
         data = response.get_json()
         assert "message" in data or "errors" in data
-        
+
         # Test avec driver_id non numérique (string)
-        response = client.get("/api/v1/planning/companies/me/planning/weekly-template?driver_id=abc", headers=auth_headers)
+        response = client.get(
+            "/api/v1/planning/companies/me/planning/weekly-template?driver_id=abc", headers=auth_headers
+        )
         assert response.status_code == 400
         data = response.get_json()
         assert "message" in data or "errors" in data
@@ -2545,6 +2495,7 @@ class TestSchemaValidationE2E:
 
         # Auth admin via JWT
         from flask_jwt_extended import create_access_token
+
         admin_claims = {"role": UserRole.admin.value, "company_id": None, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             admin_token = create_access_token(identity=str(admin_user.public_id), additional_claims=admin_claims)
@@ -2562,11 +2513,8 @@ class TestSchemaValidationE2E:
 
         response = client.put(
             f"/api/v1/admin/users/{target_user.id}/role",
-            json={
-                "role": "driver",
-                "company_id": 1
-            },
-            headers=admin_headers
+            json={"role": "driver", "company_id": 1},
+            headers=admin_headers,
         )
         assert response.status_code in [200, 400, 404]  # 400 si company_id invalide
 
@@ -2584,17 +2532,14 @@ class TestSchemaValidationE2E:
         db.session.commit()
 
         from flask_jwt_extended import create_access_token
+
         admin_claims = {"role": UserRole.admin.value, "company_id": None, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             admin_token = create_access_token(identity=str(admin_user.public_id), additional_claims=admin_claims)
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
         response = client.put(
-            f"/api/v1/admin/users/{admin_user.id}/role",
-            json={
-                "role": "invalid_role"
-            },
-            headers=admin_headers
+            f"/api/v1/admin/users/{admin_user.id}/role", json={"role": "invalid_role"}, headers=admin_headers
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -2621,6 +2566,7 @@ class TestSchemaValidationE2E:
 
         # Générer un token JWT admin directement pour éviter flakiness du login en tests
         from flask_jwt_extended import create_access_token
+
         claims = {
             "role": admin_user.role.value,
             "company_id": getattr(admin_user, "company_id", None),
@@ -2687,6 +2633,7 @@ class TestSchemaValidationE2E:
         db.session.commit()
 
         from flask_jwt_extended import create_access_token
+
         claims = {
             "role": admin_user.role.value,
             "company_id": getattr(admin_user, "company_id", None),
@@ -2911,15 +2858,19 @@ class TestSchemaValidationE2E:
             assert "reservations" in data
             assert isinstance(data["reservations"], list)
 
+
 # ================== COMPANIES RESERVATIONS ACTIONS (ACCEPT/REJECT/ASSIGN/COMPLETE) ==================
+
 
 class TestCompaniesReservationActions:
     def _company_headers(self, client, db, sample_company):
         from models import User, UserRole
+
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
+
         claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
@@ -2934,7 +2885,9 @@ class TestCompaniesReservationActions:
 
     def test_company_reservation_reject(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.post("/api/v1/companies/me/reservations/999999/reject", json={"reason": "indisponible"}, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/reservations/999999/reject", json={"reason": "indisponible"}, headers=headers
+        )
         assert resp.status_code in [200, 400, 404]
         data = resp.get_json() or {}
         assert isinstance(data, dict)
@@ -2949,20 +2902,26 @@ class TestCompaniesReservationActions:
 
     def test_company_reservation_complete(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.post("/api/v1/companies/me/reservations/999999/complete", json={"status": "done"}, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/reservations/999999/complete", json={"status": "done"}, headers=headers
+        )
         assert resp.status_code in [200, 400, 404]
         data = resp.get_json() or {}
         assert isinstance(data, dict)
 
+
 # ================== COMPANIES VEHICLES (LIST/CREATE/GET/UPDATE/DELETE) ==================
+
 
 class TestCompaniesVehicles:
     def _company_headers(self, client, db, sample_company):
         from models import User, UserRole
+
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
+
         claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
@@ -3003,15 +2962,19 @@ class TestCompaniesVehicles:
         resp = client.delete("/api/v1/companies/me/vehicles/999999", headers=headers)
         assert resp.status_code in [200, 404]
 
+
 # ================== COMPANIES DRIVERS VACATIONS (POST/GET) ==================
+
 
 class TestCompaniesDriverVacations:
     def _company_headers(self, client, db, sample_company):
         from models import User, UserRole
+
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
+
         claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
@@ -3036,15 +2999,19 @@ class TestCompaniesDriverVacations:
         data = resp.get_json() or {}
         assert isinstance(data, (dict, list))
 
+
 # ================== COMPANIES CLIENTS (LIST/CREATE/GET/UPDATE/DELETE) ==================
+
 
 class TestCompaniesClients:
     def _company_headers(self, client, db, sample_company):
         from models import User, UserRole
+
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
+
         claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
@@ -3088,15 +3055,19 @@ class TestCompaniesClients:
         resp = client.delete("/api/v1/companies/me/clients/999999", headers=headers)
         assert resp.status_code in [200, 404]
 
+
 # ================== COMPANIES MANUAL RESERVATIONS (CREATE/SCHEDULE/DISPATCH-NOW/TRIGGER-RETURN) ==================
+
 
 class TestCompaniesManualReservations:
     def _company_headers(self, client, db, sample_company):
         from models import User, UserRole
+
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
+
         claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
@@ -3137,15 +3108,19 @@ class TestCompaniesManualReservations:
         assert resp.status_code in [200, 400, 404]
         _ = resp.get_json() if resp.is_json else None
 
+
 # ================== COMPANIES DRIVERS COMPLETED-TRIPS / TOGGLE-TYPE ==================
+
 
 class TestCompaniesDriverExtras:
     def _company_headers(self, client, db, sample_company):
         from models import User, UserRole
+
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
+
         claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
@@ -3164,15 +3139,19 @@ class TestCompaniesDriverExtras:
         assert resp.status_code in [200, 400, 404, 405]
         _ = resp.get_json() if resp.is_json else None
 
+
 # ================== COMPANIES INVOICES + LOGO ==================
+
 
 class TestCompaniesInvoicesAndLogo:
     def _company_headers(self, client, db, sample_company):
         from models import User, UserRole
+
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
+
         claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
@@ -3191,15 +3170,19 @@ class TestCompaniesInvoicesAndLogo:
         assert resp.status_code in [400, 404, 405, 415]
         _ = resp.get_json() if resp.is_json else None
 
+
 # ================== COMPANIES MISC (DRIVERS CREATE, CLIENT RESERVATIONS, COMPANIES LIST) ==================
+
 
 class TestCompaniesMisc:
     def _company_headers(self, client, db, sample_company):
         from models import User, UserRole
+
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
+
         claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
@@ -3229,15 +3212,19 @@ class TestCompaniesMisc:
         assert resp.status_code in [200, 403, 404, 405]
         _ = resp.get_json() if resp.is_json else None
 
+
 # ================== COMPANIES RESERVATION BY ID (GET/DELETE) ==================
+
 
 class TestCompaniesReservationById:
     def _company_headers(self, client, db, sample_company):
         from models import User, UserRole
+
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
+
         claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
@@ -3254,15 +3241,19 @@ class TestCompaniesReservationById:
         resp = client.delete("/api/v1/companies/me/reservations/999999", headers=headers)
         assert resp.status_code in [200, 404, 405]
 
+
 # ================== COMPANIES ASSIGNED RESERVATIONS ==================
+
 
 class TestCompaniesAssignedReservations:
     def _company_headers(self, client, db, sample_company):
         from models import User, UserRole
+
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
+
         claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
@@ -3274,15 +3265,19 @@ class TestCompaniesAssignedReservations:
         assert resp.status_code in [200, 404]
         _ = resp.get_json() if resp.is_json else None
 
+
 # ================== COMPANIES DRIVER BY ID (GET/PUT/DELETE) ==================
+
 
 class TestCompaniesDriverById:
     def _company_headers(self, client, db, sample_company):
         from models import User, UserRole
+
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
+
         claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
@@ -3305,15 +3300,19 @@ class TestCompaniesDriverById:
         resp = client.delete("/api/v1/companies/me/drivers/999999", headers=headers)
         assert resp.status_code in [200, 404, 405]
 
+
 # ================== COMPANIES DISPATCH (STATUS/ACTIVATE/DEACTIVATE) ==================
+
 
 class TestCompaniesDispatch:
     def _company_headers(self, client, db, sample_company):
         from models import User, UserRole
+
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
+
         claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
         with client.application.app_context():
             token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
@@ -3336,4 +3335,3 @@ class TestCompaniesDispatch:
         resp = client.post("/api/v1/companies/me/dispatch/deactivate", json={}, headers=headers)
         assert resp.status_code in [200, 400, 404]
         _ = resp.get_json() if resp.is_json else None
-

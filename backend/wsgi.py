@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """WSGI entrypoint pour Gunicorn : expose `app`."""
+
 from __future__ import annotations
 
 import os
@@ -21,6 +22,7 @@ _async_mode = (os.getenv("SOCKETIO_ASYNC_MODE") or "eventlet").strip().lower()
 if _async_mode == "eventlet":
     try:
         import eventlet
+
         eventlet.monkey_patch()
         print("✅ [WSGI] eventlet.monkey_patch() appliqué", flush=True)
     except ImportError:
@@ -28,6 +30,7 @@ if _async_mode == "eventlet":
 elif _async_mode == "gevent":
     try:
         from gevent import monkey  # pyright: ignore[reportMissingModuleSource]
+
         monkey.patch_all()
         print("✅ [WSGI] gevent.monkey.patch_all() appliqué", flush=True)
     except ImportError:

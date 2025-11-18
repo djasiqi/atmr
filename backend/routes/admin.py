@@ -25,12 +25,15 @@ if TYPE_CHECKING:
 admin_ns = Namespace("admin", description="Admin operations")
 
 # Modèle de réponse pour les statistiques (facultatif)
-stats_model = admin_ns.model("Stats", {
-    "totalBookings": fields.Integer,
-    "totalUsers": fields.Integer,
-    "totalInvoices": fields.Integer,
-    "totalRevenue": fields.Float,
-})
+stats_model = admin_ns.model(
+    "Stats",
+    {
+        "totalBookings": fields.Integer,
+        "totalUsers": fields.Integer,
+        "totalInvoices": fields.Integer,
+        "totalRevenue": fields.Float,
+    },
+)
 
 
 @admin_ns.route("/stats")
@@ -42,56 +45,37 @@ class AdminStats(Resource):
     def get(self):
         """Récupère les statistiques administrateur."""
         try:
-            app_logger.info(
-                "🔍 Récupération des statistiques administrateur...")
+            app_logger.info("🔍 Récupération des statistiques administrateur...")
             total_bookings = Booking.query.count()
             total_users = User.query.count()
             total_invoices = Invoice.query.count()
 
             now = datetime.now(UTC)
-            start_of_month = now.replace(
-                day=1, hour=0, minute=0, second=0, microsecond=0)
+            start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             if now.month == MONTH_THRESHOLD:
-                end_of_month = now.replace(
-                    year=now.year + 1,
-                    month=1,
-                    day=1,
-                    hour=0,
-                    minute=0,
-                    second=0,
-                    microsecond=0)
+                end_of_month = now.replace(year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
             else:
-                end_of_month = now.replace(
-                    month=now.month + 1,
-                    day=1,
-                    hour=0,
-                    minute=0,
-                    second=0,
-                    microsecond=0)
+                end_of_month = now.replace(month=now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
             # Comparaisons typées pour Pylance
             cond_status: BinaryExpression[bool] = cast(
-                "BinaryExpression[bool]", Booking.status == BookingStatus.COMPLETED)
-            cond_ge: BinaryExpression[bool] = cast(
-                "BinaryExpression[bool]",
-                Booking.scheduled_time >= start_of_month)
-            cond_lt: BinaryExpression[bool] = cast(
-                "BinaryExpression[bool]", Booking.scheduled_time < end_of_month)
-
-            stmt = (
-                select(func.coalesce(func.sum(Booking.amount), 0))
-                .where(and_(cond_status, cond_ge, cond_lt))
+                "BinaryExpression[bool]", Booking.status == BookingStatus.COMPLETED
             )
+            cond_ge: BinaryExpression[bool] = cast("BinaryExpression[bool]", Booking.scheduled_time >= start_of_month)
+            cond_lt: BinaryExpression[bool] = cast("BinaryExpression[bool]", Booking.scheduled_time < end_of_month)
+
+            stmt = select(func.coalesce(func.sum(Booking.amount), 0)).where(and_(cond_status, cond_ge, cond_lt))
 
             total_revenue = db.session.execute(stmt).scalar_one()
 
             app_logger.info(
-                f"📊 Stats: {total_bookings} bookings, {total_users} users, {total_invoices} invoices, {total_revenue} revenue")
+                f"📊 Stats: {total_bookings} bookings, {total_users} users, {total_invoices} invoices, {total_revenue} revenue"
+            )
             return {
                 "totalBookings": total_bookings,
                 "totalUsers": total_users,
                 "totalInvoices": total_invoices,
-                "totalRevenue": total_revenue
+                "totalRevenue": total_revenue,
             }, 200
 
         except Exception as e:
@@ -108,21 +92,17 @@ class RecentBookings(Resource):
         """Récupère les 5 réservations récentes."""
         try:
             recent_bookings = (
-                Booking.query
-                .options(joinedload(Booking.client).joinedload(Client.user))
+                Booking.query.options(joinedload(Booking.client).joinedload(Client.user))
                 .order_by(Booking.scheduled_time.desc())
                 .limit(5)
                 .all()
             )
-            app_logger.info(
-                f"✅ {len(recent_bookings)} réservations récentes trouvées.")
+            app_logger.info(f"✅ {len(recent_bookings)} réservations récentes trouvées.")
             return [cast("Any", b).serialize for b in recent_bookings], 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                f"❌ ERREUR get_recent_bookings: {e!s}",
-                exc_info=True)
+            app_logger.error(f"❌ ERREUR get_recent_bookings: {e!s}", exc_info=True)
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
@@ -150,14 +130,11 @@ class RecentUsers(Resource):
     def get(self):
         """Récupère les 5 utilisateurs récents."""
         try:
-            recent_users = User.query.order_by(
-                User.created_at.desc()).limit(5).all()
+            recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
             return [cast("Any", u).serialize for u in recent_users], 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(
-                f"❌ ERREUR get_recent_users: {e!s}",
-                exc_info=True)
+            app_logger.error(f"❌ ERREUR get_recent_users: {e!s}", exc_info=True)
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
@@ -168,10 +145,14 @@ class ManageUser(Resource):
     def get(self, user_id):
         """Récupère les détails d'un utilisateur."""
         try:
-            user = User.query.options(
-                joinedload(User.clients),
-                joinedload(User.company)   # ← ici au singulier
-            ).filter_by(id=user_id).one_or_none()
+            user = (
+                User.query.options(
+                    joinedload(User.clients),
+                    joinedload(User.company),  # ← ici au singulier
+                )
+                .filter_by(id=user_id)
+                .one_or_none()
+            )
             if not user:
                 admin_ns.abort(404, "User not found")
             return cast("Any", user).serialize, 200
@@ -186,10 +167,14 @@ class ManageUser(Resource):
     def delete(self, user_id):
         """Supprime un utilisateur."""
         try:
-            user = User.query.options(
-                joinedload(User.clients),
-                joinedload(User.company)   # ← et ici aussi
-            ).filter_by(id=user_id).one_or_none()
+            user = (
+                User.query.options(
+                    joinedload(User.clients),
+                    joinedload(User.company),  # ← et ici aussi
+                )
+                .filter_by(id=user_id)
+                .one_or_none()
+            )
             if not user:
                 admin_ns.abort(404, "User not found")
             db.session.delete(user)
@@ -199,9 +184,7 @@ class ManageUser(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
-            app_logger.error(
-                f"❌ ERREUR manage_user DELETE: {e}",
-                exc_info=True)
+            app_logger.error(f"❌ ERREUR manage_user DELETE: {e}", exc_info=True)
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
@@ -210,14 +193,14 @@ def _setup_driver_role(user: User, company_id: int | None) -> tuple[bool, dict[s
     if not company_id:
         db.session.rollback()
         return False, {"error": "company_id is required for a driver."}, 400
-    
+
     from models import Company, Driver
-    
+
     company = Company.query.get(company_id)
     if company is None:
         db.session.rollback()
         return False, {"error": f"Company {company_id} does not exist."}, 400
-    
+
     drv = getattr(user, "driver", None)
     if drv is None:
         DriverCtor = cast("Any", Driver)
@@ -225,32 +208,30 @@ def _setup_driver_role(user: User, company_id: int | None) -> tuple[bool, dict[s
         db.session.add(drv)
     else:
         drv.company_id = company_id
-    
+
     return True, None, None
 
 
 # Modèle Swagger pour mise à jour rôle utilisateur
-user_role_update_model = admin_ns.model("UserRoleUpdate", {
-    "role": fields.String(
-        required=True,
-        enum=["admin", "client", "driver", "company"],
-        description="Nouveau rôle"
-    ),
-    "company_id": fields.Integer(
-        description="ID entreprise (requis pour rôle driver, optionnel pour company)",
-        minimum=1
-    ),
-    "company_name": fields.String(
-        description="Nom entreprise (si création company)",
-        min_length=1,
-        max_length=200
-    ),
-})
+user_role_update_model = admin_ns.model(
+    "UserRoleUpdate",
+    {
+        "role": fields.String(required=True, enum=["admin", "client", "driver", "company"], description="Nouveau rôle"),
+        "company_id": fields.Integer(
+            description="ID entreprise (requis pour rôle driver, optionnel pour company)", minimum=1
+        ),
+        "company_name": fields.String(description="Nom entreprise (si création company)", min_length=1, max_length=200),
+    },
+)
 
 # Modèle Swagger pour review action autonome
-autonomous_action_review_model = admin_ns.model("AutonomousActionReview", {
-    "notes": fields.String(description="Notes de l'admin (max 1000 caractères)", max_length=1000),
-})
+autonomous_action_review_model = admin_ns.model(
+    "AutonomousActionReview",
+    {
+        "notes": fields.String(description="Notes de l'admin (max 1000 caractères)", max_length=1000),
+    },
+)
+
 
 @admin_ns.route("/users/<int:user_id>/role")
 class UpdateUserRole(Resource):
@@ -264,46 +245,40 @@ class UpdateUserRole(Resource):
         """
         try:
             # ---------- 1) Charger l'utilisateur + relations ----------
-            user_opt: User | None = (
-                User.query.options(
-                    joinedload(User.driver),
-                    joinedload(User.company),
-                ).get(user_id)
-            )
+            user_opt: User | None = User.query.options(
+                joinedload(User.driver),
+                joinedload(User.company),
+            ).get(user_id)
             if user_opt is None:
                 return {"error": "User not found"}, 404
             user = user_opt
 
             # ---------- 2) Lire & valider le payload ----------
             data = request.get_json(silent=True) or {}
-            
+
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
             from marshmallow import ValidationError
 
             from schemas.admin_schemas import UserRoleUpdateSchema
             from schemas.validation_utils import handle_validation_error, validate_request
-            
+
             try:
                 validated_data = validate_request(UserRoleUpdateSchema(), data)
             except ValidationError as e:
                 return handle_validation_error(e)
-            
+
             # Normaliser le rôle depuis les données validées
             raw = validated_data["role"].strip().lower()
             key = raw.upper()
             try:
                 new_role_enum = UserRole[key]
             except KeyError:
-                new_role_enum = next(
-                    (r for r in UserRole if str(r.value).upper() == key),
-                    None
-                )
-            
+                new_role_enum = next((r for r in UserRole if str(r.value).upper() == key), None)
+
             if new_role_enum is None:
                 return {"error": "Invalid role"}, 400
 
-            old_role_value = (
-                user.role.value if isinstance(user.role, UserRole) else str(user.role))
+            old_role_value = user.role.value if isinstance(user.role, UserRole) else str(user.role)
             old_role_value = str(old_role_value or "").upper()
 
             # ---------- 3) Affecter le nouveau rôle ----------
@@ -313,14 +288,13 @@ class UpdateUserRole(Resource):
             role_upper = str(new_role_enum.value).upper()
 
             if role_upper == "DRIVER":
-                success, error, status = _setup_driver_role(
-                    user, validated_data.get("company_id"))
+                success, error, status = _setup_driver_role(user, validated_data.get("company_id"))
                 if not success:
                     return error, status
 
             elif role_upper == "COMPANY":
                 from models import Company
-                
+
                 comp = getattr(user, "company", None)
                 if comp is None:
                     name = validated_data.get("company_name") or user.username
@@ -357,7 +331,7 @@ class UpdateUserRole(Resource):
 
             return {
                 "message": f"✅ Rôle de {user.username} mis à jour en {new_role_enum.value}",
-                "user": cast("Any", user).serialize
+                "user": cast("Any", user).serialize,
             }, 200
 
         except Exception:
@@ -379,18 +353,14 @@ class ResetUserPassword(Resource):
                 admin_ns.abort(404, "User not found")
                 return None  # abort() lève, mais ce return rassure l'analyste statique
             u = cast("Any", user)
-            new_password = "".join(
-                random.choices(
-                    string.ascii_letters +
-                    string.digits,
-                    k=8))
+            new_password = "".join(random.choices(string.ascii_letters + string.digits, k=8))
             u.set_password(new_password)
             u.force_password_change = True
             db.session.commit()
             return {
                 "message": "Mot de passe réinitialisé",
                 "new_password": new_password,
-                "force_password_change": True
+                "force_password_change": True,
             }, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
@@ -400,6 +370,7 @@ class ResetUserPassword(Resource):
 
 
 # ========== AUDIT TRAIL DES ACTIONS AUTONOMES ==========
+
 
 @admin_ns.route("/autonomous-actions")
 class AutonomousActionsList(Resource):
@@ -437,8 +408,7 @@ class AutonomousActionsList(Resource):
 
             action_type = request.args.get("action_type")
             if action_type:
-                query = query.filter(
-                    AutonomousAction.action_type == action_type)
+                query = query.filter(AutonomousAction.action_type == action_type)
 
             success = request.args.get("success")
             if success is not None:
@@ -448,8 +418,7 @@ class AutonomousActionsList(Resource):
             reviewed = request.args.get("reviewed")
             if reviewed is not None:
                 reviewed_bool = reviewed.lower() in ["true", "1", "yes"]
-                query = query.filter(
-                    AutonomousAction.reviewed_by_admin == reviewed_bool)
+                query = query.filter(AutonomousAction.reviewed_by_admin == reviewed_bool)
 
             start_date = request.args.get("start_date")
             if start_date:
@@ -463,8 +432,7 @@ class AutonomousActionsList(Resource):
             query = query.order_by(AutonomousAction.created_at.desc())
 
             # Paginer
-            pagination = query.paginate(
-                page=page, per_page=per_page, error_out=False)
+            pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
             return {
                 "actions": [action.to_dict() for action in pagination.items],
@@ -474,14 +442,12 @@ class AutonomousActionsList(Resource):
                     "total": pagination.total,
                     "pages": pagination.pages,
                     "has_next": pagination.has_next,
-                    "has_prev": pagination.has_prev
-                }
+                    "has_prev": pagination.has_prev,
+                },
             }, 200
 
         except Exception as e:
-            app_logger.error(
-                f"❌ ERREUR list_autonomous_actions: {e!s}",
-                exc_info=True)
+            app_logger.error(f"❌ ERREUR list_autonomous_actions: {e!s}", exc_info=True)
             return {"message": "Erreur lors de la récupération des actions"}, 500
 
 
@@ -500,10 +466,9 @@ class AutonomousActionsStats(Resource):
         """
         from datetime import timedelta
 
-
         try:
             from models.autonomous_action import AutonomousAction
-            
+
             company_id = request.args.get("company_id", type=int)
             period = request.args.get("period", "day")
 
@@ -519,9 +484,7 @@ class AutonomousActionsStats(Resource):
                 start_time = now - timedelta(days=1)
 
             # Base query
-            query = AutonomousAction.query.filter(
-                AutonomousAction.created_at >= start_time
-            )
+            query = AutonomousAction.query.filter(AutonomousAction.created_at >= start_time)
 
             if company_id:
                 query = query.filter(AutonomousAction.company_id == company_id)
@@ -534,54 +497,47 @@ class AutonomousActionsStats(Resource):
 
             # Stats par type d'action
             action_type_stats = db.session.query(
-                AutonomousAction.action_type, func.count(
-                    AutonomousAction.id).label("count"), func.sum(
-                    func.cast(
-                        AutonomousAction.success, db.Integer)).label("success_count")).filter(
-                AutonomousAction.created_at >= start_time)
+                AutonomousAction.action_type,
+                func.count(AutonomousAction.id).label("count"),
+                func.sum(func.cast(AutonomousAction.success, db.Integer)).label("success_count"),
+            ).filter(AutonomousAction.created_at >= start_time)
 
             if company_id:
-                action_type_stats = action_type_stats.filter(
-                    AutonomousAction.company_id == company_id
-                )
+                action_type_stats = action_type_stats.filter(AutonomousAction.company_id == company_id)
 
-            action_type_stats = action_type_stats.group_by(
-                AutonomousAction.action_type
-            ).all()
+            action_type_stats = action_type_stats.group_by(AutonomousAction.action_type).all()
 
             # Stats par entreprise (si pas filtré)
             company_stats = []
             if not company_id:
-                company_stats_query = db.session.query(
-                    AutonomousAction.company_id, func.count(
-                        AutonomousAction.id).label("count"), func.sum(
-                        func.cast(
-                            AutonomousAction.success, db.Integer)).label("success_count")).filter(
-                    AutonomousAction.created_at >= start_time).group_by(
-                    AutonomousAction.company_id).all()
+                company_stats_query = (
+                    db.session.query(
+                        AutonomousAction.company_id,
+                        func.count(AutonomousAction.id).label("count"),
+                        func.sum(func.cast(AutonomousAction.success, db.Integer)).label("success_count"),
+                    )
+                    .filter(AutonomousAction.created_at >= start_time)
+                    .group_by(AutonomousAction.company_id)
+                    .all()
+                )
 
                 company_stats = [
                     {
                         "company_id": stat[0],
                         "total": stat[1],
                         "successful": stat[2] or 0,
-                        "failed": stat[1] - (stat[2] or 0)
+                        "failed": stat[1] - (stat[2] or 0),
                     }
                     for stat in company_stats_query
                 ]
 
             # Temps d'exécution moyen
-            avg_execution_time = db.session.query(
-                func.avg(AutonomousAction.execution_time_ms)
-            ).filter(
-                AutonomousAction.created_at >= start_time,
-                AutonomousAction.execution_time_ms.isnot(None)
+            avg_execution_time = db.session.query(func.avg(AutonomousAction.execution_time_ms)).filter(
+                AutonomousAction.created_at >= start_time, AutonomousAction.execution_time_ms.isnot(None)
             )
 
             if company_id:
-                avg_execution_time = avg_execution_time.filter(
-                    AutonomousAction.company_id == company_id
-                )
+                avg_execution_time = avg_execution_time.filter(AutonomousAction.company_id == company_id)
 
             avg_time = avg_execution_time.scalar() or 0
 
@@ -593,7 +549,9 @@ class AutonomousActionsStats(Resource):
                 "successful_actions": successful_actions,
                 "failed_actions": failed_actions,
                 "reviewed_actions": reviewed_actions,
-                "success_rate": round(successful_actions / total_actions * 100, 2) if total_actions > TOTAL_ACTIONS_ZERO else TOTAL_ACTIONS_ZERO,
+                "success_rate": round(successful_actions / total_actions * 100, 2)
+                if total_actions > TOTAL_ACTIONS_ZERO
+                else TOTAL_ACTIONS_ZERO,
                 "avg_execution_time_ms": round(avg_time, 2),
                 "by_action_type": [
                     {
@@ -601,17 +559,15 @@ class AutonomousActionsStats(Resource):
                         "total": stat[1],
                         "successful": stat[2] or 0,
                         "failed": stat[1] - (stat[2] or 0),
-                        "success_rate": round((stat[2] or 0) / stat[1] * 100, 2) if stat[1] > 0 else 0
+                        "success_rate": round((stat[2] or 0) / stat[1] * 100, 2) if stat[1] > 0 else 0,
                     }
                     for stat in action_type_stats
                 ],
-                "by_company": company_stats
+                "by_company": company_stats,
             }, 200
 
         except Exception as e:
-            app_logger.error(
-                f"❌ ERREUR autonomous_actions_stats: {e!s}",
-                exc_info=True)
+            app_logger.error(f"❌ ERREUR autonomous_actions_stats: {e!s}", exc_info=True)
             return {"message": "Erreur lors du calcul des statistiques"}, 500
 
 
@@ -626,13 +582,12 @@ class AutonomousActionDetail(Resource):
 
         try:
             from models.autonomous_action import AutonomousAction
+
             action = AutonomousAction.query.get_or_404(action_id)
             return action.to_dict(), 200
 
         except Exception as e:
-            app_logger.error(
-                f"❌ ERREUR get_autonomous_action: {e!s}",
-                exc_info=True)
+            app_logger.error(f"❌ ERREUR get_autonomous_action: {e!s}", exc_info=True)
             return {"message": "Action non trouvée"}, 404
 
 
@@ -651,19 +606,19 @@ class AutonomousActionReview(Resource):
         """
         from flask_jwt_extended import get_jwt_identity
 
-
         try:
             from models.autonomous_action import AutonomousAction
+
             action = AutonomousAction.query.get_or_404(action_id)
 
             data = request.get_json() or {}
-            
+
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
             from marshmallow import ValidationError
 
             from schemas.admin_schemas import AutonomousActionReviewSchema
             from schemas.validation_utils import handle_validation_error, validate_request
-            
+
             try:
                 validated_data = validate_request(AutonomousActionReviewSchema(), data, strict=False)
             except ValidationError as e:
@@ -677,14 +632,9 @@ class AutonomousActionReview(Resource):
 
             db.session.commit()
 
-            app_logger.info(
-                f"✅ Action {action_id} reviewée par admin {get_jwt_identity()}"
-            )
+            app_logger.info(f"✅ Action {action_id} reviewée par admin {get_jwt_identity()}")
 
-            return {
-                "message": "Action marquée comme reviewée",
-                "action": action.to_dict()
-            }, 200
+            return {"message": "Action marquée comme reviewée", "action": action.to_dict()}, 200
 
         except Exception:
             db.session.rollback()

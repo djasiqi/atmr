@@ -5,6 +5,7 @@ Revises: d7e8f9a1b2c3
 Create Date: 2025-10-29 12:00:00.000000
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
@@ -32,7 +33,7 @@ def upgrade():
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.PrimaryKeyConstraint("id"),
     )
-    
+
     # Index pour performance
     op.create_index("ix_profiling_metrics_profiling_date", "profiling_metrics", ["profiling_date"], unique=False)
 
@@ -40,4 +41,3 @@ def upgrade():
 def downgrade():
     op.drop_index("ix_profiling_metrics_profiling_date", table_name="profiling_metrics")
     op.drop_table("profiling_metrics")
-

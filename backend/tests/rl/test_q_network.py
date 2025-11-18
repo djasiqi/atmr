@@ -8,6 +8,7 @@ Teste:
 - Batch processing
 - Comptage paramètres
 """
+
 import numpy as np
 import pytest
 import torch
@@ -30,12 +31,7 @@ class TestQNetworkBasics:
 
     def test_q_network_custom_hidden_sizes(self):
         """Test création avec tailles custom."""
-        net = QNetwork(
-            state_dim=50,
-            action_dim=0.100,
-            hidden_sizes=(256, 128, 64, 32),
-            dropout_rates=(0.3, 0.3, 0.2)
-        )
+        net = QNetwork(state_dim=50, action_dim=0.100, hidden_sizes=(256, 128, 64, 32), dropout_rates=(0.3, 0.3, 0.2))
 
         assert net.hidden_sizes == (256, 128, 64, 32)
 
@@ -171,4 +167,3 @@ class TestQNetworkDevices:
         q_values = net(state)
 
         assert q_values.device.type == "cuda"
-

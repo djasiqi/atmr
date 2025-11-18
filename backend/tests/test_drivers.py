@@ -1,6 +1,7 @@
 """
 Tests pour les routes drivers (disponibilité, assignations).
 """
+
 import pytest
 
 from models import Driver, User, UserRole
@@ -70,4 +71,3 @@ def test_drivers_by_company(db, sample_driver, sample_company):
     drivers = Driver.query.filter_by(company_id=sample_company.id).all()
     assert len(drivers) > 0
     assert sample_driver in drivers
-

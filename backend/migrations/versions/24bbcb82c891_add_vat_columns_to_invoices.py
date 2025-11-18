@@ -1,4 +1,3 @@
-
 """Add VAT columns to invoices
 
 Revision ID: 24bbcb82c891
@@ -6,6 +5,7 @@ Revises: 8186648ac54e
 Create Date: 2025-11-09 14:32:03.503163
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
@@ -34,17 +34,11 @@ def upgrade():
                 server_default=sa.text("7.70"),
             )
         )
-        batch_op.add_column(
-            sa.Column("vat_label", sa.String(length=50), nullable=True)
-        )
-        batch_op.add_column(
-            sa.Column("vat_number", sa.String(length=50), nullable=True)
-        )
+        batch_op.add_column(sa.Column("vat_label", sa.String(length=50), nullable=True))
+        batch_op.add_column(sa.Column("vat_number", sa.String(length=50), nullable=True))
 
     with op.batch_alter_table("invoice_lines", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column("vat_rate", sa.Numeric(precision=5, scale=2), nullable=True)
-        )
+        batch_op.add_column(sa.Column("vat_rate", sa.Numeric(precision=5, scale=2), nullable=True))
         batch_op.add_column(
             sa.Column(
                 "vat_amount",

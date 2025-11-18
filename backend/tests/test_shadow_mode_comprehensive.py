@@ -34,7 +34,7 @@ class TestShadowModeManager:
         """Crée un agent RL mock."""
         if ImprovedDQNAgent is None:
             return Mock()
-        
+
         agent = Mock(spec=ImprovedDQNAgent)
         agent.select_action.return_value = 5
         agent.get_q_values.return_value = [0.1, 0.2, 0.3, 0.4, 0.5]
@@ -46,7 +46,7 @@ class TestShadowModeManager:
         """Crée une instance de ShadowModeManager pour les tests."""
         if ShadowModeManager is None:
             pytest.skip("ShadowModeManager non disponible")
-        
+
         return ShadowModeManager(rl_agent=mock_rl_agent)
 
     def test_manager_initialization(self, shadow_manager):
@@ -62,17 +62,15 @@ class TestShadowModeManager:
         state = [0.1, 0.2, 0.3, 0.4, 0.5]
         human_action = 3
         human_eta = datetime.now(UTC) + timedelta(minutes=20)
-        
+
         # Mock de la décision RL
         mock_rl_agent.select_action.return_value = 5
         mock_rl_agent.get_q_values.return_value = [0.1, 0.2, 0.3, 0.4, 0.5]
         mock_rl_agent.get_action_confidence.return_value = 0.85
-        
+
         # Test de la comparaison
-        comparison = shadow_manager.compare_decisions(
-            state, human_action, human_eta
-        )
-        
+        comparison = shadow_manager.compare_decisions(state, human_action, human_eta)
+
         assert isinstance(comparison, dict)
         assert "rl_action" in comparison
         assert "human_action" in comparison
@@ -89,12 +87,12 @@ class TestShadowModeManager:
             "agreement_rate": 0.8,
             "rl_confidence": 0.85,
             "constraint_violations": 0,
-            "performance_impact": 0.1
+            "performance_impact": 0.1,
         }
-        
+
         # Test du calcul des KPIs
         kpis = shadow_manager.calculate_kpis(comparison_data)
-        
+
         assert isinstance(kpis, dict)
         assert "eta_delta" in kpis
         assert "delay_delta" in kpis
@@ -109,12 +107,10 @@ class TestShadowModeManager:
         state = [0.1, 0.2, 0.3, 0.4, 0.5]
         rl_action = 5
         human_action = 3
-        
+
         # Test de la génération des raisons
-        reasons = shadow_manager.generate_decision_reasons(
-            state, rl_action, human_action
-        )
-        
+        reasons = shadow_manager.generate_decision_reasons(state, rl_action, human_action)
+
         assert isinstance(reasons, dict)
         assert "rl_reasons" in reasons
         assert "human_reasons" in reasons
@@ -125,10 +121,10 @@ class TestShadowModeManager:
         # Données de test
         action = 5
         state = [0.1, 0.2, 0.3, 0.4, 0.5]
-        
+
         # Test de la vérification des contraintes
         violations = shadow_manager.check_constraint_violations(action, state)
-        
+
         assert isinstance(violations, list)
         # Vérifier que chaque violation a les champs requis
         for violation in violations:
@@ -141,10 +137,10 @@ class TestShadowModeManager:
         # Données de test
         rl_eta = datetime.now(UTC) + timedelta(minutes=15)
         human_eta = datetime.now(UTC) + timedelta(minutes=20)
-        
+
         # Test du calcul de l'impact
         impact = shadow_manager.calculate_performance_impact(rl_eta, human_eta)
-        
+
         assert isinstance(impact, float)
         assert -1 <= impact <= 1  # Impact normalisé entre -1 et 1
 
@@ -153,28 +149,18 @@ class TestShadowModeManager:
         # Données de test
         company_id = "company_1"
         date = datetime.now(UTC).date()
-        
+
         # Mock des données de comparaison
         shadow_manager.comparison_history = {
             (company_id, date): [
-                {
-                    "eta_delta": 5.0,
-                    "delay_delta": 2.0,
-                    "agreement_rate": 0.8,
-                    "rl_confidence": 0.85
-                },
-                {
-                    "eta_delta": 3.0,
-                    "delay_delta": 1.0,
-                    "agreement_rate": 0.9,
-                    "rl_confidence": 0.92
-                }
+                {"eta_delta": 5.0, "delay_delta": 2.0, "agreement_rate": 0.8, "rl_confidence": 0.85},
+                {"eta_delta": 3.0, "delay_delta": 1.0, "agreement_rate": 0.9, "rl_confidence": 0.92},
             ]
         }
-        
+
         # Test de la génération du rapport
         report = shadow_manager.generate_daily_report(company_id, date)
-        
+
         assert isinstance(report, dict)
         assert "company_id" in report
         assert "date" in report
@@ -189,7 +175,7 @@ class TestShadowModeManager:
         company_id = "company_1"
         start_date = datetime.now(UTC).date() - timedelta(days=7)
         end_date = datetime.now(UTC).date()
-        
+
         # Mock des données historiques
         shadow_manager.comparison_history = {}
         for i in range(7):
@@ -199,15 +185,13 @@ class TestShadowModeManager:
                     "eta_delta": 5.0 + i,
                     "delay_delta": 2.0 + i,
                     "agreement_rate": 0.8 - (i * 0.01),
-                    "rl_confidence": 0.85 + (i * 0.01)
+                    "rl_confidence": 0.85 + (i * 0.01),
                 }
             ]
-        
+
         # Test de l'analyse historique
-        analysis = shadow_manager.analyze_historical_performance(
-            company_id, start_date, end_date
-        )
-        
+        analysis = shadow_manager.analyze_historical_performance(company_id, start_date, end_date)
+
         assert isinstance(analysis, dict)
         assert "trend_analysis" in analysis
         assert "performance_summary" in analysis
@@ -219,14 +203,14 @@ class TestShadowModeManager:
         company_id = "company_1"
         kpi_data = {
             "agreement_rate": 0.3,  # Faible accord
-            "rl_confidence": 0.2,   # Faible confiance
+            "rl_confidence": 0.2,  # Faible confiance
             "constraint_violations": 5,  # Nombreuses violations
-            "performance_impact": -0.8  # Impact négatif important
+            "performance_impact": -0.8,  # Impact négatif important
         }
-        
+
         # Test de la génération d'alertes
         alerts = shadow_manager.generate_performance_alerts(company_id, kpi_data)
-        
+
         assert isinstance(alerts, list)
         # Vérifier que chaque alerte a les champs requis
         for alert in alerts:
@@ -241,22 +225,17 @@ class TestShadowModeManager:
         company_id = "company_1"
         start_date = datetime.now(UTC).date() - timedelta(days=7)
         end_date = datetime.now(UTC).date()
-        
+
         # Mock des données
         shadow_manager.comparison_history = {
             (company_id, start_date): [
-                {
-                    "eta_delta": 5.0,
-                    "delay_delta": 2.0,
-                    "agreement_rate": 0.8,
-                    "rl_confidence": 0.85
-                }
+                {"eta_delta": 5.0, "delay_delta": 2.0, "agreement_rate": 0.8, "rl_confidence": 0.85}
             ]
         }
-        
+
         # Test de l'export
         exported_data = shadow_manager.export_data(company_id, start_date, end_date)
-        
+
         assert isinstance(exported_data, dict)
         assert "company_id" in exported_data
         assert "date_range" in exported_data
@@ -267,7 +246,7 @@ class TestShadowModeManager:
         # Test avec des données invalides
         invalid_state = None
         invalid_action = "invalid"
-        
+
         with contextlib.suppress(ValueError, TypeError, AttributeError):
             shadow_manager.compare_decisions(invalid_state, invalid_action, None)
 
@@ -279,9 +258,9 @@ class TestShadowModeManager:
             "average_agreement_rate": 0.85,
             "average_rl_confidence": 0.78,
             "constraint_violation_rate": 0.05,
-            "performance_improvement": 0.12
+            "performance_improvement": 0.12,
         }
-        
+
         # Vérifier que les métriques sont dans des plages raisonnables
         assert metrics["total_comparisons"] > 0
         assert 0 <= metrics["average_agreement_rate"] <= 1
@@ -298,20 +277,20 @@ class TestShadowModeRoutes:
         """Crée un manager de shadow mode mock."""
         if ShadowModeManager is None:
             return Mock()
-        
+
         manager = Mock(spec=ShadowModeManager)
         manager.compare_decisions.return_value = {
             "rl_action": 5,
             "human_action": 3,
             "eta_delta": 5.0,
             "agreement_rate": 0.8,
-            "rl_confidence": 0.85
+            "rl_confidence": 0.85,
         }
         manager.generate_daily_report.return_value = {
             "company_id": "company_1",
             "date": datetime.now(UTC).date().isoformat(),
             "total_decisions": 100,
-            "average_agreement_rate": 0.85
+            "average_agreement_rate": 0.85,
         }
         return manager
 
@@ -321,17 +300,15 @@ class TestShadowModeRoutes:
         request_data = {
             "state": [0.1, 0.2, 0.3, 0.4, 0.5],
             "human_action": 3,
-            "human_eta": datetime.now(UTC).isoformat()
+            "human_eta": datetime.now(UTC).isoformat(),
         }
-        
+
         # Simuler l'appel à l'endpoint
         try:
             result = mock_shadow_manager.compare_decisions(
-                request_data["state"],
-                request_data["human_action"],
-                request_data["human_eta"]
+                request_data["state"], request_data["human_action"], request_data["human_eta"]
             )
-            
+
             assert isinstance(result, dict)
             assert "rl_action" in result
             assert "human_action" in result
@@ -344,10 +321,10 @@ class TestShadowModeRoutes:
         # Mock des paramètres
         company_id = "company_1"
         date = datetime.now(UTC).date()
-        
+
         # Test de récupération du rapport
         report = mock_shadow_manager.generate_daily_report(company_id, date)
-        
+
         assert isinstance(report, dict)
         assert "company_id" in report
         assert "date" in report
@@ -358,19 +335,17 @@ class TestShadowModeRoutes:
         company_id = "company_1"
         start_date = datetime.now(UTC).date() - timedelta(days=7)
         end_date = datetime.now(UTC).date()
-        
+
         # Mock de la réponse
         mock_shadow_manager.analyze_historical_performance.return_value = {
             "trend_analysis": "improving",
             "performance_summary": "good",
-            "recommendations": ["continue monitoring"]
+            "recommendations": ["continue monitoring"],
         }
-        
+
         # Test de l'analyse historique
-        analysis = mock_shadow_manager.analyze_historical_performance(
-            company_id, start_date, end_date
-        )
-        
+        analysis = mock_shadow_manager.analyze_historical_performance(company_id, start_date, end_date)
+
         assert isinstance(analysis, dict)
         assert "trend_analysis" in analysis
         assert "performance_summary" in analysis
@@ -379,22 +354,19 @@ class TestShadowModeRoutes:
 def run_shadow_mode_tests():
     """Exécute tous les tests du shadow mode."""
     print("👥 Exécution des tests du Shadow Mode")
-    
+
     # Tests de base
-    test_classes = [
-        TestShadowModeManager,
-        TestShadowModeRoutes
-    ]
-    
+    test_classes = [TestShadowModeManager, TestShadowModeRoutes]
+
     total_tests = 0
     passed_tests = 0
-    
+
     for test_class in test_classes:
         print("\n📋 Tests {test_class.__name__}")
-        
+
         # Créer une instance de la classe de test
         test_instance = test_class()
-        
+
         # Exécuter les méthodes de test
         for method_name in dir(test_instance):
             if method_name.startswith("test_"):
@@ -406,12 +378,12 @@ def run_shadow_mode_tests():
                     passed_tests += 1
                 except Exception:
                     print("  ❌ {method_name}: {e}")
-    
+
     print("\n📊 Résultats des tests du Shadow Mode:")
     print("  Tests exécutés: {total_tests}")
     print("  Tests réussis: {passed_tests}")
     print("  Taux de succès: {passed_tests/total_tests*100" if total_tests > 0 else "  Taux de succès: 0%")
-    
+
     return passed_tests, total_tests
 
 

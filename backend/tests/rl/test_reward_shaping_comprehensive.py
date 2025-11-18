@@ -1,6 +1,7 @@
 """
 Tests complets pour reward_shaping.py - Couverture 90%+
 """
+
 from unittest.mock import patch
 
 import numpy as np
@@ -19,7 +20,7 @@ class TestRewardShapingComprehensive:
             distance_weight=1.0,
             equity_weight=0.5,
             efficiency_weight=0.3,
-            satisfaction_weight=0.6
+            satisfaction_weight=0.6,
         )
 
         assert reward_shaping.punctuality_weight == 2.0
@@ -44,7 +45,7 @@ class TestRewardShapingComprehensive:
             "assignment_time_minutes": 3,
             "driver_type": "REGULAR",
             "respects_preferences": True,
-            "booking_priority": 3
+            "booking_priority": 3,
         }
 
         # Activer le logging debug
@@ -271,10 +272,7 @@ class TestRewardShapingComprehensive:
         reward_shaping = AdvancedRewardShaping()
 
         with patch("services.rl.reward_shaping.logger") as mock_logger:
-            reward_shaping.update_weights(
-                punctuality_weight=2.0,
-                distance_weight=1.5
-            )
+            reward_shaping.update_weights(punctuality_weight=2.0, distance_weight=1.5)
 
             assert reward_shaping.punctuality_weight == 2.0
             assert reward_shaping.distance_weight == 1.5
@@ -292,10 +290,7 @@ class TestRewardShapingComprehensive:
 
     def test_get_current_weights(self):
         """Test récupération des poids actuels"""
-        reward_shaping = AdvancedRewardShaping(
-            punctuality_weight=2.0,
-            distance_weight=1.5
-        )
+        reward_shaping = AdvancedRewardShaping(punctuality_weight=2.0, distance_weight=1.5)
 
         weights = reward_shaping.get_current_weights()
 
@@ -426,7 +421,7 @@ class TestRewardShapingConfigComprehensive:
             "assignment_time_minutes": 3,
             "driver_type": "REGULAR",
             "respects_preferences": True,
-            "booking_priority": 3
+            "booking_priority": 3,
         }
 
         reward = reward_shaping.calculate_reward(state, action, next_state, info)
@@ -451,7 +446,7 @@ class TestRewardShapingConfigComprehensive:
             "driver_loads": [1, 10, 20],
             "assignment_successful": False,
             "driver_type": "EMERGENCY",
-            "booking_priority": 2
+            "booking_priority": 2,
         }
 
         reward = reward_shaping.calculate_reward(state, action, next_state, info)
