@@ -120,7 +120,7 @@ class PDFService:
         from io import BytesIO
 
         from reportlab.lib import colors
-        from reportlab.lib.enums import TA_LEFT
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import cm
@@ -141,6 +141,17 @@ class PDFService:
             fontSize=10,
             textColor=colors.black,
             alignment=TA_LEFT,
+            spaceAfter=6,
+            fontName="Helvetica",
+        )
+
+        # Style pour le texte centré (pied de page)
+        centered_style = ParagraphStyle(
+            "Centered",
+            parent=styles["Normal"],
+            fontSize=10,
+            textColor=colors.black,
+            alignment=TA_CENTER,
             spaceAfter=6,
             fontName="Helvetica",
         )
@@ -605,10 +616,6 @@ class PDFService:
 
         # Message de facturation avec valeurs dynamiques
         jours_text = "jours" if payment_terms_days > 1 else "jour"
-        message = f"En votre aimable règlement net sous {payment_terms_days} {jours_text} avec nos remerciements anticipés. En cas de retard de paiement, des frais de rappel d'un montant de CHF {overdue_fee:.2f} vous seront facturés, conformément à nos conditions générales."
-
-        story.append(Paragraph(message, normal_style))
-        story.append(Spacer(1, 8))
 
         # Informations bancaires (récupérer depuis billing_settings)
         iban_value = "CH6509000000152631289"  # Valeur par défaut
@@ -617,8 +624,16 @@ class PDFService:
         elif hasattr(company, "iban") and company.iban:
             iban_value = company.iban
 
-        banking_info = f"Paiement par virement bancaire : IBAN : {iban_value}"
-        story.append(Paragraph(banking_info, normal_style))
+        # Message complet centré en pied de page
+        footer_message = (
+            f"En votre aimable règlement net sous {payment_terms_days} {jours_text} avec nos remerciements anticipés. "
+            f"En cas de retard de paiement, des frais de rappel d'un montant de CHF {overdue_fee:.2f} vous seront facturés, "
+            f"conformément à nos conditions générales. "
+            f"Paiement par virement bancaire : IBAN : {iban_value}"
+        )
+
+        story.append(Spacer(1, 20))  # Espace avant le pied de page
+        story.append(Paragraph(footer_message, centered_style))
 
         # === QR-BILL SUISSE OFFICIEL SUR PAGE SÉPARÉE ===
         # Forcer une nouvelle page pour le QR-Bill (toujours après la facture)
