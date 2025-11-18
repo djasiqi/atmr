@@ -55,14 +55,14 @@ class ShadowModeManager:
 
         # Structure des KPIs
         self.kpi_metrics = {
-            "eta_delta": [],           # Différence ETA humain vs RL
-            "delay_delta": [],         # Différence retard humain vs RL
+            "eta_delta": [],  # Différence ETA humain vs RL
+            "delay_delta": [],  # Différence retard humain vs RL
             "second_best_driver": [],  # Second meilleur driver suggéré
-            "rl_confidence": [],       # Confiance RL dans la décision
-            "human_confidence": [],    # Confiance humaine (si disponible)
-            "decision_reasons": [],    # Raisons de la décision RL
+            "rl_confidence": [],  # Confiance RL dans la décision
+            "human_confidence": [],  # Confiance humaine (si disponible)
+            "decision_reasons": [],  # Raisons de la décision RL
             "constraint_violations": [],  # Violations de contraintes
-            "performance_impact": []   # Impact sur performance globale
+            "performance_impact": [],  # Impact sur performance globale
         }
 
         # Métadonnées des décisions
@@ -73,7 +73,7 @@ class ShadowModeManager:
             "driver_id": [],
             "human_decision": [],
             "rl_decision": [],
-            "context": []
+            "context": [],
         }
 
         self.logger = self._setup_logging()
@@ -89,7 +89,7 @@ class ShadowModeManager:
         booking_id: str,
         human_decision: Dict[str, Any],
         rl_decision: Dict[str, Any],
-        context: Dict[str, Any]
+        context: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Enregistre une comparaison de décision humain vs RL.
 
@@ -111,9 +111,7 @@ class ShadowModeManager:
         rl_driver = rl_decision.get("driver_id")
 
         # Calculer les KPIs
-        kpis = self._calculate_kpis(
-            human_decision, rl_decision, context
-        )
+        kpis = self._calculate_kpis(human_decision, rl_decision, context)
 
         # Enregistrer les métadonnées
         self.decision_metadata["timestamp"].append(timestamp)
@@ -132,16 +130,17 @@ class ShadowModeManager:
         # Log de la décision
         self.logger.info(
             "Decision logged: Company=%s, Booking=%s, Human=%s, RL=%s, ETA Delta=%s",
-            company_id, booking_id, human_driver, rl_driver, kpis.get("eta_delta", 0)
+            company_id,
+            booking_id,
+            human_driver,
+            rl_driver,
+            kpis.get("eta_delta", 0),
         )
 
         return kpis
 
     def _calculate_kpis(
-        self,
-        human_decision: Dict[str, Any],
-        rl_decision: Dict[str, Any],
-        context: Dict[str, Any]
+        self, human_decision: Dict[str, Any], rl_decision: Dict[str, Any], context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Calcule les KPIs détaillés pour la comparaison.
 
@@ -168,9 +167,7 @@ class ShadowModeManager:
 
         # 3. Second best driver
         rl_alternatives = rl_decision.get("alternative_drivers", [])
-        kpis["second_best_driver"] = (
-            rl_alternatives[1] if len(rl_alternatives) > 1 else None
-        )
+        kpis["second_best_driver"] = rl_alternatives[1] if len(rl_alternatives) > 1 else None
 
         # 4. Confiance RL
         kpis["rl_confidence"] = rl_decision.get("confidence", 0)
@@ -179,27 +176,17 @@ class ShadowModeManager:
         kpis["human_confidence"] = human_decision.get("confidence")
 
         # 6. Raisons de la décision RL
-        kpis["decision_reasons"] = self._extract_decision_reasons(
-            rl_decision, context
-        )
+        kpis["decision_reasons"] = self._extract_decision_reasons(rl_decision, context)
 
         # 7. Violations de contraintes
-        kpis["constraint_violations"] = self._check_constraint_violations(
-            rl_decision, context
-        )
+        kpis["constraint_violations"] = self._check_constraint_violations(rl_decision, context)
 
         # 8. Impact sur performance globale
-        kpis["performance_impact"] = self._calculate_performance_impact(
-            human_decision, rl_decision, context
-        )
+        kpis["performance_impact"] = self._calculate_performance_impact(human_decision, rl_decision, context)
 
         return kpis
 
-    def _extract_decision_reasons(
-        self,
-        rl_decision: Dict[str, Any],
-        context: Dict[str, Any]
-    ) -> List[str]:
+    def _extract_decision_reasons(self, rl_decision: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
         """Extrait les raisons de la décision RL."""
         reasons = []
 
@@ -222,17 +209,15 @@ class ShadowModeManager:
 
         # Raisons basées sur l'historique
         driver_id = rl_decision.get("driver_id")
-        if driver_id and context.get("driver_performance", {}).get(
-                driver_id, {}).get("rating", 0) > HIGH_DRIVER_RATING_THRESHOLD:
+        if (
+            driver_id
+            and context.get("driver_performance", {}).get(driver_id, {}).get("rating", 0) > HIGH_DRIVER_RATING_THRESHOLD
+        ):
             reasons.append("Chauffeur bien noté")
 
         return reasons
 
-    def _check_constraint_violations(
-        self,
-        rl_decision: Dict[str, Any],
-        context: Dict[str, Any]
-    ) -> List[str]:
+    def _check_constraint_violations(self, rl_decision: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
         """Vérifie les violations de contraintes."""
         violations = []
 
@@ -245,8 +230,7 @@ class ShadowModeManager:
             violations.append("Chauffeur non disponible")
 
         # Vérifier capacité véhicule
-        if rl_decision.get("passenger_count", 0) > context.get(
-                "vehicle_capacity", 4):
+        if rl_decision.get("passenger_count", 0) > context.get("vehicle_capacity", 4):
             violations.append("Capacité véhicule dépassée")
 
         # Vérifier zone géographique
@@ -256,45 +240,31 @@ class ShadowModeManager:
         return violations
 
     def _calculate_performance_impact(
-        self,
-        human_decision: Dict[str, Any],
-        rl_decision: Dict[str, Any],
-        context: Dict[str, Any]
+        self, human_decision: Dict[str, Any], rl_decision: Dict[str, Any], context: Dict[str, Any]
     ) -> Dict[str, float]:
         """Calcule l'impact sur la performance globale."""
         impact = {}
 
         # Impact sur ETA
-        eta_improvement = human_decision.get(
-            "eta_minutes", 0) - rl_decision.get("eta_minutes", 0)
+        eta_improvement = human_decision.get("eta_minutes", 0) - rl_decision.get("eta_minutes", 0)
         impact["eta_improvement"] = eta_improvement
 
         # Impact sur distance
-        distance_improvement = (
-            human_decision.get("distance_km", 0) -
-            rl_decision.get("distance_km", 0)
-        )
+        distance_improvement = human_decision.get("distance_km", 0) - rl_decision.get("distance_km", 0)
         impact["distance_improvement"] = distance_improvement
 
         # Impact sur charge chauffeur
-        load_balance = abs(
-            rl_decision.get("driver_load", 0) - context.get("avg_load", 0)
-        ) - abs(
+        load_balance = abs(rl_decision.get("driver_load", 0) - context.get("avg_load", 0)) - abs(
             human_decision.get("driver_load", 0) - context.get("avg_load", 0)
         )
         impact["load_balance"] = -load_balance  # Négatif = meilleur équilibre
 
         # Score global
-        impact["global_score"] = (
-            eta_improvement * 0.4 +
-            distance_improvement * 0.3 +
-            load_balance * 0.3
-        )
+        impact["global_score"] = eta_improvement * 0.4 + distance_improvement * 0.3 + load_balance * 0.3
 
         return impact
 
-    def generate_daily_report(self, company_id: str,
-                              date: date | None = None) -> Dict[str, Any]:
+    def generate_daily_report(self, company_id: str, date: date | None = None) -> Dict[str, Any]:
         """Génère un rapport quotidien pour une entreprise.
 
         Args:
@@ -316,7 +286,7 @@ class ShadowModeManager:
                 "company_id": company_id,
                 "date": date.isoformat(),
                 "total_decisions": 0,
-                "message": "Aucune décision enregistrée pour cette date"
+                "message": "Aucune décision enregistrée pour cette date",
             }
 
         # Calculer les statistiques
@@ -330,7 +300,7 @@ class ShadowModeManager:
             "statistics": stats,
             "kpis_summary": self._generate_kpis_summary(company_data),
             "top_insights": self._generate_top_insights(company_data),
-            "recommendations": self._generate_recommendations(company_data)
+            "recommendations": self._generate_recommendations(company_data),
         }
 
         # Sauvegarder le rapport
@@ -338,30 +308,22 @@ class ShadowModeManager:
 
         return report
 
-    def _filter_data_by_company_and_date(
-        self,
-        company_id: str,
-        date: date
-    ) -> Dict[str, List[Any]]:
+    def _filter_data_by_company_and_date(self, company_id: str, date: date) -> Dict[str, List[Any]]:
         """Filtre les données par entreprise et date."""
-        filtered_data = {
-            "decisions": [],
-            "kpis": [],
-            "metadata": []
-        }
+        filtered_data = {"decisions": [], "kpis": [], "metadata": []}
 
         for i, timestamp in enumerate(self.decision_metadata["timestamp"]):
-            if (timestamp.date() == date and
-                    self.decision_metadata["company_id"][i] == company_id):
-
-                filtered_data["decisions"].append({
-                    "timestamp": timestamp,
-                    "booking_id": self.decision_metadata["booking_id"][i],
-                    "driver_id": self.decision_metadata["driver_id"][i],
-                    "human_decision": self.decision_metadata["human_decision"][i],
-                    "rl_decision": self.decision_metadata["rl_decision"][i],
-                    "context": self.decision_metadata["context"][i]
-                })
+            if timestamp.date() == date and self.decision_metadata["company_id"][i] == company_id:
+                filtered_data["decisions"].append(
+                    {
+                        "timestamp": timestamp,
+                        "booking_id": self.decision_metadata["booking_id"][i],
+                        "driver_id": self.decision_metadata["driver_id"][i],
+                        "human_decision": self.decision_metadata["human_decision"][i],
+                        "rl_decision": self.decision_metadata["rl_decision"][i],
+                        "context": self.decision_metadata["context"][i],
+                    }
+                )
 
                 # Ajouter KPIs correspondants
                 kpis = {}
@@ -370,16 +332,17 @@ class ShadowModeManager:
                         kpis[metric] = values[i]
                 filtered_data["kpis"].append(kpis)
 
-                filtered_data["metadata"].append({
-                    "timestamp": timestamp,
-                    "company_id": company_id,
-                    "booking_id": self.decision_metadata["booking_id"][i]
-                })
+                filtered_data["metadata"].append(
+                    {
+                        "timestamp": timestamp,
+                        "company_id": company_id,
+                        "booking_id": self.decision_metadata["booking_id"][i],
+                    }
+                )
 
         return filtered_data
 
-    def _calculate_daily_statistics(
-            self, company_data: Dict[str, List[Any]]) -> Dict[str, Any]:
+    def _calculate_daily_statistics(self, company_data: Dict[str, List[Any]]) -> Dict[str, Any]:
         """Calcule les statistiques quotidiennes."""
         stats = {}
 
@@ -393,33 +356,33 @@ class ShadowModeManager:
             "median": sorted(eta_deltas)[len(eta_deltas) // 2],
             "min": min(eta_deltas),
             "max": max(eta_deltas),
-            "std": self._calculate_std(eta_deltas)
+            "std": self._calculate_std(eta_deltas),
         }
 
         # Statistiques retard
-        delay_deltas = [kpi.get("delay_delta", 0)
-                        for kpi in company_data["kpis"]]
+        delay_deltas = [kpi.get("delay_delta", 0) for kpi in company_data["kpis"]]
         stats["delay_delta"] = {
             "mean": sum(delay_deltas) / len(delay_deltas),
             "median": sorted(delay_deltas)[len(delay_deltas) // 2],
             "min": min(delay_deltas),
             "max": max(delay_deltas),
-            "std": self._calculate_std(delay_deltas)
+            "std": self._calculate_std(delay_deltas),
         }
 
         # Statistiques confiance RL
-        rl_confidences = [kpi.get("rl_confidence", 0)
-                          for kpi in company_data["kpis"]]
+        rl_confidences = [kpi.get("rl_confidence", 0) for kpi in company_data["kpis"]]
         stats["rl_confidence"] = {
             "mean": sum(rl_confidences) / len(rl_confidences),
             "min": min(rl_confidences),
-            "max": max(rl_confidences)
+            "max": max(rl_confidences),
         }
 
         # Accord humain vs RL
-        agreements = sum(1 for decision in company_data["decisions"]
-                         if decision["human_decision"].get("driver_id") ==
-                         decision["rl_decision"].get("driver_id"))
+        agreements = sum(
+            1
+            for decision in company_data["decisions"]
+            if decision["human_decision"].get("driver_id") == decision["rl_decision"].get("driver_id")
+        )
         stats["agreement_rate"] = agreements / len(company_data["decisions"])
 
         return stats
@@ -431,10 +394,9 @@ class ShadowModeManager:
 
         mean = sum(values) / len(values)
         variance = sum((x - mean) ** 2 for x in values) / (len(values) - 1)
-        return variance ** 0.5
+        return variance**0.5
 
-    def _generate_kpis_summary(
-            self, company_data: Dict[str, List[Any]]) -> Dict[str, Any]:
+    def _generate_kpis_summary(self, company_data: Dict[str, List[Any]]) -> Dict[str, Any]:
         """Génère un résumé des KPIs."""
         summary = {}
 
@@ -442,10 +404,8 @@ class ShadowModeManager:
             return summary
 
         # Résumé des améliorations
-        eta_improvements = [kpi.get("eta_delta", 0)
-                            for kpi in company_data["kpis"]]
-        positive_eta = sum(1 for x in eta_improvements if x <
-                           X_ZERO)  # ETA RL < ETA humain
+        eta_improvements = [kpi.get("eta_delta", 0) for kpi in company_data["kpis"]]
+        positive_eta = sum(1 for x in eta_improvements if x < X_ZERO)  # ETA RL < ETA humain
         summary["eta_improvement_rate"] = positive_eta / len(eta_improvements)
 
         # Résumé des violations
@@ -464,16 +424,11 @@ class ShadowModeManager:
         for reason in all_reasons:
             reason_counts[reason] = reason_counts.get(reason, 0) + 1
 
-        summary["top_reasons"] = sorted(
-            reason_counts.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )[:5]
+        summary["top_reasons"] = sorted(reason_counts.items(), key=lambda x: x[1], reverse=True)[:5]
 
         return summary
 
-    def _generate_top_insights(
-            self, company_data: Dict[str, List[Any]]) -> List[str]:
+    def _generate_top_insights(self, company_data: Dict[str, List[Any]]) -> List[str]:
         """Génère les insights principaux."""
         insights = []
 
@@ -485,19 +440,17 @@ class ShadowModeManager:
         avg_eta_improvement = sum(eta_deltas) / len(eta_deltas)
 
         if avg_eta_improvement < RL_ETA_IMPROVEMENT_THRESHOLD:  # RL meilleur de plus de 2 minutes
-            insights.append(
-                f"RL améliore l'ETA de {abs(avg_eta_improvement)}"
-            )
+            insights.append(f"RL améliore l'ETA de {abs(avg_eta_improvement)}")
         # Humain meilleur de plus de AVG_ETA_IMPROVEMENT_THRESHOLD minutes
         elif avg_eta_improvement > AVG_ETA_IMPROVEMENT_THRESHOLD:
-            insights.append(
-                f"L'humain améliore l'ETA de {avg_eta_improvement}"
-            )
+            insights.append(f"L'humain améliore l'ETA de {avg_eta_improvement}")
 
         # Insight 2: Accord des décisions
-        agreements = sum(1 for decision in company_data["decisions"]
-                         if decision["human_decision"].get("driver_id") ==
-                         decision["rl_decision"].get("driver_id"))
+        agreements = sum(
+            1
+            for decision in company_data["decisions"]
+            if decision["human_decision"].get("driver_id") == decision["rl_decision"].get("driver_id")
+        )
         agreement_rate = agreements / len(company_data["decisions"])
 
         if agreement_rate > INSIGHT_HIGH_AGREEMENT_THRESHOLD:
@@ -506,8 +459,7 @@ class ShadowModeManager:
             insights.append(f"Taux d'accord faible: {agreement_rate}")
 
         # Insight 3: Confiance RL
-        rl_confidences = [kpi.get("rl_confidence", 0)
-                          for kpi in company_data["kpis"]]
+        rl_confidences = [kpi.get("rl_confidence", 0) for kpi in company_data["kpis"]]
         avg_confidence = sum(rl_confidences) / len(rl_confidences)
 
         if avg_confidence > HIGH_RL_CONFIDENCE_THRESHOLD:
@@ -517,8 +469,7 @@ class ShadowModeManager:
 
         return insights
 
-    def _generate_recommendations(
-            self, company_data: Dict[str, List[Any]]) -> List[str]:
+    def _generate_recommendations(self, company_data: Dict[str, List[Any]]) -> List[str]:
         """Génère des recommandations basées sur les données."""
         recommendations = []
 
@@ -526,39 +477,32 @@ class ShadowModeManager:
             return recommendations
 
         # Recommandation 1: Basée sur l'accord
-        agreements = sum(1 for decision in company_data["decisions"]
-                         if decision["human_decision"].get("driver_id") ==
-                         decision["rl_decision"].get("driver_id"))
+        agreements = sum(
+            1
+            for decision in company_data["decisions"]
+            if decision["human_decision"].get("driver_id") == decision["rl_decision"].get("driver_id")
+        )
         agreement_rate = agreements / len(company_data["decisions"])
 
         if agreement_rate > HIGH_AGREEMENT_RATE_THRESHOLD:
-            recommendations.append(
-                "Taux d'accord élevé - Considérer l'activation du mode automatique"
-            )
+            recommendations.append("Taux d'accord élevé - Considérer l'activation du mode automatique")
         elif agreement_rate < LOW_AGREEMENT_RATE_THRESHOLD:
-            recommendations.append(
-                "Taux d'accord faible - Analyser les différences de logique"
-            )
+            recommendations.append("Taux d'accord faible - Analyser les différences de logique")
 
         # Recommandation 2: Basée sur les violations
         violations = []
         for kpi in company_data["kpis"]:
             violations.extend(kpi.get("constraint_violations", []))
 
-        if len(violations) > len(
-                company_data["kpis"]) * 0.1:  # Plus de 10% de violations
-            recommendations.append(
-                "Taux de violations élevé - Revoir les contraintes RL"
-            )
+        if len(violations) > len(company_data["kpis"]) * 0.1:  # Plus de 10% de violations
+            recommendations.append("Taux de violations élevé - Revoir les contraintes RL")
 
         # Recommandation 3: Basée sur la performance
         eta_deltas = [kpi.get("eta_delta", 0) for kpi in company_data["kpis"]]
         avg_eta_improvement = sum(eta_deltas) / len(eta_deltas)
 
         if avg_eta_improvement < EXCELLENT_RL_ETA_IMPROVEMENT_THRESHOLD:  # RL meilleur de plus de 5 minutes
-            recommendations.append(
-                "Performance RL excellente - Augmenter la confiance dans les suggestions"
-            )
+            recommendations.append("Performance RL excellente - Augmenter la confiance dans les suggestions")
 
         return recommendations
 
@@ -591,11 +535,7 @@ class ShadowModeManager:
         date = report["date"]
 
         # Ajouter les métadonnées de base
-        base_data = {
-            "company_id": company_id,
-            "date": date,
-            "total_decisions": report["total_decisions"]
-        }
+        base_data = {"company_id": company_id, "date": date, "total_decisions": report["total_decisions"]}
 
         # Ajouter les statistiques
         stats = report.get("statistics", {})
@@ -626,8 +566,7 @@ class ShadowModeManager:
         df = pd.DataFrame(csv_data)
         df.to_csv(csv_path, index=False)
 
-    def get_company_summary(self, company_id: str,
-                            days: int = 7) -> Dict[str, Any]:
+    def get_company_summary(self, company_id: str, days: int = 7) -> Dict[str, Any]:
         """Génère un résumé sur plusieurs jours pour une entreprise.
 
         Args:
@@ -653,7 +592,7 @@ class ShadowModeManager:
                 "company_id": company_id,
                 "period_days": days,
                 "total_decisions": 0,
-                "message": "Aucune décision enregistrée sur cette période"
+                "message": "Aucune décision enregistrée sur cette période",
             }
 
         # Calculer les moyennes sur la période
@@ -664,11 +603,10 @@ class ShadowModeManager:
             "avg_decisions_per_day": sum(r["total_decisions"] for r in daily_reports) / len(daily_reports),
             "avg_agreement_rate": self._calculate_avg_agreement_rate(daily_reports),
             "avg_eta_improvement": self._calculate_avg_eta_improvement(daily_reports),
-            "trend_analysis": self._analyze_trends(daily_reports)
+            "trend_analysis": self._analyze_trends(daily_reports),
         }
 
-    def _calculate_avg_agreement_rate(
-            self, daily_reports: List[Dict[str, Any]]) -> float:
+    def _calculate_avg_agreement_rate(self, daily_reports: List[Dict[str, Any]]) -> float:
         """Calcule le taux d'accord moyen."""
         agreement_rates = []
         for report in daily_reports:
@@ -676,11 +614,9 @@ class ShadowModeManager:
             if "agreement_rate" in stats:
                 agreement_rates.append(stats["agreement_rate"])
 
-        return sum(agreement_rates) / \
-            len(agreement_rates) if agreement_rates else 0
+        return sum(agreement_rates) / len(agreement_rates) if agreement_rates else 0
 
-    def _calculate_avg_eta_improvement(
-            self, daily_reports: List[Dict[str, Any]]) -> float:
+    def _calculate_avg_eta_improvement(self, daily_reports: List[Dict[str, Any]]) -> float:
         """Calcule l'amélioration ETA moyenne."""
         eta_improvements = []
         for report in daily_reports:
@@ -689,11 +625,9 @@ class ShadowModeManager:
             if "mean" in eta_delta:
                 eta_improvements.append(eta_delta["mean"])
 
-        return sum(eta_improvements) / \
-            len(eta_improvements) if eta_improvements else 0
+        return sum(eta_improvements) / len(eta_improvements) if eta_improvements else 0
 
-    def _analyze_trends(
-            self, daily_reports: List[Dict[str, Any]]) -> Dict[str, str]:
+    def _analyze_trends(self, daily_reports: List[Dict[str, Any]]) -> Dict[str, str]:
         """Analyse les tendances sur la période."""
         trends = {}
 
@@ -750,95 +684,85 @@ class ShadowModeManager:
 
         # Garder seulement les données récentes
         for key in self.decision_metadata:
-            self.decision_metadata[key] = [
-                self.decision_metadata[key][i] for i in recent_indices
-            ]
+            self.decision_metadata[key] = [self.decision_metadata[key][i] for i in recent_indices]
 
         for key in self.kpi_metrics:
-            self.kpi_metrics[key] = [
-                self.kpi_metrics[key][i] for i in recent_indices
-            ]
+            self.kpi_metrics[key] = [self.kpi_metrics[key][i] for i in recent_indices]
 
-        self.logger.info(
-            "Cleaned old data, kept %s recent decisions",
-            len(recent_indices))
+        self.logger.info("Cleaned old data, kept %s recent decisions", len(recent_indices))
 
     def generate_shadow_suggestions(
-        self,
-        bookings: List[Any],
-        drivers: List[Any],
-        current_assignments: Dict[int, int]
+        self, bookings: List[Any], drivers: List[Any], current_assignments: Dict[int, int]
     ) -> List[Dict[str, Any]]:
         """Génère des suggestions RL en mode shadow (sans impact production).
-        
+
         Args:
             dispatch_run_id: ID du dispatch run
             bookings: Liste des bookings à dispatcher
             drivers: Liste des drivers disponibles
             current_assignments: Dict {booking_id: driver_id} des assignations courantes
-            
+
         Returns:
             Liste de suggestions RL formatées
         """
         suggestions = []
-        
+
         try:
             from services.rl.suggestion_generator import get_suggestion_generator
-            
+
             generator = get_suggestion_generator()
-            
+
             for booking in bookings:
                 # Simuler état actuel pour RL
                 suggested_driver_id = current_assignments.get(booking.id)
-                
+
                 if not suggested_driver_id:
                     continue
-                
+
                 # Générer suggestion RL
                 rl_suggestion = generator.generate_suggestion_for_booking(
                     booking=booking,
                     current_driver_id=suggested_driver_id,
                     available_drivers=drivers,
-                    current_assignments=current_assignments
+                    current_assignments=current_assignments,
                 )
-                
+
                 if rl_suggestion:
-                    suggestions.append({
-                        "booking_id": booking.id,
-                        "current_driver_id": suggested_driver_id,
-                        "rl_suggested_driver_id": rl_suggestion.get("driver_id"),
-                        "confidence": rl_suggestion.get("confidence", 0.0),
-                        "score": rl_suggestion.get("score", 0.0),
-                        "reason": rl_suggestion.get("reason", "")
-                    })
-        
+                    suggestions.append(
+                        {
+                            "booking_id": booking.id,
+                            "current_driver_id": suggested_driver_id,
+                            "rl_suggested_driver_id": rl_suggestion.get("driver_id"),
+                            "confidence": rl_suggestion.get("confidence", 0.0),
+                            "score": rl_suggestion.get("score", 0.0),
+                            "reason": rl_suggestion.get("reason", ""),
+                        }
+                    )
+
         except Exception as e:
             self.logger.error("[ShadowMode] Error generating suggestions: %s", e)
-        
+
         return suggestions
 
     def store_shadow_suggestions(
-        self,
-        dispatch_run_id: int,
-        suggestions: List[Dict[str, Any]],
-        kpi_snapshot: Dict[str, Any] | None = None
+        self, dispatch_run_id: int, suggestions: List[Dict[str, Any]], kpi_snapshot: Dict[str, Any] | None = None
     ) -> int:
         """Stocke les suggestions RL en mode shadow dans la DB.
-        
+
         Args:
             dispatch_run_id: ID du dispatch run
             suggestions: Liste de suggestions à stocker
             kpi_snapshot: Snapshot des KPIs au moment de la suggestion
-            
+
         Returns:
             Nombre de suggestions stockées
         """
         stored_count = 0
-        
+
         try:
             from ext import db as ext_db
             from models import RLSuggestion
-            
+
             for suggestion in suggestions:
                 rl_sugg = RLSuggestion()
                 rl_sugg.dispatch_run_id = dispatch_run_id
@@ -848,68 +772,56 @@ class ShadowModeManager:
                 rl_sugg.kpi_snapshot = kpi_snapshot
                 ext_db.session.add(rl_sugg)
                 stored_count += 1
-            
+
             ext_db.session.commit()
-            self.logger.info(
-                "[ShadowMode] Stored %s suggestions for dispatch_run %s",
-                stored_count, dispatch_run_id
-            )
-        
+            self.logger.info("[ShadowMode] Stored %s suggestions for dispatch_run %s", stored_count, dispatch_run_id)
+
         except Exception as e:
             from ext import db as ext_db
+
             ext_db.session.rollback()
-            self.logger.error(
-                "[ShadowMode] Failed to store suggestions: %s", e
-            )
-        
+            self.logger.error("[ShadowMode] Failed to store suggestions: %s", e)
+
         return stored_count
 
-    def compare_shadow_with_actual(
-        self,
-        dispatch_run_id: int,
-        actual_assignments: Dict[int, int]
-    ) -> Dict[str, Any]:
+    def compare_shadow_with_actual(self, dispatch_run_id: int, actual_assignments: Dict[int, int]) -> Dict[str, Any]:
         """Compare les suggestions shadow avec les assignations réelles.
-        
+
         Args:
             dispatch_run_id: ID du dispatch run
             actual_assignments: Dict {booking_id: driver_id} des assignations réelles
-            
+
         Returns:
             Statistiques de comparaison
         """
         try:
             from models import RLSuggestion
-            
+
             # Récupérer les suggestions shadow
-            shadow_suggestions = RLSuggestion.query.filter_by(
-                dispatch_run_id=dispatch_run_id
-            ).all()
-            
+            shadow_suggestions = RLSuggestion.query.filter_by(dispatch_run_id=dispatch_run_id).all()
+
             if not shadow_suggestions:
                 return {"total": 0, "message": "No shadow suggestions found"}
-            
+
             # Comparaison
             agreements = 0
             total = len(shadow_suggestions)
-            
+
             for sugg in shadow_suggestions:
                 actual_driver = actual_assignments.get(sugg.booking_id)
                 if actual_driver == sugg.driver_id:
                     agreements += 1
-            
+
             agreement_rate = agreements / total if total > 0 else 0
-            
+
             return {
                 "total_suggestions": total,
                 "agreements": agreements,
                 "disagreements": total - agreements,
                 "agreement_rate": agreement_rate,
-                "dispatch_run_id": dispatch_run_id
+                "dispatch_run_id": dispatch_run_id,
             }
-        
+
         except Exception as e:
-            self.logger.error(
-                "[ShadowMode] Failed to compare: %s", e
-            )
+            self.logger.error("[ShadowMode] Failed to compare: %s", e)
             return {"error": str(e)}

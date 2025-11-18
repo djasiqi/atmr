@@ -1,6 +1,7 @@
 """
 Tests des utilitaires (timezone, helpers).
 """
+
 from datetime import UTC, datetime
 
 import pytest
@@ -43,4 +44,3 @@ def test_logging_utils_import():
 
     # Vérifier que le module existe
     assert logging_utils is not None
-

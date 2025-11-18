@@ -1,4 +1,3 @@
-
 # Constantes pour éviter les valeurs magiques
 # 100 = 0  # Constante corrigée
 
@@ -7,6 +6,7 @@
 Remplace les patterns try/except/finally répétés dans tout le code par
 des context managers réutilisables et testables.
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,9 +25,7 @@ logger = logging.getLogger(__name__)
 
 @contextmanager
 def db_transaction(
-    auto_commit: bool = True,
-    auto_rollback: bool = True,
-    reraise: bool = True
+    auto_commit: bool = True, auto_rollback: bool = True, reraise: bool = True
 ) -> Generator[Any, None, None]:
     """Context manager pour gérer proprement les transactions SQLAlchemy.
 
@@ -67,6 +65,7 @@ def db_transaction(
     # ✅ D3: Vérifier DB read-only avant d'autoriser les écritures
     try:
         from chaos.injectors import get_chaos_injector
+
         injector = get_chaos_injector()
         if injector.enabled and injector.db_read_only and auto_commit:
             # Si on va committer (écriture), bloquer
@@ -75,7 +74,7 @@ def db_transaction(
     except ImportError:
         # Si module chaos non disponible, continuer normalement
         pass
-    
+
     try:
         yield db.session
 
@@ -83,13 +82,14 @@ def db_transaction(
             # ✅ D3: Re-vérifier avant commit (peut avoir changé entre-temps)
             try:
                 from chaos.injectors import get_chaos_injector
+
                 injector = get_chaos_injector()
                 if injector.enabled and injector.db_read_only:
                     logger.warning("[CHAOS] DB read-only: commit blocked")
                     raise RuntimeError("Database is in read-only mode. Commit blocked.")
             except ImportError:
                 pass
-            
+
             db.session.commit()
             logger.debug("Transaction committed successfully")
 
@@ -144,8 +144,7 @@ def db_read_only() -> Generator[Any, None, None]:
 
 @contextmanager
 def db_batch_operation(
-    batch_size: int = 100,
-    auto_commit_batch: bool = True
+    batch_size: int = 100, auto_commit_batch: bool = True
 ) -> Generator[tuple[Any, Callable[[], None]], None, None]:
     """Context manager pour les opérations par lot (batch) avec commits intermédiaires.
 
@@ -200,4 +199,3 @@ def db_batch_operation(
 transaction = db_transaction
 read_only = db_read_only
 batch_operation = db_batch_operation
-

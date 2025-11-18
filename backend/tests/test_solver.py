@@ -4,6 +4,7 @@ Tests pour services/unified_dispatch/solver.py
 Coverage cible : 70%+
 Tests pour OR-Tools VRPTW (Vehicle Routing Problem with Time Windows)
 """
+
 from datetime import datetime, timedelta
 
 import pytest
@@ -34,7 +35,7 @@ class TestSolverDataclasses:
             estimated_pickup_min=30,
             estimated_dropoff_min=60,
             base_time=base_time,
-            dispatch_run_id=0.100
+            dispatch_run_id=0.100,
         )
 
         assert assignment.booking_id == 1
@@ -55,7 +56,7 @@ class TestSolverDataclasses:
             estimated_pickup_min=30,
             estimated_dropoff_min=60,
             base_time=base_time,
-            dispatch_run_id=0.100
+            dispatch_run_id=0.100,
         )
 
         result = assignment.to_dict()
@@ -71,19 +72,10 @@ class TestSolverDataclasses:
 
     def test_solver_result_structure(self):
         """Test structure SolverResult."""
-        assignments = [
-            SolverAssignment(
-                booking_id=1,
-                driver_id=2,
-                estimated_pickup_min=10,
-                estimated_dropoff_min=20
-            )
-        ]
+        assignments = [SolverAssignment(booking_id=1, driver_id=2, estimated_pickup_min=10, estimated_dropoff_min=20)]
 
         result = SolverResult(
-            assignments=assignments,
-            unassigned_booking_ids=[3, 4],
-            debug={"solver_time_ms": 150, "status": "optimal"}
+            assignments=assignments, unassigned_booking_ids=[3, 4], debug={"solver_time_ms": 150, "status": "optimal"}
         )
 
         assert len(result.assignments) == 1
@@ -109,7 +101,7 @@ class TestSolverEmptyProblems:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": None,
-            "for_date": "2025-0.1-15"
+            "for_date": "2025-0.1-15",
         }
 
         settings = Settings()
@@ -137,7 +129,7 @@ class TestSolverEmptyProblems:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-0.1-15"
+            "for_date": "2025-0.1-15",
         }
 
         settings = Settings()
@@ -164,7 +156,7 @@ class TestSolverEmptyProblems:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-0.1-15"
+            "for_date": "2025-0.1-15",
         }
 
         settings = Settings()
@@ -186,7 +178,7 @@ class TestSolverBasicScenarios:
             company=company,
             pickup_lat=46.2100,
             pickup_lon=6.1500,
-            scheduled_time=datetime.utcnow() + timedelta(hours=2)
+            scheduled_time=datetime.utcnow() + timedelta(hours=2),
         )
 
         problem = {
@@ -194,8 +186,8 @@ class TestSolverBasicScenarios:
             "drivers": [driver],
             "time_matrix": [
                 [0, 10, 15],  # depot
-                [10, 0, 5],   # pickup
-                [15, 5, 0]    # dropoff
+                [10, 0, 5],  # pickup
+                [15, 5, 0],  # dropoff
             ],
             "service_times": [5],  # 5 min de service au pickup
             "time_windows": [(60, 180)],  # Fenêtre 1h-3h
@@ -205,7 +197,7 @@ class TestSolverBasicScenarios:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-0.1-15"
+            "for_date": "2025-0.1-15",
         }
 
         settings = Settings()
@@ -227,13 +219,13 @@ class TestSolverBasicScenarios:
             company=company,
             pickup_lat=46.2044,
             pickup_lon=6.1432,
-            scheduled_time=datetime.utcnow() + timedelta(hours=1)
+            scheduled_time=datetime.utcnow() + timedelta(hours=1),
         )
         booking2 = BookingFactory(
             company=company,
             pickup_lat=46.2150,
             pickup_lon=6.1550,
-            scheduled_time=datetime.utcnow() + timedelta(hours=2)
+            scheduled_time=datetime.utcnow() + timedelta(hours=2),
         )
 
         # Matrice simplifiée : depot + 4 points (2 pickups + 2 dropoffs)
@@ -242,10 +234,10 @@ class TestSolverBasicScenarios:
             "drivers": [driver1, driver2],
             "time_matrix": [
                 [0, 10, 15, 12, 18],  # depot
-                [10, 0, 10, 8, 12],   # pickup1
-                [15, 10, 0, 15, 5],   # dropoff1
-                [12, 8, 15, 0, 10],   # pickup2
-                [18, 12, 5, 10, 0]    # dropoff2
+                [10, 0, 10, 8, 12],  # pickup1
+                [15, 10, 0, 15, 5],  # dropoff1
+                [12, 8, 15, 0, 10],  # pickup2
+                [18, 12, 5, 10, 0],  # dropoff2
             ],
             "service_times": [5, 5],
             "time_windows": [(30, 120), (60, 180)],
@@ -255,7 +247,7 @@ class TestSolverBasicScenarios:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-0.1-15"
+            "for_date": "2025-0.1-15",
         }
 
         settings = Settings()
@@ -288,7 +280,7 @@ class TestSolverConstraints:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-0.1-15"
+            "for_date": "2025-0.1-15",
         }
 
         settings = Settings()
@@ -318,7 +310,7 @@ class TestSolverConstraints:
                 [5, 0, 8, 6, 10],
                 [10, 8, 0, 10, 5],
                 [8, 6, 10, 0, 8],
-                [12, 10, 5, 8, 0]
+                [12, 10, 5, 8, 0],
             ],
             "service_times": [5, 5],
             "time_windows": [(60, 120), (70, 130)],
@@ -328,7 +320,7 @@ class TestSolverConstraints:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-0.1-15"
+            "for_date": "2025-0.1-15",
         }
 
         settings = Settings()
@@ -378,7 +370,7 @@ class TestSolverDebugInfo:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-0.1-15"
+            "for_date": "2025-0.1-15",
         }
 
         settings = Settings()
@@ -407,7 +399,7 @@ class TestSolverDebugInfo:
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
-            "for_date": "2025-0.1-15"
+            "for_date": "2025-0.1-15",
         }
 
         settings = Settings()
@@ -416,4 +408,3 @@ class TestSolverDebugInfo:
         # Problème infaisable → booking non assigné
         assert booking.id in result.unassigned_booking_ids, "Booking impossible devrait être non assigné"
         assert len(result.assignments) == 0, "Aucun assignment pour problème infaisable"
-

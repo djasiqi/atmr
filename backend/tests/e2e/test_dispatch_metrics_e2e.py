@@ -31,10 +31,7 @@ def test_company(db):
 @pytest.fixture
 def test_drivers(db, test_company):
     """Crée des drivers de test."""
-    drivers = [
-        DriverFactory(company=test_company, is_available=True)
-        for _ in range(3)
-    ]
+    drivers = [DriverFactory(company=test_company, is_available=True) for _ in range(3)]
     db.session.commit()
     return drivers
 
@@ -94,22 +91,24 @@ def test_metrics_format_valid(metrics_endpoint):
     """Test: le format Prometheus est valide."""
     response = requests.get(metrics_endpoint, timeout=10)
     content = response.text
-    
+
     # Vérifier la présence de lignes TYPE et HELP
     assert "# TYPE" in content
     assert "# HELP" in content
-    
+
     # Vérifier que les métriques sont bien formatées
     metric_lines = [line for line in content.split("\n") if line.strip() and not line.strip().startswith("#")]
     for metric_line in metric_lines[:10]:  # Limiter à 10 pour performance
-        assert re.match(r"^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^}]*\})?\s+[0-9.+-eE]+", metric_line), f"Ligne mal formatée: {metric_line}"
+        assert re.match(r"^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^}]*\})?\s+[0-9.+-eE]+", metric_line), (
+            f"Ligne mal formatée: {metric_line}"
+        )
 
 
 def test_dispatch_metrics_present(metrics_endpoint):
     """Test: les métriques dispatch sont présentes."""
     response = requests.get(metrics_endpoint, timeout=10)
     content = response.text
-    
+
     expected_metrics = [
         "dispatch_runs_total",
         "dispatch_duration_seconds",
@@ -118,28 +117,23 @@ def test_dispatch_metrics_present(metrics_endpoint):
         "dispatch_unassigned_count",
         "dispatch_circuit_breaker_state",
     ]
-    
+
     for metric in expected_metrics:
         assert metric in content, f"Métrique {metric} non trouvée"
 
 
-def test_dispatch_increments_metrics(
-    db, test_company, test_drivers, test_bookings, metrics_endpoint
-):
+def test_dispatch_increments_metrics(db, test_company, test_drivers, test_bookings, metrics_endpoint):
     """Test: un dispatch incrémente les métriques."""
     # Récupérer métriques avant
     response_before = requests.get(metrics_endpoint, timeout=10)
     metrics_before = parse_metrics(response_before.text)
-    
+
     runs_before = get_metric_value(metrics_before, "dispatch_runs_total")
-    
+
     # Créer et exécuter un dispatch
-    dispatch_run = DispatchRunFactory(
-        company=test_company,
-        status="PENDING"
-    )
+    dispatch_run = DispatchRunFactory(company=test_company, status="PENDING")
     db.session.commit()
-    
+
     # Exécuter le dispatch (simulation)
     try:
         engine.run(
@@ -147,19 +141,19 @@ def test_dispatch_increments_metrics(
             dispatch_day=dispatch_run.day,
             mode="semi_auto",
         )
-        
+
         # Attendre un peu pour que les métriques se mettent à jour
         time.sleep(2)
-        
+
         # Récupérer métriques après
         response_after = requests.get(metrics_endpoint, timeout=10)
         metrics_after = parse_metrics(response_after.text)
-        
+
         runs_after = get_metric_value(metrics_after, "dispatch_runs_total")
-        
+
         # Vérifier que les métriques ont été incrémentées
         assert runs_after >= runs_before, "dispatch_runs_total n'a pas été incrémenté"
-        
+
     except Exception as e:
         pytest.skip(f"Dispatch non exécutable dans ce contexte: {e}")
 
@@ -167,17 +161,14 @@ def test_dispatch_increments_metrics(
 def test_metrics_correlation_with_logs(db, test_company):
     """Test: corrélation entre métriques et logs avec dispatch_run_id."""
     # Créer un dispatch run
-    dispatch_run = DispatchRunFactory(
-        company=test_company,
-        status="PENDING"
-    )
+    dispatch_run = DispatchRunFactory(company=test_company, status="PENDING")
     db.session.commit()
-    
+
     dispatch_run_id = dispatch_run.id
-    
+
     # Vérifier que dispatch_run_id existe
     assert dispatch_run_id is not None
-    
+
     # Dans un vrai test E2E, on vérifierait que les logs contiennent dispatch_run_id
     # Ici, on simule en vérifiant que le dispatch_run existe
     assert DispatchRun.query.get(dispatch_run_id) is not None
@@ -187,13 +178,13 @@ def test_osrm_metrics_present(metrics_endpoint):
     """Test: les métriques OSRM sont présentes."""
     response = requests.get(metrics_endpoint, timeout=10)
     content = response.text
-    
+
     expected_metrics = [
         "osrm_cache_hits_total",
         "osrm_cache_misses_total",
         "osrm_cache_hit_rate",
     ]
-    
+
     for metric in expected_metrics:
         # Les métriques peuvent ne pas être présentes si pas encore utilisées
         # On vérifie juste que le format est correct si présent
@@ -206,13 +197,13 @@ def test_slo_metrics_present(metrics_endpoint):
     """Test: les métriques SLO sont présentes."""
     response = requests.get(metrics_endpoint, timeout=10)
     content = response.text
-    
+
     expected_metrics = [
         "dispatch_slo_breaches_total",
         "dispatch_slo_breach_severity",
         "dispatch_slo_should_alert",
     ]
-    
+
     for metric in expected_metrics:
         assert metric in content, f"Métrique SLO {metric} non trouvée"
 
@@ -221,11 +212,13 @@ def test_metrics_labels(db, test_company, metrics_endpoint):
     """Test: les métriques ont les bons labels."""
     response = requests.get(metrics_endpoint, timeout=10)
     content = response.text
-    
+
     # Vérifier que dispatch_runs_total a les labels attendus
     if "dispatch_runs_total" in content:
         # Chercher une ligne avec les labels
-        metric_lines = [line for line in content.split("\n") if "dispatch_runs_total" in line and not line.startswith("#")]
+        metric_lines = [
+            line for line in content.split("\n") if "dispatch_runs_total" in line and not line.startswith("#")
+        ]
         if metric_lines:
             metric_line = metric_lines[0]
             # Vérifier la présence de labels (format: metric{labels} value)
@@ -235,12 +228,12 @@ def test_metrics_labels(db, test_company, metrics_endpoint):
 @pytest.mark.skip(reason="Nécessite un environnement complet avec Prometheus")
 def test_metrics_in_prometheus():
     """Test: les métriques sont visibles dans Prometheus.
-    
+
     Note: Ce test nécessite Prometheus en cours d'exécution.
     """
     # Ce test devrait être exécuté dans un environnement avec Prometheus
     prometheus_url = "http://localhost:9090"
-    
+
     try:
         response = requests.get(
             f"{prometheus_url}/api/v1/query",
@@ -256,4 +249,3 @@ def test_metrics_in_prometheus():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

@@ -47,7 +47,7 @@ class ModelMetadata:
         hyperparameters: Dict[str, Any] | None = None,
         dataset_info: Dict[str, Any] | None = None,
         model_size_mb: float | None = None,
-        checksum: str | None = None
+        checksum: str | None = None,
     ):
         """Initialise les métadonnées d'un modèle.
 
@@ -96,7 +96,7 @@ class ModelMetadata:
             "hyperparameters": self.hyperparameters,
             "dataset_info": self.dataset_info,
             "model_size_mb": self.model_size_mb,
-            "checksum": self.checksum
+            "checksum": self.checksum,
         }
 
     @classmethod
@@ -115,7 +115,7 @@ class ModelMetadata:
             hyperparameters=data.get("hyperparameters", {}),
             dataset_info=data.get("dataset_info", {}),
             model_size_mb=data.get("model_size_mb"),
-            checksum=data.get("checksum")
+            checksum=data.get("checksum"),
         )
 
 
@@ -156,7 +156,7 @@ class ModelRegistry:
             "models": {},
             "current_models": {},
             "promotion_history": [],
-            "last_updated": datetime.now(UTC).isoformat()
+            "last_updated": datetime.now(UTC).isoformat(),
         }
 
     def _save_registry(self):
@@ -169,7 +169,7 @@ class ModelRegistry:
         self,
         model: torch.nn.Module,
         metadata: ModelMetadata,
-        model_file_path: Path | None = None  # noqa: ARG002
+        model_file_path: Path | None = None,  # noqa: ARG002
     ) -> Path:
         """Enregistre un nouveau modèle dans le registre.
 
@@ -205,20 +205,20 @@ class ModelRegistry:
         if model_key not in self.registry["models"]:
             self.registry["models"][model_key] = []
 
-        self.registry["models"][model_key].append({
-            "version": metadata.version,
-            "created_at": metadata.created_at.isoformat(),
-            "model_path": str(model_path),
-            "metadata_path": str(metadata_path),
-            "performance_metrics": metadata.performance_metrics,
-            "model_size_mb": metadata.model_size_mb,
-            "checksum": metadata.checksum
-        })
+        self.registry["models"][model_key].append(
+            {
+                "version": metadata.version,
+                "created_at": metadata.created_at.isoformat(),
+                "model_path": str(model_path),
+                "metadata_path": str(metadata_path),
+                "performance_metrics": metadata.performance_metrics,
+                "model_size_mb": metadata.model_size_mb,
+                "checksum": metadata.checksum,
+            }
+        )
 
         # Trier par date de création (plus récent en premier)
-        self.registry["models"][model_key].sort(
-            key=lambda x: x["created_at"], reverse=True
-        )
+        self.registry["models"][model_key].sort(key=lambda x: x["created_at"], reverse=True)
 
         self._save_registry()
 
@@ -234,8 +234,7 @@ class ModelRegistry:
                 hash_md5.update(chunk)
         return hash_md5.hexdigest()
 
-    def get_model_versions(self, model_name: str,
-                           model_arch: str) -> List[Dict[str, Any]]:
+    def get_model_versions(self, model_name: str, model_arch: str) -> List[Dict[str, Any]]:
         """Obtient toutes les versions d'un modèle.
 
         Args:
@@ -249,8 +248,7 @@ class ModelRegistry:
         model_key = f"{model_name}_{model_arch}"
         return self.registry["models"].get(model_key, [])
 
-    def get_latest_model(self, model_name: str,
-                         model_arch: str) -> Dict[str, Any] | None:
+    def get_latest_model(self, model_name: str, model_arch: str) -> Dict[str, Any] | None:
         """Obtient la dernière version d'un modèle.
 
         Args:
@@ -265,12 +263,7 @@ class ModelRegistry:
         return versions[0] if versions else None
 
     def promote_model(
-        self,
-        model_name: str,
-        model_arch: str,
-        version: str,
-        kpi_thresholds: Dict[str, float],
-        force: bool = False
+        self, model_name: str, model_arch: str, version: str, kpi_thresholds: Dict[str, float], force: bool = False
     ) -> bool:
         """Promouvoit un modèle vers la production (canary promotion).
 
@@ -307,13 +300,11 @@ class ModelRegistry:
         metadata = ModelMetadata.from_dict(metadata_data)
 
         # Valider les KPIs si pas forcé
-        if not force and not self._validate_kpis(
-                metadata.performance_metrics, kpi_thresholds):
+        if not force and not self._validate_kpis(metadata.performance_metrics, kpi_thresholds):
             return False
 
         # Créer le lien symbolique vers le modèle actuel
-        current_model_path = self.current_path / \
-            f"{model_name}_{model_arch}.pth"
+        current_model_path = self.current_path / f"{model_name}_{model_arch}.pth"
         if current_model_path.exists():
             current_model_path.unlink()
 
@@ -327,26 +318,27 @@ class ModelRegistry:
             "model_path": str(current_model_path),
             "metadata_path": str(metadata_path),
             "performance_metrics": metadata.performance_metrics,
-            "kpi_thresholds": kpi_thresholds
+            "kpi_thresholds": kpi_thresholds,
         }
 
         # Ajouter à l'historique de promotion
-        self.registry["promotion_history"].append({
-            "model_name": model_name,
-            "model_arch": model_arch,
-            "version": version,
-            "promoted_at": datetime.now(UTC).isoformat(),
-            "performance_metrics": metadata.performance_metrics,
-            "kpi_thresholds": kpi_thresholds,
-            "forced": force
-        })
+        self.registry["promotion_history"].append(
+            {
+                "model_name": model_name,
+                "model_arch": model_arch,
+                "version": version,
+                "promoted_at": datetime.now(UTC).isoformat(),
+                "performance_metrics": metadata.performance_metrics,
+                "kpi_thresholds": kpi_thresholds,
+                "forced": force,
+            }
+        )
 
         self._save_registry()
 
         return True
 
-    def _validate_kpis(
-            self, performance_metrics: Dict[str, float], thresholds: Dict[str, float]) -> bool:
+    def _validate_kpis(self, performance_metrics: Dict[str, float], thresholds: Dict[str, float]) -> bool:
         """Valide que les métriques de performance respectent les seuils.
 
         Args:
@@ -359,8 +351,7 @@ class ModelRegistry:
         """
         for metric_name, threshold in thresholds.items():
             if metric_name not in performance_metrics:
-                print(
-                    f"⚠️ Métrique {metric_name} manquante dans les performances")
+                print(f"⚠️ Métrique {metric_name} manquante dans les performances")
                 return False
 
             metric_value = performance_metrics[metric_name]
@@ -369,15 +360,13 @@ class ModelRegistry:
             # seuil
             if metric_name in ["punctuality_rate", "accuracy", "f1_score"]:
                 if metric_value < threshold:
-                    print(
-                        f"❌ {metric_name}: {metric_value:.2f} < {threshold:.2f}")
+                    print(f"❌ {metric_name}: {metric_value:.2f} < {threshold:.2f}")
                     return False
 
             # Pour les métriques de coût (distance, retards), on veut <= seuil
             elif metric_name in ["avg_distance", "avg_delay", "cost"]:
                 if metric_value > threshold:
-                    print(
-                        f"❌ {metric_name}: {metric_value:.2f} > {threshold:.2f}")
+                    print(f"❌ {metric_name}: {metric_value:.2f} > {threshold:.2f}")
                     return False
 
             else:
@@ -386,8 +375,7 @@ class ModelRegistry:
 
         return True
 
-    def rollback_model(self, model_name: str, model_arch: str,
-                       target_version: str | None = None) -> bool:
+    def rollback_model(self, model_name: str, model_arch: str, target_version: str | None = None) -> bool:
         """Effectue un rollback vers une version précédente.
 
         Args:
@@ -411,8 +399,7 @@ class ModelRegistry:
         if target_version is None:
             versions = self.get_model_versions(model_name, model_arch)
             if len(versions) < MIN_VERSIONS_FOR_ROLLBACK:
-                print(
-                    f"❌ Pas de version précédente disponible pour {model_key}")
+                print(f"❌ Pas de version précédente disponible pour {model_key}")
                 return False
 
             # Trouver la version précédente (pas la version actuelle)
@@ -426,13 +413,9 @@ class ModelRegistry:
             return False
 
         # Promouvoir la version cible
-        return self.promote_model(
-            model_name, model_arch, target_version,
-            kpi_thresholds={}, force=True
-        )
+        return self.promote_model(model_name, model_arch, target_version, kpi_thresholds={}, force=True)
 
-    def get_current_model(self, model_name: str,
-                          model_arch: str) -> Dict[str, Any] | None:
+    def get_current_model(self, model_name: str, model_arch: str) -> Dict[str, Any] | None:
         """Obtient le modèle actuellement en production.
 
         Args:
@@ -470,8 +453,7 @@ class ModelRegistry:
         """
         return self.registry["promotion_history"]
 
-    def cleanup_old_versions(self, model_name: str,
-                             model_arch: str, keep_versions: int = 5):
+    def cleanup_old_versions(self, model_name: str, model_arch: str, keep_versions: int = 5):
         """Nettoie les anciennes versions d'un modèle.
 
         Args:
@@ -504,8 +486,7 @@ class ModelRegistry:
         self.registry["models"][model_key] = versions[:keep_versions]
         self._save_registry()
 
-        print(
-            f"🧹 Nettoyage terminé: {len(versions_to_remove)} versions supprimées")
+        print(f"🧹 Nettoyage terminé: {len(versions_to_remove)} versions supprimées")
 
 
 class ModelPromotionValidator:
@@ -521,11 +502,7 @@ class ModelPromotionValidator:
         self.registry = registry
 
     def validate_model_for_promotion(
-        self,
-        model_name: str,
-        model_arch: str,
-        version: str,
-        kpi_thresholds: Dict[str, float]
+        self, model_name: str, model_arch: str, version: str, kpi_thresholds: Dict[str, float]
     ) -> Tuple[bool, List[str]]:
         """Valide qu'un modèle peut être promu.
 
@@ -550,8 +527,7 @@ class ModelPromotionValidator:
                 break
 
         if not target_model:
-            issues.append(
-                f"Modèle {model_name}_{model_arch} version {version} non trouvé")
+            issues.append(f"Modèle {model_name}_{model_arch} version {version} non trouvé")
             return False, issues
 
         # Charger les métadonnées
@@ -566,15 +542,12 @@ class ModelPromotionValidator:
         metadata = ModelMetadata.from_dict(metadata_data)
 
         # Valider les KPIs
-        if not self.registry._validate_kpis(
-                metadata.performance_metrics, kpi_thresholds):
-            issues.append(
-                "Les métriques de performance ne respectent pas les seuils KPI")
+        if not self.registry._validate_kpis(metadata.performance_metrics, kpi_thresholds):
+            issues.append("Les métriques de performance ne respectent pas les seuils KPI")
 
         # Vérifier la taille du modèle
         if metadata.model_size_mb and metadata.model_size_mb > MODEL_SIZE_MB_THRESHOLD:  # 1GB
-            issues.append(
-                f"Modèle trop volumineux: {metadata.model_size_mb:.1f} MB")
+            issues.append(f"Modèle trop volumineux: {metadata.model_size_mb:.1f} MB")
 
         # Vérifier l'âge du modèle
         model_age_days = (datetime.now(UTC) - metadata.created_at).days

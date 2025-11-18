@@ -14,6 +14,7 @@ Conversion en weather_factor (0 - 1):
 - 0.5 = Conditions normales
 - 1 = Conditions très défavorables
 """
+
 import logging
 import os
 from datetime import datetime, timedelta
@@ -88,16 +89,18 @@ class WeatherService:
             weather_data = WeatherService._parse_weather_response(data)
 
             # Calculer weather_factor
-            weather_data["weather_factor"] = WeatherService._calculate_weather_factor(
-                weather_data
-            )
+            weather_data["weather_factor"] = WeatherService._calculate_weather_factor(weather_data)
 
             # Mettre en cache
             WeatherService._put_in_cache(cache_key, weather_data)
 
             logger.info(
                 "[Weather] Fetched for (%s,%s) temp=%s°C, conditions=%s, factor=%s",
-                lat, lon, weather_data["temperature"], weather_data["main_condition"], weather_data["weather_factor"]
+                lat,
+                lon,
+                weather_data["temperature"],
+                weather_data["main_condition"],
+                weather_data["weather_factor"],
             )
 
             return weather_data
@@ -291,4 +294,3 @@ def get_weather_factor(lat: float, lon: float) -> float:
     """
     weather = WeatherService.get_weather(lat, lon)
     return weather.get("weather_factor", 0.5)
-

@@ -1,6 +1,7 @@
 """
 Tests pour le masquage PII dans les logs (CWE-778).
 """
+
 import logging
 from io import StringIO
 
@@ -117,11 +118,8 @@ def test_sanitize_nested_dict():
     """Test sanitization dans structures imbriquées"""
     input_data = {
         "user": "john.doe@example.com",
-        "location": {
-            "coords": "46.519654, 6.632273",
-            "address": "Rue Test"
-        },
-        "phone": "0791234567"
+        "location": {"coords": "46.519654, 6.632273", "address": "Rue Test"},
+        "phone": "0791234567",
     }
 
     result = sanitize_log_data(input_data)
@@ -146,4 +144,3 @@ def test_multiple_pii_in_same_string():
     assert "j***@e***.com" in result
     assert "[GPS_APPROX]" in result
     assert "[PHONE_REDACTED]" in result
-

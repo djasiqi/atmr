@@ -33,9 +33,7 @@ MFA_CHALLENGE_PREFIX = "company_mobile:mfa:challenge:"
 DEFAULT_SCOPES = ["enterprise.dispatch:read", "enterprise.dispatch:write"]
 
 
-company_mobile_auth_ns = Namespace(
-    "company_mobile_auth", description="Authentification mobile entreprise (dispatch)"
-)
+company_mobile_auth_ns = Namespace("company_mobile_auth", description="Authentification mobile entreprise (dispatch)")
 
 
 # ====== Modèles Swagger ======
@@ -76,9 +74,7 @@ refresh_model = company_mobile_auth_ns.model(
 
 # ====== Schemas Marshmallow ======
 class EnterpriseLoginSchema(Schema):
-    method = ma_fields.String(
-        load_default="password", validate=validate.OneOf(["password", "oidc"])
-    )
+    method = ma_fields.String(load_default="password", validate=validate.OneOf(["password", "oidc"]))
     email = ma_fields.Email(load_default=None)
     password = ma_fields.String(load_default=None)
     id_token = ma_fields.String(load_default=None)
@@ -229,9 +225,7 @@ def _store_mfa_challenge(
             json.dumps(payload),
         )
     else:  # pragma: no cover - fallback
-        logger.warning(
-            "[AUTH][Enterprise] Redis indisponible, impossible de stocker le challenge MFA."
-        )
+        logger.warning("[AUTH][Enterprise] Redis indisponible, impossible de stocker le challenge MFA.")
     return challenge_id
 
 
@@ -452,5 +446,3 @@ class EnterpriseMobileSession(Resource):
             "session_id": claims.get("session_id"),
             "aud": claims.get("aud"),
         }, 200
-
-

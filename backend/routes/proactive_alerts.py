@@ -23,10 +23,7 @@ from services.proactive_alerts import ProactiveAlertsService
 logger = logging.getLogger(__name__)
 
 # Créer le blueprint
-proactive_alerts_bp = Blueprint(
-    "proactive_alerts",
-    __name__,
-    url_prefix="/api/alerts")
+proactive_alerts_bp = Blueprint("proactive_alerts", __name__, url_prefix="/api/alerts")
 
 # Instance globale du service
 alerts_service = ProactiveAlertsService()
@@ -50,10 +47,9 @@ def check_delay_risk():
         company_id = request.args.get("company_id")
 
         if not all([booking_id, driver_id, company_id]):
-            return jsonify({
-                "error": "Paramètres manquants",
-                "required": ["booking_id", "driver_id", "company_id"]
-            }), 400
+            return jsonify(
+                {"error": "Paramètres manquants", "required": ["booking_id", "driver_id", "company_id"]}
+            ), 400
 
         # TODO: Récupérer les données depuis la base de données
         # Pour l'instant, simulation avec données mock
@@ -65,15 +61,11 @@ def check_delay_risk():
             driver_data = None
 
         if not booking_data or not driver_data:
-            return jsonify({
-                "error": "Booking ou chauffeur non trouvé"
-            }), 404
+            return jsonify({"error": "Booking ou chauffeur non trouvé"}), 404
 
         # Analyser le risque
         analysis_result = alerts_service.check_delay_risk(
-            booking=booking_data,
-            driver=driver_data,
-            current_time=datetime.now(UTC)
+            booking=booking_data, driver=driver_data, current_time=datetime.now(UTC)
         )
 
         logger.info(
@@ -81,20 +73,14 @@ def check_delay_risk():
             booking_id,
             driver_id,
             analysis_result["delay_probability"] * 100,
-            analysis_result["risk_level"])
+            analysis_result["risk_level"],
+        )
 
-        return jsonify({
-            "success": True,
-            "analysis": analysis_result,
-            "timestamp": datetime.now(UTC).isoformat()
-        })
+        return jsonify({"success": True, "analysis": analysis_result, "timestamp": datetime.now(UTC).isoformat()})
 
     except Exception as e:
         logger.error("[ProactiveAlerts] Erreur endpoint delay-risk: %s", e)
-        return jsonify({
-            "error": "Erreur interne du serveur",
-            "details": str(e)
-        }), 500
+        return jsonify({"error": "Erreur interne du serveur", "details": str(e)}), 500
 
 
 @proactive_alerts_bp.route("/delay-risk", methods=["POST"])
@@ -118,23 +104,16 @@ def analyze_multiple_delay_risks():
         data = request.get_json()
 
         if not data or "assignments" not in data:
-            return jsonify({
-                "error": "Body manquant ou invalide",
-                "required": ["assignments", "company_id"]
-            }), 400
+            return jsonify({"error": "Body manquant ou invalide", "required": ["assignments", "company_id"]}), 400
 
         assignments = data["assignments"]
         company_id = data.get("company_id")
 
         if not company_id:
-            return jsonify({
-                "error": "company_id requis"
-            }), 400
+            return jsonify({"error": "company_id requis"}), 400
 
         if not isinstance(assignments, list) or len(assignments) == 0:
-            return jsonify({
-                "error": "assignments doit être une liste non vide"
-            }), 400
+            return jsonify({"error": "assignments doit être une liste non vide"}), 400
 
         # Analyser chaque assignation
         results = []
@@ -143,11 +122,9 @@ def analyze_multiple_delay_risks():
             driver_id = assignment.get("driver_id")
 
             if not booking_id or not driver_id:
-                results.append({
-                    "booking_id": booking_id,
-                    "driver_id": driver_id,
-                    "error": "booking_id et driver_id requis"
-                })
+                results.append(
+                    {"booking_id": booking_id, "driver_id": driver_id, "error": "booking_id et driver_id requis"}
+                )
                 continue
 
             # Récupérer données
@@ -155,45 +132,30 @@ def analyze_multiple_delay_risks():
             driver_data = _get_mock_driver_data(driver_id)
 
             if not booking_data or not driver_data:
-                results.append({
-                    "booking_id": booking_id,
-                    "driver_id": driver_id,
-                    "error": "Données non trouvées"
-                })
+                results.append({"booking_id": booking_id, "driver_id": driver_id, "error": "Données non trouvées"})
                 continue
 
             # Analyser
             analysis_result = alerts_service.check_delay_risk(
-                booking=booking_data,
-                driver=driver_data,
-                current_time=datetime.now(UTC)
+                booking=booking_data, driver=driver_data, current_time=datetime.now(UTC)
             )
 
-            results.append({
-                "booking_id": booking_id,
-                "driver_id": driver_id,
-                "analysis": analysis_result
-            })
+            results.append({"booking_id": booking_id, "driver_id": driver_id, "analysis": analysis_result})
 
-        logger.info(
-            "[ProactiveAlerts] Analyse batch - %d assignations analysées",
-            len(results)
+        logger.info("[ProactiveAlerts] Analyse batch - %d assignations analysées", len(results))
+
+        return jsonify(
+            {
+                "success": True,
+                "results": results,
+                "total_analyzed": len(results),
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
         )
 
-        return jsonify({
-            "success": True,
-            "results": results,
-            "total_analyzed": len(results),
-            "timestamp": datetime.now(UTC).isoformat()
-        })
-
     except Exception as e:
-        logger.error(
-            "[ProactiveAlerts] Erreur endpoint batch delay-risk: %s", e)
-        return jsonify({
-            "error": "Erreur interne du serveur",
-            "details": str(e)
-        }), 500
+        logger.error("[ProactiveAlerts] Erreur endpoint batch delay-risk: %s", e)
+        return jsonify({"error": "Erreur interne du serveur", "details": str(e)}), 500
 
 
 @proactive_alerts_bp.route("/explain-decision", methods=["POST"])
@@ -219,44 +181,27 @@ def explain_rl_decision():
         data = request.get_json()
 
         if not data:
-            return jsonify({
-                "error": "Body requis"
-            }), 400
+            return jsonify({"error": "Body requis"}), 400
 
         booking_id = data.get("booking_id")
         driver_id = data.get("driver_id")
         rl_decision = data.get("rl_decision", {})
 
         if not all([booking_id, driver_id]):
-            return jsonify({
-                "error": "booking_id et driver_id requis"
-            }), 400
+            return jsonify({"error": "booking_id et driver_id requis"}), 400
 
         # Générer l'explication
         explanation = alerts_service.get_explanation_for_decision(
-            booking_id=booking_id,
-            driver_id=driver_id,
-            rl_decision=rl_decision
+            booking_id=booking_id, driver_id=driver_id, rl_decision=rl_decision
         )
 
-        logger.info(
-            "[ProactiveAlerts] Explication générée - Booking %s, Driver %s",
-            booking_id, driver_id
-        )
+        logger.info("[ProactiveAlerts] Explication générée - Booking %s, Driver %s", booking_id, driver_id)
 
-        return jsonify({
-            "success": True,
-            "explanation": explanation,
-            "timestamp": datetime.now(UTC).isoformat()
-        })
+        return jsonify({"success": True, "explanation": explanation, "timestamp": datetime.now(UTC).isoformat()})
 
     except Exception as e:
-        logger.error(
-            "[ProactiveAlerts] Erreur endpoint explain-decision: %s", e)
-        return jsonify({
-            "error": "Erreur interne du serveur",
-            "details": str(e)
-        }), 500
+        logger.error("[ProactiveAlerts] Erreur endpoint explain-decision: %s", e)
+        return jsonify({"error": "Erreur interne du serveur", "details": str(e)}), 500
 
 
 @proactive_alerts_bp.route("/send-alert", methods=["POST"])
@@ -279,9 +224,7 @@ def send_proactive_alert():
         data = request.get_json()
 
         if not data:
-            return jsonify({
-                "error": "Body requis"
-            }), 400
+            return jsonify({"error": "Body requis"}), 400
 
         booking_id = data.get("booking_id")
         driver_id = data.get("driver_id")
@@ -289,52 +232,44 @@ def send_proactive_alert():
         force_send = data.get("force_send", False)
 
         if not all([booking_id, driver_id, company_id]):
-            return jsonify({
-                "error": "booking_id, driver_id et company_id requis"
-            }), 400
+            return jsonify({"error": "booking_id, driver_id et company_id requis"}), 400
 
         # Récupérer données
         booking_data = _get_mock_booking_data(booking_id)
         driver_data = _get_mock_driver_data(driver_id)
 
         if not booking_data or not driver_data:
-            return jsonify({
-                "error": "Booking ou chauffeur non trouvé"
-            }), 404
+            return jsonify({"error": "Booking ou chauffeur non trouvé"}), 404
 
         # Analyser le risque
         analysis_result = alerts_service.check_delay_risk(
-            booking=booking_data,
-            driver=driver_data,
-            current_time=datetime.now(UTC)
+            booking=booking_data, driver=driver_data, current_time=datetime.now(UTC)
         )
 
         # Envoyer l'alerte
         alert_sent = alerts_service.send_proactive_alert(
-            analysis_result=analysis_result,
-            company_id=company_id,
-            force_send=force_send
+            analysis_result=analysis_result, company_id=company_id, force_send=force_send
         )
 
         logger.info(
             "[ProactiveAlerts] Alerte %s - Booking %s, Company %s",
             "envoyée" if alert_sent else "non envoyée",
-            booking_id, company_id
+            booking_id,
+            company_id,
         )
 
-        return jsonify({
-            "success": True,
-            "alert_sent": alert_sent,
-            "analysis": analysis_result,
-            "timestamp": datetime.now(UTC).isoformat()
-        })
+        return jsonify(
+            {
+                "success": True,
+                "alert_sent": alert_sent,
+                "analysis": analysis_result,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
 
     except Exception as e:
         logger.error("[ProactiveAlerts] Erreur endpoint send-alert: %s", e)
-        return jsonify({
-            "error": "Erreur interne du serveur",
-            "details": str(e)
-        }), 500
+        return jsonify({"error": "Erreur interne du serveur", "details": str(e)}), 500
 
 
 @proactive_alerts_bp.route("/statistics", methods=["GET"])
@@ -351,18 +286,11 @@ def get_alert_statistics():
 
         logger.info("[ProactiveAlerts] Statistiques récupérées")
 
-        return jsonify({
-            "success": True,
-            "statistics": stats,
-            "timestamp": datetime.now(UTC).isoformat()
-        })
+        return jsonify({"success": True, "statistics": stats, "timestamp": datetime.now(UTC).isoformat()})
 
     except Exception as e:
         logger.error("[ProactiveAlerts] Erreur endpoint statistics: %s", e)
-        return jsonify({
-            "error": "Erreur interne du serveur",
-            "details": str(e)
-        }), 500
+        return jsonify({"error": "Erreur interne du serveur", "details": str(e)}), 500
 
 
 @proactive_alerts_bp.route("/clear-history", methods=["POST"])
@@ -386,22 +314,20 @@ def clear_alert_history():
         alerts_service.clear_alert_history(booking_id)
 
         logger.info(
-            "[ProactiveAlerts] Historique nettoyé%s",
-            f" pour booking {booking_id}" if booking_id else " (complet)"
+            "[ProactiveAlerts] Historique nettoyé%s", f" pour booking {booking_id}" if booking_id else " (complet)"
         )
 
-        return jsonify({
-            "success": True,
-            "message": f'Historique nettoyé{" pour booking " + booking_id if booking_id else ""}',
-            "timestamp": datetime.now(UTC).isoformat()
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Historique nettoyé{' pour booking ' + booking_id if booking_id else ''}",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
 
     except Exception as e:
         logger.error("[ProactiveAlerts] Erreur endpoint clear-history: %s", e)
-        return jsonify({
-            "error": "Erreur interne du serveur",
-            "details": str(e)
-        }), 500
+        return jsonify({"error": "Erreur interne du serveur", "details": str(e)}), 500
 
 
 @proactive_alerts_bp.route("/health", methods=["GET"])
@@ -423,25 +349,28 @@ def health_check():
             "components": {
                 "delay_predictor": "loaded" if delay_predictor_loaded else "not_loaded",
                 "notification_service": "available" if notification_service_available else "unavailable",
-                "alerts_service": "running"},
-            "timestamp": datetime.now(UTC).isoformat()}
+                "alerts_service": "running",
+            },
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
         # Déterminer le statut global
         if not delay_predictor_loaded:
             health_status["status"] = "degraded"
-            health_status["warnings"] = [
-                "delay_predictor not loaded - using heuristic fallback"]
+            health_status["warnings"] = ["delay_predictor not loaded - using heuristic fallback"]
 
         return jsonify(health_status)
 
     except Exception as e:
         logger.error("[ProactiveAlerts] Erreur health check: %s", e)
-        return jsonify({
-            "service": "proactive_alerts",
-            "status": "unhealthy",
-            "error": str(e),
-            "timestamp": datetime.now(UTC).isoformat()
-        }), 500
+        return jsonify(
+            {
+                "service": "proactive_alerts",
+                "status": "unhealthy",
+                "error": str(e),
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        ), 500
 
 
 # Fonctions utilitaires pour données mock
@@ -453,26 +382,21 @@ def _get_mock_booking_data(booking_id: str) -> Dict[str, Any] | None:
             "id": "123",
             "pickup_lat": 46.2044,
             "pickup_lon": 6.1432,
-            "pickup_time": (
-                datetime.now(UTC).replace(
-                    microsecond=0) +
-                timedelta(
-                    minutes=25)).isoformat(),
+            "pickup_time": (datetime.now(UTC).replace(microsecond=0) + timedelta(minutes=25)).isoformat(),
             "priority": 3,
             "is_outbound": True,
-            "estimated_duration": 30},
+            "estimated_duration": 30,
+        },
         "124": {
             "id": "124",
             "pickup_lat": 46.2200,
             "pickup_lon": 6.1500,
-            "pickup_time": (
-                datetime.now(UTC).replace(
-                    microsecond=0) +
-                timedelta(
-                    minutes=45)).isoformat(),
+            "pickup_time": (datetime.now(UTC).replace(microsecond=0) + timedelta(minutes=45)).isoformat(),
             "priority": 4,
             "is_outbound": False,
-            "estimated_duration": 25}}
+            "estimated_duration": 25,
+        },
+    }
 
     return mock_bookings.get(booking_id)
 
@@ -488,7 +412,7 @@ def _get_mock_driver_data(driver_id: str) -> Dict[str, Any] | None:
             "current_bookings": 2,
             "load": 0,
             "type": "REGULAR",
-            "available": True
+            "available": True,
         },
         "457": {
             "id": "457",
@@ -497,8 +421,8 @@ def _get_mock_driver_data(driver_id: str) -> Dict[str, Any] | None:
             "current_bookings": 1,
             "load": 0,
             "type": "EMERGENCY",
-            "available": True
-        }
+            "available": True,
+        },
     }
 
     return mock_drivers.get(driver_id)

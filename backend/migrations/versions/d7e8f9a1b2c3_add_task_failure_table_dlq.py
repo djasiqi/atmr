@@ -5,6 +5,7 @@ Revises: f3a9c7b8d1e2
 Create Date: 2025-01-27 10:00:00.000000
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
@@ -35,7 +36,7 @@ def upgrade():
         sa.Column("dispatch_run_id", sa.Integer(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    
+
     # Indexes pour performance
     op.create_index("ix_task_failure_task_id", "task_failure", ["task_id"], unique=True)
     op.create_index("ix_task_failure_task_name", "task_failure", ["task_name"])
@@ -51,7 +52,6 @@ def downgrade():
     op.drop_index("ix_task_failure_dispatch_run_id", table_name="task_failure")
     op.drop_index("ix_task_failure_task_name", table_name="task_failure")
     op.drop_index("ix_task_failure_task_id", table_name="task_failure")
-    
+
     # Supprimer la table
     op.drop_table("task_failure")
-

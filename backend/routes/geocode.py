@@ -13,42 +13,36 @@ from sqlalchemy import func
 from models import FavoritePlace
 from services.google_places import GooglePlacesError, autocomplete_address, geocode_address_google, get_place_details
 
-geocode_ns = Namespace(
-    "geocode",
-    description="Autocomplete & géocodage avec Google Places API")
+geocode_ns = Namespace("geocode", description="Autocomplete & géocodage avec Google Places API")
 
 # Configuration
 # Fallback si Google API indisponible
 PHOTON = os.getenv("PHOTON_BASE_URL", "https://photon.komoot.io")
-USE_GOOGLE_PLACES = os.getenv(
-    "USE_GOOGLE_PLACES",
-    "true").lower() in (
-        "true",
-        "1",
-    "yes")
+USE_GOOGLE_PLACES = os.getenv("USE_GOOGLE_PLACES", "true").lower() in ("true", "1", "yes")
 
 # Constantes pour éviter les valeurs magiques
 MIN_COORDINATES_COUNT = 2
 MIN_QUERY_LENGTH = 2
 
 # Biais géographique Genève (approx)
-GENEVA_CENTER: Tuple[float, float] = (46.2044, 6.1432)   # (lat, lon)
-GENEVA_BBOX: Tuple[float, float, float, float] = (
-    6.02, 46.16, 6.27, 46.28)  # (minLon, minLat, maxLon, maxLat)
+GENEVA_CENTER: Tuple[float, float] = (46.2044, 6.1432)  # (lat, lon)
+GENEVA_BBOX: Tuple[float, float, float, float] = (6.02, 46.16, 6.27, 46.28)  # (minLon, minLat, maxLon, maxLat)
 
 # ===== Aliases canoniques (regex précompilées) =====
 ALIASES: List[Dict[str, Any]] = [
     {
-        "keys": [re.compile(r"\bhug\b", re.I),
-                 re.compile(r"h[ôo]pit(?:al|aux).+gen[eè]ve", re.I),
-                 re.compile(r"\bh[ôo]pital\s+cantonal\b", re.I)],
+        "keys": [
+            re.compile(r"\bhug\b", re.I),
+            re.compile(r"h[ôo]pit(?:al|aux).+gen[eè]ve", re.I),
+            re.compile(r"\bh[ôo]pital\s+cantonal\b", re.I),
+        ],
         "label": "HUG - Hôpitaux Universitaires de Genève",
         "address": "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
         "lat": 46.19226,
         "lon": 6.14262,
         "category": "hospital",
     },
-    #Ajoute d'autres alias ici (La Tour, Butini, etc.)
+    # Ajoute d'autres alias ici (La Tour, Butini, etc.)
 ]
 
 
@@ -68,18 +62,10 @@ def match_alias(q: str) -> Dict[str, Any] | None:
 
 def looks_like_hospital(q: str) -> bool:
     t = (q or "").lower()
-    return any(
-        w in t for w in (
-            "hug",
-            "hopital",
-            "hôpital",
-            "hospital",
-            "clinique",
-            "urgenc"))
+    return any(w in t for w in ("hug", "hopital", "hôpital", "hospital", "clinique", "urgenc"))
 
 
-def photon_query(q: str, lat: float, lon: float, limit: int,
-                 hospital_hint: bool) -> Dict[str, Any]:
+def photon_query(q: str, lat: float, lon: float, limit: int, hospital_hint: bool) -> Dict[str, Any]:
     params = {
         "q": q,
         "limit": max(1, min(limit, 12)),
@@ -114,10 +100,7 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
             country = props.get("country")
 
             # Construire l'adresse complète avec numéro et rue
-            street_with_number = " ".join(
-                x for x in [
-                    street,
-                    housenumber] if x) if street else None
+            street_with_number = " ".join(x for x in [street, housenumber] if x) if street else None
 
             # Construire le label : nom OU adresse complète OU au moins la
             # ville
@@ -134,47 +117,47 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
 
             address_display = street_with_number or street or label
 
-            out.append({
-                "source": "photon",
-                "label": label,
-                "address": address_display,
-                "postcode": props.get("postcode"),
-                "city": city,
-                "country": country,
-                "lat": float(lat),
-                "lon": float(lng),
-                "housenumber": housenumber,
-            })
+            out.append(
+                {
+                    "source": "photon",
+                    "label": label,
+                    "address": address_display,
+                    "postcode": props.get("postcode"),
+                    "city": city,
+                    "country": country,
+                    "lat": float(lat),
+                    "lon": float(lng),
+                    "housenumber": housenumber,
+                }
+            )
         except Exception:
             # Une feature mal formée : on ignore proprement
             continue
 
     # Priorise les adresses avec n° + label pertinent
-    out.sort(
-        key=lambda r: (
-            r.get("housenumber") is None,
-            (r.get("label") or "").lower()))
+    out.sort(key=lambda r: (r.get("housenumber") is None, (r.get("label") or "").lower()))
     return out
 
 
 @geocode_ns.route("/aliases")
 class GeocodeAliases(Resource):
-    @geocode_ns.doc(security=None,
-                    params={"q": "Texte à rechercher (ex: HUG, hôpital cantonal, ... )"})
+    @geocode_ns.doc(security=None, params={"q": "Texte à rechercher (ex: HUG, hôpital cantonal, ... )"})
     def get(self):
         q = request.args.get("q", "")
         hit = match_alias(q)
         if not hit:
             return [], 200
         # IMPORTANT : label = address pour écriture directe dans le champ
-        return [{
-            "source": "alias",
-            "label": hit["address"],
-            "address": hit["address"],
-            "lat": hit["lat"],
-            "lon": hit["lon"],
-            "category": hit.get("category"),
-        }], 200
+        return [
+            {
+                "source": "alias",
+                "label": hit["address"],
+                "address": hit["address"],
+                "lat": hit["lat"],
+                "lon": hit["lon"],
+                "category": hit.get("category"),
+            }
+        ], 200
 
 
 @geocode_ns.route("/autocomplete")
@@ -213,14 +196,16 @@ class GeocodeAutocomplete(Resource):
         # 1) Alias rapides (HUG…)
         alias = match_alias(q)
         if alias:
-            results.append({
-                "source": "alias",
-                "label": alias["address"],   # label = adresse pour l'UI
-                "address": alias["address"],
-                "lat": alias["lat"],
-                "lon": alias["lon"],
-                "category": alias.get("category"),
-            })
+            results.append(
+                {
+                    "source": "alias",
+                    "label": alias["address"],  # label = adresse pour l'UI
+                    "address": alias["address"],
+                    "lat": alias["lat"],
+                    "lon": alias["lon"],
+                    "category": alias.get("category"),
+                }
+            )
 
         # 2) Favoris (optionnel)
         company_id = request.args.get("company_id")
@@ -228,21 +213,24 @@ class GeocodeAutocomplete(Resource):
             try:
                 like_q = f"%{q.lower()}%"
                 favs = (
-                    FavoritePlace.query .filter(
-                        cast(
-                            "Any", FavoritePlace.company_id) == int(company_id), _like_ci(
-                            FavoritePlace.label, like_q)) .order_by(
-                        cast(
-                            "Any", FavoritePlace.label).asc()) .limit(6) .all())
+                    FavoritePlace.query.filter(
+                        cast("Any", FavoritePlace.company_id) == int(company_id), _like_ci(FavoritePlace.label, like_q)
+                    )
+                    .order_by(cast("Any", FavoritePlace.label).asc())
+                    .limit(6)
+                    .all()
+                )
                 for f in favs:
-                    results.append({
-                        "source": "favorite",
-                        "label": f.label,
-                        "address": f.address,
-                        "lat": f.lat,
-                        "lon": f.lon,
-                        "category": "favorite",
-                    })
+                    results.append(
+                        {
+                            "source": "favorite",
+                            "label": f.label,
+                            "address": f.address,
+                            "lat": f.lat,
+                            "lon": f.lon,
+                            "category": "favorite",
+                        }
+                    )
             except Exception as e:
                 current_app.logger.warning("Favorites lookup failed: %s", e)
 
@@ -250,53 +238,39 @@ class GeocodeAutocomplete(Resource):
         if USE_GOOGLE_PLACES:
             try:
                 # Appel à Google Places Autocomplete
-                google_results = autocomplete_address(
-                    q,
-                    location={"lat": lat, "lng": lon},
-                    limit=limit
-                )
+                google_results = autocomplete_address(q, location={"lat": lat, "lng": lon}, limit=limit)
 
                 for pred in google_results:
                     # Pour chaque prédiction, on peut optionnellement récupérer les coordonnées
                     # via Place Details (mais c'est plus coûteux en quota)
                     # Pour l'autocomplete, on retourne juste les suggestions
-                    results.append({
-                        "source": "google_places",
-                        "label": pred.get("description", ""),
-                        "address": pred.get("description", ""),
-                        "place_id": pred.get("place_id"),
-                        "main_text": pred.get("main_text", ""),
-                        "secondary_text": pred.get("secondary_text", ""),
-                        "types": pred.get("types", []),
-                        # Les coordonnées seront récupérées lors de la
-                        # sélection finale
-                        "lat": None,
-                        "lon": None,
-                    })
+                    results.append(
+                        {
+                            "source": "google_places",
+                            "label": pred.get("description", ""),
+                            "address": pred.get("description", ""),
+                            "place_id": pred.get("place_id"),
+                            "main_text": pred.get("main_text", ""),
+                            "secondary_text": pred.get("secondary_text", ""),
+                            "types": pred.get("types", []),
+                            # Les coordonnées seront récupérées lors de la
+                            # sélection finale
+                            "lat": None,
+                            "lon": None,
+                        }
+                    )
             except GooglePlacesError as e:
-                current_app.logger.warning(
-                    "⚠️ Google Places API error, falling back to Photon: %s", e)
+                current_app.logger.warning("⚠️ Google Places API error, falling back to Photon: %s", e)
                 # Fallback vers Photon si Google échoue
                 try:
-                    ph = photon_query(
-                        q,
-                        lat=0.0,
-                        lon=0.0,
-                        limit=limit,
-                        hospital_hint=looks_like_hospital(q))
+                    ph = photon_query(q, lat=0.0, lon=0.0, limit=limit, hospital_hint=looks_like_hospital(q))
                     results.extend(normalize_photon(ph))
                 except Exception as e2:
-                    current_app.logger.warning(
-                        "Photon autocomplete error: %s", e2)
+                    current_app.logger.warning("Photon autocomplete error: %s", e2)
         else:
             # 3) Photon (biais Genève + hint hôpital) - mode fallback
             try:
-                ph = photon_query(
-                    q,
-                    lat=0.0,
-                    lon=0.0,
-                    limit=limit,
-                    hospital_hint=looks_like_hospital(q))
+                ph = photon_query(q, lat=0.0, lon=0.0, limit=limit, hospital_hint=looks_like_hospital(q))
                 results.extend(normalize_photon(ph))
             except Exception as e:
                 current_app.logger.warning("Photon autocomplete error: %s", e)
@@ -306,20 +280,15 @@ class GeocodeAutocomplete(Resource):
         uniq: List[Dict[str, Any]] = []
         for r in results:
             addr_or_label = (r.get("address") or r.get("label") or "").strip()
-            lat_v = float(r.get("lat") or 0.0) if r.get(
-                "lat") is not None else 0.0
-            lon_v = float(r.get("lon") or 0.0) if r.get(
-                "lon") is not None else 0.0
+            lat_v = float(r.get("lat") or 0.0) if r.get("lat") is not None else 0.0
+            lon_v = float(r.get("lon") or 0.0) if r.get("lon") is not None else 0.0
             # Pour les résultats Google sans coordonnées, utiliser place_id
             # pour dédup
             place_id = r.get("place_id")
             if place_id:
                 key = (str(place_id), 0.0, 0.0)
             else:
-                key = (
-                    addr_or_label or "unknown", round(
-                        lat_v, 5), round(
-                        lon_v, 5))
+                key = (addr_or_label or "unknown", round(lat_v, 5), round(lon_v, 5))
             if key in seen:
                 continue
             seen.add(key)
@@ -393,16 +362,20 @@ class GeocodeAddress(Resource):
             else:
                 # Fallback vers le service existant
                 from services.maps import geocode_address
+
                 coords = geocode_address(address, country=country)
-                result = {
-                    "address": address,
-                    "lat": coords.get("lat"),
-                    "lon": coords.get("lon"),
-                } if coords else None
+                result = (
+                    {
+                        "address": address,
+                        "lat": coords.get("lat"),
+                        "lon": coords.get("lon"),
+                    }
+                    if coords
+                    else None
+                )
 
             if not result:
-                return {
-                    "error": "Aucune coordonnée trouvée pour cette adresse"}, 404
+                return {"error": "Aucune coordonnée trouvée pour cette adresse"}, 404
 
             return {
                 "source": "google_geocoding" if USE_GOOGLE_PLACES else "nominatim",

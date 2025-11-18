@@ -2,6 +2,7 @@
 """Modèle pour enregistrer les feedbacks utilisateurs sur les suggestions RL.
 Permet l'amélioration continue du modèle DQN via apprentissage supervisé.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -46,11 +47,7 @@ class RLFeedback(db.Model):
     user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Qui a donné le feedback
 
     # Dates
-    created_at = Column(
-        DateTime,
-        nullable=False,
-        default=func.now(),
-        index=True)
+    created_at = Column(DateTime, nullable=False, default=func.now(), index=True)
     suggestion_generated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Résultats réels (si appliqué)
@@ -63,8 +60,7 @@ class RLFeedback(db.Model):
     # État DQN au moment de la suggestion
     suggestion_state = Column(JSON, nullable=True)
     suggestion_action: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Action DQN choisie
-    suggestion_confidence = Column(
-        Float, nullable=True)  # Confiance de la suggestion
+    suggestion_confidence = Column(Float, nullable=True)  # Confiance de la suggestion
 
     # Métadonnées
     additional_data = Column(JSON, nullable=True)
@@ -162,7 +158,4 @@ class RLFeedback(db.Model):
 
     @override
     def __repr__(self):
-        return (
-            f"<RLFeedback {self.suggestion_id} "
-            f"action={self.action} booking={self.booking_id}>"
-        )
+        return f"<RLFeedback {self.suggestion_id} action={self.action} booking={self.booking_id}>"

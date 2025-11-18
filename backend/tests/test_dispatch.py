@@ -1,6 +1,7 @@
 """
 Tests pour les routes de dispatch (planification automatique).
 """
+
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -11,12 +12,11 @@ from models import Booking, BookingStatus, Driver, User, UserRole, Vehicle
 @pytest.fixture
 def mock_osrm(monkeypatch):
     """Mock OSRM pour éviter appels réseau."""
+
     def fake_table(*args, **kwargs):
         # Retourne une matrice 3x3 factice (durées en secondes)
-        return {
-            "code": "Ok",
-            "durations": [[0, 600, 1200], [600, 0, 800], [1200, 800, 0]]
-        }
+        return {"code": "Ok", "durations": [[0, 600, 1200], [600, 0, 800], [1200, 800, 0]]}
+
     monkeypatch.setattr("services.osrm_client._table", fake_table)
     return fake_table
 
@@ -25,23 +25,15 @@ def mock_osrm(monkeypatch):
 def sample_driver(db, sample_company):
     """Crée un chauffeur de test."""
     from ext import bcrypt
+
     user = User(
-        username="driver1",
-        email="driver@example.com",
-        role=UserRole.driver,
-        first_name="John",
-        last_name="Driver"
+        username="driver1", email="driver@example.com", role=UserRole.driver, first_name="John", last_name="Driver"
     )
     user.password = bcrypt.generate_password_hash("password123").decode("utf-8")
     db.session.add(user)
     db.session.flush()
 
-    driver = Driver(
-        user_id=user.id,
-        company_id=sample_company.id,
-        license_number="CH123456",
-        is_available=True
-    )
+    driver = Driver(user_id=user.id, company_id=sample_company.id, license_number="CH123456", is_available=True)
     db.session.add(driver)
     db.session.commit()
     return driver
@@ -55,7 +47,7 @@ def sample_vehicle(db, sample_company, sample_driver):
         license_plate="VD-123456",
         model="Mercedes Vito",
         seats=8,
-        wheelchair_accessible=True
+        wheelchair_accessible=True,
     )
     db.session.add(vehicle)
     db.session.commit()
@@ -86,11 +78,11 @@ def test_create_booking_for_dispatch(client, auth_headers, db, sample_user, samp
             customer_name=f"Client {i}",
             pickup_location="Lausanne Gare",
             dropoff_location="CHUV",
-            scheduled_time=datetime.now(UTC) + timedelta(hours=i+1),
+            scheduled_time=datetime.now(UTC) + timedelta(hours=i + 1),
             status=BookingStatus.PENDING,
             amount=50.0,
             distance_meters=0.5000,
-            duration_seconds=0.900
+            duration_seconds=0.900,
         )
         db.session.add(booking)
     db.session.commit()
@@ -105,4 +97,3 @@ def test_driver_availability(db, sample_driver):
     driver = Driver.query.get(sample_driver.id)
     assert driver is not None
     assert driver.is_available is True
-

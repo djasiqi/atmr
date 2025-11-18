@@ -2,6 +2,7 @@
 """Models Invoice et tous ses modèles liés (lignes, paiements, rappels, etc.).
 Extrait depuis models.py (lignes ~1763-3258).
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -40,23 +41,11 @@ class Invoice(db.Model):
     __tablename__ = "invoices"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id: Mapped[int] = mapped_column(
-        ForeignKey("company.id"),
-        nullable=False,
-        index=True
-    )
-    client_id: Mapped[int] = mapped_column(
-        ForeignKey("client.id"),
-        nullable=False,
-        index=True
-    )
+    company_id: Mapped[int] = mapped_column(ForeignKey("company.id"), nullable=False, index=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("client.id"), nullable=False, index=True)
 
     # Facturation tierce (Third-Party Billing)
-    bill_to_client_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("client.id"),
-        nullable=True,
-        index=True
-    )
+    bill_to_client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("client.id"), nullable=True, index=True)
 
     # Période de facturation
     period_month: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-12
@@ -77,40 +66,19 @@ class Invoice(db.Model):
     balance_due: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
 
     # Dates clés
-    issued_at = Column(
-        DateTime(
-            timezone=True),
-        nullable=False,
-        default=func.now())
+    issued_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=False)
     sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at = Column(
-        DateTime(
-            timezone=True),
-        nullable=False,
-        server_default=func.now())
-    updated_at = Column(
-        DateTime(
-            timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     # Statut
-    status = Column(
-        SAEnum(
-            InvoiceStatus,
-            name="invoice_status"),
-        nullable=False,
-        default=InvoiceStatus.DRAFT)
+    status = Column(SAEnum(InvoiceStatus, name="invoice_status"), nullable=False, default=InvoiceStatus.DRAFT)
 
     # Rappels
-    reminder_level = Column(
-        Integer,
-        nullable=False,
-        default=0)  # 0 = aucun, 1, 2, 3
+    reminder_level = Column(Integer, nullable=False, default=0)  # 0 = aucun, 1, 2, 3
     last_reminder_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Artifacts
@@ -120,43 +88,19 @@ class Invoice(db.Model):
 
     # Relations
     company = relationship("Company", backref="invoices")
-    client = relationship(
-        "Client",
-        foreign_keys=[client_id],
-        backref="service_invoices")
-    bill_to_client = relationship(
-        "Client",
-        foreign_keys=[bill_to_client_id],
-        backref="billing_invoices")
-    lines = relationship(
-        "InvoiceLine",
-        back_populates="invoice",
-        cascade="all, delete-orphan")
-    payments = relationship(
-        "InvoicePayment",
-        back_populates="invoice",
-        cascade="all, delete-orphan")
-    reminders = relationship(
-        "InvoiceReminder",
-        back_populates="invoice",
-        cascade="all, delete-orphan")
+    client = relationship("Client", foreign_keys=[client_id], backref="service_invoices")
+    bill_to_client = relationship("Client", foreign_keys=[bill_to_client_id], backref="billing_invoices")
+    lines = relationship("InvoiceLine", back_populates="invoice", cascade="all, delete-orphan")
+    payments = relationship("InvoicePayment", back_populates="invoice", cascade="all, delete-orphan")
+    reminders = relationship("InvoiceReminder", back_populates="invoice", cascade="all, delete-orphan")
 
     # Index et contraintes
     __table_args__ = (
-        UniqueConstraint(
-            "company_id",
-            "invoice_number",
-            name="uq_company_invoice_number"),
-        Index(
-            "ix_invoice_company_period",
-            "company_id",
-            "period_year",
-            "period_month"),
+        UniqueConstraint("company_id", "invoice_number", name="uq_company_invoice_number"),
+        Index("ix_invoice_company_period", "company_id", "period_year", "period_month"),
         Index("ix_invoice_status", "company_id", "status"),
         Index("ix_invoice_due_date", "due_date"),
-        CheckConstraint(
-            "total_amount >= 0",
-            name="chk_invoice_amount_positive"),
+        CheckConstraint("total_amount >= 0", name="chk_invoice_amount_positive"),
         CheckConstraint("balance_due >= 0", name="chk_invoice_balance_nonneg"),
         CheckConstraint("amount_paid >= 0", name="chk_invoice_paid_nonneg"),
     )
@@ -236,22 +180,38 @@ class Invoice(db.Model):
             "meta": self.meta,
             "client": {
                 "id": self.client.id,
-                "first_name": getattr(self.client.user, "first_name", "") if hasattr(self.client, "user") and self.client.user else "",
-                "last_name": getattr(self.client.user, "last_name", "") if hasattr(self.client, "user") and self.client.user else "",
-                "username": getattr(self.client.user, "username", "") if hasattr(self.client, "user") and self.client.user else "",
+                "first_name": getattr(self.client.user, "first_name", "")
+                if hasattr(self.client, "user") and self.client.user
+                else "",
+                "last_name": getattr(self.client.user, "last_name", "")
+                if hasattr(self.client, "user") and self.client.user
+                else "",
+                "username": getattr(self.client.user, "username", "")
+                if hasattr(self.client, "user") and self.client.user
+                else "",
                 "is_institution": _as_bool(self.client.is_institution) if self.client else False,
                 "institution_name": self.client.institution_name if self.client else None,
-            } if self.client else None,
+            }
+            if self.client
+            else None,
             "bill_to_client": {
                 "id": self.bill_to_client.id,
-                "first_name": getattr(self.bill_to_client.user, "first_name", "") if hasattr(self.bill_to_client, "user") and self.bill_to_client.user else "",
-                "last_name": getattr(self.bill_to_client.user, "last_name", "") if hasattr(self.bill_to_client, "user") and self.bill_to_client.user else "",
-                "username": getattr(self.bill_to_client.user, "username", "") if hasattr(self.bill_to_client, "user") and self.bill_to_client.user else "",
+                "first_name": getattr(self.bill_to_client.user, "first_name", "")
+                if hasattr(self.bill_to_client, "user") and self.bill_to_client.user
+                else "",
+                "last_name": getattr(self.bill_to_client.user, "last_name", "")
+                if hasattr(self.bill_to_client, "user") and self.bill_to_client.user
+                else "",
+                "username": getattr(self.bill_to_client.user, "username", "")
+                if hasattr(self.bill_to_client, "user") and self.bill_to_client.user
+                else "",
                 "is_institution": _as_bool(self.bill_to_client.is_institution),
                 "institution_name": self.bill_to_client.institution_name,
                 "billing_address": self.bill_to_client.billing_address,
                 "contact_email": self.bill_to_client.contact_email,
-            } if self.bill_to_client else None,
+            }
+            if self.bill_to_client
+            else None,
             "lines": [line.to_dict() for line in self.lines] if hasattr(self, "lines") else [],
             "payments": [payment.to_dict() for payment in self.payments] if hasattr(self, "payments") else [],
             "reminders": [reminder.to_dict() for reminder in self.reminders] if hasattr(self, "reminders") else [],
@@ -266,10 +226,7 @@ class InvoiceLine(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), nullable=False)
 
-    type: Mapped[InvoiceLineType] = mapped_column(
-        SAEnum(InvoiceLineType, name="invoice_line_type"),
-        nullable=False
-    )
+    type: Mapped[InvoiceLineType] = mapped_column(SAEnum(InvoiceLineType, name="invoice_line_type"), nullable=False)
     description: Mapped[str] = mapped_column(String(500), nullable=False)
     qty: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=1)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
@@ -280,19 +237,11 @@ class InvoiceLine(db.Model):
     adjustment_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Optionnel : tracer la source (réservation)
-    reservation_id = Column(
-        Integer,
-        ForeignKey(
-            "booking.id",
-            name="fk_invoice_line_reservation"),
-        nullable=True)
+    reservation_id = Column(Integer, ForeignKey("booking.id", name="fk_invoice_line_reservation"), nullable=True)
 
     # Relations
     invoice = relationship("Invoice", back_populates="lines")
-    reservation = relationship(
-        "Booking",
-        foreign_keys=[reservation_id],
-        backref="invoice_lines_for_reservation")
+    reservation = relationship("Booking", foreign_keys=[reservation_id], backref="invoice_lines_for_reservation")
 
     @override
     def __repr__(self):
@@ -325,18 +274,10 @@ class InvoicePayment(db.Model):
     invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), nullable=False)
 
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    paid_at = Column(
-        DateTime(
-            timezone=True),
-        nullable=False,
-        default=func.now())
+    paid_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
     method = Column(
-        SAEnum(
-            PaymentMethod,
-            name="payment_method",
-            values_callable=lambda enum_cls: [e.value for e in enum_cls]
-        ),
-        nullable=False
+        SAEnum(PaymentMethod, name="payment_method", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        nullable=False,
     )
     reference: Mapped[str] = mapped_column(String(100), nullable=True)
 
@@ -369,11 +310,7 @@ class InvoiceReminder(db.Model):
 
     level: Mapped[int] = mapped_column(Integer, nullable=False)  # 1, 2, 3
     added_fee: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
-    generated_at = Column(
-        DateTime(
-            timezone=True),
-        nullable=False,
-        default=func.now())
+    generated_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
     sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     pdf_url: Mapped[str] = mapped_column(String(500), nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -405,11 +342,7 @@ class CompanyBillingSettings(db.Model):
     __tablename__ = "company_billing_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id: Mapped[int] = mapped_column(
-        ForeignKey("company.id"),
-        nullable=False,
-        unique=True
-    )
+    company_id: Mapped[int] = mapped_column(ForeignKey("company.id"), nullable=False, unique=True)
 
     # Délais et frais
     payment_terms_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=10)
@@ -423,21 +356,22 @@ class CompanyBillingSettings(db.Model):
     vat_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Planning des rappels (en jours)
-    reminder_schedule_days = Column(JSON, nullable=False, default={
-        "1": 10,  # 1er rappel 10j après échéance
-        "2": 5,   # 2e rappel 5j après le 1er
-        "3": 5    # 3e rappel 5j après le 2e
-    })
+    reminder_schedule_days = Column(
+        JSON,
+        nullable=False,
+        default={
+            "1": 10,  # 1er rappel 10j après échéance
+            "2": 5,  # 2e rappel 5j après le 1er
+            "3": 5,  # 3e rappel 5j après le 2e
+        },
+    )
 
     # Configuration
     auto_reminders_enabled = Column(Boolean, nullable=False, default=True)
     email_sender: Mapped[str] = mapped_column(String(200), nullable=True)
 
     # Format de numérotation
-    invoice_number_format = Column(
-        String(50),
-        nullable=False,
-        default="{PREFIX}-{YYYY}-{MM}-{SEQ4}")
+    invoice_number_format = Column(String(50), nullable=False, default="{PREFIX}-{YYYY}-{MM}-{SEQ4}")
     invoice_prefix = Column(String(10), nullable=False, default="EM")
 
     # Informations bancaires
@@ -453,8 +387,7 @@ class CompanyBillingSettings(db.Model):
 
     # Pied de page légal
     legal_footer: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    pdf_template_variant = Column(
-        String(20), nullable=False, default="default")
+    pdf_template_variant = Column(String(20), nullable=False, default="default")
 
     # Relations
     company = relationship("Company", backref="billing_settings")
@@ -509,10 +442,7 @@ class InvoiceSequence(db.Model):
     company = relationship("Company", backref="invoice_sequences")
 
     # Contrainte d'unicité
-    __table_args__ = (
-        UniqueConstraint("company_id", "year", "month",
-                         name="uq_company_year_month"),
-    )
+    __table_args__ = (UniqueConstraint("company_id", "year", "month", name="uq_company_year_month"),)
 
     @override
     def __repr__(self):

@@ -30,10 +30,7 @@ class TestRLSuggestionGenerator:
 
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés."""
-        generator = RLSuggestionGenerator(
-            model_path="custom_model.pkl",
-            enable_logging=True
-        )
+        generator = RLSuggestionGenerator(model_path="custom_model.pkl", enable_logging=True)
 
         assert generator.model_path == "custom_model.pkl"
         assert generator.agent is None
@@ -45,9 +42,10 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         # Mock des modules RL
-        with patch("services.rl.suggestion_generator._dqn_agent", Mock()), \
-             patch("services.rl.suggestion_generator._dispatch_env", Mock()):
-
+        with (
+            patch("services.rl.suggestion_generator._dqn_agent", Mock()),
+            patch("services.rl.suggestion_generator._dispatch_env", Mock()),
+        ):
             result = generator._lazy_import_rl()
 
             assert result is True
@@ -69,9 +67,10 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         # Mock du fichier existant
-        with patch("pathlib.Path.exists", return_value=True), \
-             patch("services.rl.suggestion_generator._dqn_agent", Mock()):
-
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("services.rl.suggestion_generator._dqn_agent", Mock()),
+        ):
             result = generator._load_model()
 
             assert result is True
@@ -93,9 +92,10 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         # Mock pour lever une exception
-        with patch("pathlib.Path.exists", return_value=True), \
-             patch("services.rl.suggestion_generator._dqn_agent", side_effect=Exception("Load error")):
-
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("services.rl.suggestion_generator._dqn_agent", side_effect=Exception("Load error")),
+        ):
             result = generator._load_model()
 
             assert result is False
@@ -114,7 +114,7 @@ class TestRLSuggestionGenerator:
             drivers=[],
             for_date=datetime.now(),
             min_confidence=0.5,
-            max_suggestions=10
+            max_suggestions=10,
         )
 
         assert isinstance(suggestions, list)
@@ -138,7 +138,7 @@ class TestRLSuggestionGenerator:
             drivers=[],
             for_date=datetime.now(),
             min_confidence=0.5,
-            max_suggestions=10
+            max_suggestions=10,
         )
 
         assert isinstance(suggestions, list)
@@ -154,7 +154,7 @@ class TestRLSuggestionGenerator:
             drivers=[],
             for_date=datetime.now(),
             min_confidence=0.5,
-            max_suggestions=10
+            max_suggestions=10,
         )
 
         assert isinstance(suggestions, list)
@@ -165,10 +165,7 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         # Mock des drivers non disponibles
-        drivers = [
-            {"id": "driver_1", "is_available": False},
-            {"id": "driver_2", "is_available": False}
-        ]
+        drivers = [{"id": "driver_1", "is_available": False}, {"id": "driver_2", "is_available": False}]
 
         suggestions = generator.generate_suggestions(
             company_id="company_1",
@@ -176,7 +173,7 @@ class TestRLSuggestionGenerator:
             drivers=drivers,
             for_date=datetime.now(),
             min_confidence=0.5,
-            max_suggestions=10
+            max_suggestions=10,
         )
 
         assert isinstance(suggestions, list)
@@ -187,10 +184,7 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         # Mock des assignments déjà assignés
-        assignments = [
-            {"id": "assignment_1", "driver_id": "driver_1"},
-            {"id": "assignment_2", "driver_id": "driver_2"}
-        ]
+        assignments = [{"id": "assignment_1", "driver_id": "driver_1"}, {"id": "assignment_2", "driver_id": "driver_2"}]
 
         suggestions = generator.generate_suggestions(
             company_id="company_1",
@@ -198,7 +192,7 @@ class TestRLSuggestionGenerator:
             drivers=[],
             for_date=datetime.now(),
             min_confidence=0.5,
-            max_suggestions=10
+            max_suggestions=10,
         )
 
         assert isinstance(suggestions, list)
@@ -216,7 +210,7 @@ class TestRLSuggestionGenerator:
                 drivers=[],
                 for_date=datetime.now(),
                 min_confidence=0.5,
-                max_suggestions=10
+                max_suggestions=10,
             )
 
             assert isinstance(suggestions, list)
@@ -232,7 +226,7 @@ class TestRLSuggestionGenerator:
             drivers=[],
             for_date=datetime.now(),
             min_confidence=0.8,
-            max_suggestions=5
+            max_suggestions=5,
         )
 
         assert isinstance(suggestions, list)
@@ -248,7 +242,7 @@ class TestRLSuggestionGenerator:
             drivers=[],
             for_date=datetime.now(),
             min_confidence=0.9,
-            max_suggestions=10
+            max_suggestions=10,
         )
 
         assert isinstance(suggestions, list)
@@ -264,7 +258,7 @@ class TestRLSuggestionGenerator:
             drivers=[],
             for_date=datetime.now(),
             min_confidence=0.5,
-            max_suggestions=3
+            max_suggestions=3,
         )
 
         assert isinstance(suggestions, list)
@@ -282,7 +276,7 @@ class TestRLSuggestionGenerator:
             drivers=[],
             for_date=past_date,
             min_confidence=0.5,
-            max_suggestions=10
+            max_suggestions=10,
         )
 
         # Test avec date future
@@ -293,7 +287,7 @@ class TestRLSuggestionGenerator:
             drivers=[],
             for_date=future_date,
             min_confidence=0.5,
-            max_suggestions=10
+            max_suggestions=10,
         )
 
         assert isinstance(suggestions1, list)
@@ -315,7 +309,7 @@ class TestRLSuggestionGenerator:
                 drivers=[],
                 for_date=datetime.now(),
                 min_confidence=0.5,
-                max_suggestions=10
+                max_suggestions=10,
             )
 
             assert isinstance(suggestions, list)
@@ -326,12 +320,7 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=None,
-            assignments=None,
-            drivers=None,
-            for_date=None,
-            min_confidence=None,
-            max_suggestions=None
+            company_id=None, assignments=None, drivers=None, for_date=None, min_confidence=None, max_suggestions=None
         )
 
         assert isinstance(suggestions, list)
@@ -342,12 +331,7 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id="",
-            assignments=[],
-            drivers=[],
-            for_date=datetime.now(),
-            min_confidence=0.5,
-            max_suggestions=10
+            company_id="", assignments=[], drivers=[], for_date=datetime.now(), min_confidence=0.5, max_suggestions=10
         )
 
         assert isinstance(suggestions, list)

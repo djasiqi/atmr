@@ -38,7 +38,7 @@ class ShiftsMe(Resource):
     @planning_ns.param("driver_id", "ID du chauffeur (optionnel, > 0)", type="integer", minimum=1)
     def get(self):
         """Récupère les shifts (planning) de l'entreprise.
-        
+
         Query params:
             - driver_id: ID du chauffeur pour filtrer (optionnel)
         """
@@ -50,21 +50,19 @@ class ShiftsMe(Resource):
 
         from schemas.planning_schemas import PlanningShiftsQuerySchema
         from schemas.validation_utils import handle_validation_error, validate_request
-        
+
         args_dict = dict(request.args)
         try:
             validated_args = validate_request(PlanningShiftsQuerySchema(), args_dict, strict=False)
             driver_id = validated_args.get("driver_id")
         except ValidationError as e:
             return handle_validation_error(e)
-        
-        q = db.session.query(DriverShift).filter(
-            DriverShift.company_id == company.id)
+
+        q = db.session.query(DriverShift).filter(DriverShift.company_id == company.id)
         if driver_id:
             q = q.filter(DriverShift.driver_id == driver_id)
         # TODO: parse from/to as ISO
-        items = [serialize_shift(s) for s in q.order_by(
-            DriverShift.start_local).limit(500).all()]
+        items = [serialize_shift(s) for s in q.order_by(DriverShift.start_local).limit(500).all()]
         return {"items": items, "total": len(items)}
 
     @jwt_required()
@@ -80,8 +78,7 @@ class ShiftsMe(Resource):
         except Exception:
             return {"error": "payload invalide"}, 400
         try:
-            validate_shift_overlap(
-                company.id, driver_id, start_local, end_local)
+            validate_shift_overlap(company.id, driver_id, start_local, end_local)
         except ValueError as e:
             return {"error": str(e)}, 409
         s = DriverShift()
@@ -105,7 +102,7 @@ class ShiftDetailMe(Resource):
         # Variables pour stocker le résultat
         result = None
         status_code = 200
-        
+
         company, _, _ = get_company_from_token()
         if not company:
             result = {"error": "unauthorized"}
@@ -142,7 +139,8 @@ class ShiftDetailMe(Resource):
                                 int(getattr(s, "driver_id", 0)),
                                 start_local,
                                 end_local,
-                                exclude_id=int(getattr(s, "id", 0)))
+                                exclude_id=int(getattr(s, "id", 0)),
+                            )
                             s.start_local = start_local
                             s.end_local = end_local
                             if "type" in data:
@@ -212,7 +210,11 @@ class ShiftBreakDetail(Resource):
         if not b:
             return {"error": "not found"}, 404
         s = db.session.get(DriverShift, shift_id)
-        if s is None or getattr(s, "company_id", None) != getattr(company, "id", None) or getattr(b, "shift_id", None) != getattr(s, "id", None):
+        if (
+            s is None
+            or getattr(s, "company_id", None) != getattr(company, "id", None)
+            or getattr(b, "shift_id", None) != getattr(s, "id", None)
+        ):
             return {"error": "not found"}, 404
         db.session.delete(b)
         db.session.commit()
@@ -226,7 +228,7 @@ class Unavailability(Resource):
     @planning_ns.param("driver_id", "ID du chauffeur (optionnel, > 0)", type="integer", minimum=1)
     def get(self):
         """Récupère les indisponibilités de l'entreprise.
-        
+
         Query params:
             - driver_id: ID du chauffeur pour filtrer (optionnel)
         """
@@ -238,16 +240,15 @@ class Unavailability(Resource):
 
         from schemas.planning_schemas import PlanningUnavailabilityQuerySchema
         from schemas.validation_utils import handle_validation_error, validate_request
-        
+
         args_dict = dict(request.args)
         try:
             validated_args = validate_request(PlanningUnavailabilityQuerySchema(), args_dict, strict=False)
             driver_id = validated_args.get("driver_id")
         except ValidationError as e:
             return handle_validation_error(e)
-        
-        q = db.session.query(DriverUnavailability).filter(
-            DriverUnavailability.company_id == company.id)
+
+        q = db.session.query(DriverUnavailability).filter(DriverUnavailability.company_id == company.id)
         if driver_id:
             q = q.filter(DriverUnavailability.driver_id == driver_id)
         items = [
@@ -309,7 +310,7 @@ class WeeklyTemplate(Resource):
     @planning_ns.param("driver_id", "ID du chauffeur (optionnel, > 0)", type="integer", minimum=1)
     def get(self):
         """Récupère les templates hebdomadaires de l'entreprise.
-        
+
         Query params:
             - driver_id: ID du chauffeur pour filtrer (optionnel)
         """
@@ -321,30 +322,33 @@ class WeeklyTemplate(Resource):
 
         from schemas.planning_schemas import PlanningWeeklyTemplateQuerySchema
         from schemas.validation_utils import handle_validation_error, validate_request
-        
+
         args_dict = dict(request.args)
         try:
             validated_args = validate_request(PlanningWeeklyTemplateQuerySchema(), args_dict, strict=False)
             driver_id = validated_args.get("driver_id")
         except ValidationError as e:
             return handle_validation_error(e)
-        
-        q = db.session.query(DriverWeeklyTemplate).filter(
-            DriverWeeklyTemplate.company_id == company.id)
+
+        q = db.session.query(DriverWeeklyTemplate).filter(DriverWeeklyTemplate.company_id == company.id)
         if driver_id:
             q = q.filter(DriverWeeklyTemplate.driver_id == driver_id)
+
         def safe_isoformat(value):
             return value.isoformat() if value is not None else None
-        
-        items = [{"id": t.id,
-                  "driver_id": t.driver_id,
-                  "weekday": t.weekday,
-                  "start_time": safe_isoformat(getattr(t, "start_time", None)),
-                  "end_time": safe_isoformat(getattr(t, "end_time", None)),
-                  "effective_from": safe_isoformat(getattr(t, "effective_from", None)),
-                  "effective_to": safe_isoformat(getattr(t, "effective_to", None)),
-                  } for t in q.order_by(DriverWeeklyTemplate.driver_id,
-                                        DriverWeeklyTemplate.weekday).all()]
+
+        items = [
+            {
+                "id": t.id,
+                "driver_id": t.driver_id,
+                "weekday": t.weekday,
+                "start_time": safe_isoformat(getattr(t, "start_time", None)),
+                "end_time": safe_isoformat(getattr(t, "end_time", None)),
+                "effective_from": safe_isoformat(getattr(t, "effective_from", None)),
+                "effective_to": safe_isoformat(getattr(t, "effective_to", None)),
+            }
+            for t in q.order_by(DriverWeeklyTemplate.driver_id, DriverWeeklyTemplate.weekday).all()
+        ]
         return {"items": items, "total": len(items)}
 
     @jwt_required()
@@ -389,8 +393,7 @@ class WeeklyTemplateDetail(Resource):
         if "effective_from" in data:
             t.effective_from = date.fromisoformat(data["effective_from"])
         if "effective_to" in data:
-            t.effective_to = date.fromisoformat(
-                data["effective_to"]) if data["effective_to"] else None
+            t.effective_to = date.fromisoformat(data["effective_to"]) if data["effective_to"] else None
         db.session.commit()
         return {"ok": True}
 
@@ -416,18 +419,14 @@ class WeeklyTemplateMaterialize(Resource):
             return {"error": "unauthorized"}, 401
         data = request.json or {}
         try:
-            driver_id = int(data["driver_id"]) if data.get(
-                "driver_id") else None
-            from_date = date.fromisoformat(
-                data["from_date"]) if data.get("from_date") else None
-            to_date = date.fromisoformat(
-                data["to_date"]) if data.get("to_date") else None
+            driver_id = int(data["driver_id"]) if data.get("driver_id") else None
+            from_date = date.fromisoformat(data["from_date"]) if data.get("from_date") else None
+            to_date = date.fromisoformat(data["to_date"]) if data.get("to_date") else None
         except Exception:
             return {"error": "payload invalide"}, 400
         if not (driver_id and from_date and to_date):
             return {"error": "missing fields"}, 400
-        created = materialize_template(
-            company.id, driver_id, from_date, to_date)
+        created = materialize_template(company.id, driver_id, from_date, to_date)
         return {"created": int(created)}
 
 

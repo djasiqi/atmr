@@ -31,12 +31,7 @@ class TestPERPriorityUpdateEdgeCases:
         if PrioritizedReplayBuffer is None:
             pytest.skip("PrioritizedReplayBuffer non disponible")
 
-        return PrioritizedReplayBuffer(
-            capacity=0.100,
-            alpha=0.6,
-            beta_start=0.4,
-            beta_end=1.0
-        )
+        return PrioritizedReplayBuffer(capacity=0.100, alpha=0.6, beta_start=0.4, beta_end=1.0)
 
     def test_priority_update_with_zero_td_error(self, buffer):
         """Test mise à jour priorité avec TD-error = 0."""
@@ -107,10 +102,10 @@ class TestPERPriorityUpdateEdgeCases:
         """Test mise à jour priorité avec plusieurs transitions."""
         # Ajouter plusieurs transitions
         for i in range(10):
-            state = np.array([i, i+1, i+2])
+            state = np.array([i, i + 1, i + 2])
             action = i % 3
             reward = i * 0.1
-            next_state = np.array([i+1, i+2, i+3])
+            next_state = np.array([i + 1, i + 2, i + 3])
             done = i == 9
 
             buffer.add(state, action, reward, next_state, done)
@@ -219,10 +214,10 @@ class TestPERPriorityUpdateEdgeCases:
         """Test cohérence des mises à jour de priorité."""
         # Ajouter plusieurs transitions
         for i in range(5):
-            state = np.array([i, i+1, i+2])
+            state = np.array([i, i + 1, i + 2])
             action = i % 3
             reward = i * 0.1
-            next_state = np.array([i+1, i+2, i+3])
+            next_state = np.array([i + 1, i + 2, i + 3])
             done = i == 4
 
             buffer.add(state, action, reward, next_state, done)
@@ -251,10 +246,10 @@ class TestPERPriorityUpdateEdgeCases:
         """Test mise à jour priorité avec TD-errors mixtes."""
         # Ajouter plusieurs transitions
         for i in range(5):
-            state = np.array([i, i+1, i+2])
+            state = np.array([i, i + 1, i + 2])
             action = i % 3
             reward = i * 0.1
-            next_state = np.array([i+1, i+2, i+3])
+            next_state = np.array([i + 1, i + 2, i + 3])
             done = i == 4
 
             buffer.add(state, action, reward, next_state, done)
@@ -287,17 +282,17 @@ class TestPERBufferOverflowEdgeCases:
             capacity=5,  # Petit buffer pour tester le débordement
             alpha=0.6,
             beta_start=0.4,
-            beta_end=1.0
+            beta_end=1.0,
         )
 
     def test_buffer_overflow_priority_update(self, small_buffer):
         """Test mise à jour priorité après débordement du buffer."""
         # Remplir le buffer
         for i in range(7):  # Plus que la capacité
-            state = np.array([i, i+1, i+2])
+            state = np.array([i, i + 1, i + 2])
             action = i % 3
             reward = i * 0.1
-            next_state = np.array([i+1, i+2, i+3])
+            next_state = np.array([i + 1, i + 2, i + 3])
             done = i == 6
 
             small_buffer.add(state, action, reward, next_state, done)
@@ -322,10 +317,10 @@ class TestPERBufferOverflowEdgeCases:
         """Test échantillonnage après débordement du buffer."""
         # Remplir le buffer
         for i in range(7):  # Plus que la capacité
-            state = np.array([i, i+1, i+2])
+            state = np.array([i, i + 1, i + 2])
             action = i % 3
             reward = i * 0.1
-            next_state = np.array([i+1, i+2, i+3])
+            next_state = np.array([i + 1, i + 2, i + 3])
             done = i == 6
 
             small_buffer.add(state, action, reward, next_state, done)
@@ -347,10 +342,10 @@ class TestPERBufferOverflowEdgeCases:
         """Test max_priority après débordement du buffer."""
         # Remplir le buffer
         for i in range(7):  # Plus que la capacité
-            state = np.array([i, i+1, i+2])
+            state = np.array([i, i + 1, i + 2])
             action = i % 3
             reward = i * 0.1
-            next_state = np.array([i+1, i+2, i+3])
+            next_state = np.array([i + 1, i + 2, i + 3])
             done = i == 6
 
             small_buffer.add(state, action, reward, next_state, done)
@@ -369,12 +364,7 @@ class TestPERSamplingEdgeCases:
         if PrioritizedReplayBuffer is None:
             pytest.skip("PrioritizedReplayBuffer non disponible")
 
-        return PrioritizedReplayBuffer(
-            capacity=0.100,
-            alpha=0.6,
-            beta_start=0.4,
-            beta_end=1.0
-        )
+        return PrioritizedReplayBuffer(capacity=0.100, alpha=0.6, beta_start=0.4, beta_end=1.0)
 
     def test_sampling_with_zero_priorities(self, buffer):
         """Test échantillonnage avec priorités zéro."""
@@ -403,10 +393,10 @@ class TestPERSamplingEdgeCases:
         """Test échantillonnage avec priorités identiques."""
         # Ajouter plusieurs transitions avec priorités identiques
         for i in range(5):
-            state = np.array([i, i+1, i+2])
+            state = np.array([i, i + 1, i + 2])
             action = i % 3
             reward = i * 0.1
-            next_state = np.array([i+1, i+2, i+3])
+            next_state = np.array([i + 1, i + 2, i + 3])
             done = i == 4
 
             buffer.add(state, action, reward, next_state, done)
@@ -429,20 +419,20 @@ class TestPERSamplingEdgeCases:
         """Test échantillonnage avec priorités extrêmes."""
         # Ajouter plusieurs transitions
         for i in range(5):
-            state = np.array([i, i+1, i+2])
+            state = np.array([i, i + 1, i + 2])
             action = i % 3
             reward = i * 0.1
-            next_state = np.array([i+1, i+2, i+3])
+            next_state = np.array([i + 1, i + 2, i + 3])
             done = i == 4
 
             buffer.add(state, action, reward, next_state, done)
 
         # Mettre des priorités extrêmes
         buffer.priorities[0] = 1e-6  # Très petite
-        buffer.priorities[1] = 1e6   # Très grande
-        buffer.priorities[2] = 1.0   # Normale
-        buffer.priorities[3] = 0.5   # Normale
-        buffer.priorities[4] = 2.0   # Normale
+        buffer.priorities[1] = 1e6  # Très grande
+        buffer.priorities[2] = 1.0  # Normale
+        buffer.priorities[3] = 0.5  # Normale
+        buffer.priorities[4] = 2.0  # Normale
 
         # Mettre à jour l'arbre après modification des priorités
         for i in range(5):

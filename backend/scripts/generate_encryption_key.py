@@ -3,6 +3,7 @@
 
 Usage: python -m scripts.generate_encryption_key
 """
+
 import os
 import secrets
 import sys
@@ -21,9 +22,9 @@ def main():
     """Génère et affiche la clé d'encryption."""
     print("🔐 Génération d'une clé d'encryption maître (AES-256)...")
     print()
-    
+
     master_key = generate_master_key()
-    
+
     print("✅ Clé générée avec succès:")
     print(f"MASTER_ENCRYPTION_KEY={master_key}")
     print()
@@ -40,11 +41,11 @@ def main():
     print("   - Ne la commitez PAS dans Git")
     print("   - Utilisez un gestionnaire de secrets pour la production")
     print()
-    
+
     # Optionnel: ajouter automatiquement au .env si disponible et mode non-interactif
     env_file = Path(__file__).parent.parent / ".env"
     is_interactive = sys.stdin.isatty()
-    
+
     if env_file.exists():
         with env_file.open("r", encoding="utf-8") as f:
             content = f.read()
@@ -61,10 +62,9 @@ def main():
     else:
         print(f"⚠️  Fichier {env_file} non trouvé")
         print("   Créez-le et ajoutez la clé manuellement.")
-    
+
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
-

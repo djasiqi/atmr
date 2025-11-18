@@ -11,6 +11,7 @@ from typing import ClassVar
 # ✅ 4.1: Import Vault client (optionnel)
 try:
     from shared.vault_client import get_vault_client as _get_vault_client
+
     VAULT_AVAILABLE = True
 except ImportError:
     VAULT_AVAILABLE = False
@@ -27,16 +28,16 @@ def _get_secret_from_vault_or_env(
     required: bool = False,
 ) -> str | None:
     """✅ 4.1: Récupère un secret depuis Vault ou variable d'environnement.
-    
+
     Essaie d'abord Vault, puis fallback vers .env.
-    
+
     Args:
         vault_path: Chemin Vault (ex: "dev/flask/secret_key")
         vault_key: Clé dans Vault (généralement "value")
         env_key: Nom de la variable d'environnement
         default: Valeur par défaut si non trouvée
         required: Si True, lève une exception si non trouvé
-        
+
     Returns:
         Valeur du secret ou None
     """
@@ -49,16 +50,17 @@ def _get_secret_from_vault_or_env(
         except Exception:
             # Fallback silencieux vers .env en cas d'erreur Vault
             pass
-    
+
     # Fallback vers variable d'environnement
     value = os.getenv(env_key, default)
     if value:
         return value
-    
+
     if required:
         raise RuntimeError(f"Secret requis non trouvé: {env_key} (Vault path: {vault_path})")
-    
+
     return None
+
 
 class Config:
     """Configuration de base partagée.
@@ -73,9 +75,7 @@ class Config:
     }
 
     # --- JWT (délais par défaut, surclassables par env) ---
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(
-        seconds=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_SECONDS", str(60 * 60)))
-    )
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_SECONDS", str(60 * 60))))
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(
         seconds=int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES_SECONDS", str(30 * 24 * 3600)))
     )
@@ -97,6 +97,7 @@ class Config:
     @staticmethod
     def init_app(app):
         pass
+
 
 class DevelopmentConfig(Config):
     """Configuration pour le développement local (PostgreSQL via Docker)."""
@@ -130,9 +131,9 @@ class DevelopmentConfig(Config):
     # ✅ PostgreSQL-specific options pour développement
     SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {  # pyright: ignore[reportIncompatibleVariableOverride]
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
-        "pool_size": 10,        # ✅ PERF: Connection pooling (PostgreSQL uniquement)
-        "max_overflow": 20,     # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
-        "connect_args": {"client_encoding": "utf8"}
+        "pool_size": 10,  # ✅ PERF: Connection pooling (PostgreSQL uniquement)
+        "max_overflow": 20,  # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
+        "connect_args": {"client_encoding": "utf8"},
     }
 
     # CORRECTION: Ajout des configurations de cookies pour le développement
@@ -181,9 +182,9 @@ class ProductionConfig(Config):
     # ✅ PostgreSQL-specific options
     SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {  # pyright: ignore[reportIncompatibleVariableOverride]
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
-        "pool_size": 10,        # ✅ PERF: Connection pooling (PostgreSQL uniquement)
-        "max_overflow": 20,     # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
-        "connect_args": {"client_encoding": "utf8"}
+        "pool_size": 10,  # ✅ PERF: Connection pooling (PostgreSQL uniquement)
+        "max_overflow": 20,  # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
+        "connect_args": {"client_encoding": "utf8"},
     }
     # Cookies plus stricts en prod (peuvent être ajustés via env si reverse proxy HTTP)
     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "true").lower() == "true"
@@ -197,6 +198,7 @@ class ProductionConfig(Config):
     PDF_BASE_URL = os.getenv("PDF_BASE_URL")
     if not PDF_BASE_URL:
         pass  # PDF_BASE_URL sera validé au runtime si nécessaire
+
 
 class TestingConfig(Config):
     TESTING = True
@@ -214,7 +216,7 @@ class TestingConfig(Config):
     RATELIMIT_ENABLED = False
     PDF_BASE_URL = "http://testserver"
     UPLOADS_PUBLIC_BASE = "/uploads"
-    
+
     @staticmethod
     def init_app(app):
         """Ajuste les options d'engine selon le type de base de données."""
@@ -222,14 +224,14 @@ class TestingConfig(Config):
         database_url = os.getenv("DATABASE_URL")
         if database_url:
             app.config["SQLALCHEMY_DATABASE_URI"] = database_url
-        
+
         # Ajouter options PostgreSQL uniquement si DATABASE_URL pointe vers PostgreSQL
         db_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
         if db_uri and db_uri.startswith("postgresql"):
             app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
                 **app.config.get("SQLALCHEMY_ENGINE_OPTIONS", {}),
-                "pool_size": 5,        # Pool plus petit pour les tests
-                "max_overflow": 10,     # Overflow plus petit pour les tests
+                "pool_size": 5,  # Pool plus petit pour les tests
+                "max_overflow": 10,  # Overflow plus petit pour les tests
             }
 
 
@@ -238,5 +240,5 @@ config = {
     "development": DevelopmentConfig,
     "testing": TestingConfig,
     "production": ProductionConfig,
-    "default": DevelopmentConfig
+    "default": DevelopmentConfig,
 }

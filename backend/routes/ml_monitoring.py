@@ -1,4 +1,3 @@
-
 # Constantes pour éviter les valeurs magiques
 import logging
 
@@ -30,10 +29,7 @@ Endpoints:
 logger = logging.getLogger(__name__)
 
 # Créer le blueprint
-ml_monitoring_bp = Blueprint(
-    "ml_monitoring",
-    __name__,
-    url_prefix="/api/ml-monitoring")
+ml_monitoring_bp = Blueprint("ml_monitoring", __name__, url_prefix="/api/ml-monitoring")
 
 
 @ml_monitoring_bp.route("/metrics", methods=["GET"])
@@ -81,10 +77,12 @@ def get_daily_metrics():
 
         daily_metrics = MLMonitoringService.get_daily_metrics(days=days)
 
-        return jsonify({
-            "days": days,
-            "data": daily_metrics,
-        }), 200
+        return jsonify(
+            {
+                "days": days,
+                "data": daily_metrics,
+            }
+        ), 200
 
     except Exception as e:
         logger.error("[MLMonitoringAPI] Error getting daily metrics: %s", e)
@@ -110,11 +108,13 @@ def get_recent_predictions():
 
         predictions = MLMonitoringService.get_recent_predictions(limit=limit)
 
-        return jsonify({
-            "limit": limit,
-            "count": len(predictions),
-            "predictions": predictions,
-        }), 200
+        return jsonify(
+            {
+                "limit": limit,
+                "count": len(predictions),
+                "predictions": predictions,
+            }
+        ), 200
 
     except Exception as e:
         logger.error("[MLMonitoringAPI] Error getting predictions: %s", e)
@@ -135,14 +135,15 @@ def get_anomalies():
     try:
         threshold = request.args.get("threshold", 5.0, type=float)
 
-        anomalies = MLMonitoringService.detect_anomalies(
-            threshold_mae=threshold)
+        anomalies = MLMonitoringService.detect_anomalies(threshold_mae=threshold)
 
-        return jsonify({
-            "threshold_mae": threshold,
-            "count": len(anomalies),
-            "anomalies": anomalies,
-        }), 200
+        return jsonify(
+            {
+                "threshold_mae": threshold,
+                "count": len(anomalies),
+                "anomalies": anomalies,
+            }
+        ), 200
 
     except Exception as e:
         logger.error("[MLMonitoringAPI] Error getting anomalies: %s", e)

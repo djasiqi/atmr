@@ -1,6 +1,7 @@
 """
 Tests simplifiés pour RLSuggestionGenerator
 """
+
 import os
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, Mock, patch
@@ -25,11 +26,7 @@ class TestRLSuggestionGeneratorSimple:
 
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés"""
-        generator = RLSuggestionGenerator(
-            model_path="custom/path.pth",
-            max_suggestions=5,
-            min_confidence=0.8
-        )
+        generator = RLSuggestionGenerator(model_path="custom/path.pth", max_suggestions=5, min_confidence=0.8)
 
         assert generator.model_path == "custom/path.pth"
         assert generator.max_suggestions == 5
@@ -44,16 +41,13 @@ class TestRLSuggestionGeneratorSimple:
             {
                 "id": 1,
                 "booking": {"id": 1, "pickup_lat": 45.0, "pickup_lng": 2.0, "dropoff_lat": 45.1, "dropoff_lng": 2.1},
-                "driver": {"id": 1, "lat": 45.0, "lng": 2.0}
+                "driver": {"id": 1, "lat": 45.0, "lng": 2.0},
             }
         ]
         drivers = [{"id": 1, "lat": 45.0, "lng": 2.0}]
 
         suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=assignments,
-            drivers=drivers,
-            for_date=datetime.now()
+            company_id=1, assignments=assignments, drivers=drivers, for_date=datetime.now()
         )
 
         # Devrait retourner des suggestions basiques
@@ -63,12 +57,7 @@ class TestRLSuggestionGeneratorSimple:
         """Test génération de suggestions avec entrée vide"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date=datetime.now()
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date=datetime.now())
 
         assert suggestions == []
 
@@ -80,15 +69,12 @@ class TestRLSuggestionGeneratorSimple:
             {
                 "id": 1,
                 "booking": {"id": 1, "pickup_lat": 45.0, "pickup_lng": 2.0, "dropoff_lat": 45.1, "dropoff_lng": 2.1},
-                "driver": {"id": 1, "lat": 45.0, "lng": 2.0}
+                "driver": {"id": 1, "lat": 45.0, "lng": 2.0},
             }
         ]
 
         suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=assignments,
-            drivers=[],
-            for_date=datetime.now()
+            company_id=1, assignments=assignments, drivers=[], for_date=datetime.now()
         )
 
         assert suggestions == []
@@ -100,10 +86,7 @@ class TestRLSuggestionGeneratorSimple:
         # Mock pour provoquer une exception
         with patch.object(generator, "_generate_basic_suggestions", side_effect=Exception("Test error")):
             suggestions = generator.generate_suggestions(
-                company_id=1,
-                assignments=[],
-                drivers=[],
-                for_date=datetime.now()
+                company_id=1, assignments=[], drivers=[], for_date=datetime.now()
             )
 
             assert suggestions == []
@@ -116,7 +99,7 @@ class TestRLSuggestionGeneratorSimple:
             {
                 "id": 1,
                 "booking": {"id": 1, "pickup_lat": 45.0, "pickup_lng": 2.0, "dropoff_lat": 45.1, "dropoff_lng": 2.1},
-                "driver": {"id": 1, "lat": 45.0, "lng": 2.0}
+                "driver": {"id": 1, "lat": 45.0, "lng": 2.0},
             }
         ]
         drivers = [{"id": 1, "lat": 45.0, "lng": 2.0}]
@@ -127,7 +110,7 @@ class TestRLSuggestionGeneratorSimple:
             drivers=drivers,
             for_date=datetime.now(),
             min_confidence=0.8,
-            max_suggestions=5
+            max_suggestions=5,
         )
 
         assert isinstance(suggestions, list)
@@ -141,17 +124,13 @@ class TestRLSuggestionGeneratorSimple:
             {
                 "id": 1,
                 "booking": {"id": 1, "pickup_lat": 45.0, "pickup_lng": 2.0, "dropoff_lat": 45.1, "dropoff_lng": 2.1},
-                "driver": {"id": 1, "lat": 45.0, "lng": 2.0}
+                "driver": {"id": 1, "lat": 45.0, "lng": 2.0},
             }
         ]
         drivers = [{"id": 1, "lat": 45.0, "lng": 2.0}]
 
         suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=assignments,
-            drivers=drivers,
-            for_date=datetime.now(),
-            min_confidence=0.9
+            company_id=1, assignments=assignments, drivers=drivers, for_date=datetime.now(), min_confidence=0.9
         )
 
         assert isinstance(suggestions, list)
@@ -164,18 +143,14 @@ class TestRLSuggestionGeneratorSimple:
             {
                 "id": i,
                 "booking": {"id": i, "pickup_lat": 45.0, "pickup_lng": 2.0, "dropoff_lat": 45.1, "dropoff_lng": 2.1},
-                "driver": {"id": i, "lat": 45.0, "lng": 2.0}
+                "driver": {"id": i, "lat": 45.0, "lng": 2.0},
             }
             for i in range(10)
         ]
         drivers = [{"id": i, "lat": 45.0, "lng": 2.0} for i in range(10)]
 
         suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=assignments,
-            drivers=drivers,
-            for_date=datetime.now(),
-            max_suggestions=3
+            company_id=1, assignments=assignments, drivers=drivers, for_date=datetime.now(), max_suggestions=3
         )
 
         assert isinstance(suggestions, list)
@@ -189,25 +164,19 @@ class TestRLSuggestionGeneratorSimple:
             {
                 "id": 1,
                 "booking": {"id": 1, "pickup_lat": 45.0, "pickup_lng": 2.0, "dropoff_lat": 45.1, "dropoff_lng": 2.1},
-                "driver": {"id": 1, "lat": 45.0, "lng": 2.0}
+                "driver": {"id": 1, "lat": 45.0, "lng": 2.0},
             }
         ]
         drivers = [{"id": 1, "lat": 45.0, "lng": 2.0}]
 
         # Test avec date d'aujourd'hui
         suggestions1 = generator.generate_suggestions(
-            company_id=1,
-            assignments=assignments,
-            drivers=drivers,
-            for_date=datetime.now()
+            company_id=1, assignments=assignments, drivers=drivers, for_date=datetime.now()
         )
 
         # Test avec date future
         suggestions2 = generator.generate_suggestions(
-            company_id=1,
-            assignments=assignments,
-            drivers=drivers,
-            for_date=datetime.now() + timedelta(days=1)
+            company_id=1, assignments=assignments, drivers=drivers, for_date=datetime.now() + timedelta(days=1)
         )
 
         assert isinstance(suggestions1, list)
@@ -221,24 +190,18 @@ class TestRLSuggestionGeneratorSimple:
             {
                 "id": 1,
                 "booking": {"id": 1, "pickup_lat": 45.0, "pickup_lng": 2.0, "dropoff_lat": 45.1, "dropoff_lng": 2.1},
-                "driver": {"id": 1, "lat": 45.0, "lng": 2.0}
+                "driver": {"id": 1, "lat": 45.0, "lng": 2.0},
             }
         ]
         drivers = [{"id": 1, "lat": 45.0, "lng": 2.0}]
 
         # Test avec différentes entreprises
         suggestions1 = generator.generate_suggestions(
-            company_id=1,
-            assignments=assignments,
-            drivers=drivers,
-            for_date=datetime.now()
+            company_id=1, assignments=assignments, drivers=drivers, for_date=datetime.now()
         )
 
         suggestions2 = generator.generate_suggestions(
-            company_id=2,
-            assignments=assignments,
-            drivers=drivers,
-            for_date=datetime.now()
+            company_id=2, assignments=assignments, drivers=drivers, for_date=datetime.now()
         )
 
         assert isinstance(suggestions1, list)
@@ -252,16 +215,13 @@ class TestRLSuggestionGeneratorSimple:
             {
                 "id": 1,
                 "booking": {"id": 1, "pickup_lat": 45.0, "pickup_lng": 2.0, "dropoff_lat": 45.1, "dropoff_lng": 2.1},
-                "driver": {"id": 1, "lat": 45.0, "lng": 2.0}
+                "driver": {"id": 1, "lat": 45.0, "lng": 2.0},
             }
         ]
         drivers = [{"id": 1, "lat": 45.0, "lng": 2.0}]
 
         suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=assignments,
-            drivers=drivers,
-            for_date=datetime.now()
+            company_id=1, assignments=assignments, drivers=drivers, for_date=datetime.now()
         )
 
         assert isinstance(suggestions, list)

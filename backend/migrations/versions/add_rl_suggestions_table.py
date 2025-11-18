@@ -5,6 +5,7 @@ Revises: rl_feedback_001
 Create Date: 2025-01-20
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -29,7 +30,7 @@ def upgrade():
         sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], name="fk_rl_suggestions_booking_id"),
         sa.ForeignKeyConstraint(["dispatch_run_id"], ["dispatch_run.id"], name="fk_rl_suggestions_dispatch_run_id"),
         sa.ForeignKeyConstraint(["driver_id"], ["driver.id"], name="fk_rl_suggestions_driver_id"),
-        sa.PrimaryKeyConstraint("id")
+        sa.PrimaryKeyConstraint("id"),
     )
 
     # Créer index pour performance

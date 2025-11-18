@@ -42,11 +42,10 @@ def register_proactive_alerts_sockets(socketio: SocketIO):
             logger.info("[ProactiveAlerts] Client connecté: %s", client_id)
 
             # Envoyer confirmation de connexion
-            emit("connection_established", {
-                "status": "connected",
-                "client_id": client_id,
-                "timestamp": datetime.now(UTC).isoformat()
-            })
+            emit(
+                "connection_established",
+                {"status": "connected", "client_id": client_id, "timestamp": datetime.now(UTC).isoformat()},
+            )
 
         except Exception as e:
             logger.error("[ProactiveAlerts] Erreur connexion: %s", e)
@@ -78,7 +77,7 @@ def register_proactive_alerts_sockets(socketio: SocketIO):
     @socketio.on("subscribe_alerts")
     def handle_subscribe_alerts(data: Dict[str, Any]):
         """Gère la subscription aux alertes pour une entreprise.
-        
+
         Data:
             {
                 "company_id": "company_123",
@@ -96,9 +95,7 @@ def register_proactive_alerts_sockets(socketio: SocketIO):
             filters = data.get("filters", {})
 
             if not company_id:
-                emit("subscription_error", {
-                    "error": "company_id requis"
-                })
+                emit("subscription_error", {"error": "company_id requis"})
                 return
 
             # Rejoindre la room de l'entreprise
@@ -111,18 +108,18 @@ def register_proactive_alerts_sockets(socketio: SocketIO):
             active_connections[company_id].add(client_id)
 
             # Confirmer la subscription
-            emit("subscription_confirmed", {
-                "company_id": company_id,
-                "room": room_name,
-                "alert_types": alert_types,
-                "filters": filters,
-                "timestamp": datetime.now(UTC).isoformat()
-            })
-
-            logger.info(
-                "[ProactiveAlerts] Client %s subscribé aux alertes pour company %s",
-                client_id, company_id
+            emit(
+                "subscription_confirmed",
+                {
+                    "company_id": company_id,
+                    "room": room_name,
+                    "alert_types": alert_types,
+                    "filters": filters,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
             )
+
+            logger.info("[ProactiveAlerts] Client %s subscribé aux alertes pour company %s", client_id, company_id)
 
         except Exception as e:
             logger.error("[ProactiveAlerts] Erreur subscription: %s", e)
@@ -131,7 +128,7 @@ def register_proactive_alerts_sockets(socketio: SocketIO):
     @socketio.on("unsubscribe_alerts")
     def handle_unsubscribe_alerts(data: Dict[str, Any]):
         """Gère la désubscription aux alertes.
-        
+
         Data:
             {
                 "company_id": "company_123"
@@ -151,15 +148,9 @@ def register_proactive_alerts_sockets(socketio: SocketIO):
                     if not active_connections[company_id]:
                         del active_connections[company_id]
 
-                emit("unsubscription_confirmed", {
-                    "company_id": company_id,
-                    "timestamp": datetime.now(UTC).isoformat()
-                })
+                emit("unsubscription_confirmed", {"company_id": company_id, "timestamp": datetime.now(UTC).isoformat()})
 
-                logger.info(
-                    "[ProactiveAlerts] Client %s désubscrit des alertes company %s",
-                    client_id, company_id
-                )
+                logger.info("[ProactiveAlerts] Client %s désubscrit des alertes company %s", client_id, company_id)
             else:
                 # Désubscription complète
                 current_rooms = rooms()
@@ -173,10 +164,10 @@ def register_proactive_alerts_sockets(socketio: SocketIO):
                     if not connections:
                         del active_connections[company_id]
 
-                emit("unsubscription_confirmed", {
-                    "message": "Désubscription complète",
-                    "timestamp": datetime.now(UTC).isoformat()
-                })
+                emit(
+                    "unsubscription_confirmed",
+                    {"message": "Désubscription complète", "timestamp": datetime.now(UTC).isoformat()},
+                )
 
         except Exception as e:
             logger.error("[ProactiveAlerts] Erreur désubscription: %s", e)
@@ -185,7 +176,7 @@ def register_proactive_alerts_sockets(socketio: SocketIO):
     @socketio.on("request_explanation")
     def handle_request_explanation(data: Dict[str, Any]):
         """Gère les demandes d'explication RL en temps réel.
-        
+
         Data:
             {
                 "booking_id": "123",
@@ -199,30 +190,26 @@ def register_proactive_alerts_sockets(socketio: SocketIO):
             rl_decision = data.get("rl_decision", {})
 
             if not all([booking_id, driver_id]):
-                emit("explanation_error", {
-                    "error": "booking_id et driver_id requis"
-                })
+                emit("explanation_error", {"error": "booking_id et driver_id requis"})
                 return
 
             # Générer l'explication
             explanation = alerts_service.get_explanation_for_decision(
-                booking_id=str(booking_id),
-                driver_id=str(driver_id),
-                rl_decision=rl_decision
+                booking_id=str(booking_id), driver_id=str(driver_id), rl_decision=rl_decision
             )
 
             # Envoyer l'explication
-            emit("explanation_response", {
-                "booking_id": booking_id,
-                "driver_id": driver_id,
-                "explanation": explanation,
-                "timestamp": datetime.now(UTC).isoformat()
-            })
-
-            logger.info(
-                "[ProactiveAlerts] Explication envoyée - Booking %s, Driver %s",
-                booking_id, driver_id
+            emit(
+                "explanation_response",
+                {
+                    "booking_id": booking_id,
+                    "driver_id": driver_id,
+                    "explanation": explanation,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
             )
+
+            logger.info("[ProactiveAlerts] Explication envoyée - Booking %s, Driver %s", booking_id, driver_id)
 
         except Exception as e:
             logger.error("[ProactiveAlerts] Erreur demande explication: %s", e)
@@ -231,13 +218,11 @@ def register_proactive_alerts_sockets(socketio: SocketIO):
     @socketio.on("ping")
     def handle_ping():
         """Gère les pings de keep-alive."""
-        emit("pong", {
-            "timestamp": datetime.now(UTC).isoformat()
-        })
+        emit("pong", {"timestamp": datetime.now(UTC).isoformat()})
 
     # ✅ C3: Enregistrer handlers ACK
     register_ack_handlers(socketio)
-    
+
     @socketio.on("message_ack")
     def handle_message_ack(data: Dict[str, Any]):
         """✅ C3: Handler pour ACK côté serveur."""
@@ -245,27 +230,29 @@ def register_proactive_alerts_sockets(socketio: SocketIO):
         if message_id:
             manager = get_ack_manager()
             manager.on_ack_received(message_id)
-    
+
     logger.info("[ProactiveAlerts] Handlers Socket.IO enregistrés (incluant ACK C3)")
-    
+
     # Référencer les handlers pour indiquer qu'ils sont utilisés par Socket.IO
-    _handlers = (handle_connect, handle_disconnect, handle_subscribe_alerts, 
-                 handle_unsubscribe_alerts, handle_request_explanation, handle_ping,
-                 handle_message_ack)
+    _handlers = (
+        handle_connect,
+        handle_disconnect,
+        handle_subscribe_alerts,
+        handle_unsubscribe_alerts,
+        handle_request_explanation,
+        handle_ping,
+        handle_message_ack,
+    )
 
 
-def broadcast_delay_alert(
-    company_id: str,
-    analysis_result: Dict[str, Any],
-    socketio: SocketIO
-) -> bool:
+def broadcast_delay_alert(company_id: str, analysis_result: Dict[str, Any], socketio: SocketIO) -> bool:
     """Diffuse une alerte de retard à tous les clients d'une entreprise.
-    
+
     Args:
         company_id: ID de l'entreprise
         analysis_result: Résultat de l'analyse de risque
         socketio: Instance SocketIO
-        
+
     Returns:
         True si diffusion réussie
 
@@ -278,7 +265,7 @@ def broadcast_delay_alert(
             "type": "delay_risk_alert",
             "data": analysis_result,
             "timestamp": datetime.now(UTC).isoformat(),
-            "priority": analysis_result.get("risk_level", "unknown")
+            "priority": analysis_result.get("risk_level", "unknown"),
         }
 
         # Diffuser à la room de l'entreprise
@@ -286,7 +273,9 @@ def broadcast_delay_alert(
 
         logger.info(
             "[ProactiveAlerts] Alerte diffusée - Company %s, Room %s, Risque %s",
-            company_id, room_name, analysis_result.get("risk_level")
+            company_id,
+            room_name,
+            analysis_result.get("risk_level"),
         )
 
         return True
@@ -296,18 +285,14 @@ def broadcast_delay_alert(
         return False
 
 
-def broadcast_rl_explanation(
-    company_id: str,
-    explanation: Dict[str, Any],
-    socketio: SocketIO
-) -> bool:
+def broadcast_rl_explanation(company_id: str, explanation: Dict[str, Any], socketio: SocketIO) -> bool:
     """Diffuse une explication RL à tous les clients d'une entreprise.
-    
+
     Args:
         company_id: ID de l'entreprise
         explanation: Explication RL
         socketio: Instance SocketIO
-        
+
     Returns:
         True si diffusion réussie
 
@@ -319,7 +304,7 @@ def broadcast_rl_explanation(
         explanation_message = {
             "type": "rl_explanation",
             "data": explanation,
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         # Diffuser à la room de l'entreprise
@@ -327,7 +312,8 @@ def broadcast_rl_explanation(
 
         logger.info(
             "[ProactiveAlerts] Explication RL diffusée - Company %s, Booking %s",
-            company_id, explanation.get("booking_id")
+            company_id,
+            explanation.get("booking_id"),
         )
 
         return True
@@ -337,18 +323,14 @@ def broadcast_rl_explanation(
         return False
 
 
-def broadcast_system_status(
-    company_id: str,
-    status_data: Dict[str, Any],
-    socketio: SocketIO
-) -> bool:
+def broadcast_system_status(company_id: str, status_data: Dict[str, Any], socketio: SocketIO) -> bool:
     """Diffuse le statut système à tous les clients d'une entreprise.
-    
+
     Args:
         company_id: ID de l'entreprise
         status_data: Données de statut
         socketio: Instance SocketIO
-        
+
     Returns:
         True si diffusion réussie
 
@@ -357,18 +339,12 @@ def broadcast_system_status(
         room_name = f"company_{company_id}"
 
         # Construire le message de statut
-        status_message = {
-            "type": "system_status",
-            "data": status_data,
-            "timestamp": datetime.now(UTC).isoformat()
-        }
+        status_message = {"type": "system_status", "data": status_data, "timestamp": datetime.now(UTC).isoformat()}
 
         # Diffuser à la room de l'entreprise
         socketio.emit("system_status", status_message, room=room_name)  # type: ignore[call-arg]
 
-        logger.info(
-            "[ProactiveAlerts] Statut système diffusé - Company %s", company_id
-        )
+        logger.info("[ProactiveAlerts] Statut système diffusé - Company %s", company_id)
 
         return True
 
@@ -379,7 +355,7 @@ def broadcast_system_status(
 
 def get_active_connections_stats() -> Dict[str, Any]:
     """Retourne les statistiques des connexions actives.
-    
+
     Returns:
         Statistiques des connexions
 
@@ -390,28 +366,21 @@ def get_active_connections_stats() -> Dict[str, Any]:
         return {
             "total_companies": len(active_connections),
             "total_connections": total_connections,
-            "companies": {
-                company_id: len(connections)
-                for company_id, connections in active_connections.items()
-            },
-            "timestamp": datetime.now(UTC).isoformat()
+            "companies": {company_id: len(connections) for company_id, connections in active_connections.items()},
+            "timestamp": datetime.now(UTC).isoformat(),
         }
-
 
     except Exception as e:
         logger.error("[ProactiveAlerts] Erreur stats connexions: %s", e)
-        return {
-            "error": str(e),
-            "timestamp": datetime.now(UTC).isoformat()
-        }
+        return {"error": str(e), "timestamp": datetime.now(UTC).isoformat()}
 
 
 def cleanup_inactive_connections(socketio: SocketIO) -> int:
     """Nettoie les connexions inactives.
-    
+
     Args:
         socketio: Instance SocketIO
-        
+
     Returns:
         Nombre de connexions nettoyées
 
@@ -425,7 +394,11 @@ def cleanup_inactive_connections(socketio: SocketIO) -> int:
 
             for client_id in active_connections_copy:
                 # Vérifier si la connexion est toujours active
-                if hasattr(socketio, "server") and hasattr(socketio.server, "manager") and not socketio.server.manager.is_connected(client_id):
+                if (
+                    hasattr(socketio, "server")
+                    and hasattr(socketio.server, "manager")
+                    and not socketio.server.manager.is_connected(client_id)
+                ):
                     connections.discard(client_id)
                     cleaned_count += 1
 
@@ -434,9 +407,7 @@ def cleanup_inactive_connections(socketio: SocketIO) -> int:
                 del active_connections[company_id]
 
         if cleaned_count > 0:
-            logger.info(
-                "[ProactiveAlerts] %s connexions inactives nettoyées", cleaned_count
-            )
+            logger.info("[ProactiveAlerts] %s connexions inactives nettoyées", cleaned_count)
 
         return cleaned_count
 
@@ -448,13 +419,14 @@ def cleanup_inactive_connections(socketio: SocketIO) -> int:
 # Fonction utilitaire pour intégrer avec le service d'alertes
 def integrate_with_alerts_service(socketio: SocketIO):
     """Intègre le service d'alertes avec Socket.IO.
-    
+
     Cette fonction peut être appelée depuis le service d'alertes
     pour diffuser automatiquement les alertes via WebSocket.
     """
 
     def enhanced_send_alert(original_send_alert):
         """Wrapper pour diffuser les alertes via Socket.IO."""
+
         def wrapper(analysis_result: Dict[str, Any], company_id: str, force_send: bool = False):
             # Appeler la méthode originale
             success = original_send_alert(analysis_result, company_id, force_send)
@@ -468,8 +440,6 @@ def integrate_with_alerts_service(socketio: SocketIO):
         return wrapper
 
     # Appliquer le wrapper au service d'alertes
-    alerts_service.send_proactive_alert = enhanced_send_alert(
-        alerts_service.send_proactive_alert
-    )
+    alerts_service.send_proactive_alert = enhanced_send_alert(alerts_service.send_proactive_alert)
 
     logger.info("[ProactiveAlerts] Service d'alertes intégré avec Socket.IO")

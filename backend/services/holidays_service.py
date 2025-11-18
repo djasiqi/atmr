@@ -13,6 +13,7 @@ def get_geneva_holidays(year: int) -> Set[date]:
     # country_holidays est itérable sur les dates fériées
     return set(hols)
 
+
 def is_holiday_in_geneva(check_date: date) -> bool:
     """Renvoie True si 'check_date' tombe sur un jour férié officiel de Genève,
     False sinon.

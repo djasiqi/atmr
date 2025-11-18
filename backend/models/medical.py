@@ -43,10 +43,7 @@ Extrait depuis models.py (lignes ~2016-2393).
 class FavoritePlace(db.Model):
     __tablename__ = "favorite_place"
     __table_args__ = (
-        UniqueConstraint(
-            "company_id",
-            "address",
-            name="uq_fav_company_address"),
+        UniqueConstraint("company_id", "address", name="uq_fav_company_address"),
         Index("ix_fav_company_label", "company_id", "label"),
         Index("ix_fav_company_coords", "company_id", "lat", "lon"),
         CheckConstraint("lat BETWEEN -90 AND 90", name="chk_fav_lat"),
@@ -54,13 +51,7 @@ class FavoritePlace(db.Model):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id = Column(
-        Integer,
-        ForeignKey(
-            "company.id",
-            ondelete="CASCADE"),
-        nullable=False,
-        index=True)
+    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
 
     label: Mapped[str] = mapped_column(String(200), nullable=False)
     address: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -70,17 +61,8 @@ class FavoritePlace(db.Model):
 
     tags = Column(String(200))
 
-    created_at = Column(
-        DateTime(
-            timezone=True),
-        server_default=func.now(),
-        nullable=False)
-    updated_at = Column(
-        DateTime(
-            timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Normalisation & validations
     @staticmethod
@@ -190,27 +172,15 @@ class MedicalEstablishment(db.Model):
     aliases: Mapped[str] = mapped_column(String(500), nullable=True)
     active = Column(Boolean, nullable=False, default=True)
 
-    created_at = Column(
-        DateTime(
-            timezone=True),
-        server_default=func.now(),
-        nullable=False)
-    updated_at = Column(
-        DateTime(
-            timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     services = relationship(
-        "MedicalService",
-        backref="establishment",
-        cascade="all, delete-orphan",
-        passive_deletes=True)
+        "MedicalService", backref="establishment", cascade="all, delete-orphan", passive_deletes=True
+    )
 
     def alias_list(self):
-        return [a.strip().lower()
-                for a in (self.aliases or "").split(";") if a.strip()]
+        return [a.strip().lower() for a in (self.aliases or "").split(";") if a.strip()]
 
     def to_dict(self):
         return {
@@ -241,7 +211,8 @@ class MedicalEstablishment(db.Model):
             msg = f"'{key}' ne peut pas être vide."
             raise ValueError(msg)
         if (key == "name" and len(v) > NAME_MAX_LENGTH) or (
-                key in {"display_name", "address"} and len(v) > DISPLAY_NAME_MAX_LENGTH):
+            key in {"display_name", "address"} and len(v) > DISPLAY_NAME_MAX_LENGTH
+        ):
             msg = f"'{key}' dépasse la longueur maximale autorisée."
             raise ValueError(msg)
         return v
@@ -282,26 +253,15 @@ class MedicalEstablishment(db.Model):
 class MedicalService(db.Model):
     __tablename__ = "medical_service"
     __table_args__ = (
-        UniqueConstraint(
-            "establishment_id",
-            "name",
-            name="uq_med_service_per_estab"),
-        CheckConstraint(
-            "lat IS NULL OR (lat BETWEEN -90 AND 90)",
-            name="chk_med_service_lat"),
-        CheckConstraint(
-            "lon IS NULL OR (lon BETWEEN -180 AND 180)",
-            name="chk_med_service_lon"),
+        UniqueConstraint("establishment_id", "name", name="uq_med_service_per_estab"),
+        CheckConstraint("lat IS NULL OR (lat BETWEEN -90 AND 90)", name="chk_med_service_lat"),
+        CheckConstraint("lon IS NULL OR (lon BETWEEN -180 AND 180)", name="chk_med_service_lon"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     establishment_id = Column(
-        Integer,
-        ForeignKey(
-            "medical_establishment.id",
-            ondelete="CASCADE"),
-        nullable=False,
-        index=True)
+        Integer, ForeignKey("medical_establishment.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     category = Column(String(50), nullable=False, default="Service")
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -321,17 +281,8 @@ class MedicalService(db.Model):
     lon: Mapped[float] = mapped_column(Float, nullable=True)
 
     active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(
-        DateTime(
-            timezone=True),
-        server_default=func.now(),
-        nullable=False)
-    updated_at = Column(
-        DateTime(
-            timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     def to_dict(self):
         return {

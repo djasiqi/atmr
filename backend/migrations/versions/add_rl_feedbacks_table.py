@@ -5,6 +5,7 @@ Revises: rl_metrics_001
 Create Date: 2025-10-21
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -38,7 +39,7 @@ def upgrade():
         sa.Column("suggestion_action", sa.Integer(), nullable=True),
         sa.Column("suggestion_confidence", sa.Float(), nullable=True),
         sa.Column("additional_data", sa.JSON(), nullable=True),
-        sa.PrimaryKeyConstraint("id")
+        sa.PrimaryKeyConstraint("id"),
     )
 
     # Créer index pour performance
@@ -57,4 +58,3 @@ def downgrade():
     op.drop_index("ix_rl_feedbacks_suggestion_id", table_name="rl_feedbacks")
     op.drop_index("ix_rl_feedbacks_company_id", table_name="rl_feedbacks")
     op.drop_table("rl_feedbacks")
-

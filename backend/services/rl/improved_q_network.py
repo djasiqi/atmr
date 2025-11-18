@@ -188,9 +188,7 @@ class DuelingQNetwork(nn.Module):
 
         # Couches partagées (shared layers)
         self.shared_fc1 = nn.Linear(state_dim, shared_hidden_sizes[0])
-        self.shared_fc2 = nn.Linear(
-            shared_hidden_sizes[0],
-            shared_hidden_sizes[1])
+        self.shared_fc2 = nn.Linear(shared_hidden_sizes[0], shared_hidden_sizes[1])
         self.shared_dropout = nn.Dropout(dropout_rate)
 
         # Stream de valeur V(s)
@@ -198,8 +196,7 @@ class DuelingQNetwork(nn.Module):
         self.value_fc2 = nn.Linear(value_hidden_size, 1)  # Valeur scalaire
 
         # Stream d'avantage A(s,a)
-        self.advantage_fc1 = nn.Linear(
-            shared_hidden_sizes[1], advantage_hidden_size)
+        self.advantage_fc1 = nn.Linear(shared_hidden_sizes[1], advantage_hidden_size)
         self.advantage_fc2 = nn.Linear(advantage_hidden_size, action_dim)
 
         # Initialisation améliorée
@@ -249,8 +246,7 @@ class DuelingQNetwork(nn.Module):
         # Q-values finales
         return value + advantage - advantage_mean
 
-    def get_value_and_advantage(
-            self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def get_value_and_advantage(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Retourne séparément la valeur d'état et l'avantage des actions.
 
         Args:
@@ -299,7 +295,7 @@ class NoisyImprovedQNetwork(nn.Module):
         dropout_rates: Tuple[float, float, float] = (0.3, 0.3, 0.2),
         use_noisy: bool = True,
         std_init: float = 0.5,
-        device: torch.device | None = None
+        device: torch.device | None = None,
     ):
         """Initialise le réseau Q amélioré avec support Noisy Networks.
 
@@ -327,15 +323,12 @@ class NoisyImprovedQNetwork(nn.Module):
                 action_size=action_dim,
                 hidden_sizes=list(hidden_sizes),
                 std_init=std_init,
-                device=device
+                device=device,
             )
         else:
             # Fallback vers le réseau standard
             self.network = ImprovedQNetwork(
-                state_dim=state_dim,
-                action_dim=action_dim,
-                hidden_sizes=hidden_sizes,
-                dropout_rates=dropout_rates
+                state_dim=state_dim, action_dim=action_dim, hidden_sizes=hidden_sizes, dropout_rates=dropout_rates
             )
 
     def forward(self, state: torch.Tensor) -> torch.Tensor:
@@ -382,7 +375,7 @@ class NoisyDuelingImprovedQNetwork(nn.Module):
         dropout_rates: Tuple[float, float, float] = (0.3, 0.3, 0.2),
         use_noisy: bool = True,
         std_init: float = 0.5,
-        device: torch.device | None = None
+        device: torch.device | None = None,
     ):
         """Initialise le réseau Dueling Q amélioré avec support Noisy Networks.
 
@@ -410,7 +403,7 @@ class NoisyDuelingImprovedQNetwork(nn.Module):
                 action_size=action_dim,
                 hidden_sizes=list(hidden_sizes),
                 std_init=std_init,
-                device=device
+                device=device,
             )
         else:
             # Fallback vers le réseau Dueling standard
@@ -420,7 +413,7 @@ class NoisyDuelingImprovedQNetwork(nn.Module):
                 shared_hidden_sizes=(hidden_sizes[0], hidden_sizes[1]),
                 value_hidden_size=hidden_sizes[2],
                 advantage_hidden_size=hidden_sizes[3],
-                dropout_rate=dropout_rates[0]
+                dropout_rate=dropout_rates[0],
             )
 
     def forward(self, state: torch.Tensor) -> torch.Tensor:
@@ -460,7 +453,7 @@ def create_q_network(
     dropout_rates: Tuple[float, float, float] = (0.3, 0.3, 0.2),
     use_noisy: bool = False,
     std_init: float = 0.5,
-    device: torch.device | None = None
+    device: torch.device | None = None,
 ) -> nn.Module:
     """Factory function pour créer des réseaux Q.
 
@@ -482,25 +475,23 @@ def create_q_network(
 
     """
     if network_type.lower() == "standard":
-        return ImprovedQNetwork(state_dim, action_dim,
-                                hidden_sizes, dropout_rates)
+        return ImprovedQNetwork(state_dim, action_dim, hidden_sizes, dropout_rates)
     if network_type.lower() == "dueling":
         return DuelingQNetwork(
-            state_dim, action_dim,
+            state_dim,
+            action_dim,
             shared_hidden_sizes=(hidden_sizes[0], hidden_sizes[1]),
             value_hidden_size=hidden_sizes[2],
             advantage_hidden_size=hidden_sizes[3],
-            dropout_rate=dropout_rates[0]
+            dropout_rate=dropout_rates[0],
         )
     if network_type.lower() == "noisy":
         return NoisyImprovedQNetwork(
-            state_dim, action_dim, hidden_sizes, dropout_rates,
-            use_noisy=use_noisy, std_init=std_init, device=device
+            state_dim, action_dim, hidden_sizes, dropout_rates, use_noisy=use_noisy, std_init=std_init, device=device
         )
     if network_type.lower() == "noisy_dueling":
         return NoisyDuelingImprovedQNetwork(
-            state_dim, action_dim, hidden_sizes, dropout_rates,
-            use_noisy=use_noisy, std_init=std_init, device=device
+            state_dim, action_dim, hidden_sizes, dropout_rates, use_noisy=use_noisy, std_init=std_init, device=device
         )
     msg = f"Type de réseau non supporté: {network_type}"
     raise ValueError(msg)

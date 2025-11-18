@@ -1,4 +1,3 @@
-
 # Constantes pour éviter les valeurs magiques
 import logging
 from typing import Any, ClassVar, Dict
@@ -38,7 +37,7 @@ class AdvancedRewardShaping:
     - Pénalités progressives
     - Configuration via settings
     """
-    
+
     # Déclaration de variable d'instance pour le linter
     _custom_weights: Dict[str, float] | None = None
 
@@ -81,7 +80,11 @@ class AdvancedRewardShaping:
 
         logger.info(
             "[RewardShaping] Initialisé avec poids: punct=%.1f, dist=%.1f, equity=%.1f, eff=%.1f, sat=%.1f",
-            punctuality_weight, distance_weight, equity_weight, efficiency_weight, satisfaction_weight
+            punctuality_weight,
+            distance_weight,
+            equity_weight,
+            efficiency_weight,
+            satisfaction_weight,
         )
 
     def calculate_reward(
@@ -89,7 +92,7 @@ class AdvancedRewardShaping:
         state: np.ndarray[Any, np.dtype[np.float32]],  # noqa: ARG002
         action: int,  # noqa: ARG002
         next_state: np.ndarray[Any, np.dtype[np.float32]],  # noqa: ARG002
-        info: Dict[str, Any]
+        info: Dict[str, Any],
     ) -> float:
         """Calcule la récompense totale avec shaping avancé.
 
@@ -129,7 +132,12 @@ class AdvancedRewardShaping:
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
                 "[RewardShaping] Détail: punct=%.1f, dist=%.1f, equity=%.1f, eff=%.1f, sat=%.1f → total=%.1f",
-                punctuality_reward, distance_reward, equity_reward, efficiency_reward, satisfaction_reward, reward
+                punctuality_reward,
+                distance_reward,
+                equity_reward,
+                efficiency_reward,
+                satisfaction_reward,
+                reward,
             )
 
         return reward
@@ -204,7 +212,7 @@ class AdvancedRewardShaping:
         if load_std < self.excellent_equity_threshold:
             return 100  # Excellent équilibre
         if load_std < self.good_equity_threshold:
-            return 50   # Bon équilibre
+            return 50  # Bon équilibre
         return float(-load_std * 10)  # Pénalité déséquilibre
 
     def _calculate_efficiency_reward(self, info: Dict[str, Any]) -> float:
@@ -252,8 +260,7 @@ class AdvancedRewardShaping:
             return 15
 
         # Pénalité pour chauffeur EMERGENCY utilisé pour course normale
-        if info.get("driver_type") == "EMERGENCY" and info.get(
-                "booking_priority", 3) < HIGH_PRIORITY_THRESHOLD:
+        if info.get("driver_type") == "EMERGENCY" and info.get("booking_priority", 3) < HIGH_PRIORITY_THRESHOLD:
             return -10
 
         return 0
@@ -268,8 +275,7 @@ class AdvancedRewardShaping:
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-                logger.info(
-                    "[RewardShaping] Poids %s mis à jour: %.2f", key, value)
+                logger.info("[RewardShaping] Poids %s mis à jour: %.2f", key, value)
 
     def get_current_weights(self) -> Dict[str, float]:
         """Retourne les poids actuels.

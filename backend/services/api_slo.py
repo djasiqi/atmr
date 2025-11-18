@@ -18,6 +18,7 @@ from typing import Dict, Optional
 # Import optionnel prometheus_client (peut ne pas être installé en dev)
 try:
     from prometheus_client import Counter, Histogram
+
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
@@ -28,7 +29,7 @@ except ImportError:
 @dataclass
 class APISLOTarget:
     """Définition d'un SLO pour une route API.
-    
+
     Attributes:
         endpoint: Pattern de l'endpoint (ex: "/api/bookings" ou "/api/bookings/:id")
         latency_p95_max_ms: Latence p95 maximale en millisecondes
@@ -36,6 +37,7 @@ class APISLOTarget:
         availability_min: Disponibilité minimale (ex: 0.99 = 99%)
         method: Méthode HTTP (optionnel, si None, s'applique à toutes les méthodes)
     """
+
     endpoint: str
     latency_p95_max_ms: int
     error_rate_max: float
@@ -58,7 +60,6 @@ API_SLOS: Dict[str, APISLOTarget] = {
         error_rate_max=0.01,
         availability_min=0.99,
     ),
-    
     # Routes Companies (profil utilisateur)
     "/api/companies/me": APISLOTarget(
         endpoint="/api/companies/me",
@@ -66,7 +67,6 @@ API_SLOS: Dict[str, APISLOTarget] = {
         error_rate_max=0.01,
         availability_min=0.99,
     ),
-    
     # Routes Auth (critique pour l'accès)
     "/api/auth/login": APISLOTarget(
         endpoint="/api/auth/login",
@@ -80,7 +80,6 @@ API_SLOS: Dict[str, APISLOTarget] = {
         error_rate_max=0.02,
         availability_min=0.99,
     ),
-    
     # Routes Dispatch (critique métier)
     "/api/dispatch/run": APISLOTarget(
         endpoint="/api/dispatch/run",
@@ -94,7 +93,6 @@ API_SLOS: Dict[str, APISLOTarget] = {
         error_rate_max=0.01,
         availability_min=0.99,
     ),
-    
     # Routes Drivers (mise à jour fréquente)
     "/api/drivers": APISLOTarget(
         endpoint="/api/drivers",
@@ -102,7 +100,6 @@ API_SLOS: Dict[str, APISLOTarget] = {
         error_rate_max=0.01,
         availability_min=0.99,
     ),
-    
     # Routes Health (critique pour monitoring)
     "/api/health": APISLOTarget(
         endpoint="/api/health",
@@ -121,11 +118,11 @@ API_SLOS: Dict[str, APISLOTarget] = {
 
 def get_slo_target(endpoint: str, method: Optional[str] = None) -> Optional[APISLOTarget]:
     """Récupère la définition SLO pour un endpoint.
-    
+
     Args:
         endpoint: Endpoint normalisé (ex: "/api/bookings/:id")
         method: Méthode HTTP (optionnel)
-        
+
     Returns:
         APISLOTarget si trouvé, None sinon
     """
@@ -136,12 +133,12 @@ def get_slo_target(endpoint: str, method: Optional[str] = None) -> Optional[APIS
         if slo.method and method and slo.method != method:
             return None
         return slo
-    
+
     # Chercher une correspondance par préfixe (ex: "/api/bookings/:id" -> "/api/bookings")
     for slo_endpoint, slo in API_SLOS.items():
         if endpoint.startswith(slo_endpoint) and (not slo.method or slo.method == method):
             return slo
-    
+
     return None
 
 
@@ -152,19 +149,19 @@ if PROMETHEUS_AVAILABLE and Counter is not None and Histogram is not None:
         "Nombre total de violations de latence SLO",
         ["endpoint", "method"],
     )
-    
+
     SLO_ERROR_BREACH = Counter(
         "api_slo_error_breach_total",
         "Nombre total de violations de taux d'erreurs SLO",
         ["endpoint", "method"],
     )
-    
+
     SLO_AVAILABILITY_BREACH = Counter(
         "api_slo_availability_breach_total",
         "Nombre total de violations de disponibilité SLO",
         ["endpoint", "method"],
     )
-    
+
     # Histogram pour calculer p95/p99 (utilise les buckets du middleware metrics)
     SLO_LATENCY_HISTOGRAM = Histogram(
         "api_slo_request_duration_seconds",
@@ -186,10 +183,10 @@ def record_slo_metric(
     method: str = "GET",
 ) -> None:
     """Enregistre une métrique pour le calcul de SLO.
-    
+
     Cette fonction vérifie si la requête viole les SLO définis et incrémente
     les compteurs de breach Prometheus si nécessaire.
-    
+
     Args:
         endpoint: Endpoint normalisé (ex: "/api/bookings/:id")
         duration_seconds: Durée de la requête en secondes
@@ -198,13 +195,13 @@ def record_slo_metric(
     """
     if not PROMETHEUS_AVAILABLE:
         return
-    
+
     # Récupérer le SLO target
     slo = get_slo_target(endpoint, method)
     if not slo:
         # Pas de SLO défini pour cet endpoint
         return
-    
+
     # Enregistrer dans l'histogram pour calcul p95/p99
     if SLO_LATENCY_HISTOGRAM:
         SLO_LATENCY_HISTOGRAM.labels(
@@ -212,7 +209,7 @@ def record_slo_metric(
             method=method,
             status=str(status_code),
         ).observe(duration_seconds)
-    
+
     # Vérifier violation de latence
     latency_ms = duration_seconds * 1000
     if latency_ms > slo.latency_p95_max_ms and SLO_LATENCY_BREACH:
@@ -220,7 +217,7 @@ def record_slo_metric(
             endpoint=endpoint,
             method=method,
         ).inc()
-    
+
     # Vérifier violation de taux d'erreurs (5xx = erreur serveur)
     HTTP_STATUS_ERROR_THRESHOLD = 500
     ERROR_RATE_MAX_THRESHOLD = 1.0
@@ -235,24 +232,24 @@ def record_slo_metric(
 
 def normalize_endpoint(endpoint: str) -> str:
     """Normalise un endpoint pour correspondre aux patterns SLO.
-    
+
     Remplace les IDs numériques par :id pour regrouper les routes.
     Ex: /api/bookings/123 -> /api/bookings/:id
-    
+
     Args:
         endpoint: Endpoint brut (ex: "/api/bookings/123")
-        
+
     Returns:
         Endpoint normalisé (ex: "/api/bookings/:id")
     """
     import re
+
     # Pattern: /api/resource/123 ou /api/resource/123/subresource/456
     normalized = re.sub(r"/\d+(?=/|$)", "/:id", endpoint)
-    
+
     # Limiter longueur (éviter labels trop longs)
     MAX_ENDPOINT_LENGTH = 100
     if len(normalized) > MAX_ENDPOINT_LENGTH:
         normalized = normalized[:MAX_ENDPOINT_LENGTH] + "..."
-    
-    return normalized
 
+    return normalized

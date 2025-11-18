@@ -36,19 +36,19 @@ CURRENT_DISTANCE_THRESHOLD = 10
 try:
     from services.notification_service import NotificationService
 except ImportError:
-        NotificationService = None
+    NotificationService = None
 
 try:
     from services.unified_dispatch.ml_predictor import MLPredictor
 except ImportError:
-        MLPredictor = None
+    MLPredictor = None
 
 logger = logging.getLogger(__name__)
 
 
 class ProactiveAlertsService:
     """Service d'alertes proactives avec explicabilité RL.
-    
+
     Features:
     - Prédiction de risque de retard via delay_predictor.pkl
     - Explicabilité des décisions RL (top-K features, règles métier)
@@ -65,9 +65,9 @@ class ProactiveAlertsService:
 
         # Seuils configurables
         self.delay_risk_thresholds = {
-            "low": 0.3,      # 30% - Alerte info
-            "medium": 0.6,   # 60% - Alerte warning
-            "high": 0.8,     # 80% - Alerte critical
+            "low": 0.3,  # 30% - Alerte info
+            "medium": 0.6,  # 60% - Alerte warning
+            "high": 0.8,  # 80% - Alerte critical
         }
 
         # Système de debounce avancé
@@ -104,18 +104,15 @@ class ProactiveAlertsService:
             self.delay_predictor = None
 
     def check_delay_risk(
-        self,
-        booking: Dict[str, Any],
-        driver: Dict[str, Any],
-        current_time: datetime | None = None
+        self, booking: Dict[str, Any], driver: Dict[str, Any], current_time: datetime | None = None
     ) -> Dict[str, Any]:
         """Analyse le risque de retard pour une assignation.
-        
+
         Args:
             booking: Données du booking
             driver: Données du chauffeur
             current_time: Temps actuel (optionnel)
-            
+
         Returns:
             Dictionnaire avec probabilité de retard et explication
 
@@ -144,12 +141,15 @@ class ProactiveAlertsService:
                 "explanation": explanation,
                 "metrics": metrics,
                 "timestamp": current_time.isoformat(),
-                "should_alert": risk_level in ["medium", "high"]
+                "should_alert": risk_level in ["medium", "high"],
             }
 
             logger.debug(
                 "[ProactiveAlerts] Risque retard Booking %s → Driver %s: %.2f%% (%s)",
-                booking.get("id"), driver.get("id"), delay_probability * 100, risk_level
+                booking.get("id"),
+                driver.get("id"),
+                delay_probability * 100,
+                risk_level,
             )
 
             return result
@@ -164,14 +164,11 @@ class ProactiveAlertsService:
                 "explanation": {"error": str(e)},
                 "metrics": {},
                 "timestamp": current_time.isoformat(),
-                "should_alert": False
+                "should_alert": False,
             }
 
     def _calculate_delay_probability(
-        self,
-        booking: Dict[str, Any],
-        driver: Dict[str, Any],
-        current_time: datetime
+        self, booking: Dict[str, Any], driver: Dict[str, Any], current_time: datetime
     ) -> float:
         """Calcule la probabilité de retard."""
         try:
@@ -201,7 +198,9 @@ class ProactiveAlertsService:
 
             logger.debug(
                 "[ProactiveAlerts] Prédiction ML - Retard: %.1f min, Confiance: %.2f, Prob: %.2f",
-                predicted_delay_minutes, confidence, probability
+                predicted_delay_minutes,
+                confidence,
+                probability,
             )
 
             return min(0.95, max(0.5, probability))
@@ -211,10 +210,7 @@ class ProactiveAlertsService:
             return self._heuristic_delay_probability(booking, driver, current_time)
 
     def _heuristic_delay_probability(
-        self,
-        booking: Dict[str, Any],
-        driver: Dict[str, Any],
-        current_time: datetime
+        self, booking: Dict[str, Any], driver: Dict[str, Any], current_time: datetime
     ) -> float:
         """Calcul heuristique de probabilité de retard."""
         try:
@@ -270,12 +266,7 @@ class ProactiveAlertsService:
             logger.error("[ProactiveAlerts] Erreur calcul heuristique: %s", e)
             return 0.5  # Probabilité neutre en cas d'erreur
 
-    def _prepare_features(
-        self,
-        booking: Dict[str, Any],
-        driver: Dict[str, Any],
-        current_time: datetime
-    ) -> List[float]:
+    def _prepare_features(self, booking: Dict[str, Any], driver: Dict[str, Any], current_time: datetime) -> List[float]:
         """Prépare les features pour le modèle de prédiction."""
         try:
             features = []
@@ -286,29 +277,35 @@ class ProactiveAlertsService:
                 pickup_time = datetime.fromisoformat(pickup_time.replace("Z", "+00:00"))
 
             time_remaining = (pickup_time - current_time).total_seconds() / 60 if pickup_time else 30
-            features.extend([
-                time_remaining,
-                current_time.hour,
-                current_time.weekday(),
-            ])
+            features.extend(
+                [
+                    time_remaining,
+                    current_time.hour,
+                    current_time.weekday(),
+                ]
+            )
 
             # Features géographiques
             distance = self._estimate_distance(driver, booking)
             features.append(distance)
 
             # Features chauffeur
-            features.extend([
-                driver.get("current_bookings", 0),
-                driver.get("load", 0),
-                1 if driver.get("type") == "REGULAR" else 0,
-            ])
+            features.extend(
+                [
+                    driver.get("current_bookings", 0),
+                    driver.get("load", 0),
+                    1 if driver.get("type") == "REGULAR" else 0,
+                ]
+            )
 
             # Features booking
-            features.extend([
-                booking.get("priority", 3),
-                1 if booking.get("is_outbound", True) else 0,
-                booking.get("estimated_duration", 30),
-            ])
+            features.extend(
+                [
+                    booking.get("priority", 3),
+                    1 if booking.get("is_outbound", True) else 0,
+                    booking.get("estimated_duration", 30),
+                ]
+            )
 
             return features
 
@@ -332,8 +329,7 @@ class ProactiveAlertsService:
             lon_diff = abs(driver_lon - pickup_lon)
 
             # Conversion approximative en km
-            return ((lat_diff ** 2 + lon_diff ** 2) ** 0.5) * 111.32
-
+            return ((lat_diff**2 + lon_diff**2) ** 0.5) * 111.32
 
         except Exception as e:
             logger.error("[ProactiveAlerts] Erreur calcul distance: %s", e)
@@ -350,11 +346,7 @@ class ProactiveAlertsService:
         return "minimal"
 
     def _generate_explanation(
-        self,
-        booking: Dict[str, Any],
-        driver: Dict[str, Any],
-        probability: float,
-        risk_level: str
+        self, booking: Dict[str, Any], driver: Dict[str, Any], probability: float, risk_level: str
     ) -> Dict[str, Any]:
         """Génère une explication détaillée du risque."""
         try:
@@ -364,7 +356,7 @@ class ProactiveAlertsService:
                 "primary_factors": [],
                 "recommendations": [],
                 "alternative_drivers": [],
-                "business_impact": self._assess_business_impact(probability, booking)
+                "business_impact": self._assess_business_impact(probability, booking),
             }
 
             # Analyser les facteurs principaux
@@ -389,14 +381,10 @@ class ProactiveAlertsService:
                 "primary_factors": [{"factor": "unknown", "impact": "unknown"}],
                 "recommendations": ["Contactez le support technique"],
                 "alternative_drivers": [],
-                "business_impact": "unknown"
+                "business_impact": "unknown",
             }
 
-    def _analyze_risk_factors(
-        self,
-        booking: Dict[str, Any],
-        driver: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+    def _analyze_risk_factors(self, booking: Dict[str, Any], driver: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Analyse les facteurs de risque principaux."""
         factors = []
 
@@ -410,55 +398,67 @@ class ProactiveAlertsService:
                 time_remaining = (pickup_time - datetime.now(UTC)).total_seconds() / 60
 
                 if time_remaining < TIME_REMAINING_THRESHOLD:
-                    factors.append({
-                        "factor": "temps_insuffisant",
-                        "impact": "high",
-                        "description": f"Seulement {time_remaining:.1f} min",
-                        "value": time_remaining
-                    })
+                    factors.append(
+                        {
+                            "factor": "temps_insuffisant",
+                            "impact": "high",
+                            "description": f"Seulement {time_remaining:.1f} min",
+                            "value": time_remaining,
+                        }
+                    )
                 elif time_remaining < TIME_REMAINING_THRESHOLD:
-                    factors.append({
-                        "factor": "temps_limite",
-                        "impact": "medium",
-                        "description": f"{time_remaining:.1f} min restantes",
-                        "value": time_remaining
-                    })
+                    factors.append(
+                        {
+                            "factor": "temps_limite",
+                            "impact": "medium",
+                            "description": f"{time_remaining:.1f} min restantes",
+                            "value": time_remaining,
+                        }
+                    )
             except Exception:
                 pass
 
         # Facteur distance
         distance = self._estimate_distance(driver, booking)
         if distance > DISTANCE_THRESHOLD:
-            factors.append({
-                "factor": "distance_elevee",
-                "impact": "high",
-                "description": f"Distance {distance:.1f} km",
-                "value": distance
-            })
+            factors.append(
+                {
+                    "factor": "distance_elevee",
+                    "impact": "high",
+                    "description": f"Distance {distance:.1f} km",
+                    "value": distance,
+                }
+            )
         elif distance > DISTANCE_THRESHOLD:
-            factors.append({
-                "factor": "distance_moderee",
-                "impact": "medium",
-                "description": f"Distance {distance:.1f} km",
-                "value": distance
-            })
+            factors.append(
+                {
+                    "factor": "distance_moderee",
+                    "impact": "medium",
+                    "description": f"Distance {distance:.1f} km",
+                    "value": distance,
+                }
+            )
 
         # Facteur charge chauffeur
         driver_load = driver.get("current_bookings", 0)
         if driver_load >= DRIVER_LOAD_THRESHOLD:
-            factors.append({
-                "factor": "charge_maximale",
-                "impact": "high",
-                "description": f"Chauffeur à {driver_load} courses",
-                "value": driver_load
-            })
+            factors.append(
+                {
+                    "factor": "charge_maximale",
+                    "impact": "high",
+                    "description": f"Chauffeur à {driver_load} courses",
+                    "value": driver_load,
+                }
+            )
         elif driver_load >= DRIVER_LOAD_THRESHOLD:
-            factors.append({
-                "factor": "charge_elevee",
-                "impact": "medium",
-                "description": f"Chauffeur à {driver_load} courses",
-                "value": driver_load
-            })
+            factors.append(
+                {
+                    "factor": "charge_elevee",
+                    "impact": "medium",
+                    "description": f"Chauffeur à {driver_load} courses",
+                    "value": driver_load,
+                }
+            )
 
         return factors
 
@@ -466,7 +466,7 @@ class ProactiveAlertsService:
         self,
         booking: Dict[str, Any],
         driver: Dict[str, Any],  # noqa: ARG002
-        probability: float
+        probability: float,
     ) -> List[str]:
         """Génère des recommandations basées sur l'analyse."""
         recommendations = []
@@ -500,9 +500,7 @@ class ProactiveAlertsService:
         return recommendations
 
     def _suggest_alternative_drivers(
-        self,
-        booking: Dict[str, Any],
-        current_driver: Dict[str, Any]
+        self, booking: Dict[str, Any], current_driver: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """Suggère des chauffeurs alternatifs."""
         # Placeholder - dans une vraie implémentation,
@@ -513,20 +511,24 @@ class ProactiveAlertsService:
         current_distance = self._estimate_distance(current_driver, booking)
 
         if current_distance > CURRENT_DISTANCE_THRESHOLD:
-            alternatives.append({
-                "driver_id": "alt_001",
-                "estimated_distance": current_distance * 0.6,
-                "risk_reduction": 0.3,
-                "reason": "Chauffeur plus proche"
-            })
+            alternatives.append(
+                {
+                    "driver_id": "alt_001",
+                    "estimated_distance": current_distance * 0.6,
+                    "risk_reduction": 0.3,
+                    "reason": "Chauffeur plus proche",
+                }
+            )
 
         if current_driver.get("current_bookings", 0) >= DRIVER_LOAD_WARNING:
-            alternatives.append({
-                "driver_id": "alt_002",
-                "estimated_distance": current_distance * 0.8,
-                "risk_reduction": 0.2,
-                "reason": "Chauffeur moins chargé"
-            })
+            alternatives.append(
+                {
+                    "driver_id": "alt_002",
+                    "estimated_distance": current_distance * 0.8,
+                    "risk_reduction": 0.2,
+                    "reason": "Chauffeur moins chargé",
+                }
+            )
 
         return alternatives
 
@@ -543,10 +545,7 @@ class ProactiveAlertsService:
         return "low"
 
     def _calculate_additional_metrics(
-        self,
-        booking: Dict[str, Any],
-        driver: Dict[str, Any],
-        current_time: datetime
+        self, booking: Dict[str, Any], driver: Dict[str, Any], current_time: datetime
     ) -> Dict[str, Any]:
         """Calcule des métriques additionnelles."""
         try:
@@ -564,26 +563,21 @@ class ProactiveAlertsService:
                 "booking_priority": booking.get("priority", 3),
                 "is_outbound": booking.get("is_outbound", True),
                 "estimated_travel_time_minutes": round(distance * 2, 1),  # 30 km/h moyenne
-                "buffer_time_minutes": round(time_remaining - (distance * 2), 1)
+                "buffer_time_minutes": round(time_remaining - (distance * 2), 1),
             }
 
         except Exception as e:
             logger.error("[ProactiveAlerts] Erreur calcul métriques: %s", e)
             return {}
 
-    def send_proactive_alert(
-        self,
-        analysis_result: Dict[str, Any],
-        company_id: str,
-        force_send: bool = False
-    ) -> bool:
+    def send_proactive_alert(self, analysis_result: Dict[str, Any], company_id: str, force_send: bool = False) -> bool:
         """Envoie une alerte proactive si nécessaire avec système de debounce avancé.
-        
+
         Args:
             analysis_result: Résultat de l'analyse de risque
             company_id: ID de l'entreprise
             force_send: Forcer l'envoi même si debounce
-            
+
         Returns:
             True si alerte envoyée, False sinon
 
@@ -598,8 +592,7 @@ class ProactiveAlertsService:
                 debounce_result = self._check_debounce_rules(booking_id, risk_level, current_time)
                 if not debounce_result["should_send"]:
                     logger.debug(
-                        "[ProactiveAlerts] Alerte debounced pour booking %s: %s",
-                        booking_id, debounce_result["reason"]
+                        "[ProactiveAlerts] Alerte debounced pour booking %s: %s", booking_id, debounce_result["reason"]
                     )
                     return False
 
@@ -618,11 +611,7 @@ class ProactiveAlertsService:
             logger.error("[ProactiveAlerts] Erreur envoi alerte: %s", e)
             return False
 
-    def _send_alert_notification(
-        self,
-        analysis_result: Dict[str, Any],
-        company_id: str
-    ) -> bool:
+    def _send_alert_notification(self, analysis_result: Dict[str, Any], company_id: str) -> bool:
         """Envoie la notification d'alerte."""
         try:
             risk_level = analysis_result.get("risk_level")
@@ -641,15 +630,13 @@ class ProactiveAlertsService:
                 "explanation": explanation,
                 "booking_id": analysis_result.get("booking_id"),
                 "driver_id": analysis_result.get("driver_id"),
-                "timestamp": analysis_result.get("timestamp")
+                "timestamp": analysis_result.get("timestamp"),
             }
 
             # Utiliser le service de notification existant
             if self.notification_service:
                 success = self.notification_service.send_notification(
-                    company_id=company_id,
-                    notification_type="delay_risk",
-                    data=notification_data
+                    company_id=company_id, notification_type="delay_risk", data=notification_data
                 )
             else:
                 logger.warning("[ProactiveAlerts] NotificationService non disponible")
@@ -658,13 +645,12 @@ class ProactiveAlertsService:
             if success:
                 logger.info(
                     "[ProactiveAlerts] ✅ Alerte envoyée - Booking %s, Risque %s (%.1f%%)",
-                    analysis_result.get("booking_id"), risk_level, probability * 100
+                    analysis_result.get("booking_id"),
+                    risk_level,
+                    probability * 100,
                 )
             else:
-                logger.warning(
-                    "[ProactiveAlerts] ⚠️ Échec envoi alerte - Booking %s",
-                    analysis_result.get("booking_id")
-                )
+                logger.warning("[ProactiveAlerts] ⚠️ Échec envoi alerte - Booking %s", analysis_result.get("booking_id"))
 
             return success
 
@@ -679,19 +665,14 @@ class ProactiveAlertsService:
         explanation = analysis_result.get("explanation", {})
 
         # Emojis selon niveau de risque
-        emoji_map = {
-            "high": "🚨",
-            "medium": "⚠️",
-            "low": "ℹ️",
-            "minimal": "✅"
-        }
+        emoji_map = {"high": "🚨", "medium": "⚠️", "low": "ℹ️", "minimal": "✅"}
 
         emoji = emoji_map.get(risk_level or "unknown", "❓")
 
         # Message principal
         risk_level_str = (risk_level or "unknown").upper()
         message = f"{emoji} Risque de retard détecté\n\n"
-        message += f"Probabilité: {probability*100:.1f}%\n"
+        message += f"Probabilité: {probability * 100:.1f}%\n"
         message += f"Niveau: {risk_level_str}\n\n"
 
         # Facteurs principaux
@@ -712,18 +693,15 @@ class ProactiveAlertsService:
         return message
 
     def get_explanation_for_decision(
-        self,
-        booking_id: str,
-        driver_id: str,
-        rl_decision: Dict[str, Any]
+        self, booking_id: str, driver_id: str, rl_decision: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Génère une explication pour une décision RL.
-        
+
         Args:
             booking_id: ID du booking
             driver_id: ID du chauffeur assigné
             rl_decision: Décision RL (Q-values, action choisie, etc.)
-            
+
         Returns:
             Explication détaillée de la décision
 
@@ -738,7 +716,7 @@ class ProactiveAlertsService:
                 "q_values": rl_decision.get("q_values", {}),
                 "confidence": rl_decision.get("confidence", 0),
                 "alternative_options": [],
-                "business_rules_applied": []
+                "business_rules_applied": [],
             }
 
             # Analyser les facteurs de décision
@@ -762,7 +740,7 @@ class ProactiveAlertsService:
                 "booking_id": booking_id,
                 "driver_id": driver_id,
                 "error": str(e),
-                "timestamp": datetime.now(UTC).isoformat()
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
     def _analyze_rl_decision_factors(self, rl_decision: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -775,21 +753,25 @@ class ProactiveAlertsService:
             sorted_actions = sorted(q_values.items(), key=lambda x: x[1], reverse=True)
 
             for i, (action, q_value) in enumerate(sorted_actions[:3]):
-                factors.append({
-                    "factor": f"q_value_rank_{i+1}",
-                    "action": action,
-                    "q_value": q_value,
-                    "description": f"Action {action} avec Q-value {q_value:.2f}"
-                })
+                factors.append(
+                    {
+                        "factor": f"q_value_rank_{i + 1}",
+                        "action": action,
+                        "q_value": q_value,
+                        "description": f"Action {action} avec Q-value {q_value:.2f}",
+                    }
+                )
 
         # Facteurs de reward shaping
         reward_components = rl_decision.get("reward_components", {})
         for component, value in reward_components.items():
-            factors.append({
-                "factor": f"reward_{component}",
-                "value": value,
-                "description": f"Composant reward {component}: {value:.2f}"
-            })
+            factors.append(
+                {
+                    "factor": f"reward_{component}",
+                    "value": value,
+                    "description": f"Composant reward {component}: {value:.2f}",
+                }
+            )
 
         return factors
 
@@ -803,13 +785,15 @@ class ProactiveAlertsService:
 
             # Top 3 alternatives
             for i, (action, q_value) in enumerate(sorted_actions[1:4]):
-                alternatives.append({
-                    "alternative_rank": i + 1,
-                    "action": action,
-                    "q_value": q_value,
-                    "confidence": q_value / sorted_actions[0][1] if sorted_actions else 0,
-                    "description": f"Alternative {i+1}: Action {action}"
-                })
+                alternatives.append(
+                    {
+                        "alternative_rank": i + 1,
+                        "action": action,
+                        "q_value": q_value,
+                        "confidence": q_value / sorted_actions[0][1] if sorted_actions else 0,
+                        "description": f"Alternative {i + 1}: Action {action}",
+                    }
+                )
 
         return alternatives
 
@@ -832,19 +816,14 @@ class ProactiveAlertsService:
 
         return rules
 
-    def _check_debounce_rules(
-        self,
-        booking_id: str,
-        risk_level: str,
-        current_time: datetime
-    ) -> Dict[str, Any]:
+    def _check_debounce_rules(self, booking_id: str, risk_level: str, current_time: datetime) -> Dict[str, Any]:
         """Vérifie les règles de debounce avancées.
-        
+
         Args:
             booking_id: ID du booking
             risk_level: Niveau de risque actuel
             current_time: Temps actuel
-            
+
         Returns:
             Dictionnaire avec should_send et reason
 
@@ -858,10 +837,7 @@ class ProactiveAlertsService:
                 if last_alert_time:
                     time_since_last = current_time - last_alert_time
                     if time_since_last.total_seconds() < (self.debounce_minutes * 60):
-                        return {
-                            "should_send": False,
-                            "reason": f"Debounce temporel: {self.debounce_minutes} min"
-                        }
+                        return {"should_send": False, "reason": f"Debounce temporel: {self.debounce_minutes} min"}
 
             # Règle 2: Limite de fréquence par heure
             if booking_id in self.alert_frequency_tracker:
@@ -874,63 +850,42 @@ class ProactiveAlertsService:
                 if recent_count >= self.max_alerts_per_hour:
                     return {
                         "should_send": False,
-                        "reason": f"Limite fréquence: {recent_count}/{self.max_alerts_per_hour} par heure"
+                        "reason": f"Limite fréquence: {recent_count}/{self.max_alerts_per_hour} par heure",
                     }
 
             # Règle 3: Escalade de risque (forcer si risque augmente)
             if booking_id in self.alert_history:
                 last_risk_level = self.alert_history[booking_id].get("last_risk_level", "minimal")
-                risk_escalation = self._get_risk_level_numeric(risk_level) > self._get_risk_level_numeric(last_risk_level)
+                risk_escalation = self._get_risk_level_numeric(risk_level) > self._get_risk_level_numeric(
+                    last_risk_level
+                )
 
                 if risk_escalation:
-                    return {
-                        "should_send": True,
-                        "reason": f"Escalade de risque: {last_risk_level} → {risk_level}"
-                    }
+                    return {"should_send": True, "reason": f"Escalade de risque: {last_risk_level} → {risk_level}"}
 
             # Règle 4: Alerte critique toujours autorisée
             if risk_level == "high":
-                return {
-                    "should_send": True,
-                    "reason": "Risque critique - toujours autorisé"
-                }
+                return {"should_send": True, "reason": "Risque critique - toujours autorisé"}
 
-            return {
-                "should_send": True,
-                "reason": "Règles de debounce respectées"
-            }
+            return {"should_send": True, "reason": "Règles de debounce respectées"}
 
         except Exception as e:
             logger.error("[ProactiveAlerts] Erreur vérification debounce: %s", e)
-            return {
-                "should_send": True,
-                "reason": "Erreur debounce - autoriser par sécurité"
-            }
+            return {"should_send": True, "reason": "Erreur debounce - autoriser par sécurité"}
 
     def _get_risk_level_numeric(self, risk_level: str) -> int:
         """Convertit le niveau de risque en valeur numérique."""
-        risk_map = {
-            "minimal": 0,
-            "low": 1,
-            "medium": 2,
-            "high": 3,
-            "critical": 4
-        }
+        risk_map = {"minimal": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
         return risk_map.get(risk_level, 0)
 
-    def _update_alert_history(
-        self,
-        booking_id: str,
-        risk_level: str,
-        current_time: datetime
-    ) -> None:
+    def _update_alert_history(self, booking_id: str, risk_level: str, current_time: datetime) -> None:
         """Met à jour l'historique des alertes."""
         try:
             # Mettre à jour l'historique principal
             self.alert_history[booking_id] = {
                 "last_alert_time": current_time,
                 "last_risk_level": risk_level,
-                "total_alerts": self.alert_history.get(booking_id, {}).get("total_alerts", 0) + 1
+                "total_alerts": self.alert_history.get(booking_id, {}).get("total_alerts", 0) + 1,
             }
 
             # Mettre à jour le tracker de fréquence
@@ -942,8 +897,7 @@ class ProactiveAlertsService:
             # Nettoyer les anciennes entrées (plus de 24h)
             cutoff_time = current_time - timedelta(hours=24)
             self.alert_frequency_tracker[booking_id] = [
-                t for t in self.alert_frequency_tracker[booking_id]
-                if t > cutoff_time
+                t for t in self.alert_frequency_tracker[booking_id] if t > cutoff_time
             ]
 
         except Exception as e:
@@ -976,5 +930,5 @@ class ProactiveAlertsService:
             "active_debounce_count": len(self.alert_history),
             "risk_level_distribution": risk_levels,
             "debounce_minutes": self.debounce_minutes,
-            "delay_predictor_loaded": self.delay_predictor is not None
+            "delay_predictor_loaded": self.delay_predictor is not None,
         }

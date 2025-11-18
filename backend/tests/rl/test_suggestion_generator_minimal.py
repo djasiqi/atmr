@@ -1,6 +1,7 @@
 """
 Tests minimaux pour RLSuggestionGenerator
 """
+
 from datetime import datetime
 from unittest.mock import Mock, patch
 
@@ -50,12 +51,7 @@ class TestRLSuggestionGeneratorMinimal:
         """Test génération de suggestions avec entrée vide"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[],
-            drivers=[],
-            for_date=datetime.now()
-        )
+        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date=datetime.now())
 
         assert suggestions == []
 
@@ -68,10 +64,7 @@ class TestRLSuggestionGeneratorMinimal:
         assignment = MockAssignment(1, booking, driver)
 
         suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[assignment],
-            drivers=[],
-            for_date=datetime.now()
+            company_id=1, assignments=[assignment], drivers=[], for_date=datetime.now()
         )
 
         assert suggestions == []
@@ -84,10 +77,7 @@ class TestRLSuggestionGeneratorMinimal:
         with patch.object(generator, "_generate_basic_suggestions", side_effect=Exception("Test error")):
             try:
                 suggestions = generator.generate_suggestions(
-                    company_id=1,
-                    assignments=[],
-                    drivers=[],
-                    for_date=datetime.now()
+                    company_id=1, assignments=[], drivers=[], for_date=datetime.now()
                 )
                 # Si l'exception est gérée, on devrait avoir une liste vide
                 assert suggestions == []
@@ -109,7 +99,7 @@ class TestRLSuggestionGeneratorMinimal:
             drivers=[driver],
             for_date=datetime.now(),
             min_confidence=0.8,
-            max_suggestions=5
+            max_suggestions=5,
         )
 
         assert isinstance(suggestions, list)
@@ -124,11 +114,7 @@ class TestRLSuggestionGeneratorMinimal:
         assignment = MockAssignment(1, booking, driver)
 
         suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=[assignment],
-            drivers=[driver],
-            for_date=datetime.now(),
-            min_confidence=0.9
+            company_id=1, assignments=[assignment], drivers=[driver], for_date=datetime.now(), min_confidence=0.9
         )
 
         assert isinstance(suggestions, list)
@@ -148,11 +134,7 @@ class TestRLSuggestionGeneratorMinimal:
             drivers.append(driver)
 
         suggestions = generator.generate_suggestions(
-            company_id=1,
-            assignments=assignments,
-            drivers=drivers,
-            for_date=datetime.now(),
-            max_suggestions=3
+            company_id=1, assignments=assignments, drivers=drivers, for_date=datetime.now(), max_suggestions=3
         )
 
         assert isinstance(suggestions, list)
@@ -168,18 +150,12 @@ class TestRLSuggestionGeneratorMinimal:
 
         # Test avec date d'aujourd'hui
         suggestions1 = generator.generate_suggestions(
-            company_id=1,
-            assignments=[assignment],
-            drivers=[driver],
-            for_date=datetime.now()
+            company_id=1, assignments=[assignment], drivers=[driver], for_date=datetime.now()
         )
 
         # Test avec date future
         suggestions2 = generator.generate_suggestions(
-            company_id=1,
-            assignments=[assignment],
-            drivers=[driver],
-            for_date=datetime.now()
+            company_id=1, assignments=[assignment], drivers=[driver], for_date=datetime.now()
         )
 
         assert isinstance(suggestions1, list)
@@ -195,17 +171,11 @@ class TestRLSuggestionGeneratorMinimal:
 
         # Test avec différentes entreprises
         suggestions1 = generator.generate_suggestions(
-            company_id=1,
-            assignments=[assignment],
-            drivers=[driver],
-            for_date=datetime.now()
+            company_id=1, assignments=[assignment], drivers=[driver], for_date=datetime.now()
         )
 
         suggestions2 = generator.generate_suggestions(
-            company_id=2,
-            assignments=[assignment],
-            drivers=[driver],
-            for_date=datetime.now()
+            company_id=2, assignments=[assignment], drivers=[driver], for_date=datetime.now()
         )
 
         assert isinstance(suggestions1, list)

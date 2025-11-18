@@ -49,19 +49,11 @@ def iter_test_users() -> Iterable[User]:
     filters = [User.username.ilike(f"{prefix}%") for prefix in TEST_USERNAME_PREFIXES]
     criterion = and_(User.email.ilike(TEST_EMAIL_DOMAIN), or_(*filters))
 
-    return (
-        User.query.filter(criterion)
-        .order_by(User.created_at.asc())
-        .all()
-    )
+    return User.query.filter(criterion).order_by(User.created_at.asc()).all()
 
 
 def iter_users_by_created_date(target_date: date) -> Iterable[User]:
-    return (
-        User.query.filter(func.date(User.created_at) == target_date)
-        .order_by(User.created_at.asc())
-        .all()
-    )
+    return User.query.filter(func.date(User.created_at) == target_date).order_by(User.created_at.asc()).all()
 
 
 def resolve_company_by_name(name: str) -> Optional[Company]:
@@ -134,26 +126,16 @@ def main() -> None:
             if not keep_company:
                 print(f"❌ Entreprise '{args.keep_company}' introuvable dans la base.")
             else:
-                outside_clients_count = (
-                    Client.query.filter(client_filter_outside(keep_company.id)).count()
-                )
-                print(
-                    f"{outside_clients_count} client(s) hors '{keep_company.name}' identifiés"
-                )
-                drivers_outside_count = (
-                    Driver.query.filter(Driver.company_id != keep_company.id).count()
-                )
-                print(
-                    f"{drivers_outside_count} chauffeur(s) hors '{keep_company.name}' identifiés"
-                )
+                outside_clients_count = Client.query.filter(client_filter_outside(keep_company.id)).count()
+                print(f"{outside_clients_count} client(s) hors '{keep_company.name}' identifiés")
+                drivers_outside_count = Driver.query.filter(Driver.company_id != keep_company.id).count()
+                print(f"{drivers_outside_count} chauffeur(s) hors '{keep_company.name}' identifiés")
 
         if args.created_on:
             try:
                 created_on_date = datetime.strptime(args.created_on, "%Y-%m-%d").date()
                 users_created_on = list(iter_users_by_created_date(created_on_date))
-                print(
-                    f"{len(users_created_on)} utilisateur(s) créé(s) le {created_on_date.isoformat()}"
-                )
+                print(f"{len(users_created_on)} utilisateur(s) créé(s) le {created_on_date.isoformat()}")
             except ValueError:
                 print(f"❌ Date invalide pour --created-on : {args.created_on} (attendu AAAA-MM-JJ)")
                 users_created_on = []
@@ -173,10 +155,7 @@ def main() -> None:
 
         if keep_company and outside_clients_count:
             clients_to_delete = (
-                Client.query
-                .options(selectinload(Client.user))
-                .filter(client_filter_outside(keep_company.id))
-                .all()
+                Client.query.options(selectinload(Client.user)).filter(client_filter_outside(keep_company.id)).all()
             )
             deleted_users_for_clients = 0
             for client in clients_to_delete:
@@ -196,8 +175,7 @@ def main() -> None:
         if users:
             user_ids = [user.id for user in users]
             company_ids: List[int] = [
-                company_id
-                for (company_id,) in db.session.query(Company.id).filter(Company.user_id.in_(user_ids)).all()
+                company_id for (company_id,) in db.session.query(Company.id).filter(Company.user_id.in_(user_ids)).all()
             ]
 
             if company_ids:
@@ -241,10 +219,7 @@ def main() -> None:
 
         if keep_company and drivers_outside_count:
             drivers_to_delete = (
-                Driver.query
-                .options(selectinload(Driver.user))
-                .filter(Driver.company_id != keep_company.id)
-                .all()
+                Driver.query.options(selectinload(Driver.user)).filter(Driver.company_id != keep_company.id).all()
             )
             driver_ids = [driver.id for driver in drivers_to_delete]
             if driver_ids:
@@ -295,17 +270,23 @@ def main() -> None:
             if client_ids_for_users:
                 booking_ids.update(
                     booking_id
-                    for (booking_id,) in db.session.query(Booking.id).filter(Booking.client_id.in_(client_ids_for_users)).all()
+                    for (booking_id,) in db.session.query(Booking.id)
+                    .filter(Booking.client_id.in_(client_ids_for_users))
+                    .all()
                 )
             if driver_ids_for_users:
                 booking_ids.update(
                     booking_id
-                    for (booking_id,) in db.session.query(Booking.id).filter(Booking.driver_id.in_(driver_ids_for_users)).all()
+                    for (booking_id,) in db.session.query(Booking.id)
+                    .filter(Booking.driver_id.in_(driver_ids_for_users))
+                    .all()
                 )
             if company_ids_for_users:
                 booking_ids.update(
                     booking_id
-                    for (booking_id,) in db.session.query(Booking.id).filter(Booking.company_id.in_(company_ids_for_users)).all()
+                    for (booking_id,) in db.session.query(Booking.id)
+                    .filter(Booking.company_id.in_(company_ids_for_users))
+                    .all()
                 )
 
             if driver_ids_for_users:
@@ -333,7 +314,9 @@ def main() -> None:
                     .delete(synchronize_session=False)
                 )
                 if deleted_autonomous_created:
-                    print(f"Suppression des actions autonomes (entreprises créées le {created_on_date.isoformat()}): {deleted_autonomous_created}")
+                    print(
+                        f"Suppression des actions autonomes (entreprises créées le {created_on_date.isoformat()}): {deleted_autonomous_created}"
+                    )
 
                 deleted_billing_created = (
                     db.session.query(CompanyBillingSettings)
@@ -341,7 +324,9 @@ def main() -> None:
                     .delete(synchronize_session=False)
                 )
                 if deleted_billing_created:
-                    print(f"Suppression des paramètres de facturation (entreprises créées le {created_on_date.isoformat()}): {deleted_billing_created}")
+                    print(
+                        f"Suppression des paramètres de facturation (entreprises créées le {created_on_date.isoformat()}): {deleted_billing_created}"
+                    )
 
                 deleted_sequences_created = (
                     db.session.query(InvoiceSequence)
@@ -349,7 +334,9 @@ def main() -> None:
                     .delete(synchronize_session=False)
                 )
                 if deleted_sequences_created:
-                    print(f"Suppression des séquences de facturation (entreprises créées le {created_on_date.isoformat()}): {deleted_sequences_created}")
+                    print(
+                        f"Suppression des séquences de facturation (entreprises créées le {created_on_date.isoformat()}): {deleted_sequences_created}"
+                    )
 
                 deleted_invoices_created = (
                     db.session.query(Invoice)
@@ -357,7 +344,9 @@ def main() -> None:
                     .delete(synchronize_session=False)
                 )
                 if deleted_invoices_created:
-                    print(f"Suppression des factures (entreprises créées le {created_on_date.isoformat()}): {deleted_invoices_created}")
+                    print(
+                        f"Suppression des factures (entreprises créées le {created_on_date.isoformat()}): {deleted_invoices_created}"
+                    )
 
             for user in users_filter:
                 db.session.delete(user)
@@ -365,9 +354,7 @@ def main() -> None:
             total_deleted_records += len(users_filter)
             total_deleted_users += len(users_filter)
             pending_user_ids.update(user.id for user in users_filter)
-            print(
-                f"Suppression des utilisateurs créés le {created_on_date.isoformat()}: {len(users_filter)}"
-            )
+            print(f"Suppression des utilisateurs créés le {created_on_date.isoformat()}: {len(users_filter)}")
 
         if total_deleted_records == 0:
             print("Aucun enregistrement à supprimer.")
@@ -381,4 +368,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

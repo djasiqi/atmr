@@ -39,30 +39,14 @@ class TestShadowModeManagerSimple:
         """Test logging comparaison décisions basique."""
         manager = ShadowModeManager()
 
-        human_decision = {
-            "driver_id": 1,
-            "eta_minutes": 15,
-            "delay_minutes": 0
-        }
+        human_decision = {"driver_id": 1, "eta_minutes": 15, "delay_minutes": 0}
 
-        rl_decision = {
-            "driver_id": 2,
-            "eta_minutes": 12,
-            "delay_minutes": 0
-        }
+        rl_decision = {"driver_id": 2, "eta_minutes": 12, "delay_minutes": 0}
 
-        context = {
-            "booking_id": 1,
-            "pickup_time": datetime.now(),
-            "distance_km": 5.0
-        }
+        context = {"booking_id": 1, "pickup_time": datetime.now(), "distance_km": 5.0}
 
         kpis = manager.log_decision_comparison(
-            company_id="1",
-            booking_id="1",
-            human_decision=human_decision,
-            rl_decision=rl_decision,
-            context=context
+            company_id="1", booking_id="1", human_decision=human_decision, rl_decision=rl_decision, context=context
         )
 
         assert isinstance(kpis, dict)
@@ -76,23 +60,11 @@ class TestShadowModeManagerSimple:
         """Test calcul KPIs basique."""
         manager = ShadowModeManager()
 
-        human_decision = {
-            "driver_id": 1,
-            "eta_minutes": 15,
-            "delay_minutes": 0
-        }
+        human_decision = {"driver_id": 1, "eta_minutes": 15, "delay_minutes": 0}
 
-        rl_decision = {
-            "driver_id": 2,
-            "eta_minutes": 12,
-            "delay_minutes": 0
-        }
+        rl_decision = {"driver_id": 2, "eta_minutes": 12, "delay_minutes": 0}
 
-        context = {
-            "booking_id": 1,
-            "pickup_time": datetime.now(),
-            "distance_km": 5.0
-        }
+        context = {"booking_id": 1, "pickup_time": datetime.now(), "distance_km": 5.0}
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
 
@@ -193,7 +165,7 @@ class TestShadowModeManagerSimple:
             "pickup_time": datetime.now(),
             "distance_km": 5.0,
             "traffic_level": "high",
-            "weather": "rain"
+            "weather": "rain",
         }
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
@@ -225,7 +197,7 @@ class TestShadowModeManagerSimple:
             "eta_minutes": 20,
             "delay_minutes": 5,
             "confidence": 0.8,
-            "reason": "Closest driver"
+            "reason": "Closest driver",
         }
 
         rl_decision = {
@@ -233,7 +205,7 @@ class TestShadowModeManagerSimple:
             "eta_minutes": 15,
             "delay_minutes": 2,
             "confidence": 0.9,
-            "reason": "Better traffic route"
+            "reason": "Better traffic route",
         }
 
         context = {
@@ -242,7 +214,7 @@ class TestShadowModeManagerSimple:
             "distance_km": 5.0,
             "traffic_level": "high",
             "weather": "rain",
-            "time_of_day": "rush_hour"
+            "time_of_day": "rush_hour",
         }
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
@@ -373,11 +345,7 @@ class TestShadowModeManagerSimple:
 
         human_decision = {"eta_minutes": 20}
         rl_decision = {"eta_minutes": 15}
-        context = {
-            "traffic_level": "high",
-            "avg_eta": 18,
-            "traffic_factor": 1.2
-        }
+        context = {"traffic_level": "high", "avg_eta": 18, "traffic_factor": 1.2}
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
 
@@ -389,11 +357,7 @@ class TestShadowModeManagerSimple:
 
         human_decision = {"eta_minutes": 20}
         rl_decision = {"eta_minutes": 15}
-        context = {
-            "weather": "rain",
-            "weather_factor": 1.1,
-            "visibility": "poor"
-        }
+        context = {"weather": "rain", "weather_factor": 1.1, "visibility": "poor"}
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
 
@@ -405,11 +369,7 @@ class TestShadowModeManagerSimple:
 
         human_decision = {"eta_minutes": 20}
         rl_decision = {"eta_minutes": 15}
-        context = {
-            "time_of_day": "rush_hour",
-            "day_of_week": "monday",
-            "hour": 17
-        }
+        context = {"time_of_day": "rush_hour", "day_of_week": "monday", "hour": 17}
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
 
@@ -426,7 +386,7 @@ class TestShadowModeManagerSimple:
             "pickup_lat": 48.8566,
             "pickup_lon": 2.3522,
             "dropoff_lat": 48.8606,
-            "dropoff_lon": 2.3376
+            "dropoff_lon": 2.3376,
         }
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
@@ -439,11 +399,7 @@ class TestShadowModeManagerSimple:
 
         human_decision = {"eta_minutes": 20}
         rl_decision = {"eta_minutes": 15}
-        context = {
-            "vehicle_type": "sedan",
-            "vehicle_capacity": 4,
-            "vehicle_fuel_type": "gasoline"
-        }
+        context = {"vehicle_type": "sedan", "vehicle_capacity": 4, "vehicle_fuel_type": "gasoline"}
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
 
@@ -455,11 +411,7 @@ class TestShadowModeManagerSimple:
 
         human_decision = {"eta_minutes": 20}
         rl_decision = {"eta_minutes": 15}
-        context = {
-            "driver_experience": "expert",
-            "driver_rating": 4.8,
-            "driver_availability": "high"
-        }
+        context = {"driver_experience": "expert", "driver_rating": 4.8, "driver_availability": "high"}
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
 
@@ -471,12 +423,7 @@ class TestShadowModeManagerSimple:
 
         human_decision = {"eta_minutes": 20}
         rl_decision = {"eta_minutes": 15}
-        context = {
-            "booking_id": 1,
-            "pickup_time": datetime.now(),
-            "booking_type": "standard",
-            "priority": "normal"
-        }
+        context = {"booking_id": 1, "pickup_time": datetime.now(), "booking_type": "standard", "priority": "normal"}
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
 
@@ -488,11 +435,7 @@ class TestShadowModeManagerSimple:
 
         human_decision = {"eta_minutes": 20}
         rl_decision = {"eta_minutes": 15}
-        context = {
-            "company_id": 1,
-            "company_size": "large",
-            "company_type": "taxi"
-        }
+        context = {"company_id": 1, "company_size": "large", "company_type": "taxi"}
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
 
@@ -507,7 +450,7 @@ class TestShadowModeManagerSimple:
             "eta_minutes": 20,
             "delay_minutes": 5,
             "confidence": 0.8,
-            "reason": "Closest driver"
+            "reason": "Closest driver",
         }
 
         rl_decision = {
@@ -515,7 +458,7 @@ class TestShadowModeManagerSimple:
             "eta_minutes": 15,
             "delay_minutes": 2,
             "confidence": 0.9,
-            "reason": "Better route"
+            "reason": "Better route",
         }
 
         context = {
@@ -529,7 +472,7 @@ class TestShadowModeManagerSimple:
             "driver_experience": "expert",
             "company_id": 1,
             "avg_eta": 18,
-            "second_best_driver": 3
+            "second_best_driver": 3,
         }
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)

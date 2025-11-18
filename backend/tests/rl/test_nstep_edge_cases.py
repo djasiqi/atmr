@@ -32,11 +32,7 @@ class TestNStepEndEpisodeEdgeCases:
         if NStepBuffer is None:
             pytest.skip("NStepBuffer non disponible")
 
-        return NStepBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.99
-        )
+        return NStepBuffer(capacity=0.100, n_step=3, gamma=0.99)
 
     def test_n_step_end_episode_exact_length(self, n_step_buffer):
         """Test N-step avec épisode de longueur exacte n."""
@@ -175,10 +171,10 @@ class TestNStepEndEpisodeEdgeCases:
         """Test N-step avec débordement du buffer à la fin d'épisode."""
         # Remplir le buffer presque complètement
         for i in range(98):
-            state = np.array([i, i+1, i+2])
+            state = np.array([i, i + 1, i + 2])
             action = i % 3
             reward = i * 0.01
-            next_state = np.array([i+1, i+2, i+3])
+            next_state = np.array([i + 1, i + 2, i + 3])
             done = False
 
             n_step_buffer.add(state, action, reward, next_state, done)
@@ -205,19 +201,11 @@ class TestNStepReturnCalculationEdgeCases:
         if NStepBuffer is None:
             pytest.skip("NStepBuffer non disponible")
 
-        return NStepBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.99
-        )
+        return NStepBuffer(capacity=0.100, n_step=3, gamma=0.99)
 
     def test_n_step_return_calculation_with_gamma_one(self):
         """Test calcul retour N-step avec gamma=1.0."""
-        buffer = NStepBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=1.0
-        )
+        buffer = NStepBuffer(capacity=0.100, n_step=3, gamma=1.0)
 
         # Créer un épisode
         transitions = [
@@ -236,11 +224,7 @@ class TestNStepReturnCalculationEdgeCases:
 
     def test_n_step_return_calculation_with_gamma_zero(self):
         """Test calcul retour N-step avec gamma=0.0."""
-        buffer = NStepBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.0
-        )
+        buffer = NStepBuffer(capacity=0.100, n_step=3, gamma=0.0)
 
         # Créer un épisode
         transitions = [
@@ -259,11 +243,7 @@ class TestNStepReturnCalculationEdgeCases:
 
     def test_n_step_return_calculation_with_small_gamma(self):
         """Test calcul retour N-step avec gamma très petit."""
-        buffer = NStepBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.01
-        )
+        buffer = NStepBuffer(capacity=0.100, n_step=3, gamma=0.01)
 
         # Créer un épisode
         transitions = [
@@ -285,7 +265,7 @@ class TestNStepReturnCalculationEdgeCases:
         buffer = NStepBuffer(
             capacity=0.100,
             n_step=10,  # n très grand
-            gamma=0.99
+            gamma=0.99,
         )
 
         # Créer un épisode court
@@ -306,7 +286,7 @@ class TestNStepReturnCalculationEdgeCases:
         buffer = NStepBuffer(
             capacity=0.100,
             n_step=1,  # Pas de N-step
-            gamma=0.99
+            gamma=0.99,
         )
 
         # Créer un épisode
@@ -333,14 +313,7 @@ class TestNStepPrioritizedEdgeCases:
         if NStepPrioritizedBuffer is None:
             pytest.skip("NStepPrioritizedBuffer non disponible")
 
-        return NStepPrioritizedBuffer(
-            capacity=0.100,
-            n_step=3,
-            gamma=0.99,
-            alpha=0.6,
-            beta_start=0.4,
-            beta_end=1.0
-        )
+        return NStepPrioritizedBuffer(capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_end=1.0)
 
     def test_n_step_prioritized_end_episode(self, n_step_prioritized_buffer):
         """Test buffer N-step priorisé avec fin d'épisode."""

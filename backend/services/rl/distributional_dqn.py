@@ -42,7 +42,7 @@ class C51Network(nn.Module):
         num_atoms: int = 51,
         v_min: float = -10.0,
         v_max: float = 10.0,
-        device: torch.device | None = None
+        device: torch.device | None = None,
     ):
         """Initialise le réseau C51.
 
@@ -78,11 +78,7 @@ class C51Network(nn.Module):
         input_dim = state_size
 
         for hidden_size in hidden_sizes:
-            layers.extend([
-                nn.Linear(input_dim, hidden_size),
-                nn.ReLU(),
-                nn.Dropout(0.2)
-            ])
+            layers.extend([nn.Linear(input_dim, hidden_size), nn.ReLU(), nn.Dropout(0.2)])
             input_dim = hidden_size
 
         # Couche de sortie pour les logits de distribution
@@ -142,8 +138,7 @@ class C51Network(nn.Module):
 
         """
         distribution = self.get_distribution(state)
-        return torch.sum(
-            distribution * self.z.unsqueeze(0).unsqueeze(0), dim=-1)
+        return torch.sum(distribution * self.z.unsqueeze(0).unsqueeze(0), dim=-1)
 
 
 class QRNetwork(nn.Module):
@@ -159,7 +154,7 @@ class QRNetwork(nn.Module):
         action_size: int,
         hidden_sizes: List[int] | None = None,
         num_quantiles: int = 200,
-        device: torch.device | None = None
+        device: torch.device | None = None,
     ):
         """Initialise le réseau QR-DQN.
 
@@ -190,11 +185,7 @@ class QRNetwork(nn.Module):
         input_dim = state_size
 
         for hidden_size in hidden_sizes:
-            layers.extend([
-                nn.Linear(input_dim, hidden_size),
-                nn.ReLU(),
-                nn.Dropout(0.2)
-            ])
+            layers.extend([nn.Linear(input_dim, hidden_size), nn.ReLU(), nn.Dropout(0.2)])
             input_dim = hidden_size
 
         # Couche de sortie pour les valeurs de quantiles
@@ -256,7 +247,7 @@ class DistributionalLoss:
         dones: torch.Tensor,
         gamma: float,
         z: torch.Tensor,
-        delta_z: float
+        delta_z: float,
     ) -> torch.Tensor:
         """Calcule la perte C51 (Cross-entropy entre distributions).
 
@@ -285,8 +276,7 @@ class DistributionalLoss:
         target_distribution = target_distribution[range(batch_size), actions]
 
         # Projeter la distribution cible
-        target_z = rewards.unsqueeze(-1) + gamma * \
-            z.unsqueeze(0) * (~dones.unsqueeze(-1)).float()
+        target_z = rewards.unsqueeze(-1) + gamma * z.unsqueeze(0) * (~dones.unsqueeze(-1)).float()
         target_z = torch.clamp(target_z, z[0], z[-1])
 
         # Calculer les indices de projection
@@ -299,27 +289,18 @@ class DistributionalLoss:
 
         for batch_idx in range(batch_size):
             for atom_idx in range(num_atoms):
-                l_idx = torch.clamp(
-                    lower_idx[batch_idx, atom_idx], 0, num_atoms - 1)
-                u_idx = torch.clamp(
-                    upper_idx[batch_idx, atom_idx], 0, num_atoms - 1)
+                l_idx = torch.clamp(lower_idx[batch_idx, atom_idx], 0, num_atoms - 1)
+                u_idx = torch.clamp(upper_idx[batch_idx, atom_idx], 0, num_atoms - 1)
 
                 # Répartir la probabilité
-                weight_l = upper_idx[batch_idx,
-                                     atom_idx].float() - b[batch_idx, atom_idx]
-                weight_u = b[batch_idx, atom_idx] - \
-                    lower_idx[batch_idx, atom_idx].float()
+                weight_l = upper_idx[batch_idx, atom_idx].float() - b[batch_idx, atom_idx]
+                weight_u = b[batch_idx, atom_idx] - lower_idx[batch_idx, atom_idx].float()
 
-                target_distribution_projected[batch_idx,
-                                              l_idx] += target_distribution[batch_idx,
-                                                                            atom_idx] * weight_l
-                target_distribution_projected[batch_idx,
-                                              u_idx] += target_distribution[batch_idx,
-                                                                            atom_idx] * weight_u
+                target_distribution_projected[batch_idx, l_idx] += target_distribution[batch_idx, atom_idx] * weight_l
+                target_distribution_projected[batch_idx, u_idx] += target_distribution[batch_idx, atom_idx] * weight_u
 
         # Calculer la perte cross-entropy
-        loss = -torch.sum(target_distribution_projected *
-                          F.log_softmax(logits, dim=-1), dim=-1)
+        loss = -torch.sum(target_distribution_projected * F.log_softmax(logits, dim=-1), dim=-1)
 
         return loss.mean()
 
@@ -331,7 +312,7 @@ class DistributionalLoss:
         rewards: torch.Tensor,
         dones: torch.Tensor,
         gamma: float,
-        tau: torch.Tensor
+        tau: torch.Tensor,
     ) -> torch.Tensor:
         """Calcule la perte QR-DQN (Quantile Regression Loss).
 
@@ -355,8 +336,7 @@ class DistributionalLoss:
 
         # Calculer les quantiles cibles
         target_quantiles = target_quantiles[range(batch_size), actions]
-        target_quantiles = rewards.unsqueeze(-1) + gamma * \
-            target_quantiles * (~dones.unsqueeze(-1)).float()
+        target_quantiles = rewards.unsqueeze(-1) + gamma * target_quantiles * (~dones.unsqueeze(-1)).float()
 
         # Calculer la perte de régression quantile
         td_error = target_quantiles - quantiles
@@ -382,8 +362,7 @@ class UncertaintyCapture:
         self.method = method
         self.uncertainty_history = []
 
-    def calculate_uncertainty(
-            self, distribution: torch.Tensor) -> Dict[str, float]:
+    def calculate_uncertainty(self, distribution: torch.Tensor) -> Dict[str, float]:
         """Calcule l'incertitude à partir de la distribution.
 
         Args:
@@ -400,27 +379,24 @@ class UncertaintyCapture:
         msg = f"Méthode non supportée: {self.method}"
         raise ValueError(msg)
 
-    def _calculate_c51_uncertainty(
-            self, distribution: torch.Tensor) -> Dict[str, float]:
+    def _calculate_c51_uncertainty(self, distribution: torch.Tensor) -> Dict[str, float]:
         """Calcule l'incertitude pour C51."""
         # Calculer l'entropie de la distribution
-        entropy = -torch.sum(distribution *
-                             torch.log(distribution + 1e-8), dim=-1)
+        entropy = -torch.sum(distribution * torch.log(distribution + 1e-8), dim=-1)
 
         # Calculer la variance
-        mean = torch.sum(distribution * torch.linspace(-10,
-                         10, distribution.size(-1)), dim=-1)
-        variance = torch.sum(distribution * (torch.linspace(-10, 10,
-                             distribution.size(-1)) - mean.unsqueeze(-1)) ** 2, dim=-1)
+        mean = torch.sum(distribution * torch.linspace(-10, 10, distribution.size(-1)), dim=-1)
+        variance = torch.sum(
+            distribution * (torch.linspace(-10, 10, distribution.size(-1)) - mean.unsqueeze(-1)) ** 2, dim=-1
+        )
 
         return {
             "entropy": entropy.mean().item(),
             "variance": variance.mean().item(),
-            "confidence": (1.0 - entropy.mean().item() / math.log(distribution.size(-1)))
+            "confidence": (1.0 - entropy.mean().item() / math.log(distribution.size(-1))),
         }
 
-    def _calculate_qr_uncertainty(
-            self, quantiles: torch.Tensor) -> Dict[str, float]:
+    def _calculate_qr_uncertainty(self, quantiles: torch.Tensor) -> Dict[str, float]:
         """Calcule l'incertitude pour QR-DQN."""
         # Calculer l'écart interquartile (IQR)
         q25 = torch.quantile(quantiles, 0.25, dim=-1)
@@ -433,11 +409,7 @@ class UncertaintyCapture:
         # Calculer la confiance (inverse de l'IQR)
         confidence = 1.0 / (1.0 + iqr.mean().item())
 
-        return {
-            "iqr": iqr.mean().item(),
-            "variance": variance.mean().item(),
-            "confidence": confidence
-        }
+        return {"iqr": iqr.mean().item(), "variance": variance.mean().item(), "confidence": confidence}
 
     def update_uncertainty_history(self, uncertainty: Dict[str, float]):
         """Met à jour l'historique d'incertitude."""
@@ -453,8 +425,11 @@ class UncertaintyCapture:
             return {"trend": 0.0, "stability": 0.0}
 
         recent = self.uncertainty_history[-RECENT_WINDOW_SIZE:]
-        older = self.uncertainty_history[-OLDER_WINDOW_SIZE:-RECENT_WINDOW_SIZE] if len(
-            self.uncertainty_history) >= OLDER_WINDOW_SIZE else self.uncertainty_history[:-RECENT_WINDOW_SIZE]
+        older = (
+            self.uncertainty_history[-OLDER_WINDOW_SIZE:-RECENT_WINDOW_SIZE]
+            if len(self.uncertainty_history) >= OLDER_WINDOW_SIZE
+            else self.uncertainty_history[:-RECENT_WINDOW_SIZE]
+        )
 
         recent_avg = sum(u["confidence"] for u in recent) / len(recent)
         older_avg = sum(u["confidence"] for u in older) / len(older)
@@ -462,10 +437,7 @@ class UncertaintyCapture:
         trend = recent_avg - older_avg
         stability = 1.0 - np.std([u["confidence"] for u in recent])
 
-        return {
-            "trend": float(trend),
-            "stability": float(stability)
-        }
+        return {"trend": float(trend), "stability": float(stability)}
 
 
 def create_distributional_network(
@@ -474,7 +446,7 @@ def create_distributional_network(
     action_size: int,
     hidden_sizes: List[int] | None = None,
     device: torch.device | None = None,
-    **kwargs
+    **kwargs,
 ) -> nn.Module:
     """Factory function pour créer des réseaux distributionnels.
 
@@ -495,28 +467,18 @@ def create_distributional_network(
 
     if network_type.lower() == "c51":
         return C51Network(
-            state_size=state_size,
-            action_size=action_size,
-            hidden_sizes=hidden_sizes,
-            device=device,
-            **kwargs
+            state_size=state_size, action_size=action_size, hidden_sizes=hidden_sizes, device=device, **kwargs
         )
     if network_type.lower() == "qr_dqn":
         return QRNetwork(
-            state_size=state_size,
-            action_size=action_size,
-            hidden_sizes=hidden_sizes,
-            device=device,
-            **kwargs
+            state_size=state_size, action_size=action_size, hidden_sizes=hidden_sizes, device=device, **kwargs
         )
     msg = f"Type de réseau distributionnel non supporté: {network_type}"
     raise ValueError(msg)
 
 
 def compare_distributional_methods(
-    c51_network: C51Network,
-    qr_network: QRNetwork,
-    state: torch.Tensor
+    c51_network: C51Network, qr_network: QRNetwork, state: torch.Tensor
 ) -> Dict[str, Dict[str, float | Dict[str, float]]]:
     """Compare les méthodes distributionnelles.
 
@@ -538,18 +500,10 @@ def compare_distributional_methods(
     qr_q_values = qr_network.get_q_values(state)
 
     # Calculer l'incertitude
-    c51_uncertainty = UncertaintyCapture(
-        "c51").calculate_uncertainty(c51_distribution)
-    qr_uncertainty = UncertaintyCapture(
-        "qr_dqn").calculate_uncertainty(qr_quantiles)
+    c51_uncertainty = UncertaintyCapture("c51").calculate_uncertainty(c51_distribution)
+    qr_uncertainty = UncertaintyCapture("qr_dqn").calculate_uncertainty(qr_quantiles)
 
     return {
-        "c51": {
-            "q_values": float(c51_q_values.mean().item()),
-            "uncertainty": c51_uncertainty
-        },
-        "qr_dqn": {
-            "q_values": float(qr_q_values.mean().item()),
-            "uncertainty": qr_uncertainty
-        }
+        "c51": {"q_values": float(c51_q_values.mean().item()), "uncertainty": c51_uncertainty},
+        "qr_dqn": {"q_values": float(qr_q_values.mean().item()), "uncertainty": qr_uncertainty},
     }

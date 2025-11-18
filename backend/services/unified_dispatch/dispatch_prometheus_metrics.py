@@ -20,6 +20,7 @@ from contextlib import contextmanager
 # Import optionnel prometheus_client
 try:
     from prometheus_client import Counter, Gauge, Histogram
+
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
@@ -38,7 +39,7 @@ if PROMETHEUS_AVAILABLE and Counter is not None and Gauge is not None and Histog
         "Nombre total de runs dispatch",
         ["status", "mode", "company_id"],  # status: running, completed, failed
     )
-    
+
     # Histogramme durée dispatch
     DISPATCH_DURATION_SECONDS = Histogram(
         "dispatch_duration_seconds",
@@ -46,56 +47,56 @@ if PROMETHEUS_AVAILABLE and Counter is not None and Gauge is not None and Histog
         ["mode", "company_id"],
         buckets=[0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0],
     )
-    
+
     # Gauge qualité dispatch
     DISPATCH_QUALITY_SCORE = Gauge(
         "dispatch_quality_score",
         "Score de qualité du dispatch (0-100)",
         ["dispatch_run_id", "company_id"],
     )
-    
+
     # Gauge taux d'assignation
     DISPATCH_ASSIGNMENT_RATE = Gauge(
         "dispatch_assignment_rate",
         "Taux d'assignation des bookings (%)",
         ["dispatch_run_id", "company_id"],
     )
-    
+
     # Gauge nombre de bookings non assignés
     DISPATCH_UNASSIGNED_COUNT = Gauge(
         "dispatch_unassigned_count",
         "Nombre de bookings non assignés",
         ["dispatch_run_id", "company_id"],
     )
-    
+
     # Gauge état circuit breaker OSRM
     DISPATCH_CIRCUIT_BREAKER_STATE = Gauge(
         "dispatch_circuit_breaker_state",
         "État du circuit breaker OSRM (0=CLOSED, 1=OPEN, 2=HALF_OPEN)",
         ["company_id"],
     )
-    
+
     # Compteur conflits temporels
     DISPATCH_TEMPORAL_CONFLICTS_TOTAL = Counter(
         "dispatch_temporal_conflicts_total",
         "Nombre total de conflits temporels détectés",
         ["dispatch_run_id", "company_id"],
     )
-    
+
     # Compteur conflits DB
     DISPATCH_DB_CONFLICTS_TOTAL = Counter(
         "dispatch_db_conflicts_total",
         "Nombre total de conflits DB (contraintes uniques)",
         ["dispatch_run_id", "company_id"],
     )
-    
+
     # Compteur OSRM cache hits/misses
     DISPATCH_OSRM_CACHE_HITS_TOTAL = Counter(
         "dispatch_osrm_cache_hits_total",
         "Nombre total de hits cache OSRM",
         ["dispatch_run_id", "company_id"],
     )
-    
+
     DISPATCH_OSRM_CACHE_MISSES_TOTAL = Counter(
         "dispatch_osrm_cache_misses_total",
         "Nombre total de misses cache OSRM",
@@ -117,13 +118,14 @@ else:
 
 # ==================== Helper Functions ====================
 
+
 def record_dispatch_run(
     status: str,
     mode: str,
     company_id: int,
 ) -> None:
     """Enregistre un run dispatch.
-    
+
     Args:
         status: Status du run (running, completed, failed)
         mode: Mode du dispatch (auto, semi_auto, manual)
@@ -146,7 +148,7 @@ def record_dispatch_duration(
     company_id: int,
 ) -> None:
     """Enregistre la durée d'un dispatch.
-    
+
     Args:
         duration_seconds: Durée en secondes
         mode: Mode du dispatch
@@ -168,7 +170,7 @@ def record_dispatch_quality(
     company_id: int,
 ) -> None:
     """Enregistre le score de qualité.
-    
+
     Args:
         quality_score: Score de qualité (0-100)
         dispatch_run_id: ID du dispatch run
@@ -190,7 +192,7 @@ def record_assignment_rate(
     company_id: int,
 ) -> None:
     """Enregistre le taux d'assignation.
-    
+
     Args:
         assignment_rate: Taux d'assignation (0-100)
         dispatch_run_id: ID du dispatch run
@@ -212,7 +214,7 @@ def record_unassigned_count(
     company_id: int,
 ) -> None:
     """Enregistre le nombre de bookings non assignés.
-    
+
     Args:
         unassigned_count: Nombre de bookings non assignés
         dispatch_run_id: ID du dispatch run
@@ -233,7 +235,7 @@ def record_circuit_breaker_state(
     company_id: int,
 ) -> None:
     """Enregistre l'état du circuit breaker OSRM.
-    
+
     Args:
         state: État (CLOSED=0, OPEN=1, HALF_OPEN=2)
         company_id: ID de l'entreprise
@@ -254,7 +256,7 @@ def record_temporal_conflicts(
     company_id: int,
 ) -> None:
     """Enregistre les conflits temporels.
-    
+
     Args:
         conflicts_count: Nombre de conflits
         dispatch_run_id: ID du dispatch run
@@ -276,7 +278,7 @@ def record_db_conflicts(
     company_id: int,
 ) -> None:
     """Enregistre les conflits DB.
-    
+
     Args:
         conflicts_count: Nombre de conflits
         dispatch_run_id: ID du dispatch run
@@ -297,7 +299,7 @@ def record_osrm_cache_hit(
     company_id: int,
 ) -> None:
     """Enregistre un hit cache OSRM.
-    
+
     Args:
         dispatch_run_id: ID du dispatch run (optionnel)
         company_id: ID de l'entreprise
@@ -317,7 +319,7 @@ def record_osrm_cache_miss(
     company_id: int,
 ) -> None:
     """Enregistre un miss cache OSRM.
-    
+
     Args:
         dispatch_run_id: ID du dispatch run (optionnel)
         company_id: ID de l'entreprise
@@ -339,27 +341,27 @@ def dispatch_metrics_context(
     mode: str,
 ):
     """Context manager pour enregistrer automatiquement les métriques dispatch.
-    
+
     Usage:
         with dispatch_metrics_context(dispatch_run_id, company_id, mode):
             # Code dispatch
             record_dispatch_quality(score, dispatch_run_id, company_id)
-    
+
     Args:
         dispatch_run_id: ID du dispatch run (passé pour usage dans le contexte, non utilisé directement)
         company_id: ID de l'entreprise
         mode: Mode du dispatch
-    
+
     Note:
         dispatch_run_id est accepté mais non utilisé directement dans cette fonction.
         Il est disponible pour être passé aux fonctions appelées dans le contexte (ex: record_dispatch_quality).
     """
     _ = dispatch_run_id  # Accepté mais non utilisé directement (utilisé par fonctions appelées dans le contexte)
     import time
-    
+
     start_time = time.time()
     record_dispatch_run("running", mode, company_id)
-    
+
     try:
         yield
         record_dispatch_run("completed", mode, company_id)
@@ -369,4 +371,3 @@ def dispatch_metrics_context(
     finally:
         duration = time.time() - start_time
         record_dispatch_duration(duration, mode, company_id)
-

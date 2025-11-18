@@ -6,6 +6,7 @@ l'écart de charge entre chauffeurs (équité).
 Auteur: ATMR Project - RL Team
 Date: 21 octobre 2025
 """
+
 from __future__ import annotations
 
 import logging
@@ -87,9 +88,7 @@ class RLDispatchOptimizer:
         try:
             import torch  # pyright: ignore[reportMissingImports]
 
-            checkpoint = torch.load(
-                str(self.model_path), map_location="cpu", weights_only=False
-            )
+            checkpoint = torch.load(str(self.model_path), map_location="cpu", weights_only=False)
 
             config = checkpoint.get("config", {})
             state_dim = int(config.get("state_dim", 166))
@@ -166,8 +165,7 @@ class RLDispatchOptimizer:
 
         """
         if not self.is_available():
-            logger.warning(
-                "[RLOptimizer] Modèle non disponible, retour assignations originales")
+            logger.warning("[RLOptimizer] Modèle non disponible, retour assignations originales")
             return initial_assignments
 
         if not initial_assignments:
@@ -175,12 +173,9 @@ class RLDispatchOptimizer:
             return []
 
         disable_reason: Optional[str] = None
-        if matrix_quality and (
-            matrix_quality.get("fallback_used") or matrix_quality.get("has_large_value")
-        ):
+        if matrix_quality and (matrix_quality.get("fallback_used") or matrix_quality.get("has_large_value")):
             disable_reason = (
-                f"matrix fallback={matrix_quality.get('fallback_used')} "
-                f"max={matrix_quality.get('max_entry')}"
+                f"matrix fallback={matrix_quality.get('fallback_used')} max={matrix_quality.get('max_entry')}"
             )
 
         if disable_reason is None and coord_quality:
@@ -209,6 +204,7 @@ class RLDispatchOptimizer:
         # Import conditionnel du RLLogger pour logging des décisions
         try:
             from services.rl.rl_logger import get_rl_logger
+
             rl_logger = get_rl_logger()
             enable_logging = True
         except ImportError:
@@ -221,9 +217,7 @@ class RLDispatchOptimizer:
 
         # Si déjà optimal (gap ≤1), pas besoin d'optimiser
         if initial_gap <= 1:
-            logger.info(
-                "[RLOptimizer] ✅ Déjà optimal (gap=%d), pas d'optimisation",
-                initial_gap)
+            logger.info("[RLOptimizer] ✅ Déjà optimal (gap=%d), pas d'optimisation", initial_gap)
             return initial_assignments
 
         # Créer environnement de simulation (utiliser les dimensions du modèle)
@@ -266,6 +260,7 @@ class RLDispatchOptimizer:
             if enable_logging and rl_logger is not None:
                 try:
                     import time
+
                     start_time = time.time()
 
                     # Calculer les métriques actuelles
@@ -287,7 +282,7 @@ class RLDispatchOptimizer:
                         "model_path": str(self.model_path),
                         "num_bookings": len(bookings),
                         "num_drivers": len(drivers),
-                        "current_loads": list(current_loads.values())
+                        "current_loads": list(current_loads.values()),
                     }
 
                     # Log la décision (sans q_values car select_action les gère
@@ -298,16 +293,14 @@ class RLDispatchOptimizer:
                         latency_ms=(time.time() - start_time) * 1000,
                         model_version="dispatch_optimizer_v2",
                         constraints=constraints,
-                        metadata=metadata
+                        metadata=metadata,
                     )
                 except Exception as e:
                     # Ne pas faire échouer l'optimisation si le logging échoue
-                    logger.debug(
-                        "[RLOptimizer] Erreur logging décision: %s", e)
+                    logger.debug("[RLOptimizer] Erreur logging décision: %s", e)
 
             if action == 0:  # Wait (no change)
-                logger.debug(
-                    "[RLOptimizer] Agent suggère d'arrêter (action=0)")
+                logger.debug("[RLOptimizer] Agent suggère d'arrêter (action=0)")
                 break
 
             driver_capacity = self.env.num_drivers
@@ -318,10 +311,7 @@ class RLDispatchOptimizer:
             booking_slot = (action - 1) // driver_capacity
             driver_slot = (action - 1) % driver_capacity
 
-            if (
-                driver_slot >= len(self._driver_index_map)
-                or booking_slot >= len(self._booking_index_map)
-            ):
+            if driver_slot >= len(self._driver_index_map) or booking_slot >= len(self._booking_index_map):
                 logger.debug(
                     "[RLOptimizer] Action ignorée (slot driver=%s booking=%s hors sous-ensemble)",
                     driver_slot,
@@ -336,8 +326,7 @@ class RLDispatchOptimizer:
             new_driver_id = drivers[driver_idx].id
 
             # Trouver l'assignation actuelle
-            assignment = next(
-                (a for a in optimized if a["booking_id"] == booking_id), None)
+            assignment = next((a for a in optimized if a["booking_id"] == booking_id), None)
             if not assignment:
                 continue
 
@@ -380,8 +369,7 @@ class RLDispatchOptimizer:
 
                 # Si optimal atteint, arrêter
                 if new_gap <= 1:
-                    logger.info(
-                        "[RLOptimizer] 🎯 Optimal atteint (gap=1), arrêt")
+                    logger.info("[RLOptimizer] 🎯 Optimal atteint (gap=1), arrêt")
                     break
             else:
                 # Rollback (annuler)
@@ -406,12 +394,12 @@ class RLDispatchOptimizer:
         if enable_logging and rl_logger is not None:
             try:
                 import time
+
                 start_time = time.time()
 
                 # Métriques finales
                 final_loads = self._calculate_loads(optimized, drivers)
-                gap_improvement = self._calculate_gap(
-                    initial_assignments, drivers) - final_gap
+                gap_improvement = self._calculate_gap(initial_assignments, drivers) - final_gap
 
                 constraints = {
                     "max_swaps": self.max_swaps,
@@ -419,7 +407,7 @@ class RLDispatchOptimizer:
                     "final_gap": final_gap,
                     "initial_gap": self._calculate_gap(initial_assignments, drivers),
                     "total_improvements": improvements,
-                    "gap_improvement": gap_improvement
+                    "gap_improvement": gap_improvement,
                 }
 
                 metadata = {
@@ -429,7 +417,7 @@ class RLDispatchOptimizer:
                     "num_drivers": len(drivers),
                     "final_loads": list(final_loads.values()),
                     "optimization_completed": True,
-                    "swaps_performed": improvements
+                    "swaps_performed": improvements,
                 }
 
                 # Log le résultat final
@@ -440,7 +428,7 @@ class RLDispatchOptimizer:
                     latency_ms=(time.time() - start_time) * 1000,
                     model_version="dispatch_optimizer_v2_final",
                     constraints=constraints,
-                    metadata=metadata
+                    metadata=metadata,
                 )
             except Exception as e:
                 logger.debug("[RLOptimizer] Erreur logging final: %s", e)
@@ -458,7 +446,7 @@ class RLDispatchOptimizer:
                 "driver_loads": list(self._calculate_loads(optimized, drivers).values()),
                 "avg_distance_km": 0,  # À calculer
                 "max_distance_km": 0,
-                "total_distance_km": 0
+                "total_distance_km": 0,
             }
 
             # Métadonnées RL spécifiques à l'optimiseur
@@ -469,13 +457,11 @@ class RLDispatchOptimizer:
                 "q_value_variance": 0.1,
                 "episode_length": improvements + 1,  # Longueur basée sur les améliorations
                 "swaps_performed": improvements,
-                "gap_improvement": initial_gap - final_gap
+                "gap_improvement": initial_gap - final_gap,
             }
 
             # Vérifier la sécurité
-            is_safe, _safety_result = safety_guards.check_dispatch_result(
-                dispatch_metrics, rl_metadata
-            )
+            is_safe, _safety_result = safety_guards.check_dispatch_result(dispatch_metrics, rl_metadata)
 
             if not is_safe:
                 logger.warning(
@@ -485,11 +471,9 @@ class RLDispatchOptimizer:
                 # Rollback vers assignations initiales
                 optimized = initial_assignments.copy()
 
-                logger.info(
-                    "[RLOptimizer] ✅ Rollback vers assignations initiales effectué")
+                logger.info("[RLOptimizer] ✅ Rollback vers assignations initiales effectué")
             else:
-                logger.info(
-                    "[RLOptimizer] ✅ Safety Guards: Optimisation RL validée")
+                logger.info("[RLOptimizer] ✅ Safety Guards: Optimisation RL validée")
 
         except Exception as safety_e:
             logger.error("[RLOptimizer] Erreur Safety Guards: %s", safety_e)
@@ -497,16 +481,14 @@ class RLDispatchOptimizer:
 
         return optimized
 
-    def _calculate_gap(
-            self, assignments: List[Dict[str, Any]], drivers: List[Any]) -> int:
+    def _calculate_gap(self, assignments: List[Dict[str, Any]], drivers: List[Any]) -> int:
         """Calcule l'écart de charge max-min."""
         loads = self._calculate_loads(assignments, drivers)
         if not loads:
             return 0
         return max(loads.values()) - min(loads.values())
 
-    def _calculate_loads(
-            self, assignments: List[Dict[str, Any]], drivers: List[Any]) -> Dict[int, int]:
+    def _calculate_loads(self, assignments: List[Dict[str, Any]], drivers: List[Any]) -> Dict[int, int]:
         """Compte le nombre d'assignations par chauffeur."""
         loads = {d.id: 0 for d in drivers}
         for a in assignments:
@@ -543,20 +525,16 @@ class RLDispatchOptimizer:
         _obs, _ = self.env.reset()
 
         if driver_indices is None:
-            driver_indices = self._driver_index_map or list(
-                range(min(len(drivers), self.env.num_drivers)))
+            driver_indices = self._driver_index_map or list(range(min(len(drivers), self.env.num_drivers)))
         if booking_indices is None:
-            booking_indices = self._booking_index_map or list(
-                range(min(len(bookings), self.env.max_bookings)))
+            booking_indices = self._booking_index_map or list(range(min(len(bookings), self.env.max_bookings)))
 
         driver_subset = [drivers[idx] for idx in driver_indices]
         booking_subset = [bookings[idx] for idx in booking_indices]
 
         self.env.set_active_counts(len(driver_subset), len(booking_subset))
 
-        assignment_map = {
-            assignment["booking_id"]: assignment for assignment in assignments
-        }
+        assignment_map = {assignment["booking_id"]: assignment for assignment in assignments}
 
         self.env.bookings = []
         for booking in booking_subset:
@@ -662,7 +640,5 @@ class RLDispatchOptimizer:
 
         sorted_indices = sorted(range(len(bookings)), key=booking_sort_key)
         selected = sorted_indices[:capacity]
-        logger.info(
-            "[RLOptimizer] Limitation RL à %d/%d bookings", len(selected), len(bookings)
-        )
+        logger.info("[RLOptimizer] Limitation RL à %d/%d bookings", len(selected), len(bookings))
         return selected

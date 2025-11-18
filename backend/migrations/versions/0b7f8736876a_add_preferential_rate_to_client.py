@@ -5,6 +5,7 @@ Revises: d9f3a8b2c4e5
 Create Date: 2025-10-10 21:46:48.744206
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -20,7 +21,9 @@ def upgrade():
     op.add_column("client", sa.Column("preferential_rate", sa.Numeric(10, 2), nullable=True))
 
     # Ajouter un commentaire pour documenter les valeurs typiques
-    op.execute("COMMENT ON COLUMN client.preferential_rate IS 'Tarif préférentiel en CHF (ex: 45, 50, 55, 60, 70, 80, 110). NULL = tarif standard'")
+    op.execute(
+        "COMMENT ON COLUMN client.preferential_rate IS 'Tarif préférentiel en CHF (ex: 45, 50, 55, 60, 70, 80, 110). NULL = tarif standard'"
+    )
 
 
 def downgrade():

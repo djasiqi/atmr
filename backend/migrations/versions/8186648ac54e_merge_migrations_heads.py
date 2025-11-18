@@ -5,6 +5,7 @@ Revises: ('3_4_profiling', 'rl_suggestions_001', 'fix_audit_metadata')
 Create Date: 2025-10-31 11:05:20.836158
 
 """
+
 from alembic import op  # noqa: I001
 
 
@@ -20,4 +21,3 @@ def upgrade():
 
 def downgrade():
     pass
-

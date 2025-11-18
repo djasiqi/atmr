@@ -19,12 +19,7 @@ class TestNStepBufferMissingLines:
         buffer = NStepBuffer(capacity=10, n_step=3, gamma=0.9)
 
         buffer.add_transition(
-            state=np.array([1, 2, 3]),
-            action=0,
-            reward=1.0,
-            next_state=np.array([4, 5, 6]),
-            done=False,
-            info=None
+            state=np.array([1, 2, 3]), action=0, reward=1.0, next_state=np.array([4, 5, 6]), done=False, info=None
         )
 
         assert len(buffer.temp_buffer) == 1
@@ -34,10 +29,7 @@ class TestNStepBufferMissingLines:
     def test_calculate_n_step_return_with_n_step_one(self):
         """Test ligne 119: _calculate_n_step_return avec n_step=1."""
         buffer = NStepBuffer(capacity=10, n_step=1, gamma=0.9)
-        buffer.temp_buffer = [
-            {"reward": 1.0, "done": False},
-            {"reward": 2.0, "done": True}
-        ]
+        buffer.temp_buffer = [{"reward": 1.0, "done": False}, {"reward": 2.0, "done": True}]
 
         result = buffer._calculate_n_step_return(0)
         assert result == 1.0  # Pas de discount avec n_step=1
@@ -53,13 +45,13 @@ class TestNStepPrioritizedBufferMissingLines:
         # Ajouter 3 transitions pour compléter n_step
         for i in range(3):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
-                reward=float(i+1),
-                next_state=np.array([i+3, i+4, i+5]),
+                reward=float(i + 1),
+                next_state=np.array([i + 3, i + 4, i + 5]),
                 done=i == 2,
                 info=None,
-                td_error=None
+                td_error=None,
             )
 
         assert len(buffer.buffer) == 3  # Trois transitions ajoutées
@@ -72,13 +64,13 @@ class TestNStepPrioritizedBufferMissingLines:
         # Ajouter 3 transitions pour compléter n_step
         for i in range(3):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
-                reward=float(i+1),
-                next_state=np.array([i+3, i+4, i+5]),
+                reward=float(i + 1),
+                next_state=np.array([i + 3, i + 4, i + 5]),
                 done=i == 2,
                 info=None,
-                td_error=float(i+1)
+                td_error=float(i + 1),
             )
 
         assert len(buffer.buffer) == 3  # Trois transitions ajoutées
@@ -101,13 +93,13 @@ class TestNStepPrioritizedBufferMissingLines:
         # Ajouter plusieurs transitions
         for i in range(3):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
-                reward=float(i+1),
-                next_state=np.array([i+3, i+4, i+5]),
+                reward=float(i + 1),
+                next_state=np.array([i + 3, i + 4, i + 5]),
                 done=i == 2,
                 info=None,
-                td_error=float(i+1)
+                td_error=float(i + 1),
             )
 
         batch, weights, indices = buffer.sample(2)
@@ -138,13 +130,13 @@ class TestNStepPrioritizedBufferMissingLines:
         # Ajouter quelques transitions complètes
         for i in range(3):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
-                reward=float(i+1),
-                next_state=np.array([i+3, i+4, i+5]),
+                reward=float(i + 1),
+                next_state=np.array([i + 3, i + 4, i + 5]),
                 done=i == 2,
                 info=None,
-                td_error=float(i+1)
+                td_error=float(i + 1),
             )
 
         stats = buffer.get_stats()
@@ -163,13 +155,13 @@ class TestNStepPrioritizedBufferMissingLines:
         # Ajouter des données complètes
         for i in range(3):
             buffer.add_transition(
-                state=np.array([i, i+1, i+2]),
+                state=np.array([i, i + 1, i + 2]),
                 action=i,
-                reward=float(i+1),
-                next_state=np.array([i+3, i+4, i+5]),
+                reward=float(i + 1),
+                next_state=np.array([i + 3, i + 4, i + 5]),
                 done=i == 2,
                 info=None,
-                td_error=float(i+1)
+                td_error=float(i + 1),
             )
 
         assert len(buffer.buffer) == 3  # Trois transitions ajoutées
@@ -183,10 +175,7 @@ class TestNStepPrioritizedBufferMissingLines:
     def test_calculate_n_step_return_with_nan(self):
         """Test lignes 457-459: _calculate_n_step_return avec NaN."""
         buffer = NStepPrioritizedBuffer(capacity=10, n_step=3, gamma=0.9)
-        buffer.temp_buffer = [
-            {"reward": float("nan"), "done": False},
-            {"reward": 2.0, "done": True}
-        ]
+        buffer.temp_buffer = [{"reward": float("nan"), "done": False}, {"reward": 2.0, "done": True}]
 
         result = buffer._calculate_n_step_return(0)
         # Le calcul inclut les deux transitions: NaN (0.0) + 2.0*0.9 = 1.8
@@ -195,10 +184,7 @@ class TestNStepPrioritizedBufferMissingLines:
     def test_calculate_n_step_return_with_inf(self):
         """Test lignes 483-486: _calculate_n_step_return avec inf."""
         buffer = NStepPrioritizedBuffer(capacity=10, n_step=3, gamma=0.9)
-        buffer.temp_buffer = [
-            {"reward": float("inf"), "done": False},
-            {"reward": 2.0, "done": True}
-        ]
+        buffer.temp_buffer = [{"reward": float("inf"), "done": False}, {"reward": 2.0, "done": True}]
 
         result = buffer._calculate_n_step_return(0)
         # Le calcul inclut les deux transitions: inf (1.0) + 2.0*0.9 = 2.8
@@ -207,10 +193,7 @@ class TestNStepPrioritizedBufferMissingLines:
     def test_calculate_n_step_return_with_neg_inf(self):
         """Test lignes 483-486: _calculate_n_step_return avec -inf."""
         buffer = NStepPrioritizedBuffer(capacity=10, n_step=3, gamma=0.9)
-        buffer.temp_buffer = [
-            {"reward": float("-inf"), "done": False},
-            {"reward": 2.0, "done": True}
-        ]
+        buffer.temp_buffer = [{"reward": float("-inf"), "done": False}, {"reward": 2.0, "done": True}]
 
         result = buffer._calculate_n_step_return(0)
         # Le calcul inclut les deux transitions: -inf (-1.0) + 2.0*0.9 = 0.8

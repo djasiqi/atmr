@@ -25,8 +25,7 @@ def compliance_scan(company_id: int) -> int:
     # Placeholder: ne fait rien de coûteux pour l'instant
     # Ex: marquer les shifts passés sans flags
     try:
-        q = db.session.query(DriverShift).filter(
-            DriverShift.company_id == company_id)
+        q = db.session.query(DriverShift).filter(DriverShift.company_id == company_id)
         count = 0
         for s in q.limit(1000):
             # no-op: serialize to ensure import path is valid

@@ -8,6 +8,7 @@ Valide que merge_overrides gère correctement:
 - Valeurs par défaut
 - Clés inconnues (mode, preferred_driver_id, etc.)
 """
+
 import logging
 from typing import Any, Dict
 
@@ -24,16 +25,8 @@ class TestMergeOverrides:
     def test_merge_overrides_nested_paths(self):
         """Test: merge de chemins imbriqués (heuristic.proximity, etc.)."""
         base = Settings()
-        
-        overrides = {
-            "heuristic": {
-                "proximity": 0.05,
-                "driver_load_balance": 0.95
-            },
-            "solver": {
-                "time_limit_sec": 120
-            }
-        }
+
+        overrides = {"heuristic": {"proximity": 0.05, "driver_load_balance": 0.95}, "solver": {"time_limit_sec": 120}}
 
         merged = merge_overrides(base, overrides)
 
@@ -41,19 +34,22 @@ class TestMergeOverrides:
         assert merged.heuristic.proximity == 0.05
         assert merged.heuristic.driver_load_balance == 0.95
         assert merged.solver.time_limit_sec == 120
-        
-        logger.info("✅ Merge imbriqué réussi: heuristic.proximity=%s, solver.time_limit_sec=%s",
-                   merged.heuristic.proximity, merged.solver.time_limit_sec)
+
+        logger.info(
+            "✅ Merge imbriqué réussi: heuristic.proximity=%s, solver.time_limit_sec=%s",
+            merged.heuristic.proximity,
+            merged.solver.time_limit_sec,
+        )
 
     def test_merge_overrides_ignores_unknown_keys(self):
         """Test: les clés inconnues (mode, preferred_driver_id) sont ignorées."""
         base = Settings()
-        
+
         overrides = {
             "heuristic": {"proximity": 0.3},
             "mode": "heuristic_only",  # Clé inconnue
             "preferred_driver_id": 42,  # Clé inconnue
-            "run_async": True  # Clé inconnue
+            "run_async": True,  # Clé inconnue
         }
 
         merged = merge_overrides(base, overrides)
@@ -64,7 +60,7 @@ class TestMergeOverrides:
         assert not hasattr(merged, "mode")
         assert not hasattr(merged, "preferred_driver_id")
         assert not hasattr(merged, "run_async")
-        
+
         logger.info("✅ Clés inconnues ignorées correctement")
 
     def test_merge_overrides_preserves_defaults(self):
@@ -88,26 +84,24 @@ class TestMergeOverrides:
         assert merged.heuristic.driver_load_balance == 0.8
         # time_limit_sec doit conserver sa valeur par défaut
         assert merged.solver.time_limit_sec == default_time_limit
-        
-        logger.info("✅ Valeurs par défaut préservées: proximity=%s, time_limit=%s",
-                   merged.heuristic.proximity, merged.solver.time_limit_sec)
+
+        logger.info(
+            "✅ Valeurs par défaut préservées: proximity=%s, time_limit=%s",
+            merged.heuristic.proximity,
+            merged.solver.time_limit_sec,
+        )
 
     def test_merge_overrides_deep_nesting(self):
         """Test: merge sur plusieurs niveaux d'imbrication."""
         base = Settings()
 
         overrides = {
-            "heuristic": {
-                "proximity": 0.1,
-                "driver_load_balance": 0.9
-            },
-            "fairness": {
-                "fairness_weight": 0.7
-            },
+            "heuristic": {"proximity": 0.1, "driver_load_balance": 0.9},
+            "fairness": {"fairness_weight": 0.7},
             "matrix": {
                 "provider": "osrm",
-                "cache_ttl_sec": 1800  # Utiliser un attribut existant de MatrixSettings
-            }
+                "cache_ttl_sec": 1800,  # Utiliser un attribut existant de MatrixSettings
+            },
         }
 
         merged = merge_overrides(base, overrides)
@@ -124,16 +118,13 @@ class TestMergeOverrides:
     def test_merge_overrides_type_coercion(self):
         """Test: gestion des types (int vs float, bool, etc.)."""
         base = Settings()
-        
+
         # Test avec différents types
         overrides = {
             "solver": {
                 "time_limit_sec": 60.0  # Float au lieu d'int
             },
-            "features": {
-                "enable_heuristics": True,
-                "enable_solver": False
-            }
+            "features": {"enable_heuristics": True, "enable_solver": False},
         }
 
         merged = merge_overrides(base, overrides)
@@ -142,7 +133,7 @@ class TestMergeOverrides:
         assert merged.solver.time_limit_sec == 60  # Doit être int
         assert merged.features.enable_heuristics is True
         assert merged.features.enable_solver is False
-        
+
         logger.info("✅ Types gérés correctement")
 
     def test_merge_overrides_empty_dict(self):
@@ -158,7 +149,7 @@ class TestMergeOverrides:
     def test_merge_overrides_partial_override(self):
         """Test: override partiel d'une dataclass imbriquée."""
         base = Settings()
-        
+
         # Override seulement une clé dans heuristic
         overrides = {
             "heuristic": {
@@ -173,5 +164,5 @@ class TestMergeOverrides:
         assert merged.heuristic.proximity == 0.4
         # Les autres valeurs de heuristic doivent être préservées
         assert hasattr(merged.heuristic, "driver_load_balance")
-        
+
         logger.info("✅ Override partiel réussi")

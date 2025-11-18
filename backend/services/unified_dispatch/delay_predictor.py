@@ -93,10 +93,10 @@ class DelayPredictor:
         self.settings = settings or Settings()
         # Seuils de retard
         self.delay_thresholds = {
-            "low": 5,      # < 5 min
+            "low": 5,  # < 5 min
             "medium": 10,  # 5-10 min
-            "high": 15,    # 10-15 min
-            "critical": 20  # > 15 min
+            "high": 15,  # 10-15 min
+            "critical": 20,  # > 15 min
         }
 
     def predict_delays_before_dispatch(
@@ -122,7 +122,7 @@ class DelayPredictor:
                 delayed_count=0,
                 average_delay=0,
                 max_delay=0,
-                recommendations=["Aucune assignation à analyser"]
+                recommendations=["Aucune assignation à analyser"],
             )
 
         bookings_map = {b.id: b for b in problem.get("bookings", [])}
@@ -144,8 +144,7 @@ class DelayPredictor:
                 continue
 
             # Calculer la prédiction de retard
-            prediction = self._predict_single_delay(
-                booking, driver, assignment, problem)
+            prediction = self._predict_single_delay(booking, driver, assignment, problem)
 
             if prediction:
                 predictions.append(prediction)
@@ -154,25 +153,20 @@ class DelayPredictor:
         analysis = self._analyze_predictions(predictions)
 
         # Générer des recommandations
-        analysis.recommendations = self._generate_recommendations(
-            analysis, problem)
+        analysis.recommendations = self._generate_recommendations(analysis, problem)
 
         logger.info(
             "[DelayPredictor] Analyzed %d assignments: %d on-time, %d delayed (avg: %.1f min)",
             analysis.total_assignments,
             analysis.on_time_count,
             analysis.delayed_count,
-            analysis.average_delay
+            analysis.average_delay,
         )
 
         return analysis
 
     def _predict_single_delay(
-        self,
-        booking: Booking,
-        driver: Driver,
-        assignment: Any,
-        problem: Dict[str, Any]
+        self, booking: Booking, driver: Driver, assignment: Any, problem: Dict[str, Any]
     ) -> DelayPrediction | None:
         """Prédit le retard pour une seule assignation."""
         try:
@@ -182,34 +176,23 @@ class DelayPredictor:
                 return None
 
             # ETA estimé
-            estimated_pickup = getattr(
-                assignment, "estimated_pickup_arrival", None)
+            estimated_pickup = getattr(assignment, "estimated_pickup_arrival", None)
 
             if not estimated_pickup:
                 # Fallback: calculer depuis les coordonnées
                 driver_pos = (
-                    getattr(
-                        driver, "current_lat", getattr(
-                            driver, "latitude", 46.2044)),
-                    getattr(
-                        driver, "current_lon", getattr(
-                            driver, "longitude", 6.1432))
+                    getattr(driver, "current_lat", getattr(driver, "latitude", 46.2044)),
+                    getattr(driver, "current_lon", getattr(driver, "longitude", 6.1432)),
                 )
-                pickup_pos = (
-                    getattr(booking, "pickup_lat", 46.2044),
-                    getattr(booking, "pickup_lon", 6.1432)
-                )
+                pickup_pos = (getattr(booking, "pickup_lat", 46.2044), getattr(booking, "pickup_lon", 6.1432))
 
-                eta_seconds = calculate_eta(
-                    driver_pos, pickup_pos, settings=self.settings)
+                eta_seconds = calculate_eta(driver_pos, pickup_pos, settings=self.settings)
                 estimated_pickup = now_local() + timedelta(seconds=eta_seconds)
 
             # Calculer le retard
-            scheduled_dt = scheduled_time if isinstance(
-                scheduled_time, datetime) else now_local()
+            scheduled_dt = scheduled_time if isinstance(scheduled_time, datetime) else now_local()
 
-            estimated_dt = estimated_pickup if isinstance(
-                estimated_pickup, datetime) else now_local()
+            estimated_dt = estimated_pickup if isinstance(estimated_pickup, datetime) else now_local()
 
             delay_seconds = (estimated_dt - scheduled_dt).total_seconds()
             delay_minutes = int(delay_seconds / 60)
@@ -232,8 +215,7 @@ class DelayPredictor:
 
         except Exception as e:
             logger.warning(
-                "[DelayPredictor] Failed to predict delay for booking %s: %s",
-                getattr(booking, "id", None), e
+                "[DelayPredictor] Failed to predict delay for booking %s: %s", getattr(booking, "id", None), e
             )
             return None
 
@@ -249,24 +231,17 @@ class DelayPredictor:
             return "high"
         return "critical"
 
-    def _calculate_confidence(
-        self,
-        booking: Booking,
-        driver: Driver,
-        problem: Dict[str, Any]
-    ) -> float:
+    def _calculate_confidence(self, booking: Booking, driver: Driver, problem: Dict[str, Any]) -> float:
         """Calcule la confiance de la prédiction basée sur la qualité des données.
         Retourne un score entre 0 et 1.
         """
         confidence = 1
 
         # Réduire si coordonnées manquantes ou par défaut
-        if not getattr(booking, "pickup_lat", None) or not getattr(
-                booking, "pickup_lon", None):
+        if not getattr(booking, "pickup_lat", None) or not getattr(booking, "pickup_lon", None):
             confidence -= 0.3
 
-        if not getattr(driver, "latitude", None) or not getattr(
-                driver, "longitude", None):
+        if not getattr(driver, "latitude", None) or not getattr(driver, "longitude", None):
             confidence -= 0.2
 
         # Position du chauffeur récente ?
@@ -285,8 +260,7 @@ class DelayPredictor:
 
         return max(0, min(1, confidence))
 
-    def _analyze_predictions(
-            self, predictions: List[DelayPrediction]) -> DelayAnalysis:
+    def _analyze_predictions(self, predictions: List[DelayPrediction]) -> DelayAnalysis:
         """Analyse les prédictions et génère des statistiques."""
         if not predictions:
             return DelayAnalysis(
@@ -296,17 +270,15 @@ class DelayPredictor:
                 delayed_count=0,
                 average_delay=0,
                 max_delay=0,
-                recommendations=[]
+                recommendations=[],
             )
 
         total = len(predictions)
-        delayed = [p for p in predictions if p.predicted_delay_minutes >
-                   PREDICTED_DELAY_MINUTES_THRESHOLD]
+        delayed = [p for p in predictions if p.predicted_delay_minutes > PREDICTED_DELAY_MINUTES_THRESHOLD]
         on_time = total - len(delayed)
 
         delay_values = [p.predicted_delay_minutes for p in predictions]
-        avg_delay = sum(delay_values) / \
-            len(delay_values) if delay_values else 0
+        avg_delay = sum(delay_values) / len(delay_values) if delay_values else 0
         max_delay = max(delay_values) if delay_values else 0
 
         return DelayAnalysis(
@@ -316,14 +288,10 @@ class DelayPredictor:
             delayed_count=len(delayed),
             average_delay=avg_delay,
             max_delay=max_delay,
-            recommendations=[]  # Sera rempli par _generate_recommendations
+            recommendations=[],  # Sera rempli par _generate_recommendations
         )
 
-    def _generate_recommendations(
-        self,
-        analysis: DelayAnalysis,
-        problem: Dict[str, Any]
-    ) -> List[str]:
+    def _generate_recommendations(self, analysis: DelayAnalysis, problem: Dict[str, Any]) -> List[str]:
         """Génère des recommandations basées sur l'analyse."""
         recommendations = []
 
@@ -347,8 +315,7 @@ class DelayPredictor:
             )
 
         # Retards critiques
-        critical_delays = [
-            p for p in analysis.predictions if p.severity == "critical"]
+        critical_delays = [p for p in analysis.predictions if p.severity == "critical"]
         if critical_delays:
             recommendations.append(
                 f"🚨 {len(critical_delays)} assignation(s) avec retard critique (>15 min). Réassignation urgente recommandée."
@@ -366,16 +333,13 @@ class DelayPredictor:
                 )
 
         if not recommendations:
-            recommendations.append(
-                "✅ Planning optimal, aucune action requise.")
+            recommendations.append("✅ Planning optimal, aucune action requise.")
 
         return recommendations
 
 
 def predict_delays_for_dispatch(
-    problem: Dict[str, Any],
-    assignments: List[Any],
-    settings: Settings | None = None
+    problem: Dict[str, Any], assignments: List[Any], settings: Settings | None = None
 ) -> DelayAnalysis:
     """Fonction helper pour prédire les retards d'un ensemble d'assignations.
 

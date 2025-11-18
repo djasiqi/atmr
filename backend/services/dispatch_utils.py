@@ -14,11 +14,13 @@ DEFAULT_STATUSES_FOR_COUNT = (
     BookingStatus.IN_PROGRESS if hasattr(BookingStatus, "IN_PROGRESS") else BookingStatus.ASSIGNED,
 )
 
+
 def _to_utc(dt: datetime) -> datetime:
     # utilitaire de secours si routes.utils.to_utc n'existe pas / crash
     if dt.tzinfo is None:
         return dt.replace(tzinfo=UTC)
     return dt.astimezone(UTC)
+
 
 def count_assigned_bookings_for_day(
     company_id: int,

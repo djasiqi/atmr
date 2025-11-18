@@ -23,12 +23,7 @@ logger = logging.getLogger(__name__)
 class MetricsCollector:
     """Collecte et sauvegarde les métriques de dispatch."""
 
-    def collect_dispatch_metrics(
-        self,
-        dispatch_run_id: int,
-        company_id: int,
-        day: date
-    ) -> DispatchMetrics | None:
+    def collect_dispatch_metrics(self, dispatch_run_id: int, company_id: int, day: date) -> DispatchMetrics | None:
         """Collecte les métriques après un dispatch run.
         Appelé automatiquement à la fin d'un dispatch.
 
@@ -43,32 +38,23 @@ class MetricsCollector:
         """
         try:
             # Récupérer toutes les assignations du dispatch
-            assignments = Assignment.query.filter_by(
-                dispatch_run_id=dispatch_run_id
-            ).all()
+            assignments = Assignment.query.filter_by(dispatch_run_id=dispatch_run_id).all()
 
             if not assignments:
-                logger.warning(
-                    "[MetricsCollector] No assignments found for dispatch run %s",
-                    dispatch_run_id
-                )
+                logger.warning("[MetricsCollector] No assignments found for dispatch run %s", dispatch_run_id)
                 return None
 
             bookings = [a.booking for a in assignments if a.booking]
 
             if not bookings:
-                logger.warning(
-                    "[MetricsCollector] No bookings found for dispatch run %s",
-                    dispatch_run_id
-                )
+                logger.warning("[MetricsCollector] No bookings found for dispatch run %s", dispatch_run_id)
                 return None
 
             # Calculer les métriques de base
             total_bookings = len(bookings)
             on_time = sum(1 for b in bookings if self._is_on_time(b))
             delayed = sum(1 for b in bookings if self._is_delayed(b))
-            cancelled = sum(1 for b in bookings
-                            if b.status == BookingStatus.CANCELED)
+            cancelled = sum(1 for b in bookings if b.status == BookingStatus.CANCELED)
 
             # Métriques de retard
             delays = [self._calculate_delay(b) for b in bookings]
@@ -77,29 +63,25 @@ class MetricsCollector:
             total_delay = sum(delays)
 
             # Métriques chauffeurs
-            drivers_in_assignments = {
-                a.driver_id for a in assignments if a.driver_id}
-            total_drivers = Driver.query.filter_by(
-                company_id=company_id,
-                is_active=True
-            ).count()
+            drivers_in_assignments = {a.driver_id for a in assignments if a.driver_id}
+            total_drivers = Driver.query.filter_by(company_id=company_id, is_active=True).count()
             active_drivers = len(drivers_in_assignments)
             avg_per_driver = (
-                total_bookings / active_drivers if active_drivers > ACTIVE_DRIVERS_ZERO else ACTIVE_DRIVERS_ZERO.ACTIVE_DRIVERS_ZERO
+                total_bookings / active_drivers
+                if active_drivers > ACTIVE_DRIVERS_ZERO
+                else ACTIVE_DRIVERS_ZERO.ACTIVE_DRIVERS_ZERO
             )
 
             # Métriques de distance
-            total_distance = sum(
-                self._estimate_booking_distance(b) for b in bookings
-            )
+            total_distance = sum(self._estimate_booking_distance(b) for b in bookings)
             avg_distance = (
-                total_distance / total_bookings if total_bookings > TOTAL_BOOKINGS_ZERO else TOTAL_BOOKINGS_ZERO.TOTAL_BOOKINGS_ZERO
+                total_distance / total_bookings
+                if total_bookings > TOTAL_BOOKINGS_ZERO
+                else TOTAL_BOOKINGS_ZERO.TOTAL_BOOKINGS_ZERO
             )
 
             # Score de qualité (0-100)
-            quality_score = self._calculate_quality_score(
-                on_time, total_bookings, avg_delay, cancelled
-            )
+            quality_score = self._calculate_quality_score(on_time, total_bookings, avg_delay, cancelled)
 
             # Créer l'enregistrement
             metrics = DispatchMetrics()
@@ -133,16 +115,15 @@ class MetricsCollector:
 
             logger.info(
                 "[MetricsCollector] Collected metrics for dispatch run %s: Quality=%.1f, Avg delay=%.1f",
-                dispatch_run_id, quality_score, avg_delay
+                dispatch_run_id,
+                quality_score,
+                avg_delay,
             )
 
             return metrics
 
         except Exception as e:
-            logger.exception(
-                "[MetricsCollector] Failed to collect metrics for dispatch run %s: %s",
-                dispatch_run_id, e
-            )
+            logger.exception("[MetricsCollector] Failed to collect metrics for dispatch run %s: %s", dispatch_run_id, e)
             db.session.rollback()
             return None
 
@@ -183,19 +164,10 @@ class MetricsCollector:
             return haversine_distance(lat1, lon1, lat2, lon2)
 
         except Exception as e:
-            logger.warning(
-                "[MetricsCollector] Failed to calculate distance for booking %s: %s",
-                booking.id,
-                e)
+            logger.warning("[MetricsCollector] Failed to calculate distance for booking %s: %s", booking.id, e)
             return 0.0
 
-    def _calculate_quality_score(
-        self,
-        on_time: int,
-        total: int,
-        avg_delay: float,
-        cancelled: int
-    ) -> float:
+    def _calculate_quality_score(self, on_time: int, total: int, avg_delay: float, cancelled: int) -> float:
         """Calcule un score de qualité global (0-100).
 
         Formule:
@@ -233,10 +205,7 @@ class MetricsCollector:
         return min(100, max(0, total_score))
 
     def update_suggestions_count(
-        self,
-        dispatch_run_id: int,
-        generated: int | None = None,
-        applied: int | None = None
+        self, dispatch_run_id: int, generated: int | None = None, applied: int | None = None
     ) -> bool:
         """Met à jour le nombre de suggestions générées/appliquées pour un dispatch run.
         Utilisé par le realtime_optimizer.
@@ -251,15 +220,10 @@ class MetricsCollector:
 
         """
         try:
-            metrics = DispatchMetrics.query.filter_by(
-                dispatch_run_id=dispatch_run_id
-            ).first()
+            metrics = DispatchMetrics.query.filter_by(dispatch_run_id=dispatch_run_id).first()
 
             if not metrics:
-                logger.warning(
-                    "[MetricsCollector] No metrics found for dispatch run %s",
-                    dispatch_run_id
-                )
+                logger.warning("[MetricsCollector] No metrics found for dispatch run %s", dispatch_run_id)
                 return False
 
             if generated is not None:
@@ -272,16 +236,15 @@ class MetricsCollector:
 
             logger.debug(
                 "[MetricsCollector] Updated suggestions count for dispatch run %s: generated=%s, applied=%s",
-                dispatch_run_id, generated, applied
+                dispatch_run_id,
+                generated,
+                applied,
             )
 
             return True
 
         except Exception as e:
-            logger.exception(
-                "[MetricsCollector] Failed to update suggestions count: %s",
-                e
-            )
+            logger.exception("[MetricsCollector] Failed to update suggestions count: %s", e)
             db.session.rollback()
             return False
 
@@ -290,29 +253,19 @@ class MetricsCollector:
 _metrics_collector = MetricsCollector()
 
 
-def collect_dispatch_metrics(
-    dispatch_run_id: int,
-    company_id: int,
-    day: date
-) -> DispatchMetrics | None:
+def collect_dispatch_metrics(dispatch_run_id: int, company_id: int, day: date) -> DispatchMetrics | None:
     """Helper function pour collecter les métriques.
 
     Usage:
         metrics = collect_dispatch_metrics(run_id, company_id, date.today())
     """
-    return _metrics_collector.collect_dispatch_metrics(
-        dispatch_run_id, company_id, day)
+    return _metrics_collector.collect_dispatch_metrics(dispatch_run_id, company_id, day)
 
 
-def update_suggestions_count(
-    dispatch_run_id: int,
-    generated: int | None = None,
-    applied: int | None = None
-) -> bool:
+def update_suggestions_count(dispatch_run_id: int, generated: int | None = None, applied: int | None = None) -> bool:
     """Helper function pour mettre à jour le nombre de suggestions.
 
     Usage:
         update_suggestions_count(run_id, generated=5, applied=3)
     """
-    return _metrics_collector.update_suggestions_count(
-        dispatch_run_id, generated, applied)
+    return _metrics_collector.update_suggestions_count(dispatch_run_id, generated, applied)

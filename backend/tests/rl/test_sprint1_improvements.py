@@ -134,20 +134,9 @@ class TestActionMasking:
         env.reset()
 
         # Créer un chauffeur et un booking
-        driver = {
-            "available": True,
-            "lat": 46.2044,
-            "lon": 6.1432,
-            "current_bookings": 0,
-            "load": 0
-        }
+        driver = {"available": True, "lat": 46.2044, "lon": 6.1432, "current_bookings": 0, "load": 0}
 
-        booking = {
-            "pickup_lat": 46.2044,
-            "pickup_lon": 6.1432,
-            "time_window_end": 30.0,
-            "assigned": False
-        }
+        booking = {"pickup_lat": 46.2044, "pickup_lon": 6.1432, "time_window_end": 30.0, "assigned": False}
 
         # Vérifier contrainte valide
         assert env._check_time_window_constraint(driver, booking)
@@ -167,15 +156,10 @@ class TestActionMasking:
             "lat": 46.2044,
             "lon": 6.1432,
             "current_bookings": 3,  # Max capacité
-            "load": 0
+            "load": 0,
         }
 
-        booking = {
-            "pickup_lat": 46.2044,
-            "pickup_lon": 6.1432,
-            "time_window_end": 30.0,
-            "assigned": False
-        }
+        booking = {"pickup_lat": 46.2044, "pickup_lon": 6.1432, "time_window_end": 30.0, "assigned": False}
 
         # Vérifier que la contrainte est respectée
         assert not env._check_time_window_constraint(driver, booking)
@@ -232,20 +216,12 @@ class TestRewardInvariants:
         reward_shaping = AdvancedRewardShaping()
 
         # Test ponctualité parfaite
-        info_perfect = {
-            "is_late": False,
-            "lateness_minutes": 0,
-            "is_outbound": True
-        }
+        info_perfect = {"is_late": False, "lateness_minutes": 0, "is_outbound": True}
         reward_perfect = reward_shaping._calculate_punctuality_reward(info_perfect)
         assert reward_perfect > 0
 
         # Test retard ALLER (0 tolérance)
-        info_late_aller = {
-            "is_late": True,
-            "lateness_minutes": 10,
-            "is_outbound": True
-        }
+        info_late_aller = {"is_late": True, "lateness_minutes": 10, "is_outbound": True}
         reward_late_aller = reward_shaping._calculate_punctuality_reward(info_late_aller)
         assert reward_late_aller < 0
 
@@ -253,7 +229,7 @@ class TestRewardInvariants:
         info_late_retour = {
             "is_late": True,
             "lateness_minutes": 10,  # Dans tolérance douce
-            "is_outbound": False
+            "is_outbound": False,
         }
         reward_late_retour = reward_shaping._calculate_punctuality_reward(info_late_retour)
         assert reward_late_retour == 0.0  # Neutre dans tolérance

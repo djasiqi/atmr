@@ -1,4 +1,3 @@
-
 # Constantes pour éviter les valeurs magiques
 import logging
 from typing import Any
@@ -29,10 +28,7 @@ Endpoints:
 logger = logging.getLogger(__name__)
 
 # Créer le blueprint
-feature_flags_bp = Blueprint(
-    "feature_flags",
-    __name__,
-    url_prefix="/api/feature-flags")
+feature_flags_bp = Blueprint("feature_flags", __name__, url_prefix="/api/feature-flags")
 
 
 @feature_flags_bp.route("/status", methods=["GET"])
@@ -68,24 +64,22 @@ def enable_ml() -> tuple[dict[str, Any], int]:
         data = request.get_json() or {}
         percentage = data.get("percentage", 10)
 
-        if not isinstance(
-                percentage,
-                int) or not 0 <= percentage <= PERCENTAGE_PERCENT:
+        if not isinstance(percentage, int) or not 0 <= percentage <= PERCENTAGE_PERCENT:
             msg = "Percentage must be an integer between 0 and 100"
             raise BadRequest(msg)
 
         FeatureFlags.set_ml_enabled(True)
         FeatureFlags.set_ml_traffic_percentage(percentage)
 
-        logger.warning(
-            "[FeatureFlagsAPI] ML enabled at %s% via API",
-            percentage)
+        logger.warning("[FeatureFlagsAPI] ML enabled at %s% via API", percentage)
 
-        return jsonify({
-            "success": True,
-            "message": f"ML activé à {percentage}%",
-            "status": get_feature_flags_status(),
-        }), 200
+        return jsonify(
+            {
+                "success": True,
+                "message": f"ML activé à {percentage}%",
+                "status": get_feature_flags_status(),
+            }
+        ), 200
 
     except BadRequest as e:
         return jsonify({"error": str(e)}), 400
@@ -108,11 +102,13 @@ def disable_ml() -> tuple[dict[str, Any], int]:
 
         logger.warning("[FeatureFlagsAPI] ML disabled via API")
 
-        return jsonify({
-            "success": True,
-            "message": "ML désactivé",
-            "status": get_feature_flags_status(),
-        }), 200
+        return jsonify(
+            {
+                "success": True,
+                "message": "ML désactivé",
+                "status": get_feature_flags_status(),
+            }
+        ), 200
 
     except Exception as e:
         logger.error("[FeatureFlagsAPI] Error disabling ML: %s", e)
@@ -139,23 +135,21 @@ def set_percentage() -> tuple[dict[str, Any], int]:
 
         percentage = data["percentage"]
 
-        if not isinstance(
-                percentage,
-                int) or not 0 <= percentage <= PERCENTAGE_PERCENT:
+        if not isinstance(percentage, int) or not 0 <= percentage <= PERCENTAGE_PERCENT:
             msg = "Percentage must be an integer between 0 and 100"
             raise BadRequest(msg)
 
         FeatureFlags.set_ml_traffic_percentage(percentage)
 
-        logger.warning(
-            "[FeatureFlagsAPI] ML percentage set to %s% via API",
-            percentage)
+        logger.warning("[FeatureFlagsAPI] ML percentage set to %s% via API", percentage)
 
-        return jsonify({
-            "success": True,
-            "message": f"Trafic ML configuré à {percentage}%",
-            "status": get_feature_flags_status(),
-        }), 200
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Trafic ML configuré à {percentage}%",
+                "status": get_feature_flags_status(),
+            }
+        ), 200
 
     except BadRequest as e:
         return jsonify({"error": str(e)}), 400
@@ -177,11 +171,13 @@ def reset_stats() -> tuple[dict[str, Any], int]:
 
         logger.info("[FeatureFlagsAPI] Stats reset via API")
 
-        return jsonify({
-            "success": True,
-            "message": "Statistiques réinitialisées",
-            "status": get_feature_flags_status(),
-        }), 200
+        return jsonify(
+            {
+                "success": True,
+                "message": "Statistiques réinitialisées",
+                "status": get_feature_flags_status(),
+            }
+        ), 200
 
     except Exception as e:
         logger.error("[FeatureFlagsAPI] Error resetting stats: %s", e)
@@ -202,9 +198,7 @@ def ml_health() -> tuple[dict[str, Any], int]:
 
         # Déterminer le status
         is_healthy = (
-            status["config"]["ML_ENABLED"]
-            and stats["ml_requests"] > 0
-            and stats["ml_success_rate"] >= MIN_SUCCESS_RATE
+            status["config"]["ML_ENABLED"] and stats["ml_requests"] > 0 and stats["ml_success_rate"] >= MIN_SUCCESS_RATE
         )
 
         health_status = "healthy" if is_healthy else "degraded"
@@ -212,26 +206,29 @@ def ml_health() -> tuple[dict[str, Any], int]:
         # Alertes
         alerts = []
         if stats["ml_success_rate"] < MIN_SUCCESS_RATE and stats["ml_requests"] > MIN_REQUESTS_FOR_ALERT:
-            alerts.append(
-                f"Taux de succès bas: {stats['ml_success_rate']:.2%}")
+            alerts.append(f"Taux de succès bas: {stats['ml_success_rate']:.2%}")
 
         if stats["ml_failures"] > MAX_FAILURES_THRESHOLD:
             alerts.append(f"Trop d'erreurs: {stats['ml_failures']}")
 
-        return jsonify({
-            "status": health_status,
-            "healthy": is_healthy,
-            "ml_enabled": status["config"]["ML_ENABLED"],
-            "ml_traffic": status["config"]["ML_TRAFFIC_PERCENTAGE"],
-            "success_rate": stats["ml_success_rate"],
-            "total_requests": stats["total_requests"],
-            "alerts": alerts,
-        }), 200 if is_healthy else 503
+        return jsonify(
+            {
+                "status": health_status,
+                "healthy": is_healthy,
+                "ml_enabled": status["config"]["ML_ENABLED"],
+                "ml_traffic": status["config"]["ML_TRAFFIC_PERCENTAGE"],
+                "success_rate": stats["ml_success_rate"],
+                "total_requests": stats["total_requests"],
+                "alerts": alerts,
+            }
+        ), 200 if is_healthy else 503
 
     except Exception as e:
         logger.error("[FeatureFlagsAPI] Error checking health: %s", e)
-        return jsonify({
-            "status": "error",
-            "healthy": False,
-            "error": str(e),
-        }), 500
+        return jsonify(
+            {
+                "status": "error",
+                "healthy": False,
+                "error": str(e),
+            }
+        ), 500

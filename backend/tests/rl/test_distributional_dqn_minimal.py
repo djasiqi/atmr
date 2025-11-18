@@ -1,6 +1,7 @@
 """
 Tests minimaux pour distributional_dqn.py - Version corrigée
 """
+
 import numpy as np
 import pytest
 import torch
@@ -66,9 +67,7 @@ class TestDistributionalDQNMinimal:
         dones = torch.tensor([False, True])
         next_distributions = torch.randn(2, 5, 51)
 
-        loss = loss_fn.compute_loss(
-            distributions, target_distributions, actions, rewards, dones, next_distributions
-        )
+        loss = loss_fn.compute_loss(distributions, target_distributions, actions, rewards, dones, next_distributions)
 
         assert isinstance(loss, torch.Tensor)
         assert loss.item() >= 0
@@ -120,9 +119,7 @@ class TestDistributionalDQNMinimal:
         dones = torch.tensor([False])
         next_distributions = torch.randn(1, 3, 51)
 
-        loss = loss_fn.compute_loss(
-            distributions, target_distributions, actions, rewards, dones, next_distributions
-        )
+        loss = loss_fn.compute_loss(distributions, target_distributions, actions, rewards, dones, next_distributions)
 
         assert isinstance(loss, torch.Tensor)
         assert loss.item() >= 0

@@ -14,35 +14,29 @@ from models import Booking, Client, Payment, PaymentStatus, User, UserRole, db
 
 app_logger = logging.getLogger("app")
 
-payments_ns = Namespace(
-    "payments",
-     description="Opérations liées aux paiements")
+payments_ns = Namespace("payments", description="Opérations liées aux paiements")
 
 # Modèle Swagger pour la mise à jour du statut d'un paiement (admin uniquement)
-payment_status_model = payments_ns.model("PaymentStatus", {
-    "status": fields.String(
-        required=True,
-        description="Nouveau statut",
-        enum=["pending", "completed", "failed"]
-    )
-})
+payment_status_model = payments_ns.model(
+    "PaymentStatus",
+    {"status": fields.String(required=True, description="Nouveau statut", enum=["pending", "completed", "failed"])},
+)
 
 # Modèle Swagger pour la création d'un paiement
-payment_create_model = payments_ns.model("PaymentCreate", {
-    "amount": fields.Float(
-        required=True,
-        description="Montant du paiement",
-        minimum=0.01
-    ),
-    "method": fields.String(
-        required=True,
-        description="Méthode de paiement (ex: credit_card, paypal, etc.)",
-        min_length=1,
-        max_length=50
-    ),
-    "booking_id": fields.Integer(description="ID de la réservation associée (optionnel)"),
-    "reference": fields.String(description="Référence du paiement (optionnel, max 100 caractères)", max_length=100)
-})
+payment_create_model = payments_ns.model(
+    "PaymentCreate",
+    {
+        "amount": fields.Float(required=True, description="Montant du paiement", minimum=0.01),
+        "method": fields.String(
+            required=True,
+            description="Méthode de paiement (ex: credit_card, paypal, etc.)",
+            min_length=1,
+            max_length=50,
+        ),
+        "booking_id": fields.Integer(description="ID de la réservation associée (optionnel)"),
+        "reference": fields.String(description="Référence du paiement (optionnel, max 100 caractères)", max_length=100),
+    },
+)
 
 # ====================================================
 # Récupération des paiements du client
@@ -59,7 +53,7 @@ class ClientPayments(Resource):
             current_user = User.query.filter_by(public_id=jwt_public_id).one_or_none()
             if not current_user:
                 return {"error": "User not found"}, 401
-            
+
             client = Client.query.filter_by(user_id=current_user.id).one_or_none()
             if not client:
                 return {"error": "Unauthorized: Client not found"}, 403
@@ -72,7 +66,6 @@ class ClientPayments(Resource):
             return result, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-
 
             app_logger.error("❌ ERREUR get_my_payments: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500
@@ -97,15 +90,9 @@ class PaymentResource(Resource):
                 return {"error": "User not found"}, 401
 
             # Trouver le client lié à l'utilisateur (si existant)
-            client = Client.query.filter_by(
-    user_id=current_user.id).one_or_none()
+            client = Client.query.filter_by(user_id=current_user.id).one_or_none()
 
-            is_admin = getattr(
-    current_user,
-    "role",
-    None) in (
-        UserRole.admin,
-         "admin")
+            is_admin = getattr(current_user, "role", None) in (UserRole.admin, "admin")
             owns_payment = client is not None and payment.client_id == client.id
 
             if not (is_admin or owns_payment):
@@ -123,7 +110,6 @@ class PaymentResource(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
 
-
             app_logger.error("❌ ERREUR get_payment_details: %s - %s", type(e).__name__, str(e))
             return {"error": "Une erreur interne est survenue."}, 500
 
@@ -137,18 +123,18 @@ class PaymentResource(Resource):
                 return {"error": "Payment not found"}, 404
 
             data = request.get_json(silent=True) or {}
-            
+
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
             from marshmallow import ValidationError
 
             from schemas.payment_schemas import PaymentStatusUpdateSchema
             from schemas.validation_utils import handle_validation_error, validate_request
-            
+
             try:
                 validated_data = validate_request(PaymentStatusUpdateSchema(), data)
             except ValidationError as e:
                 return handle_validation_error(e)
-            
+
             status_map = {
                 "pending": PaymentStatus.PENDING,
                 "completed": PaymentStatus.COMPLETED,
@@ -177,7 +163,7 @@ class CreatePayment(Resource):
             current_user = User.query.filter_by(public_id=jwt_public_id).one_or_none()
             if not current_user:
                 return {"error": "User not found"}, 401
-            
+
             client = Client.query.filter_by(user_id=current_user.id).one_or_none()
             if not client:
                 return {"error": "Unauthorized: Client not found"}, 403

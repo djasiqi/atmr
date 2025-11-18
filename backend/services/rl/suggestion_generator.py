@@ -29,6 +29,7 @@ Utilisé par :
 
 Voir aussi : services/unified_dispatch/reactive_suggestions.py (suggestions réactives)
 """
+
 from __future__ import annotations
 
 import logging
@@ -51,6 +52,7 @@ def _lazy_import_rl():
     if _dqn_agent is None:
         try:
             from services.rl import dispatch_env, improved_dqn_agent
+
             _dqn_agent = improved_dqn_agent
             _dispatch_env = dispatch_env
         except ImportError as e:
@@ -91,20 +93,22 @@ class RLSuggestionGenerator:
             if not model_file.exists():
                 logger.warning(
                     "[RL] Modèle DQN non trouvé: %s. Les suggestions seront basiques. Entraînez le modèle avec: python backend/scripts/rl/train_dqn.py",
-                    model_file
+                    model_file,
                 )
                 return
 
             # Créer l'environnement (pour obtenir observation/action space)
             from services.rl.dispatch_env import DispatchEnv
+
             dummy_env = DispatchEnv(num_drivers=5, max_bookings=10)
 
             # Créer et charger l'agent
             from services.rl.improved_dqn_agent import ImprovedDQNAgent
+
             self.agent = ImprovedDQNAgent(
                 state_dim=dummy_env.observation_space.shape[0],
                 action_dim=dummy_env.action_space.n,
-                learning_rate=0.00001
+                learning_rate=0.00001,
             )
 
             self.agent.load(str(model_file))
@@ -114,7 +118,6 @@ class RLSuggestionGenerator:
             logger.info("[RL] ✅ Modèle DQN chargé: %s", model_file)
 
         except Exception as e:
-
             logger.error("[RL] Erreur lors du chargement du modèle: %s", e)
             self.agent = None
 
@@ -125,7 +128,7 @@ class RLSuggestionGenerator:
         drivers: List[Any],
         for_date: str,
         min_confidence: float = 0.5,
-        max_suggestions: int = 20
+        max_suggestions: int = 20,
     ) -> List[Dict[str, Any]]:
         """Génère des suggestions RL pour optimiser les assignments.
 
@@ -143,9 +146,7 @@ class RLSuggestionGenerator:
         """
         if self.agent is None:
             # Fallback: suggestions basiques
-            return self._generate_basic_suggestions(
-                assignments, drivers, min_confidence, max_suggestions
-            )
+            return self._generate_basic_suggestions(assignments, drivers, min_confidence, max_suggestions)
 
         return self._generate_rl_suggestions(
             company_id, assignments, drivers, for_date, min_confidence, max_suggestions
@@ -158,7 +159,7 @@ class RLSuggestionGenerator:
         drivers: List[Any],
         _for_date: str,
         min_confidence: float,
-        max_suggestions: int
+        max_suggestions: int,
     ) -> List[Dict[str, Any]]:
         """Génère des suggestions en utilisant le modèle DQN."""
         import torch
@@ -180,8 +181,7 @@ class RLSuggestionGenerator:
                 with torch.no_grad():
                     state_tensor = torch.FloatTensor(state).unsqueeze(0)
                     if self.agent is not None and hasattr(self.agent, "q_network"):
-                        q_values = self.agent.q_network(
-                            state_tensor).cpu().numpy()[0]
+                        q_values = self.agent.q_network(state_tensor).cpu().numpy()[0]
                     else:
                         continue
 
@@ -236,16 +236,16 @@ class RLSuggestionGenerator:
                     # Get driver names from user relation
                     current_user = getattr(current_driver, "user", None)
                     current_name = (
-                        f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}".strip(
-                        )
-                        if current_user else f"Driver #{current_driver.id}"
+                        f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}".strip()
+                        if current_user
+                        else f"Driver #{current_driver.id}"
                     )
 
                     alt_user = getattr(alt_driver, "user", None)
                     alt_name = (
-                        f"{getattr(alt_user, 'first_name', '')} {getattr(alt_user, 'last_name', '')}".strip(
-                        )
-                        if alt_user else f"Driver #{alt_driver.id}"
+                        f"{getattr(alt_user, 'first_name', '')} {getattr(alt_user, 'last_name', '')}".strip()
+                        if alt_user
+                        else f"Driver #{alt_driver.id}"
                     )
 
                     suggestion = {
@@ -265,18 +265,15 @@ class RLSuggestionGenerator:
                             f"à {alt_name} "
                             f"(gain estimé: +{expected_gain} min)"
                         ),
-                        "source": "dqn_model"
+                        "source": "dqn_model",
                     }
 
                     suggestions.append(suggestion)
 
         except Exception as e:
-
             logger.error("[RL] Erreur génération suggestions DQN: %s", e)
             # Fallback vers suggestions basiques
-            return self._generate_basic_suggestions(
-                assignments, drivers, min_confidence, max_suggestions
-            )
+            return self._generate_basic_suggestions(assignments, drivers, min_confidence, max_suggestions)
 
         # Trier par confiance décroissante
         suggestions.sort(key=lambda x: x["confidence"], reverse=True)
@@ -322,8 +319,7 @@ class RLSuggestionGenerator:
         dropoff_lon = getattr(booking, "dropoff_lon", None)
 
         if pickup_lat and pickup_lon and dropoff_lat and dropoff_lon:
-            distance_km = haversine_distance(
-                pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+            distance_km = haversine_distance(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
             normalized_distance = min(distance_km / 50, 1)
         else:
             normalized_distance = 0.5  # Fallback si pas de coordonnées
@@ -333,19 +329,13 @@ class RLSuggestionGenerator:
 
         # 4. Temps jusqu'au pickup normalisé (heures, max 4h)
         if scheduled_time:
-            time_until_pickup_seconds = (
-                scheduled_time - now_local()).total_seconds()
+            time_until_pickup_seconds = (scheduled_time - now_local()).total_seconds()
             time_until_pickup_hours = max(0, time_until_pickup_seconds / 3600)
             normalized_time_until = min(time_until_pickup_hours / 4, 1)
         else:
             normalized_time_until = 0.5  # Fallback
 
-        state.extend([
-            normalized_time,
-            normalized_distance,
-            is_emergency_val,
-            normalized_time_until
-        ])
+        state.extend([normalized_time, normalized_distance, is_emergency_val, normalized_time_until])
 
         # ✅ Drivers features (5 x 3 = 15 VRAIES features)
         for i in range(5):
@@ -353,22 +343,15 @@ class RLSuggestionGenerator:
                 driver = drivers[i]
 
                 # 1. Is available (0 ou 1)
-                is_available_val = 1 if getattr(
-                    driver, "is_available", False) else 0
+                is_available_val = 1 if getattr(driver, "is_available", False) else 0
 
                 # 2. Distance driver-pickup normalisée (km, max 30km)
-                driver_lat = getattr(
-                    driver, "current_lat", getattr(
-                        driver, "latitude", None))
-                driver_lon = getattr(
-                    driver, "current_lon", getattr(
-                        driver, "longitude", None))
+                driver_lat = getattr(driver, "current_lat", getattr(driver, "latitude", None))
+                driver_lon = getattr(driver, "current_lon", getattr(driver, "longitude", None))
 
                 if driver_lat and driver_lon and pickup_lat and pickup_lon:
-                    driver_distance_km = haversine_distance(
-                        driver_lat, driver_lon, pickup_lat, pickup_lon)
-                    normalized_driver_distance = min(
-                        driver_distance_km / 30, 1)
+                    driver_distance_km = haversine_distance(driver_lat, driver_lon, pickup_lat, pickup_lon)
+                    normalized_driver_distance = min(driver_distance_km / 30, 1)
                 else:
                     # Fallback si pas de GPS : distance moyenne
                     normalized_driver_distance = 0.5
@@ -377,26 +360,25 @@ class RLSuggestionGenerator:
                 # 5)
                 try:
                     from models import Assignment
+
                     current_load = Assignment.query.filter(
                         Assignment.driver_id == driver.id,
-                        Assignment.status.in_([
-                            AssignmentStatus.SCHEDULED,
-                            AssignmentStatus.EN_ROUTE_PICKUP,
-                            AssignmentStatus.ARRIVED_PICKUP,
-                            AssignmentStatus.ONBOARD,
-                            AssignmentStatus.EN_ROUTE_DROPOFF
-                        ])
+                        Assignment.status.in_(
+                            [
+                                AssignmentStatus.SCHEDULED,
+                                AssignmentStatus.EN_ROUTE_PICKUP,
+                                AssignmentStatus.ARRIVED_PICKUP,
+                                AssignmentStatus.ONBOARD,
+                                AssignmentStatus.EN_ROUTE_DROPOFF,
+                            ]
+                        ),
                     ).count()
                     normalized_load = min(current_load / 5, 1)
                 except Exception as e:
                     logger.warning("[RL] Error counting driver load: %s", e)
                     normalized_load = 0  # Fallback
 
-                state.extend([
-                    is_available_val,
-                    normalized_driver_distance,
-                    normalized_load
-                ])
+                state.extend([is_available_val, normalized_driver_distance, normalized_load])
             else:
                 # Padding pour drivers manquants
                 state.extend([0, 0, 0])
@@ -427,11 +409,7 @@ class RLSuggestionGenerator:
         return float(confidence)
 
     def _generate_basic_suggestions(
-        self,
-        assignments: List[Any],
-        drivers: List[Any],
-        min_confidence: float,
-        max_suggestions: int
+        self, assignments: List[Any], drivers: List[Any], min_confidence: float, max_suggestions: int
     ) -> List[Dict[str, Any]]:
         """Génère des suggestions basiques sans modèle RL.
         Utilisé en fallback ou quand le modèle n'est pas disponible.
@@ -469,8 +447,7 @@ class RLSuggestionGenerator:
 
                 # Vérifier type
                 d_type = getattr(d, "driver_type", None)
-                d_type_value = d_type.value if d_type and hasattr(
-                    d_type, "value") else "REGULAR"
+                d_type_value = d_type.value if d_type and hasattr(d_type, "value") else "REGULAR"
 
                 # Prendre seulement les REGULAR (pas les EMERGENCY pour
                 # suggestions)
@@ -511,7 +488,7 @@ class RLSuggestionGenerator:
                 "distance_km": None,
                 "action": "reassign",
                 "message": f"Suggestion basique: Réassigner de {current_driver_name} à {suggested_driver_name}",
-                "source": "basic_heuristic"
+                "source": "basic_heuristic",
             }
 
             suggestions.append(suggestion)

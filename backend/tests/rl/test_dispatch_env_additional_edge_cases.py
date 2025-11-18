@@ -1,6 +1,7 @@
 """
 Tests supplémentaires pour dispatch_env.py - Couverture 95%+ (Partie 2)
 """
+
 import logging
 from unittest.mock import Mock, patch
 
@@ -22,12 +23,9 @@ class TestDispatchEnvAdditionalEdgeCases:
         env.drivers = [
             {"id": 1, "available": False, "load": 2},
             {"id": 2, "available": False, "load": 1},
-            {"id": 3, "available": False, "load": 3}
+            {"id": 3, "available": False, "load": 3},
         ]
-        env.bookings = [
-            {"id": 1, "priority": 3, "time_window": 30},
-            {"id": 2, "priority": 1, "time_window": 15}
-        ]
+        env.bookings = [{"id": 1, "priority": 3, "time_window": 30}, {"id": 2, "priority": 1, "time_window": 15}]
 
         valid_mask = env._get_valid_actions_mask()
 
@@ -41,13 +39,10 @@ class TestDispatchEnvAdditionalEdgeCases:
         env.reset()
 
         # Simuler des bookings déjà assignés
-        env.drivers = [
-            {"id": 1, "available": True, "load": 2},
-            {"id": 2, "available": True, "load": 1}
-        ]
+        env.drivers = [{"id": 1, "available": True, "load": 2}, {"id": 2, "available": True, "load": 1}]
         env.bookings = [
             {"id": 1, "priority": 3, "time_window": 30, "assigned": True},
-            {"id": 2, "priority": 1, "time_window": 15, "assigned": True}
+            {"id": 2, "priority": 1, "time_window": 15, "assigned": True},
         ]
 
         valid_mask = env._get_valid_actions_mask()
@@ -62,13 +57,10 @@ class TestDispatchEnvAdditionalEdgeCases:
         env.reset()
 
         # Simuler des bookings avec fenêtre temporelle expirée
-        env.drivers = [
-            {"id": 1, "available": True, "load": 2},
-            {"id": 2, "available": True, "load": 1}
-        ]
+        env.drivers = [{"id": 1, "available": True, "load": 2}, {"id": 2, "available": True, "load": 1}]
         env.bookings = [
             {"id": 1, "priority": 3, "time_window": 0},  # Expiré
-            {"id": 2, "priority": 1, "time_window": 15}
+            {"id": 2, "priority": 1, "time_window": 15},
         ]
 
         valid_mask = env._get_valid_actions_mask()
@@ -84,12 +76,9 @@ class TestDispatchEnvAdditionalEdgeCases:
         # Simuler des chauffeurs à capacité maximale
         env.drivers = [
             {"id": 1, "available": True, "load": 10},  # Capacité max
-            {"id": 2, "available": True, "load": 10}   # Capacité max
+            {"id": 2, "available": True, "load": 10},  # Capacité max
         ]
-        env.bookings = [
-            {"id": 1, "priority": 3, "time_window": 30},
-            {"id": 2, "priority": 1, "time_window": 15}
-        ]
+        env.bookings = [{"id": 1, "priority": 3, "time_window": 30}, {"id": 2, "priority": 1, "time_window": 15}]
 
         valid_mask = env._get_valid_actions_mask()
 
@@ -241,7 +230,7 @@ class TestDispatchEnvAdditionalEdgeCases:
             "lat": 48.8566,
             "lon": 2.3522,
             "total_distance": 0.0,
-            "completed_bookings": 0
+            "completed_bookings": 0,
         }
         booking = {
             "id": 1,
@@ -249,7 +238,7 @@ class TestDispatchEnvAdditionalEdgeCases:
             "time_window": 30,
             "pickup_lat": 48.8606,
             "pickup_lon": 2.3376,
-            "time_window_end": 30
+            "time_window_end": 30,
         }
 
         reward = env._assign_booking(driver, booking)
@@ -269,7 +258,7 @@ class TestDispatchEnvAdditionalEdgeCases:
             "lat": 48.8566,
             "lon": 2.3522,
             "total_distance": 0.0,
-            "completed_bookings": 0
+            "completed_bookings": 0,
         }
         booking = {
             "id": 1,
@@ -277,7 +266,7 @@ class TestDispatchEnvAdditionalEdgeCases:
             "time_window": 5,  # Très court
             "pickup_lat": 48.8606,
             "pickup_lon": 2.3376,
-            "time_window_end": 5
+            "time_window_end": 5,
         }
 
         reward = env._assign_booking(driver, booking)
@@ -350,10 +339,7 @@ class TestDispatchEnvAdditionalEdgeCases:
         env.reset()
 
         # Simuler des bookings expirés
-        env.bookings = [
-            {"id": 1, "time_window": 0, "assigned": False},
-            {"id": 2, "time_window": 5, "assigned": False}
-        ]
+        env.bookings = [{"id": 1, "time_window": 0, "assigned": False}, {"id": 2, "time_window": 5, "assigned": False}]
 
         penalty = env._check_expired_bookings()
 
@@ -440,7 +426,7 @@ class TestDispatchEnvAdditionalEdgeCases:
             "lon": 2.3522,
             "home_lat": 48.8566,
             "home_lon": 2.3522,
-            "total_distance": 0.0
+            "total_distance": 0.0,
         }
 
         env._end_of_day_return(driver)

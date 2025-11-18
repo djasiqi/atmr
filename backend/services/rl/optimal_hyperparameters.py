@@ -1,4 +1,3 @@
-
 # Constantes pour éviter les valeurs magiques
 import json
 import logging
@@ -35,41 +34,32 @@ class OptimalHyperparameters:
         "learning_rate": 9.32e-05,
         "gamma": 0.951,
         "batch_size": 128,
-
         # Exploration parameters
         "epsilon_start": 0.850,
         "epsilon_end": 0.055,
         "epsilon_decay": 0.993,
-
         # Buffer parameters
         "buffer_size": 200000,
         "target_update_freq": 13,
-
         # PER parameters (ajoutés pour Sprint 1)
         "alpha": 0.6,  # Priorité exponentielle
         "beta_start": 0.4,  # Importance sampling début
         "beta_end": 1,  # Importance sampling fin
-
         # N-step parameters (ajoutés pour Étape 5)
         "use_n_step": True,  # Activer N-step learning
         "n_step": 3,  # Nombre d'étapes pour N-step
         "n_step_gamma": 0.99,  # Gamma pour N-step
-
         # Dueling DQN parameters (ajoutés pour Étape 6)
         "use_dueling": True,  # Activer Dueling DQN
-
         # Soft update parameters
         "tau": 0.005,  # Soft update rate
-
         # Network parameters
         "hidden_sizes": [1024, 512, 256, 128],
         "dropout": 0.2,
-
         # Environment parameters
         "num_drivers": 5,
         "max_bookings": 15,
         "simulation_hours": 8,
-
         # Training parameters
         "max_episodes": 1000,
         "max_steps_per_episode": 200,
@@ -80,108 +70,34 @@ class OptimalHyperparameters:
     # Configuration étendue pour Optuna tuning
     OPTUNA_SEARCH_SPACE: ClassVar[Dict[str, Any]] = {
         # Learning rate (log scale)
-        "learning_rate": {
-            "type": "float",
-            "low": 1e-5,
-            "high": 1e-3,
-            "log": True
-        },
-
+        "learning_rate": {"type": "float", "low": 1e-5, "high": 1e-3, "log": True},
         # Discount factor
-        "gamma": {
-            "type": "float",
-            "low": 0.9,
-            "high": 0.99
-        },
-
+        "gamma": {"type": "float", "low": 0.9, "high": 0.99},
         # Batch size
-        "batch_size": {
-            "type": "categorical",
-            "choices": [32, 64, 128, 256]
-        },
-
+        "batch_size": {"type": "categorical", "choices": [32, 64, 128, 256]},
         # Epsilon parameters
-        "epsilon_start": {
-            "type": "float",
-            "low": 0.8,
-            "high": 1
-        },
-        "epsilon_end": {
-            "type": "float",
-            "low": 0.1,
-            "high": 0.1
-        },
-        "epsilon_decay": {
-            "type": "float",
-            "low": 0.99,
-            "high": 0.999
-        },
-
+        "epsilon_start": {"type": "float", "low": 0.8, "high": 1},
+        "epsilon_end": {"type": "float", "low": 0.1, "high": 0.1},
+        "epsilon_decay": {"type": "float", "low": 0.99, "high": 0.999},
         # Buffer size
-        "buffer_size": {
-            "type": "categorical",
-            "choices": [50000, 100000, 200000, 500000]
-        },
-
+        "buffer_size": {"type": "categorical", "choices": [50000, 100000, 200000, 500000]},
         # Target update frequency
-        "target_update_freq": {
-            "type": "int",
-            "low": 5,
-            "high": 50
-        },
-
+        "target_update_freq": {"type": "int", "low": 5, "high": 50},
         # PER parameters
-        "alpha": {
-            "type": "float",
-            "low": 0.4,
-            "high": 0.8
-        },
-        "beta_start": {
-            "type": "float",
-            "low": 0.2,
-            "high": 0.6
-        },
-        "beta_end": {
-            "type": "float",
-            "low": 0.8,
-            "high": 1
-        },
-
+        "alpha": {"type": "float", "low": 0.4, "high": 0.8},
+        "beta_start": {"type": "float", "low": 0.2, "high": 0.6},
+        "beta_end": {"type": "float", "low": 0.8, "high": 1},
         # Soft update
-        "tau": {
-            "type": "float",
-            "low": 0.001,
-            "high": 0.1
-        },
-
+        "tau": {"type": "float", "low": 0.001, "high": 0.1},
         # Network architecture
         "hidden_sizes": {
             "type": "categorical",
-            "choices": [
-                [512, 256, 128],
-                [1024, 512, 256],
-                [1024, 512, 128],
-                [512, 512, 256],
-                [1024, 512, 256, 128]
-            ]
+            "choices": [[512, 256, 128], [1024, 512, 256], [1024, 512, 128], [512, 512, 256], [1024, 512, 256, 128]],
         },
-        "dropout": {
-            "type": "float",
-            "low": 0,
-            "high": 0.5
-        },
-
+        "dropout": {"type": "float", "low": 0, "high": 0.5},
         # Environment parameters
-        "num_drivers": {
-            "type": "int",
-            "low": 3,
-            "high": 10
-        },
-        "max_bookings": {
-            "type": "int",
-            "low": 10,
-            "high": 30
-        }
+        "num_drivers": {"type": "int", "low": 3, "high": 10},
+        "max_bookings": {"type": "int", "low": 10, "high": 30},
     }
 
     # Configurations spécialisées par contexte
@@ -197,7 +113,6 @@ class OptimalHyperparameters:
             "target_update_freq": 20,
             "tau": 0.001,  # Soft update plus lent
         },
-
         "training": {
             # Configuration optimisée pour l'entraînement
             "learning_rate": 9.32e-05,  # Optimal Optuna
@@ -209,7 +124,6 @@ class OptimalHyperparameters:
             "target_update_freq": 13,
             "tau": 0.005,
         },
-
         "evaluation": {
             # Configuration pour l'évaluation
             "learning_rate": 0,  # Pas d'apprentissage
@@ -221,7 +135,6 @@ class OptimalHyperparameters:
             "target_update_freq": 0,
             "tau": 0,
         },
-
         "fine_tuning": {
             # Configuration pour le fine-tuning
             "learning_rate": 1e-05,  # Très petit
@@ -232,7 +145,7 @@ class OptimalHyperparameters:
             "buffer_size": 50000,
             "target_update_freq": 50,
             "tau": 0.001,
-        }
+        },
     }
 
     # Configurations de reward shaping
@@ -244,7 +157,6 @@ class OptimalHyperparameters:
             "efficiency_weight": 0.2,
             "satisfaction_weight": 0.4,
         },
-
         "punctuality_focused": {
             "punctuality_weight": 1.5,
             "distance_weight": 0.3,
@@ -252,7 +164,6 @@ class OptimalHyperparameters:
             "efficiency_weight": 0.1,
             "satisfaction_weight": 0.3,
         },
-
         "equity_focused": {
             "punctuality_weight": 0.8,
             "distance_weight": 0.4,
@@ -260,14 +171,13 @@ class OptimalHyperparameters:
             "efficiency_weight": 0.2,
             "satisfaction_weight": 0.3,
         },
-
         "efficiency_focused": {
             "punctuality_weight": 0.7,
             "distance_weight": 1,
             "equity_weight": 0.2,
             "efficiency_weight": 0.4,
             "satisfaction_weight": 0.2,
-        }
+        },
     }
 
     @classmethod
@@ -290,8 +200,7 @@ class OptimalHyperparameters:
         return base_config
 
     @classmethod
-    def get_reward_shaping_config(
-            cls, profile: str = "default") -> Dict[str, float]:
+    def get_reward_shaping_config(cls, profile: str = "default") -> Dict[str, float]:
         """Retourne la configuration de reward shaping.
 
         Args:
@@ -301,8 +210,7 @@ class OptimalHyperparameters:
             Configuration de reward shaping
 
         """
-        return cls.REWARD_SHAPING_CONFIGS.get(
-            profile, cls.REWARD_SHAPING_CONFIGS["default"])
+        return cls.REWARD_SHAPING_CONFIGS.get(profile, cls.REWARD_SHAPING_CONFIGS["default"])
 
     @classmethod
     def get_optuna_search_space(cls) -> Dict[str, Any]:
@@ -362,8 +270,13 @@ class OptimalHyperparameters:
 
         # Vérifier les paramètres obligatoires
         required_params = [
-            "learning_rate", "gamma", "batch_size", "epsilon_start",
-            "epsilon_end", "epsilon_decay", "buffer_size"
+            "learning_rate",
+            "gamma",
+            "batch_size",
+            "epsilon_start",
+            "epsilon_end",
+            "epsilon_decay",
+            "buffer_size",
         ]
 
         for param in required_params:
@@ -437,8 +350,7 @@ SPRINT1 = OptimalHyperparameters.get_optimal_config("training")
 SPRINT1 = OptimalHyperparameters.get_optimal_config("production")
 
 # Configuration de reward shaping pour le Sprint 1
-SPRINT1 = OptimalHyperparameters.get_reward_shaping_config(
-    "punctuality_focused")
+SPRINT1 = OptimalHyperparameters.get_reward_shaping_config("punctuality_focused")
 
 
 if __name__ == "__main__":
@@ -448,9 +360,7 @@ if __name__ == "__main__":
 
     # Sauvegarder les configurations Sprint 1
     OptimalHyperparameters.save_config(SPRINT1, "sprint1training_config.json")
-    OptimalHyperparameters.save_config(
-        SPRINT1, "sprint1production_config.json")
+    OptimalHyperparameters.save_config(SPRINT1, "sprint1production_config.json")
     OptimalHyperparameters.save_config(SPRINT1, "sprint1reward_config.json")
 
-    logging.info(
-        "\nConfigurations Sprint 1 sauvegardées dans backend/data/rl/configs/")
+    logging.info("\nConfigurations Sprint 1 sauvegardées dans backend/data/rl/configs/")

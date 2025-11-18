@@ -36,7 +36,7 @@ class TestImprovedDQNAgent:
             epsilon_end=0.01,
             epsilon_decay=0.99,
             batch_size=32,
-            target_update_freq=50
+            target_update_freq=50,
         )
 
         assert agent.state_dim == 100

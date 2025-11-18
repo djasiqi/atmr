@@ -34,6 +34,8 @@ EMERGENCY_PICKUP_FAR_THRESHOLD = 20  # Pickup loin du bureau
 EMERGENCY_TRIP_SHORT_THRESHOLD = 15  # Trajet court
 EMERGENCY_TRIP_MEDIUM_THRESHOLD = 20  # Trajet moyen
 MAX_FAIRNESS_GAP = 2  # Écart maximum entre chauffeurs réguliers (équité stricte)
+
+
 def baseline_and_cap_loads(loads: Dict[int, int]) -> Tuple[Dict[int, int], int]:
     """Normalise les charges brutes en retirant la charge minimale (baseline)
     puis en bornant l'écart maximal à MAX_FAIRNESS_GAP.
@@ -83,6 +85,7 @@ def _normalized_loads(loads: Dict[int, int]) -> Dict[int, int]:
         normalized[did] = min(diff, MAX_FAIRNESS_GAP)
     return normalized
 
+
 PREFERRED_EXTRA_GAP = 1  # Marge supplémentaire autorisée pour le chauffeur préféré
 
 DEFAULT_SETTINGS = Settings()
@@ -98,27 +101,28 @@ logger = logging.getLogger(__name__)
 # ✅ A1: Compteur thread-safe pour conflits temporels
 class TemporalConflictCounter:
     """Compteur thread-safe pour les conflits temporels détectés."""
-    _instance: 'TemporalConflictCounter | None' = None
-    
+
+    _instance: "TemporalConflictCounter | None" = None
+
     def __init__(self):
         super().__init__()
         self._counter = 0
-    
+
     @classmethod
-    def get_instance(cls) -> 'TemporalConflictCounter':
+    def get_instance(cls) -> "TemporalConflictCounter":
         """Retourne l'instance singleton."""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
-    
+
     def reset(self) -> None:
         """Réinitialise le compteur."""
         self._counter = 0
-    
+
     def increment(self) -> None:
         """Incrémente le compteur."""
         self._counter += 1
-    
+
     def get_count(self) -> int:
         """Retourne le nombre total de conflits."""
         return self._counter
@@ -177,10 +181,16 @@ def _can_be_pooled(b1: Booking, b2: Booking, settings: Settings) -> bool:
     distance_m = _haversine_distance(lat1safe, lon1safe, lat2safe, lon2safe)
 
     if distance_m <= settings.pooling.pickup_distance_m:
-        logger.info("[POOLING] 🚗 Courses #%s et #%s peuvent être regroupées (même pickup à %.0fm, même heure)", b1.id, b2.id, distance_m)
+        logger.info(
+            "[POOLING] 🚗 Courses #%s et #%s peuvent être regroupées (même pickup à %.0fm, même heure)",
+            b1.id,
+            b2.id,
+            distance_m,
+        )
         return True
 
     return False
+
 
 # ⏱️ Temps de service RÉELS (selon utilisateur) - maintenant paramétrables via settings
 # PICKUP_SERVICE_MIN, DROPOFF_SERVICE_MIN, MIN_TRANSITION_MARGIN_MIN, etc.
@@ -202,7 +212,7 @@ class HeuristicAssignment:
     estimated_start_min: int
     estimated_finish_min: int
     breakdown: Dict[str, Any] | None = None  # ✅ A1: Détails de scoring + conflits
-    
+
     # ✅ B2: Explicabilité des décisions (top-3 alternatives & contributions)
     top_alternatives: List[Dict[str, Any]] | None = None  # Top 3 drivers avec scores
     reason_codes: Dict[str, float] | None = None  # distance, fairness, priority, temporal_conflict
@@ -216,10 +226,8 @@ class HeuristicAssignment:
         """
         base = now_local()
         try:
-            est_pickup_dt = base + \
-                timedelta(minutes=int(self.estimated_start_min))
-            est_drop_dt = base + \
-                timedelta(minutes=int(self.estimated_finish_min))
+            est_pickup_dt = base + timedelta(minutes=int(self.estimated_start_min))
+            est_drop_dt = base + timedelta(minutes=int(self.estimated_finish_min))
         except Exception:
             est_pickup_dt = base
             est_drop_dt = base
@@ -245,6 +253,7 @@ class HeuristicResult:
 # -------------------------------------------------------------------
 # Utilitaires internes
 # -------------------------------------------------------------------
+
 
 def haversine_minutes(
     a: Tuple[float, float],
@@ -348,8 +357,7 @@ def _driver_current_coord(d: Driver) -> Tuple[Tuple[float, float], float]:
     return coord, factor
 
 
-def _booking_coords(
-        b: Booking) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+def _booking_coords(b: Booking) -> Tuple[Tuple[float, float], Tuple[float, float]]:
     def _extract(lat_value: Any, lon_value: Any) -> Tuple[float, float]:
         try:
             lat = float(lat_value) if lat_value is not None else float("nan")
@@ -369,8 +377,7 @@ def _is_booking_assigned(b: Booking) -> bool:
     try:
         s = cast("Any", getattr(b, "status", None))
         # compare à l'enum (ou à sa value) pour éviter ColumnElement
-        return (s == BookingStatus.ASSIGNED) or (
-            getattr(s, "value", None) == BookingStatus.ASSIGNED.value)
+        return (s == BookingStatus.ASSIGNED) or (getattr(s, "value", None) == BookingStatus.ASSIGNED.value)
     except Exception:
         return False
 
@@ -415,13 +422,18 @@ def _is_return_urgent(b: Booking, settings: Settings) -> bool:
         return False
     mins = minutes_from_now(getattr(b, "scheduled_time", None))
     # compat: certains settings utilisent emergency_threshold_min
-    thr = cast("Any", getattr(settings.emergency, "return_urgent_threshold_min",
-                              getattr(settings.emergency, "emergency_threshold_min", 30)))
+    thr = cast(
+        "Any",
+        getattr(
+            settings.emergency,
+            "return_urgent_threshold_min",
+            getattr(settings.emergency, "emergency_threshold_min", 30),
+        ),
+    )
     return mins <= int(thr)
 
 
-def _driver_fairness_penalty(
-        driver_id: int, fairness_counts: Dict[int, int]) -> float:
+def _driver_fairness_penalty(driver_id: int, fairness_counts: Dict[int, int]) -> float:
     """Plus le chauffeur a déjà de courses (dans la fenêtre équité), plus la pénalité augmente."""
     normalized = _normalized_loads(fairness_counts)
     diff = normalized.get(driver_id, 0)
@@ -449,8 +461,7 @@ def _regular_driver_bonus(b: Booking, d: Driver) -> float:
     return 0
 
 
-def _check_driver_window_feasible(
-        driver_window: Tuple[int, int], est_start_min: int) -> bool:  
+def _check_driver_window_feasible(driver_window: Tuple[int, int], est_start_min: int) -> bool:
     start_w, end_w = driver_window
 
     # ⚠️ CORRECTION CRITIQUE : driver_window (0-1440) représente la journée du chauffeur
@@ -471,6 +482,7 @@ def _check_driver_window_feasible(
 # -------------------------------------------------------------------
 # Scoring principal
 # -------------------------------------------------------------------
+
 
 def _score_driver_for_booking(
     b: Booking,
@@ -502,8 +514,8 @@ def _score_driver_for_booking(
     driver_type_str = str(driver_type or "").strip().upper()
     if "." in driver_type_str:
         driver_type_str = driver_type_str.split(".")[-1]
-    is_emergency = (driver_type_str == "EMERGENCY")
-    
+    is_emergency = driver_type_str == "EMERGENCY"
+
     # ⚡ AMÉLIORATION: Utiliser le meilleur des deux points de départ pour le calcul de base
     # Cela évite de pénaliser inutilement les courses quand last_dropoff_coord est loin
     # Puis ajouter un bonus de continuité si last_dropoff_coord est utilisé et proche
@@ -514,18 +526,16 @@ def _score_driver_for_booking(
 
     # Initialiser use_last_dropoff_for_bonus
     use_last_dropoff_for_bonus = False
-    
+
     # Calculer les distances depuis les deux points possibles
-    to_pickup_from_current = haversine_minutes(
-        current_coord, p_coord, avg_kmh=avg_kmh, min_minutes=1, max_minutes=180
-    )
-    
+    to_pickup_from_current = haversine_minutes(current_coord, p_coord, avg_kmh=avg_kmh, min_minutes=1, max_minutes=180)
+
     to_pickup_from_last_dropoff = 999
     if last_dropoff_coord:
         to_pickup_from_last_dropoff = haversine_minutes(
             last_dropoff_coord, p_coord, avg_kmh=avg_kmh, min_minutes=1, max_minutes=180
         )
-    
+
     # Utiliser le point de départ qui donne la distance la plus courte
     # Cela garantit que le prox_score est toujours optimal
     to_pickup_min = to_pickup_from_current
@@ -533,16 +543,12 @@ def _score_driver_for_booking(
         to_pickup_min = to_pickup_from_last_dropoff
         use_last_dropoff_for_bonus = True
     elif is_emergency and company_coords:
-        to_pickup_min = haversine_minutes(
-            company_coords, p_coord, avg_kmh=avg_kmh, min_minutes=1, max_minutes=180
-        )
+        to_pickup_min = haversine_minutes(company_coords, p_coord, avg_kmh=avg_kmh, min_minutes=1, max_minutes=180)
 
     # Estimations robustes (plancher/plafond pour éviter les valeurs extrêmes
     # en heuristique)
-    to_drop_min = haversine_minutes(
-        p_coord, d_coord, avg_kmh=avg_kmh, min_minutes=1, max_minutes=240
-    )
-    
+    to_drop_min = haversine_minutes(p_coord, d_coord, avg_kmh=avg_kmh, min_minutes=1, max_minutes=240)
+
     # ⚡ Pour les chauffeurs d'urgence : bonus pour trajets courts (pickup proche + trajet court)
     emergency_trip_bonus = 0.0
     if is_emergency:
@@ -565,8 +571,7 @@ def _score_driver_for_booking(
 
     # Pré-faisabilité : fenêtre de travail chauffeur
     # Si on dépasse déjà la fenêtre, inutile d'aller plus loin.
-    if not _check_driver_window_feasible(
-            driver_window, est_start_min):
+    if not _check_driver_window_feasible(driver_window, est_start_min):
         return (-1, {"feasible": 0}, (est_start_min, est_finish_min))
 
     # Garde "pickup trop tard" : si le chauffeur ne peut pas arriver à temps
@@ -599,7 +604,12 @@ def _score_driver_for_booking(
             # ✅ Fort bonus pour le chauffeur préféré (ajuste le poids selon settings si nécessaire)
             # Bonus de 3.0 = très fort pour prioriser ce chauffeur (surmonte proximité, équité, etc.)
             preferred_bonus = 3.0
-            logger.info("[HEURISTIC] 🎯 Bonus préférence FORT appliqué pour chauffeur #%d (+%.1f) booking_id=%s", did_safe, preferred_bonus, int(cast("Any", getattr(b, "id", 0))))
+            logger.info(
+                "[HEURISTIC] 🎯 Bonus préférence FORT appliqué pour chauffeur #%d (+%.1f) booking_id=%s",
+                did_safe,
+                preferred_bonus,
+                int(cast("Any", getattr(b, "id", 0))),
+            )
 
     # Normalisations simples
     # Proximité -> transformer to_pickup_min en score (0..1)
@@ -611,7 +621,7 @@ def _score_driver_for_booking(
     else:
         prox_score = max(0, 1 - (to_pickup_min - 5) / 25)
     prox_score *= coord_quality_factor
-    
+
     # ⚡ Bonus de continuité géographique si last_dropoff_coord est utilisé
     # Cela récompense les courses qui minimisent les trajets entre courses consécutives
     # Seuils étendus et bonus augmentés pour avoir un impact significatif
@@ -623,7 +633,7 @@ def _score_driver_for_booking(
     CONTINUITY_BONUS_MEDIUM = 0.3  # Bonus moyen
     CONTINUITY_BONUS_FAR = 0.2  # Bonus faible
     CONTINUITY_BONUS_VERY_FAR = 0.1  # Bonus très faible
-    
+
     continuity_bonus = 0.0
     # ⚡ Bonus de continuité seulement si last_dropoff_coord est utilisé ET proche
     # On utilise to_pickup_from_last_dropoff pour le bonus (pas to_pickup_min qui peut venir de current_coord)
@@ -650,14 +660,14 @@ def _score_driver_for_booking(
     # Urgence "non-critique" déjà dans pr via return_generic
     # Appliquer malus de retard potentiel
     heuristic_score = max(0, base - lateness_penalty)
-    
+
     # ⚡ Ajouter le bonus de continuité géographique (ajouté après pour avoir un impact fort)
     heuristic_score += continuity_bonus
-    
+
     # ⚡ Bonus pour chauffeurs d'urgence avec trajets courts depuis le bureau
     if is_emergency:
         heuristic_score += emergency_trip_bonus
-    
+
     # ✅ Bonus pour chauffeur préféré (ajouté après les autres calculs pour avoir un impact fort)
     heuristic_score += preferred_bonus * 1.0  # Poids fort (1.0) pour prioriser significativement
 
@@ -671,39 +681,38 @@ def _score_driver_for_booking(
         "continuity_bonus": continuity_bonus,  # ⚡ Bonus de continuité géographique
         "coord_quality": coord_quality_factor,
     }
-    
+
     # Fusion avec score RL si activé
     if getattr(settings.features, "enable_rl", False) and getattr(settings.features, "enable_rl_apply", False):
         # Normaliser le score heuristique de 0-1 vers 0-100
         heuristic_score_100 = heuristic_score * 100
-        
+
         # TODO: Récupérer le score RL (à implémenter avec le système RL)
         rl_score = 0.5  # Placeholder: score RL par défaut
         alpha = getattr(settings.rl, "alpha", 0.2)
-        
+
         from services.unified_dispatch.score_fusion import fuse_scores
-        
+
         final_score_100, fusion_breakdown = fuse_scores(
-            heuristic_score=heuristic_score_100,
-            rl_score=rl_score,
-            alpha=alpha
+            heuristic_score=heuristic_score_100, rl_score=rl_score, alpha=alpha
         )
-        
+
         # Reconvertir en 0-1
         total = final_score_100 / 100
-        
+
         # Ajouter le breakdown de fusion
         breakdown["rl_fusion"] = fusion_breakdown
         breakdown["heuristic_raw"] = heuristic_score
     else:
         total = heuristic_score
-    
+
     return (total, breakdown, (est_start_min, est_finish_min))
 
 
 # -------------------------------------------------------------------
 # Parallélisation du scoring
 # -------------------------------------------------------------------
+
 
 def _score_booking_driver_pair(
     b: Booking,
@@ -717,7 +726,7 @@ def _score_booking_driver_pair(
     last_dropoff_coord: Tuple[float, float] | None = None,  # ⚡ Position de dropoff de la dernière course assignée
 ) -> Tuple[int, int, float, Dict[str, float], Tuple[int, int]]:
     """Score un couple (booking, driver) de manière thread-safe.
-    
+
     Returns:
         (booking_id, driver_id, score, breakdown, (est_start, est_finish))
     """
@@ -725,13 +734,20 @@ def _score_booking_driver_pair(
         b_id = int(cast("Any", b.id))
         d_id = int(cast("Any", d.id))
         dw = (0, 24 * 60)  # Default window (driver_window non utilisé dans cette version simplifiée)
-        
+
         normalized_counts = _normalized_loads(fairness_counts)
 
         sc, breakdown, time_est = _score_driver_for_booking(
-            b, d, dw, settings, normalized_counts, company_coords=company_coords, preferred_driver_id=preferred_driver_id, last_dropoff_coord=last_dropoff_coord
+            b,
+            d,
+            dw,
+            settings,
+            normalized_counts,
+            company_coords=company_coords,
+            preferred_driver_id=preferred_driver_id,
+            last_dropoff_coord=last_dropoff_coord,
         )
-        
+
         return (b_id, d_id, sc, breakdown, time_est)
     except Exception as e:
         logger.error("[ParallelScoring] Error scoring b=%s d=%s: %s", b.id, d.id, e)
@@ -742,8 +758,8 @@ def _score_booking_driver_pair(
 # Assignation heuristique
 # -------------------------------------------------------------------
 
-def assign(problem: Dict[str, Any],
-           settings: Settings = DEFAULT_SETTINGS) -> HeuristicResult:
+
+def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> HeuristicResult:
     """Algorithme glouton :
     1) Traite en premier les "retours urgents".
     2) Trie le reste par scheduled_time croissante puis score décroissant.
@@ -751,8 +767,7 @@ def assign(problem: Dict[str, Any],
     4) Évite les réassignations inutiles (ASSIGNED au même driver).
     """
     if not problem:
-        return HeuristicResult(assignments=[], unassigned_booking_ids=[
-        ], debug={"reason": "empty_problem"})
+        return HeuristicResult(assignments=[], unassigned_booking_ids=[], debug={"reason": "empty_problem"})
 
     bookings: List[Booking] = problem["bookings"]
     drivers: List[Driver] = problem["drivers"]
@@ -762,9 +777,11 @@ def assign(problem: Dict[str, Any],
     problem["fairness_counts"] = fairness_counts
     problem["fairness_baseline"] = fairness_baseline
     company_coords: Tuple[float, float] | None = problem.get("company_coords")  # ⚡ Coordonnées du bureau
-    driver_load_multipliers: Dict[int, float] = problem.get("driver_load_multipliers", {})  # ⚡ Multiplicateurs de charge par chauffeur
+    driver_load_multipliers: Dict[int, float] = problem.get(
+        "driver_load_multipliers", {}
+    )  # ⚡ Multiplicateurs de charge par chauffeur
     preferred_driver_id: int | None = problem.get("preferred_driver_id")  # ⚡ Chauffeur préféré
-    
+
     # Log pour debug
     total_fairness = sum(fairness_counts.values())
     max_fairness = max(fairness_counts.values()) if fairness_counts else 0
@@ -780,7 +797,11 @@ def assign(problem: Dict[str, Any],
     )
     if preferred_driver_id:
         driver_ids = [int(cast("Any", d.id)) for d in drivers]
-        logger.info("[HEURISTIC] 🎯 Chauffeur préféré %s dans drivers disponibles: %s", preferred_driver_id, preferred_driver_id in driver_ids)
+        logger.info(
+            "[HEURISTIC] 🎯 Chauffeur préféré %s dans drivers disponibles: %s",
+            preferred_driver_id,
+            preferred_driver_id in driver_ids,
+        )
         logger.info("[HEURISTIC] 🎯 Chauffeur préféré détecté dans le problème: %s", preferred_driver_id)
     if company_coords:
         logger.debug("[HEURISTIC] 📍 Coordonnées bureau disponibles: (%s, %s)", company_coords[0], company_coords[1])
@@ -793,31 +814,29 @@ def assign(problem: Dict[str, Any],
     # État local : nombre d'assignations *proposées* dans cette passe (ids
     # castés en int)
     proposed_load: Dict[int, int] = {
-        int(cast("Any", d.id)): previous_load.get(int(cast("Any", d.id)), 0)
-        for d in drivers
+        int(cast("Any", d.id)): previous_load.get(int(cast("Any", d.id)), 0) for d in drivers
     }
     fairness_effective: Dict[int, int] = {
         int(cast("Any", d.id)): fairness_counts.get(int(cast("Any", d.id)), 0)
         + proposed_load.get(int(cast("Any", d.id)), 0)
         for d in drivers
     }
-    driver_index: Dict[int, int] = {
-        int(cast("Any", d.id)): i for i, d in enumerate(drivers)}
+    driver_index: Dict[int, int] = {int(cast("Any", d.id)): i for i, d in enumerate(drivers)}
 
     max_cap = settings.solver.max_bookings_per_driver
-    
+
     # ⚡ Calculer les caps ajustés selon les préférences de charge par chauffeur
     def get_adjusted_max_cap(driver_id: int) -> int:
         """Retourne le cap maximum ajusté pour un chauffeur selon ses préférences."""
         multiplier = driver_load_multipliers.get(driver_id, 1.0)
         return int(max_cap * multiplier)
-    
+
     # ⚡ Fonction helper pour obtenir les chauffeurs éligibles selon équité stricte ou préférence
     def get_eligible_drivers(all_drivers: List[Driver], current_loads: Dict[int, int]) -> List[Driver]:
         """Retourne la liste des chauffeurs éligibles selon la préférence ou l'équité stricte.
-        
+
         ⚡ CORRECTION: Le chauffeur préféré est inclus dans la liste éligible avec un bonus de +3.0
-        dans le scoring, plutôt que d'être exclusivement sélectionné. Cela permet au bonus de 
+        dans le scoring, plutôt que d'être exclusivement sélectionné. Cela permet au bonus de
         prioriser le préféré tout en gardant la flexibilité pour d'autres assignations si nécessaire.
         """
         # Équité stricte : filtrer selon MAX_FAIRNESS_GAP
@@ -827,24 +846,18 @@ def assign(problem: Dict[str, Any],
         min_load = min(current_loads.values())
 
         # Priorité absolue aux chauffeurs avec la charge minimale
-        eligible = [
-            d for d in all_drivers
-            if current_loads.get(int(cast("Any", d.id)), 0) == min_load
-        ]
+        eligible = [d for d in all_drivers if current_loads.get(int(cast("Any", d.id)), 0) == min_load]
 
         # Si tout le monde a déjà au moins min_load+1, élargir progressivement jusqu'à MAX_FAIRNESS_GAP
         gap = 1
         while not eligible and gap <= MAX_FAIRNESS_GAP:
-            eligible = [
-                d for d in all_drivers
-                if current_loads.get(int(cast("Any", d.id)), 0) <= min_load + gap
-            ]
+            eligible = [d for d in all_drivers if current_loads.get(int(cast("Any", d.id)), 0) <= min_load + gap]
             gap += 1
 
         # Si malgré tout aucun chauffeur n'est éligible (cas extrême), retourner la liste complète
         if not eligible:
             eligible = all_drivers
-        
+
         max_allowed_for_log = min_load + MAX_FAIRNESS_GAP
         preferred_gap_limit = max_allowed_for_log + PREFERRED_EXTRA_GAP
 
@@ -856,7 +869,7 @@ def assign(problem: Dict[str, Any],
                 preferred_did = int(cast("Any", preferred_driver.id))
                 adjusted_cap = get_adjusted_max_cap(preferred_did)
                 current_load = current_loads.get(preferred_did, 0)
-                
+
                 # Toujours inclure le préféré s'il est sous le cap et dans la marge d'équité élargie
                 if (
                     current_load < adjusted_cap
@@ -865,18 +878,24 @@ def assign(problem: Dict[str, Any],
                 ):
                     logger.info(
                         "[HEURISTIC] 🎯 Ajout chauffeur préféré #%s à la liste éligible (load: %d/%d, bonus: +3.0)",
-                        preferred_did, current_load, adjusted_cap
+                        preferred_did,
+                        current_load,
+                        adjusted_cap,
                     )
                     eligible.append(preferred_driver)
                 elif current_load < adjusted_cap and current_load <= preferred_gap_limit:
                     logger.debug(
                         "[HEURISTIC] 🎯 Chauffeur préféré #%s déjà éligible (load: %d/%d, bonus: +3.0)",
-                        preferred_did, current_load, adjusted_cap
+                        preferred_did,
+                        current_load,
+                        adjusted_cap,
                     )
                 else:
                     logger.warning(
                         "[HEURISTIC] ⚠️ Chauffeur préféré #%s au cap (load: %d/%d), bonus non appliqué",
-                        preferred_did, current_load, adjusted_cap
+                        preferred_did,
+                        current_load,
+                        adjusted_cap,
                     )
         logger.debug(
             "[HEURISTIC] 📊 Équité stricte: %d chauffeurs éligibles (min_load: %s, max_allowed: %s)",
@@ -886,43 +905,23 @@ def assign(problem: Dict[str, Any],
         )
         return eligible if eligible else all_drivers
 
-    urgent: List[Booking] = [
-        b for b in bookings if _is_return_urgent(
-            b, settings)]
+    urgent: List[Booking] = [b for b in bookings if _is_return_urgent(b, settings)]
     urgent_ids = {int(cast("Any", b.id)) for b in urgent}
-    regular: List[Booking] = [
-        b for b in bookings if int(
-            cast(
-                "Any",
-                b.id)) not in urgent_ids]
+    regular: List[Booking] = [b for b in bookings if int(cast("Any", b.id)) not in urgent_ids]
 
     # Trier
-    urgent.sort(
-        key=lambda b: sort_key_utc(
-            cast(
-                "Any",
-                getattr(
-                    b,
-                    "scheduled_time",
-                    None))))    # plus proches
-    regular.sort(
-        key=lambda b: sort_key_utc(
-            cast(
-                "Any",
-                getattr(
-                    b,
-                    "scheduled_time",
-                    None))))   # FIFO temporel
+    urgent.sort(key=lambda b: sort_key_utc(cast("Any", getattr(b, "scheduled_time", None))))  # plus proches
+    regular.sort(key=lambda b: sort_key_utc(cast("Any", getattr(b, "scheduled_time", None))))  # FIFO temporel
 
     assignments: List[HeuristicAssignment] = []
-    
+
     # ⚡ AMÉLIORATION: Construire un dictionnaire driver_last_dropoff AVANT le scoring
     # en utilisant les bookings déjà assignés (status=ASSIGNED avec driver_id)
     # Cela permet de minimiser les trajets dès le scoring initial
     # On garde pour chaque chauffeur la dernière course assignée (par scheduled_time)
     driver_last_dropoff_initial: Dict[int, Tuple[float, float]] = {}
     driver_last_booking_time: Dict[int, datetime] = {}  # Pour comparer les scheduled_time
-    
+
     for booking in bookings:
         # Vérifier si le booking est déjà assigné
         booking_driver_id = getattr(booking, "driver_id", None)
@@ -946,11 +945,11 @@ def assign(problem: Dict[str, Any],
                         driver_last_booking_time[did] = booking_scheduled
 
     # Timeline par chauffeur (en minutes depuis maintenant)
-    busy_until: Dict[int, int] = {int(cast("Any", d.id)): previous_busy.get(
-        int(cast("Any", d.id)), 0) for d in drivers}
+    busy_until: Dict[int, int] = {int(cast("Any", d.id)): previous_busy.get(int(cast("Any", d.id)), 0) for d in drivers}
     # 🆕 Tracker les scheduled_time par chauffeur pour éviter les conflits
-    driver_scheduled_times: Dict[int, List[int]] = {int(cast("Any", d.id)): list(
-        previous_times.get(int(cast("Any", d.id)), [])) for d in drivers}
+    driver_scheduled_times: Dict[int, List[int]] = {
+        int(cast("Any", d.id)): list(previous_times.get(int(cast("Any", d.id)), [])) for d in drivers
+    }
 
     unassigned: List[int] = []
     # ✅ A1: Tracker les rejets de conflits temporels pour observabilité
@@ -958,18 +957,12 @@ def assign(problem: Dict[str, Any],
 
     # --- 1) Retours urgents (hard priority) ---
     logger.info("=" * 80)
-    logger.info(
-        "[DISPATCH HEURISTIC] 🚨 %d retours urgents, %d courses régulières",
-        len(urgent),
-        len(regular))
-    logger.info(
-        "[DISPATCH HEURISTIC] 👥 %d chauffeurs disponibles",
-        len(drivers))
+    logger.info("[DISPATCH HEURISTIC] 🚨 %d retours urgents, %d courses régulières", len(urgent), len(regular))
+    logger.info("[DISPATCH HEURISTIC] 👥 %d chauffeurs disponibles", len(drivers))
     if previous_busy or previous_times or previous_load:
         logger.info(
-            "[DISPATCH HEURISTIC] 📥 États récupérés: busy_until=%s, proposed_load=%s",
-            busy_until,
-            proposed_load)
+            "[DISPATCH HEURISTIC] 📥 États récupérés: busy_until=%s, proposed_load=%s", busy_until, proposed_load
+        )
     logger.info("=" * 80)
 
     for b in urgent:
@@ -978,10 +971,7 @@ def assign(problem: Dict[str, Any],
         logger.debug("[DISPATCH] Assignation urgente #$%s...", b_id)
 
         # ⚡ Calculer les charges actuelles pour tous les chauffeurs
-        raw_loads = {
-            int(cast("Any", d.id)): fairness_effective.get(int(cast("Any", d.id)), 0)
-            for d in drivers
-        }
+        raw_loads = {int(cast("Any", d.id)): fairness_effective.get(int(cast("Any", d.id)), 0) for d in drivers}
         current_loads = _normalized_loads(raw_loads)
         # ⚡ Filtrer les chauffeurs éligibles selon préférence ou équité stricte
         eligible_drivers = get_eligible_drivers(drivers, current_loads)
@@ -994,8 +984,7 @@ def assign(problem: Dict[str, Any],
                 continue
 
             di = driver_index[did]
-            dw = driver_windows[di] if di < len(
-                driver_windows) else (0, 24 * 60)
+            dw = driver_windows[di] if di < len(driver_windows) else (0, 24 * 60)
 
             sc, _, (est_s, est_f) = _score_driver_for_booking(
                 b,
@@ -1012,10 +1001,10 @@ def assign(problem: Dict[str, Any],
             min_gap_minutes = int(getattr(settings.safety, "min_gap_minutes", 30))
             post_trip_buffer = int(getattr(settings.safety, "post_trip_buffer_min", 15))
             strict_check = bool(getattr(settings.features, "enable_strict_temporal_conflict_check", True))
-            
+
             has_conflict = False
             conflict_reasons = []
-            
+
             # 🚫 Règle 1 (AMÉLIORÉE): Vérifier scheduled_time avec marge
             for existing_time in driver_scheduled_times[did]:
                 gap_minutes = abs(est_s - existing_time)
@@ -1027,11 +1016,12 @@ def assign(problem: Dict[str, Any],
                         b_id,
                         est_s,
                         gap_minutes,
-                        min_gap_minutes)
+                        min_gap_minutes,
+                    )
                     has_conflict = True
                     conflict_reasons.append(f"scheduled_time_gap:{gap_minutes}min")
                     break
-            
+
             # 🚫 Règle 2 (AMÉLIORÉE): Vérifier busy_until avec buffer
             # est_s = quand le chauffeur doit ARRIVER au pickup
             # busy_until[did] = quand le chauffeur finit la précédente
@@ -1047,9 +1037,10 @@ def assign(problem: Dict[str, Any],
                         required_free_time,
                         b_id,
                         est_s,
-                        est_s - required_free_time)
+                        est_s - required_free_time,
+                    )
                     has_conflict = True
-                    conflict_reasons.append(f"busy_until:{busy_until[did]}→{required_free_time}") 
+                    conflict_reasons.append(f"busy_until:{busy_until[did]}→{required_free_time}")
                 elif est_s < busy_until[did]:
                     # Cas edge : chauffeur pas encore libre
                     logger.debug(
@@ -1057,29 +1048,33 @@ def assign(problem: Dict[str, Any],
                         did,
                         busy_until[did],
                         b_id,
-                        est_s)
+                        est_s,
+                    )
                     has_conflict = True
                     conflict_reasons.append(f"driver_not_free:{busy_until[did]}")
-            
+
             if has_conflict:
                 logger.warning(
                     "[DISPATCH] 🔴 Conflit temporel détecté pour booking #%s + driver #%s: %s",
                     b_id,
                     did,
-                    ", ".join(conflict_reasons))
+                    ", ".join(conflict_reasons),
+                )
                 # ✅ A1: Incrémenter métrique
                 increment_temporal_conflict_counter()
                 # ✅ A1: Marquer le rejet avec conflict_penalty dans le debug
-                temporal_conflict_rejects.append({
-                    "booking_id": b_id,
-                    "driver_id": did,
-                    "conflict_reasons": conflict_reasons,
-                    "conflict_penalty": -9999.0,  # Score négatif symbolique
-                    "estimated_start_min": est_s,
-                    "busy_until": busy_until[did],
-                    "gap_minutes": min_gap_minutes,
-                    "post_trip_buffer": post_trip_buffer
-                })
+                temporal_conflict_rejects.append(
+                    {
+                        "booking_id": b_id,
+                        "driver_id": did,
+                        "conflict_reasons": conflict_reasons,
+                        "conflict_penalty": -9999.0,  # Score négatif symbolique
+                        "estimated_start_min": est_s,
+                        "busy_until": busy_until[did],
+                        "gap_minutes": min_gap_minutes,
+                        "post_trip_buffer": post_trip_buffer,
+                    }
+                )
                 continue
             if sc <= SC_ZERO:
                 continue
@@ -1101,10 +1096,7 @@ def assign(problem: Dict[str, Any],
 
             # 🏆 Bonus FORT pour chauffeur moins chargé
             # ⚡ CORRECTION: Calculer min_load avec fairness_counts inclus (charge totale réelle)
-            current_loads_all = [
-                fairness_effective.get(int(cast("Any", d.id)), 0)
-                for d in drivers
-            ]
+            current_loads_all = [fairness_effective.get(int(cast("Any", d.id)), 0) for d in drivers]
             min_load = min(current_loads_all) if current_loads_all else 0
             if current_load == min_load:
                 sc += 0.8
@@ -1149,15 +1141,17 @@ def assign(problem: Dict[str, Any],
                 scheduled_dt_utc = to_utc(scheduled_time_dt)
                 base_dt_utc = to_utc(base_time)
                 delta = scheduled_dt_utc - base_dt_utc if scheduled_dt_utc and base_dt_utc else None
-                scheduled_min = int(
-                    delta.total_seconds() //
-                    60) if delta else (
-                    scheduled_time_dt.hour *
-                    60 +
-                    scheduled_time_dt.minute)
+                scheduled_min = (
+                    int(delta.total_seconds() // 60)
+                    if delta
+                    else (scheduled_time_dt.hour * 60 + scheduled_time_dt.minute)
+                )
             else:
-                scheduled_min = scheduled_time_dt.hour * 60 + \
-                    scheduled_time_dt.minute if scheduled_time_dt else chosen.estimated_start_min
+                scheduled_min = (
+                    scheduled_time_dt.hour * 60 + scheduled_time_dt.minute
+                    if scheduled_time_dt
+                    else chosen.estimated_start_min
+                )
 
             # Calculer la durée réelle de la course selon OSRM (pickup + trajet
             # OSRM + dropoff)
@@ -1167,12 +1161,17 @@ def assign(problem: Dict[str, Any],
 
             # 📅 Enregistrer le scheduled_time RÉEL
             driver_scheduled_times[did2].append(scheduled_min)
-            logger.info("[DISPATCH] ✅ Urgent #%s → Chauffeur #%s (score: %.2f, start: %smin, busy_until: %smin)", chosen.booking_id, chosen.driver_id, chosen.score, scheduled_min, busy_until[did2])
+            logger.info(
+                "[DISPATCH] ✅ Urgent #%s → Chauffeur #%s (score: %.2f, start: %smin, busy_until: %smin)",
+                chosen.booking_id,
+                chosen.driver_id,
+                chosen.score,
+                scheduled_min,
+                busy_until[did2],
+            )
         else:
             unassigned.append(int(cast("Any", b.id)))
-            logger.warning(
-                "[DISPATCH] ⚠️ Impossible d'assigner urgent #%s (aucun chauffeur disponible)",
-                b_id)
+            logger.warning("[DISPATCH] ⚠️ Impossible d'assigner urgent #%s (aucun chauffeur disponible)", b_id)
 
     # --- 2) Assignations régulières ---
     # Pré-scorage rapide pour limiter la combinatoire
@@ -1181,18 +1180,20 @@ def assign(problem: Dict[str, Any],
     # Vérifier si parallélisation activée
     use_parallel = getattr(settings.features, "enable_parallel_heuristics", False)
     scores_dict = {}  # Initialiser pour éviter "unbound"
-    
+
     logger.warning(
         "[HEURISTIC] 🔍 Début scoring de %s courses régulières avec %s chauffeurs (parallel=%s)...",
-        len(regular), len(drivers), use_parallel)
+        len(regular),
+        len(drivers),
+        use_parallel,
+    )
 
     # ✅ C2: Scoring parallèle optimisé pour 100+ courses
     if use_parallel and len(regular) > PARALLEL_MIN_BOOKINGS and len(drivers) > PARALLEL_MIN_DRIVERS:
         # Pré-scorer toutes les combinaisons en parallèle
         # ⚡ Calculer les charges actuelles pour tous les chauffeurs (pour le scoring parallèle)
         raw_loads_parallel = {
-            int(cast("Any", d.id)): fairness_effective.get(int(cast("Any", d.id)), 0)
-            for d in drivers
+            int(cast("Any", d.id)): fairness_effective.get(int(cast("Any", d.id)), 0) for d in drivers
         }
         current_loads_parallel = _normalized_loads(raw_loads_parallel)
         eligible_drivers_parallel = get_eligible_drivers(drivers, current_loads_parallel)
@@ -1206,13 +1207,13 @@ def assign(problem: Dict[str, Any],
                     continue
                 # ✅ C2: Réduire allocations - stocker seulement les IDs
                 scoring_tasks.append((b_id, did, b, d))
-        
+
         # ✅ C2: Exécuter en parallèle avec ThreadPoolExecutor
         scores_dict = {}
         max_workers = min(len(scoring_tasks), PARALLEL_MAX_WORKERS)
-        
+
         start_parallel = time.time()  # ✅ C2: Mesurer temps parallélisation
-        
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(
@@ -1225,11 +1226,13 @@ def assign(problem: Dict[str, Any],
                     driver_index,
                     company_coords,
                     preferred_driver_id=preferred_driver_id,
-                    last_dropoff_coord=driver_last_dropoff_initial.get(did),  # ⚡ Utiliser last_dropoff_coord si disponible
+                    last_dropoff_coord=driver_last_dropoff_initial.get(
+                        did
+                    ),  # ⚡ Utiliser last_dropoff_coord si disponible
                 ): (b_id, did)
                 for b_id, did, b, d in scoring_tasks
             }
-            
+
             for future in as_completed(futures):
                 try:
                     result = future.result()
@@ -1238,23 +1241,22 @@ def assign(problem: Dict[str, Any],
                     scores_dict[(b_id, d_id)] = (sc, breakdown, est_s, est_f)
                 except Exception as e:
                     logger.error("[ParallelScoring] Error: %s", e)
-        
+
         parallel_time = time.time() - start_parallel
         logger.info(
             "[C2] ParallelScoring completed %d tasks in %.2fs (speedup: ~%.1fx)",
-            len(scores_dict), parallel_time, len(scoring_tasks) / max_workers
+            len(scores_dict),
+            parallel_time,
+            len(scoring_tasks) / max_workers,
         )
-    
+
     for b in regular:
         b_id = int(cast("Any", b.id))
         best_for_b: Tuple[float, HeuristicAssignment] | None = None
         rejected_reasons = []
 
         # ⚡ Calculer les charges actuelles pour tous les chauffeurs
-        raw_loads_regular = {
-            int(cast("Any", d.id)): fairness_effective.get(int(cast("Any", d.id)), 0)
-            for d in drivers
-        }
+        raw_loads_regular = {int(cast("Any", d.id)): fairness_effective.get(int(cast("Any", d.id)), 0) for d in drivers}
         current_loads = _normalized_loads(raw_loads_regular)
         # ⚡ Filtrer les chauffeurs éligibles selon préférence ou équité stricte
         eligible_drivers = get_eligible_drivers(drivers, current_loads)
@@ -1273,15 +1275,19 @@ def assign(problem: Dict[str, Any],
             prefer_assigned = bool(is_assigned and (cur_driver_id == did))
 
             di = driver_index[did]
-            dw = driver_windows[di] if di < len(
-                driver_windows) else (0, 24 * 60)
+            dw = driver_windows[di] if di < len(driver_windows) else (0, 24 * 60)
 
             # ⚡ AMÉLIORATION: Utiliser last_dropoff_coord si disponible pour ce chauffeur
             # Cela permet de minimiser les trajets entre courses consécutives dès le scoring initial
             last_dropoff_for_driver = driver_last_dropoff_initial.get(did)
 
             # Utiliser le score parallèle si disponible
-            if use_parallel and len(regular) > PARALLEL_MIN_BOOKINGS and len(drivers) > PARALLEL_MIN_DRIVERS and len(scores_dict) > 0:
+            if (
+                use_parallel
+                and len(regular) > PARALLEL_MIN_BOOKINGS
+                and len(drivers) > PARALLEL_MIN_DRIVERS
+                and len(scores_dict) > 0
+            ):
                 score_key = (b_id, did)
                 if score_key in scores_dict:
                     sc, _breakdown, est_s, est_f = scores_dict[score_key]
@@ -1325,12 +1331,11 @@ def assign(problem: Dict[str, Any],
                 scheduled_dt_utc = to_utc(scheduled_time_dt)
                 base_dt_utc = to_utc(base_time)
                 delta = scheduled_dt_utc - base_dt_utc if scheduled_dt_utc and base_dt_utc else None
-                scheduled_min = int(
-                    delta.total_seconds() //
-                    60) if delta else (
-                    scheduled_time_dt.hour *
-                    60 +
-                    scheduled_time_dt.minute)
+                scheduled_min = (
+                    int(delta.total_seconds() // 60)
+                    if delta
+                    else (scheduled_time_dt.hour * 60 + scheduled_time_dt.minute)
+                )
             else:
                 # Sinon, utiliser les heures/minutes du jour
                 scheduled_min = scheduled_time_dt.hour * 60 + scheduled_time_dt.minute
@@ -1338,24 +1343,18 @@ def assign(problem: Dict[str, Any],
             # 🔍 Logs détaillés pour debug
             if b_id in [106, 109, 11, 115] and did == DID_THRESHOLD:
                 logger.error("[DEBUG] Course #%s + Giuseppe (#%s):", b_id, did)
-                logger.error(
-                    "  - scheduled_time: %s (%smin)",
-                    scheduled_time_dt,
-                    scheduled_min)
+                logger.error("  - scheduled_time: %s (%smin)", scheduled_time_dt, scheduled_min)
                 logger.error("  - est_start_min (OSRM optimisé): %smin", est_s)
                 logger.error("  - est_finish_min: %smin", est_f)
                 logger.error("  - busy_until[%s]: %smin", did, busy_until[did])
-                logger.error(
-                    "  - driver_scheduled_times[%s]: %s",
-                    did,
-                    driver_scheduled_times[did])
+                logger.error("  - driver_scheduled_times[%s]: %s", did, driver_scheduled_times[did])
                 logger.error("  - score: %.3f", sc)
 
             # ✅ A1: VALIDATION STRICTE DES CONFLITS TEMPORELS (section regular)
             min_gap_minutes = int(getattr(settings.safety, "min_gap_minutes", 30))
             post_trip_buffer = int(getattr(settings.safety, "post_trip_buffer_min", 15))
             strict_check = bool(getattr(settings.features, "enable_strict_temporal_conflict_check", True))
-            
+
             has_conflict = False
             can_pool = False
             conflict_reasons_reg = []
@@ -1365,29 +1364,33 @@ def assign(problem: Dict[str, Any],
             pickup_service_min = int(getattr(settings.service_times, "pickup_service_min", 5))
             dropoff_service_min = int(getattr(settings.service_times, "dropoff_service_min", 10))
             min_transition_margin_min = int(getattr(settings.service_times, "min_transition_margin_min", 15))
-            
+
             for existing_time in driver_scheduled_times[did]:
                 # Chercher la course existante pour calculer le temps réel nécessaire
                 # ✅ CORRECTION: Vérifier aussi les courses qui sont en train d'être assignées dans le même batch
                 existing_booking = None
                 # D'abord chercher dans les assignments déjà faits
                 for assigned in [a for a in assignments if a.driver_id == did]:
-                        assigned_booking = next(
-                            (bk for bk in bookings if int(cast("Any", bk.id)) == assigned.booking_id),
-                            None)
-                        if assigned_booking:
-                            assigned_time_dt = getattr(assigned_booking, "scheduled_time", None)
-                            if assigned_time_dt:
-                                if base_time:
-                                    assigned_dt_utc = to_utc(assigned_time_dt)
-                                    base_dt_utc = to_utc(base_time)
-                                    delta = assigned_dt_utc - base_dt_utc if assigned_dt_utc and base_dt_utc else None
-                                    assigned_min = int(delta.total_seconds() // 60) if delta else (assigned_time_dt.hour * 60 + assigned_time_dt.minute)
-                                else:
-                                    assigned_min = assigned_time_dt.hour * 60 + assigned_time_dt.minute
-                                if assigned_min == existing_time:
-                                    existing_booking = assigned_booking
-                                    break
+                    assigned_booking = next(
+                        (bk for bk in bookings if int(cast("Any", bk.id)) == assigned.booking_id), None
+                    )
+                    if assigned_booking:
+                        assigned_time_dt = getattr(assigned_booking, "scheduled_time", None)
+                        if assigned_time_dt:
+                            if base_time:
+                                assigned_dt_utc = to_utc(assigned_time_dt)
+                                base_dt_utc = to_utc(base_time)
+                                delta = assigned_dt_utc - base_dt_utc if assigned_dt_utc and base_dt_utc else None
+                                assigned_min = (
+                                    int(delta.total_seconds() // 60)
+                                    if delta
+                                    else (assigned_time_dt.hour * 60 + assigned_time_dt.minute)
+                                )
+                            else:
+                                assigned_min = assigned_time_dt.hour * 60 + assigned_time_dt.minute
+                            if assigned_min == existing_time:
+                                existing_booking = assigned_booking
+                                break
 
                 # ✅ Si pas trouvé dans assignments, chercher dans toutes les bookings du problème
                 # (pour détecter les conflits avec les courses qui seront assignées dans le même batch)
@@ -1401,7 +1404,11 @@ def assign(problem: Dict[str, Any],
                                 other_dt_utc = to_utc(other_time_dt)
                                 base_dt_utc = to_utc(base_time)
                                 delta = other_dt_utc - base_dt_utc if other_dt_utc and base_dt_utc else None
-                                other_min = int(delta.total_seconds() // 60) if delta else (other_time_dt.hour * 60 + other_time_dt.minute)
+                                other_min = (
+                                    int(delta.total_seconds() // 60)
+                                    if delta
+                                    else (other_time_dt.hour * 60 + other_time_dt.minute)
+                                )
                             else:
                                 other_min = other_time_dt.hour * 60 + other_time_dt.minute
                             if other_min == existing_time:
@@ -1421,34 +1428,37 @@ def assign(problem: Dict[str, Any],
 
                 # À ce point, existing_booking est défini (sinon on aurait fait continue)
                 assert existing_booking is not None, "existing_booking should be defined here"
-                    # Vérifier si regroupement possible
+                # Vérifier si regroupement possible
                 if _can_be_pooled(b, existing_booking, settings):
-                        can_pool = True
-                        logger.info(
-                            "[POOLING] 🚗 Course #%s peut être regroupée avec #%s (chauffeur #%s)",
-                            b_id, existing_booking.id, did)
-                        break
-                    
+                    can_pool = True
+                    logger.info(
+                        "[POOLING] 🚗 Course #%s peut être regroupée avec #%s (chauffeur #%s)",
+                        b_id,
+                        existing_booking.id,
+                        did,
+                    )
+                    break
+
                 # Calculer le temps réel nécessaire entre les deux courses
                 # 1. Temps de trajet de la course précédente (pickup → dropoff)
                 existing_pickup_coord = _booking_coords(existing_booking)[0]
                 existing_dropoff_coord = _booking_coords(existing_booking)[1]
                 booking_pickup_coord = _booking_coords(b)[0]
-                
+
                 # Utiliser la matrice de temps si disponible, sinon haversine
                 trip_time_min = 20  # Estimation par défaut
                 transition_time_min = 15  # Estimation par défaut
-                
+
                 if "time_matrix" in problem and "coords" in problem:
                     try:
                         coords = problem["coords"]
                         time_matrix = problem["time_matrix"]
-                        
+
                         # Trouver les indices dans la matrice
                         existing_pickup_idx = None
                         existing_dropoff_idx = None
                         booking_pickup_idx = None
-                        
+
                         for idx, coord in enumerate(coords):
                             if coord == existing_pickup_coord:
                                 existing_pickup_idx = idx
@@ -1456,56 +1466,67 @@ def assign(problem: Dict[str, Any],
                                 existing_dropoff_idx = idx
                             if coord == booking_pickup_coord:
                                 booking_pickup_idx = idx
-                        
+
                         # Calculer temps de trajet course précédente
-                        if (existing_pickup_idx is not None and existing_dropoff_idx is not None and
-                            existing_pickup_idx < len(time_matrix) and existing_dropoff_idx < len(time_matrix[existing_pickup_idx])):
+                        if (
+                            existing_pickup_idx is not None
+                            and existing_dropoff_idx is not None
+                            and existing_pickup_idx < len(time_matrix)
+                            and existing_dropoff_idx < len(time_matrix[existing_pickup_idx])
+                        ):
                             trip_time_min = int(time_matrix[existing_pickup_idx][existing_dropoff_idx])
-                        
+
                         # Calculer temps de transition (dropoff précédent → pickup suivant)
-                        if (existing_dropoff_idx is not None and booking_pickup_idx is not None and
-                            existing_dropoff_idx < len(time_matrix) and booking_pickup_idx < len(time_matrix[existing_dropoff_idx])):
+                        if (
+                            existing_dropoff_idx is not None
+                            and booking_pickup_idx is not None
+                            and existing_dropoff_idx < len(time_matrix)
+                            and booking_pickup_idx < len(time_matrix[existing_dropoff_idx])
+                        ):
                             transition_time_min = int(time_matrix[existing_dropoff_idx][booking_pickup_idx])
                     except Exception as e:
                         logger.debug("[DISPATCH] Erreur calcul matrice temps, utilisation haversine: %s", e)
                         # Fallback: utiliser haversine
                         if existing_pickup_coord and existing_dropoff_coord:
                             trip_time_min = haversine_minutes(
-                                existing_pickup_coord, existing_dropoff_coord,
-                                avg_kmh=getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25)
+                                existing_pickup_coord,
+                                existing_dropoff_coord,
+                                avg_kmh=getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25),
                             )
                         if existing_dropoff_coord and booking_pickup_coord:
                             transition_time_min = haversine_minutes(
-                                existing_dropoff_coord, booking_pickup_coord,
-                                avg_kmh=getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25)
+                                existing_dropoff_coord,
+                                booking_pickup_coord,
+                                avg_kmh=getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25),
                             )
-                
+
                 # Temps total nécessaire entre les deux courses
                 total_time_needed = (
-                    trip_time_min +  # Temps de trajet course précédente
-                    dropoff_service_min +  # Temps de dropoff
-                    transition_time_min +  # Temps de trajet entre courses
-                    pickup_service_min +  # Temps de pickup
-                    min_transition_margin_min  # Marge de sécurité
+                    trip_time_min  # Temps de trajet course précédente
+                    + dropoff_service_min  # Temps de dropoff
+                    + transition_time_min  # Temps de trajet entre courses
+                    + pickup_service_min  # Temps de pickup
+                    + min_transition_margin_min  # Marge de sécurité
                 )
-                
+
                 # Calculer l'heure de fin estimée de la course précédente
                 from datetime import timedelta
+
                 existing_scheduled_dt = getattr(existing_booking, "scheduled_time", None)
                 if not existing_scheduled_dt:
                     continue
-                
+
                 existing_end_time = existing_scheduled_dt + timedelta(
                     minutes=trip_time_min + pickup_service_min + dropoff_service_min
                 )
-                
+
                 # Calculer l'heure de début nécessaire pour la nouvelle course
                 booking_scheduled_dt = getattr(b, "scheduled_time", None)
                 if booking_scheduled_dt:
                     required_start_time = booking_scheduled_dt - timedelta(
                         minutes=transition_time_min + pickup_service_min + min_transition_margin_min
                     )
-                    
+
                     # Vérifier si on a assez de temps
                     if existing_end_time > required_start_time:
                         time_gap = (required_start_time - existing_end_time).total_seconds() / 60
@@ -1518,25 +1539,33 @@ def assign(problem: Dict[str, Any],
                         conflict_reasons_reg.append(conflict_msg)
                         logger.warning(
                             "[DISPATCH] ⚠️ Conflit temporel détaillé: course #%s (fin %s) et #%s (début %s) → temps nécessaire: %dmin, écart disponible: %.1fmin",
-                            existing_booking.id, existing_end_time.strftime("%H:%M"),
-                            b_id, booking_scheduled_dt.strftime("%H:%M"),
-                            total_time_needed, time_gap
+                            existing_booking.id,
+                            existing_end_time.strftime("%H:%M"),
+                            b_id,
+                            booking_scheduled_dt.strftime("%H:%M"),
+                            total_time_needed,
+                            time_gap,
                         )
                         break
 
             if has_conflict and not can_pool:
                 logger.warning(
                     "[DISPATCH] 🔴 Conflit temporel (regular) booking #%s + driver #%s: %s",
-                    b_id, did, ", ".join(conflict_reasons_reg))
+                    b_id,
+                    did,
+                    ", ".join(conflict_reasons_reg),
+                )
                 # ✅ A1: Marquer le rejet avec conflict_penalty
-                temporal_conflict_rejects.append({
-                    "booking_id": b_id,
-                    "driver_id": did,
-                    "conflict_reasons": conflict_reasons_reg,
-                    "conflict_penalty": -9999.0,
-                    "estimated_start_min": est_s,
-                    "scheduled_min": scheduled_min
-                })
+                temporal_conflict_rejects.append(
+                    {
+                        "booking_id": b_id,
+                        "driver_id": did,
+                        "conflict_reasons": conflict_reasons_reg,
+                        "conflict_penalty": -9999.0,
+                        "estimated_start_min": est_s,
+                        "scheduled_min": scheduled_min,
+                    }
+                )
                 continue
 
             # 🚫 Règle 2 (AMÉLIORÉE): Vérifier busy_until avec buffer configurable
@@ -1546,11 +1575,14 @@ def assign(problem: Dict[str, Any],
                 conflict_reasons_reg.append(f"busy_until:{busy_until[did]}→{required_free_time}")
                 if b_id in [106, 109, 11, 115] and did == DID_THRESHOLD:
                     logger.error(
-                        "  ❌ BUSY: scheduled_min=%smin < busy_until+margin=%smin",
-                        scheduled_min, required_free_time)
+                        "  ❌ BUSY: scheduled_min=%smin < busy_until+margin=%smin", scheduled_min, required_free_time
+                    )
                 logger.warning(
                     "[DISPATCH] 🔴 Conflit busy_until booking #%s + driver #%s: %s",
-                    b_id, did, ", ".join(conflict_reasons_reg))
+                    b_id,
+                    did,
+                    ", ".join(conflict_reasons_reg),
+                )
                 continue
             if sc <= SC_ZERO:
                 rejected_reasons.append(f"driver#{did}:score_negative")
@@ -1578,10 +1610,7 @@ def assign(problem: Dict[str, Any],
 
             # 🏆 Bonus FORT pour chauffeur moins chargé (favoriser l'équilibrage)
             # ⚡ CORRECTION: Calculer min_load avec fairness_counts inclus (charge totale réelle)
-            current_loads_all = [
-                fairness_effective.get(int(cast("Any", d.id)), 0)
-                for d in drivers
-            ]
+            current_loads_all = [fairness_effective.get(int(cast("Any", d.id)), 0) for d in drivers]
             min_load = min(current_loads_all) if current_loads_all else 0
             if current_load == min_load:
                 sc += 0.8  # Fort bonus pour le chauffeur le moins chargé
@@ -1621,34 +1650,46 @@ def assign(problem: Dict[str, Any],
         if best_for_b:
             # Log pour tracer les décisions de sélection
             if preferred_driver_id and best_for_b[1].driver_id == preferred_driver_id:
-                logger.info("[HEURISTIC] ✅ Booking #%s → Chauffeur préféré #%s (score: %.2f, reason: preferred_bonus)", b_id, preferred_driver_id, best_for_b[0])
+                logger.info(
+                    "[HEURISTIC] ✅ Booking #%s → Chauffeur préféré #%s (score: %.2f, reason: preferred_bonus)",
+                    b_id,
+                    preferred_driver_id,
+                    best_for_b[0],
+                )
             elif preferred_driver_id:
-                logger.debug("[HEURISTIC] ⚠️ Booking #%s → Chauffeur #%s (score: %.2f) au lieu du préféré #%s", b_id, best_for_b[1].driver_id, best_for_b[0], preferred_driver_id)
+                logger.debug(
+                    "[HEURISTIC] ⚠️ Booking #%s → Chauffeur #%s (score: %.2f) au lieu du préféré #%s",
+                    b_id,
+                    best_for_b[1].driver_id,
+                    best_for_b[0],
+                    preferred_driver_id,
+                )
             scored_pool.append((best_for_b[0], best_for_b[1], b))
-            logger.debug("[HEURISTIC] ✅ Course #%s peut être assignée au driver #%s (score: %.2f)", b_id, best_for_b[1].driver_id, best_for_b[0])
+            logger.debug(
+                "[HEURISTIC] ✅ Course #%s peut être assignée au driver #%s (score: %.2f)",
+                b_id,
+                best_for_b[1].driver_id,
+                best_for_b[0],
+            )
         else:
             unassigned.append(int(cast("Any", b.id)))
             logger.warning(
                 "[HEURISTIC] ❌ Course #%s REJETÉE par tous les chauffeurs: %s",
                 b_id,
-                ", ".join(rejected_reasons) if rejected_reasons else "aucune raison")
+                ", ".join(rejected_reasons) if rejected_reasons else "aucune raison",
+            )
 
     # 🕐 CORRECTION: Ordonner par scheduled_time CHRONOLOGIQUE d'abord, puis par score
     # Cela évite d'assigner les courses tardives (bon score) avant les courses matinales (moins bon score)
     # et d'avoir des conflits "busy_until" absurdes
-    scored_pool.sort(
-        key=lambda x: (
-            sort_key_utc(
-                cast(
-                    "Any", getattr(
-                        x[2], "scheduled_time", None))), -x[0]))
+    scored_pool.sort(key=lambda x: (sort_key_utc(cast("Any", getattr(x[2], "scheduled_time", None))), -x[0]))
 
     pooled_bookings = set()  # Track bookings that were pooled to skip other candidates
 
     # ⚡ Dictionnaire pour suivre la position de dropoff de la dernière course assignée à chaque chauffeur
     # Cela permet de minimiser les trajets entre courses consécutives
     driver_last_dropoff: Dict[int, Tuple[float, float]] = {}
-    
+
     logger.info("[DISPATCH] 🔍 Début boucle scored_pool: %d courses à traiter", len(scored_pool))
 
     for sc_original, cand, b in scored_pool:
@@ -1661,10 +1702,7 @@ def assign(problem: Dict[str, Any],
         did = int(cand.driver_id)
         adjusted_cap = get_adjusted_max_cap(did)
         if fairness_effective.get(did, 0) >= adjusted_cap:
-            logger.debug(
-                "[DISPATCH] ⏭️ Chauffeur #%s a atteint le cap (%s), skipped",
-                did,
-                max_cap)
+            logger.debug("[DISPATCH] ⏭️ Chauffeur #%s a atteint le cap (%s), skipped", did, max_cap)
             continue
 
         # ⚡ AMÉLIORATION: Re-scorer en utilisant la position de dropoff de la dernière course assignée
@@ -1672,14 +1710,17 @@ def assign(problem: Dict[str, Any],
         # On cherche dans : 1) driver_last_dropoff (courses déjà assignées dans le batch), 2) assignments (courses assignées dans le batch en cours)
         sc = sc_original
         last_dropoff = driver_last_dropoff.get(did)
-        
+
         # Log de diagnostic pour comprendre pourquoi le re-scoring ne se déclenche pas
         # Utiliser INFO pour s'assurer que les logs apparaissent
         logger.info(
             "[DISPATCH] 🔍 Re-scoring check pour course #%s + chauffeur #%s: driver_last_dropoff=%s, assignments_count=%d",
-            int(cast("Any", b.id)), did, "présent" if last_dropoff else "absent", len(assignments)
+            int(cast("Any", b.id)),
+            did,
+            "présent" if last_dropoff else "absent",
+            len(assignments),
         )
-        
+
         # ⚡ Si pas trouvé dans driver_last_dropoff, chercher dans assignments (courses assignées dans le batch en cours)
         if not last_dropoff:
             # Trouver la dernière course assignée à ce chauffeur dans le batch (par scheduled_time)
@@ -1687,35 +1728,46 @@ def assign(problem: Dict[str, Any],
             if b_scheduled:
                 last_assigned_booking = None
                 last_assigned_time = None
-                
+
                 # Parcourir les assignments déjà faits pour ce chauffeur
                 assignments_for_driver = [a for a in assignments if a.driver_id == did]
                 logger.info(
                     "[DISPATCH] 🔍 Course #%s: Recherche dans assignments pour chauffeur #%s: %d assignments trouvés",
-                    int(cast("Any", b.id)), did, len(assignments_for_driver)
+                    int(cast("Any", b.id)),
+                    did,
+                    len(assignments_for_driver),
                 )
-                
+
                 for assigned in assignments_for_driver:
                     assigned_booking = next(
-                        (bk for bk in bookings if int(cast("Any", bk.id)) == assigned.booking_id),
-                        None
+                        (bk for bk in bookings if int(cast("Any", bk.id)) == assigned.booking_id), None
                     )
                     if assigned_booking:
                         assigned_scheduled = getattr(assigned_booking, "scheduled_time", None)
                         logger.info(
                             "[DISPATCH] 🔍 Course #%s: Assignment #%s (booking_id=%s) pour chauffeur #%s: scheduled=%s, b_scheduled=%s",
-                            int(cast("Any", b.id)), assigned.booking_id, assigned.booking_id, did, assigned_scheduled, b_scheduled
+                            int(cast("Any", b.id)),
+                            assigned.booking_id,
+                            assigned.booking_id,
+                            did,
+                            assigned_scheduled,
+                            b_scheduled,
                         )
                         # Garder la course assignée la plus récente qui se termine AVANT la course actuelle
-                        if (assigned_scheduled and assigned_scheduled < b_scheduled and
-                            (last_assigned_time is None or assigned_scheduled > last_assigned_time)):
+                        if (
+                            assigned_scheduled
+                            and assigned_scheduled < b_scheduled
+                            and (last_assigned_time is None or assigned_scheduled > last_assigned_time)
+                        ):
                             last_assigned_booking = assigned_booking
                             last_assigned_time = assigned_scheduled
                             logger.info(
                                 "[DISPATCH] 🔍 Course #%s: Nouvelle meilleure course trouvée: #%s à %s",
-                                int(cast("Any", b.id)), last_assigned_booking.id, last_assigned_time
+                                int(cast("Any", b.id)),
+                                last_assigned_booking.id,
+                                last_assigned_time,
                             )
-                
+
                 # Si on a trouvé une course assignée, utiliser sa position de dropoff
                 if last_assigned_booking:
                     _, dropoff_coord = _booking_coords(last_assigned_booking)
@@ -1723,28 +1775,36 @@ def assign(problem: Dict[str, Any],
                         last_dropoff = dropoff_coord
                         logger.info(
                             "[DISPATCH] 🔍 Course #%s: Utilisation dropoff de course #%s (assignée dans le batch à %s) pour chauffeur #%s",
-                            int(cast("Any", b.id)), last_assigned_booking.id, last_assigned_time, did
+                            int(cast("Any", b.id)),
+                            last_assigned_booking.id,
+                            last_assigned_time,
+                            did,
                         )
                     else:
                         logger.warning(
                             "[DISPATCH] ⚠️ Course #%s: Dropoff coord non trouvée pour course #%s (chauffeur #%s)",
-                            int(cast("Any", b.id)), last_assigned_booking.id, did
+                            int(cast("Any", b.id)),
+                            last_assigned_booking.id,
+                            did,
                         )
                 else:
                     logger.info(
                         "[DISPATCH] 🔍 Course #%s: Aucune course assignée trouvée dans le batch pour chauffeur #%s (scheduled_time=%s)",
-                        int(cast("Any", b.id)), did, b_scheduled
+                        int(cast("Any", b.id)),
+                        did,
+                        b_scheduled,
                     )
-        
+
         # ⚡ Utiliser aussi driver_last_dropoff_initial (courses déjà assignées avant le batch)
         if not last_dropoff:
             last_dropoff = driver_last_dropoff_initial.get(did)
             if last_dropoff:
                 logger.info(
                     "[DISPATCH] 🔍 Course #%s: Utilisation dropoff initial (course déjà assignée avant batch) pour chauffeur #%s",
-                    int(cast("Any", b.id)), did
+                    int(cast("Any", b.id)),
+                    did,
                 )
-        
+
         if last_dropoff:
             # Trouver le chauffeur correspondant
             driver_obj = drivers[driver_index.get(did, 0)] if driver_index.get(did) is not None else None
@@ -1769,14 +1829,20 @@ def assign(problem: Dict[str, Any],
                 cand.estimated_start_min = est_s_improved
                 cand.estimated_finish_min = est_f_improved
                 cand.score = sc_improved
-                
+
                 # Log détaillé pour comprendre l'impact
                 score_delta = sc_improved - sc_original
                 proximity_contrib = breakdown_improved.get("proximity", 0)
                 continuity_bonus_contrib = breakdown_improved.get("continuity_bonus", 0)
                 logger.info(
                     "[DISPATCH] ⚡ Re-scoring avec dropoff précédente pour course #%s + chauffeur #%s: %.2f → %.2f (Δ=%.2f, proximité=%.2f, continuité=%.2f)",
-                    int(cast("Any", b.id)), did, sc_original, sc_improved, score_delta, proximity_contrib, continuity_bonus_contrib
+                    int(cast("Any", b.id)),
+                    did,
+                    sc_original,
+                    sc_improved,
+                    score_delta,
+                    proximity_contrib,
+                    continuity_bonus_contrib,
                 )
 
         # 🚫 Récupérer le scheduled_time réel du booking pour les vérifications finales
@@ -1786,12 +1852,13 @@ def assign(problem: Dict[str, Any],
             scheduled_dt_utc = to_utc(scheduled_time_dt)
             base_dt_utc = to_utc(base_time)
             delta = scheduled_dt_utc - base_dt_utc if scheduled_dt_utc and base_dt_utc else None
-            scheduled_min = int(
-                delta.total_seconds() //
-                60) if delta else (
-                scheduled_time_dt.hour *
-                60 +
-                scheduled_time_dt.minute) if scheduled_time_dt else 0
+            scheduled_min = (
+                int(delta.total_seconds() // 60)
+                if delta
+                else (scheduled_time_dt.hour * 60 + scheduled_time_dt.minute)
+                if scheduled_time_dt
+                else 0
+            )
         else:
             scheduled_min = scheduled_time_dt.hour * 60 + scheduled_time_dt.minute if scheduled_time_dt else 0
 
@@ -1799,7 +1866,7 @@ def assign(problem: Dict[str, Any],
         min_gap_minutes = int(getattr(settings.safety, "min_gap_minutes", 30))
         post_trip_buffer = int(getattr(settings.safety, "post_trip_buffer_min", 15))
         strict_check = bool(getattr(settings.features, "enable_strict_temporal_conflict_check", True))
-        
+
         has_conflict = False
         can_pool = False
         pooled_with = None
@@ -1817,23 +1884,22 @@ def assign(problem: Dict[str, Any],
                 # Chercher la course existante déjà assignée à ce chauffeur
                 existing_booking = None
                 for assigned in [a for a in assignments if a.driver_id == did]:
-                    assigned_booking = next((bk for bk in bookings if int(
-                        cast("Any", bk.id)) == assigned.booking_id), None)
+                    assigned_booking = next(
+                        (bk for bk in bookings if int(cast("Any", bk.id)) == assigned.booking_id), None
+                    )
                     if assigned_booking:
-                        assigned_time_dt = getattr(
-                            assigned_booking, "scheduled_time", None)
+                        assigned_time_dt = getattr(assigned_booking, "scheduled_time", None)
                         if assigned_time_dt:
                             base_time = problem.get("base_time")
                             if base_time:
                                 assigned_dt_utc = to_utc(assigned_time_dt)
                                 base_dt_utc = to_utc(base_time)
                                 delta = assigned_dt_utc - base_dt_utc if assigned_dt_utc and base_dt_utc else None
-                                assigned_min = int(
-                                    delta.total_seconds() //
-                                    60) if delta else (
-                                    assigned_time_dt.hour *
-                                    60 +
-                                    assigned_time_dt.minute)
+                                assigned_min = (
+                                    int(delta.total_seconds() // 60)
+                                    if delta
+                                    else (assigned_time_dt.hour * 60 + assigned_time_dt.minute)
+                                )
                             else:
                                 assigned_min = assigned_time_dt.hour * 60 + assigned_time_dt.minute
 
@@ -1847,31 +1913,34 @@ def assign(problem: Dict[str, Any],
                     pooled_with = existing_booking.id
                     logger.warning(
                         "[POOLING] 🚗 Course #%s FORCÉE au chauffeur #%s (regroupement avec #%s, priorité absolue)",
-                        cand.booking_id, did, existing_booking.id)
+                        cand.booking_id,
+                        did,
+                        existing_booking.id,
+                    )
                     pooled_bookings.add(int(cast("Any", b.id)))
                     break
-                
+
                 # ✅ CALCUL DÉTAILLÉ du temps réel nécessaire (comme dans la section "regular")
                 if existing_booking:
                     # Calculer le temps réel nécessaire entre les deux courses
                     existing_pickup_coord = _booking_coords(existing_booking)[0]
                     existing_dropoff_coord = _booking_coords(existing_booking)[1]
                     booking_pickup_coord = _booking_coords(b)[0]
-                    
+
                     # Utiliser la matrice de temps si disponible, sinon haversine
                     trip_time_min = 20  # Estimation par défaut
                     transition_time_min = 15  # Estimation par défaut
-                    
+
                     if "time_matrix" in problem and "coords" in problem:
                         try:
                             coords = problem["coords"]
                             time_matrix = problem["time_matrix"]
-                            
+
                             # Trouver les indices dans la matrice
                             existing_pickup_idx = None
                             existing_dropoff_idx = None
                             booking_pickup_idx = None
-                            
+
                             for idx, coord in enumerate(coords):
                                 if coord == existing_pickup_coord:
                                     existing_pickup_idx = idx
@@ -1879,55 +1948,68 @@ def assign(problem: Dict[str, Any],
                                     existing_dropoff_idx = idx
                                 if coord == booking_pickup_coord:
                                     booking_pickup_idx = idx
-                            
+
                             # Calculer temps de trajet course précédente
-                            if (existing_pickup_idx is not None and existing_dropoff_idx is not None and
-                                existing_pickup_idx < len(time_matrix) and existing_dropoff_idx < len(time_matrix[existing_pickup_idx])):
+                            if (
+                                existing_pickup_idx is not None
+                                and existing_dropoff_idx is not None
+                                and existing_pickup_idx < len(time_matrix)
+                                and existing_dropoff_idx < len(time_matrix[existing_pickup_idx])
+                            ):
                                 trip_time_min = int(time_matrix[existing_pickup_idx][existing_dropoff_idx])
-                            
+
                             # Calculer temps de transition (dropoff précédent → pickup suivant)
-                            if (existing_dropoff_idx is not None and booking_pickup_idx is not None and
-                                existing_dropoff_idx < len(time_matrix) and booking_pickup_idx < len(time_matrix[existing_dropoff_idx])):
+                            if (
+                                existing_dropoff_idx is not None
+                                and booking_pickup_idx is not None
+                                and existing_dropoff_idx < len(time_matrix)
+                                and booking_pickup_idx < len(time_matrix[existing_dropoff_idx])
+                            ):
                                 transition_time_min = int(time_matrix[existing_dropoff_idx][booking_pickup_idx])
                         except Exception as e:
-                            logger.debug("[DISPATCH] Erreur calcul matrice temps (scored_pool), utilisation haversine: %s", e)
+                            logger.debug(
+                                "[DISPATCH] Erreur calcul matrice temps (scored_pool), utilisation haversine: %s", e
+                            )
                             # Fallback: utiliser haversine
                             if existing_pickup_coord and existing_dropoff_coord:
                                 trip_time_min = haversine_minutes(
-                                    existing_pickup_coord, existing_dropoff_coord,
-                                    avg_kmh=getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25)
+                                    existing_pickup_coord,
+                                    existing_dropoff_coord,
+                                    avg_kmh=getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25),
                                 )
                             if existing_dropoff_coord and booking_pickup_coord:
                                 transition_time_min = haversine_minutes(
-                                    existing_dropoff_coord, booking_pickup_coord,
-                                    avg_kmh=getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25)
+                                    existing_dropoff_coord,
+                                    booking_pickup_coord,
+                                    avg_kmh=getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25),
                                 )
-                    
+
                     # Temps total nécessaire
                     total_time_needed = (
-                        trip_time_min +  # Temps de trajet course précédente
-                        dropoff_service_min +  # Temps de dropoff
-                        transition_time_min +  # Temps de trajet entre courses
-                        pickup_service_min +  # Temps de pickup
-                        min_transition_margin_min  # Marge de sécurité
+                        trip_time_min  # Temps de trajet course précédente
+                        + dropoff_service_min  # Temps de dropoff
+                        + transition_time_min  # Temps de trajet entre courses
+                        + pickup_service_min  # Temps de pickup
+                        + min_transition_margin_min  # Marge de sécurité
                     )
-                    
+
                     # Calculer l'heure de fin estimée de la course précédente
                     from datetime import timedelta
+
                     existing_scheduled_dt = getattr(existing_booking, "scheduled_time", None)
                     booking_scheduled_dt = getattr(b, "scheduled_time", None)
-                    
+
                     # Si les deux courses ont des heures planifiées, faire le calcul détaillé
                     if existing_scheduled_dt and booking_scheduled_dt:
                         existing_end_time = existing_scheduled_dt + timedelta(
                             minutes=trip_time_min + pickup_service_min + dropoff_service_min
                         )
-                        
+
                         # Calculer l'heure de début nécessaire pour la nouvelle course
                         required_start_time = booking_scheduled_dt - timedelta(
                             minutes=transition_time_min + pickup_service_min + min_transition_margin_min
                         )
-                        
+
                         # Vérifier si on a assez de temps
                         if existing_end_time > required_start_time:
                             time_gap = (required_start_time - existing_end_time).total_seconds() / 60
@@ -1939,16 +2021,21 @@ def assign(problem: Dict[str, Any],
                             conflict_reasons_final.append(conflict_msg)
                             logger.warning(
                                 "[DISPATCH] ⚠️ Conflit temporel détaillé (scored_pool): course #%s (fin %s) et #%s (début %s) → temps nécessaire: %dmin, écart disponible: %.1fmin",
-                                existing_booking.id, existing_end_time.strftime("%H:%M"),
-                                cand.booking_id, booking_scheduled_dt.strftime("%H:%M"),
-                                total_time_needed, time_gap
+                                existing_booking.id,
+                                existing_end_time.strftime("%H:%M"),
+                                cand.booking_id,
+                                booking_scheduled_dt.strftime("%H:%M"),
+                                total_time_needed,
+                                time_gap,
                             )
                             has_conflict = True
                             break
                         # Si pas de conflit détecté par le calcul détaillé, continuer la boucle
                     else:
                         # Si les heures ne sont pas disponibles, utiliser la vérification simple
-                        conflict_reasons_final.append(f"time_gap:{gap_minutes}min (heures non disponibles pour calcul détaillé)")
+                        conflict_reasons_final.append(
+                            f"time_gap:{gap_minutes}min (heures non disponibles pour calcul détaillé)"
+                        )
                         conflict_msg = f"⚠️ CONFLIT: Chauffeur #{did} a course à {existing_time}min, course #{cand.booking_id} à {scheduled_min}min (écart: {gap_minutes}min)"
                         logger.warning("[DISPATCH] %s → SKIP", conflict_msg)
                         has_conflict = True
@@ -1964,17 +2051,22 @@ def assign(problem: Dict[str, Any],
         if has_conflict and not can_pool:
             logger.warning(
                 "[DISPATCH] 🔴 Conflit temporel (final) booking #%s + driver #%s: %s",
-                cand.booking_id, did, ", ".join(conflict_reasons_final))
+                cand.booking_id,
+                did,
+                ", ".join(conflict_reasons_final),
+            )
             # ✅ A1: Incrémenter métrique
             increment_temporal_conflict_counter()
             # ✅ A1: Marquer le rejet avec conflict_penalty
-            temporal_conflict_rejects.append({
-                "booking_id": int(cast("Any", b.id)),
-                "driver_id": did,
-                "conflict_reasons": conflict_reasons_final,
-                "conflict_penalty": -9999.0,
-                "estimated_start_min": scheduled_min
-            })
+            temporal_conflict_rejects.append(
+                {
+                    "booking_id": int(cast("Any", b.id)),
+                    "driver_id": did,
+                    "conflict_reasons": conflict_reasons_final,
+                    "conflict_penalty": -9999.0,
+                    "estimated_start_min": scheduled_min,
+                }
+            )
             continue
 
         # ✅ A1: Vérifier busy_until avec buffer configurable
@@ -1984,7 +2076,13 @@ def assign(problem: Dict[str, Any],
                 conflict_reasons_final.append(f"busy_until:{busy_until[did]}→{required_free_time}")
                 logger.warning(
                     "[DISPATCH] ⚠️ CONFLIT BUSY: Chauffeur #%s occupé jusqu'à %smin (+%smin buffer = %smin), course #%s démarre à %smin → SKIP",
-                    did, busy_until[did], post_trip_buffer, required_free_time, cand.booking_id, scheduled_min)
+                    did,
+                    busy_until[did],
+                    post_trip_buffer,
+                    required_free_time,
+                    cand.booking_id,
+                    scheduled_min,
+                )
                 continue
 
         # Si déjà pris (par un meilleur match urgent par ex.)
@@ -1994,7 +2092,7 @@ def assign(problem: Dict[str, Any],
         assignments.append(cand)
         proposed_load[did] += 1
         fairness_effective[did] = fairness_effective.get(did, 0) + 1
-        
+
         # ✅ CRITIQUE: Mettre à jour driver_scheduled_times IMMÉDIATEMENT après l'assignation
         # pour que les courses suivantes dans le même batch voient cette assignation
         if scheduled_min not in driver_scheduled_times[did]:
@@ -2004,15 +2102,13 @@ def assign(problem: Dict[str, Any],
         is_pooled = False
         pooled_with = None
         for existing_time in driver_scheduled_times[did]:
-            if abs(scheduled_min -
-                   existing_time) < settings.pooling.time_tolerance_min:
+            if abs(scheduled_min - existing_time) < settings.pooling.time_tolerance_min:
                 # Trouver la course existante
-                for assigned in [
-                        a for a in assignments if a.driver_id == did and a != cand]:
-                    assigned_booking = next((bk for bk in bookings if int(
-                        cast("Any", bk.id)) == assigned.booking_id), None)
-                    if assigned_booking and _can_be_pooled(
-                            b, assigned_booking, settings):
+                for assigned in [a for a in assignments if a.driver_id == did and a != cand]:
+                    assigned_booking = next(
+                        (bk for bk in bookings if int(cast("Any", bk.id)) == assigned.booking_id), None
+                    )
+                    if assigned_booking and _can_be_pooled(b, assigned_booking, settings):
                         is_pooled = True
                         pooled_with = assigned.booking_id
                         break
@@ -2030,7 +2126,8 @@ def assign(problem: Dict[str, Any],
                 "[POOLING] 🚗 Course #%s regroupée avec #%s → busy_until += %smin détour",
                 cand.booking_id,
                 pooled_with,
-                settings.pooling.max_detour_min)
+                settings.pooling.max_detour_min,
+            )
         else:
             realistic_finish = scheduled_min + duration_osrm
 
@@ -2054,8 +2151,8 @@ def assign(problem: Dict[str, Any],
     allow_emergency_flag = problem.get("allow_emergency", True)  # Par défaut, autoriser les urgences
     # ⚡ Définir les constantes de rush hour en dehors du bloc pour éviter "possibly unbound"
     rush_start = 13 * 60 + 30  # 13:30
-    rush_end = 14 * 60 + 30    # 14:30
-    
+    rush_end = 14 * 60 + 30  # 14:30
+
     if unassigned and allow_emergency_flag:
         # ✅ Vérifier via driver_type (pas is_emergency)
         def _is_emergency_driver(driver):
@@ -2066,28 +2163,33 @@ def assign(problem: Dict[str, Any],
             if "." in driver_type_str:
                 driver_type_str = driver_type_str.split(".")[-1]
             return driver_type_str == "EMERGENCY"
+
         emergency_drivers = [d for d in drivers if _is_emergency_driver(d)]
         if emergency_drivers:
-            logger.info("[DISPATCH] 🚨 Tentative de réassignation avec %d chauffeur(s) d'urgence pour %d courses non assignées", len(emergency_drivers), len(unassigned))
-            
+            logger.info(
+                "[DISPATCH] 🚨 Tentative de réassignation avec %d chauffeur(s) d'urgence pour %d courses non assignées",
+                len(emergency_drivers),
+                len(unassigned),
+            )
+
             # Filtrer les courses non assignées
             unassigned_bookings = [b for b in bookings if int(cast("Any", b.id)) in unassigned]
-            
+
             # Trier par priorité : rush hour (13:30-14:30) d'abord, puis proximité au bureau
             def get_priority_for_emergency(b: Booking) -> Tuple[int, float]:
                 scheduled_time_dt = getattr(b, "scheduled_time", None)
                 if not scheduled_time_dt:
                     return (9999, 9999.0)  # Dernière priorité si pas d'heure
-                
+
                 # Calculer l'heure en minutes depuis minuit
                 scheduled_min = scheduled_time_dt.hour * 60 + scheduled_time_dt.minute
-                
+
                 # Bonus si dans le rush (13:30-14:30 = 810-870 minutes)
                 rush_start = 13 * 60 + 30  # 13:30
-                rush_end = 14 * 60 + 30    # 14:30
+                rush_end = 14 * 60 + 30  # 14:30
                 is_rush = rush_start <= scheduled_min <= rush_end
                 priority_time = 0 if is_rush else 1000  # Priorité au rush
-                
+
                 # Calculer la distance au bureau pour prioriser les plus proches
                 if company_coords:
                     p_coord, _ = _booking_coords(b)
@@ -2096,21 +2198,21 @@ def assign(problem: Dict[str, Any],
                     )
                 else:
                     distance_to_office = 999.0
-                
+
                 return (priority_time, distance_to_office)
-            
+
             # Trier par priorité (rush d'abord, puis distance)
             unassigned_bookings.sort(key=get_priority_for_emergency)
-            
+
             # Essayer d'assigner avec les chauffeurs d'urgence
             for b in unassigned_bookings:
                 b_id = int(cast("Any", b.id))
                 best_emergency = None
                 best_score = -9999.0
-                
+
                 for d_emg in emergency_drivers:
                     d_emg_id = int(cast("Any", d_emg.id))
-                    
+
                     # Calculer le score avec le chauffeur d'urgence
                     driver_window_emg = driver_windows[drivers.index(d_emg)] if d_emg in drivers else (0, 24 * 60)
                     sc_emg, _breakdown_emg, (est_s_emg, est_f_emg) = _score_driver_for_booking(
@@ -2122,11 +2224,11 @@ def assign(problem: Dict[str, Any],
                         company_coords=company_coords,
                         preferred_driver_id=preferred_driver_id,
                     )
-                    
+
                     # Vérifier la faisabilité
                     if sc_emg <= SC_ZERO:
                         continue
-                    
+
                     # Vérifier les conflits temporels
                     scheduled_time_dt = getattr(b, "scheduled_time", None)
                     base_time = problem.get("base_time")
@@ -2134,10 +2236,16 @@ def assign(problem: Dict[str, Any],
                         scheduled_dt_utc = to_utc(scheduled_time_dt)
                         base_dt_utc = to_utc(base_time)
                         delta = scheduled_dt_utc - base_dt_utc if scheduled_dt_utc and base_dt_utc else None
-                        scheduled_min_emg = int(delta.total_seconds() // 60) if delta else (scheduled_time_dt.hour * 60 + scheduled_time_dt.minute)
+                        scheduled_min_emg = (
+                            int(delta.total_seconds() // 60)
+                            if delta
+                            else (scheduled_time_dt.hour * 60 + scheduled_time_dt.minute)
+                        )
                     else:
-                        scheduled_min_emg = scheduled_time_dt.hour * 60 + scheduled_time_dt.minute if scheduled_time_dt else 0
-                    
+                        scheduled_min_emg = (
+                            scheduled_time_dt.hour * 60 + scheduled_time_dt.minute if scheduled_time_dt else 0
+                        )
+
                     # Vérifier les conflits
                     min_gap_minutes_emg = int(getattr(settings.safety, "min_gap_minutes", 30))
                     has_conflict_emg = False
@@ -2145,23 +2253,23 @@ def assign(problem: Dict[str, Any],
                         if abs(scheduled_min_emg - existing_time) < min_gap_minutes_emg:
                             has_conflict_emg = True
                             break
-                    
+
                     if has_conflict_emg:
                         continue
-                    
+
                     # Bonus si dans le rush (13:30-14:30)
                     # rush_start et rush_end sont définis avant la boucle
                     if rush_start <= scheduled_min_emg <= rush_end:
                         sc_emg += 1.0  # Bonus fort pour rush
-                    
+
                     if sc_emg > best_score:
                         best_score = sc_emg
                         best_emergency = (d_emg, sc_emg, est_s_emg, est_f_emg, scheduled_min_emg)
-                
+
                 if best_emergency:
                     d_emg, sc_emg, est_s_emg, est_f_emg, scheduled_min_emg = best_emergency
                     d_emg_id = int(cast("Any", d_emg.id))
-                    
+
                     cand_emg = HeuristicAssignment(
                         booking_id=b_id,
                         driver_id=d_emg_id,
@@ -2170,24 +2278,29 @@ def assign(problem: Dict[str, Any],
                         estimated_start_min=est_s_emg,
                         estimated_finish_min=est_f_emg,
                     )
-                    
+
                     assignments.append(cand_emg)
                     proposed_load[d_emg_id] += 1
                     fairness_effective[d_emg_id] = fairness_effective.get(d_emg_id, 0) + 1
                     unassigned.remove(b_id)
-                    
+
                     # Mettre à jour busy_until et scheduled_times
                     duration_osrm_emg = est_f_emg - est_s_emg
                     realistic_finish_emg = scheduled_min_emg + duration_osrm_emg
                     busy_until[d_emg_id] = max(busy_until.get(d_emg_id, 0), realistic_finish_emg)
-                    
+
                     if d_emg_id not in driver_scheduled_times:
                         driver_scheduled_times[d_emg_id] = []
                     if scheduled_min_emg not in driver_scheduled_times[d_emg_id]:
                         driver_scheduled_times[d_emg_id].append(scheduled_min_emg)
-                    
-                    logger.info("[DISPATCH] 🚨 Course #%s réassignée avec chauffeur d'urgence #%s (score: %.2f, rush: %s)", 
-                               b_id, d_emg_id, sc_emg, rush_start <= scheduled_min_emg <= rush_end)
+
+                    logger.info(
+                        "[DISPATCH] 🚨 Course #%s réassignée avec chauffeur d'urgence #%s (score: %.2f, rush: %s)",
+                        b_id,
+                        d_emg_id,
+                        sc_emg,
+                        rush_start <= scheduled_min_emg <= rush_end,
+                    )
 
     debug = {
         "proposed_load": proposed_load,
@@ -2201,14 +2314,11 @@ def assign(problem: Dict[str, Any],
         "temporal_conflict_rejects": temporal_conflict_rejects,  # ✅ A1: Rejets avec conflict_penalty
     }
 
-    logger.info(
-        "[DISPATCH] 📊 Résultat: %s assignations, %s non-assignées",
-        len(assignments),
-        len(unassigned))
+    logger.info("[DISPATCH] 📊 Résultat: %s assignations, %s non-assignées", len(assignments), len(unassigned))
     logger.info("[DISPATCH] 📈 Charge par chauffeur: %s", dict(proposed_load))
 
-    return HeuristicResult(assignments=assignments,
-                           unassigned_booking_ids=unassigned, debug=debug)
+    return HeuristicResult(assignments=assignments, unassigned_booking_ids=unassigned, debug=debug)
+
 
 # -------------------------------------------------------------------
 # Assignation "retours urgents" (pré-tri) : réguliers d'abord, urgence si nécessaire
@@ -2221,8 +2331,7 @@ def assign_urgent(
     settings: Settings = DEFAULT_SETTINGS,
 ) -> HeuristicResult:
     if not problem or not urgent_booking_ids:
-        return HeuristicResult(assignments=[], unassigned_booking_ids=[
-        ], debug={"reason": "no_urgent"})
+        return HeuristicResult(assignments=[], unassigned_booking_ids=[], debug={"reason": "no_urgent"})
 
     allow_emergency = bool(getattr(settings.emergency, "allow_emergency", True))
     logger.info(
@@ -2239,10 +2348,12 @@ def assign_urgent(
     problem["fairness_counts"] = fairness_counts
     problem["fairness_baseline"] = fairness_baseline
     company_coords: Tuple[float, float] | None = problem.get("company_coords")  # ⚡ Coordonnées du bureau
-    driver_load_multipliers: Dict[int, float] = problem.get("driver_load_multipliers", {})  # ⚡ Multiplicateurs de charge
+    driver_load_multipliers: Dict[int, float] = problem.get(
+        "driver_load_multipliers", {}
+    )  # ⚡ Multiplicateurs de charge
     preferred_driver_id: int | None = problem.get("preferred_driver_id")  # ⚡ Chauffeur préféré
     max_cap = settings.solver.max_bookings_per_driver
-    
+
     # ⚡ Calculer les caps ajustés selon les préférences de charge par chauffeur
     def get_adjusted_max_cap(driver_id: int) -> int:
         """Retourne le cap maximum ajusté pour un chauffeur selon ses préférences."""
@@ -2250,10 +2361,8 @@ def assign_urgent(
         return int(max_cap * multiplier)
 
     by_id: Dict[int, Booking] = {int(cast("Any", b.id)): b for b in bookings}
-    driver_index: Dict[int, int] = {
-        int(cast("Any", d.id)): i for i, d in enumerate(drivers)}
-    proposed_load: Dict[int, int] = {
-        int(cast("Any", d.id)): 0 for d in drivers}
+    driver_index: Dict[int, int] = {int(cast("Any", d.id)): i for i, d in enumerate(drivers)}
+    proposed_load: Dict[int, int] = {int(cast("Any", d.id)): 0 for d in drivers}
     busy_until: Dict[int, int] = {int(cast("Any", d.id)): 0 for d in drivers}
     fairness_effective_local: Dict[int, int] = {
         int(cast("Any", d.id)): fairness_counts.get(int(cast("Any", d.id)), 0)
@@ -2261,8 +2370,7 @@ def assign_urgent(
         for d in drivers
     }
 
-    def _choose_best(
-            b: Booking, regular_only: bool) -> HeuristicAssignment | None:
+    def _choose_best(b: Booking, regular_only: bool) -> HeuristicAssignment | None:
         best: Tuple[float, HeuristicAssignment] | None = None
         norm_loads = _normalized_loads(fairness_effective_local)
         emergency_candidate_logged = False
@@ -2280,8 +2388,7 @@ def assign_urgent(
             if fairness_effective_local.get(did, 0) >= adjusted_cap:
                 continue
             di = driver_index[did]
-            dw = driver_windows[di] if di < len(
-                driver_windows) else (0, 24 * 60)
+            dw = driver_windows[di] if di < len(driver_windows) else (0, 24 * 60)
             sc, _br, (est_s, est_f) = _score_driver_for_booking(
                 b,
                 d,
@@ -2323,14 +2430,7 @@ def assign_urgent(
         b = by_id.get(int(cast("Any", bid)))
         if b:
             ordered.append(b)
-    ordered.sort(
-        key=lambda x: sort_key_utc(
-            cast(
-                "Any",
-                getattr(
-                    x,
-                    "scheduled_time",
-                    None))))
+    ordered.sort(key=lambda x: sort_key_utc(cast("Any", getattr(x, "scheduled_time", None))))
 
     assignments: List[HeuristicAssignment] = []
     unassigned: List[int] = []
@@ -2357,8 +2457,7 @@ def assign_urgent(
         "proposed_load": proposed_load,
         "fairness_baseline": fairness_baseline,
     }
-    return HeuristicResult(assignments=assignments,
-                           unassigned_booking_ids=unassigned, debug=debug)
+    return HeuristicResult(assignments=assignments, unassigned_booking_ids=unassigned, debug=debug)
 
 
 # -------------------------------------------------------------------
@@ -2370,8 +2469,7 @@ def closest_feasible(
     settings: Settings = DEFAULT_SETTINGS,
 ) -> HeuristicResult:
     if not problem or not booking_ids:
-        return HeuristicResult(assignments=[], unassigned_booking_ids=[
-        ], debug={"reason": "empty_fallback"})
+        return HeuristicResult(assignments=[], unassigned_booking_ids=[], debug={"reason": "empty_fallback"})
 
     bookings: List[Booking] = problem["bookings"]
     drivers: List[Driver] = problem["drivers"]
@@ -2384,8 +2482,7 @@ def closest_feasible(
     preferred_driver_id: int | None = problem.get("preferred_driver_id")  # ⚡ Chauffeur préféré
 
     by_id: Dict[int, Booking] = {int(cast("Any", b.id)): b for b in bookings}
-    driver_index: Dict[int, int] = {
-        int(cast("Any", d.id)): i for i, d in enumerate(drivers)}
+    driver_index: Dict[int, int] = {int(cast("Any", d.id)): i for i, d in enumerate(drivers)}
 
     # 📅 RÉCUPÉRER les états de l'heuristique principale si disponibles (pour éviter les conflits)
     previous_busy = problem.get("busy_until", {})
@@ -2393,35 +2490,32 @@ def closest_feasible(
     previous_load = problem.get("proposed_load", {})
 
     proposed_load: Dict[int, int] = {
-        int(cast("Any", d.id)): previous_load.get(int(cast("Any", d.id)), 0)
-        for d in drivers
+        int(cast("Any", d.id)): previous_load.get(int(cast("Any", d.id)), 0) for d in drivers
     }
     fairness_effective_fb: Dict[int, int] = {
         int(cast("Any", d.id)): fairness_counts.get(int(cast("Any", d.id)), 0)
         + proposed_load.get(int(cast("Any", d.id)), 0)
         for d in drivers
     }
-    busy_until: Dict[int, int] = {int(cast("Any", d.id)): previous_busy.get(
-        int(cast("Any", d.id)), 0) for d in drivers}
+    busy_until: Dict[int, int] = {int(cast("Any", d.id)): previous_busy.get(int(cast("Any", d.id)), 0) for d in drivers}
 
     # 📅 Traçabilité des temps exacts assignés à chaque chauffeur (pour détecter les doublons d'heure)
-    driver_scheduled_times: Dict[int, List[int]] = {int(cast("Any", d.id)): list(
-        previous_times.get(int(cast("Any", d.id)), [])) for d in drivers}
+    driver_scheduled_times: Dict[int, List[int]] = {
+        int(cast("Any", d.id)): list(previous_times.get(int(cast("Any", d.id)), [])) for d in drivers
+    }
 
     logger.warning(
         "[FALLBACK] 📥 Récupération état précédent: busy_until=%s, scheduled_times=%s",
         dict(busy_until),
-        dict(driver_scheduled_times))
+        dict(driver_scheduled_times),
+    )
     if preferred_driver_id:
-        logger.info(
-            "[FALLBACK] 🎯 Chauffeur préféré détecté: %s - bonus +3.0 sera appliqué",
-            preferred_driver_id)
+        logger.info("[FALLBACK] 🎯 Chauffeur préféré détecté: %s - bonus +3.0 sera appliqué", preferred_driver_id)
 
     assignments: List[HeuristicAssignment] = []
     unassigned: List[int] = []
 
-    min_effective_load = min(fairness_effective_fb.values()
-                             ) if fairness_effective_fb else 0
+    min_effective_load = min(fairness_effective_fb.values()) if fairness_effective_fb else 0
 
     for bid in booking_ids:
         b = by_id.get(int(cast("Any", bid)))
@@ -2453,8 +2547,7 @@ def closest_feasible(
                 )
                 continue
             di = driver_index[did]
-            dw = driver_windows[di] if di < len(
-                driver_windows) else (0, 24 * 60)
+            dw = driver_windows[di] if di < len(driver_windows) else (0, 24 * 60)
             company_coords = problem.get("company_coords")  # ⚡ Coordonnées du bureau
             sc, _br, (est_s, est_f) = _score_driver_for_booking(
                 b,
@@ -2476,12 +2569,11 @@ def closest_feasible(
                 scheduled_dt_utc = to_utc(scheduled_time_dt)
                 base_dt_utc = to_utc(base_time)
                 delta = scheduled_dt_utc - base_dt_utc if scheduled_dt_utc and base_dt_utc else None
-                scheduled_min = int(
-                    delta.total_seconds() //
-                    60) if delta else (
-                    scheduled_time_dt.hour *
-                    60 +
-                    scheduled_time_dt.minute)
+                scheduled_min = (
+                    int(delta.total_seconds() // 60)
+                    if delta
+                    else (scheduled_time_dt.hour * 60 + scheduled_time_dt.minute)
+                )
             else:
                 scheduled_min = scheduled_time_dt.hour * 60 + scheduled_time_dt.minute
 
@@ -2489,7 +2581,7 @@ def closest_feasible(
             min_gap_minutes = int(getattr(settings.safety, "min_gap_minutes", 30))
             post_trip_buffer = int(getattr(settings.safety, "post_trip_buffer_min", 15))
             strict_check = bool(getattr(settings.features, "enable_strict_temporal_conflict_check", True))
-            
+
             has_conflict = False
             can_pool = False
             conflict_reasons_fb = []
@@ -2500,23 +2592,20 @@ def closest_feasible(
                     # Chercher la course existante pour vérifier si
                     # regroupement possible
                     existing_booking = None
-                    for assigned in [
-                            a for a in assignments if a.driver_id == did]:
+                    for assigned in [a for a in assignments if a.driver_id == did]:
                         assigned_booking = by_id.get(int(assigned.booking_id))
                         if assigned_booking:
-                            assigned_time_dt = getattr(
-                                assigned_booking, "scheduled_time", None)
+                            assigned_time_dt = getattr(assigned_booking, "scheduled_time", None)
                             if assigned_time_dt:
                                 if base_time:
                                     assigned_dt_utc = to_utc(assigned_time_dt)
                                     base_dt_utc = to_utc(base_time)
                                     delta = assigned_dt_utc - base_dt_utc if assigned_dt_utc and base_dt_utc else None
-                                    assigned_min = int(
-                                        delta.total_seconds() //
-                                        60) if delta else (
-                                        assigned_time_dt.hour *
-                                        60 +
-                                        assigned_time_dt.minute)
+                                    assigned_min = (
+                                        int(delta.total_seconds() // 60)
+                                        if delta
+                                        else (assigned_time_dt.hour * 60 + assigned_time_dt.minute)
+                                    )
                                 else:
                                     assigned_min = assigned_time_dt.hour * 60 + assigned_time_dt.minute
 
@@ -2529,20 +2618,31 @@ def closest_feasible(
                         can_pool = True
                         logger.info(
                             "[POOLING] 🚗 [FALLBACK] Course #%s peut être regroupée avec #%s (chauffeur #%s)",
-                            bid, existing_booking.id, did)
+                            bid,
+                            existing_booking.id,
+                            did,
+                        )
                         break
-                    
+
                     conflict_reasons_fb.append(f"time_gap:{gap_minutes}min")
                     logger.warning(
                         "[FALLBACK] ⚠️ CONFLIT: Chauffeur #%s a course à %smin, course #%s à %smin (écart: %smin) → SKIP",
-                        did, existing_time, bid, scheduled_min, gap_minutes)
+                        did,
+                        existing_time,
+                        bid,
+                        scheduled_min,
+                        gap_minutes,
+                    )
                     has_conflict = True
                     break
 
             if has_conflict and not can_pool:
                 logger.warning(
                     "[FALLBACK] 🔴 Conflit temporel booking #%s + driver #%s: %s",
-                    bid, did, ", ".join(conflict_reasons_fb))
+                    bid,
+                    did,
+                    ", ".join(conflict_reasons_fb),
+                )
                 # ✅ A1: Incrémenter métrique
                 increment_temporal_conflict_counter()
                 continue
@@ -2554,23 +2654,31 @@ def closest_feasible(
                     conflict_reasons_fb.append(f"busy_until:{busy_until[did]}→{required_free_time}")
                     logger.warning(
                         "[FALLBACK] ⚠️ BUSY: Chauffeur #%s occupé jusqu'à %smin (+%smin buffer = %smin), course #%s démarre à %smin → SKIP",
-                        did, busy_until[did], post_trip_buffer, required_free_time, bid, scheduled_min)
+                        did,
+                        busy_until[did],
+                        post_trip_buffer,
+                        required_free_time,
+                        bid,
+                        scheduled_min,
+                    )
                     continue
 
             # 🚗 REGROUPEMENT : Si détecté, assigner IMMÉDIATEMENT sans chercher d'autres chauffeurs
             if can_pool:
                 logger.warning(
-                    "[POOLING] 🚗 [FALLBACK] Course #%s FORCÉE au chauffeur #%s (regroupement prioritaire)",
-                    bid,
-                    did)
-                best = (sc, HeuristicAssignment(
-                    booking_id=int(cast("Any", b.id)),
-                    driver_id=did,
-                    score=sc,
-                    reason="fallback_pooled",
-                    estimated_start_min=est_s,
-                    estimated_finish_min=est_f,
-                ))
+                    "[POOLING] 🚗 [FALLBACK] Course #%s FORCÉE au chauffeur #%s (regroupement prioritaire)", bid, did
+                )
+                best = (
+                    sc,
+                    HeuristicAssignment(
+                        booking_id=int(cast("Any", b.id)),
+                        driver_id=did,
+                        score=sc,
+                        reason="fallback_pooled",
+                        estimated_start_min=est_s,
+                        estimated_finish_min=est_f,
+                    ),
+                )
                 break  # ⚠️ CRUCIAL: Sortir de la boucle des chauffeurs
 
             # 🚫 VÉRIFICATION 3: Score négatif
@@ -2593,10 +2701,7 @@ def closest_feasible(
             sc -= load_penalty
 
             # ⚡ CORRECTION: Calculer min_load avec fairness_counts inclus (charge totale réelle)
-            current_loads_all = [
-                fairness_effective_fb.get(int(cast("Any", d.id)), 0)
-                for d in drivers
-            ]
+            current_loads_all = [fairness_effective_fb.get(int(cast("Any", d.id)), 0) for d in drivers]
             min_load = min(current_loads_all) if current_loads_all else 0
             if current_load == min_load:
                 sc += 0.8
@@ -2629,28 +2734,27 @@ def closest_feasible(
                 scheduled_dt_utc = to_utc(scheduled_time_dt)
                 base_dt_utc = to_utc(base_time)
                 delta = scheduled_dt_utc - base_dt_utc if scheduled_dt_utc and base_dt_utc else None
-                scheduled_min = int(
-                    delta.total_seconds() //
-                    60) if delta else (
-                    scheduled_time_dt.hour *
-                    60 +
-                    scheduled_time_dt.minute)
+                scheduled_min = (
+                    int(delta.total_seconds() // 60)
+                    if delta
+                    else (scheduled_time_dt.hour * 60 + scheduled_time_dt.minute)
+                )
             else:
-                scheduled_min = scheduled_time_dt.hour * 60 + \
-                    scheduled_time_dt.minute if scheduled_time_dt else chosen.estimated_start_min
+                scheduled_min = (
+                    scheduled_time_dt.hour * 60 + scheduled_time_dt.minute
+                    if scheduled_time_dt
+                    else chosen.estimated_start_min
+                )
 
             # 🚗 Vérifier si c'est un regroupement avec une course existante
             is_pooled = False
             pooled_with = None
             for existing_time in driver_scheduled_times[did2]:
-                if abs(scheduled_min -
-                       existing_time) < settings.pooling.time_tolerance_min:
+                if abs(scheduled_min - existing_time) < settings.pooling.time_tolerance_min:
                     # Trouver la course existante
-                    for assigned in [
-                            a for a in assignments if a.driver_id == did2 and a != chosen]:
+                    for assigned in [a for a in assignments if a.driver_id == did2 and a != chosen]:
                         assigned_booking = by_id.get(int(assigned.booking_id))
-                        if assigned_booking and _can_be_pooled(
-                                b, assigned_booking, settings):
+                        if assigned_booking and _can_be_pooled(b, assigned_booking, settings):
                             is_pooled = True
                             pooled_with = assigned.booking_id
                             break
@@ -2667,7 +2771,8 @@ def closest_feasible(
                     "[POOLING] 🚗 [FALLBACK] Course #%s regroupée avec #%s → +%smin détour",
                     chosen.booking_id,
                     pooled_with,
-                    settings.pooling.max_detour_min)
+                    settings.pooling.max_detour_min,
+                )
             else:
                 realistic_finish = scheduled_min + duration_osrm
 
@@ -2678,12 +2783,18 @@ def closest_feasible(
                 driver_scheduled_times[did2].append(scheduled_min)
 
             pool_indicator = f" [GROUPÉ avec #{pooled_with}]" if is_pooled else ""
-            logger.info("[FALLBACK] ✅ Course #%s → Chauffeur #%s (score: %.2f, start: %smin, busy_until: %smin)%s", chosen.booking_id, did2, best[0], scheduled_min, busy_until[did2], pool_indicator)
+            logger.info(
+                "[FALLBACK] ✅ Course #%s → Chauffeur #%s (score: %.2f, start: %smin, busy_until: %smin)%s",
+                chosen.booking_id,
+                did2,
+                best[0],
+                scheduled_min,
+                busy_until[did2],
+                pool_indicator,
+            )
         else:
             unassigned.append(int(cast("Any", b.id)))
-            logger.warning(
-                "[FALLBACK] ❌ Course #%s impossible à assigner (aucun chauffeur disponible)",
-                bid)
+            logger.warning("[FALLBACK] ❌ Course #%s impossible à assigner (aucun chauffeur disponible)", bid)
 
     debug = {
         "input_unassigned": booking_ids,
@@ -2695,8 +2806,7 @@ def closest_feasible(
         "fairness_counts": fairness_counts,
         "fairness_baseline": problem.get("fairness_baseline", fairness_baseline),
     }
-    return HeuristicResult(assignments=assignments,
-                           unassigned_booking_ids=unassigned, debug=debug)
+    return HeuristicResult(assignments=assignments, unassigned_booking_ids=unassigned, debug=debug)
 
 
 # -------------------------------------------------------------------
@@ -2725,36 +2835,20 @@ def estimate_wait_or_require_extra(
         cur_lat = getattr(d, "current_lat", None)
         cur_lon = getattr(d, "current_lon", None)
         if cur_lat is not None and cur_lon is not None:
-            driver_coords.append(
-                (float(cur_lat), float(cur_lon)))
+            driver_coords.append((float(cur_lat), float(cur_lon)))
             continue
         lat = getattr(d, "latitude", None)
         lon = getattr(d, "longitude", None)
         if lat is not None and lon is not None:
-            driver_coords.append(
-                (float(lat), float(lon)))
+            driver_coords.append((float(lat), float(lon)))
         else:
             driver_coords.append((46.2044, 6.1432))  # Genève
 
     now = now_local()
     items: List[Dict[str, Any]] = []
-    avg_kmh = float(
-        getattr(
-            getattr(
-                settings,
-                "matrix",
-                None),
-            "avg_speed_kmh",
-            25))
+    avg_kmh = float(getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25))
     # mapping vers la clé réellement présente dans TimeSettings
-    buf_min = int(
-        getattr(
-            getattr(
-                settings,
-                "time",
-                None),
-            "pickup_buffer_min",
-            5))
+    buf_min = int(getattr(getattr(settings, "time", None), "pickup_buffer_min", 5))
 
     for bid in remaining_booking_ids:
         b = by_id.get(int(cast("Any", bid)))
@@ -2772,13 +2866,7 @@ def estimate_wait_or_require_extra(
 
         # ETA min depuis n'importe quel chauffeur
         etas = [
-            haversine_minutes(
-                dc,
-                pick,
-                avg_kmh=avg_kmh,
-                min_minutes=1,
-                max_minutes=240)
-            for dc in driver_coords
+            haversine_minutes(dc, pick, avg_kmh=avg_kmh, min_minutes=1, max_minutes=240) for dc in driver_coords
         ] or [999]
         eta_min = min(etas)
 
@@ -2799,26 +2887,15 @@ def estimate_wait_or_require_extra(
         )
 
     # Synthèse basique
-    allow_emg = bool(
-        getattr(
-            getattr(
-                settings,
-                "emergency",
-                None),
-            "allow_emergency_drivers",
-            True))
+    allow_emg = bool(getattr(getattr(settings, "emergency", None), "allow_emergency_drivers", True))
     suggestions: List[str] = []
     if not allow_emg:
-        suggestions.append(
-            "Autoriser les chauffeurs d'urgence pour absorber le pic.")
+        suggestions.append("Autoriser les chauffeurs d'urgence pour absorber le pic.")
     if len(drivers) == 0:
-        suggestions.append(
-            "Aucun chauffeur disponible : en ajouter au planning.")
+        suggestions.append("Aucun chauffeur disponible : en ajouter au planning.")
     elif any(it.get("lateness_min", 0) > LATENESS_THRESHOLD_MIN for it in items):
-        suggestions.append(
-            "Ajouter au moins 1 chauffeur sur le créneau ou élargir les fenêtres de temps.")
+        suggestions.append("Ajouter au moins 1 chauffeur sur le créneau ou élargir les fenêtres de temps.")
     elif any(it.get("lateness_min", 0) > 0 for it in items):
-        suggestions.append(
-            "Élargir légèrement les fenêtres ou ajuster les priorités.")
+        suggestions.append("Élargir légèrement les fenêtres ou ajuster les priorités.")
 
     return {"summary": "ok", "items": items, "suggestions": suggestions}

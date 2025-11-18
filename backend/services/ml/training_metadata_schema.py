@@ -35,7 +35,7 @@ class TrainingMetadataSchema:
                 "version": "v1.00",
                 "created_at": datetime.now(UTC).isoformat(),
                 "framework": "pytorch",
-                "framework_version": "2.00"
+                "framework_version": "2.00",
             },
             "architecture_config": {
                 "network_type": "dueling",  # standard, dueling, c51, qr_dqn, noisy
@@ -54,8 +54,8 @@ class TrainingMetadataSchema:
                     "num_atoms": 51,
                     "num_quantiles": 200,
                     "v_min": -10.0,
-                    "v_max": 10.0
-                }
+                    "v_max": 10.0,
+                },
             },
             "training_config": {
                 "learning_rate": 0.0001,
@@ -69,11 +69,7 @@ class TrainingMetadataSchema:
                 "tau": 0.0005,  # Soft update
                 "gradient_clipping": 1.0,
                 "optimizer": "adam",
-                "optimizer_params": {
-                    "betas": [0.9, 0.999],
-                    "eps": 1e-8,
-                    "weight_decay": 1e-4
-                }
+                "optimizer_params": {"betas": [0.9, 0.999], "eps": 1e-8, "weight_decay": 1e-4},
             },
             "features_config": {
                 "state_features": [
@@ -91,26 +87,22 @@ class TrainingMetadataSchema:
                     "booking_passenger_count",
                     "current_time",
                     "traffic_level",
-                    "weather_condition"
+                    "weather_condition",
                 ],
-                "action_features": [
-                    "assign_driver",
-                    "reject_booking",
-                    "delay_assignment"
-                ],
+                "action_features": ["assign_driver", "reject_booking", "delay_assignment"],
                 "feature_scaling": {
                     "method": "standard",  # standard, minmax, robust
                     "fit_on": "training_data",
                     "handle_outliers": True,
-                    "outlier_threshold": 3.0
+                    "outlier_threshold": 3.0,
                 },
                 "feature_engineering": {
                     "distance_features": True,
                     "time_features": True,
                     "interaction_features": False,
                     "polynomial_features": False,
-                    "degree": 2
-                }
+                    "degree": 2,
+                },
             },
             "scalers_config": {
                 "state_scaler": {
@@ -118,49 +110,28 @@ class TrainingMetadataSchema:
                     "fitted": True,
                     "mean": [],
                     "scale": [],
-                    "feature_names": []
+                    "feature_names": [],
                 },
-                "reward_scaler": {
-                    "type": "MinMaxScaler",
-                    "fitted": True,
-                    "min": 0.0,
-                    "scale": 1.0
-                },
-                "action_scaler": {
-                    "type": "None",
-                    "fitted": False
-                }
+                "reward_scaler": {"type": "MinMaxScaler", "fitted": True, "min": 0.0, "scale": 1.0},
+                "action_scaler": {"type": "None", "fitted": False},
             },
             "dataset_info": {
                 "training_data": {
                     "file_path": "data/training/training_data_cleaned_final.json",
                     "num_samples": 0,
-                    "date_range": {
-                        "start": "2024-0.1-0.1",
-                        "end": "2024-12-31"
-                    },
-                    "data_quality": {
-                        "missing_values": 0.0,
-                        "outliers": 0.0,
-                        "duplicates": 0.0
-                    }
+                    "date_range": {"start": "2024-0.1-0.1", "end": "2024-12-31"},
+                    "data_quality": {"missing_values": 0.0, "outliers": 0.0, "duplicates": 0.0},
                 },
                 "validation_data": {
                     "file_path": "data/validation/validation_data.json",
                     "num_samples": 0,
-                    "date_range": {
-                        "start": "2024-0.1-0.1",
-                        "end": "2024-12-31"
-                    }
+                    "date_range": {"start": "2024-0.1-0.1", "end": "2024-12-31"},
                 },
                 "test_data": {
                     "file_path": "data/test/test_data.json",
                     "num_samples": 0,
-                    "date_range": {
-                        "start": "2024-0.1-0.1",
-                        "end": "2024-12-31"
-                    }
-                }
+                    "date_range": {"start": "2024-0.1-0.1", "end": "2024-12-31"},
+                },
             },
             "hyperparameter_tuning": {
                 "use_optuna": True,
@@ -171,37 +142,15 @@ class TrainingMetadataSchema:
                 "pruner": "median",
                 "sampler": "tpe",
                 "hyperparameter_space": {
-                    "learning_rate": {
-                        "type": "float",
-                        "low": 1e-5,
-                        "high": 1e-2,
-                        "log": True
-                    },
-                    "batch_size": {
-                        "type": "categorical",
-                        "choices": [32, 64, 128, 256]
-                    },
+                    "learning_rate": {"type": "float", "low": 1e-5, "high": 1e-2, "log": True},
+                    "batch_size": {"type": "categorical", "choices": [32, 64, 128, 256]},
                     "hidden_sizes": {
                         "type": "categorical",
-                        "choices": [
-                            [256, 128],
-                            [512, 256],
-                            [512, 256, 128],
-                            [1024, 512, 256]
-                        ]
+                        "choices": [[256, 128], [512, 256], [512, 256, 128], [1024, 512, 256]],
                     },
-                    "gamma": {
-                        "type": "float",
-                        "low": 0.9,
-                        "high": 0.999,
-                        "log": False
-                    }
+                    "gamma": {"type": "float", "low": 0.9, "high": 0.999, "log": False},
                 },
-                "best_trial": {
-                    "trial_number": 0,
-                    "value": 0.0,
-                    "params": {}
-                }
+                "best_trial": {"trial_number": 0, "value": 0.0, "params": {}},
             },
             "performance_metrics": {
                 "training_metrics": {
@@ -209,13 +158,13 @@ class TrainingMetadataSchema:
                     "final_reward": 0.0,
                     "convergence_episode": 0,
                     "training_time_hours": 0.0,
-                    "samples_per_second": 0.0
+                    "samples_per_second": 0.0,
                 },
                 "validation_metrics": {
                     "avg_reward": 0.0,
                     "std_reward": 0.0,
                     "success_rate": 0.0,
-                    "avg_episode_length": 0.0
+                    "avg_episode_length": 0.0,
                 },
                 "test_metrics": {
                     "punctuality_rate": 0.0,
@@ -223,14 +172,14 @@ class TrainingMetadataSchema:
                     "avg_delay": 0.0,
                     "driver_utilization": 0.0,
                     "customer_satisfaction": 0.0,
-                    "cost_efficiency": 0.0
+                    "cost_efficiency": 0.0,
                 },
                 "business_metrics": {
                     "revenue_impact": 0.0,
                     "cost_reduction": 0.0,
                     "time_savings": 0.0,
-                    "quality_score": 0.0
-                }
+                    "quality_score": 0.0,
+                },
             },
             "model_artifacts": {
                 "model_file": "models/dqn_dispatch_dueling_dqn_v1.00.pth",
@@ -238,7 +187,7 @@ class TrainingMetadataSchema:
                 "checksum": "",
                 "config_file": "configs/dqn_dispatch_v1.00.json",
                 "logs_file": "logs/training_dqn_dispatch_v1.00.log",
-                "tensorboard_logs": "logs/tensorboard/dqn_dispatch_v1.00"
+                "tensorboard_logs": "logs/tensorboard/dqn_dispatch_v1.00",
             },
             "deployment_info": {
                 "deployment_status": "not_deployed",  # not_deployed, staging, production
@@ -250,8 +199,8 @@ class TrainingMetadataSchema:
                     "model_loading_time": 0.0,
                     "inference_latency": 0.0,
                     "memory_usage": 0.0,
-                    "cpu_usage": 0.0
-                }
+                    "cpu_usage": 0.0,
+                },
             },
             "kpi_thresholds": {
                 "punctuality_rate": 0.85,
@@ -259,7 +208,7 @@ class TrainingMetadataSchema:
                 "avg_delay": 5.0,
                 "driver_utilization": 0.75,
                 "customer_satisfaction": 0.8,
-                "cost_efficiency": 0.7
+                "cost_efficiency": 0.7,
             },
             "experiment_info": {
                 "experiment_id": "exp_dqn_dispatch_v1",
@@ -268,8 +217,8 @@ class TrainingMetadataSchema:
                 "description": "Optimisation du dispatch avec DQN et améliorations avancées",
                 "researcher": "ML Team",
                 "baseline_model": "heuristic_dispatch",
-                "improvement_over_baseline": 0.0
-            }
+                "improvement_over_baseline": 0.0,
+            },
         }
 
     @staticmethod
@@ -288,9 +237,14 @@ class TrainingMetadataSchema:
 
         # Vérifier les sections obligatoires
         required_sections = [
-            "model_info", "architecture_config", "training_config",
-            "features_config", "scalers_config", "dataset_info",
-            "performance_metrics", "model_artifacts"
+            "model_info",
+            "architecture_config",
+            "training_config",
+            "features_config",
+            "scalers_config",
+            "dataset_info",
+            "performance_metrics",
+            "model_artifacts",
         ]
 
         for section in required_sections:
@@ -300,20 +254,18 @@ class TrainingMetadataSchema:
         # Vérifier les champs obligatoires dans model_info
         if "model_info" in metadata:
             model_info = metadata["model_info"]
-            required_fields = [
-                "model_name",
-                "model_arch",
-                "version",
-                "created_at"]
+            required_fields = ["model_name", "model_arch", "version", "created_at"]
             for field in required_fields:
                 if field not in model_info:
                     issues.append(f"Champ manquant dans model_info: {field}")
 
         # Vérifier la cohérence de l'architecture
-        if "architecture_config" in metadata and metadata["architecture_config"].get(
-                "use_distributional", False) and "distributional_config" not in metadata["architecture_config"]:
-            issues.append(
-                "distributional_config manquant pour architecture distributionnelle")
+        if (
+            "architecture_config" in metadata
+            and metadata["architecture_config"].get("use_distributional", False)
+            and "distributional_config" not in metadata["architecture_config"]
+        ):
+            issues.append("distributional_config manquant pour architecture distributionnelle")
 
         # Vérifier les métriques de performance
         if "performance_metrics" in metadata:
@@ -324,11 +276,7 @@ class TrainingMetadataSchema:
         return len(issues) == 0, issues
 
     @staticmethod
-    def update_metadata(
-        metadata: Dict[str, Any],
-        updates: Dict[str, Any],
-        validate: bool = True
-    ) -> Dict[str, Any]:
+    def update_metadata(metadata: Dict[str, Any], updates: Dict[str, Any], validate: bool = True) -> Dict[str, Any]:
         """Met à jour les métadonnées avec de nouvelles valeurs.
 
         Args:
@@ -340,12 +288,11 @@ class TrainingMetadataSchema:
             Métadonnées mises à jour
 
         """
-        def deep_update(
-                base_dict: Dict[str, Any], update_dict: Dict[str, Any]) -> Dict[str, Any]:
+
+        def deep_update(base_dict: Dict[str, Any], update_dict: Dict[str, Any]) -> Dict[str, Any]:
             """Met à jour récursivement un dictionnaire."""
             for key, value in update_dict.items():
-                if key in base_dict and isinstance(
-                        base_dict[key], dict) and isinstance(value, dict):
+                if key in base_dict and isinstance(base_dict[key], dict) and isinstance(value, dict):
                     base_dict[key] = deep_update(base_dict[key], value)
                 else:
                     base_dict[key] = value
@@ -354,8 +301,7 @@ class TrainingMetadataSchema:
         updated_metadata = deep_update(metadata.copy(), updates)
 
         if validate:
-            is_valid, issues = TrainingMetadataSchema.validate_metadata(
-                updated_metadata)
+            is_valid, issues = TrainingMetadataSchema.validate_metadata(updated_metadata)
             if not is_valid:
                 msg = f"Métadonnées invalides après mise à jour: {issues}"
                 raise ValueError(msg)
@@ -411,12 +357,7 @@ class TrainingMetadataSchema:
         return metadata
 
 
-def create_training_metadata(
-    model_name: str,
-    model_arch: str,
-    version: str,
-    **kwargs
-) -> Dict[str, Any]:
+def create_training_metadata(model_name: str, model_arch: str, version: str, **kwargs) -> Dict[str, Any]:
     """Factory function pour créer des métadonnées de training.
 
     Args:

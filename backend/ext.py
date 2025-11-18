@@ -64,6 +64,7 @@ app_logger = logging.getLogger("app")
 DB_PROFILER_N_PLUS_1_THRESHOLD = 10  # Seuil pour détecter pattern N+1
 DB_PROFILER_WARNING_QUERY_COUNT = 15  # Seuil pour avertir trop de requêtes
 
+
 # Event listener pour compter les requêtes SQL (performance metrics)
 def setup_sql_event_listener():
     """Configure l'event listener SQLAlchemy pour compter les requêtes SQL."""
@@ -71,7 +72,7 @@ def setup_sql_event_listener():
     from sqlalchemy import event as sqlalchemy_event
 
     from services.unified_dispatch import performance_metrics
-    
+
     def _receive_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):  # noqa: ARG001
         """Compteur SQL pour performance metrics."""
         # Détecter type de requête
@@ -85,63 +86,59 @@ def setup_sql_event_listener():
             query_type = "DELETE"
         elif stmt_upper.startswith("SELECT"):
             query_type = "SELECT"
-        
+
         # Incrémenter compteur
         performance_metrics.increment_sql_counter(query_type)
-    
+
     sqlalchemy_event.listens_for(engine.Engine, "before_cursor_execute")(_receive_before_cursor_execute)
 
 
 # ✅ 2.7: Setup DB Profiler pour détecter N+1
 def setup_db_profiler(app):
     """Configure le profiler DB si activé via ENABLE_DB_PROFILING.
-    
+
     Args:
         app: Instance Flask
     """
     from shared.db_profiler import get_db_profiler, is_profiling_enabled
-    
+
     if is_profiling_enabled():
         profiler = get_db_profiler()
         app.logger.info("[DB Profiler] ✅ Profiling DB activé via ENABLE_DB_PROFILING")
-        
+
         # Middleware pour profiler chaque requête HTTP
         @app.before_request
         def _start_profiling():  # pyright: ignore[reportUnusedFunction]
             """Démarre le profiling pour cette requête."""
             if profiler.enabled:
                 profiler.reset()
-        
+
         @app.after_request
         def _end_profiling(response):  # pyright: ignore[reportUnusedFunction]
             """Termine le profiling et log les statistiques."""
             if profiler.enabled:
                 stats = profiler.get_stats()
-                
+
                 # Log si trop de requêtes (suspect N+1)
                 if stats["query_count"] > DB_PROFILER_WARNING_QUERY_COUNT:
                     app.logger.warning(
                         "[DB Profiler] ⚠️ %d requêtes sur %s %s (suspect N+1?)",
                         stats["query_count"],
                         request.method,
-                        request.path
+                        request.path,
                     )
-                
+
                 # Détecter N+1
                 if profiler.detect_n_plus_1(threshold=DB_PROFILER_N_PLUS_1_THRESHOLD):
-                    app.logger.error(
-                        "[DB Profiler] 🚨 PATTERN N+1 détecté sur %s %s",
-                        request.method,
-                        request.path
-                    )
-                
+                    app.logger.error("[DB Profiler] 🚨 PATTERN N+1 détecté sur %s %s", request.method, request.path)
+
                 # Ajouter headers de profiling si demandé
                 if os.getenv("DB_PROFILING_HEADERS", "false").lower() == "true":
                     response.headers["X-DB-Query-Count"] = str(stats["query_count"])
                     response.headers["X-DB-Total-Time-Ms"] = str(stats["total_time_ms"])
-            
+
             return response
-        
+
         app.logger.info("[DB Profiler] Middleware de profiling configuré")
     else:
         app.logger.debug("[DB Profiler] Profiling désactivé (set ENABLE_DB_PROFILING=true)")
@@ -152,17 +149,21 @@ def setup_db_profiler(app):
 def expired_token_callback(jwt_header, jwt_payload):  # noqa: ARG001
     return jsonify({"error": "Le token a expiré. Veuillez vous reconnecter."}), 401
 
+
 @jwt.invalid_token_loader
 def invalid_token_callback(error):  # noqa: ARG001
     return jsonify({"error": "Token invalide. Veuillez vous reconnecter."}), 422
+
 
 @jwt.unauthorized_loader
 def missing_token_callback(error):  # noqa: ARG001
     return jsonify({"error": "Token d'accès manquant. Veuillez vous authentifier."}), 401
 
+
 @jwt.needs_fresh_token_loader
 def token_not_fresh_callback(jwt_header, jwt_payload):  # noqa: ARG001
     return jsonify({"error": "Le token n'est pas frais. Veuillez vous reconnecter."}), 401
+
 
 #  Decorator role_required
 def role_required(*roles):
@@ -170,6 +171,7 @@ def role_required(*roles):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             from models import User  # import local pour éviter les cycles
+
             user_public_id = get_jwt_identity()
             user = User.query.filter_by(public_id=user_public_id).first()
 
@@ -179,6 +181,7 @@ def role_required(*roles):
 
             # Convertir les rôles en objets UserRole pour la comparaison
             from models import UserRole
+
             allowed_roles = []
 
             # Gérer les deux formats : @role_required(['ADMIN', 'COMPANY']) et @role_required(UserRole.company)
@@ -201,10 +204,13 @@ def role_required(*roles):
                         app_logger.warning("Rôle invalide dans la configuration : %s", role_str)
 
             if user.role not in allowed_roles:
-                app_logger.warning("⛔ Accès refusé : %s (%s) a tenté d'accéder à une route restreinte.",
-                                   user.username, user.role)
+                app_logger.warning(
+                    "⛔ Accès refusé : %s (%s) a tenté d'accéder à une route restreinte.", user.username, user.role
+                )
                 abort(403, description="Accès non autorisé")
 
             return fn(*args, **kwargs)
+
         return wrapper
+
     return decorator

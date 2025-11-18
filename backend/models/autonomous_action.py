@@ -6,6 +6,7 @@ Ce modèle est essentiel pour :
 - Monitoring et détection d'anomalies
 - Compliance et traçabilité
 """
+
 from datetime import datetime, timezone
 from typing import Any
 
@@ -31,21 +32,9 @@ class AutonomousAction(db.Model):
     id = db.Column(Integer, primary_key=True)
 
     # Identifiants
-    company_id = db.Column(
-        Integer,
-        db.ForeignKey("company.id"),
-        nullable=False,
-        index=True)
-    booking_id = db.Column(
-        Integer,
-        db.ForeignKey("booking.id"),
-        nullable=True,
-        index=True)
-    driver_id = db.Column(
-        Integer,
-        db.ForeignKey("driver.id"),
-        nullable=True,
-        index=True)
+    company_id = db.Column(Integer, db.ForeignKey("company.id"), nullable=False, index=True)
+    booking_id = db.Column(Integer, db.ForeignKey("booking.id"), nullable=True, index=True)
+    driver_id = db.Column(Integer, db.ForeignKey("driver.id"), nullable=True, index=True)
 
     # Type d'action
     action_type = db.Column(String(50), nullable=False, index=True)
@@ -69,10 +58,8 @@ class AutonomousAction(db.Model):
 
     # Métriques
     execution_time_ms = db.Column(Float, nullable=True)  # Temps d'exécution
-    confidence_score = db.Column(
-        Float, nullable=True)  # Confiance ML (0.0-1.0)
-    expected_improvement_minutes = db.Column(
-        Float, nullable=True)  # Gain attendu
+    confidence_score = db.Column(Float, nullable=True)  # Confiance ML (0.0-1.0)
+    expected_improvement_minutes = db.Column(Float, nullable=True)  # Gain attendu
 
     # Contexte
     trigger_source = db.Column(String(100), nullable=True)
@@ -90,41 +77,23 @@ class AutonomousAction(db.Model):
     admin_notes = db.Column(Text, nullable=True)
 
     # Métadonnées
-    created_at = db.Column(
-        db.DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
-        index=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
     updated_at = db.Column(
         db.DateTime,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False)
+        nullable=False,
+    )
 
     # Relations
-    company = db.relationship(
-        "Company",
-        backref=db.backref(
-            "autonomous_actions",
-            lazy="dynamic"))
-    booking = db.relationship(
-        "Booking",
-        backref=db.backref(
-            "autonomous_actions",
-            lazy="dynamic"))
-    driver = db.relationship(
-        "Driver",
-        backref=db.backref(
-            "autonomous_actions",
-            lazy="dynamic"))
+    company = db.relationship("Company", backref=db.backref("autonomous_actions", lazy="dynamic"))
+    booking = db.relationship("Booking", backref=db.backref("autonomous_actions", lazy="dynamic"))
+    driver = db.relationship("Driver", backref=db.backref("autonomous_actions", lazy="dynamic"))
 
     @override
     def __repr__(self) -> str:
         return (
-            f"<AutonomousAction id={self.id} "
-            f"type={self.action_type} "
-            f"company={self.company_id} "
-            f"success={self.success}>"
+            f"<AutonomousAction id={self.id} type={self.action_type} company={self.company_id} success={self.success}>"
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -151,8 +120,7 @@ class AutonomousAction(db.Model):
         }
 
     @classmethod
-    def count_actions_last_hour(cls, company_id: int,
-                                action_type: str | None = None) -> int:
+    def count_actions_last_hour(cls, company_id: int, action_type: str | None = None) -> int:
         """Compte le nombre d'actions dans la dernière heure.
 
         Args:
@@ -164,6 +132,7 @@ class AutonomousAction(db.Model):
 
         """
         from datetime import timedelta
+
         one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
 
         query = cls.query.filter(
@@ -180,8 +149,7 @@ class AutonomousAction(db.Model):
         return query.count()
 
     @classmethod
-    def count_actions_today(cls, company_id: int,
-                            action_type: str | None = None) -> int:
+    def count_actions_today(cls, company_id: int, action_type: str | None = None) -> int:
         """Compte le nombre d'actions aujourd'hui.
 
         Args:
@@ -192,8 +160,7 @@ class AutonomousAction(db.Model):
             Nombre d'actions aujourd'hui
 
         """
-        today_start = datetime.now(timezone.utc).replace(
-            hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
         query = cls.query.filter(
             cls.company_id == company_id,

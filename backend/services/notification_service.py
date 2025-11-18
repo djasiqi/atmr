@@ -49,7 +49,9 @@ def send_push_message(token: str, title: str, body: str, *, timeout: int = 5) ->
 def notify_driver_new_booking(driver_id: int, booking: Booking) -> None:
     room = f"driver_{driver_id}"
     try:
-        payload: Dict[str, Any] = booking.to_dict() if hasattr(booking, "to_dict") else {"id": getattr(booking, "id", None)}
+        payload: Dict[str, Any] = (
+            booking.to_dict() if hasattr(booking, "to_dict") else {"id": getattr(booking, "id", None)}
+        )
         _emit_room("new_booking", payload, room)
     except Exception as e:
         app_logger.error("[notify_driver_new_booking] failed: %s", e)
@@ -59,7 +61,9 @@ def notify_driver_new_booking(driver_id: int, booking: Booking) -> None:
 def notify_booking_update(driver_id: int, booking: Booking) -> None:
     room = f"driver_{driver_id}"
     try:
-        payload: Dict[str, Any] = booking.to_dict() if hasattr(booking, "to_dict") else {"id": getattr(booking, "id", None)}
+        payload: Dict[str, Any] = (
+            booking.to_dict() if hasattr(booking, "to_dict") else {"id": getattr(booking, "id", None)}
+        )
         _emit_room("booking_updated", payload, room)
     except Exception as e:
         app_logger.error("[notify_booking_update] failed: %s", e)
@@ -101,18 +105,18 @@ def notify_dispatch_run_completed(
         if not date_str:
             try:
                 from models import DispatchRun
+
                 dr = DispatchRun.query.get(dispatch_run_id)
                 if dr and getattr(dr, "day", None):
                     d = dr.day
                     date_str = d.isoformat() if hasattr(d, "isoformat") else str(d)
                     app_logger.info(
                         "[notify_dispatch_run_completed] Retrieved date_str=%s from dispatch_run_id=%s",
-                        date_str, dispatch_run_id
+                        date_str,
+                        dispatch_run_id,
                     )
             except Exception as e:
-                app_logger.warning(
-                    "[notify_dispatch_run_completed] Failed to get day_str from DispatchRun: %s", e
-                )
+                app_logger.warning("[notify_dispatch_run_completed] Failed to get day_str from DispatchRun: %s", e)
 
         payload: Dict[str, Any] = {
             "dispatch_run_id": dispatch_run_id,
@@ -146,7 +150,6 @@ def notify_dispatcher_optimization_opportunity(opportunity_data: Dict[str, Any])
 
     """
     try:
-
         company_id = opportunity_data.get("company_id")
         if not company_id:
             app_logger.warning("[notify_dispatcher_optimization_opportunity] No company_id in data")
@@ -167,7 +170,7 @@ def notify_dispatcher_optimization_opportunity(opportunity_data: Dict[str, Any])
             "[notify_dispatcher_optimization_opportunity] Emitting to company %s: severity=%s delay=%d",
             company_id,
             payload.get("severity"),
-            payload.get("current_delay")
+            payload.get("current_delay"),
         )
 
         emit_company_event(company_id, "optimization_opportunity", payload)

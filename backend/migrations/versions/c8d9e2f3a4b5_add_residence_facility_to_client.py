@@ -5,6 +5,7 @@ Revises: af5e460cd09e
 Create Date: 2025-10-17 22:10:00.000000
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -23,4 +24,3 @@ def upgrade():
 def downgrade():
     # Supprimer la colonne residence_facility de la table client
     op.drop_column("client", "residence_facility")
-

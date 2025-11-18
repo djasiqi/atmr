@@ -1,6 +1,7 @@
 """
 Tests unitaires des modèles (sans DB complète).
 """
+
 import pytest
 
 from models.enums import BookingStatus, PaymentStatus, UserRole
@@ -44,4 +45,3 @@ def test_booking_status_choices():
     assert isinstance(choices, list)
     assert "PENDING" in choices
     assert "COMPLETED" in choices
-

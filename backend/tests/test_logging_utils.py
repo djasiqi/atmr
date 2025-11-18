@@ -1,6 +1,7 @@
 """
 Tests pour les utilitaires de masquage PII (logging_utils).
 """
+
 import pytest
 
 from shared.logging_utils import PIIFilter, mask_email, mask_iban, mask_phone, sanitize_log_data
@@ -41,11 +42,7 @@ def test_sanitize_log_data_string():
 
 def test_sanitize_log_data_dict():
     """Sanitize masque PII dans les dicts récursivement."""
-    data = {
-        "name": "John",
-        "email": "john@example.com",
-        "nested": {"phone": "+41791234567"}
-    }
+    data = {"name": "John", "email": "john@example.com", "nested": {"phone": "+41791234567"}}
     sanitized = sanitize_log_data(data)
 
     assert sanitized["name"] == "John"
@@ -67,11 +64,10 @@ def test_pii_filter():
         lineno=0,
         msg="User email: test@example.com",
         args=(),
-        exc_info=None
+        exc_info=None,
     )
 
     result = filter_obj.filter(record)
 
     assert result is True
     assert "***" in record.msg
-

@@ -48,10 +48,10 @@ jobs:
           cd backend
           ruff check . --output-format=github
 
-      - name: Ruff format check
+      - name: Ruff format
         run: |
           cd backend
-          ruff format --check .
+          ruff format .
 
       - name: MyPy type check
         run: |

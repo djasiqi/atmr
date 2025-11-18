@@ -1,6 +1,7 @@
 # pyright: reportAttributeAccessIssue=false
 
 """Service A/B Testing pour comparer ML vs Heuristique."""
+
 import logging
 import time
 from datetime import datetime, timezone
@@ -15,18 +16,14 @@ class ABTestingService:
     """Service pour comparer ML vs Heuristique."""
 
     @staticmethod
-    def run_ab_test(
-        booking: Any,
-        driver: Any,
-        current_time: datetime | None = None
-    ) -> dict[str, Any]:
+    def run_ab_test(booking: Any, driver: Any, current_time: datetime | None = None) -> dict[str, Any]:
         """Exécute test A/B : ML vs Heuristique.
-        
+
         Args:
             booking: Booking à tester
             driver: Driver assigné
             current_time: Timestamp du test
-            
+
         Returns:
             dict avec résultats comparatifs
 
@@ -51,18 +48,15 @@ class ABTestingService:
             "booking_id": booking.id,
             "driver_id": driver.id,
             "test_timestamp": current_time.isoformat(),
-
             # ML
             "ml_delay_minutes": ml_prediction["delay_minutes"],
             "ml_confidence": ml_prediction.get("confidence", 0),
             "ml_risk_level": ml_prediction.get("risk_level", "unknown"),
             "ml_prediction_time_ms": ml_time,
             "ml_weather_factor": ml_prediction.get("weather_factor", 0.5),
-
             # Heuristique
             "heuristic_delay_minutes": heuristic_prediction["delay_minutes"],
             "heuristic_prediction_time_ms": heuristic_time,
-
             # Comparaison
             "difference_minutes": abs(ml_prediction["delay_minutes"] - heuristic_prediction["delay_minutes"]),
             "ml_faster": ml_time < heuristic_time,
@@ -73,17 +67,13 @@ class ABTestingService:
             "[AB Test] Booking %s: ML=%s, Heuristic=%s",
             booking.id,
             ml_prediction["delay_minutes"],
-            heuristic_prediction["delay_minutes"]
+            heuristic_prediction["delay_minutes"],
         )
 
         return result
 
     @staticmethod
-    def _run_ml_prediction(
-        booking: Any,
-        driver: Any,
-        current_time: datetime
-    ) -> dict[str, Any]:
+    def _run_ml_prediction(booking: Any, driver: Any, current_time: datetime) -> dict[str, Any]:
         """Exécute prédiction ML."""
         try:
             from services.unified_dispatch.ml_predictor import get_ml_predictor
@@ -98,7 +88,6 @@ class ABTestingService:
                 "weather_factor": prediction.contributing_factors.get("weather_factor", 0.5),
             }
         except Exception as e:
-
             logger.error("[AB Test] ML prediction failed: %s", e)
             return {
                 "delay_minutes": 5,
@@ -110,7 +99,7 @@ class ABTestingService:
     @staticmethod
     def _run_heuristic_prediction(booking: Any, _driver: Any) -> dict[str, Any]:
         """Exécute prédiction heuristique simple.
-        
+
         Basé sur distance Haversine : 0.5 min/km (30 km/h moyen).
         """
         try:
@@ -129,17 +118,16 @@ class ABTestingService:
 
             return {"delay_minutes": delay_minutes}
         except Exception as e:
-
             logger.error("[AB Test] Heuristic prediction failed: %s", e)
             return {"delay_minutes": 5}
 
     @staticmethod
     def calculate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         """Calcule métriques agrégées des tests A/B.
-        
+
         Args:
             results: Liste des résultats A/B
-            
+
         Returns:
             dict avec métriques agrégées
 
@@ -164,16 +152,13 @@ class ABTestingService:
 
         metrics = {
             "total_tests": n,
-
             # ML
             "ml_avg_delay": sum(ml_delays) / n,
             "ml_avg_time_ms": sum(ml_times) / n,
             "ml_avg_confidence": sum(ml_confidences) / n,
-
             # Heuristique
             "heuristic_avg_delay": sum(heuristic_delays) / n,
             "heuristic_avg_time_ms": sum(heuristic_times) / n,
-
             # Comparaison
             "avg_difference_minutes": sum(differences) / n,
             "ml_faster_percentage": (ml_faster_count / n) * 100,
@@ -190,11 +175,11 @@ class ABTestingService:
 
 def run_batch_ab_tests(booking_ids: list[int], driver_ids: list[int]) -> dict[str, Any]:
     """Exécute tests A/B en batch.
-    
+
     Args:
         booking_ids: Liste IDs bookings
         driver_ids: Liste IDs drivers (appariés)
-        
+
     Returns:
         dict avec résultats et métriques
 
@@ -233,4 +218,3 @@ def run_batch_ab_tests(booking_ids: list[int], driver_ids: list[int]) -> dict[st
         "timestamp": current_time.isoformat(),
         "total_tests": len(results),
     }
-

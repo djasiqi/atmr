@@ -10,4 +10,3 @@ __all__ = [
     "get_encryption_service",
     "reset_encryption_service",
 ]
-

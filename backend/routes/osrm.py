@@ -1,4 +1,5 @@
 """Routes API pour OSRM (itinéraires et calculs de durée)."""
+
 import logging
 import os
 
@@ -15,12 +16,13 @@ osrm_ns = Namespace("osrm", description="OSRM routing services")
 
 # Modèle pour la réponse de route
 route_response_model = osrm_ns.model(
-    "RouteResponse", {
-        "duration": fields.Float(
-            description="Durée en secondes"), "distance": fields.Float(
-                description="Distance en mètres"), "route": fields.List(
-                    fields.List(
-                        fields.Float), description="Liste des coordonnées [lat, lon]"), })
+    "RouteResponse",
+    {
+        "duration": fields.Float(description="Durée en secondes"),
+        "distance": fields.Float(description="Distance en mètres"),
+        "route": fields.List(fields.List(fields.Float), description="Liste des coordonnées [lat, lon]"),
+    },
+)
 
 
 @osrm_ns.route("/route")
@@ -69,14 +71,10 @@ class OSRMRoute(Resource):
 
             # Extraire les coordonnées de la géométrie
             route_coords = []
-            if result.get("geometry") and result["geometry"].get(
-                    "coordinates"):
+            if result.get("geometry") and result["geometry"].get("coordinates"):
                 # OSRM retourne [lon, lat], on convertit en [lat, lon] pour
                 # Leaflet
-                route_coords = [
-                    [coord[1], coord[0]]
-                    for coord in result["geometry"]["coordinates"]
-                ]
+                route_coords = [[coord[1], coord[0]] for coord in result["geometry"]["coordinates"]]
 
             return {
                 "duration": result.get("duration", 0),
@@ -85,6 +83,5 @@ class OSRMRoute(Resource):
             }, 200
 
         except Exception as e:
-
             logger.error("Erreur OSRM route: %s", e)
             return {"error": str(e)}, 500

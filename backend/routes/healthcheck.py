@@ -1,4 +1,5 @@
 """Enhanced healthcheck endpoint with DB and Redis checks."""
+
 from flask import Blueprint, jsonify
 from sqlalchemy import text
 
@@ -10,7 +11,7 @@ healthcheck_bp = Blueprint("healthcheck", __name__)
 @healthcheck_bp.route("/ready")
 def readiness():
     """Kubernetes readiness probe - vérifie dépendances critiques.
-    
+
     Returns:
         200 si DB + Redis OK, 503 sinon.
         Utilisé par Kubernetes pour déterminer si le pod peut recevoir du trafic.
@@ -45,14 +46,11 @@ def readiness():
 @healthcheck_bp.route("/health/detailed")
 def detailed_health():
     """Detailed healthcheck with component status
-    
+
     Returns 200 if all OK, 503 if any component degraded.
     Note: Plus permissif que /ready - Redis n'est pas critique ici.
     """
-    status = {
-        "status": "ok",
-        "components": {}
-    }
+    status = {"status": "ok", "components": {}}
 
     # Check DB
     try:

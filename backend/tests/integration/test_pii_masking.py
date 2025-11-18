@@ -33,7 +33,7 @@ class TestPIIMasking:
                 "phone": ["+33123456789"],
                 "name": ["John Doe"],
                 "address": ["123 Main Street"],
-                "confidence": 0.95
+                "confidence": 0.95,
             }
 
             # Test de détection PII (mock)
@@ -46,7 +46,7 @@ class TestPIIMasking:
                 "user_email": "user@example.com",
                 "user_phone": "+33123456789",
                 "user_name": "John Doe",
-                "user_address": "123 Main Street"
+                "user_address": "123 Main Street",
             }
 
             pii_detected = detector.detect_pii(test_data)
@@ -160,7 +160,7 @@ class TestPIIMasking:
                 "user_name": "J*** D**",
                 "user_address": "123 *** Street",
                 "masking_applied": True,
-                "masking_timestamp": "2025-0.1-01T00:00:00Z"
+                "masking_timestamp": "2025-0.1-01T00:00:00Z",
             }
 
             # Test de masquage complet (mock)
@@ -173,7 +173,7 @@ class TestPIIMasking:
                 "user_email": "user@example.com",
                 "user_phone": "+33123456789",
                 "user_name": "John Doe",
-                "user_address": "123 Main Street"
+                "user_address": "123 Main Street",
             }
 
             masked_data = masker.mask_complete_data(original_data)
@@ -193,7 +193,7 @@ class TestPIIMasking:
             mock_masker.return_value.mask_reversible.return_value = {
                 "masked_data": "u***@e******.com",
                 "masking_key": "encrypted_key_123",
-                "reversible": True
+                "reversible": True,
             }
 
             # Test de masquage réversible (mock)
@@ -221,7 +221,7 @@ class TestPIIMasking:
             mock_masker.return_value.mask_irreversible.return_value = {
                 "masked_data": "u***@e******.com",
                 "irreversible": True,
-                "hash": "sha256_hash_123"
+                "hash": "sha256_hash_123",
             }
 
             # Test de masquage irréversible (mock)
@@ -252,11 +252,11 @@ class TestPIIMasking:
                     "user_email": "u***@e******.com",
                     "user_phone": "+33***56789",
                     "user_name": "J*** D**",
-                    "user_address": "123 *** Street"
+                    "user_address": "123 *** Street",
                 },
                 "anonymization_level": "high",
                 "anonymization_method": "k_anonymity",
-                "k_value": 5
+                "k_value": 5,
             }
 
             # Test d'anonymisation (mock)
@@ -270,7 +270,7 @@ class TestPIIMasking:
                 "user_email": "user@example.com",
                 "user_phone": "+33123456789",
                 "user_name": "John Doe",
-                "user_address": "123 Main Street"
+                "user_address": "123 Main Street",
             }
 
             anonymized_result = masker.anonymize_data(original_data)
@@ -294,8 +294,8 @@ class TestPIIMasking:
                 "compliance_score": 0.95,
                 "recommendations": [
                     "Consider using stronger masking for sensitive data",
-                    "Implement data retention policies"
-                ]
+                    "Implement data retention policies",
+                ],
             }
 
             # Test de vérification de conformité (mock)
@@ -304,11 +304,7 @@ class TestPIIMasking:
             checker = PIIComplianceChecker()
 
             # Test de vérification
-            test_data = {
-                "user_email": "u***@e******.com",
-                "user_phone": "+33***56789",
-                "user_name": "J*** D**"
-            }
+            test_data = {"user_email": "u***@e******.com", "user_phone": "+33***56789", "user_name": "J*** D**"}
 
             compliance_result = checker.check_compliance(test_data)
 
@@ -334,9 +330,9 @@ class TestPIIMaskingIntegration:
                 "masked_booking": {
                     "patient_name": "J*** D**",
                     "patient_phone": "+33***56789",
-                    "patient_address": "123 *** Street"
+                    "patient_address": "123 *** Street",
                 },
-                "masking_applied": True
+                "masking_applied": True,
             }
 
             # Test de l'intégration (mock)
@@ -349,7 +345,7 @@ class TestPIIMaskingIntegration:
                 "booking_id": 123,
                 "patient_name": "John Doe",
                 "patient_phone": "+33123456789",
-                "patient_address": "123 Main Street"
+                "patient_address": "123 Main Street",
             }
 
             masked_booking = dispatch_manager.mask_pii_in_booking(original_booking)
@@ -370,7 +366,7 @@ class TestPIIMaskingIntegration:
                 "original_state": [0.1, 0.2, 0.3, 0.4, 0.5],
                 "masked_state": [0.1, 0.2, 0.3, 0.4, 0.5],
                 "pii_masked": True,
-                "masking_method": "anonymization"
+                "masking_method": "anonymization",
             }
 
             # Test de l'intégration RL (mock)
@@ -398,7 +394,7 @@ class TestPIIMaskingIntegration:
                 "log_entry": "PII masked successfully",
                 "masking_timestamp": "2025-0.1-01T00:00:00Z",
                 "masking_method": "anonymization",
-                "data_type": "booking_data"
+                "data_type": "booking_data",
             }
 
             # Test de l'intégration logging (mock)
@@ -407,10 +403,7 @@ class TestPIIMaskingIntegration:
             logger = PIILogger()
 
             # Test de logging des données masquées
-            masked_data = {
-                "user_email": "u***@e******.com",
-                "user_phone": "+33***56789"
-            }
+            masked_data = {"user_email": "u***@e******.com", "user_phone": "+33***56789"}
 
             log_result = logger.log_masked_data(masked_data)
 

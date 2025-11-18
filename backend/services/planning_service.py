@@ -54,7 +54,9 @@ def _normalize_to_local_naive(dt: datetime | None) -> datetime | None:
     return dt
 
 
-def validate_shift_overlap(company_id: int, driver_id: int, start_local: datetime, end_local: datetime, *, exclude_id: int | None = None) -> None:
+def validate_shift_overlap(
+    company_id: int, driver_id: int, start_local: datetime, end_local: datetime, *, exclude_id: int | None = None
+) -> None:
     """Squelette: lève une ValueError si un chevauchement est détecté."""
     # Normalize to naive local for consistent comparisons & DB filters
     start_local_norm = _normalize_to_local_naive(start_local)
@@ -65,7 +67,7 @@ def validate_shift_overlap(company_id: int, driver_id: int, start_local: datetim
     if end_local_norm <= start_local_norm:
         msg = "end_local doit être > start_local"
         raise ValueError(msg)
-    
+
     # Utiliser les valeurs normalisées pour la requête
     start_local = start_local_norm
     end_local = end_local_norm
@@ -130,7 +132,7 @@ def is_driver_available_at(company_id: int, driver_id: int, dt: datetime) -> boo
                 DriverShift.driver_id == driver_id,
                 DriverShift.start_local <= local_dt,
                 DriverShift.end_local >= local_dt,
-                DriverShift.status.in_([ShiftStatus.SCHEDULED, ShiftStatus.ACTIVE])
+                DriverShift.status.in_([ShiftStatus.SCHEDULED, ShiftStatus.ACTIVE]),
             )
         ).first()
 
@@ -139,14 +141,17 @@ def is_driver_available_at(company_id: int, driver_id: int, dt: datetime) -> boo
             return False
 
         # 2. Vérifier qu'il n'est pas en indisponibilité
-        has_unavailability = DriverUnavailability.query.filter(
-            and_(
-                DriverUnavailability.company_id == company_id,
-                DriverUnavailability.driver_id == driver_id,
-                DriverUnavailability.start_date <= local_date,
-                DriverUnavailability.end_date >= local_date
-            )
-        ).first() is not None
+        has_unavailability = (
+            DriverUnavailability.query.filter(
+                and_(
+                    DriverUnavailability.company_id == company_id,
+                    DriverUnavailability.driver_id == driver_id,
+                    DriverUnavailability.start_date <= local_date,
+                    DriverUnavailability.end_date >= local_date,
+                )
+            ).first()
+            is not None
+        )
 
         # 3. TODO futur : Vérifier les pauses (DriverBreak)
         # Pour l'instant, on considère disponible si shift actif et pas indispo
@@ -157,8 +162,7 @@ def is_driver_available_at(company_id: int, driver_id: int, dt: datetime) -> boo
     except Exception as e:
         # En cas d'erreur, considérer comme non disponible par sécurité
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning("Erreur vérification disponibilité driver #%s à %s: %s", driver_id, dt, e)
         return False
-
-

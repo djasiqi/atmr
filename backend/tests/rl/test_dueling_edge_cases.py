@@ -41,7 +41,7 @@ class TestDuelingShapesEdgeCases:
             action_dim=10,
             shared_hidden_sizes=(512, 256),
             value_hidden_size=0.128,
-            advantage_hidden_size=0.128
+            advantage_hidden_size=0.128,
         )
 
     def test_dueling_network_with_minimal_dimensions(self):
@@ -54,7 +54,7 @@ class TestDuelingShapesEdgeCases:
             action_dim=1,
             shared_hidden_sizes=(2, 1),  # Corrigé: au moins 2 éléments
             value_hidden_size=1,
-            advantage_hidden_size=1
+            advantage_hidden_size=1,
         )
 
         # Test forward pass
@@ -75,7 +75,7 @@ class TestDuelingShapesEdgeCases:
             action_dim=0.100,
             shared_hidden_sizes=(2048, 1024, 512),
             value_hidden_size=0.256,
-            advantage_hidden_size=0.256
+            advantage_hidden_size=0.256,
         )
 
         # Test forward pass
@@ -96,7 +96,7 @@ class TestDuelingShapesEdgeCases:
             action_dim=1,
             shared_hidden_sizes=(512, 256),
             value_hidden_size=0.128,
-            advantage_hidden_size=0.128
+            advantage_hidden_size=0.128,
         )
 
         # Test forward pass
@@ -117,7 +117,7 @@ class TestDuelingShapesEdgeCases:
             action_dim=10,
             shared_hidden_sizes=(512, 256),
             value_hidden_size=0.128,
-            advantage_hidden_size=0.128
+            advantage_hidden_size=0.128,
         )
 
         # Test forward pass
@@ -195,7 +195,7 @@ class TestDuelingValueAdvantageEdgeCases:
             action_dim=10,
             shared_hidden_sizes=(512, 256),
             value_hidden_size=0.128,
-            advantage_hidden_size=0.128
+            advantage_hidden_size=0.128,
         )
 
     def test_value_stream_with_extreme_values(self, dueling_network):
@@ -299,7 +299,7 @@ class TestDuelingAggregationEdgeCases:
             action_dim=10,
             shared_hidden_sizes=(512, 256),
             value_hidden_size=0.128,
-            advantage_hidden_size=0.128
+            advantage_hidden_size=0.128,
         )
 
     def test_aggregation_formula_with_single_action(self):
@@ -312,7 +312,7 @@ class TestDuelingAggregationEdgeCases:
             action_dim=1,
             shared_hidden_sizes=(512, 256),
             value_hidden_size=0.128,
-            advantage_hidden_size=0.128
+            advantage_hidden_size=0.128,
         )
 
         state = torch.randn(1, 100)
@@ -332,7 +332,7 @@ class TestDuelingAggregationEdgeCases:
             action_dim=2,
             shared_hidden_sizes=(512, 256),
             value_hidden_size=0.128,
-            advantage_hidden_size=0.128
+            advantage_hidden_size=0.128,
         )
 
         state = torch.randn(1, 100)
@@ -412,7 +412,7 @@ class TestDuelingInitializationEdgeCases:
                 "action_dim": 5,
                 "shared_hidden_sizes": (32, 16),  # Corrigé: au moins 2 éléments
                 "value_hidden_size": 16,
-                "advantage_hidden_size": 16
+                "advantage_hidden_size": 16,
             },
             # Architecture standard
             {
@@ -420,7 +420,7 @@ class TestDuelingInitializationEdgeCases:
                 "action_dim": 10,
                 "shared_hidden_sizes": (512, 256),
                 "value_hidden_size": 128,
-                "advantage_hidden_size": 128
+                "advantage_hidden_size": 128,
             },
             # Architecture large
             {
@@ -428,8 +428,8 @@ class TestDuelingInitializationEdgeCases:
                 "action_dim": 100,
                 "shared_hidden_sizes": (2048, 1024, 512),
                 "value_hidden_size": 256,
-                "advantage_hidden_size": 256
-            }
+                "advantage_hidden_size": 256,
+            },
         ]
 
         for arch in architectures:
@@ -450,11 +450,29 @@ class TestDuelingInitializationEdgeCases:
 
         edge_cases = [
             # Dimensions minimales
-            {"state_dim": 1, "action_dim": 1, "shared_hidden_sizes": (1, 1), "value_hidden_size": 1, "advantage_hidden_size": 1},
+            {
+                "state_dim": 1,
+                "action_dim": 1,
+                "shared_hidden_sizes": (1, 1),
+                "value_hidden_size": 1,
+                "advantage_hidden_size": 1,
+            },
             # Dimensions égales
-            {"state_dim": 50, "action_dim": 50, "shared_hidden_sizes": (50, 25), "value_hidden_size": 50, "advantage_hidden_size": 50},
+            {
+                "state_dim": 50,
+                "action_dim": 50,
+                "shared_hidden_sizes": (50, 25),
+                "value_hidden_size": 50,
+                "advantage_hidden_size": 50,
+            },
             # Dimensions très différentes
-            {"state_dim": 1000, "action_dim": 2, "shared_hidden_sizes": (500, 250), "value_hidden_size": 100, "advantage_hidden_size": 100},
+            {
+                "state_dim": 1000,
+                "action_dim": 2,
+                "shared_hidden_sizes": (500, 250),
+                "value_hidden_size": 100,
+                "advantage_hidden_size": 100,
+            },
         ]
 
         for case in edge_cases:
@@ -478,7 +496,7 @@ class TestDuelingInitializationEdgeCases:
             action_dim=10,
             shared_hidden_sizes=(512, 256),
             value_hidden_size=0.128,
-            advantage_hidden_size=0.128
+            advantage_hidden_size=0.128,
         )
 
         # Vérifier que les poids ne sont pas tous zéro (sauf pour les paramètres normalement initialisés à zéro)
@@ -503,7 +521,7 @@ class TestDuelingInitializationEdgeCases:
             action_dim=10,
             shared_hidden_sizes=(512, 256),
             value_hidden_size=0.128,
-            advantage_hidden_size=0.128
+            advantage_hidden_size=0.128,
         )
 
         state = torch.randn(1, 100, requires_grad=True)
