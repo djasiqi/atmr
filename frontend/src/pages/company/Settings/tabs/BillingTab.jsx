@@ -261,17 +261,19 @@ const BillingTab = () => {
             <span className={styles.unit}>CHF</span>
           </div>
           <small className={styles.hint}>
-            Montant facturé lorsque le paiement est en retard après l'échéance
+            Montant facturé automatiquement lorsque le paiement est en retard après l'échéance
           </small>
         </div>
+      </section>
 
-        {/* Frais de rappel - Toujours visibles */}
-        <h2 style={{ marginTop: '24px' }}>📧 Frais de rappel</h2>
+      {/* Section Rappels */}
+      <section className={styles.section}>
+        <h2>📧 Rappels de paiement</h2>
         <small className={styles.hint} style={{ display: 'block', marginBottom: '16px' }}>
-          Montants facturés lors de l'émission de chaque rappel (applicables même si les rappels automatiques sont désactivés)
+          Configurez les frais et délais pour chaque niveau de rappel. Les frais sont toujours facturés lors de l'émission du rappel, même si l'envoi automatique est désactivé.
         </small>
 
-        {/* 1er rappel */}
+        {/* 1er rappel - Délai et Frais ensemble */}
         <div className={styles.reminderRow}>
           <h4 className={styles.reminderTitle}>1er rappel</h4>
           <div className={styles.reminderFields}>
@@ -289,12 +291,26 @@ const BillingTab = () => {
                 />
                 <span className={styles.unit}>CHF</span>
               </div>
-              <small className={styles.hint}>Montant facturé lors de l'émission du 1er rappel</small>
+              <small className={styles.hint}>Montant facturé lors de l'émission</small>
             </div>
+            {form.auto_reminders_enabled && (
+              <div className={styles.formGroup}>
+                <label>Délai d'envoi (jours)</label>
+                <input
+                  type="number"
+                  value={form.reminder_schedule_days['1'] || 10}
+                  onChange={(e) => handleReminderScheduleChange('1', e.target.value)}
+                  onBlur={handleReminderScheduleBlur}
+                  min="1"
+                  max="90"
+                />
+                <small className={styles.hint}>Jours après l'échéance</small>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* 2e rappel */}
+        {/* 2e rappel - Délai et Frais ensemble */}
         <div className={styles.reminderRow}>
           <h4 className={styles.reminderTitle}>2e rappel</h4>
           <div className={styles.reminderFields}>
@@ -312,12 +328,26 @@ const BillingTab = () => {
                 />
                 <span className={styles.unit}>CHF</span>
               </div>
-              <small className={styles.hint}>Montant facturé lors de l'émission du 2e rappel</small>
+              <small className={styles.hint}>Montant facturé lors de l'émission</small>
             </div>
+            {form.auto_reminders_enabled && (
+              <div className={styles.formGroup}>
+                <label>Délai d'envoi (jours)</label>
+                <input
+                  type="number"
+                  value={form.reminder_schedule_days['2'] || 5}
+                  onChange={(e) => handleReminderScheduleChange('2', e.target.value)}
+                  onBlur={handleReminderScheduleBlur}
+                  min="1"
+                  max="90"
+                />
+                <small className={styles.hint}>Jours après le 1er rappel</small>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* 3e rappel */}
+        {/* 3e rappel - Délai et Frais ensemble */}
         <div className={styles.reminderRow}>
           <h4 className={styles.reminderTitle}>3e rappel (Mise en demeure)</h4>
           <div className={styles.reminderFields}>
@@ -335,82 +365,35 @@ const BillingTab = () => {
                 />
                 <span className={styles.unit}>CHF</span>
               </div>
-              <small className={styles.hint}>Montant facturé lors de l'émission du 3e rappel (mise en demeure)</small>
+              <small className={styles.hint}>Montant facturé lors de l'émission</small>
             </div>
+            {form.auto_reminders_enabled && (
+              <div className={styles.formGroup}>
+                <label>Délai d'envoi (jours)</label>
+                <input
+                  type="number"
+                  value={form.reminder_schedule_days['3'] || 3}
+                  onChange={(e) => handleReminderScheduleChange('3', e.target.value)}
+                  onBlur={handleReminderScheduleBlur}
+                  min="1"
+                  max="90"
+                />
+                <small className={styles.hint}>Jours après le 2e rappel</small>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Rappels automatiques */}
-        <h2 style={{ marginTop: '24px' }}>⏰ Planning des rappels automatiques</h2>
-
-        <ToggleField
-          label="Activer les rappels automatiques"
-          name="auto_reminders_enabled"
-          value={form.auto_reminders_enabled}
-          onChange={handleToggle}
-          hint="Les rappels seront envoyés automatiquement selon le planning défini ci-dessous"
-        />
-
-        {form.auto_reminders_enabled && (
-          <>
-            {/* 1er rappel - Délai */}
-            <div className={styles.reminderRow}>
-              <h4 className={styles.reminderTitle}>1er rappel - Délai</h4>
-              <div className={styles.reminderFields}>
-                <div className={styles.formGroup}>
-                  <label>Délai (jours)</label>
-                  <input
-                    type="number"
-                    value={form.reminder_schedule_days['1'] || 10}
-                    onChange={(e) => handleReminderScheduleChange('1', e.target.value)}
-                    onBlur={handleReminderScheduleBlur}
-                    min="1"
-                    max="90"
-                  />
-                  <small className={styles.hint}>Jours après l'échéance avant l'envoi du 1er rappel</small>
-                </div>
-              </div>
-            </div>
-
-            {/* 2e rappel - Délai */}
-            <div className={styles.reminderRow}>
-              <h4 className={styles.reminderTitle}>2e rappel - Délai</h4>
-              <div className={styles.reminderFields}>
-                <div className={styles.formGroup}>
-                  <label>Délai (jours)</label>
-                  <input
-                    type="number"
-                    value={form.reminder_schedule_days['2'] || 5}
-                    onChange={(e) => handleReminderScheduleChange('2', e.target.value)}
-                    onBlur={handleReminderScheduleBlur}
-                    min="1"
-                    max="90"
-                  />
-                  <small className={styles.hint}>Jours après le 1er rappel avant l'envoi du 2e rappel</small>
-                </div>
-              </div>
-            </div>
-
-            {/* 3e rappel - Délai */}
-            <div className={styles.reminderRow}>
-              <h4 className={styles.reminderTitle}>3e rappel - Délai</h4>
-              <div className={styles.reminderFields}>
-                <div className={styles.formGroup}>
-                  <label>Délai (jours)</label>
-                  <input
-                    type="number"
-                    value={form.reminder_schedule_days['3'] || 3}
-                    onChange={(e) => handleReminderScheduleChange('3', e.target.value)}
-                    onBlur={handleReminderScheduleBlur}
-                    min="1"
-                    max="90"
-                  />
-                  <small className={styles.hint}>Jours après le 2e rappel avant l'envoi du 3e rappel (mise en demeure)</small>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
+        {/* Activation des rappels automatiques */}
+        <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--border-primary)' }}>
+          <ToggleField
+            label="Activer l'envoi automatique des rappels"
+            name="auto_reminders_enabled"
+            value={form.auto_reminders_enabled}
+            onChange={handleToggle}
+            hint="Si activé, les rappels seront envoyés automatiquement selon les délais configurés ci-dessus. Les frais seront toujours facturés même si l'envoi est manuel."
+          />
+        </div>
       </section>
 
       {/* Templates d'emails */}

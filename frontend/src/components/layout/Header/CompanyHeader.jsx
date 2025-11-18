@@ -67,8 +67,12 @@ const CompanyHeader = () => {
               src={logoSrc}
               alt="Logo de l'entreprise"
               className={styles.logoImg}
-              onError={() => {
-                console.warn('Erreur de chargement du logo:', logoSrc);
+              onError={(e) => {
+                console.warn('Erreur de chargement du logo:', logoSrc, {
+                  naturalWidth: e.currentTarget.naturalWidth,
+                  naturalHeight: e.currentTarget.naturalHeight,
+                  complete: e.currentTarget.complete,
+                });
                 setLogoError(true);
               }}
               onLoad={() => setLogoError(false)}

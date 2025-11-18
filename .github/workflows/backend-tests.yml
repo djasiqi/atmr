@@ -17,7 +17,7 @@ on:
 
 jobs:
   lint:
-    name: Lint (Ruff)
+    name: Lint (Ruff + MyPy + Vulture)
     runs-on: ubuntu-latest
 
     steps:
@@ -31,18 +31,43 @@ jobs:
           cache: "pip"
           cache-dependency-path: backend/requirements.txt
 
-      - name: Install Ruff
-        run: pip install ruff
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcairo2-dev libffi-dev pkg-config
 
-      - name: Run Ruff linter
+      - name: Install dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install ruff mypy vulture
+          pip install -r requirements.txt
+
+      - name: Ruff lint
         run: |
           cd backend
           ruff check . --output-format=github
 
-      - name: Run Ruff formatter check
+      - name: Ruff format check
         run: |
           cd backend
           ruff format --check .
+
+      - name: MyPy type check
+        run: |
+          cd backend
+          mypy --install-types --non-interactive --ignore-missing-imports \
+            models/ routes/ services/ tasks/ shared/
+        continue-on-error: true # MyPy strict peut être activé progressivement
+
+      - name: Check dead code (vulture)
+        run: |
+          cd backend
+          vulture . \
+            --min-confidence 80 \
+            --sort-by-size \
+            --exclude venv,__pycache__,migrations,htmlcov,.pytest_cache,temp_*,instance,uploads,static/qrcodes,scripts/profiling,data/ml,data/rl
+        continue-on-error: true # Continue même si du code mort est détecté (alerte uniquement)
 
   test:
     name: Tests (pytest)
