@@ -10,7 +10,10 @@ import {
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { registerPushToken } from "@/services/api"; // si l’alias '@' n'est pas configuré: ../services/api
+import { registerPushToken } from "@/services/api"; // si l'alias '@' n'est pas configuré: ../services/api
+
+// ✅ Enregistrer la tâche de localisation en arrière-plan
+import "@/tasks/locationTask";
 
 Sentry.init({
   dsn: "https://500ea836dce2e802b27109d857cb3534@o4509736814772224.ingest.de.sentry.io/4509736867201104",

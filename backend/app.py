@@ -821,6 +821,17 @@ def create_app(config_name: str | None = None):
 
         @app.errorhandler(Exception)
         def handle_exception(e: Exception):  # pyright: ignore[reportUnusedFunction]
+            # Intercepter les erreurs JWT expirées qui peuvent échapper aux handlers JWT
+            from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
+
+            if isinstance(e, ExpiredSignatureError):
+                app.logger.warning("Token JWT expiré intercepté: %s", str(e))
+                return jsonify({"error": "token_expired", "message": "Signature has expired"}), 401
+            if isinstance(e, InvalidTokenError):
+                app.logger.warning("Token JWT invalide intercepté: %s", str(e))
+                return jsonify({"error": "invalid_token", "message": str(e)}), 422
+
+            # Pour toutes les autres exceptions
             app.logger.exception("Unhandled server error")
             msg = str(e) if app.config.get("DEBUG") else "Une erreur interne est survenue."
             return jsonify({"error": "server_error", "message": msg}), 500

@@ -405,8 +405,7 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
           const amount = Number.isNaN(baseAmount) ? 0 : baseAmount;
           const vatRate = vatConfig.applicable
             ? Number(
-                override.vat_rate ??
-                  reservation?.vat_rate ??
+                reservation?.vat_rate ??
                   reservation?.default_vat_rate ??
                   vatConfig.defaultRate ??
                   0
@@ -461,10 +460,6 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
         if (override.amount !== undefined) {
           const amount = Number(override.amount);
           if (!Number.isNaN(amount)) clean.amount = amount;
-        }
-        if (override.vat_rate !== undefined) {
-          const rate = Number(override.vat_rate);
-          if (!Number.isNaN(rate)) clean.vat_rate = rate;
         }
         if (override.note) {
           clean.note = override.note;
@@ -787,7 +782,7 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
                             <span>Montant HT</span>
                             <strong>{formatCurrency(directTotals.base)}</strong>
                           </div>
-                          {vatConfig.applicable && (
+                          {vatConfig.applicable && directTotals.vat > 0 && (
                             <div className={styles.summaryCardRow}>
                               <span>TVA totale</span>
                               <strong>{formatCurrency(directTotals.vat)}</strong>
@@ -914,7 +909,7 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
                     <span>Montant HT global</span>
                     <strong>{formatCurrency(consolidatedTotals.base)}</strong>
                   </div>
-                  {vatConfig.applicable && (
+                  {vatConfig.applicable && consolidatedTotals.vat > 0 && (
                     <div className={styles.summaryCardRow}>
                       <span>TVA totale</span>
                       <strong>{formatCurrency(consolidatedTotals.vat)}</strong>

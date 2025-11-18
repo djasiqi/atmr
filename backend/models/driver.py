@@ -100,69 +100,107 @@ class Driver(db.Model):
 
     @property
     def serialize(self):
-        user = getattr(self, "user", None)
-        last_pos = getattr(self, "last_position_update", None)
-        emp_start = getattr(self, "employment_start_date", None)
-        emp_end = getattr(self, "employment_end_date", None)
-        license_valid = getattr(self, "license_valid_until", None)
-        medical_valid = getattr(self, "medical_valid_until", None)
-        user_payload = None
-        username = None
-        first_name = None
-        last_name = None
-        email = None
-        full_name = None
-        if user is not None:
-            try:
-                user_payload = user.serialize
-            except Exception:
-                user_payload = {
-                    "id": getattr(user, "id", None),
-                    "public_id": getattr(user, "public_id", None),
-                    "username": getattr(user, "username", None),
-                    "email": getattr(user, "email", None),
-                    "first_name": getattr(user, "first_name", None),
-                    "last_name": getattr(user, "last_name", None),
-                }
-            username = getattr(user, "username", None)
-            first_name = getattr(user, "first_name", None)
-            last_name = getattr(user, "last_name", None)
-            email = getattr(user, "email", None)
-            fn = (first_name or "").strip()
-            ln = (last_name or "").strip()
-            full_name = (f"{fn} {ln}".strip()) or username
+        try:
+            user = getattr(self, "user", None)
+            last_pos = getattr(self, "last_position_update", None)
+            emp_start = getattr(self, "employment_start_date", None)
+            emp_end = getattr(self, "employment_end_date", None)
+            license_valid = getattr(self, "license_valid_until", None)
+            medical_valid = getattr(self, "medical_valid_until", None)
+            user_payload = None
+            username = None
+            first_name = None
+            last_name = None
+            email = None
+            full_name = None
+            if user is not None:
+                try:
+                    user_payload = user.serialize
+                except Exception:
+                    user_payload = {
+                        "id": getattr(user, "id", None),
+                        "public_id": getattr(user, "public_id", None),
+                        "username": getattr(user, "username", None),
+                        "email": getattr(user, "email", None),
+                        "first_name": getattr(user, "first_name", None),
+                        "last_name": getattr(user, "last_name", None),
+                    }
+                username = getattr(user, "username", None)
+                first_name = getattr(user, "first_name", None)
+                last_name = getattr(user, "last_name", None)
+                email = getattr(user, "email", None)
+                fn = (first_name or "").strip()
+                ln = (last_name or "").strip()
+                full_name = (f"{fn} {ln}".strip()) or username
 
-        return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "company_id": self.company_id,
-            "user": user_payload,
-            "username": username,
-            "first_name": first_name,
-            "last_name": last_name,
-            "full_name": full_name,
-            "email": email,
-            "is_active": _as_bool(getattr(self, "is_active", False)),
-            "is_available": _as_bool(getattr(self, "is_available", False)),
-            "driver_type": getattr(getattr(self, "driver_type", None), "value", getattr(self, "driver_type", None)),
-            "vehicle_assigned": getattr(self, "vehicle_assigned", None),
-            "brand": getattr(self, "brand", None),
-            "latitude": getattr(self, "latitude", None),
-            "longitude": getattr(self, "longitude", None),
-            "last_position_update": (last_pos.isoformat() if last_pos is not None else None),
-            "driver_photo": getattr(self, "driver_photo", None),
-            "photo": getattr(self, "driver_photo", None),
-            "push_token": getattr(self, "push_token", None),
-            "contract_type": getattr(self, "contract_type", None),
-            "weekly_hours": getattr(self, "weekly_hours", None),
-            "hourly_rate_cents": getattr(self, "hourly_rate_cents", None),
-            "employment_start_date": emp_start.isoformat() if emp_start else None,
-            "employment_end_date": emp_end.isoformat() if emp_end else None,
-            "license_categories": getattr(self, "license_categories", []),
-            "license_valid_until": license_valid.isoformat() if license_valid else None,
-            "trainings": getattr(self, "trainings", []),
-            "medical_valid_until": medical_valid.isoformat() if medical_valid else None,
-        }
+            return {
+                "id": self.id,
+                "user_id": self.user_id,
+                "company_id": self.company_id,
+                "user": user_payload,
+                "username": username,
+                "first_name": first_name,
+                "last_name": last_name,
+                "full_name": full_name,
+                "email": email,
+                "is_active": _as_bool(getattr(self, "is_active", False)),
+                "is_available": _as_bool(getattr(self, "is_available", False)),
+                "driver_type": getattr(getattr(self, "driver_type", None), "value", getattr(self, "driver_type", None)),
+                "vehicle_assigned": getattr(self, "vehicle_assigned", None),
+                "brand": getattr(self, "brand", None),
+                "latitude": getattr(self, "latitude", None),
+                "longitude": getattr(self, "longitude", None),
+                "last_position_update": (last_pos.isoformat() if last_pos is not None else None),
+                "driver_photo": getattr(self, "driver_photo", None),
+                "photo": getattr(self, "driver_photo", None),
+                "push_token": getattr(self, "push_token", None),
+                "contract_type": getattr(self, "contract_type", None),
+                "weekly_hours": getattr(self, "weekly_hours", None),
+                "hourly_rate_cents": getattr(self, "hourly_rate_cents", None),
+                "employment_start_date": emp_start.isoformat() if emp_start else None,
+                "employment_end_date": emp_end.isoformat() if emp_end else None,
+                "license_categories": getattr(self, "license_categories", []),
+                "license_valid_until": license_valid.isoformat() if license_valid else None,
+                "trainings": getattr(self, "trainings", []),
+                "medical_valid_until": medical_valid.isoformat() if medical_valid else None,
+            }
+        except Exception as e:
+            # Log l'erreur mais retourne un profil minimal pour éviter une erreur 500
+            import logging
+            logger = logging.getLogger("driver_model")
+            logger.error(f"Erreur lors de la sérialisation du driver {self.id}: {e}", exc_info=True)
+            # Retourner un profil minimal en cas d'erreur
+            return {
+                "id": self.id,
+                "user_id": getattr(self, "user_id", None),
+                "company_id": getattr(self, "company_id", None),
+                "user": None,
+                "username": None,
+                "first_name": None,
+                "last_name": None,
+                "full_name": None,
+                "email": None,
+                "is_active": False,
+                "is_available": False,
+                "driver_type": None,
+                "vehicle_assigned": None,
+                "brand": None,
+                "latitude": None,
+                "longitude": None,
+                "last_position_update": None,
+                "driver_photo": None,
+                "photo": None,
+                "push_token": None,
+                "contract_type": None,
+                "weekly_hours": None,
+                "hourly_rate_cents": None,
+                "employment_start_date": None,
+                "employment_end_date": None,
+                "license_categories": [],
+                "license_valid_until": None,
+                "trainings": [],
+                "medical_valid_until": None,
+            }
 
     def to_dict(self):
         return self.serialize
