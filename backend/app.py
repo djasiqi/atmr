@@ -500,7 +500,8 @@ def create_app(config_name: str | None = None):
             resp.headers["Content-Type"] = "application/json; charset=utf-8"
         # ✅ Force UTF-8 pour les réponses texte également
         elif "text/" in ct and "charset" not in ct:
-            resp.headers["Content-Type"] = f"{resp.headers.get(\"Content-Type\")}; charset=utf-8"
+            current_ct = resp.headers.get("Content-Type")
+            resp.headers["Content-Type"] = f"{current_ct}; charset=utf-8"
         return resp
 
     # 5) CORS
