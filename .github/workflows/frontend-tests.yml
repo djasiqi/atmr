@@ -17,7 +17,7 @@ on:
 
 jobs:
   lint:
-    name: Lint (ESLint)
+    name: Lint (ESLint + Prettier)
     runs-on: ubuntu-latest
 
     steps:
@@ -40,6 +40,11 @@ jobs:
         run: |
           cd frontend
           npm run lint
+
+      - name: Prettier check
+        run: |
+          cd frontend
+          npx prettier --check "src/**/*.{js,jsx,css}"
 
   test:
     name: Unit Tests (Jest)

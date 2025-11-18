@@ -425,9 +425,33 @@ def create_app(config_name: str | None = None):
         # anti-path traversal
         if not str(candidate).startswith(str(base)):
             raise NotFound
+        
+        # Vérifier que le fichier existe
+        if not candidate.exists():
+            app.logger.warning("Fichier upload introuvable: %s (chemin résolu: %s)", filename, candidate)
+            raise NotFound
+        
         directory = str(base)
         fname = str(candidate.relative_to(base)).replace("\\", "/")
-        return send_from_directory(directory, fname, conditional=True)
+        
+        # Servir le fichier avec les en-têtes appropriés pour les images
+        response = send_from_directory(directory, fname, conditional=True)
+        
+        # Ajouter les en-têtes CORS pour permettre l'accès depuis le frontend
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        
+        # Définir le type MIME approprié pour les images
+        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp')):
+            if filename.lower().endswith('.svg'):
+                response.headers.add('Content-Type', 'image/svg+xml')
+            elif filename.lower().endswith('.png'):
+                response.headers.add('Content-Type', 'image/png')
+            elif filename.lower().endswith(('.jpg', '.jpeg')):
+                response.headers.add('Content-Type', 'image/jpeg')
+        
+        return response
 
     # 4) Sécurité (CSP)
     if config_name in {"development", "testing"}:
