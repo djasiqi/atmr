@@ -40,6 +40,11 @@ billing_settings_model = settings_ns.model(
         "reminder3_template": fields.String(description="Template 3e rappel"),
         "legal_footer": fields.String(description="Pied de page légal"),
         "pdf_template_variant": fields.String(description="Variante template PDF"),
+        # TVA
+        "vat_applicable": fields.Boolean(description="TVA applicable", allow_null=True),
+        "vat_rate": fields.Float(description="Taux de TVA (%)", allow_null=True),
+        "vat_label": fields.String(description="Libellé TVA", allow_null=True),
+        "vat_number": fields.String(description="Numéro de TVA", allow_null=True),
     },
 )
 
@@ -164,17 +169,19 @@ class BillingSettings(Resource):
 
     @jwt_required()
     @role_required(UserRole.company)
-    @settings_ns.expect(billing_settings_model)
+    @settings_ns.expect(billing_settings_model, validate=False)
     def put(self):
         """Mettre à jour les paramètres de facturation."""
         company, err, code = get_company_from_token()
         if err:
             return {"success": False, "error": err}, code
 
-        data = request.get_json()
+        data = request.get_json() or {}
 
         if not company:
             return {"success": False, "error": "Company not found"}, 404
+
+        logger.info("[Settings] Billing settings update request for company %s: %s", company.id, data)
 
         try:
             billing = CompanyBillingSettings.query.filter_by(company_id=company.id).first()
@@ -209,7 +216,29 @@ class BillingSettings(Resource):
 
             for field in updatable_fields:
                 if field in data:
-                    setattr(billing, field, data[field])
+                    value = data[field]
+                    # Gérer les valeurs None/empty pour les champs optionnels
+                    if value is None or value == "":
+                        if field in [
+                            "email_sender",
+                            "iban",
+                            "qr_iban",
+                            "esr_ref_base",
+                            "invoice_message_template",
+                            "reminder1_template",
+                            "reminder2_template",
+                            "reminder3_template",
+                            "legal_footer",
+                        ]:
+                            setattr(billing, field, None)
+                        continue
+                    # Conversion spéciale pour reminder_schedule_days (doit être un dict)
+                    if field == "reminder_schedule_days" and isinstance(value, dict):
+                        # S'assurer que les clés sont des strings
+                        normalized = {str(k): int(v) for k, v in value.items() if v is not None}
+                        setattr(billing, field, normalized)
+                    else:
+                        setattr(billing, field, value)
 
             # Gestion de la TVA
             if "vat_applicable" in data:
@@ -240,7 +269,7 @@ class BillingSettings(Resource):
             return {"success": True, "message": "Paramètres de facturation mis à jour", "data": billing.to_dict()}, 200
         except Exception as e:
             db.session.rollback()
-            logger.error("[Settings] Error updating billing settings: %s", e)
+            logger.exception("[Settings] Error updating billing settings: %s", e)
             return {"success": False, "error": str(e)}, 500
 
 

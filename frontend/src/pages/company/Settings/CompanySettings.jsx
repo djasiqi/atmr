@@ -1,5 +1,6 @@
 // frontend/src/pages/company/Settings/CompanySettings.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import styles from './CompanySettings.module.css';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
@@ -43,15 +44,26 @@ function ibanChecksumIsValid(iban) {
 
 export default function CompanySettings() {
   const { company, error: loadError, reloadCompany } = useCompanyData();
+  const location = useLocation();
 
   // Onglet actif (détecte le hash dans l'URL)
   const [activeTab, setActiveTab] = useState(() => {
-    const hash = window.location.hash.replace('#', '');
+    const hash = location.hash.replace('#', '');
     const validTabs = ['general', 'operations', 'billing', 'notifications', 'security'];
     return validTabs.includes(hash) ? hash : 'general';
   });
 
-  // Écouter les changements de hash
+  // Écouter les changements de hash (via React Router location)
+  useEffect(() => {
+    const hash = location.hash.replace('#', '');
+    const validTabs = ['general', 'operations', 'billing', 'notifications', 'security'];
+    if (validTabs.includes(hash)) {
+      setActiveTab(hash);
+    }
+    // Si pas de hash, on reste sur l'onglet actuel (ou 'general' par défaut)
+  }, [location.hash]);
+
+  // Écouter aussi les changements de hash via l'événement hashchange (pour les navigations directes)
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');

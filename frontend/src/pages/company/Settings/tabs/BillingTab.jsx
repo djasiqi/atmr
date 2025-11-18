@@ -96,13 +96,38 @@ const BillingTab = () => {
     setError('');
 
     try {
-      await updateBillingSettings(updatedForm || form);
+      const formData = updatedForm || form;
+      
+      // Nettoyer les données avant envoi
+      const cleanedData = {
+        ...formData,
+        // S'assurer que reminder_schedule_days a les bonnes clés (strings)
+        reminder_schedule_days: formData.reminder_schedule_days ? {
+          '1': parseInt(formData.reminder_schedule_days['1']) || 0,
+          '2': parseInt(formData.reminder_schedule_days['2']) || 0,
+          '3': parseInt(formData.reminder_schedule_days['3']) || 0,
+        } : { '1': 10, '2': 5, '3': 3 },
+        // Convertir les valeurs null en undefined pour les champs optionnels
+        vat_rate: formData.vat_rate === null || formData.vat_rate === '' ? null : parseFloat(formData.vat_rate),
+        vat_label: formData.vat_label || null,
+        vat_number: formData.vat_number || null,
+        // Convertir les frais en nombres
+        reminder1_fee: parseFloat(formData.reminder1_fee) || 0,
+        reminder2_fee: parseFloat(formData.reminder2_fee) || 0,
+        reminder3_fee: parseFloat(formData.reminder3_fee) || 0,
+        overdue_fee: parseFloat(formData.overdue_fee) || 0,
+        payment_terms_days: parseInt(formData.payment_terms_days) || 10,
+      };
+      
+      console.log('[BillingTab] Sending data:', cleanedData);
+      await updateBillingSettings(cleanedData);
       setMessage('✅ Sauvegardé automatiquement');
       setTimeout(() => setMessage(''), 2000);
     } catch (err) {
       console.error('Auto-save failed:', err);
-      setError('❌ Erreur lors de la sauvegarde');
-      setTimeout(() => setError(''), 3000);
+      const errorMessage = err?.response?.data?.error || err?.message || 'Erreur lors de la sauvegarde';
+      setError(`❌ ${errorMessage}`);
+      setTimeout(() => setError(''), 5000);
     }
   };
 
@@ -235,24 +260,102 @@ const BillingTab = () => {
             />
             <span className={styles.unit}>CHF</span>
           </div>
+          <small className={styles.hint}>
+            Montant facturé lorsque le paiement est en retard après l'échéance
+          </small>
+        </div>
+
+        {/* Frais de rappel - Toujours visibles */}
+        <h2 style={{ marginTop: '24px' }}>📧 Frais de rappel</h2>
+        <small className={styles.hint} style={{ display: 'block', marginBottom: '16px' }}>
+          Montants facturés lors de l'émission de chaque rappel (applicables même si les rappels automatiques sont désactivés)
+        </small>
+
+        {/* 1er rappel */}
+        <div className={styles.reminderRow}>
+          <h4 className={styles.reminderTitle}>1er rappel</h4>
+          <div className={styles.reminderFields}>
+            <div className={styles.formGroup}>
+              <label>Frais (CHF)</label>
+              <div className={styles.inputWithUnit}>
+                <input
+                  type="number"
+                  name="reminder1_fee"
+                  value={form.reminder1_fee}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  step="0.01"
+                  min="0"
+                />
+                <span className={styles.unit}>CHF</span>
+              </div>
+              <small className={styles.hint}>Montant facturé lors de l'émission du 1er rappel</small>
+            </div>
+          </div>
+        </div>
+
+        {/* 2e rappel */}
+        <div className={styles.reminderRow}>
+          <h4 className={styles.reminderTitle}>2e rappel</h4>
+          <div className={styles.reminderFields}>
+            <div className={styles.formGroup}>
+              <label>Frais (CHF)</label>
+              <div className={styles.inputWithUnit}>
+                <input
+                  type="number"
+                  name="reminder2_fee"
+                  value={form.reminder2_fee}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  step="0.01"
+                  min="0"
+                />
+                <span className={styles.unit}>CHF</span>
+              </div>
+              <small className={styles.hint}>Montant facturé lors de l'émission du 2e rappel</small>
+            </div>
+          </div>
+        </div>
+
+        {/* 3e rappel */}
+        <div className={styles.reminderRow}>
+          <h4 className={styles.reminderTitle}>3e rappel (Mise en demeure)</h4>
+          <div className={styles.reminderFields}>
+            <div className={styles.formGroup}>
+              <label>Frais (CHF)</label>
+              <div className={styles.inputWithUnit}>
+                <input
+                  type="number"
+                  name="reminder3_fee"
+                  value={form.reminder3_fee}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  step="0.01"
+                  min="0"
+                />
+                <span className={styles.unit}>CHF</span>
+              </div>
+              <small className={styles.hint}>Montant facturé lors de l'émission du 3e rappel (mise en demeure)</small>
+            </div>
+          </div>
         </div>
 
         {/* Rappels automatiques */}
-        <h2 style={{ marginTop: '24px' }}>📧 Rappels automatiques</h2>
+        <h2 style={{ marginTop: '24px' }}>⏰ Planning des rappels automatiques</h2>
 
         <ToggleField
           label="Activer les rappels automatiques"
           name="auto_reminders_enabled"
           value={form.auto_reminders_enabled}
           onChange={handleToggle}
-          hint="Les rappels seront envoyés automatiquement selon le planning défini"
+          hint="Les rappels seront envoyés automatiquement selon le planning défini ci-dessous"
         />
 
         {form.auto_reminders_enabled && (
           <>
-            {/* 1er rappel */}
+            {/* 1er rappel - Délai */}
             <div className={styles.reminderRow}>
-              <h4 className={styles.reminderTitle}>1er rappel</h4>
+              <h4 className={styles.reminderTitle}>1er rappel - Délai</h4>
               <div className={styles.reminderFields}>
                 <div className={styles.formGroup}>
                   <label>Délai (jours)</label>
@@ -264,26 +367,14 @@ const BillingTab = () => {
                     min="1"
                     max="90"
                   />
-                  <small className={styles.hint}>Après échéance</small>
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Frais (CHF)</label>
-                  <input
-                    type="number"
-                    name="reminder1_fee"
-                    value={form.reminder1_fee}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    step="0.01"
-                    min="0"
-                  />
+                  <small className={styles.hint}>Jours après l'échéance avant l'envoi du 1er rappel</small>
                 </div>
               </div>
             </div>
 
-            {/* 2e rappel */}
+            {/* 2e rappel - Délai */}
             <div className={styles.reminderRow}>
-              <h4 className={styles.reminderTitle}>2e rappel</h4>
+              <h4 className={styles.reminderTitle}>2e rappel - Délai</h4>
               <div className={styles.reminderFields}>
                 <div className={styles.formGroup}>
                   <label>Délai (jours)</label>
@@ -295,26 +386,14 @@ const BillingTab = () => {
                     min="1"
                     max="90"
                   />
-                  <small className={styles.hint}>Après 1er rappel</small>
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Frais (CHF)</label>
-                  <input
-                    type="number"
-                    name="reminder2_fee"
-                    value={form.reminder2_fee}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    step="0.01"
-                    min="0"
-                  />
+                  <small className={styles.hint}>Jours après le 1er rappel avant l'envoi du 2e rappel</small>
                 </div>
               </div>
             </div>
 
-            {/* 3e rappel */}
+            {/* 3e rappel - Délai */}
             <div className={styles.reminderRow}>
-              <h4 className={styles.reminderTitle}>3e rappel (Mise en demeure)</h4>
+              <h4 className={styles.reminderTitle}>3e rappel - Délai</h4>
               <div className={styles.reminderFields}>
                 <div className={styles.formGroup}>
                   <label>Délai (jours)</label>
@@ -326,19 +405,7 @@ const BillingTab = () => {
                     min="1"
                     max="90"
                   />
-                  <small className={styles.hint}>Après 2e rappel</small>
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Frais (CHF)</label>
-                  <input
-                    type="number"
-                    name="reminder3_fee"
-                    value={form.reminder3_fee}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    step="0.01"
-                    min="0"
-                  />
+                  <small className={styles.hint}>Jours après le 2e rappel avant l'envoi du 3e rappel (mise en demeure)</small>
                 </div>
               </div>
             </div>
