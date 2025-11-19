@@ -1,6 +1,7 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import { Tabs } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 
 import { HapticTab } from "@/components/HapticTab";
 import { IconSymbol } from "@/components/ui/IconSymbol";
@@ -20,6 +21,7 @@ export default function EnterpriseLayout() {
 
   return (
     <EnterpriseProvider initialMode={initialMode}>
+      <StatusBar style="light" />
       <View style={styles.container}>
         <Tabs
           screenOptions={{

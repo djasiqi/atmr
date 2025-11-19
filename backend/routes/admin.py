@@ -353,8 +353,13 @@ class ResetUserPassword(Resource):
                 admin_ns.abort(404, "User not found")
                 return None  # abort() lève, mais ce return rassure l'analyste statique
             u = cast("Any", user)
-            new_password = "".join(random.choices(string.ascii_letters + string.digits, k=8))
-            # semgrep: ignore - Flask application, not Django. Password validation handled by Flask-User.
+            new_password = "".join(random.choices(string.ascii_letters + string.digits, k=12))
+            # Validation explicite du mot de passe avant set_password (sécurité)
+            from routes.utils import validate_password_or_raise
+
+            validate_password_or_raise(new_password, user=u)
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
             u.set_password(new_password)
             u.force_password_change = True
             db.session.commit()
