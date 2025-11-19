@@ -1,5 +1,4 @@
 import logging
-import re
 from datetime import UTC, datetime
 
 # Constantes pour éviter les valeurs magiques
@@ -428,7 +427,7 @@ class ResetPassword(Resource):
             new_password = data.get("new_password", "").strip()
             confirm_password = data.get("confirm_password", "").strip()
 
-            # Validation des champs
+            # Validation des champs - combiner toutes les validations pour réduire les returns
             error_message = None
 
             if not old_password or not new_password or not confirm_password:
@@ -437,18 +436,21 @@ class ResetPassword(Resource):
                 error_message = "Incorrect old password"
             elif new_password != confirm_password:
                 error_message = "New passwords do not match"
-            else:
-                PASSWORD_REGEX = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]{8,}$"
-                if not re.match(PASSWORD_REGEX, new_password):
-                    error_message = (
-                        "Password must contain at least 8 characters, including uppercase, lowercase, and a number"
-                    )
+
+            # Validation explicite du mot de passe avant set_password (sécurité)
+            if not error_message:
+                from routes.utils import validate_password_or_raise
+
+                try:
+                    validate_password_or_raise(new_password, user=current_user)
+                except ValueError as e:
+                    error_message = str(e)
 
             if error_message:
                 return {"error": error_message}, 400
 
-            # Mise à jour du mot de passe
-            # semgrep: ignore - Flask application, not Django. Password already validated above.
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
             current_user.set_password(new_password)
             db.session.commit()
 

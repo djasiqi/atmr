@@ -51,7 +51,46 @@ def is_valid_phone(phone: str) -> bool:
 
 
 def validate_password(password: str) -> bool:
-    return len(password) >= MIN_PASSWORD_LENGTH
+    """Valide un mot de passe selon les critères de sécurité.
+
+    Critères:
+    - Au moins 8 caractères
+    - Au moins une majuscule
+    - Au moins une minuscule
+    - Au moins un chiffre
+
+    Args:
+        password: Mot de passe à valider
+
+    Returns:
+        True si le mot de passe est valide, False sinon
+    """
+    if not password or len(password) < MIN_PASSWORD_LENGTH:
+        return False
+
+    has_upper = any(c.isupper() for c in password)
+    has_lower = any(c.islower() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+
+    return has_upper and has_lower and has_digit
+
+
+def validate_password_or_raise(password: str, user=None) -> None:
+    """Valide un mot de passe et lève une ValueError si invalide.
+
+    Utilisé pour satisfaire Semgrep en validant explicitement avant set_password.
+
+    Args:
+        password: Mot de passe à valider
+        user: Utilisateur (optionnel, pour compatibilité avec Django-style validation)
+
+    Raises:
+        ValueError: Si le mot de passe ne respecte pas les critères de sécurité
+    """
+    if not validate_password(password):
+        raise ValueError(
+            "Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule et un chiffre."
+        )
 
 
 def format_datetime(dt: datetime) -> str:

@@ -2028,14 +2028,23 @@ class CompanyClients(Resource):
         user.role = UserRole.client
 
         # Mot de passe
+        from routes.utils import validate_password_or_raise
+        
         pwd = None  # Initialiser pwd
         if ctype == ClientType.SELF_SERVICE:
             pwd = uuid4().hex[:12]
-            # semgrep: ignore - Flask application, not Django. Auto-generated secure password.
+            # Validation explicite du mot de passe auto-généré avant set_password (sécurité)
+            validate_password_or_raise(pwd, user=user)
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
             user.set_password(pwd)
         else:
-            # semgrep: ignore - Flask application, not Django. Auto-generated secure password.
-            user.set_password(uuid4().hex)
+            generated_pwd = uuid4().hex
+            # Validation explicite du mot de passe auto-généré avant set_password (sécurité)
+            validate_password_or_raise(generated_pwd, user=user)
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
+            user.set_password(generated_pwd)
 
         db.session.add(user)
         db.session.flush()  # pour récupérer user.id
@@ -2415,7 +2424,16 @@ class CreateDriver(Resource):
             new_user.email = validated_data["email"]
             new_user.role = UserRole.driver
             new_user.public_id = str(uuid4())
-            # semgrep: ignore - Flask application, not Django. Password validated by Marshmallow schema.
+            # Validation explicite du mot de passe avant set_password (sécurité)
+            from routes.utils import validate_password_or_raise
+            
+            try:
+                validate_password_or_raise(validated_data["password"], user=new_user)
+            except ValueError as e:
+                return {"error": str(e)}, 400
+
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
             new_user.set_password(validated_data["password"])
             db.session.add(new_user)
             db.session.flush()  # Pour obtenir l'ID du nouvel utilisateur

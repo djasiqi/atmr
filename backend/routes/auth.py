@@ -340,7 +340,16 @@ class ResetPassword(Resource):
             if not user:
                 return {"error": "Utilisateur non trouvé."}, 404
 
-            # semgrep: ignore - Flask application, not Django. Password validation handled by Flask-User.
+            # Validation explicite du mot de passe avant set_password (sécurité)
+            from routes.utils import validate_password_or_raise
+
+            try:
+                validate_password_or_raise(new_password, user=user)
+            except ValueError as e:
+                return {"error": str(e)}, 400
+
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
             user.set_password(new_password)
             user.force_password_change = False
             db.session.commit()
