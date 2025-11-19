@@ -141,6 +141,7 @@ jobs:
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
           APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+          API_LEGACY_ENABLED: "false"
           PYTHONPATH: ${{ github.workspace }}
         run: |
           cd backend
@@ -154,6 +155,7 @@ jobs:
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
           APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+          API_LEGACY_ENABLED: "false"
           PYTHONPATH: ${{ github.workspace }}
         run: |
           # Lancer pytest depuis la racine pour que les imports 'backend' fonctionnent
@@ -168,6 +170,7 @@ jobs:
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
           APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+          API_LEGACY_ENABLED: "false"
           PYTHONPATH: ${{ github.workspace }}
         run: |
           cd backend
@@ -184,6 +187,7 @@ jobs:
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
           APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+          API_LEGACY_ENABLED: "false"
           PYTHONPATH: ${{ github.workspace }}
         run: |
           echo "🚨 Vérification couverture modules critiques >= 80%..."
@@ -373,6 +377,7 @@ jobs:
           SECRET_KEY: test-secret
           JWT_SECRET_KEY: test-jwt
           APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+          API_LEGACY_ENABLED: "false"
         run: |
           cd backend
           flask db upgrade head
@@ -384,6 +389,7 @@ jobs:
           SECRET_KEY: test-secret
           JWT_SECRET_KEY: test-jwt
           APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+          API_LEGACY_ENABLED: "false"
         run: |
           cd backend
           flask db downgrade -1
@@ -396,6 +402,7 @@ jobs:
           SECRET_KEY: test-secret
           JWT_SECRET_KEY: test-jwt
           APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+          API_LEGACY_ENABLED: "false"
         run: |
           cd backend
           # Vérifier aucune migration auto-détectée non commitée
