@@ -442,7 +442,7 @@ class ResetPassword(Resource):
                 from routes.utils import validate_password_or_raise
 
                 try:
-                    validate_password_or_raise(new_password, user=current_user)
+                    validate_password_or_raise(new_password, _user=current_user)
                 except ValueError as e:
                     error_message = str(e)
 

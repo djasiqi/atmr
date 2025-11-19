@@ -357,7 +357,7 @@ class ResetUserPassword(Resource):
             # Validation explicite du mot de passe avant set_password (sécurité)
             from routes.utils import validate_password_or_raise
 
-            validate_password_or_raise(new_password, user=u)
+            validate_password_or_raise(new_password, _user=u)
             # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
             u.set_password(new_password)

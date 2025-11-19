@@ -75,14 +75,14 @@ def validate_password(password: str) -> bool:
     return has_upper and has_lower and has_digit
 
 
-def validate_password_or_raise(password: str, user=None) -> None:
+def validate_password_or_raise(password: str, _user=None) -> None:
     """Valide un mot de passe et lève une ValueError si invalide.
 
     Utilisé pour satisfaire Semgrep en validant explicitement avant set_password.
 
     Args:
         password: Mot de passe à valider
-        user: Utilisateur (optionnel, pour compatibilité avec Django-style validation)
+        _user: Utilisateur (optionnel, pour compatibilité avec Django-style validation, non utilisé)
 
     Raises:
         ValueError: Si le mot de passe ne respecte pas les critères de sécurité
