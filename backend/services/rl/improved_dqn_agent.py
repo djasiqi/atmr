@@ -72,8 +72,8 @@ class ImprovedDQNAgent:
         n_step_gamma: float = 0.99,  # Gamma pour N-step
         use_dueling: bool = False,  # Dueling DQN
     ):
-        self.state_dim = state_dim
-        self.action_dim = action_dim
+        self.state_dim = int(state_dim)
+        self.action_dim = int(action_dim)  # Ensure action_dim is always an int for randrange()
         self.learning_rate = learning_rate
         self.gamma = gamma
         self.epsilon = epsilon_start

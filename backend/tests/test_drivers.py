@@ -44,10 +44,11 @@ def test_driver_availability_flag(db, sample_driver):
 
 
 def test_driver_license_number(db, sample_driver):
-    """Driver a un numéro de permis."""
+    """Driver a des catégories de permis."""
     driver = Driver.query.get(sample_driver.id)
-    assert driver.license_number is not None
-    assert len(driver.license_number) > 0
+    # Le modèle Driver utilise license_categories (JSON) au lieu de license_number
+    assert hasattr(driver, "license_categories")
+    assert driver.license_categories is not None
 
 
 def test_driver_serialize(db, sample_driver):
