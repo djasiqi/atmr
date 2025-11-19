@@ -488,10 +488,28 @@ def create_app(config_name: str | None = None):
             "img-src": "'self' data: blob:",
             "connect-src": f"'self' {frontend_url} ws: wss:",
         }
+        # En production, on force HTTPS pour la sécurité
+        # Note: Les healthchecks Docker utilisent HTTP depuis localhost
+        # On va créer un endpoint /health exempt de Talisman pour permettre les healthchecks
         force_https = True
 
     talisman = Talisman(content_security_policy=csp, force_https=force_https)
     talisman.init_app(app)
+
+    # ✅ Définir /health APRÈS Talisman pour qu'il soit exempt de la redirection HTTPS
+    # Talisman ne redirige que les requêtes externes, pas celles depuis localhost
+    # Mais pour être sûr, on définit l'endpoint ici pour qu'il soit accessible en HTTP
+    @app.route("/health")
+    @talisman.exempt  # Exclure ce chemin de la redirection HTTPS
+    def health():  # pyright: ignore[reportUnusedFunction]
+        # Endpoint utilisé par les healthchecks Docker : renvoie explicitement
+        # le statut attendu (healthy + models_loaded).
+        return jsonify(
+            {
+                "status": "healthy",
+                "models_loaded": True,
+            }
+        ), 200
 
     # Retirer CSP pour les réponses JSON et forcer UTF-8
     @app.after_request
@@ -766,16 +784,8 @@ def create_app(config_name: str | None = None):
                 return make_response("", 204)
             return CompanyDriversList().get()
 
-        @app.route("/health")
-        def health():  # pyright: ignore[reportUnusedFunction]
-            # Endpoint utilisé par les healthchecks Docker : renvoie explicitement
-            # le statut attendu (healthy + models_loaded).
-            return jsonify(
-                {
-                    "status": "healthy",
-                    "models_loaded": True,
-                }
-            ), 200
+        # Note: L'endpoint /health est défini plus bas, après l'initialisation de Talisman
+        # Il sera exempt de la redirection HTTPS via un décorateur ou une configuration spéciale
 
         @app.route("/config")
         def show_config():  # pyright: ignore[reportUnusedFunction]

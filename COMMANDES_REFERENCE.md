@@ -22,7 +22,7 @@ docker ps
 docker ps -a
 
 # Voir l'état des services docker-compose
-cd /srv/atmr/backend/backend
+cd /srv/atmr/backend
 docker compose ps
 
 # Voir les logs d'un conteneur
@@ -33,7 +33,7 @@ docker logs backend-api-1 --tail 50 -f  # Suivre les logs en temps réel
 ### Redémarrer les services
 
 ```bash
-cd /srv/atmr/backend/backend
+cd /srv/atmr/backend
 
 # Redémarrer un service spécifique
 docker compose restart api
@@ -49,7 +49,7 @@ docker compose up -d
 ### Redéployer la dernière image
 
 ```bash
-cd /srv/atmr/backend/backend
+cd /srv/atmr/backend
 
 # Récupérer la dernière image depuis Docker Hub
 docker compose pull api

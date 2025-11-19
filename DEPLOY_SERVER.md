@@ -5,21 +5,23 @@
 ### Configuration
 
 Le script `deploy-server.sh` utilise les valeurs par défaut suivantes :
+
 - **Serveur** : `138.201.155.201`
-- **Utilisateur** : `root` (peut être surchargé via `SERVER_USER`)
-- **Chemin** : `/root/atmr` (peut être surchargé via `SERVER_PATH`)
+- **Utilisateur** : `deploy` (peut être surchargé via `SERVER_USER`)
+- **Chemin** : `/home/deploy/atmr` (peut être surchargé via `SERVER_PATH`)
 
 ### Personnalisation (optionnel)
 
 Si vous devez modifier ces valeurs, définissez les variables d'environnement :
 
 ```bash
-export SERVER_USER=votre_utilisateur_ssh  # Par défaut: root
+export SERVER_USER=votre_utilisateur_ssh  # Par défaut: deploy
 export SERVER_HOST=adresse_ip_ou_domaine  # Par défaut: 138.201.155.201
-export SERVER_PATH=/chemin/vers/atmr      # Par défaut: /root/atmr
+export SERVER_PATH=/chemin/vers/atmr      # Par défaut: /home/deploy/atmr
 ```
 
 **Exemple de personnalisation :**
+
 ```bash
 export SERVER_USER=deploy
 export SERVER_HOST=138.201.155.201

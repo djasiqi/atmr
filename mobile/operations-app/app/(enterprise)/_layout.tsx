@@ -28,16 +28,8 @@ export default function EnterpriseLayout() {
             tabBarStyle: tabBarStyles.tabBarStyle,
             tabBarItemStyle: tabBarStyles.tabBarItemStyle,
             tabBarLabelStyle: tabBarStyles.tabBarLabelStyle,
-            tabBarActiveTintColor: tabBarStyles.palette.label,
-            tabBarInactiveTintColor: tabBarStyles.palette.labelInactive,
-            tabBarActiveBackgroundColor: "rgba(30,185,128,0.14)",
-            tabBarInactiveBackgroundColor: "transparent",
-            tabBarBadgeStyle: {
-              backgroundColor: "rgba(30,185,128,0.9)",
-              color: "#052015",
-              fontWeight: "700",
-            },
-            sceneContainerStyle: { backgroundColor: styles.container.backgroundColor },
+            tabBarActiveTintColor: tabBarStyles.palette.label, // #0A7F59 - Vert accent pour l'onglet actif
+            tabBarInactiveTintColor: tabBarStyles.palette.labelInactive, // #5F7369 - Gris secondaire pour les onglets inactifs
           }}
         >
           <Tabs.Screen
@@ -45,7 +37,9 @@ export default function EnterpriseLayout() {
             options={{
               title: "Tableau de bord",
               tabBarIcon: ({ color }) => (
-                <IconSymbol name="chart.bar.fill" size={24} color={color} />
+                <View style={tabBarStyles.tabBarIconContainer}>
+                  <IconSymbol name="house.fill" size={24} color={color} />
+                </View>
               ),
             }}
           />
@@ -54,16 +48,9 @@ export default function EnterpriseLayout() {
             options={{
               title: "Courses",
               tabBarIcon: ({ color }) => (
-                <IconSymbol name="list.bullet.rectangle" size={24} color={color} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="settings"
-            options={{
-              title: "Paramètres",
-              tabBarIcon: ({ color }) => (
-                <IconSymbol name="gearshape.fill" size={24} color={color} />
+                <View style={tabBarStyles.tabBarIconContainer}>
+                  <IconSymbol name="list.bullet.rectangle" size={24} color={color} />
+                </View>
               ),
             }}
           />
@@ -72,11 +59,20 @@ export default function EnterpriseLayout() {
             options={{
               title: "Chat",
               tabBarIcon: ({ color }) => (
-                <IconSymbol
-                  name="bubble.left.and.bubble.right.fill"
-                  size={24}
-                  color={color}
-                />
+                <View style={tabBarStyles.tabBarIconContainer}>
+                  <IconSymbol name="bubble.left.and.bubble.right.fill" size={24} color={color} />
+                </View>
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="settings"
+            options={{
+              title: "Paramètres",
+              tabBarIcon: ({ color }) => (
+                <View style={tabBarStyles.tabBarIconContainer}>
+                  <IconSymbol name="gearshape.fill" size={24} color={color} />
+                </View>
               ),
             }}
           />
@@ -87,10 +83,10 @@ export default function EnterpriseLayout() {
     </EnterpriseProvider>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#07130E",
   },
 });
+

@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Modal,
+  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,20 +13,13 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import dayjs from "dayjs";
-import "dayjs/locale/fr";
 
 import { useAuth } from "@/hooks/useAuth";
 import {
   getDispatchSettings,
-  resetAssignments,
-  runDispatch,
-  runOptimizer,
   updateDispatchSettings,
 } from "@/services/enterpriseDispatch";
 import { DispatchSettings } from "@/types/enterpriseDispatch";
-
-dayjs.locale("fr");
 
 const numberOr = (value: string, fallback: number): number => {
   const parsed = Number(value);
@@ -50,8 +46,8 @@ const palette = {
   secondaryBorder: "rgba(59,143,105,0.28)",
   dangerBg: "rgba(241,104,104,0.18)",
   dangerBorder: "rgba(241,104,104,0.3)",
-  logoutBg: "rgba(10,34,26,0.55)",
-  logoutBorder: "rgba(59,143,105,0.2)",
+  logoutBg: "rgba(30,185,128,0.15)",
+  logoutBorder: "rgba(30,185,128,0.4)",
   error: "#F87171",
 };
 
@@ -61,9 +57,7 @@ export default function EnterpriseSettingsScreen() {
   const [settings, setSettings] = useState<DispatchSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [dispatchDate, setDispatchDate] = useState<string>(() =>
-    dayjs().format("YYYY-MM-DD")
-  );
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const heroSubtitle = useMemo(() => {
     if (!settings) return "Chargement des paramètres…";
@@ -116,69 +110,6 @@ export default function EnterpriseSettingsScreen() {
     }
   }, [refreshEnterprise, settings]);
 
-  const handleRunDispatch = useCallback(async () => {
-    setLoading(true);
-    try {
-      await runDispatch(dispatchDate);
-      Alert.alert("Dispatch lancé", `Dispatch demandé pour ${dispatchDate}.`);
-    } catch (error: any) {
-      const message =
-        error?.response?.data?.error ??
-        error?.message ??
-        "Impossible de lancer le dispatch.";
-      setErrorMessage(message);
-    } finally {
-      setLoading(false);
-    }
-  }, [dispatchDate]);
-
-  const handleRunOptimizer = useCallback(async () => {
-    setLoading(true);
-    try {
-      await runOptimizer(dispatchDate);
-      Alert.alert(
-        "Optimiseur relancé",
-        `Optimisation demandée pour ${dispatchDate}.`
-      );
-    } catch (error: any) {
-      const message =
-        error?.response?.data?.error ??
-        error?.message ??
-        "Impossible de relancer l’optimiseur.";
-      setErrorMessage(message);
-    } finally {
-      setLoading(false);
-    }
-  }, [dispatchDate]);
-
-  const handleResetAssignments = useCallback(async () => {
-    Alert.alert(
-      "Réinitialiser les assignations",
-      `Confirmez-vous la suppression des affectations pour ${dispatchDate} ?`,
-      [
-        { text: "Annuler", style: "cancel" },
-        {
-          text: "Réinitialiser",
-          style: "destructive",
-          onPress: async () => {
-            setLoading(true);
-            try {
-              await resetAssignments(dispatchDate);
-              Alert.alert("Réinitialisation effectuée");
-            } catch (error: any) {
-              const message =
-                error?.response?.data?.error ??
-                error?.message ??
-                "Impossible de réinitialiser les assignations.";
-              setErrorMessage(message);
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [dispatchDate]);
 
   const takeSettingsField = (path: keyof DispatchSettings["service_times"]) =>
     settings ? settings.service_times[path].toString() : "";
@@ -219,11 +150,11 @@ export default function EnterpriseSettingsScreen() {
             setSettings((prev) =>
               prev
                 ? {
-                    ...prev,
-                    fairness: {
-                      max_gap: numberOr(value, prev.fairness.max_gap),
-                    },
-                  }
+                  ...prev,
+                  fairness: {
+                    max_gap: numberOr(value, prev.fairness.max_gap),
+                  },
+                }
                 : prev
             )
           }
@@ -238,14 +169,14 @@ export default function EnterpriseSettingsScreen() {
             setSettings((prev) =>
               prev
                 ? {
-                    ...prev,
-                    emergency: {
-                      emergency_penalty: numberOr(
-                        value,
-                        prev.emergency.emergency_penalty
-                      ),
-                    },
-                  }
+                  ...prev,
+                  emergency: {
+                    emergency_penalty: numberOr(
+                      value,
+                      prev.emergency.emergency_penalty
+                    ),
+                  },
+                }
                 : prev
             )
           }
@@ -266,15 +197,15 @@ export default function EnterpriseSettingsScreen() {
               setSettings((prev) =>
                 prev
                   ? {
-                      ...prev,
-                      service_times: {
-                        ...prev.service_times,
-                        pickup_service_min: numberOr(
-                          value,
-                          prev.service_times.pickup_service_min
-                        ),
-                      },
-                    }
+                    ...prev,
+                    service_times: {
+                      ...prev.service_times,
+                      pickup_service_min: numberOr(
+                        value,
+                        prev.service_times.pickup_service_min
+                      ),
+                    },
+                  }
                   : prev
               )
             }
@@ -286,15 +217,15 @@ export default function EnterpriseSettingsScreen() {
               setSettings((prev) =>
                 prev
                   ? {
-                      ...prev,
-                      service_times: {
-                        ...prev.service_times,
-                        dropoff_service_min: numberOr(
-                          value,
-                          prev.service_times.dropoff_service_min
-                        ),
-                      },
-                    }
+                    ...prev,
+                    service_times: {
+                      ...prev.service_times,
+                      dropoff_service_min: numberOr(
+                        value,
+                        prev.service_times.dropoff_service_min
+                      ),
+                    },
+                  }
                   : prev
               )
             }
@@ -306,15 +237,15 @@ export default function EnterpriseSettingsScreen() {
               setSettings((prev) =>
                 prev
                   ? {
-                      ...prev,
-                      service_times: {
-                        ...prev.service_times,
-                        min_transition_margin_min: numberOr(
-                          value,
-                          prev.service_times.min_transition_margin_min
-                        ),
-                      },
-                    }
+                    ...prev,
+                    service_times: {
+                      ...prev.service_times,
+                      min_transition_margin_min: numberOr(
+                        value,
+                        prev.service_times.min_transition_margin_min
+                      ),
+                    },
+                  }
                   : prev
               )
             }
@@ -332,78 +263,57 @@ export default function EnterpriseSettingsScreen() {
         </Text>
       </TouchableOpacity>
 
-      <Text style={styles.sectionKicker}>Actions ponctuelles</Text>
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Pilotage quotidien</Text>
-        <Text style={styles.sectionDescription}>
-          Déclenche les opérations essentielles pour la date sélectionnée.
-        </Text>
+      <TouchableOpacity
+        style={styles.logoutButton}
+        onPress={() => setShowLogoutModal(true)}
+      >
+        <Text style={styles.logoutButtonText}>Se déconnecter</Text>
+      </TouchableOpacity>
 
-        <LabeledInput
-          label="Date cible"
-          help="Format ISO attendu : YYYY-MM-DD"
-          value={dispatchDate}
-          onChangeText={setDispatchDate}
-          keyboardType="default"
-        />
-
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={handleRunDispatch}
-          disabled={loading}
-        >
-          <Ionicons name="flash-outline" size={18} color={palette.primaryText} />
-          <Text style={styles.secondaryButtonText}>Lancer un dispatch</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={handleRunOptimizer}
-          disabled={loading}
-        >
-          <Ionicons name="sparkles-outline" size={18} color={palette.primaryText} />
-          <Text style={styles.secondaryButtonText}>Relancer l’optimiseur</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.secondaryButton, styles.dangerButton]}
-          onPress={handleResetAssignments}
-          disabled={loading}
-        >
-          <Ionicons name="alert-circle-outline" size={18} color={palette.error} />
-          <Text style={styles.dangerButtonText}>Reset assignations</Text>
-        </TouchableOpacity>
-
-        <View style={styles.divider} />
-
-        <TouchableOpacity
-          style={[styles.secondaryButton, styles.logoutButton]}
-          onPress={() =>
-            Alert.alert(
-              "Déconnexion",
-              "Voulez-vous quitter l'espace entreprise ?",
-              [
-                { text: "Annuler", style: "cancel" },
-                {
-                  text: "Se déconnecter",
-                  style: "destructive",
-                  onPress: async () => {
-                    await logoutEnterprise();
-                    await switchMode("driver");
-                  },
-                },
-              ]
-            )
-          }
-        >
-          <Ionicons name="log-out-outline" size={18} color={palette.primaryText} />
-          <Text style={styles.secondaryButtonText}>Se déconnecter</Text>
-        </TouchableOpacity>
-      </View>
+      <Modal
+        visible={showLogoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconContainer}>
+              <Ionicons
+                name="log-out-outline"
+                size={32}
+                color={palette.error}
+              />
+            </View>
+            <Text style={styles.modalTitle}>Déconnexion</Text>
+            <Text style={styles.modalMessage}>
+              Voulez-vous quitter l'espace entreprise ?
+            </Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.modalCancel}
+                onPress={() => setShowLogoutModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Annuler</Text>
+              </Pressable>
+              <Pressable
+                style={styles.modalConfirm}
+                onPress={async () => {
+                  setShowLogoutModal(false);
+                  await logoutEnterprise();
+                  await switchMode("driver");
+                }}
+              >
+                <Text style={styles.modalConfirmText}>Se déconnecter</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {errorMessage && (
         <View style={styles.errorBanner}>
-          <Ionicons name="alert-triangle" size={18} color={palette.error} />
+          <Ionicons name="alert-circle" size={18} color={palette.error} />
           <Text style={styles.error}>{errorMessage}</Text>
         </View>
       )}
@@ -446,7 +356,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    paddingBottom: 48,
+    paddingBottom: Platform.OS === "ios" ? 94 : 84, // Hauteur tabbar (78/68) + marge de sécurité (16)
     gap: 22,
   },
   hero: {
@@ -470,7 +380,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   heroBadge: {
-    backgroundColor: palette.countPillBg,
+    backgroundColor: palette.primary,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 999,
@@ -593,7 +503,21 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     backgroundColor: palette.logoutBg,
-    borderColor: palette.logoutBorder,
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: palette.logoutBg,
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 18,
+    elevation: 6,
+  },
+  logoutButtonText: {
+    color: palette.heroText,
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.4,
   },
   divider: {
     height: 1,
@@ -614,5 +538,79 @@ const styles = StyleSheet.create({
     color: palette.error,
     flex: 1,
     fontSize: 13,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(5,22,16,0.82)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: palette.cardBg,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
+    gap: 20,
+    alignItems: "center",
+  },
+  modalIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(241,104,104,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  modalTitle: {
+    color: palette.heroText,
+    fontSize: 22,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  modalMessage: {
+    color: palette.muted,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center",
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+    width: "100%",
+    marginTop: 8,
+  },
+  modalCancel: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
+  },
+  modalCancelText: {
+    color: palette.muted,
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  modalConfirm: {
+    backgroundColor: palette.error,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 14,
+    shadowColor: palette.error,
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  modalConfirmText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 15,
   },
 });

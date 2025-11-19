@@ -747,6 +747,7 @@ const styles = StyleSheet.create({
   },
   manualListSection: {
     marginTop: 24,
+    marginBottom: 24,
     gap: 12,
   },
   manualActionsRow: {

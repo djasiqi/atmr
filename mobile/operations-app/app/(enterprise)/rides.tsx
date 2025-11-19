@@ -339,7 +339,7 @@ export default function EnterpriseRidesScreen() {
             <Ionicons
               name="clipboard-outline"
               size={18}
-              color={palette.countPillText}
+              color="#052015"
             />
             <Text style={styles.heroCount}>
               {tabCounts.unassigned + tabCounts.assigned + tabCounts.urgent}
@@ -522,21 +522,20 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   heroCountPill: {
-    backgroundColor: palette.countPillBg,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
+    backgroundColor: palette.tabActive, // palette.primary équivalent
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: palette.tabBorder,
-    alignItems: "center",
-    justifyContent: "center",
     flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   heroCount: {
-    color: palette.countPillText,
+    color: "#052015", // palette.primaryText équivalent
     fontWeight: "700",
-    fontSize: 16,
+    fontSize: 13,
   },
   tabs: {
     flexDirection: "row",

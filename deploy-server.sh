@@ -26,8 +26,8 @@ error() {
 
 # Configuration par défaut (peut être surchargée par variables d'environnement)
 SERVER_HOST="${SERVER_HOST:-138.201.155.201}"
-SERVER_USER="${SERVER_USER:-root}"
-SERVER_PATH="${SERVER_PATH:-/root/atmr}"
+SERVER_USER="${SERVER_USER:-deploy}"
+SERVER_PATH="${SERVER_PATH:-/home/deploy/atmr}"
 
 # Utiliser docker-compose.production.yml par défaut, ou docker-compose.yml si spécifié
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.production.yml}"

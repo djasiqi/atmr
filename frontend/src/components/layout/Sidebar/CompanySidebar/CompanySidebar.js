@@ -1,5 +1,5 @@
 // src/components/layout/Sidebar/CompanySidebar/CompanySidebar.js
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { NavLink, useParams, useLocation } from 'react-router-dom';
 import {
   FaHome,
@@ -8,17 +8,14 @@ import {
   FaUsers,
   FaFileInvoice,
   FaCog,
-  FaChevronRight,
-  FaChevronLeft,
   FaChartLine,
   FaChartBar,
 } from 'react-icons/fa';
 import styles from './CompanySidebar.module.css';
 
-const CompanySidebar = ({ isOpen: _isOpen, onToggle: _onToggle }) => {
+const CompanySidebar = () => {
   const params = useParams();
   const location = useLocation();
-  const [open, setOpen] = useState(false);
 
   // Récupérer public_id depuis useParams() ou extraire de l'URL
   const public_id =
@@ -27,13 +24,6 @@ const CompanySidebar = ({ isOpen: _isOpen, onToggle: _onToggle }) => {
       const match = location.pathname.match(/\/dashboard\/company\/([^/]+)/);
       return match ? match[1] : null;
     })();
-
-  // Ajuste une variable CSS globale pour pousser le contenu
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty('--sidebar-w', open ? '240px' : '72px');
-    return () => root.style.removeProperty('--sidebar-w');
-  }, [open]);
 
   // Ne créer les items que si public_id existe
   const items = useMemo(() => {
@@ -44,77 +34,63 @@ const CompanySidebar = ({ isOpen: _isOpen, onToggle: _onToggle }) => {
       {
         to: `/dashboard/company/${public_id}`,
         label: 'Tableau de bord',
-        icon: <FaHome className={styles.icon} />,
+        icon: <FaHome />,
         end: true,
       },
       {
         to: `/dashboard/company/${public_id}/reservations`,
         label: 'Réservations',
-        icon: <FaCar className={styles.icon} />,
+        icon: <FaCar />,
       },
       {
         to: `/dashboard/company/${public_id}/drivers`,
         label: 'Chauffeurs',
-        icon: <FaUser className={styles.icon} />,
+        icon: <FaUser />,
       },
       {
         to: `/dashboard/company/${public_id}/clients`,
         label: 'Gestion Clients',
-        icon: <FaUsers className={styles.icon} />,
+        icon: <FaUsers />,
       },
       {
         to: `/dashboard/company/${public_id}/invoices/clients`,
         label: 'Facturation par Client',
-        icon: <FaFileInvoice className={styles.icon} />,
+        icon: <FaFileInvoice />,
       },
       {
         to: `/dashboard/company/${public_id}/dispatch`,
         label: 'Dispatch & Planification',
-        icon: <FaChartLine className={styles.icon} />,
+        icon: <FaChartLine />,
       },
       {
         to: `/dashboard/company/${public_id}/analytics`,
         label: 'Analytics',
-        icon: <FaChartBar className={styles.icon} />,
+        icon: <FaChartBar />,
       },
       {
         to: `/dashboard/company/${public_id}/settings`,
         label: 'Paramètres',
-        icon: <FaCog className={styles.icon} />,
+        icon: <FaCog />,
       },
     ];
   }, [public_id]);
 
   return (
-    <aside
-      className={`${styles.sidebar} ${open ? styles.open : styles.collapsed}`}
-      aria-label="Navigation entreprise"
-    >
-      <button
-        type="button"
-        className={styles.toggler}
-        aria-expanded={open}
-        aria-label={open ? 'Réduire le menu' : 'Développer le menu'}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {open ? <FaChevronLeft /> : <FaChevronRight />}
-      </button>
-
-      <ul className={styles.menu}>
+    <nav className={styles.sidebar}>
+      <ul>
         {items.map((item) => (
           <li key={item.to}>
             <NavLink
               to={item.to}
-              end={!!item.end} // v6
-              className={({ isActive }) => (isActive ? styles.active : undefined)} // v6
+              end={!!item.end}
+              className={({ isActive }) => (isActive ? styles.active : '')}
             >
-              {item.icon}
-              <span className={styles.text}>{item.label}</span>
+              {item.icon} {item.label}
             </NavLink>
           </li>
         ))}
       </ul>
-    </aside>
+    </nav>
   );
 };
 
