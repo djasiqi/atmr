@@ -24,6 +24,7 @@ on:
 
 jobs:
   build-and-push:
+    if: false  # Suspendu temporairement pendant la résolution des problèmes backend tests
     runs-on: ubuntu-latest
     env:
       DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
