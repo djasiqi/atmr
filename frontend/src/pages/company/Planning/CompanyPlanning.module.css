@@ -38,13 +38,31 @@
   border-bottom: 1px solid var(--border-primary);
   background: transparent;
 }
-.left, .right { display: flex; gap: var(--spacing-xs); align-items: center; }
-.badge { background: var(--brand-primary); color: white; border-radius: var(--radius-lg); padding: var(--spacing-xxs) var(--spacing-xs); font-size: var(--font-xs); }
-.error { color: var(--danger-primary); }
-
+.left,
+.right {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+.badge {
+  background: var(--brand-primary);
+  color: white;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xxs) var(--spacing-xs);
+  font-size: var(--font-xs);
+}
+.error {
+  color: var(--danger-primary);
+}
 
 /* New planning header controls */
-.tabs { display: inline-flex; gap: var(--spacing-xs); background: var(--gray-100); padding: var(--spacing-xxs); border-radius: var(--radius-full); }
+.tabs {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  background: var(--gray-100);
+  padding: var(--spacing-xxs);
+  border-radius: var(--radius-full);
+}
 .tab {
   border: none;
   background: transparent;
@@ -52,12 +70,39 @@
   border-radius: var(--radius-full);
   cursor: pointer;
 }
-.tabActive { background: var(--brand-primary); color: #fff; }
+.tabActive {
+  background: var(--brand-primary);
+  color: #fff;
+}
 
-.nav { display: inline-flex; gap: var(--spacing-xs); align-items: center; }
-.navBtn { border: 1px solid var(--border-primary); background: var(--bg-primary); border-radius: var(--radius-md); padding: var(--spacing-xs) var(--spacing-sm); cursor: pointer; }
-.dateLabel { font-weight: var(--font-weight-semibold); }
+.nav {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+.navBtn {
+  border: 1px solid var(--border-primary);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  cursor: pointer;
+}
+.dateLabel {
+  font-weight: var(--font-weight-semibold);
+}
 
-.holidayBar { margin: var(--spacing-xs) var(--spacing-sm); color: var(--text-tertiary); font-size: var(--font-xs); display: flex; gap: var(--spacing-sm); flex-wrap: wrap; }
-.holidayPill { background: var(--yellow-100); color: var(--yellow-800); border: 1px solid var(--yellow-300); padding: var(--spacing-xxs) var(--spacing-xs); border-radius: var(--radius-full); }
-
+.holidayBar {
+  margin: var(--spacing-xs) var(--spacing-sm);
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+.holidayPill {
+  background: var(--yellow-100);
+  color: var(--yellow-800);
+  border: 1px solid var(--yellow-300);
+  padding: var(--spacing-xxs) var(--spacing-xs);
+  border-radius: var(--radius-full);
+}

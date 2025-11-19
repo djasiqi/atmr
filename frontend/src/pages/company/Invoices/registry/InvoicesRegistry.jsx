@@ -224,10 +224,7 @@ const InvoicesRegistry = () => {
             </p>
           </div>
           <div className={styles.headerActions}>
-            <button
-              className={styles.settingsBtn}
-              onClick={handleOpenSettings}
-            >
+            <button className={styles.settingsBtn} onClick={handleOpenSettings}>
               ⚙️ Paramètres
             </button>
             <button
@@ -318,10 +315,10 @@ const InvoicesRegistry = () => {
                           invoice.bill_to_client.last_name || ''
                         }`.trim()
                       : invoice.client
-                      ? `${invoice.client.first_name || ''} ${
-                          invoice.client.last_name || ''
-                        }`.trim() || invoice.client.username
-                      : 'Client inconnu'}
+                        ? `${invoice.client.first_name || ''} ${
+                            invoice.client.last_name || ''
+                          }`.trim() || invoice.client.username
+                        : 'Client inconnu'}
                   </td>
                   <td>
                     {invoice.period_month.toString().padStart(2, '0')}.{invoice.period_year}

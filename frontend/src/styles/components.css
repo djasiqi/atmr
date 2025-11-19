@@ -242,8 +242,12 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .modal-content {
@@ -332,13 +336,21 @@
 }
 
 /* Tailles de modals */
-.modal-sm .modal-content { max-width: 400px !important; }
-.modal-md .modal-content { max-width: 600px !important; }
-.modal-lg .modal-content { max-width: 900px !important; }
-.modal-xl .modal-content { max-width: 1200px !important; }
+.modal-sm .modal-content {
+  max-width: 400px !important;
+}
+.modal-md .modal-content {
+  max-width: 600px !important;
+}
+.modal-lg .modal-content {
+  max-width: 900px !important;
+}
+.modal-xl .modal-content {
+  max-width: 1200px !important;
+}
 
 /* Taille spéciale pour les modales compactes (planification, assignation) */
-.modal-compact .modal-content { 
+.modal-compact .modal-content {
   max-width: 420px !important;
   width: auto;
 }
@@ -493,7 +505,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .loading-overlay {
@@ -659,4 +673,3 @@
 /* ============================================================
    SKELETON LOADER - Supprimé (non utilisé)
    ============================================================ */
-

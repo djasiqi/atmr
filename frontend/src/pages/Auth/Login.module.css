@@ -43,7 +43,9 @@
   padding: var(--spacing-sm);
   border: 1px solid var(--border-secondary);
   border-radius: var(--radius-sm);
-  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  transition:
+    border-color var(--transition-base),
+    box-shadow var(--transition-base);
 }
 
 .inputWrapper input:focus {
@@ -61,7 +63,9 @@
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background-color var(--transition-base), transform var(--transition-base);
+  transition:
+    background-color var(--transition-base),
+    transform var(--transition-base);
 }
 
 .submitButton:hover {

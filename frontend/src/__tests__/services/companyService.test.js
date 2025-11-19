@@ -40,6 +40,10 @@ describe('companyService', () => {
 
       expect(apiClient.get).toHaveBeenCalledWith('/companies/me/reservations', {
         params: { flat: true, date: '2025-10-16' },
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
       });
       expect(result).toEqual(mockReservations);
     });
@@ -339,7 +343,9 @@ describe('companyService', () => {
           allow_emergency: true,
           async: true,
           mode: 'auto',
-        })
+          overrides: { mode: 'auto' },
+        }),
+        { timeout: 60000 }
       );
       expect(result).toEqual(
         expect.objectContaining({

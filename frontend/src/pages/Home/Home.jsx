@@ -1,33 +1,28 @@
 // src/pages/Home/Home.jsx
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import styles from "./Home.module.css";
-import AddressAutocomplete from "../../components/common/AddressAutocomplete";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import styles from './Home.module.css';
+import AddressAutocomplete from '../../components/common/AddressAutocomplete';
 
 // Corrige l’icône par défaut Leaflet (sinon elle n’apparaît pas dans les bundlers)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl:
-    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl:
-    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-const OSRM_BASE =
-  process.env.REACT_APP_OSRM_BASE_URL || "http://localhost:5001";
-const OSRM_PROFILE =
-  process.env.REACT_APP_OSRM_PROFILE || "driving";
+const OSRM_BASE = process.env.REACT_APP_OSRM_BASE_URL || 'http://localhost:5001';
+const OSRM_PROFILE = process.env.REACT_APP_OSRM_PROFILE || 'driving';
 
 export default function Home() {
   // champs visibles
-  const [pickupText, setPickupText] = useState("");
-  const [dropoffText, setDropoffText] = useState("");
+  const [pickupText, setPickupText] = useState('');
+  const [dropoffText, setDropoffText] = useState('');
 
   // positions choisies
-  const [pickupCoord, setPickupCoord] = useState(null);   // {lat, lon}
+  const [pickupCoord, setPickupCoord] = useState(null); // {lat, lon}
   const [dropoffCoord, setDropoffCoord] = useState(null); // {lat, lon}
 
   // infos itinéraire
@@ -49,10 +44,9 @@ export default function Home() {
       center,
       zoom: 12,
     });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
     }).addTo(mapRef.current);
   }, [center]);
 
@@ -61,14 +55,14 @@ export default function Home() {
     const map = mapRef.current;
     if (!map) return;
 
-    const ref = which === "pickup" ? pickupMarkerRef : dropoffMarkerRef;
+    const ref = which === 'pickup' ? pickupMarkerRef : dropoffMarkerRef;
     if (ref.current) {
       ref.current.setLatLng([lat, lon]).setTooltipContent(label || which);
     } else {
       const m = L.marker([lat, lon]).addTo(map);
       m.bindTooltip(label || which, {
         permanent: true,
-        direction: "top",
+        direction: 'top',
         offset: [0, -24],
       }).openTooltip();
       ref.current = m;
@@ -93,48 +87,51 @@ export default function Home() {
   }, []);
 
   // Appel OSRM pour tracer un itinéraire quand 2 points sont définis
-  const drawRoute = useCallback(async (a, b) => {
-    if (!a || !b) return;
-    // Nettoie ancienne couche
-    if (routeLayerRef.current) {
-      try {
-        routeLayerRef.current.remove();
-      } catch {}
-      routeLayerRef.current = null;
-    }
-    setRouteInfo(null);
-
-    const url = `${OSRM_BASE}/route/v1/${OSRM_PROFILE}/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson`;
-    try {
-      const res = await fetch(url);
-      const json = await res.json();
-      if (json.code !== "Ok" || !json.routes?.length) {
-        console.warn("OSRM route KO:", json);
-        return;
+  const drawRoute = useCallback(
+    async (a, b) => {
+      if (!a || !b) return;
+      // Nettoie ancienne couche
+      if (routeLayerRef.current) {
+        try {
+          routeLayerRef.current.remove();
+        } catch {}
+        routeLayerRef.current = null;
       }
-      const route = json.routes[0];
-      const coords = route.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+      setRouteInfo(null);
 
-      routeLayerRef.current = L.polyline(coords, { weight: 5 }).addTo(mapRef.current);
+      const url = `${OSRM_BASE}/route/v1/${OSRM_PROFILE}/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson`;
+      try {
+        const res = await fetch(url);
+        const json = await res.json();
+        if (json.code !== 'Ok' || !json.routes?.length) {
+          console.warn('OSRM route KO:', json);
+          return;
+        }
+        const route = json.routes[0];
+        const coords = route.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
 
-      setRouteInfo({
-        distanceKm: (route.distance / 1000).toFixed(1),
-        durationMin: Math.round(route.duration / 60),
-      });
+        routeLayerRef.current = L.polyline(coords, { weight: 5 }).addTo(mapRef.current);
 
-      fitToContent();
-    } catch (e) {
-      console.error("OSRM route error:", e);
-    }
-  }, [fitToContent]);
+        setRouteInfo({
+          distanceKm: (route.distance / 1000).toFixed(1),
+          durationMin: Math.round(route.duration / 60),
+        });
+
+        fitToContent();
+      } catch (e) {
+        console.error('OSRM route error:', e);
+      }
+    },
+    [fitToContent]
+  );
 
   // Quand les coords changent → placer markers + calculer route
   useEffect(() => {
     if (pickupCoord) {
-      setMarker("pickup", pickupCoord.lat, pickupCoord.lon, "Départ");
+      setMarker('pickup', pickupCoord.lat, pickupCoord.lon, 'Départ');
     }
     if (dropoffCoord) {
-      setMarker("dropoff", dropoffCoord.lat, dropoffCoord.lon, "Destination");
+      setMarker('dropoff', dropoffCoord.lat, dropoffCoord.lon, 'Destination');
     }
     if (pickupCoord && dropoffCoord) {
       drawRoute(pickupCoord, dropoffCoord);
@@ -163,7 +160,7 @@ export default function Home() {
                 onChange={(e) => setPickupText(e.target.value)}
                 onSelect={(item) => {
                   // item: { label, lat, lon, ... }
-                  setPickupText(item.label || "");
+                  setPickupText(item.label || '');
                   if (item.lat && item.lon) {
                     setPickupCoord({ lat: item.lat, lon: item.lon });
                   }
@@ -178,7 +175,7 @@ export default function Home() {
                 value={dropoffText}
                 onChange={(e) => setDropoffText(e.target.value)}
                 onSelect={(item) => {
-                  setDropoffText(item.label || "");
+                  setDropoffText(item.label || '');
                   if (item.lat && item.lon) {
                     setDropoffCoord({ lat: item.lat, lon: item.lon });
                   }
@@ -213,7 +210,7 @@ export default function Home() {
 
             {routeInfo && (
               <div style={{ marginTop: 10, fontSize: 14 }}>
-                Distance ≈ <b>{routeInfo.distanceKm} km</b> • Durée ≈{" "}
+                Distance ≈ <b>{routeInfo.distanceKm} km</b> • Durée ≈{' '}
                 <b>{routeInfo.durationMin} min</b>
               </div>
             )}
@@ -222,10 +219,7 @@ export default function Home() {
 
         <div className={styles.rightSection}>
           <div className={styles.mapPlaceholder}>
-            <div
-              ref={mapElRef}
-              style={{ width: "100%", height: "100%", minHeight: 400 }}
-            />
+            <div ref={mapElRef} style={{ width: '100%', height: '100%', minHeight: 400 }} />
           </div>
         </div>
 
@@ -237,8 +231,8 @@ export default function Home() {
               <div className={styles.cardImage}>🚗</div>
               <h3 className={styles.cardTitle}>Course</h3>
               <p className={styles.cardDescription}>
-                Allez où vous voulez avec MonTransport. Commandez une course en
-                un clic et c'est parti !
+                Allez où vous voulez avec MonTransport. Commandez une course en un clic et c'est
+                parti !
               </p>
               <button className={styles.cardButton}>Détails</button>
             </div>
@@ -246,8 +240,7 @@ export default function Home() {
               <div className={styles.cardImage}>🕒</div>
               <h3 className={styles.cardTitle}>Réserver</h3>
               <p className={styles.cardDescription}>
-                Réservez votre course à l'avance pour pouvoir vous détendre le
-                jour même.
+                Réservez votre course à l'avance pour pouvoir vous détendre le jour même.
               </p>
               <button className={styles.cardButton}>Détails</button>
             </div>

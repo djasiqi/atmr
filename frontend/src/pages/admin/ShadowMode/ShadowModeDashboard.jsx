@@ -367,8 +367,8 @@ const ShadowModeDashboard = () => {
                                 (comp.confidence || 0) > 0.8
                                   ? styles.badgeSuccess
                                   : (comp.confidence || 0) > 0.5
-                                  ? styles.badgeInfo
-                                  : styles.badgeWarning
+                                    ? styles.badgeInfo
+                                    : styles.badgeWarning
                               }
                             >
                               {((comp.confidence || 0) * 100).toFixed(0)}%

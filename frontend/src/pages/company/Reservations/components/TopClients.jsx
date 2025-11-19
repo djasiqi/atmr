@@ -4,12 +4,13 @@ import styles from './TopClients.module.css';
 const TopClients = ({ reservations }) => {
   // Calculer le top des clients
   const clientStats = reservations.reduce((acc, reservation) => {
-    const clientName = reservation.customer_name || reservation.client?.full_name || 'Client anonyme';
+    const clientName =
+      reservation.customer_name || reservation.client?.full_name || 'Client anonyme';
     if (!acc[clientName]) {
       acc[clientName] = {
         name: clientName,
         count: 0,
-        revenue: 0
+        revenue: 0,
       };
     }
     acc[clientName].count++;
@@ -37,7 +38,8 @@ const TopClients = ({ reservations }) => {
               <div className={styles.clientInfo}>
                 <div className={styles.clientName}>{client.name}</div>
                 <div className={styles.clientStats}>
-                  {client.count} course{client.count > 1 ? 's' : ''} • {client.revenue.toFixed(2)} CHF
+                  {client.count} course{client.count > 1 ? 's' : ''} • {client.revenue.toFixed(2)}{' '}
+                  CHF
                 </div>
               </div>
             </div>

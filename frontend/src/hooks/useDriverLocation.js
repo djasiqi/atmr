@@ -1,5 +1,5 @@
 // src/hooks/useDriverLocation.js
-import { useState, useEffect } from "react";
+import { useState, useEffect } from 'react';
 
 const useDriverLocation = (onLocationUpdate, options) => {
   const [location, setLocation] = useState(null);
@@ -16,7 +16,7 @@ const useDriverLocation = (onLocationUpdate, options) => {
         const { latitude, longitude } = position.coords;
         const newLocation = { lat: latitude, lng: longitude };
         setLocation(newLocation);
-        if (typeof onLocationUpdate === "function") {
+        if (typeof onLocationUpdate === 'function') {
           onLocationUpdate(newLocation);
         }
       },

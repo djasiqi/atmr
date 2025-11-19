@@ -225,8 +225,8 @@ const ReservationsPage = () => {
                     {status === 'canceled'
                       ? '0 CHF'
                       : booking.amount
-                      ? `${booking.amount} CHF`
-                      : 'N/A'}
+                        ? `${booking.amount} CHF`
+                        : 'N/A'}
                   </p>
                   <p>
                     <strong>Statut :</strong>{' '}
@@ -235,19 +235,19 @@ const ReservationsPage = () => {
                         status === 'completed'
                           ? styles.statusCompleted
                           : status === 'in_progress'
-                          ? styles.statusInProgress
-                          : status === 'canceled'
-                          ? styles.statusCanceled
-                          : styles.statusDefault
+                            ? styles.statusInProgress
+                            : status === 'canceled'
+                              ? styles.statusCanceled
+                              : styles.statusDefault
                       }
                     >
                       {status === 'completed'
                         ? '✅ Terminé'
                         : status === 'in_progress'
-                        ? '🚖 En cours'
-                        : status === 'canceled'
-                        ? '❌ Annulé'
-                        : '🔄 En attente'}
+                          ? '🚖 En cours'
+                          : status === 'canceled'
+                            ? '❌ Annulé'
+                            : '🔄 En attente'}
                     </span>
                   </p>
                   {status !== 'canceled' && (
@@ -295,19 +295,19 @@ const ReservationsPage = () => {
                       booking.status === 'completed'
                         ? styles.statusCompleted
                         : booking.status === 'in_progress'
-                        ? styles.statusInProgress
-                        : booking.status === 'canceled'
-                        ? styles.statusCanceled
-                        : styles.statusDefault
+                          ? styles.statusInProgress
+                          : booking.status === 'canceled'
+                            ? styles.statusCanceled
+                            : styles.statusDefault
                     }
                   >
                     {booking.status === 'completed'
                       ? '✅ Terminé'
                       : booking.status === 'in_progress'
-                      ? '🚖 En cours'
-                      : booking.status === 'canceled'
-                      ? '❌ Annulé'
-                      : '🔄 En attente'}
+                        ? '🚖 En cours'
+                        : booking.status === 'canceled'
+                          ? '❌ Annulé'
+                          : '🔄 En attente'}
                   </span>
                 </p>
               </div>

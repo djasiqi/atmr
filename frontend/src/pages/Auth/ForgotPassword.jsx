@@ -1,27 +1,24 @@
-import React, { useState } from "react";
-import axios from "axios";
+import React, { useState } from 'react';
+import axios from 'axios';
 
 const ForgotPassword = () => {
-  const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     try {
-      const response = await axios.post(
-        "http://localhost:5000/auth/forgot-password",
-        {
-          email,
-        }
-      );
+      const response = await axios.post('http://localhost:5000/auth/forgot-password', {
+        email,
+      });
 
       setMessage(response.data.message);
-      setError("");
+      setError('');
     } catch (err) {
-      console.error("Erreur :", err);
-      setError(err.response?.data?.error || "Une erreur est survenue.");
+      console.error('Erreur :', err);
+      setError(err.response?.data?.error || 'Une erreur est survenue.');
     }
   };
 
@@ -39,7 +36,7 @@ const ForgotPassword = () => {
         <button type="submit">Envoyer</button>
       </form>
       {message && <p>{message}</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <p style={{ color: 'red' }}>{error}</p>}
     </div>
   );
 };

@@ -92,8 +92,8 @@ const DeleteConfirmModal = ({ client, onClose, onConfirm }) => {
               {loading
                 ? 'Suppression...'
                 : deleteType === 'soft'
-                ? 'Désactiver'
-                : 'Supprimer définitivement'}
+                  ? 'Désactiver'
+                  : 'Supprimer définitivement'}
             </button>
           </div>
         </div>

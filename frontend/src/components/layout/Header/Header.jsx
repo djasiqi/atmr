@@ -1,12 +1,12 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import styles from "./Header.module.css";
-import { showComingSoonToast } from "../../../utils/showComingSoonToast";
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import styles from './Header.module.css';
+import { showComingSoonToast } from '../../../utils/showComingSoonToast';
 
 const SIGNUP_DISABLED =
-  typeof process.env.REACT_APP_SIGNUP_DISABLED === "string"
-    ? process.env.REACT_APP_SIGNUP_DISABLED === "true" ||
-      process.env.REACT_APP_SIGNUP_DISABLED === "1"
+  typeof process.env.REACT_APP_SIGNUP_DISABLED === 'string'
+    ? process.env.REACT_APP_SIGNUP_DISABLED === 'true' ||
+      process.env.REACT_APP_SIGNUP_DISABLED === '1'
     : true;
 
 const Header = () => {
@@ -36,9 +36,7 @@ const Header = () => {
       {/* Navigation menu */}
       <nav className={styles.nav}>
         <ul
-          className={`${styles.navList} ${
-            isMenuOpen ? styles.navListOpen : styles.navListClosed
-          }`}
+          className={`${styles.navList} ${isMenuOpen ? styles.navListOpen : styles.navListClosed}`}
         >
           <li>
             <Link to="#" className={styles.navLink} onClick={handleComingSoon}>
@@ -75,16 +73,10 @@ const Header = () => {
         </Link>
         <button
           type="button"
-          className={`${styles.signUp} ${
-            SIGNUP_DISABLED ? styles.signUpDisabled : ""
-          }`}
+          className={`${styles.signUp} ${SIGNUP_DISABLED ? styles.signUpDisabled : ''}`}
           onClick={handleSignUpClick}
-          aria-disabled={SIGNUP_DISABLED ? "true" : undefined}
-          title={
-            SIGNUP_DISABLED
-              ? "Inscriptions suspendues – contactez info@lirie.ch"
-              : undefined
-          }
+          aria-disabled={SIGNUP_DISABLED ? 'true' : undefined}
+          title={SIGNUP_DISABLED ? 'Inscriptions suspendues – contactez info@lirie.ch' : undefined}
         >
           S'inscrire
         </button>

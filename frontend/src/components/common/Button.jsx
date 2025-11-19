@@ -5,7 +5,7 @@ import styles from './Button.module.css';
 
 /**
  * Composant Button centralisé pour toute l'application
- * 
+ *
  * @param {string} variant - Variante du bouton: 'primary', 'secondary', 'success', 'danger', 'warning', 'ghost'
  * @param {string} size - Taille du bouton: 'sm', 'md', 'lg'
  * @param {boolean} fullWidth - Si true, le bouton prend toute la largeur disponible
@@ -32,7 +32,7 @@ const Button = ({
     styles[size],
     fullWidth && styles.fullWidth,
     loading && styles.loading,
-    className
+    className,
   ]
     .filter(Boolean)
     .join(' ');
@@ -64,4 +64,3 @@ Button.propTypes = {
 };
 
 export default Button;
-

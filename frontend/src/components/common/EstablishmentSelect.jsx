@@ -1,6 +1,6 @@
 // components/common/EstablishmentSelect.jsx
-import React from "react";
-import { searchEstablishments } from "../../services/companyService";
+import React from 'react';
+import { searchEstablishments } from '../../services/companyService';
 
 /**
  * Autocomplete d'établissement médical (HUG, cliniques…)
@@ -25,12 +25,12 @@ export default function EstablishmentSelect({
   value,
   onChange,
   onPickEstablishment,
-  placeholder = "Choisir un établissement...",
+  placeholder = 'Choisir un établissement...',
   minChars = 2,
   limit = 8,
   disabled = false,
 }) {
-  const [q, setQ] = React.useState(value || "");
+  const [q, setQ] = React.useState(value || '');
   const [items, setItems] = React.useState([]);
   const [open, setOpen] = React.useState(false);
   const [activeIndex, setActiveIndex] = React.useState(-1);
@@ -43,7 +43,7 @@ export default function EstablishmentSelect({
 
   // Sync externe → interne
   React.useEffect(() => {
-    if (value !== undefined && value !== q) setQ(value || "");
+    if (value !== undefined && value !== q) setQ(value || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
@@ -56,13 +56,13 @@ export default function EstablishmentSelect({
         setActiveIndex(-1);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside, true);
-    return () => document.removeEventListener("mousedown", handleClickOutside, true);
+    document.addEventListener('mousedown', handleClickOutside, true);
+    return () => document.removeEventListener('mousedown', handleClickOutside, true);
   }, []);
 
   // Requête (debounced + abort)
   React.useEffect(() => {
-    const search = (q || "").trim();
+    const search = (q || '').trim();
 
     // Reset si trop court
     if (search.length < minChars || disabled) {
@@ -90,12 +90,12 @@ export default function EstablishmentSelect({
         setLoading(false);
         setError(null);
       } catch (err) {
-        if (err?.name === "AbortError") return; // requête précédente annulée : normal
+        if (err?.name === 'AbortError') return; // requête précédente annulée : normal
         setItems([]);
         setOpen(false);
         setActiveIndex(-1);
         setLoading(false);
-        setError("Impossible de charger les établissements");
+        setError('Impossible de charger les établissements');
       }
     }, 250);
 
@@ -109,15 +109,15 @@ export default function EstablishmentSelect({
   const pick = (it) => {
     if (!it) {
       // clear
-      setQ("");
-      onChange?.("");
+      setQ('');
+      onChange?.('');
       onPickEstablishment?.(null);
       setItems([]);
       setOpen(false);
       setActiveIndex(-1);
       return;
     }
-    const label = it?.label || it?.name || "";
+    const label = it?.label || it?.name || '';
     setQ(label);
     onChange?.(label);
     onPickEstablishment?.(it);
@@ -129,23 +129,23 @@ export default function EstablishmentSelect({
     if (disabled) return;
     // Si la liste n'est pas ouverte, Enter = auto-pick si 1 résultat
     if (!open) {
-      if (e.key === "Enter" && items.length === 1) {
+      if (e.key === 'Enter' && items.length === 1) {
         e.preventDefault();
         pick(items[0]);
       }
       return;
     }
 
-    if (e.key === "ArrowDown") {
+    if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (items.length) setActiveIndex((i) => (i + 1) % items.length);
-    } else if (e.key === "ArrowUp") {
+    } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (items.length) setActiveIndex((i) => (i - 1 + items.length) % items.length);
-    } else if (e.key === "Enter") {
+    } else if (e.key === 'Enter') {
       e.preventDefault();
       if (activeIndex >= 0 && activeIndex < items.length) pick(items[activeIndex]);
-    } else if (e.key === "Escape") {
+    } else if (e.key === 'Escape') {
       e.preventDefault();
       setOpen(false);
       setActiveIndex(-1);
@@ -155,7 +155,7 @@ export default function EstablishmentSelect({
   return (
     <div
       ref={wrapRef}
-      style={{ position: "relative" }}
+      style={{ position: 'relative' }}
       role="combobox"
       aria-expanded={open}
       aria-controls={open ? listboxId : undefined}
@@ -180,19 +180,19 @@ export default function EstablishmentSelect({
             open && activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined
           }
           placeholder={placeholder}
-          className={`w-full border rounded px-3 py-2 pr-9 ${disabled ? "bg-gray-100 cursor-not-allowed" : ""}`}
+          className={`w-full border rounded px-3 py-2 pr-9 ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           autoComplete="off"
         />
       </div>
 
       {/* Panneaux d’état */}
-      {(!open && loading) && (
+      {!open && loading && (
         <div className="absolute z-50 mt-1 w-full rounded border bg-white shadow px-3 py-2 text-sm text-gray-600">
           Recherche en cours…
         </div>
       )}
 
-      {(!open && error) && (
+      {!open && error && (
         <div className="absolute z-50 mt-1 w-full rounded border bg-white shadow px-3 py-2 text-sm text-red-600">
           {error}
         </div>
@@ -217,16 +217,14 @@ export default function EstablishmentSelect({
                   role="option"
                   aria-selected={isActive}
                   className={`px-3 py-2 cursor-pointer ${
-                    isActive ? "bg-gray-100" : "hover:bg-gray-50"
+                    isActive ? 'bg-gray-100' : 'hover:bg-gray-50'
                   }`}
                   onMouseDown={(e) => e.preventDefault()} // évite blur avant click
                   onMouseEnter={() => setActiveIndex(idx)}
                   onClick={() => pick(it)}
                 >
                   <div className="font-medium">{it.label || it.name}</div>
-                  {it.address && (
-                    <div className="text-xs text-gray-600">{it.address}</div>
-                  )}
+                  {it.address && <div className="text-xs text-gray-600">{it.address}</div>}
                 </div>
               );
             })

@@ -1,15 +1,15 @@
-import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import apiClient from "../../utils/apiClient";
-import { jwtDecode } from "jwt-decode"; // Utilisation de l'import nommé
-import styles from "./Login.module.css";
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import apiClient from '../../utils/apiClient';
+import { jwtDecode } from 'jwt-decode'; // Utilisation de l'import nommé
+import styles from './Login.module.css';
 
 const Login = () => {
   const [formData, setFormData] = useState({
-    email: "",
-    password: "",
+    email: '',
+    password: '',
   });
-  const [errorMessage, setErrorMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -17,7 +17,7 @@ const Login = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
-    setErrorMessage(""); // Réinitialise le message d'erreur
+    setErrorMessage(''); // Réinitialise le message d'erreur
   };
 
   // Validation du formulaire
@@ -25,18 +25,18 @@ const Login = () => {
     const { email, password } = formData;
 
     if (!email.trim() || !password) {
-      setErrorMessage("Veuillez remplir tous les champs.");
+      setErrorMessage('Veuillez remplir tous les champs.');
       return false;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setErrorMessage("Veuillez entrer une adresse email valide.");
+      setErrorMessage('Veuillez entrer une adresse email valide.');
       return false;
     }
 
     if (password.length < 6) {
-      setErrorMessage("Le mot de passe doit contenir au moins 6 caractères.");
+      setErrorMessage('Le mot de passe doit contenir au moins 6 caractères.');
       return false;
     }
 
@@ -50,37 +50,30 @@ const Login = () => {
 
     setIsLoading(true);
     try {
-      localStorage.removeItem("authToken");
-      const response = await apiClient.post("/auth/login", formData);
+      localStorage.removeItem('authToken');
+      const response = await apiClient.post('/auth/login', formData);
       const { token, user, refresh_token } = response.data;
 
       if (!user || !user.role || !user.public_id) {
-        throw new Error("Aucune information utilisateur reçue.");
+        throw new Error('Aucune information utilisateur reçue.');
       }
 
-      console.log("✅ Connexion réussie :", user);
+      console.log('✅ Connexion réussie :', user);
 
       // Stocker les infos utilisateur
-      localStorage.setItem("authToken", token);
-      if (refresh_token) localStorage.setItem("refreshToken", refresh_token);
-      localStorage.setItem("public_id", user.public_id);
+      localStorage.setItem('authToken', token);
+      if (refresh_token) localStorage.setItem('refreshToken', refresh_token);
+      localStorage.setItem('public_id', user.public_id);
 
       // Décoder le token pour vérifier les informations (notamment le rôle)
       const decodedToken = jwtDecode(token);
-      const roleSegment = String(
-        decodedToken.role || user.role || ""
-      ).toLowerCase();
+      const roleSegment = String(decodedToken.role || user.role || '').toLowerCase();
       // Normaliser le rôle stocké (cohérent avec ProtectedRoute)
-      localStorage.setItem(
-        "user",
-        JSON.stringify({ ...user, role: roleSegment })
-      );
+      localStorage.setItem('user', JSON.stringify({ ...user, role: roleSegment }));
 
       // Vérification si l'utilisateur doit réinitialiser son mot de passe
       if (user.force_password_change) {
-        console.log(
-          "🔄 Redirection vers la réinitialisation du mot de passe..."
-        );
+        console.log('🔄 Redirection vers la réinitialisation du mot de passe...');
         navigate(`/reset-password/${user.public_id}`, { replace: true });
       } else {
         // Redirection normale vers le dashboard
@@ -89,14 +82,12 @@ const Login = () => {
         });
       }
     } catch (error) {
-      console.error("❌ Erreur lors de la connexion :", error);
+      console.error('❌ Erreur lors de la connexion :', error);
       const msg =
         error.response?.data?.error ??
         error.response?.data?.message ??
         error.response?.data?.detail ??
-        (typeof error.response?.data === "string"
-          ? error.response.data
-          : null) ??
+        (typeof error.response?.data === 'string' ? error.response.data : null) ??
         error.message;
       setErrorMessage(msg);
     } finally {
@@ -149,12 +140,10 @@ const Login = () => {
 
         <button
           type="submit"
-          className={`${styles.submitButton} ${
-            isLoading ? styles.disabled : ""
-          }`}
+          className={`${styles.submitButton} ${isLoading ? styles.disabled : ''}`}
           disabled={isLoading}
         >
-          {isLoading ? "Connexion en cours..." : "Connexion"}
+          {isLoading ? 'Connexion en cours...' : 'Connexion'}
         </button>
       </form>
     </div>

@@ -3,9 +3,17 @@ import { BrowserRouter } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import configureStore from 'redux-mock-store';
 import Login from './Login';
-import * as authService from '../../services/authService';
+import apiClient from '../../utils/apiClient';
+import { jwtDecode } from 'jwt-decode';
 
-jest.mock('../../services/authService');
+jest.mock('../../utils/apiClient');
+jest.mock('jwt-decode');
+
+const mockNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
 
 const mockStore = configureStore([]);
 
@@ -18,6 +26,7 @@ describe('Login Page', () => {
     });
     localStorage.clear();
     jest.clearAllMocks();
+    mockNavigate.mockClear();
   });
 
   const renderLogin = () => {
@@ -39,8 +48,24 @@ describe('Login Page', () => {
   });
 
   it('submits login with valid credentials', async () => {
-    authService.loginUser.mockResolvedValue({
-      success: true,
+    const mockToken = 'fake-jwt-token';
+    const mockUser = {
+      public_id: 'user-123',
+      role: 'company',
+      first_name: 'Test',
+      last_name: 'User',
+    };
+
+    apiClient.post.mockResolvedValue({
+      data: {
+        token: mockToken,
+        user: mockUser,
+      },
+    });
+
+    jwtDecode.mockReturnValue({
+      sub: 'user-123',
+      role: 'company',
     });
 
     renderLogin();
@@ -55,7 +80,7 @@ describe('Login Page', () => {
     fireEvent.click(screen.getByRole('button', { name: /connexion/i }));
 
     await waitFor(() => {
-      expect(authService.loginUser).toHaveBeenCalledWith({
+      expect(apiClient.post).toHaveBeenCalledWith('/auth/login', {
         email: 'test@test.com',
         password: 'password123',
       });
@@ -63,7 +88,7 @@ describe('Login Page', () => {
   });
 
   it('shows error message on invalid credentials', async () => {
-    authService.loginUser.mockRejectedValue({
+    apiClient.post.mockRejectedValue({
       response: { data: { error: 'Invalid credentials' } },
     });
 
@@ -80,6 +105,6 @@ describe('Login Page', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/invalid credentials/i)).toBeInTheDocument();
-    });
+    }, { timeout: 3000 });
   });
 });

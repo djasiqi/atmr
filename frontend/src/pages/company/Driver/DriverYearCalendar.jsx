@@ -1,6 +1,6 @@
 // DriverYearCalendar.jsx
-import React from "react";
-import { Calendar } from "react-yearly-calendar";
+import React from 'react';
+import { Calendar } from 'react-yearly-calendar';
 
 function DriverYearCalendar({ absences }) {
   // absences = [{ start_date: '2025-07-10', end_date: '2025-07-20', ... }, ...]
@@ -16,10 +16,10 @@ function DriverYearCalendar({ absences }) {
     let current = new Date(abs.start_date);
     const end = new Date(abs.end_date);
     while (current <= end) {
-      const iso = current.toISOString().split("T")[0];
+      const iso = current.toISOString().split('T')[0];
       customDatesStyles.push({
         date: iso,
-        className: "vacationDay", // tu définiras la classe CSS
+        className: 'vacationDay', // tu définiras la classe CSS
       });
       current.setDate(current.getDate() + 1);
     }

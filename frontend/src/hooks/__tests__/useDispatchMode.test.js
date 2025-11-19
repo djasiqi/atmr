@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { useDispatchMode } from '../useDispatchMode';
 import apiClient from '../../utils/apiClient';
 
@@ -66,7 +66,9 @@ describe('useDispatchMode', () => {
   it('should allow manual mode setting', () => {
     const { result } = renderHook(() => useDispatchMode());
 
-    result.current.setDispatchMode('fully_auto');
+    act(() => {
+      result.current.setDispatchMode('fully_auto');
+    });
 
     expect(result.current.dispatchMode).toBe('fully_auto');
   });

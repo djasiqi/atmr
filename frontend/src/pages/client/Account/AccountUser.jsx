@@ -1,33 +1,33 @@
 // src/pages/client/Account/AccountUser.jsx
-import React, { useEffect, useState, useRef } from "react";
-import apiClient from "../../../utils/apiClient";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useState, useRef } from 'react';
+import apiClient from '../../../utils/apiClient';
+import { useParams, useNavigate } from 'react-router-dom';
 // import { Autocomplete } from "@react-google-maps/api"; // ❌ retiré
-import HeaderDashboard from "../../../components/layout/Header/HeaderDashboard";
-import Footer from "../../../components/layout/Footer/Footer";
-import "./AccountUser.css";
+import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
+import Footer from '../../../components/layout/Footer/Footer';
+import './AccountUser.css';
 
-import avatarMale from "../../../assets/images/avatar-male.png";
-import avatarFemale from "../../../assets/images/avatar-female.png";
-import defaultAvatar from "../../../assets/images/default-avatar.png";
+import avatarMale from '../../../assets/images/avatar-male.png';
+import avatarFemale from '../../../assets/images/avatar-female.png';
+import defaultAvatar from '../../../assets/images/default-avatar.png';
 
 const AccountUser = () => {
   const { public_id } = useParams();
   const navigate = useNavigate();
   const [, setProfile] = useState({});
   const [updatedProfile, setUpdatedProfile] = useState({});
-  const [paymentMethod, setPaymentMethod] = useState("none");
+  const [paymentMethod, setPaymentMethod] = useState('none');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [profilePic, setProfilePic] = useState("/default-avatar.png");
+  const [profilePic, setProfilePic] = useState('/default-avatar.png');
 
   // const autocompleteRef = useRef(null); // ❌ retiré (Google)
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("authToken");
+    const token = localStorage.getItem('authToken');
     if (!token) {
-      navigate("/login");
+      navigate('/login');
       return;
     }
 
@@ -41,7 +41,7 @@ const AccountUser = () => {
         updateProfilePic(response.data.gender, response.data.profile_image);
       })
       .catch(() => {
-        setError("Impossible de charger le compte utilisateur.");
+        setError('Impossible de charger le compte utilisateur.');
       })
       .finally(() => {
         setLoading(false);
@@ -53,10 +53,10 @@ const AccountUser = () => {
       setProfilePic(uploadedPic);
     } else {
       switch (gender) {
-        case "Homme":
+        case 'Homme':
           setProfilePic(avatarMale);
           break;
-        case "Femme":
+        case 'Femme':
           setProfilePic(avatarFemale);
           break;
         default:
@@ -69,26 +69,23 @@ const AccountUser = () => {
   // ❌ onPlaceSelected / autocomplete supprimés
 
   const handleUpdateProfile = () => {
-    const token = localStorage.getItem("authToken");
+    const token = localStorage.getItem('authToken');
     apiClient
       .put(`/clients/${public_id}`, updatedProfile, {
         headers: {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       })
       .then((response) => {
-        alert("Profil mis à jour avec succès !");
+        alert('Profil mis à jour avec succès !');
         setProfile(response.data.client);
         setUpdatedProfile(response.data.client);
-        updateProfilePic(
-          response.data.client.gender,
-          response.data.client.profile_image
-        );
-        localStorage.setItem("user", JSON.stringify(response.data.client));
+        updateProfilePic(response.data.client.gender, response.data.client.profile_image);
+        localStorage.setItem('user', JSON.stringify(response.data.client));
       })
       .catch(() => {
-        setError("Impossible de mettre à jour le compte.");
+        setError('Impossible de mettre à jour le compte.');
       });
   };
 
@@ -115,22 +112,15 @@ const AccountUser = () => {
 
         <section className="profile-card">
           <div className="profile-header">
-            <img
-              src={profilePic}
-              alt="Profil utilisateur"
-              className="profile-pic"
-            />
+            <img src={profilePic} alt="Profil utilisateur" className="profile-pic" />
             <input
               type="file"
               accept="image/*"
               ref={fileInputRef}
               onChange={handleProfilePicUpload}
-              style={{ display: "none" }}
+              style={{ display: 'none' }}
             />
-            <button
-              className="edit-button"
-              onClick={() => fileInputRef.current?.click()}
-            >
+            <button className="edit-button" onClick={() => fileInputRef.current?.click()}>
               Modifier la photo
             </button>
           </div>
@@ -139,7 +129,7 @@ const AccountUser = () => {
             <label>Prénom:</label>
             <input
               type="text"
-              value={updatedProfile.first_name || ""}
+              value={updatedProfile.first_name || ''}
               onChange={(e) =>
                 setUpdatedProfile({
                   ...updatedProfile,
@@ -151,7 +141,7 @@ const AccountUser = () => {
             <label>Nom:</label>
             <input
               type="text"
-              value={updatedProfile.last_name || ""}
+              value={updatedProfile.last_name || ''}
               onChange={(e) =>
                 setUpdatedProfile({
                   ...updatedProfile,
@@ -161,22 +151,20 @@ const AccountUser = () => {
             />
 
             <label>Email:</label>
-            <input type="email" value={updatedProfile.email || ""} disabled />
+            <input type="email" value={updatedProfile.email || ''} disabled />
 
             <label>Téléphone:</label>
             <input
               type="text"
-              value={updatedProfile.phone || ""}
-              onChange={(e) =>
-                setUpdatedProfile({ ...updatedProfile, phone: e.target.value })
-              }
+              value={updatedProfile.phone || ''}
+              onChange={(e) => setUpdatedProfile({ ...updatedProfile, phone: e.target.value })}
             />
 
             <label>Adresse complète:</label>
             {/* ✅ Champ d’adresse simple (contrôlé) */}
             <input
               type="text"
-              value={updatedProfile.address || ""}
+              value={updatedProfile.address || ''}
               placeholder="Saisissez votre adresse…"
               onChange={(e) =>
                 setUpdatedProfile({
@@ -189,7 +177,7 @@ const AccountUser = () => {
             <label>Date de Naissance:</label>
             <input
               type="date"
-              value={updatedProfile.birth_date || ""}
+              value={updatedProfile.birth_date || ''}
               onChange={(e) =>
                 setUpdatedProfile({
                   ...updatedProfile,
@@ -200,7 +188,7 @@ const AccountUser = () => {
 
             <label>Genre:</label>
             <select
-              value={updatedProfile.gender || ""}
+              value={updatedProfile.gender || ''}
               onChange={(e) => {
                 setUpdatedProfile({
                   ...updatedProfile,
@@ -229,10 +217,8 @@ const AccountUser = () => {
             <option value="twint">Twint</option>
             <option value="invoice">Paiement par Facture</option>
           </select>
-          {paymentMethod !== "none" && (
-            <button className="add-payment">
-              Ajouter ce moyen de paiement
-            </button>
+          {paymentMethod !== 'none' && (
+            <button className="add-payment">Ajouter ce moyen de paiement</button>
           )}
         </section>
       </main>

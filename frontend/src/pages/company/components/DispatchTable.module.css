@@ -36,7 +36,11 @@
   overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
-.dispatchTable thead { position: sticky; top: 0; z-index: var(--z-sticky); }
+.dispatchTable thead {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
 
 /* --- En-têtes --- */
 .dispatchTable th {
@@ -58,10 +62,26 @@
   gap: var(--spacing-sm);
   margin: var(--spacing-xs) 0 var(--spacing-sm);
 }
-.left { display: flex; align-items: center; gap: var(--spacing-sm); min-height: 24px; }
-.right { display: flex; align-items: center; gap: var(--spacing-sm); }
-.progressWrap { min-width: 160px; max-width: 260px; width: 25vw; }
-.updatedAt { font-size: var(--font-xs); color: var(--text-tertiary); }
+.left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: 24px;
+}
+.right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+.progressWrap {
+  min-width: 160px;
+  max-width: 260px;
+  width: 25vw;
+}
+.updatedAt {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+}
 
 .refreshBtn {
   background: var(--bg-primary);
@@ -72,11 +92,20 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background var(--transition-fast), transform var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast);
 }
-.refreshBtn:hover { background: var(--bg-hover); }
-.refreshBtn:active { transform: translateY(1px); }
-.refreshBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.refreshBtn:hover {
+  background: var(--bg-hover);
+}
+.refreshBtn:active {
+  transform: translateY(1px);
+}
+.refreshBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* --- Cellules et lignes --- */
 .dispatchTable td {
@@ -175,10 +204,17 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
-.iconBtn:hover { background: var(--bg-hover); }
-.iconBtn:active { transform: translateY(1px); }
+.iconBtn:hover {
+  background: var(--bg-hover);
+}
+.iconBtn:active {
+  transform: translateY(1px);
+}
 .iconBtn:focus-visible {
   outline: 2px solid var(--brand-light);
   outline-offset: 2px;
@@ -200,12 +236,25 @@
   padding: var(--spacing-xs) var(--spacing-md);
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
-  transition: filter var(--transition-fast), transform var(--transition-fast);
+  transition:
+    filter var(--transition-fast),
+    transform var(--transition-fast);
 }
-.optimizeBtn:hover { filter: brightness(1.05); }
-.optimizeBtn:active { transform: translateY(1px); }
-.optimizeBtn:disabled { filter: grayscale(0.4); opacity: 0.7; cursor: not-allowed; }
-.hint { color: var(--text-tertiary); font-size: var(--font-xs); }
+.optimizeBtn:hover {
+  filter: brightness(1.05);
+}
+.optimizeBtn:active {
+  transform: translateY(1px);
+}
+.optimizeBtn:disabled {
+  filter: grayscale(0.4);
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.hint {
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+}
 
 /* --- Tags (Retour, etc.) --- */
 .tag {
@@ -244,29 +293,52 @@
 
 /* --- Responsiveness --- */
 @media (max-width: 900px) {
-  .plannerRow { gap: var(--spacing-xs); }
-  .progressWrap { min-width: 120px; width: 35vw; }
-  .dispatchTable th, .dispatchTable td { padding: var(--spacing-sm); }
+  .plannerRow {
+    gap: var(--spacing-xs);
+  }
+  .progressWrap {
+    min-width: 120px;
+    width: 35vw;
+  }
+  .dispatchTable th,
+  .dispatchTable td {
+    padding: var(--spacing-sm);
+  }
 
   /* Aide à la lisibilité sur tablettes : fixe quelques largeurs minimales */
   .dispatchTable th:nth-child(1),
-  .dispatchTable td:nth-child(1) { min-width: 64px; }   /* ID */
+  .dispatchTable td:nth-child(1) {
+    min-width: 64px;
+  } /* ID */
   .dispatchTable th:nth-child(2),
-  .dispatchTable td:nth-child(2) { min-width: 160px; }  /* Client */
+  .dispatchTable td:nth-child(2) {
+    min-width: 160px;
+  } /* Client */
   .dispatchTable th:nth-child(3),
-  .dispatchTable td:nth-child(3) { min-width: 160px; }  /* Date/Heure */
+  .dispatchTable td:nth-child(3) {
+    min-width: 160px;
+  } /* Date/Heure */
   .dispatchTable th:nth-child(6),
-  .dispatchTable td:nth-child(6) { min-width: 160px; }  /* Chauffeur */
+  .dispatchTable td:nth-child(6) {
+    min-width: 160px;
+  } /* Chauffeur */
 }
 @media (max-width: 640px) {
-  .plannerBar { padding: var(--spacing-xs) var(--spacing-sm); }
-  .updatedAt { display: none; } /* compacter l'en-tête sur mobile */
-  .actionsCell { gap: var(--spacing-xs); }
+  .plannerBar {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+  .updatedAt {
+    display: none;
+  } /* compacter l'en-tête sur mobile */
+  .actionsCell {
+    gap: var(--spacing-xs);
+  }
 }
 
 /* --- Animation pulse --- */
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
     opacity: 1;
   }
@@ -278,8 +350,14 @@
 
 /* --- Respect Reduced Motion --- */
 @media (prefers-reduced-motion: reduce) {
-  .inProgress, .optimizing { animation: none; }
-  .refreshBtn, .optimizeBtn { transition: none; }
+  .inProgress,
+  .optimizing {
+    animation: none;
+  }
+  .refreshBtn,
+  .optimizeBtn {
+    transition: none;
+  }
 }
 
 /* --- Accessibilité & scrollbars (optionnel) --- */
@@ -287,10 +365,16 @@
   box-shadow: inset 0 -2px 0 0 var(--brand-light);
 }
 /* Scrollbar light touch (WebKit) */
-.dispatchTableContainer::-webkit-scrollbar { height: 10px; }
-.dispatchTableContainer::-webkit-scrollbar-track { background: transparent; }
+.dispatchTableContainer::-webkit-scrollbar {
+  height: 10px;
+}
+.dispatchTableContainer::-webkit-scrollbar-track {
+  background: transparent;
+}
 .dispatchTableContainer::-webkit-scrollbar-thumb {
   background: var(--border-hover);
   border-radius: var(--radius-md);
 }
-.dispatchTableContainer:hover::-webkit-scrollbar-thumb { background: var(--text-tertiary); }
+.dispatchTableContainer:hover::-webkit-scrollbar-thumb {
+  background: var(--text-tertiary);
+}

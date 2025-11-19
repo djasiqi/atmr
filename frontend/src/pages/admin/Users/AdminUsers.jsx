@@ -1,40 +1,40 @@
 // C:\Users\jasiq\atmr\frontend\src\pages\Users\AdminUsers.jsx
-import React, { useEffect, useState } from "react";
-import apiClient from "../../../utils/apiClient";
+import React, { useEffect, useState } from 'react';
+import apiClient from '../../../utils/apiClient';
 import {
   fetchUsers,
   deleteUser,
   resetUserPassword,
   updateUserRole, // ✅ Utilisation de la version du service
   fetchCompanies,
-} from "../../../services/adminService";
-import HeaderDashboard from "../../../components/layout/Header/HeaderDashboard";
-import Sidebar from "../../../components/layout/Sidebar/AdminSidebar/AdminSidebar";
-import styles from "./AdminUsers.module.css";
+} from '../../../services/adminService';
+import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
+import Sidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
+import styles from './AdminUsers.module.css';
 
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
-  const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("");
-  const [sortBy, setSortBy] = useState("created_at");
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [sortBy, setSortBy] = useState('created_at');
   const [loading, setLoading] = useState(true);
   const [companyOptions, setCompanyOptions] = useState([]);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [pendingDriverUserId, setPendingDriverUserId] = useState(null);
-  const norm = (v) => String(v ?? "").toLowerCase();
+  const norm = (v) => String(v ?? '').toLowerCase();
 
   useEffect(() => {
     const loadUsers = async () => {
       setLoading(true);
       try {
         const data = await fetchUsers();
-        console.log("📌 Utilisateurs chargés dans AdminUsers :", data);
+        console.log('📌 Utilisateurs chargés dans AdminUsers :', data);
         setUsers(data || []);
       } catch (error) {
-        console.error("❌ Erreur chargement utilisateurs :", error);
+        console.error('❌ Erreur chargement utilisateurs :', error);
       } finally {
         setLoading(false);
-        console.log("🔄 Chargement terminé"); // Vérification
+        console.log('🔄 Chargement terminé'); // Vérification
       }
     };
 
@@ -43,16 +43,14 @@ const AdminUsers = () => {
 
   useEffect(() => {
     const loadCompanies = async () => {
-      console.log("📡 Tentative de chargement des entreprises...");
+      console.log('📡 Tentative de chargement des entreprises...');
       try {
         const companies = await fetchCompanies();
-        console.log("✅ Entreprises chargées :", companies);
+        console.log('✅ Entreprises chargées :', companies);
         // on ajoute un flag selected utilisable par le modal
-        setCompanyOptions(
-          (companies || []).map((c) => ({ ...c, selected: false }))
-        );
+        setCompanyOptions((companies || []).map((c) => ({ ...c, selected: false })));
       } catch (error) {
-        console.error("⚠️ Erreur chargement entreprises :", error);
+        console.error('⚠️ Erreur chargement entreprises :', error);
       }
     };
     loadCompanies();
@@ -65,10 +63,10 @@ const AdminUsers = () => {
     }
 
     // Vérifier si on assigne le rôle "driver"
-    if (newRole.toLowerCase() === "driver") {
+    if (newRole.toLowerCase() === 'driver') {
       // Si c'est un chauffeur, on affiche la liste des entreprises dans un modal
       if (!companyOptions.length) {
-        alert("❌ Aucune entreprise disponible !");
+        alert('❌ Aucune entreprise disponible !');
         return;
       }
 
@@ -81,8 +79,8 @@ const AdminUsers = () => {
         alert(`✅ Rôle mis à jour avec succès : ${newRole}`);
         loadUsers();
       } catch (error) {
-        console.error("❌ Erreur mise à jour rôle :", error);
-        alert("⚠️ Impossible de mettre à jour le rôle.");
+        console.error('❌ Erreur mise à jour rôle :', error);
+        alert('⚠️ Impossible de mettre à jour le rôle.');
       }
     }
   };
@@ -91,44 +89,40 @@ const AdminUsers = () => {
     setLoading(true);
     try {
       const data = await fetchUsers();
-      console.log("📌 Utilisateurs chargés dans AdminUsers :", data);
+      console.log('📌 Utilisateurs chargés dans AdminUsers :', data);
       setUsers(data || []);
     } catch (error) {
-      console.error("❌ Erreur chargement utilisateurs :", error);
+      console.error('❌ Erreur chargement utilisateurs :', error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (userId) => {
-    if (!window.confirm("❌ Confirmer la suppression de cet utilisateur ?")) {
+    if (!window.confirm('❌ Confirmer la suppression de cet utilisateur ?')) {
       return;
     }
     try {
       await deleteUser(userId);
       loadUsers();
-      alert("✅ Utilisateur supprimé avec succès !");
+      alert('✅ Utilisateur supprimé avec succès !');
     } catch (error) {
-      console.error("❌ Erreur suppression utilisateur :", error);
+      console.error('❌ Erreur suppression utilisateur :', error);
       alert("⚠️ Impossible de supprimer l'utilisateur.");
     }
   };
 
   const handleResetPassword = async (userId) => {
     if (!userId) {
-      console.error("❌ Erreur : userId est undefined !");
-      alert(
-        "⚠️ Impossible de réinitialiser le mot de passe : ID utilisateur introuvable."
-      );
+      console.error('❌ Erreur : userId est undefined !');
+      alert('⚠️ Impossible de réinitialiser le mot de passe : ID utilisateur introuvable.');
       return;
     }
 
-    console.log(
-      `🔄 Tentative de réinitialisation pour l'ID utilisateur : ${userId}`
-    );
+    console.log(`🔄 Tentative de réinitialisation pour l'ID utilisateur : ${userId}`);
 
     const confirmation = window.confirm(
-      "Voulez-vous vraiment réinitialiser le mot de passe de cet utilisateur ?"
+      'Voulez-vous vraiment réinitialiser le mot de passe de cet utilisateur ?'
     );
 
     if (!confirmation) return;
@@ -137,20 +131,18 @@ const AdminUsers = () => {
       const response = await resetUserPassword(userId);
 
       if (response?.new_password) {
-        alert(
-          `✅ Mot de passe réinitialisé avec succès : ${response.new_password}`
-        );
-        console.log("✅ Nouveau mot de passe généré :", response.new_password);
+        alert(`✅ Mot de passe réinitialisé avec succès : ${response.new_password}`);
+        console.log('✅ Nouveau mot de passe généré :', response.new_password);
       } else {
-        console.warn("⚠️ La réponse API ne contient pas de mot de passe.");
-        alert("⚠️ Échec de la réinitialisation : aucun mot de passe généré.");
+        console.warn('⚠️ La réponse API ne contient pas de mot de passe.');
+        alert('⚠️ Échec de la réinitialisation : aucun mot de passe généré.');
       }
     } catch (error) {
       console.error(
-        "❌ Erreur lors de la réinitialisation du mot de passe :",
+        '❌ Erreur lors de la réinitialisation du mot de passe :',
         error.response?.data || error.message
       );
-      alert("❌ Une erreur est survenue lors de la réinitialisation.");
+      alert('❌ Une erreur est survenue lors de la réinitialisation.');
     }
   };
 
@@ -159,17 +151,15 @@ const AdminUsers = () => {
       const matchesSearch =
         user.username.toLowerCase().includes(search.toLowerCase()) ||
         user.email.toLowerCase().includes(search.toLowerCase());
-      const matchesRole = roleFilter
-        ? norm(user.role) === norm(roleFilter)
-        : true;
+      const matchesRole = roleFilter ? norm(user.role) === norm(roleFilter) : true;
       return matchesSearch && matchesRole;
     })
     .sort((a, b) => {
-      if (sortBy === "created_at") {
+      if (sortBy === 'created_at') {
         return new Date(b.created_at) - new Date(a.created_at);
-      } else if (sortBy === "username") {
+      } else if (sortBy === 'username') {
         return a.username.localeCompare(b.username);
-      } else if (sortBy === "role") {
+      } else if (sortBy === 'role') {
         return norm(a.role).localeCompare(norm(b.role));
       }
       return 0;
@@ -215,9 +205,7 @@ const AdminUsers = () => {
               onChange={(e) => setSortBy(e.target.value)}
               className={styles.roleFilter}
             >
-              <option value="created_at">
-                📅 Trier par Date d'inscription
-              </option>
+              <option value="created_at">📅 Trier par Date d'inscription</option>
               <option value="username">🔠 Trier par Nom</option>
               <option value="role">🎭 Trier par Rôle</option>
             </select>
@@ -251,9 +239,7 @@ const AdminUsers = () => {
                         <td>
                           <select
                             value={userRole}
-                            onChange={(e) =>
-                              updateUserRoleHandler(user.id, e.target.value)
-                            }
+                            onChange={(e) => updateUserRoleHandler(user.id, e.target.value)}
                           >
                             <option value="client">👤 Client</option>
                             <option value="company">🏢 Entreprise</option>
@@ -264,8 +250,8 @@ const AdminUsers = () => {
 
                         <td>
                           {user.created_at
-                            ? new Date(user.created_at).toLocaleString("fr-CH")
-                            : "📅 Inconnu"}{" "}
+                            ? new Date(user.created_at).toLocaleString('fr-CH')
+                            : '📅 Inconnu'}{' '}
                         </td>
                         <td>
                           <button
@@ -320,12 +306,12 @@ const AdminUsers = () => {
                 // Récupérer la valeur sélectionnée
                 const selectedCompany = companyOptions.find((c) => c.selected);
                 if (!selectedCompany) {
-                  alert("Veuillez sélectionner une entreprise.");
+                  alert('Veuillez sélectionner une entreprise.');
                   return;
                 }
                 try {
                   const updateData = {
-                    role: "driver",
+                    role: 'driver',
                     company_id: selectedCompany.id,
                   };
                   const response = await apiClient.put(
@@ -333,9 +319,7 @@ const AdminUsers = () => {
                     updateData,
                     {
                       headers: {
-                        Authorization: `Bearer ${localStorage.getItem(
-                          "authToken"
-                        )}`,
+                        Authorization: `Bearer ${localStorage.getItem('authToken')}`,
                       },
                     }
                   );
@@ -347,10 +331,10 @@ const AdminUsers = () => {
                   }
                 } catch (error) {
                   console.error(
-                    "❌ Erreur lors de la mise à jour du rôle :",
+                    '❌ Erreur lors de la mise à jour du rôle :',
                     error.response?.data || error.message
                   );
-                  alert("⚠️ Impossible de mettre à jour le rôle.");
+                  alert('⚠️ Impossible de mettre à jour le rôle.');
                 }
               }}
             >

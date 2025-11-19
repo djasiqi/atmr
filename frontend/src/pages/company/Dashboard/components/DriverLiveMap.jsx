@@ -133,10 +133,10 @@ const createStyledTooltip = (driver) => {
           status === 'available'
             ? '🟢'
             : status === 'busy'
-            ? '🟡'
-            : status === 'offline'
-            ? '⚫'
-            : '🔴'
+              ? '🟡'
+              : status === 'offline'
+                ? '⚫'
+                : '🔴'
         }</span>
         ${statusText[status]}
       </div>

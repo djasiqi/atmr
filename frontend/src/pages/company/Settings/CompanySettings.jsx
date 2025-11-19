@@ -277,13 +277,13 @@ export default function CompanySettings() {
 
       // Recharger les données de l'entreprise pour synchroniser
       await reloadCompany?.();
-      
+
       // Mettre à jour le preview avec les données rechargées (au cas où)
       if (company?.logo_url) {
         const resolved = resolveLogoUrl(company.logo_url);
         setLogoPreview(resolved || null);
       }
-      
+
       setMessage('Logo mis à jour avec succès.');
       setLogoUrlEditOpen(false);
     } catch (err) {
@@ -307,15 +307,15 @@ export default function CompanySettings() {
     setMessage('');
     try {
       await updateCompanyInfo({ logo_url: logoUrlInput.trim() });
-      
+
       // Mettre à jour le preview avec la nouvelle URL
       const resolved = resolveLogoUrl(logoUrlInput.trim());
       setLogoPreview(resolved || null);
-      
+
       await reloadCompany?.();
       setMessage('Logo mis à jour via URL.');
       setLogoUrlEditOpen(false);
-      
+
       // S'assurer que le preview est à jour après le reload
       if (company?.logo_url) {
         const resolvedAfterReload = resolveLogoUrl(company.logo_url);
@@ -342,10 +342,10 @@ export default function CompanySettings() {
       await updateCompanyInfo({ logo_url: null });
       setLogoUrlInput('');
       setLogoPreview(null);
-      
+
       await reloadCompany?.();
       setMessage('Logo supprimé.');
-      
+
       // S'assurer que le preview est null après le reload
       setLogoPreview(null);
     } catch (err) {

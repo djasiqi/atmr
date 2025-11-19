@@ -28,7 +28,9 @@
   overflow-x: hidden;
   overflow-y: visible;
   box-sizing: border-box;
-  transition: margin-left var(--transition-base), max-width var(--transition-base);
+  transition:
+    margin-left var(--transition-base),
+    max-width var(--transition-base);
 }
 
 .content h1 {
@@ -56,7 +58,9 @@
   border-radius: var(--radius-sm);
   font-size: var(--font-sm);
   background-color: var(--bg-primary);
-  transition: border var(--transition-base), box-shadow var(--transition-base);
+  transition:
+    border var(--transition-base),
+    box-shadow var(--transition-base);
 }
 
 .searchInput:focus,
@@ -184,11 +188,11 @@
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .pagination {
     width: 100%;
   }
-  
+
   .paginationButton {
     flex: 1;
   }
@@ -391,8 +395,12 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .emptyState {
@@ -459,18 +467,18 @@
     border-radius: var(--radius-sm);
     box-sizing: border-box;
   }
-  
+
   .content h1 {
     font-size: var(--font-xl);
     margin-bottom: var(--spacing-md);
   }
-  
+
   .widgetsGrid {
     grid-template-columns: 1fr;
     gap: var(--spacing-sm);
     margin-top: var(--spacing-md);
   }
-  
+
   .pageHeader {
     flex-direction: column;
     gap: var(--spacing-md);
@@ -478,52 +486,52 @@
     margin-bottom: var(--spacing-md);
     padding-bottom: var(--spacing-sm);
   }
-  
+
   .headerLeft h1 {
     font-size: var(--font-xl);
   }
-  
+
   .headerRight {
     width: 100%;
     justify-content: flex-start;
   }
-  
+
   .tabs {
     flex-wrap: wrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
   }
-  
+
   .tab {
     flex: 1 1 calc(50% - 2px);
     min-width: 0;
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-xs);
   }
-  
+
   .tabBadge {
     font-size: 0.65rem;
     padding: 2px var(--spacing-xs);
   }
-  
+
   .filters {
     gap: var(--spacing-xs);
     margin-bottom: var(--spacing-md);
   }
-  
+
   .searchInput,
   .statusFilter,
   .sortSelect {
     width: 100%;
     font-size: var(--font-xs);
   }
-  
+
   .paginationContainer {
     padding: var(--spacing-sm);
     margin-top: var(--spacing-md);
   }
-  
+
   .paginationButton {
     padding: var(--spacing-xs) var(--spacing-md);
     font-size: 0.7rem;
@@ -540,35 +548,35 @@
     padding: var(--spacing-xs);
     border-radius: 0;
   }
-  
+
   .content h1 {
     font-size: var(--font-lg);
     margin-bottom: var(--spacing-sm);
   }
-  
+
   .pageHeader {
     margin-bottom: var(--spacing-sm);
     padding-bottom: var(--spacing-xs);
   }
-  
+
   .headerLeft h1 {
     font-size: var(--font-lg);
   }
-  
+
   .dateDisplay {
     font-size: 0.7rem;
   }
-  
+
   .viewToggle {
     padding: var(--spacing-xs);
     font-size: 0.7rem;
   }
-  
+
   .tab {
     padding: var(--spacing-xs);
     font-size: 0.65rem;
   }
-  
+
   .widgetsGrid {
     gap: var(--spacing-xs);
     margin-top: var(--spacing-sm);
@@ -580,20 +588,20 @@
   .content {
     padding: 6px;
   }
-  
+
   .pageHeader {
     margin-bottom: 4px;
   }
-  
+
   .headerLeft h1 {
     font-size: var(--font-md);
   }
-  
+
   .tab {
     font-size: 0.6rem;
     padding: 4px 6px;
   }
-  
+
   .tabBadge {
     font-size: 0.6rem;
     min-width: 14px;

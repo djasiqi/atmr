@@ -4,7 +4,7 @@
   flex-direction: column;
   min-height: 100vh;
   background-color: var(--bg-secondary);
-  font-family: "Arial", sans-serif;
+  font-family: 'Arial', sans-serif;
 }
 
 /* ✅ Dashboard avec sidebar et contenu */

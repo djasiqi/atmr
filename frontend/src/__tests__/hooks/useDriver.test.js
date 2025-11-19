@@ -1,11 +1,7 @@
 // frontend/tests/hooks/useDriver.test.js
 import { renderHook, waitFor, act } from '@testing-library/react';
 import useDriver from 'hooks/useDriver';
-import {
-  fetchCompanyDriver,
-  updateDriverStatus,
-  deleteDriver,
-} from 'services/companyService';
+import { fetchCompanyDriver, updateDriverStatus, deleteDriver } from 'services/companyService';
 
 // Mocks
 jest.mock('services/companyService');

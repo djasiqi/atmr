@@ -107,7 +107,7 @@
   gap: var(--spacing-sm);
 }
 
-.option-info input[type="checkbox"] {
+.option-info input[type='checkbox'] {
   /* Caché - remplacé par le toggle custom */
   display: none;
 }
@@ -135,7 +135,7 @@
 
 .toggle-slider:before {
   position: absolute;
-  content: "";
+  content: '';
   height: 16px;
   width: 16px;
   left: 2px;
@@ -224,7 +224,7 @@ input:disabled + .toggle-slider {
   font-weight: var(--font-weight-medium);
 }
 
-.input-field input[type="number"] {
+.input-field input[type='number'] {
   width: 100%;
   padding: 8px 12px;
   border: 1px solid var(--border-primary);
@@ -235,7 +235,7 @@ input:disabled + .toggle-slider {
   transition: all var(--transition-base);
 }
 
-.input-field input[type="number"]:focus {
+.input-field input[type='number']:focus {
   outline: none;
   border-color: var(--brand-primary);
   box-shadow: 0 0 0 3px var(--brand-primary-lightest);

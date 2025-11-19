@@ -6,7 +6,7 @@
   flex-direction: row;
   min-height: 100vh;
   background-color: var(--bg-secondary);
-  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
   margin-top: 100px;
 }
 
@@ -73,7 +73,9 @@
 }
 
 /* --- Styles des indicateurs de statut ("badges") --- */
-.available, .unavailable, .emergency {
+.available,
+.unavailable,
+.emergency {
   display: inline-flex;
   align-items: center;
   padding: var(--spacing-xxs) var(--spacing-sm);
@@ -94,8 +96,8 @@
 }
 
 .emergency {
-    background-color: var(--warning-bg);
-    color: var(--warning-primary);
+  background-color: var(--warning-bg);
+  color: var(--warning-primary);
 }
 
 /* --- Style des boutons d'action --- */
@@ -107,7 +109,9 @@
   margin: 0 var(--spacing-xxs);
   border-radius: var(--radius-full);
   color: var(--text-tertiary);
-  transition: background-color var(--transition-base), color var(--transition-base);
+  transition:
+    background-color var(--transition-base),
+    color var(--transition-base);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -126,7 +130,6 @@
   gap: var(--spacing-xs);
 }
 
-
 /* --- Vos styles responsive existants --- */
 @media (max-width: 768px) {
   .driverDashboard {
@@ -136,7 +139,7 @@
   .mainContent {
     padding: var(--spacing-sm);
   }
-  
+
   /* Table responsive */
   .table {
     width: 100% !important;
@@ -144,7 +147,7 @@
     font-size: var(--font-xs);
     box-sizing: border-box;
   }
-  
+
   .table th,
   .table td {
     padding: var(--spacing-xs);
@@ -161,7 +164,7 @@
   .driverNameCell {
     max-width: 140px;
   }
-  
+
   .actionButton {
     padding: var(--spacing-xxs);
     margin: 0 2px;
@@ -173,7 +176,7 @@
     min-width: 400px;
     font-size: 0.65rem;
   }
-  
+
   .table th,
   .table td {
     padding: 2px var(--spacing-xs);

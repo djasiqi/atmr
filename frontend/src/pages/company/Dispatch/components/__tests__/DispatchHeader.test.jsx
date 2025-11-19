@@ -24,7 +24,7 @@ describe('DispatchHeader', () => {
 
   it('should render without crashing', () => {
     render(<DispatchHeader {...defaultProps} />);
-    expect(screen.getByText('Dispatch & Planification')).toBeInTheDocument();
+    expect(screen.getByText(/Dispatch Semi-Automatique/i)).toBeInTheDocument();
   });
 
   it('should display the current date', () => {
@@ -60,7 +60,7 @@ describe('DispatchHeader', () => {
 
   it('should toggle regularFirst checkbox', () => {
     render(<DispatchHeader {...defaultProps} />);
-    const checkbox = screen.getByLabelText(/réguliers en premier/i);
+    const checkbox = screen.getByLabelText(/Chauffeurs réguliers prioritaires/i);
 
     fireEvent.click(checkbox);
 
@@ -69,7 +69,7 @@ describe('DispatchHeader', () => {
 
   it('should toggle allowEmergency checkbox', () => {
     render(<DispatchHeader {...defaultProps} />);
-    const checkbox = screen.getByLabelText(/autoriser urgences/i);
+    const checkbox = screen.getByLabelText(/Autoriser chauffeurs d'urgence/i);
 
     fireEvent.click(checkbox);
 
@@ -85,9 +85,10 @@ describe('DispatchHeader', () => {
 
   it('should show different text based on dispatch mode', () => {
     const { rerender } = render(<DispatchHeader {...defaultProps} dispatchMode="manual" />);
-    expect(screen.getByText(/Mode:/)).toBeInTheDocument();
+    expect(screen.getByText(/Dispatch Manuel/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mode actuel:/i)).toBeInTheDocument();
 
     rerender(<DispatchHeader {...defaultProps} dispatchMode="fully_auto" />);
-    expect(screen.getByText(/Auto/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dispatch Automatique/i)).toBeInTheDocument();
   });
 });

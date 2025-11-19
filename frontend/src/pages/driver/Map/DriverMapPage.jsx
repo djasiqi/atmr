@@ -1,8 +1,8 @@
 // src/pages/DriverMapPage.jsx
-import React from "react";
-import HeaderDashboard from "../../../components/layout/Header/HeaderDashboard";
-import DriverSidebar from "../../../components/layout/Sidebar/DriverSidebar/DriverSidebar";
-import DriverMap from "../components/Dashboard/DriverMap";
+import React from 'react';
+import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
+import DriverSidebar from '../../../components/layout/Sidebar/DriverSidebar/DriverSidebar';
+import DriverMap from '../components/Dashboard/DriverMap';
 import styles from '../Dashboard/DriverDashboard.module.css';
 
 const DriverMapPage = () => {

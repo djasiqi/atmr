@@ -1,23 +1,22 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import apiClient from "../../utils/apiClient";
-import styles from "./Signup.module.css";
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import apiClient from '../../utils/apiClient';
+import styles from './Signup.module.css';
 
 const SIGNUP_DISABLED =
-  process.env.REACT_APP_SIGNUP_DISABLED === "true" ||
-  process.env.REACT_APP_SIGNUP_DISABLED === "1";
+  process.env.REACT_APP_SIGNUP_DISABLED === 'true' || process.env.REACT_APP_SIGNUP_DISABLED === '1';
 
 const Signup = () => {
   const [formData, setFormData] = useState({
-    username: "",
-    email: "",
-    password: "",
-    phone: "",
-    address: "",
+    username: '',
+    email: '',
+    password: '',
+    phone: '',
+    address: '',
   });
 
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const navigate = useNavigate();
 
   if (SIGNUP_DISABLED) {
@@ -25,8 +24,8 @@ const Signup = () => {
       <div className={styles.signupContainer}>
         <h1 className={styles.title}>Inscriptions temporairement suspendues</h1>
         <p className={styles.infoMessage}>
-          Cette fonctionnalité est en cours de développement. Pour toute
-          demande d&apos;accès ou d&apos;information, veuillez écrire à{" "}
+          Cette fonctionnalité est en cours de développement. Pour toute demande d&apos;accès ou
+          d&apos;information, veuillez écrire à{' '}
           <a href="mailto:info@lirie.ch" className={styles.contactLink}>
             info@lirie.ch
           </a>
@@ -40,8 +39,8 @@ const Signup = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
-    setErrorMessage(""); // Réinitialise le message d'erreur
-    setSuccessMessage(""); // Réinitialise le message de succès
+    setErrorMessage(''); // Réinitialise le message d'erreur
+    setSuccessMessage(''); // Réinitialise le message de succès
   };
 
   // Validation du formulaire
@@ -49,18 +48,18 @@ const Signup = () => {
     const { username, email, password } = formData;
 
     if (!username || !email.trim() || !password) {
-      setErrorMessage("Tous les champs obligatoires doivent être remplis.");
+      setErrorMessage('Tous les champs obligatoires doivent être remplis.');
       return false;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setErrorMessage("Veuillez entrer une adresse email valide.");
+      setErrorMessage('Veuillez entrer une adresse email valide.');
       return false;
     }
 
     if (password.length < 8) {
-      setErrorMessage("Le mot de passe doit contenir au moins 8 caractères.");
+      setErrorMessage('Le mot de passe doit contenir au moins 8 caractères.');
       return false;
     }
 
@@ -73,62 +72,57 @@ const Signup = () => {
 
     if (!validateForm()) return; // Validation avant d'envoyer les données
 
-    console.log("Données soumises :", formData); // Debugging : Vérifiez les données envoyées
+    console.log('Données soumises :', formData); // Debugging : Vérifiez les données envoyées
 
     try {
       // ✅ Appeler le bon endpoint via apiClient (baseURL = /api)
-      const response = await apiClient.post("/auth/register", formData);
+      const response = await apiClient.post('/auth/register', formData);
 
-      console.log("Réponse du backend :", response.data); // Loguez la réponse pour confirmation
+      console.log('Réponse du backend :', response.data); // Loguez la réponse pour confirmation
       setSuccessMessage(response.data.message);
-      setErrorMessage("");
+      setErrorMessage('');
 
       // Redirection vers le tableau de bord
       // 🔐 Option 1 (UX ++) : auto-login après inscription
       try {
         const { email, password } = formData;
-        const loginRes = await apiClient.post("/auth/login", {
+        const loginRes = await apiClient.post('/auth/login', {
           email,
           password,
         });
         const { token, user, refresh_token } = loginRes.data || {};
         if (token && user) {
-          localStorage.setItem("authToken", token);
-          if (refresh_token)
-            localStorage.setItem("refreshToken", refresh_token);
-          const role = String((user.role || "").toLowerCase());
-          localStorage.setItem("user", JSON.stringify({ ...user, role }));
-          localStorage.setItem("public_id", user.public_id);
+          localStorage.setItem('authToken', token);
+          if (refresh_token) localStorage.setItem('refreshToken', refresh_token);
+          const role = String((user.role || '').toLowerCase());
+          localStorage.setItem('user', JSON.stringify({ ...user, role }));
+          localStorage.setItem('public_id', user.public_id);
           navigate(`/dashboard/${role}/${user.public_id}`, { replace: true });
         } else {
           // fallback : si pas de token, on envoie sur la page login
-          navigate("/login", { replace: true });
+          navigate('/login', { replace: true });
         }
       } catch {
         // fallback : si l’auto-login échoue
-        navigate("/login", { replace: true });
+        navigate('/login', { replace: true });
       }
     } catch (error) {
       // Détectez les erreurs de type CORS
-      if (error.message === "Network Error") {
-        console.error(
-          "Erreur réseau détectée. Cela peut indiquer un problème CORS."
-        );
+      if (error.message === 'Network Error') {
+        console.error('Erreur réseau détectée. Cela peut indiquer un problème CORS.');
         setErrorMessage(
-          "Impossible de communiquer avec le serveur. Vérifiez la configuration CORS."
+          'Impossible de communiquer avec le serveur. Vérifiez la configuration CORS.'
         );
       } else if (error.response) {
         // Loguez les détails de l'erreur côté serveur
-        console.error("Erreur du serveur :", error.response.data);
-        setErrorMessage(
-          error.response.data.error || "Une erreur s'est produite."
-        );
+        console.error('Erreur du serveur :', error.response.data);
+        setErrorMessage(error.response.data.error || "Une erreur s'est produite.");
       } else {
-        console.error("Erreur inattendue :", error);
-        setErrorMessage("Une erreur inattendue est survenue.");
+        console.error('Erreur inattendue :', error);
+        setErrorMessage('Une erreur inattendue est survenue.');
       }
 
-      setSuccessMessage(""); // Réinitialiser les messages de succès
+      setSuccessMessage(''); // Réinitialiser les messages de succès
     }
   };
 
@@ -196,9 +190,7 @@ const Signup = () => {
 
         {/* Affichage des messages d'erreur ou de succès */}
         {errorMessage && <p className={styles.errorMessage}>{errorMessage}</p>}
-        {successMessage && (
-          <p className={styles.successMessage}>{successMessage}</p>
-        )}
+        {successMessage && <p className={styles.successMessage}>{successMessage}</p>}
 
         <button type="submit" className={styles.submitButton}>
           S'inscrire

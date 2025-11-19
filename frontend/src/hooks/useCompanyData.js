@@ -32,7 +32,7 @@ const useCompanyData = ({ day } = {}) => {
       setLoadingReservations(true);
       const data = await fetchCompanyReservations(day);
       // Le service renvoie déjà un ARRAY normalisé
-      setReservations(Array.isArray(data) ? data : data?.reservations ?? []);
+      setReservations(Array.isArray(data) ? data : (data?.reservations ?? []));
       setError(null); // Réinitialiser l'erreur en cas de succès
     } catch (err) {
       // Gérer spécifiquement les erreurs de timeout
@@ -52,7 +52,7 @@ const useCompanyData = ({ day } = {}) => {
       setLoadingDriver(true);
       const data = await fetchCompanyDriver();
       // Le service renvoie déjà un ARRAY normalisé
-      setDriver(Array.isArray(data) ? data : data?.driver ?? []);
+      setDriver(Array.isArray(data) ? data : (data?.driver ?? []));
       setError(null); // Réinitialiser l'erreur en cas de succès
     } catch (err) {
       // Gérer spécifiquement les erreurs de timeout

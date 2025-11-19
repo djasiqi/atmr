@@ -42,8 +42,8 @@ const CompanyPlanning = lazy(() => import('./pages/company/Planning/CompanyPlann
 const CompanySettings = lazy(() => import('./pages/company/Settings/CompanySettings'));
 const CompanyClients = lazy(() => import('./pages/company/Clients/CompanyClients'));
 const UnifiedDispatch = lazy(() => import('./pages/company/Dispatch/UnifiedDispatchRefactored'));
-const RLMetricsDashboard = lazy(() =>
-  import('./pages/company/Dispatch/Dashboard/RLMetricsDashboard')
+const RLMetricsDashboard = lazy(
+  () => import('./pages/company/Dispatch/Dashboard/RLMetricsDashboard')
 );
 const AnalyticsDashboard = lazy(() => import('./pages/company/Analytics/AnalyticsDashboard'));
 const Dashboard = lazy(() => import('./pages/Home/Dashboard'));
@@ -66,55 +66,58 @@ function setupTokenAutoRefresh() {
   window.addEventListener('keydown', resetActivityTimer);
   window.addEventListener('touchstart', resetActivityTimer);
 
-  const id = setInterval(async () => {
-    const now = Date.now();
-    const refreshToken = localStorage.getItem('refreshToken');
-    const authToken = localStorage.getItem('authToken');
+  const id = setInterval(
+    async () => {
+      const now = Date.now();
+      const refreshToken = localStorage.getItem('refreshToken');
+      const authToken = localStorage.getItem('authToken');
 
-    // Vérifier si l'utilisateur est actif (moins de 55 min d'inactivité)
-    const isActive = now - lastActivity < 55 * 60 * 1000;
+      // Vérifier si l'utilisateur est actif (moins de 55 min d'inactivité)
+      const isActive = now - lastActivity < 55 * 60 * 1000;
 
-    if (!refreshToken || !authToken || !isActive) {
-      return; // Ne rien faire si pas de tokens ou utilisateur inactif
-    }
+      if (!refreshToken || !authToken || !isActive) {
+        return; // Ne rien faire si pas de tokens ou utilisateur inactif
+      }
 
-    try {
-      // Token refresh en cours
-      const { data } = await apiClient.post(
-        '/auth/refresh-token',
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${refreshToken}`,
-          },
-          // Ignorer l'intercepteur d'erreur pour éviter les redirections automatiques
-          skipAuthRedirect: true,
+      try {
+        // Token refresh en cours
+        const { data } = await apiClient.post(
+          '/auth/refresh-token',
+          {},
+          {
+            headers: {
+              Authorization: `Bearer ${refreshToken}`,
+            },
+            // Ignorer l'intercepteur d'erreur pour éviter les redirections automatiques
+            skipAuthRedirect: true,
+          }
+        );
+
+        if (data.access_token) {
+          localStorage.setItem('authToken', data.access_token);
         }
-      );
+      } catch (e) {
+        console.error('❌ Erreur rafraîchissement token:');
+        console.error('  - Status:', e.response?.status);
+        console.error('  - Data:', e.response?.data);
+        console.error('  - Headers:', e.response?.headers);
 
-      if (data.access_token) {
-        localStorage.setItem('authToken', data.access_token);
+        // Ne supprimer les tokens que si le refresh token est vraiment invalide (401, 422)
+        if (e.response?.status === 401 || e.response?.status === 422) {
+          console.warn('⚠️ Refresh token invalide, nettoyage des tokens et redirection...');
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
+          localStorage.removeItem('public_id');
+          // Rediriger vers la page de connexion seulement après un délai
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1000);
+        }
       }
-    } catch (e) {
-      console.error('❌ Erreur rafraîchissement token:');
-      console.error('  - Status:', e.response?.status);
-      console.error('  - Data:', e.response?.data);
-      console.error('  - Headers:', e.response?.headers);
-
-      // Ne supprimer les tokens que si le refresh token est vraiment invalide (401, 422)
-      if (e.response?.status === 401 || e.response?.status === 422) {
-        console.warn('⚠️ Refresh token invalide, nettoyage des tokens et redirection...');
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
-        localStorage.removeItem('public_id');
-        // Rediriger vers la page de connexion seulement après un délai
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 1000);
-      }
-    }
-  }, 50 * 60 * 1000); // Toutes les 50 minutes (le token expire après 1h)
+    },
+    50 * 60 * 1000
+  ); // Toutes les 50 minutes (le token expire après 1h)
 
   // cleanup
   return () => {

@@ -75,7 +75,7 @@
     padding: 10px 16px;
     font-size: var(--font-size-sm);
   }
-  
+
   .tabIcon {
     font-size: var(--font-size-base);
   }
@@ -85,16 +85,15 @@
   .tabLabel {
     display: none;
   }
-  
+
   .tab,
   .tabActive {
     padding: 10px;
     min-width: 44px;
     justify-content: center;
   }
-  
+
   .tabIcon {
     font-size: var(--font-size-lg);
   }
 }
-

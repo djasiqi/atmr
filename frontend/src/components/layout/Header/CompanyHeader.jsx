@@ -34,12 +34,12 @@ const CompanyHeader = () => {
   const logoSrc = useMemo(() => {
     const abs = resolveLogoUrl(company?.logo_url);
     if (!abs) return '';
-    
+
     // Debug: log l'URL résolue (à retirer en production si nécessaire)
     if (abs && !abs.startsWith('http') && !abs.startsWith('data:') && !abs.startsWith('blob:')) {
       console.warn('[CompanyHeader] URL logo invalide:', abs);
     }
-    
+
     // Ajouter un timestamp pour éviter le cache uniquement pour les URLs HTTP/HTTPS
     // Ne pas ajouter pour data: ou blob: car cela casse l'URL
     if (abs.startsWith('http://') || abs.startsWith('https://')) {

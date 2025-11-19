@@ -706,10 +706,10 @@ const FullyAutoPanel = ({
                       {delay.severity === 'critical'
                         ? '🔴 Critique'
                         : delay.severity === 'high'
-                        ? '🟠 Élevé'
-                        : delay.severity === 'medium'
-                        ? '🟡 Moyen'
-                        : '🟢 Faible'}
+                          ? '🟠 Élevé'
+                          : delay.severity === 'medium'
+                            ? '🟡 Moyen'
+                            : '🟢 Faible'}
                     </span>
                   </div>
                   <div className={styles.alertContent}>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState } from 'react';
 
 export default function TemplateEditor({ open, onClose, onSave }) {
   const [rows, setRows] = useState([]);
@@ -7,15 +7,21 @@ export default function TemplateEditor({ open, onClose, onSave }) {
   const addRow = () =>
     setRows((r) => [
       ...r,
-      { driver_id: "", weekday: 1, start_time: "08:00:00", end_time: "17:00:00" },
+      { driver_id: '', weekday: 1, start_time: '08:00:00', end_time: '17:00:00' },
     ]);
 
   const save = () => onSave(rows);
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#0006" }} onClick={onClose}>
+    <div style={{ position: 'fixed', inset: 0, background: '#0006' }} onClick={onClose}>
       <div
-        style={{ background: "#fff", padding: 16, maxWidth: 640, margin: "8vh auto", borderRadius: 8 }}
+        style={{
+          background: '#fff',
+          padding: 16,
+          maxWidth: 640,
+          margin: '8vh auto',
+          borderRadius: 8,
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         <h3>Modèle hebdomadaire</h3>
@@ -62,7 +68,7 @@ export default function TemplateEditor({ open, onClose, onSave }) {
             </li>
           ))}
         </ul>
-        <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={onClose}>Fermer</button>
           <button onClick={save}>Enregistrer</button>
         </div>
@@ -70,5 +76,3 @@ export default function TemplateEditor({ open, onClose, onSave }) {
     </div>
   );
 }
-
-

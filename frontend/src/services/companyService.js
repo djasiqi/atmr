@@ -633,8 +633,8 @@ export const fetchAssignedReservations = async (forDate) => {
       reservations = Array.isArray(payload)
         ? payload
         : Array.isArray(payload?.reservations)
-        ? payload.reservations
-        : [];
+          ? payload.reservations
+          : [];
       console.log(`[Dispatch] Received ${reservations.length} reservations for date=${forDate}`);
     } catch (error) {
       console.error('[Dispatch] Error fetching reservations:', error?.response?.data || error);

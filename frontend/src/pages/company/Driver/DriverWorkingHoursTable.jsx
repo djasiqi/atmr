@@ -1,11 +1,11 @@
-import React from "react";
+import React from 'react';
 // L'import est déjà présent, c'est parfait
 import styles from './DriverWorkingHoursTable.module.css';
 
 function formatTime(minutes) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return `${h}h${m.toString().padStart(2, "0")}`;
+  return `${h}h${m.toString().padStart(2, '0')}`;
 }
 
 export default function DriverWorkingHoursTable({ driverHoursData = [] }) {
@@ -17,8 +17,8 @@ export default function DriverWorkingHoursTable({ driverHoursData = [] }) {
         <thead>
           <tr>
             <th>Chauffeur</th>
-            <th style={{ textAlign: "center" }}>Nombre de courses</th>
-            <th style={{ textAlign: "center" }}>Heures travaillées</th>
+            <th style={{ textAlign: 'center' }}>Nombre de courses</th>
+            <th style={{ textAlign: 'center' }}>Heures travaillées</th>
           </tr>
         </thead>
         <tbody>
@@ -30,7 +30,7 @@ export default function DriverWorkingHoursTable({ driverHoursData = [] }) {
               </td>
             </tr>
           ) : (
-            driverHoursData.map(driver => {
+            driverHoursData.map((driver) => {
               const count = driver.count || 0;
               const totalMinutes = driver.totalMinutes || 0;
               return (

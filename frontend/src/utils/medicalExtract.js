@@ -8,17 +8,22 @@ export function extractMedicalServiceInfo(text) {
   const result = {};
 
   // 1. Extraction Docteur
-  const doctorRegex = /(dr\.?|docteur|docteure|prof\.?)\s*([A-ZÉÈ][a-zéèêëîïôöûüàâäç\-']{2,}(?:\s+[A-ZÉÈ][a-zéèêëîïôöûüàâäç\-']{2,}){1,2})/i;
-    const doctorMatch = text.match(doctorRegex);
-    if (doctorMatch) {
+  const doctorRegex =
+    /(dr\.?|docteur|docteure|prof\.?)\s*([A-ZÉÈ][a-zéèêëîïôöûüàâäç\-']{2,}(?:\s+[A-ZÉÈ][a-zéèêëîïôöûüàâäç\-']{2,}){1,2})/i;
+  const doctorMatch = text.match(doctorRegex);
+  if (doctorMatch) {
     let match = doctorMatch[0];
     let split = match.split(/\s(?=\d)/)[0]; // coupe avant premier chiffre (numéro rue)
-    let name = split.replace(/\b(M[ée]d\.?|Medecin|Médecin)\b/gi, "").replace(/\s+/g, " ").trim();
+    let name = split
+      .replace(/\b(M[ée]d\.?|Medecin|Médecin)\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
     result.doctor_name = name;
-    }
+  }
 
   // 2. Extraction Service (Oncologie, Radiologie, etc.)
-  const serviceRegex = /(unité|service|département|secteur|pôle)?\s?(d['’])?([A-Z][a-zéèêëîïôöûüàâäç]+(ologie|iatrie|graphie|pathie|ie)?)/i;
+  const serviceRegex =
+    /(unité|service|département|secteur|pôle)?\s?(d['’])?([A-Z][a-zéèêëîïôöûüàâäç]+(ologie|iatrie|graphie|pathie|ie)?)/i;
   const serviceMatch = text.match(serviceRegex);
   if (serviceMatch) {
     result.hospital_service = serviceMatch[0].trim();
@@ -32,7 +37,8 @@ export function extractMedicalServiceInfo(text) {
   }
 
   // 4. Extraction étage (étage, floor, level, 1er, 2ème, etc.)
-  const floorRegex = /([0-9]{1,2}(er|ème|e)?\s?étage|étage\s?[0-9]{1,2}|level\s?[0-9]{1,2}|floor\s?[0-9]{1,2})/i;
+  const floorRegex =
+    /([0-9]{1,2}(er|ème|e)?\s?étage|étage\s?[0-9]{1,2}|level\s?[0-9]{1,2}|floor\s?[0-9]{1,2})/i;
   const floorMatch = text.match(floorRegex);
   if (floorMatch) {
     result.floor = floorMatch[0].trim();
@@ -43,7 +49,7 @@ export function extractMedicalServiceInfo(text) {
   const facilityMatch = text.match(facilityRegex);
   if (facilityMatch) {
     // Tente de récupérer la phrase complète jusqu'à la virgule suivante ou fin du mot
-    const after = text.slice(facilityMatch.index).split(",")[0];
+    const after = text.slice(facilityMatch.index).split(',')[0];
     result.medical_facility = after.trim();
   }
 

@@ -1,18 +1,18 @@
 // src/pages/company/components/AddDriverForm.jsx
-import React, { useState } from "react";
-import styles from "./AddDriverForm.module.css";
+import React, { useState } from 'react';
+import styles from './AddDriverForm.module.css';
 
 const AddDriverForm = ({ onSubmit, onClose }) => {
   const [formData, setFormData] = useState({
-    username: "",
-    firstName: "",
-    lastName: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-    vehicleAssigned: "",
-    brand: "",
-    licensePlate: "",
+    username: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    vehicleAssigned: '',
+    brand: '',
+    licensePlate: '',
   });
 
   const [errors, setErrors] = useState({});
@@ -30,9 +30,10 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
     const newErrors = {};
     if (!formData.username) newErrors.username = "Le nom d'utilisateur est requis.";
     if (!formData.email) newErrors.email = "L'email est requis.";
-    if (formData.password.length < 8) newErrors.password = "Le mot de passe doit faire au moins 8 caractères.";
+    if (formData.password.length < 8)
+      newErrors.password = 'Le mot de passe doit faire au moins 8 caractères.';
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Les mots de passe ne correspondent pas.";
+      newErrors.confirmPassword = 'Les mots de passe ne correspondent pas.';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -57,7 +58,7 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
     try {
       await onSubmit(payload);
     } catch (error) {
-      console.error("Submission failed:", error);
+      console.error('Submission failed:', error);
     } finally {
       setIsSubmitting(false);
     }
@@ -76,7 +77,7 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
         />
         {errors.username && <span className={styles.error}>{errors.username}</span>}
       </div>
-      
+
       <div className={styles.formGroup}>
         <label>Prénom :</label>
         <input
@@ -98,16 +99,10 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
           required
         />
       </div>
-      
+
       <div className={styles.formGroup}>
         <label>Adresse email :</label>
-        <input
-          type="email"
-          name="email"
-          value={formData.email}
-          onChange={handleChange}
-          required
-        />
+        <input type="email" name="email" value={formData.email} onChange={handleChange} required />
         {errors.email && <span className={styles.error}>{errors.email}</span>}
       </div>
 
@@ -123,7 +118,7 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
         />
         {errors.password && <span className={styles.error}>{errors.password}</span>}
       </div>
-      
+
       <div className={styles.formGroup}>
         <label>Confirmer le mot de passe :</label>
         <input
@@ -136,7 +131,7 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
         />
         {errors.confirmPassword && <span className={styles.error}>{errors.confirmPassword}</span>}
       </div>
-      
+
       <div className={styles.formGroup}>
         <label>Véhicule assigné :</label>
         <input
@@ -148,7 +143,7 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
           required
         />
       </div>
-      
+
       <div className={styles.formGroup}>
         <label>Marque :</label>
         <input
@@ -160,7 +155,7 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
           required
         />
       </div>
-      
+
       <div className={styles.formGroup}>
         <label>Numéro de plaque :</label>
         <input
@@ -175,9 +170,14 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
 
       <div className={styles.formActions}>
         <button type="submit" className={styles.submitButton} disabled={isSubmitting}>
-          {isSubmitting ? "Ajout en cours..." : "Ajouter"}
+          {isSubmitting ? 'Ajout en cours...' : 'Ajouter'}
         </button>
-        <button type="button" onClick={onClose} className={styles.cancelButton} disabled={isSubmitting}>
+        <button
+          type="button"
+          onClick={onClose}
+          className={styles.cancelButton}
+          disabled={isSubmitting}
+        >
           Annuler
         </button>
       </div>

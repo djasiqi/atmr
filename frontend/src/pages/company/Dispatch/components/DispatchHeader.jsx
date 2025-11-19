@@ -36,16 +36,16 @@ const DispatchHeader = ({
             {dispatchMode === 'manual'
               ? '✋ Dispatch Manuel'
               : dispatchMode === 'semi_auto'
-              ? '⚙️ Dispatch Semi-Automatique'
-              : '🤖 Dispatch Automatique'}
+                ? '⚙️ Dispatch Semi-Automatique'
+                : '🤖 Dispatch Automatique'}
           </h1>
           <span className={styles.modeBadge}>
             Mode actuel:{' '}
             {dispatchMode === 'manual'
               ? '✋ Manuel'
               : dispatchMode === 'semi_auto'
-              ? '⚙️ Semi-Automatique'
-              : '🤖 Totalement Automatique'}
+                ? '⚙️ Semi-Automatique'
+                : '🤖 Totalement Automatique'}
           </span>
         </div>
       </div>

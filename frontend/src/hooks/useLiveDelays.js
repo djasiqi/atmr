@@ -27,7 +27,7 @@ export const useLiveDelays = (date) => {
         // Refresh réussi, ne pas logger l'erreur ni définir d'erreur
         return;
       }
-      
+
       // Ne logger que les vraies erreurs (pas les 401 en cours de refresh)
       if (err?.response?.status !== 401) {
         console.error('[useLiveDelays] Error loading delays:', err);

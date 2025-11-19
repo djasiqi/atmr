@@ -1,12 +1,8 @@
 // src/components/CourseDetailsModal.jsx
-import React from "react";
-import styles from "./CourseDetailsModal.module.css";
-import {
-  startBooking,
-  completeBooking,
-  reportBookingIssue,
-} from "../../services/driverService";
-import { renderBookingDateTime } from "../../utils/formatDate";
+import React from 'react';
+import styles from './CourseDetailsModal.module.css';
+import { startBooking, completeBooking, reportBookingIssue } from '../../services/driverService';
+import { renderBookingDateTime } from '../../utils/formatDate';
 
 const CourseDetailsModal = ({ course, onClose }) => {
   const handleStart = async () => {
@@ -16,19 +12,19 @@ const CourseDetailsModal = ({ course, onClose }) => {
       onClose(); // Ferme la modale après l'action
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error("Error starting course:", error);
+      console.error('Error starting course:', error);
     }
   };
 
   const handleReport = async () => {
-    const issue = prompt("Décrivez le problème pour cette course:");
+    const issue = prompt('Décrivez le problème pour cette course:');
     if (issue) {
       try {
         await reportBookingIssue(course.id, issue);
         onClose(); // Ferme la modale après l'action
       } catch (error) {
         // eslint-disable-next-line no-console
-        console.error("Error reporting issue:", error);
+        console.error('Error reporting issue:', error);
       }
     }
   };
@@ -39,7 +35,7 @@ const CourseDetailsModal = ({ course, onClose }) => {
       onClose(); // Ferme la modale après l'action
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error("Error completing course:", error);
+      console.error('Error completing course:', error);
     }
   };
 
@@ -48,9 +44,11 @@ const CourseDetailsModal = ({ course, onClose }) => {
       <div className="modal-content modal-md">
         <div className="modal-header">
           <h3 className="modal-title">Détails de la course #{course.id}</h3>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>
+            ✕
+          </button>
         </div>
-        
+
         <div className="modal-body">
           <div className="flex-col gap-sm mb-lg">
             <p>
@@ -66,7 +64,7 @@ const CourseDetailsModal = ({ course, onClose }) => {
               <strong>Destination :</strong> {course.dropoff_location}
             </p>
           </div>
-          
+
           {/* Informations chaise roulante */}
           {(course.wheelchair_client_has || course.wheelchair_need) && (
             <div className={styles.wheelchairInfo}>
@@ -82,11 +80,16 @@ const CourseDetailsModal = ({ course, onClose }) => {
               )}
             </div>
           )}
-          
+
           {/* Informations médicales */}
-          {(course.medical_facility || course.doctor_name || course.hospital_service || course.notes_medical) && (
+          {(course.medical_facility ||
+            course.doctor_name ||
+            course.hospital_service ||
+            course.notes_medical) && (
             <div className={styles.medicalInfo}>
-              <p><strong>🏥 Informations médicales :</strong></p>
+              <p>
+                <strong>🏥 Informations médicales :</strong>
+              </p>
               {course.medical_facility && (
                 <p className={styles.medicalDetail}>📍 {course.medical_facility}</p>
               )}
@@ -101,13 +104,13 @@ const CourseDetailsModal = ({ course, onClose }) => {
               )}
             </div>
           )}
-          
+
           {course.instructions && (
             <p>
               <strong>Instructions :</strong> {course.instructions}
             </p>
           )}
-          
+
           <div className="flex gap-sm mt-lg">
             <button className="btn btn-primary btn-sm" onClick={handleStart}>
               ▶️ Démarrer

@@ -26,7 +26,9 @@
   overflow-x: hidden;
   overflow-y: visible;
   box-sizing: border-box;
-  transition: margin-left var(--transition-base), max-width var(--transition-base);
+  transition:
+    margin-left var(--transition-base),
+    max-width var(--transition-base);
 }
 
 /* ====== Header avec Gradient Teal ====== */
@@ -165,7 +167,7 @@
   cursor: pointer;
 }
 
-.settingsForm input[type="number"] {
+.settingsForm input[type='number'] {
   font-variant-numeric: tabular-nums;
 }
 
@@ -244,7 +246,7 @@
 }
 
 .logoPlaceholder::before {
-  content: "🖼️";
+  content: '🖼️';
   font-size: var(--font-5xl);
   opacity: 0.5;
 }
@@ -261,7 +263,11 @@
   gap: var(--spacing-xs);
   font-size: var(--font-xs);
   color: var(--brand-primary);
-  background: linear-gradient(135deg, var(--brand-primary-lightest) 0%, var(--brand-primary-lightest) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--brand-primary-lightest) 0%,
+    var(--brand-primary-lightest) 100%
+  );
   border: 1px solid var(--success-border);
   border-radius: var(--radius-full);
   padding: var(--spacing-xs) var(--spacing-md);
@@ -636,7 +642,7 @@
 
 .toggleSlider:before {
   position: absolute;
-  content: "";
+  content: '';
   height: 20px;
   width: 20px;
   left: 2px;
@@ -765,13 +771,13 @@
   .settingsForm {
     grid-template-columns: 1fr;
   }
-  
+
   .logoRow {
     grid-template-columns: 1fr;
     justify-items: center;
     text-align: center;
   }
-  
+
   .logoBox {
     width: 140px;
     height: 140px;
@@ -797,37 +803,37 @@
     margin-bottom: var(--spacing-md);
     gap: var(--spacing-md);
   }
-  
+
   .settingsHeader h1 {
     font-size: var(--font-xl);
   }
-  
+
   .headerRight {
     width: 100%;
   }
-  
+
   .headerRight .submitButton {
     width: 100%;
     justify-content: center;
   }
-  
+
   .section {
     padding: var(--spacing-lg);
   }
-  
+
   .section h2 {
     font-size: var(--font-lg);
   }
-  
+
   .logoBox {
     width: 120px;
     height: 120px;
   }
-  
+
   .actionsRow {
     flex-direction: column;
   }
-  
+
   .actionsRow .button {
     width: 100%;
     justify-content: center;

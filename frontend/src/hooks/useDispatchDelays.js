@@ -9,7 +9,7 @@ import { getLiveDelays, getOptimizerStatus } from '../services/dispatchMonitorin
 
 /**
  * Hook pour récupérer et gérer les retards de dispatch
- * 
+ *
  * @param {string} date - Date au format YYYY-MM-DD (optionnel, défaut: aujourd'hui)
  * @param {number} refreshInterval - Intervalle de refresh en ms (0 = pas d'auto-refresh)
  * @returns {object} { delays, summary, loading, error, refresh, optimizerStatus }
@@ -31,10 +31,10 @@ export const useDispatchDelays = (date = null, refreshInterval = 0) => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const currentDate = getDate();
       const response = await getLiveDelays(currentDate);
-      
+
       setDelays(response.delays || []);
       setSummary(response.summary || null);
     } catch (err) {
@@ -82,8 +82,8 @@ export const useDispatchDelays = (date = null, refreshInterval = 0) => {
 
   // Indicateurs de statut
   const hasDelays = delayCount > 0;
-  const hasCriticalDelays = delays.some(d => 
-    d.suggestions?.some(s => s.priority === 'critical')
+  const hasCriticalDelays = delays.some((d) =>
+    d.suggestions?.some((s) => s.priority === 'critical')
   );
 
   return {
@@ -93,17 +93,17 @@ export const useDispatchDelays = (date = null, refreshInterval = 0) => {
     loading,
     error,
     optimizerStatus,
-    
+
     // Fonctions
     refresh,
-    
+
     // Compteurs
     delayCount,
     onTimeCount,
     earlyCount,
     totalCount,
     averageDelay,
-    
+
     // Indicateurs
     hasDelays,
     hasCriticalDelays,
@@ -111,4 +111,3 @@ export const useDispatchDelays = (date = null, refreshInterval = 0) => {
 };
 
 export default useDispatchDelays;
-

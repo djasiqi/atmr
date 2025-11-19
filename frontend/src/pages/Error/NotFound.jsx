@@ -1,5 +1,5 @@
-import React from "react";
-import styles from "./NotFound.module.css"; // Assurez-vous d'avoir un fichier CSS pour le style
+import React from 'react';
+import styles from './NotFound.module.css'; // Assurez-vous d'avoir un fichier CSS pour le style
 
 const NotFound = () => {
   return (

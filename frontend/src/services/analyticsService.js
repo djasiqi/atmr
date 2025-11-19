@@ -2,7 +2,7 @@
 /**
  * Service pour les appels API Analytics
  */
-import apiClient from "../utils/apiClient";
+import apiClient from '../utils/apiClient';
 
 /**
  * Récupère les analytics pour le dashboard
@@ -12,27 +12,27 @@ import apiClient from "../utils/apiClient";
  * @returns {Promise} Analytics data
  */
 export const fetchDashboardAnalytics = async ({
-  period = "30d",
+  period = '30d',
   startDate = null,
   endDate = null,
 } = {}) => {
   try {
     const params = { period };
-    
+
     if (startDate && endDate) {
       params.start_date = startDate;
       params.end_date = endDate;
     }
 
-    const { data } = await apiClient.get("/analytics/dashboard", { params });
-    
+    const { data } = await apiClient.get('/analytics/dashboard', { params });
+
     if (data.success) {
       return data.data;
     } else {
-      throw new Error(data.error || "Erreur lors du chargement des analytics");
+      throw new Error(data.error || 'Erreur lors du chargement des analytics');
     }
   } catch (error) {
-    console.error("fetchDashboardAnalytics failed:", error?.response?.data || error);
+    console.error('fetchDashboardAnalytics failed:', error?.response?.data || error);
     throw error;
   }
 };
@@ -44,17 +44,17 @@ export const fetchDashboardAnalytics = async ({
  */
 export const fetchInsights = async (lookbackDays = 30) => {
   try {
-    const { data } = await apiClient.get("/analytics/insights", {
+    const { data } = await apiClient.get('/analytics/insights', {
       params: { lookback_days: lookbackDays },
     });
-    
+
     if (data.success) {
       return data.data;
     } else {
-      throw new Error(data.error || "Erreur lors du chargement des insights");
+      throw new Error(data.error || 'Erreur lors du chargement des insights');
     }
   } catch (error) {
-    console.error("fetchInsights failed:", error?.response?.data || error);
+    console.error('fetchInsights failed:', error?.response?.data || error);
     throw error;
   }
 };
@@ -67,15 +67,15 @@ export const fetchInsights = async (lookbackDays = 30) => {
 export const fetchWeeklySummary = async (weekStart = null) => {
   try {
     const params = weekStart ? { week_start: weekStart } : {};
-    const { data } = await apiClient.get("/analytics/weekly-summary", { params });
-    
+    const { data } = await apiClient.get('/analytics/weekly-summary', { params });
+
     if (data.success) {
       return data.data;
     } else {
-      throw new Error(data.error || "Erreur lors du chargement du résumé hebdomadaire");
+      throw new Error(data.error || 'Erreur lors du chargement du résumé hebdomadaire');
     }
   } catch (error) {
-    console.error("fetchWeeklySummary failed:", error?.response?.data || error);
+    console.error('fetchWeeklySummary failed:', error?.response?.data || error);
     throw error;
   }
 };
@@ -87,24 +87,24 @@ export const fetchWeeklySummary = async (weekStart = null) => {
  * @param {string} format - Format d'export ('csv' ou 'json')
  * @returns {Promise} Export data
  */
-export const exportAnalytics = async (startDate, endDate, format = "csv") => {
+export const exportAnalytics = async (startDate, endDate, format = 'csv') => {
   try {
     if (!startDate || !endDate) {
-      throw new Error("Les dates de début et de fin sont requises");
+      throw new Error('Les dates de début et de fin sont requises');
     }
 
-    const response = await apiClient.get("/analytics/export", {
+    const response = await apiClient.get('/analytics/export', {
       params: {
         start_date: startDate,
         end_date: endDate,
         format,
       },
-      responseType: format === "csv" ? "blob" : "json",
+      responseType: format === 'csv' ? 'blob' : 'json',
     });
 
     return response.data;
   } catch (error) {
-    console.error("exportAnalytics failed:", error?.response?.data || error);
+    console.error('exportAnalytics failed:', error?.response?.data || error);
     throw error;
   }
 };
@@ -116,9 +116,9 @@ export const exportAnalytics = async (startDate, endDate, format = "csv") => {
  */
 export const downloadCsvFile = (blob, filename) => {
   const url = window.URL.createObjectURL(new Blob([blob]));
-  const link = document.createElement("a");
+  const link = document.createElement('a');
   link.href = url;
-  link.setAttribute("download", filename);
+  link.setAttribute('download', filename);
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -131,9 +131,8 @@ export const downloadCsvFile = (blob, filename) => {
  */
 export const openJsonInNewTab = (jsonData) => {
   const jsonStr = JSON.stringify(jsonData, null, 2);
-  const blob = new Blob([jsonStr], { type: "application/json" });
+  const blob = new Blob([jsonStr], { type: 'application/json' });
   const url = window.URL.createObjectURL(blob);
-  window.open(url, "_blank");
+  window.open(url, '_blank');
   window.URL.revokeObjectURL(url);
 };
-

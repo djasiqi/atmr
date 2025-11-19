@@ -75,7 +75,7 @@
     grid-template-columns: repeat(2, 1fr);
     gap: var(--spacing-sm);
   }
-  
+
   .statCard {
     padding: var(--spacing-sm) var(--spacing-md);
     gap: var(--spacing-sm);
@@ -88,11 +88,11 @@
   .statIcon {
     font-size: var(--font-xl);
   }
-  
+
   .statContent .statValue {
     font-size: var(--font-lg);
   }
-  
+
   .statContent .statLabel {
     font-size: 0.7rem;
   }

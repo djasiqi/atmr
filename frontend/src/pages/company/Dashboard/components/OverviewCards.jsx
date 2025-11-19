@@ -1,16 +1,16 @@
 // src/pages/company/Dashboard/components/OverviewCards.jsx
-import React, { useMemo, useEffect } from "react";
-import styles from "../CompanyDashboard.module.css";
+import React, { useMemo, useEffect } from 'react';
+import styles from '../CompanyDashboard.module.css';
 
 const toYMD = (raw) => {
   if (!raw) return null;
-  if (typeof raw === "string") {
+  if (typeof raw === 'string') {
     const m = raw.trim().match(/^(\d{4}-\d{2}-\d{2})/);
     if (m) return m[1];
   }
   try {
     const d = new Date(raw);
-    const pad = (n) => String(n).padStart(2, "0");
+    const pad = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   } catch {
     return null;
@@ -18,17 +18,13 @@ const toYMD = (raw) => {
 };
 
 // meilleur champ date disponible
-const whenOf = (r) =>
-  r?.scheduled_time ?? r?.pickup_time ?? r?.date_time ?? r?.datetime ?? null;
+const whenOf = (r) => r?.scheduled_time ?? r?.pickup_time ?? r?.date_time ?? r?.datetime ?? null;
 
-const norm = (s) => String(s || "").toLowerCase();
-const isCompleted = (s) =>
-  ["completed", "return_completed", "done", "finished"].includes(norm(s));
+const norm = (s) => String(s || '').toLowerCase();
+const isCompleted = (s) => ['completed', 'return_completed', 'done', 'finished'].includes(norm(s));
 
 const amountOf = (r) =>
-  Number(
-    r?.amount ?? r?.total_amount ?? r?.total ?? r?.price ?? r?.fare ?? 0
-  ) || 0;
+  Number(r?.amount ?? r?.total_amount ?? r?.total ?? r?.price ?? r?.fare ?? 0) || 0;
 
 const OverviewCards = ({
   reservations,
@@ -46,10 +42,7 @@ const OverviewCards = ({
 
   // Attente = pending + accepted sans driver (si on nous les passe), sinon heuristique
   const waitingCount = useMemo(() => {
-    if (
-      Array.isArray(pendingReservations) ||
-      Array.isArray(assignedReservations)
-    ) {
+    if (Array.isArray(pendingReservations) || Array.isArray(assignedReservations)) {
       const p = Array.isArray(pendingReservations) ? pendingReservations : [];
       const a = Array.isArray(assignedReservations) ? assignedReservations : [];
       // Si day est donné, restreindre
@@ -60,7 +53,7 @@ const OverviewCards = ({
     return dayList.filter((r) => {
       const s = norm(r.status);
       const unassigned = !r?.driver_id && !r?.driver?.id;
-      return (s === "pending" || s === "accepted") && unassigned;
+      return (s === 'pending' || s === 'accepted') && unassigned;
     }).length;
   }, [dayList, pendingReservations, assignedReservations, day]);
 
@@ -70,19 +63,13 @@ const OverviewCards = ({
   );
 
   const revenue = useMemo(
-    () =>
-      dayList.reduce(
-        (acc, r) => (isCompleted(r.status) ? acc + amountOf(r) : acc),
-        0
-      ),
+    () => dayList.reduce((acc, r) => (isCompleted(r.status) ? acc + amountOf(r) : acc), 0),
     [dayList]
   );
 
   const availableDriver = useMemo(
     () =>
-      (Array.isArray(driver) ? driver : []).filter(
-        (d) => d?.is_active && d?.is_available
-      ).length,
+      (Array.isArray(driver) ? driver : []).filter((d) => d?.is_active && d?.is_available).length,
     [driver]
   );
 
@@ -95,7 +82,7 @@ const OverviewCards = ({
         return m;
       }, {});
       // Commenter si ça t’embête dans la console
-      console.debug("[OverviewCards] status distribution:", dist);
+      console.debug('[OverviewCards] status distribution:', dist);
     } catch {}
   }, [dayList]);
 

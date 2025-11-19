@@ -28,7 +28,9 @@
   overflow-x: hidden;
   overflow-y: auto;
   box-sizing: border-box;
-  transition: margin-left var(--transition-base), max-width var(--transition-base);
+  transition:
+    margin-left var(--transition-base),
+    max-width var(--transition-base);
 }
 
 .analytics {
@@ -444,7 +446,7 @@
     padding: var(--spacing-sm);
     margin-bottom: var(--spacing-md);
   }
-  
+
   .headerLeft h1 {
     font-size: var(--font-xl);
   }
@@ -452,12 +454,12 @@
   .subtitle {
     font-size: var(--font-xs);
   }
-  
+
   .periodSelector {
     width: 100%;
     justify-content: space-between;
   }
-  
+
   .periodButton,
   .periodActive {
     flex: 1;
@@ -559,7 +561,7 @@
   .headerLeft h1 {
     font-size: var(--font-lg);
   }
-  
+
   .subtitle {
     font-size: var(--font-size-xs);
   }
@@ -573,15 +575,15 @@
     padding: var(--spacing-xs) var(--spacing-sm);
     gap: var(--spacing-xs);
   }
-  
+
   .kpiIcon {
     font-size: var(--font-xl);
   }
-  
+
   .kpiValue {
     font-size: var(--font-md);
   }
-  
+
   .kpiLabel {
     font-size: var(--font-size-xs);
   }
@@ -619,4 +621,3 @@
     font-size: var(--font-size-xs);
   }
 }
-
