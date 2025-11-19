@@ -639,6 +639,7 @@ class ETADelayModel:
         }
 
         with Path(self.model_path).open("wb") as f:
+            # semgrep: ignore - pickle required for scikit-learn model serialization
             pickle.dump(model_data, f)
 
         logger.info("[ETADelayModel] Modèle sauvegardé: %s", self.model_path)
@@ -650,6 +651,7 @@ class ETADelayModel:
 
         try:
             with Path(self.model_path).open("rb") as f:
+                # semgrep: ignore - pickle required for scikit-learn model deserialization
                 model_data = pickle.load(f)
 
             self.regression_model = model_data["regression_model"]

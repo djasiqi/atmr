@@ -93,16 +93,30 @@ def _build_pagination_links(page: int, per_page: int, total: int, endpoint: str,
         dict avec 'Link' header + metadata pagination
 
     """
+    from flask import current_app
+
     total_pages = (total + per_page - 1) // per_page
     links = []
+    # Sécuriser l'URL externe pour éviter Host header injection
+    # Utiliser SERVER_NAME de la config Flask (pas request.host)
+    server_name = current_app.config.get("SERVER_NAME")
+    if not server_name:
+        # Fallback sécurisé: utiliser localhost si SERVER_NAME non configuré
+        server_name = "localhost"
+    scheme = current_app.config.get("PREFERRED_URL_SCHEME", "https")
+    base_url = f"{scheme}://{server_name}"
 
     if page > PAGE_ONE:
-        links.append(f'<{url_for(endpoint, page=page - 1, per_page=per_page, **kwargs, _external=True)}>; rel="prev"')
+        url = url_for(endpoint, page=page - 1, per_page=per_page, **kwargs)
+        links.append(f'<{base_url}{url}>; rel="prev"')
     if page < total_pages:
-        links.append(f'<{url_for(endpoint, page=page + 1, per_page=per_page, **kwargs, _external=True)}>; rel="next"')
+        url = url_for(endpoint, page=page + 1, per_page=per_page, **kwargs)
+        links.append(f'<{base_url}{url}>; rel="next"')
 
-    links.append(f'<{url_for(endpoint, page=1, per_page=per_page, **kwargs, _external=True)}>; rel="first"')
-    links.append(f'<{url_for(endpoint, page=total_pages, per_page=per_page, **kwargs, _external=True)}>; rel="last"')
+    url = url_for(endpoint, page=1, per_page=per_page, **kwargs)
+    links.append(f'<{base_url}{url}>; rel="first"')
+    url = url_for(endpoint, page=total_pages, per_page=per_page, **kwargs)
+    links.append(f'<{base_url}{url}>; rel="last"')
 
     return {
         "Link": ", ".join(links),

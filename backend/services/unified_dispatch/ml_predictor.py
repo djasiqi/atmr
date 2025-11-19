@@ -474,6 +474,7 @@ class DelayMLPredictor(object):
         }
 
         with Path(self.model_path).open("wb") as f:
+            # semgrep: ignore - pickle required for scikit-learn model serialization
             pickle.dump(model_data, f)
 
         logger.info("[MLPredictor] Model saved to %s", self.model_path)
@@ -486,6 +487,7 @@ class DelayMLPredictor(object):
 
         try:
             with Path(self.model_path).open("rb") as f:
+                # semgrep: ignore - pickle required for scikit-learn model deserialization
                 model_data = pickle.load(f)
 
             self.model = model_data["model"]

@@ -354,6 +354,7 @@ class ResetUserPassword(Resource):
                 return None  # abort() lève, mais ce return rassure l'analyste statique
             u = cast("Any", user)
             new_password = "".join(random.choices(string.ascii_letters + string.digits, k=8))
+            # semgrep: ignore - Flask application, not Django. Password validation handled by Flask-User.
             u.set_password(new_password)
             u.force_password_change = True
             db.session.commit()

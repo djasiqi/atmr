@@ -120,13 +120,13 @@ class RLLogger:
                     state_str = str(state)
                     state_bytes = state_str.encode("utf-8")
 
-            # Générer le hash SHA-1
-            return hashlib.sha1(state_bytes, usedforsecurity=False).hexdigest()
+            # Générer le hash SHA-256
+            return hashlib.sha256(state_bytes, usedforsecurity=False).hexdigest()
 
         except Exception as e:
             logger.error("[RLLogger] Erreur lors du hash de l'état: %s", e)
             # Fallback: hash basé sur le timestamp
-            return hashlib.sha1(str(time.time()).encode(), usedforsecurity=False).hexdigest()
+            return hashlib.sha256(str(time.time()).encode(), usedforsecurity=False).hexdigest()
 
     def log_decision(
         self,

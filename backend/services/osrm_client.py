@@ -379,7 +379,7 @@ def _canonical_key_table(
         "destinations": destinations or "ALL",
     }
     raw = json.dumps(payload, separators=(",", ":"), sort_keys=True)
-    return hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
+    return hashlib.sha256(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def _canonical_key_route(
@@ -397,7 +397,7 @@ def _canonical_key_route(
     pts = [_round(origin)] + ([_round(w) for w in waypoints] if waypoints else []) + [_round(destination)]
     payload = {"profile": profile, "pts": pts}
     raw = json.dumps(payload, separators=(",", ":"), sort_keys=True)
-    return hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
+    return hashlib.sha256(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 # ============================================================
