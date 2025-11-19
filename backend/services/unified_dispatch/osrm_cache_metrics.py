@@ -199,8 +199,8 @@ def generate_cache_key_v1(profile: str, points: list[tuple[float, float]], date_
     normalized = [f"{lat:.5f},{lon:.5f}" for lat, lon in points]
     points_str = "|".join(sorted(normalized))  # Trier pour être déterministe
 
-    # Hash SHA1 des points
-    sha1_hash = hashlib.sha1(points_str.encode(), usedforsecurity=False).hexdigest()
+    # Hash SHA256 des points
+    sha1_hash = hashlib.sha256(points_str.encode(), usedforsecurity=False).hexdigest()
 
     # Format: ud:osrm:matrix:v1:{profile}:{YYYYMMDD}:{slot15}:{sha1}
     return f"{CACHE_KEY_PREFIX}:{profile}:{date_str}:{slot_15min}:{sha1_hash}"

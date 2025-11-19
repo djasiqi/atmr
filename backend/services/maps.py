@@ -329,7 +329,7 @@ def _dm_request(
         params["departure_time"] = str(int(departure_time))
         params["traffic_model"] = traffic_model
 
-    inflight_key = hashlib.sha1(
+    inflight_key = hashlib.sha256(
         json.dumps({"o": origins, "d": dests, "p": params}, sort_keys=True).encode("utf-8"), usedforsecurity=False
     ).hexdigest()
 

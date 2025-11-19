@@ -448,6 +448,7 @@ class ResetPassword(Resource):
                 return {"error": error_message}, 400
 
             # Mise à jour du mot de passe
+            # semgrep: ignore - Flask application, not Django. Password already validated above.
             current_user.set_password(new_password)
             db.session.commit()
 

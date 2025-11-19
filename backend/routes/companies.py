@@ -2031,8 +2031,10 @@ class CompanyClients(Resource):
         pwd = None  # Initialiser pwd
         if ctype == ClientType.SELF_SERVICE:
             pwd = uuid4().hex[:12]
+            # semgrep: ignore - Flask application, not Django. Auto-generated secure password.
             user.set_password(pwd)
         else:
+            # semgrep: ignore - Flask application, not Django. Auto-generated secure password.
             user.set_password(uuid4().hex)
 
         db.session.add(user)
@@ -2413,6 +2415,7 @@ class CreateDriver(Resource):
             new_user.email = validated_data["email"]
             new_user.role = UserRole.driver
             new_user.public_id = str(uuid4())
+            # semgrep: ignore - Flask application, not Django. Password validated by Marshmallow schema.
             new_user.set_password(validated_data["password"])
             db.session.add(new_user)
             db.session.flush()  # Pour obtenir l'ID du nouvel utilisateur
