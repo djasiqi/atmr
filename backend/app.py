@@ -529,6 +529,7 @@ def create_app(config_name: str | None = None):
                         "models_loaded": True,
                     }
                 ), 200
+        return None
 
     talisman = Talisman(content_security_policy=csp, force_https=force_https)
     talisman.init_app(app)
