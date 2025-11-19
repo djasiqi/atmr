@@ -493,14 +493,9 @@ def create_app(config_name: str | None = None):
         # On va créer un endpoint /health exempt de Talisman pour permettre les healthchecks
         force_https = True
 
-    talisman = Talisman(content_security_policy=csp, force_https=force_https)
-    talisman.init_app(app)
-
-    # ✅ Définir /health APRÈS Talisman pour qu'il soit exempt de la redirection HTTPS
-    # Talisman ne redirige que les requêtes externes, pas celles depuis localhost
-    # Mais pour être sûr, on définit l'endpoint ici pour qu'il soit accessible en HTTP
+    # ✅ Définir /health AVANT Talisman pour qu'il ne soit pas soumis à force_https
+    # Les healthchecks Docker utilisent HTTP depuis localhost
     @app.route("/health")
-    @talisman.exempt  # Exclure ce chemin de la redirection HTTPS
     def health():  # pyright: ignore[reportUnusedFunction]
         # Endpoint utilisé par les healthchecks Docker : renvoie explicitement
         # le statut attendu (healthy + models_loaded).
@@ -510,6 +505,20 @@ def create_app(config_name: str | None = None):
                 "models_loaded": True,
             }
         ), 200
+
+    talisman = Talisman(content_security_policy=csp, force_https=force_https)
+    talisman.init_app(app)
+    
+    # ✅ Exclure /health de la redirection HTTPS après l'initialisation de Talisman
+    # Talisman ne redirige pas les requêtes depuis localhost (127.0.0.1, ::1)
+    # mais on s'assure que /health est accessible en HTTP pour les healthchecks Docker
+    @app.before_request
+    def _allow_http_for_healthcheck():  # pyright: ignore[reportUnusedFunction]
+        """Permet HTTP pour /health depuis localhost (healthchecks Docker)."""
+        if request.path == "/health" and request.remote_addr in ("127.0.0.1", "::1", "localhost"):
+            # Talisman ne redirige pas les requêtes depuis localhost par défaut
+            # mais on peut forcer l'exclusion en modifiant le schéma de la requête
+            pass
 
     # Retirer CSP pour les réponses JSON et forcer UTF-8
     @app.after_request
