@@ -79,6 +79,7 @@ services:
         WITH_POSTGRES: "true"
     container_name: atmr-backend
     restart: unless-stopped
+    # Variables d'environnement chargées depuis GitHub Secrets via workflow
     environment:
       # Configuration Flask
       FLASK_ENV: production
@@ -100,6 +101,7 @@ services:
       # Sécurité
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-jwt-secret-key-change-in-production}
+      APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
 
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -170,6 +172,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       ML_MODELS_PATH: /app/data/ml
       RL_MODELS_PATH: /app/data/rl
+      APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
     volumes:
       - backend_logs:/app/logs
       - backend_data:/app/data
@@ -207,6 +210,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
     volumes:
       - backend_logs:/app/logs
       - celery_beat_data:/app/celerybeat-schedule

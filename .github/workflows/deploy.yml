@@ -33,6 +33,14 @@ jobs:
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT }}
       SSH_KEY: ${{ secrets.SSH_KEY }}
+      APP_ENCRYPTION_KEY_B64: ${{ secrets.APP_ENCRYPTION_KEY_B64 }}
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -81,8 +89,8 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          source: "backend/docker-compose.yml"
-          target: "/srv/atmr/backend"
+          source: "docker-compose.production.yml"
+          target: "/srv/atmr"
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v0.1.10
@@ -91,10 +99,19 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
+          envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,POSTGRES_PASSWORD,POSTGRES_USER,POSTGRES_DB,MAIL_PASSWORD,SENTRY_DSN
           script: |
-            cd /srv/atmr/backend
-            docker compose pull
-            docker compose up -d
+            cd /srv/atmr
+            export APP_ENCRYPTION_KEY_B64="${{ secrets.APP_ENCRYPTION_KEY_B64 }}"
+            export SECRET_KEY="${{ secrets.SECRET_KEY }}"
+            export JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}"
+            export POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
+            export POSTGRES_USER="${{ secrets.POSTGRES_USER }}"
+            export POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
+            export MAIL_PASSWORD="${{ secrets.MAIL_PASSWORD }}"
+            export SENTRY_DSN="${{ secrets.SENTRY_DSN }}"
+            docker compose -f docker-compose.production.yml pull
+            docker compose -f docker-compose.production.yml up -d
 
   deploy-frontend:
     name: Deploy frontend to Vercel
