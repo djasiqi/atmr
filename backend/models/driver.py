@@ -167,8 +167,9 @@ class Driver(db.Model):
         except Exception as e:
             # Log l'erreur mais retourne un profil minimal pour éviter une erreur 500
             import logging
+
             logger = logging.getLogger("driver_model")
-            logger.error(f"Erreur lors de la sérialisation du driver {self.id}: {e}", exc_info=True)
+            logger.exception("Erreur lors de la sérialisation du driver %s: %s", self.id, e)
             # Retourner un profil minimal en cas d'erreur
             return {
                 "id": self.id,

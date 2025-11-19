@@ -117,7 +117,7 @@ def _build_pagination_links(page: int, per_page: int, total: int, endpoint: str,
 # 🔐 SECURITY: Ownership Check Helper (CWE-284)
 # =====================================================
 def _check_booking_ownership(
-    booking: Booking,  # noqa: PLR0911
+    booking: Booking,
     user: User,
     action: str = "access",
 ) -> tuple[bool, tuple[dict[str, str], int] | None]:
@@ -137,8 +137,10 @@ def _check_booking_ownership(
             return error  # ({"error": "..."}, 403)
 
     """
-    # Admin a tous les droits
     user_role_value = str(getattr(user.role, "value", user.role))
+    error_response = ({"error": f"Accès non autorisé ({action})"}, 403)
+
+    # Admin a tous les droits
     if user_role_value == UserRole.admin.value:
         return True, None
 
@@ -147,38 +149,37 @@ def _check_booking_ownership(
         from models import Company
 
         company = Company.query.filter_by(user_id=user.id).first()
-        if company and company.id == booking.company_id:
-            return True, None
+        has_access = company is not None and company.id == booking.company_id
+        return (True, None) if has_access else (False, error_response)
 
     # Client propriétaire
     if user_role_value == UserRole.client.value:
         client = Client.query.filter_by(user_id=user.id).first()
         if not client:
             app_logger.warning("⚠️ User %s has client role but no Client record", user.public_id)
-            return False, ({"error": f"Accès non autorisé ({action})"}, 403)
-
-        if client.id == booking.client_id:
+        elif client.id == booking.client_id:
             return True, None
-
-        # IDOR attempt détecté
-        app_logger.warning(
-            "🚨 IDOR blocked: user=%s (client_id=%s) tried to %s booking_id=%s (owner_client_id=%s)",
-            user.public_id,
-            client.id,
-            action,
-            booking.id,
-            booking.client_id,
-        )
-        return False, ({"error": "Accès non autorisé à cette réservation"}, 403)
+        else:
+            # IDOR attempt détecté
+            app_logger.warning(
+                "🚨 IDOR blocked: user=%s (client_id=%s) tried to %s booking_id=%s (owner_client_id=%s)",
+                user.public_id,
+                client.id,
+                action,
+                booking.id,
+                booking.client_id,
+            )
+            error_response = ({"error": "Accès non autorisé à cette réservation"}, 403)
+        return False, error_response
 
     # Driver assigné (read-only access)
     if user_role_value == UserRole.driver.value and action == "read":
         driver = Driver.query.filter_by(user_id=user.id).first()
-        if driver and booking.driver_id == driver.id:
-            return True, None
+        has_access = driver is not None and booking.driver_id == driver.id
+        return (True, None) if has_access else (False, error_response)
 
     # Aucun droit
-    return False, ({"error": f"Accès non autorisé ({action})"}, 403)
+    return False, error_response
 
 
 # =====================================================
