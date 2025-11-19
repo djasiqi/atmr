@@ -122,8 +122,8 @@ jobs:
           pip install pytest pytest-cov coverage
           # Dépendances de test
           pip install factory-boy freezegun
-          # Dépendances optionnelles (ML/RL - lourdes, installer seulement si nécessaire)
-          # pip install torch gymnasium optuna  # Décommenter si tests ML/RL nécessaires
+          # Dépendances ML/RL
+          pip install torch gymnasium optuna
           if [ -f backend/requirements.txt ]; then
             pip install -r backend/requirements.txt
           fi
@@ -142,7 +142,7 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
         run: |
           # Lancer pytest depuis la racine pour que les imports 'backend' fonctionnent
-          pytest backend/tests -v --cov=backend --cov-report=xml:backend/coverage.xml --cov-report=html:backend/htmlcov --cov-report=term-missing --ignore=backend/tests/ml --ignore=backend/tests/rl
+          pytest backend/tests -v --cov=backend --cov-report=xml:backend/coverage.xml --cov-report=html:backend/htmlcov --cov-report=term-missing
 
       # ✅ 3.1: Vérifier couverture globale ≥ 70% (bloquant)
       - name: Check global coverage >= 70%
