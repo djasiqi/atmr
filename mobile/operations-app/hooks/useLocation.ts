@@ -2,11 +2,18 @@
 
 import { useEffect, useState, useRef } from "react";
 import * as Location from "expo-location";
-import { Alert, Platform } from "react-native";
+import { Alert, Platform, AppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { sendDriverLocation, getDistanceInMeters } from "@/services/location";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/hooks/useSocket";
+
+// ✅ Nom de la tâche en arrière-plan (doit correspondre à locationTask.ts)
+const BACKGROUND_TASK_NAME = "background-location-task";
+
+// ✅ Mutex module-level pour éviter les doubles inits (React StrictMode / HMR)
+let backgroundInitDone = false;
+let backgroundInitRunning = false;
 
 // ✅ PERF: Configuration batching pour économiser batterie
 const BATCH_SIZE = 3;  // Buffer de 3-5 positions avant envoi
@@ -23,6 +30,8 @@ export const useLocation = () => {
   const positionBuffer = useRef<Location.LocationObject[]>([]);
   // ✅ Stocker la dernière position reçue pour forcer l'envoi périodique
   const lastReceivedLocation = useRef<Location.LocationObject | null>(null);
+  // ✅ Suivre si le tracking en arrière-plan a été démarré (local au hook)
+  const backgroundTrackingStarted = useRef<boolean>(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -91,22 +100,82 @@ export const useLocation = () => {
         // ✅ Démarrer le tracking en arrière-plan si les permissions sont accordées
         if (backgroundStatus === "granted" && driver) {
           try {
-            // Stocker le driver_id pour la tâche en arrière-plan
+            // On stocke le driver_id pour la tâche en arrière-plan
             await AsyncStorage.setItem("driver_id", driver.id.toString());
+            console.log("[useLocation] ✅ driver_id stocké pour la tâche background");
 
-            // Démarrer les mises à jour de localisation en arrière-plan
-            await Location.startLocationUpdatesAsync("background-location-task", {
-              accuracy: Location.Accuracy.Balanced,
-              timeInterval: 10000, // 10 secondes
-              distanceInterval: 50, // 50 mètres
-              foregroundService: {
-                notificationTitle: "Liri Opérations",
-                notificationBody: "Suivi de localisation en cours",
-              },
-            });
-            console.log("✅ Tracking en arrière-plan démarré");
-          } catch (error) {
+            // Mutex global pour éviter les doubles appels
+            if (backgroundInitDone || backgroundInitRunning) {
+              console.log("[useLocation] ⚠️ Background init déjà en cours / déjà fait → skip");
+            } else {
+              backgroundInitRunning = true;
+
+              const startBackgroundTracking = async () => {
+                try {
+                  console.log("[useLocation] 🚀 Init background tracking…");
+
+                  // Vérifier si déjà démarré côté natif
+                  let hasStarted = false;
+                  try {
+                    hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_TASK_NAME);
+                    console.log("[useLocation] ℹ️ hasStartedLocationUpdatesAsync =", hasStarted);
+                  } catch (checkError) {
+                    console.warn("[useLocation] ⚠️ Erreur hasStartedLocationUpdatesAsync:", checkError);
+                  }
+
+                  if (hasStarted) {
+                    console.log("[useLocation] ✅ Updates déjà démarrés → on ne relance pas");
+                    backgroundTrackingStarted.current = true;
+                    backgroundInitDone = true;
+                    return;
+                  }
+
+                  // Re-check permission background par sécurité
+                  const { status } = await Location.requestBackgroundPermissionsAsync();
+                  console.log("[useLocation] ℹ️ Background permission status =", status);
+                  if (status !== "granted") {
+                    console.warn("[useLocation] ⚠️ Permission background refusée au moment du start");
+                    return;
+                  }
+
+                  // Petit délai pour laisser Android initialiser le contexte
+                  console.log("[useLocation] ⏳ Attente initialisation contexte Android (3s)…");
+                  await new Promise((resolve) => setTimeout(resolve, 3000));
+
+                  console.log("[useLocation] 🚀 Appel Location.startLocationUpdatesAsync()");
+                  await Location.startLocationUpdatesAsync(BACKGROUND_TASK_NAME, {
+                    // ✅ PRODUCTION: Paramètres optimisés pour économiser la batterie
+                    accuracy: Location.Accuracy.Balanced, // Bon compromis précision/batterie
+                    timeInterval: 10000, // 10s = mises à jour toutes les 10 secondes
+                    distanceInterval: 50, // 50m = mises à jour si déplacement > 50m
+                    foregroundService: {
+                      notificationTitle: "Liri Opérations",
+                      notificationBody: "Suivi de localisation en cours",
+                    },
+                  });
+
+                  backgroundTrackingStarted.current = true;
+                  backgroundInitDone = true;
+                  console.log("[useLocation] ✅ startLocationUpdatesAsync démarré avec succès");
+                } catch (startError: any) {
+                  console.warn("[useLocation] ⚠️ startLocationUpdatesAsync a échoué:", startError?.message || startError);
+                  console.log("[useLocation] ℹ️ Le tracking continue au moins en foreground");
+                  backgroundTrackingStarted.current = false;
+                } finally {
+                  backgroundInitRunning = false;
+                }
+              };
+
+              // ✅ TEST : Appel immédiat sans timeout pour diagnostiquer
+              console.log("[useLocation] 🚀 Appel immédiat de startBackgroundTracking (test)");
+              startBackgroundTracking().catch((err) => {
+                console.error("[useLocation] ❌ Erreur dans startBackgroundTracking:", err);
+                backgroundInitRunning = false;
+              });
+            }
+          } catch (error: any) {
             console.error("❌ Erreur démarrage tracking arrière-plan:", error);
+            backgroundTrackingStarted.current = false;
           }
         }
 
@@ -236,11 +305,17 @@ export const useLocation = () => {
         flushPositionBatch();
       }
       
-      // ✅ Arrêter le tracking en arrière-plan
-      if (Platform.OS !== "web") {
-        Location.stopLocationUpdatesAsync("background-location-task").catch((error) => {
-          console.error("Erreur arrêt tracking arrière-plan:", error);
+      // ✅ Arrêter le tracking en arrière-plan (uniquement si démarré)
+      if (Platform.OS !== "web" && backgroundTrackingStarted.current) {
+        Location.stopLocationUpdatesAsync("background-location-task").catch((error: any) => {
+          // Ignorer l'erreur si la tâche n'existe pas (normal si elle n'a jamais été démarrée)
+          if (error?.message?.includes("TaskNotFoundException") || error?.message?.includes("not found")) {
+            console.log("ℹ️ Tâche de tracking arrière-plan non trouvée (normal si non démarrée)");
+          } else {
+            console.error("Erreur arrêt tracking arrière-plan:", error);
+          }
         });
+        backgroundTrackingStarted.current = false;
       }
       
       const sub = locationSubscription.current;

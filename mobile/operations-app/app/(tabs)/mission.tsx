@@ -284,7 +284,7 @@ export default function MissionScreen() {
           flex: 1,
           justifyContent: "center",
           alignItems: "center",
-          backgroundColor: "#FFF",
+          backgroundColor: "#F5F7F6", // ✅ Fond épuré cohérent avec le login
         }}
       >
         <Loader />
@@ -294,13 +294,13 @@ export default function MissionScreen() {
 
   return (
     <ScrollView 
-      className="flex-1 bg-white"
+      style={{ flex: 1, backgroundColor: "#F5F7F6" }} // ✅ Fond épuré cohérent avec le login
       refreshControl={
         <RefreshControl
           refreshing={isRefreshing}
           onRefresh={onRefresh}
-          colors={["#00796B"]} // Android
-          tintColor="#00796B" // iOS
+          colors={["#0A7F59"]} // Android - accent color
+          tintColor="#0A7F59" // iOS - accent color
         />
       }
     >

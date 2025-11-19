@@ -1,24 +1,22 @@
-// components/dashboard/TripHeader.tsx
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+// components/dashboard/ChatHeader.tsx
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
 
-// ✅ Palette épurée et élégante (cohérente avec le login et mission)
+// ✅ Palette épurée et élégante (cohérente avec le login et autres pages)
 const palette = {
   background: "#F5F7F6",
   text: "#15362B",
   secondary: "#5F7369",
-  accent: "#0A7F59",
   border: "rgba(15,54,43,0.08)",
 };
 
-export default function TripHeader({ date }: { date?: string | null }) {
-  // ✅ Sécurité : garantir que date est toujours une string valide
-  const safeDate = typeof date === "string" ? date : String(date ?? "");
-
+export default function ChatHeader() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Vos courses du jour</Text>
-      <Text style={styles.subtitle}>{safeDate}</Text>
+      <Text style={styles.title}>Équipe</Text>
+      <Text style={styles.subtitle}>
+        Discutez avec votre équipe en temps réel
+      </Text>
     </View>
   );
 }
@@ -26,7 +24,7 @@ export default function TripHeader({ date }: { date?: string | null }) {
 const styles = StyleSheet.create({
   // ✅ Container avec style épuré et élégant
   container: {
-    width: '100%',
+    width: "100%",
     paddingHorizontal: 28,
     paddingTop: 32,
     paddingBottom: 24,
@@ -37,7 +35,7 @@ const styles = StyleSheet.create({
   // ✅ Titre avec typographie élégante
   title: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: "700",
     color: palette.text,
     marginBottom: 8,
     letterSpacing: -0.5,
@@ -50,3 +48,4 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 });
+

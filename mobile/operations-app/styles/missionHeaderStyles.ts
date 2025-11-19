@@ -1,36 +1,47 @@
 import { StyleSheet } from 'react-native';
 
+// ✅ Palette épurée et élégante (cohérente avec le login)
+const palette = {
+  background: "#F5F7F6",
+  text: "#15362B",
+  secondary: "#5F7369",
+  accent: "#0A7F59",
+  border: "rgba(15,54,43,0.08)",
+};
+
 export const styles = StyleSheet.create({
-  
-  //bloc principal de l’en-tête
+  // ✅ Bloc principal de l'en-tête avec style épuré
   container: { 
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 16,
-    backgroundColor: '#F7F9FB',
+    paddingHorizontal: 28,
+    paddingTop: 32,
+    paddingBottom: 24,
+    backgroundColor: palette.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: palette.border,
   },
 
-  // ligne de bienvenue (ex: Bonjour, Drin 👋)
+  // ✅ Ligne de bienvenue avec typographie élégante
   title: { 
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#004D40',
-    marginBottom: 5,
+    color: palette.text,
+    marginBottom: 8,
+    letterSpacing: -0.5,
   },
 
-  // texte de date ou info complémentaire
+  // ✅ Texte de date ou info complémentaire
   subtitle: { 
-    fontSize: 14,
-    color: '#555',
-    marginBottom: 5,
+    fontSize: 15,
+    color: palette.secondary,
+    marginBottom: 8,
+    lineHeight: 22,
   },
 
-  // statut du chauffeur (disponible, indisponible…)
+  // ✅ Statut du chauffeur avec style élégant
   status: { 
     fontSize: 14,
-    color: '#00796B',
-    fontWeight: '500',
+    color: palette.accent,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
 });

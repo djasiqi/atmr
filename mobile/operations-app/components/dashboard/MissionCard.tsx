@@ -116,8 +116,8 @@ const MissionCard: MissionCardType = ({
           <Ionicons
             name="time-outline"
             size={15}
-            color="#666"
-            style={{ marginRight: 2 }}
+            color="#5F7369"
+            style={{ marginRight: 4 }}
           />
           <Text style={styles.timeEnhanced}>
             {new Date(mission.scheduled_time).toLocaleTimeString([], {
@@ -277,14 +277,14 @@ const MissionCard: MissionCardType = ({
   );
 };
 
-// ✅ Composant visuel réutilisable lorsqu'il n'y a pas de mission
+// ✅ Composant visuel réutilisable lorsqu'il n'y a pas de mission (style épuré)
 MissionCard.EmptyState = () => (
   <View style={styles.containerEnhanced}>
-    <Text style={{ fontSize: 16, textAlign: "center", color: "#666" }}>
-      🚗 En attente de course
+    <Text style={{ fontSize: 18, textAlign: "center", color: "#15362B", fontWeight: "600", letterSpacing: 0.2 }}>
+      🚗 En attente de mission
     </Text>
     <Text
-      style={{ fontSize: 14, textAlign: "center", color: "#999", marginTop: 8 }}
+      style={{ fontSize: 15, textAlign: "center", color: "#5F7369", marginTop: 10, lineHeight: 22 }}
     >
       Vous serez notifié dès qu'une mission vous sera assignée.
     </Text>

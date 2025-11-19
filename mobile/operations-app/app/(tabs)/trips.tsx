@@ -1,6 +1,6 @@
 // app/(tabs)/trips.tsx
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   SectionList,
   RefreshControl,
@@ -27,6 +27,7 @@ function categorizeTripByTime(trip: Booking) {
 export default function TripsScreen() {
   useNotifications();
   const { driver } = useAuth();
+
   const [completedTrips, setCompletedTrips] = useState<Booking[]>([]);
   const [assignedTrips, setAssignedTrips] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,18 +35,28 @@ export default function TripsScreen() {
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  const loadTrips = async () => {
-    if (!driver) return;
+  const loadTrips = useCallback(async () => {
+    if (!driver) {
+      setCompletedTrips([]);
+      setAssignedTrips([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const [completed, assigned] = await Promise.all([
         getCompletedTrips(driver.id),
         getAssignedTrips(),
       ]);
+
       const today = new Date().toDateString();
+
       const todayTrips = completed.filter(
         (t) => new Date(t.scheduled_time).toDateString() === today
       );
+
       setCompletedTrips(todayTrips);
       setAssignedTrips(assigned);
     } catch (e) {
@@ -54,19 +65,19 @@ export default function TripsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [driver]);
 
   useEffect(() => {
     loadTrips();
-  }, []);
+  }, [loadTrips]);
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadTrips();
-  };
+  }, [loadTrips]);
 
-  const groupTrips = (trips: Booking[]) => {
-    const grouped = trips.reduce(
+  const groupedCompletedSections = useMemo(() => {
+    const grouped = completedTrips.reduce(
       (acc, trip) => {
         const key = categorizeTripByTime(trip);
         if (!acc[key]) acc[key] = [];
@@ -76,16 +87,73 @@ export default function TripsScreen() {
       {} as Record<string, Booking[]>
     );
 
-    return Object.entries(grouped).map(([title, data]) => ({ title, data }));
-  };
+    return Object.entries(grouped).map(([title, data]) => ({
+      title,
+      data,
+    }));
+  }, [completedTrips]);
 
-  const renderTripCard = (trip: Booking) => {
-    if ((trip as any).isPlaceholder) {
+  const sections = useMemo(() => {
+    const baseSections = [
+      {
+        title: "🕒 Courses assignées",
+        data:
+          assignedTrips.length > 0
+            ? assignedTrips
+            : ([
+              {
+                id: -1,
+                pickup_location: "",
+                dropoff_location: "",
+                scheduled_time: new Date().toISOString(),
+                status: "assigned",
+                client_name: "",
+                client_phone: "",
+                company_id: 0,
+                driver_id: 0,
+                is_return: false,
+                isPlaceholder: true,
+              } as Booking & { isPlaceholder: boolean },
+            ] as Booking[]),
+      },
+      ...groupedCompletedSections,
+    ];
+
+    // ✅ DEBUG : Décommenter si besoin de diagnostiquer
+    // console.log("[TripsScreen] sections =", JSON.stringify(baseSections));
+    // console.log("[TripsScreen] completedTrips =", completedTrips);
+    // console.log("[TripsScreen] assignedTrips =", assignedTrips);
+
+    return baseSections;
+  }, [assignedTrips, groupedCompletedSections, completedTrips]);
+
+  const renderTripCard = (trip: Booking | (Booking & { isPlaceholder?: boolean })) => {
+    const anyTrip = trip as any;
+
+    if (anyTrip.isPlaceholder) {
       return (
         <View style={cardStyles.cardContainer}>
-          <Text style={{ fontSize: 14, color: "#616161", textAlign: "center" }}>
-            En attente de course. Vous serez notifié dès qu’une mission vous
-            sera assignée.
+          <Text
+            style={{
+              fontSize: 16,
+              color: "#15362B",
+              textAlign: "center",
+              fontWeight: "600",
+              letterSpacing: 0.2,
+            }}
+          >
+            🚗 En attente de course
+          </Text>
+          <Text
+            style={{
+              fontSize: 15,
+              color: "#5F7369",
+              textAlign: "center",
+              marginTop: 10,
+              lineHeight: 22,
+            }}
+          >
+            Vous serez notifié dès qu'une mission vous sera assignée.
           </Text>
         </View>
       );
@@ -93,7 +161,6 @@ export default function TripsScreen() {
 
     return (
       <TouchableOpacity
-        key={trip.id}
         style={cardStyles.cardContainer}
         onPress={() => {
           setSelectedTripId(trip.id);
@@ -101,7 +168,8 @@ export default function TripsScreen() {
         }}
       >
         <Text style={cardStyles.routeSection}>
-          {trip.pickup_location} → {trip.dropoff_location}
+          {trip.pickup_location || "Point de départ"} →{" "}
+          {trip.dropoff_location || "Destination"}
         </Text>
 
         <Text style={cardStyles.timeEnhanced}>
@@ -117,12 +185,20 @@ export default function TripsScreen() {
             cardStyles.statusBadge,
             {
               backgroundColor:
-                trip.status === "completed" ? "#C8E6C9" : "#BBDEFB",
-              color: trip.status === "completed" ? "#256029" : "#0D47A1",
+                trip.status === "completed"
+                  ? "rgba(10,127,89,0.12)"
+                  : "rgba(255,193,7,0.12)",
+              color: trip.status === "completed" ? "#0A7F59" : "#8B6914",
+              borderColor:
+                trip.status === "completed"
+                  ? "rgba(10,127,89,0.2)"
+                  : "rgba(255,193,7,0.2)",
             },
           ]}
         >
-          Statut : {trip.status === "completed" ? "Terminé" : trip.status}
+          {trip.status === "completed"
+            ? "✅ Terminé"
+            : `🕓 ${trip.status || "En attente"}`}
         </Text>
       </TouchableOpacity>
     );
@@ -135,7 +211,7 @@ export default function TripsScreen() {
           flex: 1,
           justifyContent: "center",
           alignItems: "center",
-          backgroundColor: "#FFFFFF",
+          backgroundColor: "#F5F7F6",
         }}
       >
         <Loader />
@@ -143,56 +219,49 @@ export default function TripsScreen() {
     );
   }
 
-  const sections = [
-    {
-      title: "🕒 Courses assignées",
-      data:
-        assignedTrips.length > 0
-          ? assignedTrips
-          : [
-              {
-                id: -1,
-                pickup_location: "",
-                dropoff_location: "",
-                scheduled_time: new Date().toISOString(),
-                status: "assigned",
-                client_name: "",
-                client_phone: "",
-                company_id: 0,
-                driver_id: 0,
-                is_return: false, // Propriété manquante ajoutée
-                isPlaceholder: true,
-              } as Booking & { isPlaceholder: boolean },
-            ],
-    },
-    ...groupTrips(completedTrips),
-  ];
-
   return (
-    <View style={{ flex: 1, backgroundColor: "#F4F6F8" }}>
+    <View style={{ flex: 1, backgroundColor: "#F5F7F6" }}>
       <TripHeader date={new Date().toLocaleDateString()} />
 
       <SectionList
         sections={sections}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => {
+          // ✅ Sécurité : garantir que keyExtractor retourne toujours une string valide
+          if (!item || item.id == null) {
+            return `item-${Math.random().toString(36).substr(2, 9)}`;
+          }
+          return String(item.id);
+        }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#0A7F59"]}
+            tintColor="#0A7F59"
+          />
         }
         ListEmptyComponent={() => (
           <View style={{ marginTop: 24, alignItems: "center" }}>
             <Text style={cardStyles.emptyText}>
-              Aucun trajet prévu pour aujourd’hui.
+              Aucun trajet prévu pour aujourd'hui.
             </Text>
           </View>
         )}
-        renderSectionHeader={({ section: { title } }) => (
-          <Text style={cardStyles.sectionHeader}>{title}</Text>
-        )}
-        renderItem={({ item }) => renderTripCard(item)}
+        renderSectionHeader={({ section }) => {
+          const rawTitle = (section as any).title;
+          const safeTitle =
+            typeof rawTitle === "string" ? rawTitle : String(rawTitle ?? "");
+
+          return (
+            <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+              <Text style={cardStyles.sectionHeader}>{safeTitle}</Text>
+            </View>
+          );
+        }}
+        renderItem={({ item }) => renderTripCard(item as any)}
         contentContainerStyle={{ paddingBottom: 80 }}
       />
 
-      {/* Modal de détails */}
       <TripDetailsModal
         visible={modalVisible}
         tripId={selectedTripId}
