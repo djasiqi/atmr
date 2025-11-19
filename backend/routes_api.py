@@ -166,14 +166,14 @@ api_v1.add_namespace(settings_ns, path="/company-settings")
 _keep_legacy_api = os.getenv("API_LEGACY_ENABLED", "true").lower() == "true"
 
 if _keep_legacy_api:
-    _doc_legacy: Any = False if API_DOCS is False else f"{API_DOCS}/legacy"
+    # Always disable docs/specs for the legacy API to avoid endpoint collisions
     api_legacy = Api(
         title="ATMR Transport API (Legacy - Déprécié)",
         version="1.0",
         description="⚠️ API Legacy - Utiliser /api/v1/ ou /api/v2/ à la place. Cette version sera supprimée dans une version future.",
         prefix=API_PREFIX,
-        doc=_doc_legacy,
-        serve_spec=False,  # Évite le conflit d'endpoint 'specs' avec api_v1 en tests
+        doc=False,          # completely disable swagger UI/docs for legacy
+        serve_spec=False,   # ensure no spec endpoint is created
         authorizations=authorizations,
         security="BearerAuth",
         validate=True,
