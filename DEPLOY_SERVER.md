@@ -1,6 +1,47 @@
 # Guide de déploiement sur le serveur
 
-## Étapes pour déployer la dernière version
+## Méthode 1 : Script automatique (recommandé)
+
+### Configuration
+
+Le script `deploy-server.sh` utilise les valeurs par défaut suivantes :
+- **Serveur** : `138.201.155.201`
+- **Utilisateur** : `root` (peut être surchargé via `SERVER_USER`)
+- **Chemin** : `/root/atmr` (peut être surchargé via `SERVER_PATH`)
+
+### Personnalisation (optionnel)
+
+Si vous devez modifier ces valeurs, définissez les variables d'environnement :
+
+```bash
+export SERVER_USER=votre_utilisateur_ssh  # Par défaut: root
+export SERVER_HOST=adresse_ip_ou_domaine  # Par défaut: 138.201.155.201
+export SERVER_PATH=/chemin/vers/atmr      # Par défaut: /root/atmr
+```
+
+**Exemple de personnalisation :**
+```bash
+export SERVER_USER=deploy
+export SERVER_HOST=138.201.155.201
+export SERVER_PATH=/opt/atmr
+```
+
+### Exécution du script
+
+```bash
+chmod +x deploy-server.sh
+./deploy-server.sh
+```
+
+Le script va automatiquement :
+
+1. Se connecter au serveur via SSH
+2. Récupérer les dernières modifications (git pull)
+3. Reconstruire les images Docker
+4. Redémarrer les services
+5. Vérifier l'état des services
+
+## Méthode 2 : Commandes manuelles
 
 ### 1. Se connecter au serveur
 
