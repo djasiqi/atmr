@@ -118,14 +118,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd backend
           python -m pip install --upgrade pip
           pip install pytest pytest-cov coverage
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
+          # Dépendances de test
+          pip install factory-boy freezegun
+          # Dépendances optionnelles (ML/RL - lourdes, installer seulement si nécessaire)
+          # pip install torch gymnasium optuna  # Décommenter si tests ML/RL nécessaires
+          if [ -f backend/requirements.txt ]; then
+            pip install -r backend/requirements.txt
           fi
-          if [ -f requirements-dev.txt ]; then
-            pip install -r requirements-dev.txt
+          if [ -f backend/requirements-dev.txt ]; then
+            pip install -r backend/requirements-dev.txt
           fi
 
       - name: Run pytest with coverage
@@ -136,9 +139,10 @@ jobs:
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
           APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+          PYTHONPATH: ${{ github.workspace }}
         run: |
-          cd backend
-          pytest -v --cov=. --cov-report=xml --cov-report=html --cov-report=term-missing
+          # Lancer pytest depuis la racine pour que les imports 'backend' fonctionnent
+          pytest backend/tests -v --cov=backend --cov-report=xml:backend/coverage.xml --cov-report=html:backend/htmlcov --cov-report=term-missing --ignore=backend/tests/ml --ignore=backend/tests/rl
 
       # ✅ 3.1: Vérifier couverture globale ≥ 70% (bloquant)
       - name: Check global coverage >= 70%
@@ -149,6 +153,7 @@ jobs:
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
           APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           cd backend
           echo "📊 Vérification couverture globale >= 70%..."
@@ -164,20 +169,21 @@ jobs:
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
           APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+          PYTHONPATH: ${{ github.workspace }}
         run: |
-          cd backend
           echo "🚨 Vérification couverture modules critiques >= 80%..."
 
           # Vérifier dispatch modules critiques (déjà vérifiés séparément)
-          pytest tests/test_heuristics.py tests/test_solver.py tests/test_autonomous_manager.py \
-            --cov=services/unified_dispatch/heuristics.py \
-            --cov=services/unified_dispatch/solver.py \
-            --cov=services/unified_dispatch/autonomous_manager.py \
+          pytest backend/tests/test_heuristics.py backend/tests/test_solver.py backend/tests/test_autonomous_manager.py \
+            --cov=backend/services/unified_dispatch/heuristics.py \
+            --cov=backend/services/unified_dispatch/solver.py \
+            --cov=backend/services/unified_dispatch/autonomous_manager.py \
             --cov-report=term-missing \
             --cov-fail-under=80 \
             -v
 
           # Vérifier autres modules critiques via script
+          cd backend
           python scripts/check_coverage.py \
             --coverage-xml coverage.xml \
             --fail-under 80.0 \
@@ -218,6 +224,7 @@ jobs:
           name: backend-coverage-report
           path: |
             backend/htmlcov/
+            backend/coverage.xml
             backend/coverage_report.json
           retention-days: 7
 
