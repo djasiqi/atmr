@@ -89,7 +89,7 @@ def sample_company(db, sample_user):
     company.contact_email = "contact@test-transport.ch"
     company.user_id = sample_user.id
     db.session.add(company)
-    db.session.commit()
+    db.session.flush()  # Use flush instead of commit to work with savepoints
     return company
 
 
@@ -107,7 +107,7 @@ def sample_user(db):
     user.set_password("password123", force_change=False)
 
     db.session.add(user)
-    db.session.commit()
+    db.session.flush()  # Use flush instead of commit to work with savepoints
     db.session.refresh(user)
     return user
 
@@ -233,19 +233,24 @@ def simple_assignment(db, simple_booking, simple_driver):
 @pytest.fixture
 def sample_client(db, sample_company):
     """Crée un client de test avec utilisateur associé."""
+    import uuid
+
     from ext import bcrypt
     from models.client import Client
     from models.enums import UserRole
     from models.user import User
 
+    # Utiliser un email unique pour éviter les conflits
+    unique_suffix = str(uuid.uuid4())[:8]
     user = User()
-    user.username = "clientuser"
-    user.email = "client@example.com"
+    user.username = f"clientuser_{unique_suffix}"
+    user.email = f"client-{unique_suffix}@example.com"
     user.role = UserRole.client
     user.first_name = "Jean"
     user.last_name = "Dupont"
     user.phone = "0791234567"
     user.address = "Rue Client 1, 1000 Lausanne"
+    user.public_id = str(uuid.uuid4())
     password_hash = bcrypt.generate_password_hash("password123")
     user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash  # type: ignore[unnecessary-isinstance]
     db.session.add(user)
@@ -255,10 +260,10 @@ def sample_client(db, sample_company):
     client.user_id = user.id
     client.company_id = sample_company.id
     client.billing_address = "Rue Client 1, 1000 Lausanne"
-    client.contact_email = "client@example.com"
+    client.contact_email = user.email
     client.contact_phone = "0791234567"
     db.session.add(client)
-    db.session.commit()
+    db.session.flush()  # Use flush instead of commit to work with savepoints
     return client
 
 

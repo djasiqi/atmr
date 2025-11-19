@@ -33,9 +33,9 @@ def sample_driver(db, sample_company):
     db.session.add(user)
     db.session.flush()
 
-    driver = Driver(user_id=user.id, company_id=sample_company.id, license_number="CH123456", is_available=True)
+    driver = Driver(user_id=user.id, company_id=sample_company.id, is_available=True)
     db.session.add(driver)
-    db.session.commit()
+    db.session.flush()  # Use flush instead of commit to work with savepoints
     return driver
 
 

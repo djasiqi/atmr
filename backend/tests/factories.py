@@ -41,7 +41,7 @@ class SQLAlchemyModelFactory(factory.alchemy.SQLAlchemyModelFactory):
     class Meta:
         abstract = True
         sqlalchemy_session = db.session
-        sqlalchemy_session_persistence = "commit"
+        sqlalchemy_session_persistence = "flush"  # Use flush instead of commit to work with savepoints
 
 
 # ========== USER & COMPANY ==========
@@ -149,7 +149,7 @@ class VehicleFactory(SQLAlchemyModelFactory):
     brand = factory.LazyAttribute(lambda _: fake.company()[:50])
     model = factory.LazyAttribute(lambda _: fake.word().capitalize()[:50])
     license_plate = factory.LazyAttribute(lambda _: f"{fake.lexify('??')}-{fake.numerify('####')}")
-    year = factory.LazyAttribute(lambda _: fake.random_int(min=0.2010, max=0.2025))
+    year = factory.LazyAttribute(lambda _: fake.random_int(min=2010, max=2025))
 
     capacity_passengers = fuzzy.FuzzyInteger(4, 8)
     capacity_wheelchairs = fuzzy.FuzzyInteger(0, 2)
@@ -188,8 +188,8 @@ class BookingFactory(SQLAlchemyModelFactory):
     company = factory.SubFactory(CompanyFactory)
     user_id = factory.LazyAttribute(lambda obj: obj.client.user.id if obj.client else None)
 
-    duration_seconds = factory.LazyAttribute(lambda _: fake.random_int(min=0.600, max=0.3600))
-    distance_meters = factory.LazyAttribute(lambda _: fake.random_int(min=0.1000, max=0.50000))
+    duration_seconds = factory.LazyAttribute(lambda _: fake.random_int(min=600, max=3600))
+    distance_meters = factory.LazyAttribute(lambda _: fake.random_int(min=1000, max=50000))
 
     wheelchair_client_has = False
     wheelchair_need = False
@@ -413,7 +413,7 @@ def create_dispatch_scenario(
     # Créer dispatch run
     dispatch_run = DispatchRunFactory(company=company, day=dispatch_day, status=DispatchStatus.PENDING)
 
-    db.session.commit()
+    db.session.flush()  # Use flush instead of commit to work with savepoints
 
     return {
         "company": company,
