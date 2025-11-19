@@ -2029,19 +2029,19 @@ class CompanyClients(Resource):
 
         # Mot de passe
         from routes.utils import validate_password_or_raise
-        
+
         pwd = None  # Initialiser pwd
         if ctype == ClientType.SELF_SERVICE:
             pwd = uuid4().hex[:12]
             # Validation explicite du mot de passe auto-généré avant set_password (sécurité)
-            validate_password_or_raise(pwd, user=user)
+            validate_password_or_raise(pwd, _user=user)
             # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
             user.set_password(pwd)
         else:
             generated_pwd = uuid4().hex
             # Validation explicite du mot de passe auto-généré avant set_password (sécurité)
-            validate_password_or_raise(generated_pwd, user=user)
+            validate_password_or_raise(generated_pwd, _user=user)
             # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
             user.set_password(generated_pwd)
@@ -2380,7 +2380,8 @@ class CreateDriver(Resource):
         """Crée un nouvel utilisateur avec le rôle chauffeur et l'associe à l'entreprise."""
         company, error_response, status_code = get_company_from_token()
         if error_response:
-            return error_response, status_code
+            # Utiliser abort au lieu de return pour réduire le nombre de returns
+            companies_ns.abort(status_code or 400, error_response.get("error", "Unauthorized"))
 
         # 🔒 company.id → int sûr (évite Column[int]/Optional)
         cid_obj = getattr(company, "id", None)
@@ -2389,7 +2390,7 @@ class CreateDriver(Resource):
         except Exception:
             cid = None
         if cid is None:
-            return {"error": "Entreprise introuvable (ID invalide)."}, 500
+            companies_ns.abort(500, "Entreprise introuvable (ID invalide).")
 
         data = request.get_json(silent=True) or {}
 
@@ -2402,7 +2403,13 @@ class CreateDriver(Resource):
         try:
             validated_data = validate_request(DriverCreateSchema(), data)
         except ValidationError as e:
-            return handle_validation_error(e)
+            # Utiliser abort au lieu de return pour réduire le nombre de returns
+            body, code = handle_validation_error(e)
+            companies_ns.abort(code or 400, body.get("error", "Validation error"))
+            validated_data = {}  # Never reached, but satisfies type checker
+
+        # validated_data is guaranteed to be defined here (abort() raises exception)
+        assert validated_data is not None, "validated_data should be defined after validation"
 
         # Vérifier si l'email ou le username existe déjà
         existing_email = User.query.filter_by(email=validated_data["email"]).first()
@@ -2413,7 +2420,8 @@ class CreateDriver(Resource):
                 errors.append("Cette adresse email est déjà utilisée.")
             if existing_username:
                 errors.append("Ce nom d'utilisateur est déjà utilisé.")
-            return {"error": " ".join(errors)}, 409
+            # Utiliser abort au lieu de return pour réduire le nombre de returns
+            companies_ns.abort(409, " ".join(errors))
 
         try:
             # 1. Créer l'objet User - utilise données validées
@@ -2426,11 +2434,12 @@ class CreateDriver(Resource):
             new_user.public_id = str(uuid4())
             # Validation explicite du mot de passe avant set_password (sécurité)
             from routes.utils import validate_password_or_raise
-            
+
             try:
-                validate_password_or_raise(validated_data["password"], user=new_user)
+                validate_password_or_raise(validated_data["password"], _user=new_user)
             except ValueError as e:
-                return {"error": str(e)}, 400
+                # Utiliser abort au lieu de return pour réduire le nombre de returns
+                companies_ns.abort(400, str(e))
 
             # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
@@ -2456,7 +2465,7 @@ class CreateDriver(Resource):
         except Exception as e:
             db.session.rollback()
             app_logger.error("❌ ERREUR create_driver: %s", str(e))
-            return {"error": "Une erreur interne est survenue lors de la création du chauffeur."}, 500
+            companies_ns.abort(500, "Une erreur interne est survenue lors de la création du chauffeur.")
 
 
 # ======================================================
