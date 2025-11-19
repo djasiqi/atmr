@@ -2,6 +2,7 @@
 
 import { Tabs } from "expo-router";
 import React from "react";
+import { View } from "react-native";
 
 import { HapticTab } from "@/components/HapticTab";
 import { IconSymbol } from "@/components/ui/IconSymbol";
@@ -19,8 +20,8 @@ export default function TabLayout() {
         tabBarStyle: tabBarStyles.tabBarStyle,
         tabBarItemStyle: tabBarStyles.tabBarItemStyle,
         tabBarLabelStyle: tabBarStyles.tabBarLabelStyle,
-        tabBarActiveTintColor: "#FFFFFF", // Blanc pur pour l'onglet actif
-        tabBarInactiveTintColor: "#B2DFDB", // Même couleur que le header subtitle
+        tabBarActiveTintColor: tabBarStyles.palette.label, // #0A7F59 - Vert accent pour l'onglet actif
+        tabBarInactiveTintColor: tabBarStyles.palette.labelInactive, // #5F7369 - Gris secondaire pour les onglets inactifs
       }}
     >
       <Tabs.Screen
@@ -28,7 +29,9 @@ export default function TabLayout() {
         options={{
           title: "Mission",
           tabBarIcon: ({ color }) => (
-            <IconSymbol name="car.fill" size={24} color={color} />
+            <View style={tabBarStyles.tabBarIconContainer}>
+              <IconSymbol name="car.fill" size={24} color={color} />
+            </View>
           ),
         }}
       />
@@ -37,7 +40,9 @@ export default function TabLayout() {
         options={{
           title: "Courses",
           tabBarIcon: ({ color }) => (
-            <IconSymbol name="list.bullet.rectangle" size={24} color={color} />
+            <View style={tabBarStyles.tabBarIconContainer}>
+              <IconSymbol name="list.bullet.rectangle" size={24} color={color} />
+            </View>
           ),
         }}
       />
@@ -46,7 +51,9 @@ export default function TabLayout() {
         options={{
           title: "Équipe",
           tabBarIcon: ({ color }) => (
-            <IconSymbol name="person.2.fill" size={24} color={color} />
+            <View style={tabBarStyles.tabBarIconContainer}>
+              <IconSymbol name="person.2.fill" size={24} color={color} />
+            </View>
           ),
         }}
       />
@@ -55,7 +62,9 @@ export default function TabLayout() {
         options={{
           title: "Profil",
           tabBarIcon: ({ color }) => (
-            <IconSymbol name="person.circle.fill" size={24} color={color} />
+            <View style={tabBarStyles.tabBarIconContainer}>
+              <IconSymbol name="person.circle.fill" size={24} color={color} />
+            </View>
           ),
         }}
       />

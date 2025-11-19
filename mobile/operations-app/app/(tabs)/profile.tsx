@@ -5,18 +5,16 @@ import {
   Alert,
   TouchableOpacity,
   Image,
-  StyleSheet,
+  Text,
   Modal,
 } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { updateDriverProfile, updateDriverPhoto } from "@/services/api";
 import { InputField } from "@/components/ui/InputField";
-import { Button } from "@/components/ui/Button";
 import { Loader } from "@/components/ui/Loader";
-import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import { profileStyles } from "@/styles/profileStyles";
 
 // Import direct de l'image par défaut
 import DefaultDriver from "../../assets/images/default-driver.png";
@@ -154,48 +152,50 @@ export default function ProfileScreen() {
 
   if (!driver) {
     return (
-      <ThemedView className="flex-1 justify-center items-center">
-        <Loader />
-      </ThemedView>
+      <View style={profileStyles.container}>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <Loader />
+        </View>
+      </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={profileStyles.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        style={styles.scrollContainer}
+        style={profileStyles.scrollContainer}
       >
         {/* Header avec photo intégrée */}
-        <View style={styles.headerGradient}>
-          <View style={styles.headerContent}>
-            <View style={styles.headerText}>
-              <ThemedText style={styles.headerTitle}>
+        <View style={profileStyles.headerGradient}>
+          <View style={profileStyles.headerContent}>
+            <View style={profileStyles.headerText}>
+              <Text style={profileStyles.headerTitle}>
                 {driver?.first_name} {driver?.last_name}
-              </ThemedText>
+              </Text>
             </View>
             <TouchableOpacity
-              style={styles.headerPhotoContainer}
+              style={profileStyles.headerPhotoContainer}
               onPress={showPhotoOptions}
             >
               <Image
                 source={form.photo ? { uri: form.photo } : DefaultDriver}
-                style={styles.headerPhoto}
+                style={profileStyles.headerPhoto}
               />
-              <View style={styles.headerPhotoOverlay}>
-                <Ionicons name="camera" size={16} color="white" />
+              <View style={profileStyles.headerPhotoOverlay}>
+                <Ionicons name="camera" size={16} color="#FFFFFF" />
               </View>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Section Informations Personnelles */}
-        <View style={styles.cardContainer}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="person-outline" size={20} color="#00796B" />
-            <ThemedText style={styles.cardTitle}>
+        <View style={profileStyles.cardContainer}>
+          <View style={profileStyles.cardHeader}>
+            <Ionicons name="person-outline" size={22} color="#0A7F59" />
+            <Text style={profileStyles.cardTitle}>
               Informations Personnelles
-            </ThemedText>
+            </Text>
           </View>
 
           <InputField
@@ -225,10 +225,10 @@ export default function ProfileScreen() {
         </View>
 
         {/* Section Véhicule */}
-        <View style={styles.cardContainer}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="car-outline" size={20} color="#00796B" />
-            <ThemedText style={styles.cardTitle}>Mon Véhicule</ThemedText>
+        <View style={profileStyles.cardContainer}>
+          <View style={profileStyles.cardHeader}>
+            <Ionicons name="car-outline" size={22} color="#0A7F59" />
+            <Text style={profileStyles.cardTitle}>Mon Véhicule</Text>
           </View>
 
           <InputField
@@ -261,31 +261,31 @@ export default function ProfileScreen() {
         </View>
 
         {/* Actions */}
-        <View style={styles.actionsContainer}>
+        <View style={profileStyles.actionsContainer}>
           <TouchableOpacity
-            style={styles.saveButton}
+            style={profileStyles.saveButton}
             onPress={handleSaveProfile}
             disabled={profileLoading}
           >
-            <Ionicons name="save-outline" size={20} color="white" />
-            <ThemedText style={styles.saveButtonText}>
+            <Ionicons name="save-outline" size={20} color="#FFFFFF" />
+            <Text style={profileStyles.saveButtonText}>
               {profileLoading
                 ? "Enregistrement..."
                 : "Enregistrer les modifications"}
-            </ThemedText>
+            </Text>
           </TouchableOpacity>
 
           {/* Bouton de déconnexion */}
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={20} color="white" />
-            <ThemedText style={styles.logoutButtonText}>
+          <TouchableOpacity style={profileStyles.logoutButton} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
+            <Text style={profileStyles.logoutButtonText}>
               Se déconnecter
-            </ThemedText>
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* Espacement final */}
-        <View style={styles.bottomSpacing} />
+        <View style={profileStyles.bottomSpacing} />
       </ScrollView>
 
       {/* Modal de sélection photo */}
@@ -295,49 +295,53 @@ export default function ProfileScreen() {
         animationType="fade"
         onRequestClose={() => setPhotoModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <ThemedText style={styles.modalTitle}>
+        <View style={profileStyles.modalOverlay}>
+          <View style={profileStyles.modalContainer}>
+            <View style={profileStyles.modalHeader}>
+              <Text style={profileStyles.modalTitle}>
                 Modifier la photo
-              </ThemedText>
+              </Text>
               <TouchableOpacity
-                style={styles.modalCloseButton}
+                style={profileStyles.modalCloseButton}
                 onPress={() => setPhotoModalVisible(false)}
               >
-                <Ionicons name="close" size={24} color="#666" />
+                <Ionicons name="close" size={24} color="#5F7369" />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalContent}>
+            <View style={profileStyles.modalContent}>
               <TouchableOpacity
-                style={styles.modalOption}
+                style={profileStyles.modalOption}
                 onPress={() => handlePhotoSelection("camera")}
               >
-                <View style={styles.modalOptionIcon}>
-                  <Ionicons name="camera" size={32} color="#00796B" />
+                <View style={profileStyles.modalOptionIcon}>
+                  <Ionicons name="camera" size={28} color="#0A7F59" />
                 </View>
-                <ThemedText style={styles.modalOptionText}>
-                  Prendre une photo
-                </ThemedText>
-                <ThemedText style={styles.modalOptionSubtext}>
-                  Utiliser la caméra
-                </ThemedText>
+                <View style={{ flex: 1 }}>
+                  <Text style={profileStyles.modalOptionText}>
+                    Prendre une photo
+                  </Text>
+                  <Text style={profileStyles.modalOptionSubtext}>
+                    Utiliser la caméra
+                  </Text>
+                </View>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.modalOption}
+                style={profileStyles.modalOption}
                 onPress={() => handlePhotoSelection("gallery")}
               >
-                <View style={styles.modalOptionIcon}>
-                  <Ionicons name="images" size={32} color="#00796B" />
+                <View style={profileStyles.modalOptionIcon}>
+                  <Ionicons name="images" size={28} color="#0A7F59" />
                 </View>
-                <ThemedText style={styles.modalOptionText}>
-                  Choisir depuis la galerie
-                </ThemedText>
-                <ThemedText style={styles.modalOptionSubtext}>
-                  Sélectionner une image existante
-                </ThemedText>
+                <View style={{ flex: 1 }}>
+                  <Text style={profileStyles.modalOptionText}>
+                    Choisir depuis la galerie
+                  </Text>
+                  <Text style={profileStyles.modalOptionSubtext}>
+                    Sélectionner une image existante
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
@@ -351,49 +355,49 @@ export default function ProfileScreen() {
         animationType="fade"
         onRequestClose={() => setLogoutModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.logoutModalContainer}>
-            <View style={styles.logoutModalHeader}>
-              <View style={styles.logoutIconContainer}>
-                <Ionicons name="log-out-outline" size={32} color="#D32F2F" />
+        <View style={profileStyles.modalOverlay}>
+          <View style={profileStyles.logoutModalContainer}>
+            <View style={profileStyles.logoutModalHeader}>
+              <View style={profileStyles.logoutIconContainer}>
+                <Ionicons name="log-out-outline" size={28} color="#D32F2F" />
               </View>
-              <ThemedText style={styles.logoutModalTitle}>
+              <Text style={profileStyles.logoutModalTitle}>
                 Déconnexion
-              </ThemedText>
+              </Text>
               <TouchableOpacity
-                style={styles.modalCloseButton}
+                style={profileStyles.modalCloseButton}
                 onPress={() => setLogoutModalVisible(false)}
               >
-                <Ionicons name="close" size={24} color="#666" />
+                <Ionicons name="close" size={24} color="#5F7369" />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.logoutModalContent}>
-              <ThemedText style={styles.logoutModalMessage}>
+            <View style={profileStyles.logoutModalContent}>
+              <Text style={profileStyles.logoutModalMessage}>
                 Êtes-vous sûr de vouloir vous déconnecter ?
-              </ThemedText>
-              <ThemedText style={styles.logoutModalSubtext}>
+              </Text>
+              <Text style={profileStyles.logoutModalSubtext}>
                 Vous devrez vous reconnecter pour accéder à l'application
-              </ThemedText>
+              </Text>
 
-              <View style={styles.logoutModalActions}>
+              <View style={profileStyles.logoutModalActions}>
                 <TouchableOpacity
-                  style={styles.logoutCancelButton}
+                  style={profileStyles.logoutCancelButton}
                   onPress={() => setLogoutModalVisible(false)}
                 >
-                  <ThemedText style={styles.logoutCancelButtonText}>
+                  <Text style={profileStyles.logoutCancelButtonText}>
                     Annuler
-                  </ThemedText>
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.logoutConfirmButton}
+                  style={profileStyles.logoutConfirmButton}
                   onPress={confirmLogout}
                 >
-                  <Ionicons name="log-out-outline" size={20} color="white" />
-                  <ThemedText style={styles.logoutConfirmButtonText}>
+                  <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
+                  <Text style={profileStyles.logoutConfirmButtonText}>
                     Se déconnecter
-                  </ThemedText>
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -403,349 +407,3 @@ export default function ProfileScreen() {
     </View>
   );
 }
-
-// Styles modernes avec photo dans le header et modal amélioré
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F7F9FB",
-  },
-
-  scrollContainer: {
-    flex: 1,
-  },
-
-  // Header avec photo intégrée
-  headerGradient: {
-    backgroundColor: "#004D40",
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 16,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-
-  headerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  headerText: {
-    flex: 1,
-  },
-
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-
-  headerPhotoContainer: {
-    position: "relative",
-    marginLeft: 16,
-  },
-
-  headerPhoto: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "#E0E0E0",
-    borderWidth: 3,
-    borderColor: "#FFFFFF",
-  },
-
-  headerPhotoOverlay: {
-    position: "absolute",
-    bottom: -2,
-    right: -2,
-    backgroundColor: "#00796B",
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
-  },
-
-  // Cartes de contenu
-  cardContainer: {
-    backgroundColor: "#FFFFFF",
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 16,
-    padding: 18,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-  },
-
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
-  },
-
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#004D40",
-    marginLeft: 12,
-    flex: 1,
-  },
-
-  // Actions
-  actionsContainer: {
-    paddingHorizontal: 16,
-    marginVertical: 12,
-  },
-
-  saveButton: {
-    backgroundColor: "#00796B",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    shadowColor: "#00796B",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-    marginBottom: 12,
-  },
-
-  saveButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-
-  // Bouton de déconnexion
-  logoutButton: {
-    backgroundColor: "#D32F2F",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    shadowColor: "#D32F2F",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-
-  logoutButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-
-  // Espacement final
-  bottomSpacing: {
-    height: 80,
-  },
-
-  // Modal de sélection photo
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-
-  modalContainer: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    width: "100%",
-    maxWidth: 400,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
-  },
-
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#004D40",
-  },
-
-  modalCloseButton: {
-    padding: 4,
-  },
-
-  modalContent: {
-    padding: 20,
-  },
-
-  modalOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginBottom: 8,
-    backgroundColor: "#F8F9FA",
-    borderWidth: 1,
-    borderColor: "#E9ECEF",
-  },
-
-  modalOptionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#E8F5E8",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 16,
-  },
-
-  modalOptionText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#004D40",
-    flex: 1,
-  },
-
-  modalOptionSubtext: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 2,
-  },
-
-  // Modal de déconnexion
-  logoutModalContainer: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    width: "90%",
-    maxWidth: 400,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-
-  logoutModalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
-  },
-
-  logoutIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#FFEBEE",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-
-  logoutModalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#004D40",
-    flex: 1,
-  },
-
-  logoutModalContent: {
-    padding: 20,
-  },
-
-  logoutModalMessage: {
-    fontSize: 16,
-    color: "#374151",
-    textAlign: "center",
-    marginBottom: 8,
-    fontWeight: "500",
-  },
-
-  logoutModalSubtext: {
-    fontSize: 14,
-    color: "#6B7280",
-    textAlign: "center",
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-
-  logoutModalActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-
-  logoutCancelButton: {
-    flex: 1,
-    backgroundColor: "#F3F4F6",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-  },
-
-  logoutCancelButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#374151",
-  },
-
-  logoutConfirmButton: {
-    flex: 1,
-    backgroundColor: "#D32F2F",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
-    shadowColor: "#D32F2F",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-
-  logoutConfirmButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#FFFFFF",
-    marginLeft: 8,
-  },
-});

@@ -10,6 +10,9 @@ import { useAuth } from "@/hooks/useAuth";
 import api from "@/services/api";
 import { getErrorMessage, logError } from "@/utils/errorHandler";
 
+// Détecter si on est en dev/local
+const isDevLocal = __DEV__ === true || Constants.executionEnvironment === "bare";
+
 // 🔔 Configuration du comportement des notifications en mode foreground
 const foregroundBehavior: NotificationBehavior = {
   shouldShowAlert: true,
@@ -52,9 +55,13 @@ export const useNotifications = () => {
         // Cast fort en entier pour correspondre au backend (évite "ID du chauffeur invalide ou manquant.")
         const driverId = Number((driver as any)?.id);
         if (!token || !Number.isInteger(driverId)) {
-          console.warn(
-            "⛔ Token ou ID de chauffeur invalide, enregistrement annulé."
-          );
+          // En dev/local sans Firebase, c'est normal de ne pas avoir de token
+          const isDevLocal = __DEV__ === true || Constants.executionEnvironment === "bare";
+          if (isDevLocal && !token) {
+            console.log("ℹ️ Pas de token push en dev/local - normal sans Firebase");
+          } else {
+            console.warn("⛔ Token ou ID de chauffeur invalide, enregistrement annulé.");
+          }
           return;
         }
         // ✅ FIX: Sauvegarder driver_id dans AsyncStorage pour Socket.IO
@@ -103,7 +110,14 @@ export const useNotifications = () => {
           );
         }
       } catch (error: unknown) {
-        logError("Erreur durant la configuration des notifications", error);
+        const errorMessage = getErrorMessage(error);
+        
+        // Ne pas logger comme erreur si c'est FIS_AUTH_ERROR (normal en dev/local)
+        if (errorMessage.includes("FIS_AUTH_ERROR")) {
+          console.warn("⚠️ Firebase Error lors de la configuration des notifications - normal en dev/local");
+        } else {
+          logError("Erreur durant la configuration des notifications", error);
+        }
       }
     };
 
@@ -182,11 +196,27 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
 
     return token.data;
   } catch (error: unknown) {
-    logError("Error registering for notifications", error);
-
     const errorMessage = getErrorMessage(error);
-    if (errorMessage.includes("FIS_AUTH_ERROR")) {
-      console.warn("⚠️ Firebase Error - Expo token should still work");
+    
+    // Ne pas logger comme erreur si c'est une erreur Firebase (normal en dev/local)
+    // Détecter plusieurs variantes d'erreurs Firebase
+    const isFirebaseError = 
+      errorMessage.includes("FIS_AUTH_ERROR") ||
+      errorMessage.includes("Missing FIS auth token") ||
+      errorMessage.includes("FIS_AUTH") ||
+      errorMessage.includes("Firebase") && errorMessage.includes("auth");
+    
+    if (isFirebaseError) {
+      // En dev/local, juste un log informatif, pas d'erreur
+      const isDevLocal = __DEV__ || process.env.NODE_ENV === "development";
+      if (isDevLocal) {
+        console.log("ℹ️ Erreur Firebase en dev/local - Firebase non accessible, c'est normal");
+      } else {
+        console.warn("⚠️ Firebase Error - Expo token should still work");
+      }
+    } else {
+      // Logger uniquement les vraies erreurs
+      logError("Error registering for notifications", error);
     }
 
     return null;

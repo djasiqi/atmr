@@ -12,8 +12,17 @@ import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { registerPushToken } from "@/services/api"; // si l'alias '@' n'est pas configuré: ../services/api
 
-// ✅ Enregistrer la tâche de localisation en arrière-plan
-import "@/tasks/locationTask";
+// ✅ Enregistrer la tâche de localisation en arrière-plan (uniquement si le module natif est disponible)
+// Note: expo-task-manager nécessite un rebuild natif. En développement avec Expo Go, on skip.
+if (Platform.OS !== "web") {
+  try {
+    require("@/tasks/locationTask");
+  } catch (error) {
+    // Module natif non disponible (Expo Go ou build non mis à jour)
+    // C'est normal en développement, le tracking arrière-plan nécessite un development build
+    console.log("ℹ️ TaskManager non disponible (normal en Expo Go, nécessite un development build)");
+  }
+}
 
 Sentry.init({
   dsn: "https://500ea836dce2e802b27109d857cb3534@o4509736814772224.ingest.de.sentry.io/4509736867201104",
@@ -143,7 +152,13 @@ function RootNav() {
         const tokenToUse = device || expo;
 
         if (!tokenToUse) {
-          console.warn("⚠️ Aucun token push disponible (APK sans Firebase ?)");
+          // En dev/local, c'est normal de ne pas avoir de token
+          const isDevLocal = __DEV__ === true || Constants.executionEnvironment === "bare";
+          if (isDevLocal) {
+            console.log("ℹ️ Pas de token push en dev/local - normal sans Firebase");
+          } else {
+            console.warn("⚠️ Aucun token push disponible (APK sans Firebase ?)");
+          }
           return;
         }
 

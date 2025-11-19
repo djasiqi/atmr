@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+import sqlalchemy as sa
 from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, Text, func
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
@@ -33,6 +34,12 @@ class Message(db.Model):
 
     sender_role = Column(SAEnum(SenderRole, name="sender_role"), nullable=False)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Support pour images et PDF
+    image_url = Column(sa.String(500), nullable=True)
+    pdf_url = Column(sa.String(500), nullable=True)
+    pdf_filename = Column(sa.String(255), nullable=True)
+    pdf_size = Column(Integer, nullable=True)
 
     timestamp = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
     is_read = Column(Boolean, nullable=False, default=False)
@@ -69,6 +76,11 @@ class Message(db.Model):
             "content": self.content,
             "timestamp": _iso(self.timestamp),
             "is_read": _as_bool(self.is_read),
+            # Support pour images et PDF
+            "image_url": getattr(self, "image_url", None),
+            "pdf_url": getattr(self, "pdf_url", None),
+            "pdf_filename": getattr(self, "pdf_filename", None),
+            "pdf_size": getattr(self, "pdf_size", None),
         }
 
     # Validateurs

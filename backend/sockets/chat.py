@@ -15,6 +15,7 @@ from flask_socketio import SocketIO, emit, join_room
 
 from ext import db, redis_client
 from models import Company, Driver, Message, SenderRole, User, UserRole
+from services.spam_protection import can_send_message
 
 # Constantes pour éviter les valeurs magiques
 RECEIVER_ID_ZERO = 0
@@ -169,22 +170,46 @@ def init_chat_socket(socketio: SocketIO):
                 emit("error", {"error": "Utilisateur non reconnu."})
                 return
 
+            # ✅ Anti-spam: vérifier le taux d'envoi (1 message/seconde)
+            allowed, spam_error = can_send_message(user.id)
+            if not allowed:
+                logger.warning("🚫 [CHAT] Anti-spam: Utilisateur %s - %s", user.id, spam_error)
+                emit("error", {"error": spam_error or "Trop de messages. Attendez 1 seconde."})
+                return
+
             content_raw = data.get("content")
             logger.info("📨 [CHAT] Content brut reçu: %s (type=%s)", content_raw, type(content_raw).__name__)
-            content = (content_raw or "").strip()
+            content = (content_raw or "").strip() if content_raw else ""
             logger.info("📨 [CHAT] Content après strip: '%s' (len=%d, bool=%s)", content, len(content), bool(content))
 
-            # ✅ Validation longueur message
-            if len(content) > MAX_MESSAGE_LENGTH:
+            # Support pour images et PDF
+            image_url = data.get("image_url") or data.get("image")
+            pdf_url = data.get("pdf_url") or data.get("pdf")
+            pdf_filename = data.get("pdf_filename")
+            pdf_size = data.get("pdf_size")
+
+            # ✅ Limite: 1 fichier par message (image OU PDF, pas les deux)
+            has_image = bool(image_url)
+            has_pdf = bool(pdf_url)
+            if has_image and has_pdf:
+                logger.error("❌ [CHAT] Limite: 1 fichier par message (image OU PDF, pas les deux)")
+                emit("error", {"error": "Limite: 1 fichier par message. Choisissez une image OU un PDF."})
+                return
+
+            # ✅ Validation : le message doit avoir au moins du contenu texte, une image ou un PDF
+            has_content = bool(content)
+            if not (has_content or has_image or has_pdf):
+                logger.error("❌ [CHAT] Message vide : ni contenu, ni image, ni PDF")
+                emit("error", {"error": "Le message doit contenir du texte, une image ou un PDF."})
+                return
+
+            # ✅ Validation longueur message (si contenu texte présent)
+            if has_content and len(content) > MAX_MESSAGE_LENGTH:
                 emit("error", {"error": f"Message trop long (max {MAX_MESSAGE_LENGTH} caractères)."})
                 return
 
             receiver_id = data.get("receiver_id")
             timestamp = datetime.now(UTC)
-            if not content:
-                logger.error("❌ [CHAT] Message vide détecté après validation")
-                emit("error", {"error": "Message vide non autorisé."})
-                return
 
             # ✅ Validation receiver_id si fourni
             if receiver_id is not None:
@@ -234,26 +259,33 @@ def init_chat_socket(socketio: SocketIO):
             MessageCtor = cast("Any", Message)
             try:
                 # ✅ Vérifier que le contenu n'est pas vide avant de créer le message
-                content_final = content.strip() if content else ""
+                # Permettre None si seulement image/PDF
+                content_final = content.strip() if content else None
                 logger.info(
-                    "📨 [CHAT] Contenu final avant création: '%s' (len=%d, type=%s)",
-                    content_final,
-                    len(content_final),
-                    type(content_final).__name__,
+                    "📨 [CHAT] Contenu final avant création: '%s' (len=%d, type=%s, has_image=%s, has_pdf=%s)",
+                    content_final or "(vide)",
+                    len(content_final) if content_final else 0,
+                    type(content_final).__name__ if content_final else "None",
+                    has_image,
+                    has_pdf,
                 )
-                if not content_final:
-                    logger.error("❌ [CHAT] Contenu vide détecté juste avant création: content='%s'", content)
-                    emit("error", {"error": "Le contenu du message ne peut pas être vide."})
-                    return
+                # Validation déjà faite plus haut : au moins content, image ou PDF
 
-                logger.info("📨 [CHAT] Création de l'objet Message avec content='%s'", content_final[:100])
+                logger.info(
+                    "📨 [CHAT] Création de l'objet Message avec content='%s'",
+                    content_final[:100] if content_final else "(vide)",
+                )
                 message = MessageCtor(
                     sender_id=sender_id,
                     receiver_id=receiver_id,
                     company_id=company_id,
                     sender_role=sender_role,
-                    content=content_final,  # ✅ FIX: Utiliser le contenu réel et s'assurer qu'il est stripé
+                    content=content_final if content_final else None,  # Permettre None si seulement image/PDF
                     timestamp=timestamp,
+                    image_url=image_url if has_image else None,
+                    pdf_url=pdf_url if has_pdf else None,
+                    pdf_filename=pdf_filename if has_pdf else None,
+                    pdf_size=int(pdf_size) if has_pdf and pdf_size else None,
                 )
                 logger.info(
                     "📨 [CHAT] Message créé avec succès, id=%s, content vérifié='%s'",
@@ -292,6 +324,11 @@ def init_chat_socket(socketio: SocketIO):
                 # ✅ FIX: company_name disponible
                 "company_name": (company_obj.name if (sender_role == SenderRole.COMPANY and company_obj) else None),
                 "_localId": local_id,
+                # Support pour images et PDF
+                "image_url": image_url if has_image else None,
+                "pdf_url": pdf_url if has_pdf else None,
+                "pdf_filename": pdf_filename if has_pdf else None,
+                "pdf_size": int(pdf_size) if has_pdf and pdf_size else None,
             }
 
             room = f"company_{company_id}"
@@ -308,6 +345,46 @@ def init_chat_socket(socketio: SocketIO):
         except Exception as e:
             logger.exception("❌ Erreur team_chat_message : %s", e)
             emit("error", {"error": "Erreur d'envoi de message."})
+
+    @socketio.on("typing_start")
+    def handle_typing_start(data=None):  # noqa: ARG001
+        """Handler pour l'indicateur de frappe (typing indicator)."""
+        try:
+            sid = _get_sid()
+            sid_data = _SID_INDEX.get(sid, {})
+            user_public_id = sid_data.get("user_public_id")
+            company_id = sid_data.get("company_id")
+
+            if not user_public_id or not company_id:
+                return
+
+            # Diffuser l'indicateur de frappe à la room de l'entreprise
+            room = f"company_{company_id}"
+            cast("Any", emit)("typing_start", {"user_id": user_public_id}, room=room, skip_sid=sid)
+            logger.debug("⌨️ typing_start de %s dans %s", user_public_id, room)
+
+        except Exception as e:
+            logger.exception("❌ Erreur typing_start : %s", e)
+
+    @socketio.on("typing_stop")
+    def handle_typing_stop(data=None):  # noqa: ARG001
+        """Handler pour arrêter l'indicateur de frappe."""
+        try:
+            sid = _get_sid()
+            sid_data = _SID_INDEX.get(sid, {})
+            user_public_id = sid_data.get("user_public_id")
+            company_id = sid_data.get("company_id")
+
+            if not user_public_id or not company_id:
+                return
+
+            # Diffuser l'arrêt de frappe à la room de l'entreprise
+            room = f"company_{company_id}"
+            cast("Any", emit)("typing_stop", {"user_id": user_public_id}, room=room, skip_sid=sid)
+            logger.debug("⌨️ typing_stop de %s dans %s", user_public_id, room)
+
+        except Exception as e:
+            logger.exception("❌ Erreur typing_stop : %s", e)
 
     @socketio.on("join_driver_room")
     def handle_join_driver_room(data=None):  # noqa: ARG001
@@ -726,6 +803,8 @@ def init_chat_socket(socketio: SocketIO):
     _registered_handlers = (
         handle_connect,
         handle_team_chat,
+        handle_typing_start,
+        handle_typing_stop,
         handle_join_driver_room,
         handle_driver_location,
         handle_driver_location_batch,

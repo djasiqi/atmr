@@ -425,6 +425,13 @@ export type Message = {
   sender_name?: string | null;
   receiver_name?: string | null;
   _localId?: string | null;
+  // Support pour images et PDF
+  image?: string | null;
+  image_url?: string | null;
+  pdf?: string | null;
+  pdf_url?: string | null;
+  pdf_filename?: string | null;
+  pdf_size?: number | null;
 };
 export const getCompanyMessages = async (
   companyId: number

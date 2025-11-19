@@ -1,549 +1,862 @@
-import React, { useCallback, useRef, useState } from "react";
+// app/(enterprise)/chat.tsx
+// ✅ Version améliorée WhatsApp-like avec les mêmes composants que le chat chauffeur
+
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
+  View,
   Text,
+  FlatList,
   TextInput,
   TouchableOpacity,
-  View,
+  KeyboardAvoidingView,
+  Keyboard,
+  Platform,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+  StyleSheet,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import dayjs from "dayjs";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/hooks/useAuth";
+import { useEnterpriseSocket } from "@/hooks/useEnterpriseSocket";
 import {
   getDispatchMessages,
   sendDispatchMessage,
 } from "@/services/enterpriseDispatch";
 import { DispatchMessage } from "@/types/enterpriseDispatch";
+import { Message } from "@/services/api";
+import api from "@/services/api";
 
-const palette = {
-  background: "#07130E",
-  heroText: "#E6F2EA",
-  heroMeta: "rgba(184,214,198,0.75)",
-  heroBorder: "rgba(46,128,94,0.32)",
-  outgoingBg: "rgba(30,185,128,0.22)",
-  outgoingBorder: "rgba(30,185,128,0.35)",
-  incomingBg: "#0F2C21",
-  incomingBorder: "rgba(59,143,105,0.28)",
-  timestamp: "rgba(184,214,198,0.6)",
-  sender: "rgba(184,214,198,0.85)",
-  inputBg: "rgba(10,34,26,0.9)",
-  inputBorder: "rgba(59,143,105,0.28)",
-  inputPlaceholder: "rgba(184,214,198,0.55)",
-  sendButton: "#1EB980",
-  sendButtonDisabled: "rgba(30,185,128,0.32)",
-  sendIcon: "#052015",
-  error: "#F87171",
-};
+import MessageBubble from "@/components/chat/MessageBubble";
+import DateSeparator from "@/components/chat/DateSeparator";
+import ScrollToBottomButton from "@/components/chat/ScrollToBottomButton";
+import TypingIndicator from "@/components/chat/TypingIndicator";
+import AttachmentSheet from "@/components/chat/AttachmentSheet";
+import ImagePreviewModal from "@/components/chat/ImagePreviewModal";
+import PdfPreviewModal from "@/components/chat/PdfPreviewModal";
+import { chatStyles } from "@/styles/chatStyles";
+import * as ImagePicker from "expo-image-picker";
 
-const CHAT_FETCH_LIMIT = 60;
-const DAYS_WINDOW = 7;
+// ✅ Import conditionnel DocumentPicker
+let DocumentPicker: typeof import("expo-document-picker") | null = null;
+try {
+  if (Platform.OS !== "web") {
+    DocumentPicker = require("expo-document-picker");
+  }
+} catch {
+  DocumentPicker = null;
+}
 
-const sortMessagesAsc = (items: DispatchMessage[]) =>
-  [...items].sort(
-    (a, b) =>
-      new Date(a.created_at).valueOf() - new Date(b.created_at).valueOf()
-  );
+// --- Constantes layout ---
+const SCROLL_TOLERANCE = 40;
+const INPUT_ESTIMATED_HEIGHT = 64;
+const CHAT_FETCH_LIMIT = 20;
+
+// Adapter DispatchMessage vers Message pour compatibilité avec MessageBubble
+const adaptDispatchMessageToMessage = (msg: DispatchMessage | any): Message => ({
+  id: msg.id,
+  sender_id: msg.sender_id,
+  sender_role: msg.sender_role || "COMPANY",
+  sender_name: msg.sender_name,
+  content: msg.content,
+  timestamp: msg.created_at || msg.timestamp, // Convertir created_at en timestamp
+  company_id: undefined,
+  receiver_id: null,
+  receiver_name: null,
+  _localId: msg._localId || null,
+  image: msg.image || null,
+  image_url: msg.image_url || null,
+  pdf: msg.pdf || null,
+  pdf_url: msg.pdf_url || null,
+  pdf_filename: msg.pdf_filename || null,
+  pdf_size: msg.pdf_size || null,
+});
+
+// Type pour les items de la liste (message ou séparateur de date)
+type ListItem =
+  | { type: "message"; message: Message }
+  | { type: "dateSeparator"; date: string };
 
 export default function EnterpriseChatScreen() {
   const { enterpriseSession } = useAuth();
-  const [messages, setMessages] = useState<DispatchMessage[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [oldestTimestamp, setOldestTimestamp] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const listRef = useRef<FlatList<DispatchMessage>>(null);
+  const [isTeamTyping, setIsTeamTyping] = useState(false);
+  const [showAttachment, setShowAttachment] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<string | null>(null);
 
-  const mergeMessages = useCallback(
-    (incoming: DispatchMessage[], { replace }: { replace: boolean }) => {
-      setMessages((prev) => {
-        const base = replace ? [] : prev;
-        const map = new Map<string | number, DispatchMessage>();
-        base.forEach((msg) => {
-          map.set(msg.id, msg);
-        });
-        incoming.forEach((msg) => {
-          map.set(msg.id, msg);
-        });
-        return sortMessagesAsc(Array.from(map.values()));
-      });
-    },
-    []
+  // Mesure réelle de la barre d'input
+  const [inputContainerHeight, setInputContainerHeight] = useState(
+    INPUT_ESTIMATED_HEIGHT
   );
 
-  const loadRecentMessages = useCallback(
-    async ({
-      replace = false,
-      scrollToEnd = false,
-      showLoader = false,
-    }: {
-      replace?: boolean;
-      scrollToEnd?: boolean;
-      showLoader?: boolean;
-    } = {}) => {
-      if (!enterpriseSession) return;
-      if (showLoader) setLoading(true);
+  // État du clavier pour Android (gestion manuelle)
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // Refs scroll & état
+  const flatListRef = useRef<FlatList<ListItem> | null>(null);
+  const isMountedRef = useRef(true);
+  const hasDoneInitialScrollRef = useRef(false);
+  const isAtBottomRef = useRef(true);
+  const previousContentHeightRef = useRef(0);
+  const contentHeightRef = useRef(0);
+  const layoutHeightRef = useRef(0);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+
+  // Pagination
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const lastScrollOffsetRef = useRef(0);
+
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
+
+  // =============== SOCKET ===============
+
+  const socket = useEnterpriseSocket((msg: any) => {
+    if (!isMountedRef.current) return;
+    // Adapter le message reçu via socket (inclure tous les champs possibles)
+    const adapted = adaptDispatchMessageToMessage({
+      id: msg.id,
+      sender_id: msg.sender_id,
+      sender_role: msg.sender_role,
+      sender_name: msg.sender_name,
+      content: msg.content,
+      created_at: msg.timestamp || msg.created_at,
+      image_url: msg.image_url,
+      pdf_url: msg.pdf_url,
+      pdf_filename: msg.pdf_filename,
+      pdf_size: msg.pdf_size,
+      _localId: msg._localId,
+    });
+
+    setMessages((prev) => {
+      const exists = prev.some(
+        (m) =>
+          (m.id && adapted.id && m.id === adapted.id) ||
+          (m._localId && adapted._localId && m._localId === adapted._localId)
+      );
+      if (exists) {
+        return prev;
+      }
+      const updated = [...prev, adapted];
+      return updated.sort((a, b) => {
+        const timeA = new Date(a.timestamp || 0).getTime();
+        const timeB = new Date(b.timestamp || 0).getTime();
+        return timeA - timeB;
+      });
+    });
+  });
+
+  // =============== TYPING INDICATOR ===============
+
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("typing_start", () => setIsTeamTyping(true));
+    socket.on("typing_stop", () => setIsTeamTyping(false));
+
+    return () => {
+      socket.off("typing_start");
+      socket.off("typing_stop");
+    };
+  }, [socket]);
+
+  const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleTyping = useCallback(
+    (text: string) => {
+      setInput(text);
+      if (!socket) return;
+
+      socket.emit("typing_start");
+      if (typingTimeout.current) clearTimeout(typingTimeout.current);
+      typingTimeout.current = setTimeout(() => {
+        socket.emit("typing_stop");
+      }, 900);
+    },
+    [socket]
+  );
+
+  // =============== IMAGE / PDF ENVOI ===============
+
+  const handleSendImage = useCallback(
+    async (imageUri: string) => {
+      if (!socket || !enterpriseSession?.company?.id) return;
+
       try {
+        const formData = new FormData();
+        formData.append("file", {
+          uri: imageUri,
+          type: "image/jpeg",
+          name: "image.jpg",
+        } as any);
+
+        const uploadRes = await api.post("/messages/upload", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        const { url } = uploadRes.data;
+        socket.emit("team_chat_message", {
+          content: "",
+          image_url: url,
+          receiver_id: null,
+        });
+      } catch (error) {
+        console.log("[EnterpriseChat] Erreur upload image:", error);
+      }
+    },
+    [socket, enterpriseSession?.company?.id]
+  );
+
+  const handleSendPdf = useCallback(
+    async (pdfUri: string, filename: string) => {
+      if (!socket || !enterpriseSession?.company?.id) return;
+
+      try {
+        const formData = new FormData();
+        formData.append("file", {
+          uri: pdfUri,
+          type: "application/pdf",
+          name: filename,
+        } as any);
+
+        const uploadRes = await api.post("/messages/upload", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        const { url, filename: uploadedFilename, size_bytes } = uploadRes.data;
+        socket.emit("team_chat_message", {
+          content: "",
+          pdf_url: url,
+          pdf_filename: uploadedFilename,
+          pdf_size: size_bytes,
+          receiver_id: null,
+        });
+      } catch (error) {
+        console.log("[EnterpriseChat] Erreur upload PDF:", error);
+      }
+    },
+    [socket, enterpriseSession?.company?.id]
+  );
+
+  // =============== ATTACHMENT HANDLERS ===============
+
+  const handlePickCamera = useCallback(async () => {
+    setShowAttachment(false);
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") return;
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      await handleSendImage(result.assets[0].uri);
+    }
+  }, [handleSendImage]);
+
+  const handlePickGallery = useCallback(async () => {
+    setShowAttachment(false);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      await handleSendImage(result.assets[0].uri);
+    }
+  }, [handleSendImage]);
+
+  const handlePickDocument = useCallback(async () => {
+    setShowAttachment(false);
+    if (!DocumentPicker) {
+      console.log("⚠️ DocumentPicker non dispo");
+      return;
+    }
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "application/pdf",
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await handleSendPdf(
+          result.assets[0].uri,
+          result.assets[0].name || "document.pdf"
+        );
+      }
+    } catch (error) {
+      console.log("Erreur sélection PDF:", error);
+    }
+  }, [handleSendPdf]);
+
+  // =============== LOAD INITIAL MESSAGES ===============
+
+  useEffect(() => {
+    const loadInitialMessages = async () => {
+      if (!enterpriseSession?.company?.id) return;
+
+      try {
+        console.log("📨 load initial messages company_id:", enterpriseSession.company.id);
         const fetched = await getDispatchMessages({
           limit: CHAT_FETCH_LIMIT,
         });
-        const sorted = sortMessagesAsc(fetched);
-        const cutoff = dayjs().subtract(DAYS_WINDOW, "day");
-        const recentOnly = sorted.filter(
-          (msg) => !dayjs(msg.created_at).isBefore(cutoff)
-        );
-        const display = recentOnly.length > 0 && replace ? recentOnly : sorted;
 
-        mergeMessages(display, { replace });
+        if (!isMountedRef.current) return;
 
-        const earliest = sorted[0];
-        setOldestTimestamp(earliest?.created_at ?? null);
-        setHasMore(
-          sorted.length >= CHAT_FETCH_LIMIT ||
-            (earliest ? dayjs(earliest.created_at).isBefore(cutoff) : false)
-        );
-        setError(null);
-        if (scrollToEnd) {
-          requestAnimationFrame(() =>
-            listRef.current?.scrollToEnd({ animated: true })
-          );
-        } else {
-          requestAnimationFrame(() =>
-            listRef.current?.scrollToEnd({ animated: false })
-          );
-        }
-      } catch (err: any) {
-        if (!loading || showLoader) {
-          const message =
-            err?.response?.data?.error ??
-            err?.message ??
-            "Impossible de charger les messages.";
-          setError(message);
-        }
-      } finally {
-        if (showLoader) {
-          setLoading(false);
-        } else {
-          setLoading(false);
-        }
+        // Convertir DispatchMessage en Message et trier
+        const adapted = fetched.map(adaptDispatchMessageToMessage);
+        const sorted = adapted.sort((a, b) => {
+          const timeA = new Date(a.timestamp || 0).getTime();
+          const timeB = new Date(b.timestamp || 0).getTime();
+          return timeA - timeB; // Tri croissant : plus ancien en premier
+        });
+
+        setMessages(sorted);
+        hasDoneInitialScrollRef.current = false;
+        isAtBottomRef.current = true;
+        setShowScrollButton(false);
+        setHasMoreMessages(fetched.length >= CHAT_FETCH_LIMIT);
+
+        // Scroll vers le bas après un délai
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setTimeout(() => {
+              if (flatListRef.current && layoutHeightRef.current > 0) {
+                const offset = contentHeightRef.current - layoutHeightRef.current;
+                if (offset > 0) {
+                  flatListRef.current.scrollToOffset({ offset, animated: false });
+                } else {
+                  flatListRef.current.scrollToEnd({ animated: false });
+                }
+                setTimeout(() => {
+                  if (flatListRef.current && layoutHeightRef.current > 0) {
+                    const offset2 = contentHeightRef.current - layoutHeightRef.current;
+                    if (offset2 > 0) {
+                      flatListRef.current.scrollToOffset({ offset: offset2, animated: false });
+                    } else {
+                      flatListRef.current.scrollToEnd({ animated: false });
+                    }
+                    isAtBottomRef.current = true;
+                    setShowScrollButton(false);
+                  }
+                }, 150);
+              }
+            }, 100);
+          });
+        });
+      } catch (e) {
+        console.error("❌ Erreur chargement messages:", e);
       }
-    },
-    [enterpriseSession, mergeMessages]
-  );
+    };
 
-  const loadOlderMessages = useCallback(async () => {
-    if (!enterpriseSession || !hasMore || loadingMore || !oldestTimestamp) {
-      return;
-    }
-    setLoadingMore(true);
+    loadInitialMessages();
+  }, [enterpriseSession?.company?.id]);
+
+  // =============== LOAD MORE MESSAGES ===============
+
+  const loadMoreMessages = useCallback(async () => {
+    if (!enterpriseSession?.company?.id || isLoadingMore || !hasMoreMessages) return;
+
+    const oldestMessage = messages[0];
+    if (!oldestMessage?.timestamp) return;
+
+    setIsLoadingMore(true);
     try {
       const older = await getDispatchMessages({
-        before: oldestTimestamp,
+        before: oldestMessage.timestamp,
         limit: CHAT_FETCH_LIMIT,
       });
-      if (older.length === 0) {
-        setHasMore(false);
+
+      if (!isMountedRef.current || older.length === 0) {
+        setHasMoreMessages(false);
+        setIsLoadingMore(false);
         return;
       }
-      const sortedOlder = sortMessagesAsc(older);
-      setOldestTimestamp(sortedOlder[0]?.created_at ?? oldestTimestamp);
-      mergeMessages(sortedOlder, { replace: false });
-      if (sortedOlder.length < CHAT_FETCH_LIMIT) {
-        setHasMore(false);
-      }
-      setError(null);
-    } catch (err: any) {
-      const message =
-        err?.response?.data?.error ??
-        err?.message ??
-        "Impossible de charger plus de messages.";
-      setError(message);
+
+      const adapted = older.map(adaptDispatchMessageToMessage);
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id).filter((id) => id != null));
+        const newMessages = adapted.filter((m) => !m.id || !existingIds.has(m.id));
+        const combined = [...prev, ...newMessages];
+        return combined.sort((a, b) => {
+          const timeA = new Date(a.timestamp || 0).getTime();
+          const timeB = new Date(b.timestamp || 0).getTime();
+          return timeA - timeB;
+        });
+      });
+
+      setHasMoreMessages(older.length >= CHAT_FETCH_LIMIT);
+    } catch (e) {
+      console.error("❌ Erreur chargement messages supplémentaires:", e);
     } finally {
-      setLoadingMore(false);
+      setIsLoadingMore(false);
     }
-  }, [enterpriseSession, hasMore, loadingMore, mergeMessages, oldestTimestamp]);
+  }, [enterpriseSession?.company?.id, isLoadingMore, hasMoreMessages, messages]);
+
+  // =============== SCROLL TO BOTTOM ===============
+
+  const scrollToBottom = useCallback((animated = true) => {
+    if (!flatListRef.current) return;
+    try {
+      if (layoutHeightRef.current > 0 && contentHeightRef.current > 0) {
+        const offset = contentHeightRef.current - layoutHeightRef.current;
+        if (offset > 0) {
+          flatListRef.current.scrollToOffset({ offset, animated });
+        } else {
+          flatListRef.current.scrollToEnd({ animated });
+        }
+      } else {
+        flatListRef.current.scrollToEnd({ animated });
+      }
+      isAtBottomRef.current = true;
+      setShowScrollButton(false);
+    } catch (e) {
+      console.log("[EnterpriseChat] scrollToBottom error:", e);
+    }
+  }, []);
+
+  // =============== HANDLE SCROLL ===============
+
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+
+      const distanceFromBottom =
+        contentSize.height - (contentOffset.y + layoutMeasurement.height);
+
+      const isBottom = distanceFromBottom <= SCROLL_TOLERANCE;
+      isAtBottomRef.current = isBottom;
+      setShowScrollButton(!isBottom);
+
+      // Pagination : détecter le scroll vers le haut
+      const currentOffset = contentOffset.y;
+      const isScrollingUp = currentOffset < lastScrollOffsetRef.current;
+      const distanceFromTop = contentOffset.y;
+
+      if (isScrollingUp && distanceFromTop < 200 && hasMoreMessages && !isLoadingMore) {
+        loadMoreMessages();
+      }
+
+      lastScrollOffsetRef.current = currentOffset;
+    },
+    [hasMoreMessages, isLoadingMore, loadMoreMessages]
+  );
+
+  // =============== SEND MESSAGE ===============
+
+  const sendMessage = useCallback(() => {
+    const content = input.trim();
+    if (!content || !socket) return;
+
+    socket.emit("team_chat_message", {
+      content,
+      receiver_id: null,
+    });
+
+    setInput("");
+    if (typingTimeout.current) {
+      clearTimeout(typingTimeout.current);
+      typingTimeout.current = null;
+    }
+    socket.emit("typing_stop");
+  }, [input, socket]);
+
+  // =============== FOCUS SCREEN ===============
 
   useFocusEffect(
     useCallback(() => {
-      if (!enterpriseSession) return;
-      loadRecentMessages({
-        replace: true,
-        scrollToEnd: true,
-        showLoader: true,
-      });
-      pollRef.current = setInterval(
-        () => loadRecentMessages({ replace: false, scrollToEnd: false }),
-        5000
-      );
-      return () => {
-        if (pollRef.current) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-        }
-      };
-    }, [enterpriseSession, loadRecentMessages])
-  );
-
-  const handleSend = async () => {
-    const content = input.trim();
-    if (!content || sending) return;
-    setSending(true);
-    try {
-      const message = await sendDispatchMessage(content);
-      setMessages((prev) => {
-        const dedup = new Map<string | number, DispatchMessage>();
-        [...prev, message].forEach((item) => {
-          dedup.set(item.id, item);
-        });
-        return sortMessagesAsc(Array.from(dedup.values()));
-      });
-      setError(null);
-      requestAnimationFrame(() =>
-        listRef.current?.scrollToEnd({ animated: true })
-      );
-      await loadRecentMessages({ replace: false, scrollToEnd: true });
-      setInput("");
-    } catch (err: any) {
-      const message =
-        err?.response?.data?.error ??
-        err?.message ??
-        "Impossible d’envoyer le message.";
-      setError(message);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleScroll = useCallback(
-    ({ nativeEvent }: { nativeEvent: any }) => {
-      if (
-        nativeEvent.contentOffset?.y <= 24 &&
-        hasMore &&
-        !loadingMore &&
-        !loading
-      ) {
-        loadOlderMessages();
+      if (messages.length > 0 && isAtBottomRef.current) {
+        const t = setTimeout(() => {
+          scrollToBottom(false);
+          setTimeout(() => {
+            scrollToBottom(false);
+          }, 100);
+        }, 100);
+        return () => clearTimeout(t);
       }
-    },
-    [hasMore, loadingMore, loadOlderMessages, loading]
+      return () => { };
+    }, [messages.length, scrollToBottom])
   );
 
-  const renderItem = ({ item }: { item: DispatchMessage }) => {
-    const isCompany = (item.sender_role || "").toUpperCase() === "COMPANY";
-    const bubbleStyles = [
-      styles.messageBubble,
-      isCompany ? styles.outgoingBubble : styles.incomingBubble,
-      isCompany ? styles.outgoingShadow : styles.incomingShadow,
-    ];
-    return (
-      <View
-        style={[
-          styles.messageContainer,
-          isCompany ? styles.messageOutgoing : styles.messageIncoming,
-        ]}
-      >
-        <View style={bubbleStyles}>
-          <View style={styles.messageHeader}>
-            <Text style={styles.messageSender}>
-              {item.sender_name || (isCompany ? "Vous" : "Dispatch")}
-            </Text>
-            <Text style={styles.messageTime}>
-              {new Date(item.created_at).toLocaleTimeString("fr-CH", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+  // =============== KEYBOARD LISTENERS (Android uniquement) ===============
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      (event) => {
+        const newKeyboardHeight = event.endCoordinates.height;
+        setKeyboardHeight(newKeyboardHeight);
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setTimeout(() => {
+              scrollToBottom(true);
+              setTimeout(() => {
+                scrollToBottom(true);
+              }, 100);
+            }, 50);
+          });
+        });
+      }
+    );
+
+    const keyboardDidHideListener = Keyboard.addListener(
+      "keyboardDidHide",
+      () => {
+        setTimeout(() => {
+          setKeyboardHeight(0);
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              setTimeout(() => {
+                scrollToBottom(true);
+                setTimeout(() => {
+                  scrollToBottom(true);
+                }, 100);
+              }, 50);
+            });
+          });
+        }, 50);
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, [scrollToBottom]);
+
+  // =============== MOUNT / UNMOUNT ===============
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (typingTimeout.current) clearTimeout(typingTimeout.current);
+    };
+  }, []);
+
+  // =============== FLATLIST PADDING & BOUTON ↓ ===============
+
+  // paddingBottom = hauteur input + tab bar/clavier + safe area + marge verticale
+  // Le dernier message doit être juste au-dessus de l'input
+  // Sur Android avec clavier ouvert : clavier + input + marge verticale
+  const flatListPaddingBottom = useMemo(() => {
+    const safeBottom = insets.bottom;
+    const messageSpacing = 4; // Marge verticale pour que le dernier message soit bien visible juste au-dessus de l'input
+
+    if (Platform.OS === "android" && keyboardHeight > 0) {
+      // Clavier ouvert : clavier + input + marge verticale
+      // Le message doit être affiché au-dessus de l'input qui est au-dessus du clavier
+      return keyboardHeight + inputContainerHeight + safeBottom + messageSpacing;
+    }
+    // Clavier fermé : padding pour l'input au-dessus de la tab bar
+    return inputContainerHeight + tabBarHeight + safeBottom + messageSpacing;
+  }, [inputContainerHeight, tabBarHeight, insets.bottom, keyboardHeight]);
+
+  // offset du bouton ↓ = au-dessus de l'input + tab bar
+  const scrollButtonBottom = useMemo(() => {
+    const safeBottom = insets.bottom;
+    return inputContainerHeight + tabBarHeight + safeBottom + 16;
+  }, [inputContainerHeight, tabBarHeight, insets.bottom]);
+
+  const contentContainerStyle = useMemo(
+    () => [
+      chatStyles.messagesList,
+      messages.length === 0 && {
+        flexGrow: 1,
+        justifyContent: "center" as const,
+      },
+      { paddingBottom: flatListPaddingBottom },
+    ],
+    [messages.length, flatListPaddingBottom]
+  );
+
+  // =============== FORMAT DATA WITH DATE SEPARATORS ===============
+
+  const listItemsWithDates = useMemo((): ListItem[] => {
+    if (messages.length === 0) return [];
+
+    const items: ListItem[] = [];
+    let lastDate: string | null = null;
+
+    for (const message of messages) {
+      if (!message.timestamp) {
+        items.push({ type: "message", message });
+        continue;
+      }
+
+      const messageDate = new Date(message.timestamp);
+      const dateKey = `${messageDate.getFullYear()}-${String(messageDate.getMonth() + 1).padStart(2, "0")}-${String(messageDate.getDate()).padStart(2, "0")}`;
+
+      if (lastDate !== dateKey) {
+        items.push({ type: "dateSeparator", date: messageDate.toISOString() });
+        lastDate = dateKey;
+      }
+      items.push({ type: "message", message });
+    }
+    return items;
+  }, [messages]);
+
+  // =============== RENDER ===============
+
+  const renderContent = () => (
+    <View style={{ flex: 1 }}>
+      <FlatList
+        ref={flatListRef}
+        data={listItemsWithDates}
+        renderItem={({ item }) => {
+          if (item.type === "dateSeparator") {
+            return <DateSeparator date={item.date} />;
+          }
+          return (
+            <MessageBubble
+              message={item.message}
+              currentUserId={enterpriseSession?.user?.id || null}
+              onPressImage={setImagePreview}
+              onPressPdf={setPdfPreview}
+            />
+          );
+        }}
+        keyExtractor={(item, index) => {
+          if (item.type === "dateSeparator") {
+            return `date-${item.date}-${index}`;
+          }
+          if (item.message?.id != null) {
+            return `msg-${item.message.id}`;
+          }
+          const timestamp = item.message?.timestamp ? new Date(item.message.timestamp).getTime() : Date.now();
+          return `msg-${index}-${timestamp}-${Math.random().toString(36).slice(2)}`;
+        }}
+        contentContainerStyle={contentContainerStyle}
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        onLayout={(event) => {
+          layoutHeightRef.current = event.nativeEvent.layout.height;
+        }}
+        ListHeaderComponent={
+          isLoadingMore ? (
+            <View style={{ padding: 16, alignItems: "center" }}>
+              <Text style={{ color: "#5F7369", fontSize: 14 }}>Chargement...</Text>
+            </View>
+          ) : null
+        }
+        onContentSizeChange={(contentWidth, contentHeight) => {
+          if (listItemsWithDates.length === 0) return;
+
+          contentHeightRef.current = contentHeight;
+
+          if (!hasDoneInitialScrollRef.current) {
+            hasDoneInitialScrollRef.current = true;
+            previousContentHeightRef.current = contentHeight;
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                setTimeout(() => {
+                  if (flatListRef.current && layoutHeightRef.current > 0) {
+                    const offset = contentHeight - layoutHeightRef.current;
+                    if (offset > 0) {
+                      flatListRef.current.scrollToOffset({ offset, animated: false });
+                    } else {
+                      flatListRef.current.scrollToEnd({ animated: false });
+                    }
+                    setTimeout(() => {
+                      if (flatListRef.current && layoutHeightRef.current > 0) {
+                        const offset2 = contentHeightRef.current - layoutHeightRef.current;
+                        if (offset2 > 0) {
+                          flatListRef.current.scrollToOffset({ offset: offset2, animated: false });
+                        } else {
+                          flatListRef.current.scrollToEnd({ animated: false });
+                        }
+                        isAtBottomRef.current = true;
+                        setShowScrollButton(false);
+                      }
+                    }, 100);
+                  }
+                }, 100);
+              });
+            });
+            return;
+          }
+
+          // Vérifier si c'est un changement de taille dû au padding ou à un nouveau message
+          const heightDifference = contentHeight - previousContentHeightRef.current;
+          previousContentHeightRef.current = contentHeight;
+
+          // Si la différence est petite (< 100px), c'est probablement juste un changement de padding
+          // On ne scroll pas dans ce cas pour éviter le scroll inversé
+          if (Math.abs(heightDifference) < 100) {
+            return;
+          }
+
+          // Si la différence est grande et qu'on est en bas, c'est un nouveau message
+          // Scroller vers le bas pour montrer le nouveau message
+          if (heightDifference > 0 && isAtBottomRef.current) {
+            requestAnimationFrame(() => {
+              scrollToBottom(true);
+            });
+          }
+        }}
+        onScrollBeginDrag={() => {
+          // Sur Android, ne pas fermer le clavier automatiquement pour éviter les conflits
+          // Le clavier peut se fermer automatiquement si nécessaire
+          if (Platform.OS === "ios") {
+            try {
+              Keyboard.dismiss();
+            } catch (e) {
+              console.log("[EnterpriseChat] Keyboard dismiss error:", e);
+            }
+          }
+        }}
+        keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={() => (
+          <View style={chatStyles.emptyContainer}>
+            <Ionicons name="chatbubble-ellipses-outline" size={48} color="#5F7369" />
+            <Text style={chatStyles.emptyText}>
+              Aucun message pour le moment.{"\n"}
+              Commencez la conversation avec votre équipe !
             </Text>
           </View>
-          <Text style={styles.messageContent}>{item.content}</Text>
-        </View>
-      </View>
-    );
-  };
+        )}
+      />
 
-  const canSend = !!input.trim() && !sending;
+      {/* Indicateur "équipe écrit" */}
+      {isTeamTyping && <TypingIndicator />}
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      {loading ? (
-        <View style={styles.loading}>
-          <ActivityIndicator color={palette.sendButton} />
-        </View>
-      ) : (
-        <FlatList
-          ref={listRef}
-          data={messages}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          ListHeaderComponent={
-            hasMore ? (
-              <View style={styles.loadMoreWrapper}>
-                {loadingMore ? (
-                  <ActivityIndicator color={palette.heroMeta} size="small" />
-                ) : (
-                  <TouchableOpacity
-                    style={styles.loadMoreButton}
-                    onPress={loadOlderMessages}
-                  >
-                    <Ionicons
-                      name="time-outline"
-                      size={16}
-                      color={palette.heroText}
-                    />
-                    <Text style={styles.loadMoreText}>
-                      Voir l’historique plus ancien
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            ) : null
+      {/* Bouton ↓ flottant */}
+      <ScrollToBottomButton
+        visible={showScrollButton}
+        onPress={() => scrollToBottom(true)}
+        bottomOffset={scrollButtonBottom}
+      />
+
+      {/* Barre d'input - Position dynamique sur Android selon le clavier */}
+      <View
+        style={[
+          chatStyles.inputContainer,
+          Platform.OS === "android"
+            ? {
+              // Android : Position absolue pour suivre le clavier
+              position: "absolute" as const,
+              bottom:
+                keyboardHeight > 0
+                  ? keyboardHeight // Au-dessus du clavier quand ouvert
+                  : tabBarHeight, // Au-dessus de la tab bar quand fermé
+              left: 0,
+              right: 0,
+              paddingBottom: insets.bottom,
+              // Éviter les re-renders qui font perdre le focus
+              pointerEvents: "auto" as const,
+            }
+            : {
+              // iOS : Dans le flux normal (géré par KeyboardAvoidingView)
+              paddingBottom: insets.bottom,
+              marginBottom: tabBarHeight,
+            },
+        ]}
+        onLayout={(e) => {
+          // Ne mesurer que si le clavier est fermé pour éviter les re-renders
+          if (Platform.OS === "android" && keyboardHeight === 0) {
+            setInputContainerHeight(e.nativeEvent.layout.height);
+          } else if (Platform.OS !== "android") {
+            setInputContainerHeight(e.nativeEvent.layout.height);
           }
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Ionicons
-                name="chatbubble-ellipses-outline"
-                size={28}
-                color={palette.heroMeta}
-              />
-              <Text style={styles.emptyStateText}>
-                Aucune conversation pour le moment. Démarre un échange
-                ci-dessous.
-              </Text>
-            </View>
-          }
-          refreshing={loading && !loadingMore}
-          onRefresh={() =>
-            loadRecentMessages({
-              replace: true,
-              scrollToEnd: true,
-              showLoader: true,
-            })
-          }
-          onScroll={handleScroll}
-          scrollEventThrottle={100}
-          maintainVisibleContentPosition={{
-            minIndexForVisible: 0,
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => setShowAttachment(true)}
+          style={{ marginRight: 8 }}
+        >
+          <Ionicons
+            name="attach"
+            size={22}
+            color="#0A7F59"
+            style={{ transform: [{ rotate: "45deg" }] }}
+          />
+        </TouchableOpacity>
+
+        <TextInput
+          value={input}
+          onChangeText={handleTyping}
+          placeholder="Écrire un message..."
+          placeholderTextColor={chatStyles.inputPlaceholder.color}
+          style={chatStyles.input}
+          multiline={false}
+          maxLength={1000}
+          onSubmitEditing={sendMessage}
+          returnKeyType="send"
+          onFocus={() => {
+            // Pas de scroll automatique au focus sur Android
+            // Le clavier va s'ouvrir et le padding va s'ajuster automatiquement
+            // On laisse le comportement natif gérer le scroll
           }}
         />
-      )}
-
-      {error ? (
-        <View style={styles.errorBanner}>
-          <Ionicons
-            name="alert-circle-outline"
-            size={18}
-            color={palette.error}
-          />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity
-            onPress={() =>
-              loadRecentMessages({
-                replace: false,
-                scrollToEnd: true,
-                showLoader: true,
-              })
-            }
-            style={styles.retryButton}
-          >
-            <Ionicons name="refresh" size={16} color={palette.heroText} />
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          value={input}
-          onChangeText={setInput}
-          placeholder="Écrire un message…"
-          placeholderTextColor={palette.inputPlaceholder}
-          multiline
-        />
         <TouchableOpacity
-          style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
-          onPress={handleSend}
-          disabled={!canSend}
-          activeOpacity={0.85}
+          onPress={sendMessage}
+          style={chatStyles.sendButton}
         >
-          {sending ? (
-            <ActivityIndicator size="small" color={palette.sendIcon} />
-          ) : (
-            <Ionicons name="send" size={20} color={palette.sendIcon} />
-          )}
+          <Ionicons name="send" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
+  );
+
+  return (
+    <View style={chatStyles.container}>
+      {Platform.OS === "android" ? (
+        // Android : Gestion manuelle du clavier via listeners (pas de KeyboardAvoidingView)
+        // Cela évite les marges supplémentaires générées par KeyboardAvoidingView
+        renderContent()
+      ) : (
+        // iOS : KeyboardAvoidingView avec behavior="padding"
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior="padding"
+          keyboardVerticalOffset={tabBarHeight}
+        >
+          {renderContent()}
+        </KeyboardAvoidingView>
+      )}
+
+      {/* -------- ATTACHMENT SHEET -------- */}
+      <AttachmentSheet
+        visible={showAttachment}
+        onClose={() => setShowAttachment(false)}
+        onPickCamera={handlePickCamera}
+        onPickGallery={handlePickGallery}
+        onPickDocument={handlePickDocument}
+      />
+
+      {/* -------- IMAGE PREVIEW -------- */}
+      <ImagePreviewModal
+        visible={imagePreview !== null}
+        uri={imagePreview}
+        onClose={() => setImagePreview(null)}
+      />
+
+      {/* -------- PDF PREVIEW -------- */}
+      <PdfPreviewModal
+        visible={pdfPreview !== null}
+        pdfUrl={pdfPreview}
+        onClose={() => setPdfPreview(null)}
+      />
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: palette.background,
-  },
-  loading: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  listContent: {
-    padding: 20,
-    paddingBottom: 90,
-    gap: 12,
-  },
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 40,
-    gap: 8,
-  },
-  emptyStateText: {
-    color: palette.heroMeta,
-    fontSize: 13,
-    textAlign: "center",
-    lineHeight: 18,
-  },
-  loadMoreWrapper: {
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadMoreButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: palette.heroBorder,
-    backgroundColor: "rgba(10,34,26,0.65)",
-  },
-  loadMoreText: {
-    color: palette.heroText,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  messageContainer: {
-    maxWidth: "82%",
-    marginBottom: 8,
-  },
-  messageOutgoing: {
-    alignSelf: "flex-end",
-  },
-  messageIncoming: {
-    alignSelf: "flex-start",
-  },
-  messageBubble: {
-    borderRadius: 18,
-    padding: 14,
-    overflow: "hidden",
-  },
-  outgoingBubble: {
-    backgroundColor: palette.outgoingBg,
-  },
-  incomingBubble: {
-    backgroundColor: palette.incomingBg,
-  },
-  outgoingShadow: {
-    shadowColor: palette.outgoingBorder,
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 14,
-    elevation: 4,
-  },
-  incomingShadow: {
-    shadowColor: palette.incomingBorder,
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  messageHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    marginBottom: 6,
-  },
-  messageSender: {
-    color: palette.sender,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  messageContent: {
-    color: palette.heroText,
-    fontSize: 15,
-    lineHeight: 21,
-  },
-  messageTime: {
-    color: palette.timestamp,
-    fontSize: 11,
-  },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    paddingBottom: 80,
-    borderTopWidth: 1,
-    borderColor: palette.heroBorder,
-    backgroundColor: "rgba(5,21,16,0.92)",
-  },
-  input: {
-    flex: 1,
-    backgroundColor: palette.inputBg,
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: palette.heroText,
-    borderWidth: 1,
-    borderColor: palette.inputBorder,
-    maxHeight: 120,
-  },
-  sendButton: {
-    backgroundColor: palette.sendButton,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sendButtonDisabled: {
-    backgroundColor: palette.sendButtonDisabled,
-  },
-  errorBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: palette.heroBorder,
-    backgroundColor: "rgba(241,104,104,0.12)",
-  },
-  errorText: {
-    color: palette.error,
-    flex: 1,
-    fontSize: 12,
-  },
-  retryButton: {
-    padding: 6,
-    borderRadius: 999,
-    backgroundColor: "rgba(10,34,26,0.6)",
-  },
-});

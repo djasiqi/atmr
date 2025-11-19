@@ -1,10 +1,27 @@
 // tasks/locationTask.ts
 // Tâche en arrière-plan pour le tracking de localisation
 
-import * as TaskManager from "expo-task-manager";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { io, Socket } from "socket.io-client";
+
+// Vérifier si le module natif est disponible
+let TaskManager: any = null;
+try {
+  TaskManager = require("expo-task-manager");
+  // Vérifier que le module est bien chargé (pas juste un stub)
+  if (TaskManager && typeof TaskManager.defineTask === "function") {
+    console.log("[LocationTask] ✅ TaskManager chargé et disponible");
+  } else {
+    console.warn("[LocationTask] ⚠️ TaskManager chargé mais méthodes non disponibles");
+    TaskManager = null;
+  }
+} catch (error: any) {
+  console.warn("[LocationTask] ⚠️ expo-task-manager non disponible:", error?.message || error);
+  console.warn("[LocationTask] ℹ️ Nécessite un rebuild natif (npx expo prebuild + rebuild)");
+  // En mode Expo Go ou sans rebuild, on exporte quand même les constantes
+  // mais la tâche ne sera pas active
+}
 
 const LOCATION_TASK_NAME = "background-location-task";
 
@@ -20,7 +37,7 @@ let positionBuffer: Array<{
 
 const BATCH_SIZE = 3;
 const BATCH_INTERVAL_MS = 15000; // 15 secondes
-let flushInterval: NodeJS.Timeout | null = null;
+let flushInterval: ReturnType<typeof setInterval> | null = null;
 
 // Socket.IO pour l'envoi des positions
 let socket: Socket | null = null;
@@ -63,8 +80,12 @@ async function initSocket() {
       console.log("[LocationTask] ✅ Socket connecté");
     });
 
-    socket.on("disconnect", () => {
-      console.log("[LocationTask] ⚠️ Socket déconnecté");
+    socket.on("disconnect", (reason) => {
+      console.log(`[LocationTask] ⚠️ Socket déconnecté (raison: ${reason})`);
+    });
+
+    socket.on("reconnect", (attemptNumber) => {
+      console.log(`[LocationTask] 🔄 Socket reconnecté (tentative ${attemptNumber})`);
     });
 
     socket.on("connect_error", (error) => {
@@ -83,11 +104,13 @@ async function flushPositionBatch() {
 
   // Initialiser le socket si nécessaire
   if (!socket || !socket.connected) {
+    console.log("[LocationTask] 🔌 Socket non connecté, initialisation...");
     await initSocket();
     // Attendre un peu pour la connexion
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     if (!socket || !socket.connected) {
-      console.log("[LocationTask] ⚠️ Socket non disponible, positions mises en attente");
+      console.log("[LocationTask] ⚠️ Socket non disponible après initialisation, positions mises en attente");
+      console.log(`[LocationTask] 📊 État: socket=${!!socket}, connected=${socket?.connected}`);
       return;
     }
   }
@@ -118,45 +141,94 @@ async function flushPositionBatch() {
   }
 }
 
-// Définir la tâche en arrière-plan
-TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
-  if (error) {
-    console.error("[LocationTask] ❌ Erreur:", error);
-    return;
-  }
+// Variable pour indiquer si la tâche est enregistrée
+let taskRegistered = false;
 
-  if (data) {
-    const { locations } = data as { locations: Location.LocationObject[] };
+// ✅ PROTECTION : Vérifier si la tâche est déjà définie (évite les doubles appels)
+// Cette protection est importante car React StrictMode peut monter/démonter les composants deux fois
+let taskDefinitionAttempted = false;
 
-    // Initialiser le socket et le flush périodique au premier appel
-    if (!socket) {
-      await initSocket();
-      startPeriodicFlush();
+// Définir la tâche en arrière-plan (uniquement si TaskManager est disponible)
+if (TaskManager && !taskDefinitionAttempted) {
+  taskDefinitionAttempted = true;
+  try {
+    // Définir la tâche directement (defineTask est idempotent mais on protège quand même)
+    TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: { data?: { locations: Location.LocationObject[] }; error?: Error }) => {
+    // ✅ Log explicite pour diagnostiquer si la tâche est appelée en arrière-plan
+    console.log(`[LocationTask] 🔔 Task appelée`);
+    
+    if (error) {
+      console.log(`[LocationTask] ❌ Erreur dans la tâche :`, error);
+      return;
     }
 
-    for (const location of locations) {
-      const { latitude, longitude, speed, heading, accuracy } = location.coords;
-      const timestamp = location.timestamp || Date.now();
+    if (data) {
+      const { locations } = data;
+      console.log(`[LocationTask] 📍 Locations reçues :`, JSON.stringify(locations));
 
-      // Ajouter au buffer
-      positionBuffer.push({
-        latitude: Number(latitude),
-        longitude: Number(longitude),
-        speed: Number(speed || 0),
-        heading: Number(heading || 0),
-        accuracy: Number(accuracy || 10),
-        timestamp,
-      });
+      // Récupérer le driver_id
+      try {
+        const driverId = await AsyncStorage.getItem("driver_id");
+        console.log(`[LocationTask] ℹ️ driver_id récupéré:`, driverId);
+      } catch (e) {
+        console.log(`[LocationTask] ⚠️ Erreur récupération driver_id:`, e);
+      }
 
-      console.log(`[LocationTask] 📍 Position ajoutée au buffer: ${positionBuffer.length}/${BATCH_SIZE}`);
+      // Initialiser le socket au premier appel (pas de setInterval, mode event-driven)
+      if (!socket) {
+        await initSocket();
+      }
 
-      // Flush si buffer plein
-      if (positionBuffer.length >= BATCH_SIZE) {
+      for (const location of locations) {
+        const { latitude, longitude, speed, heading, accuracy } = location.coords;
+        const timestamp = location.timestamp || Date.now();
+
+        // Ajouter au buffer
+        positionBuffer.push({
+          latitude: Number(latitude),
+          longitude: Number(longitude),
+          speed: Number(speed || 0),
+          heading: Number(heading || 0),
+          accuracy: Number(accuracy || 10),
+          timestamp,
+        });
+
+        console.log(`[LocationTask] 📍 Position ajoutée au buffer: ${positionBuffer.length}/${BATCH_SIZE}`);
+
+        // Flush si buffer plein
+        if (positionBuffer.length >= BATCH_SIZE) {
+          await flushPositionBatch();
+        }
+      }
+
+      // ✅ Envoyer le batch restant à la fin (mode event-driven, pas besoin d'interval)
+      // Android appelle la task par batch de locations, on peut envoyer directement
+      if (positionBuffer.length > 0) {
+        console.log(`[LocationTask] 📤 Envoi batch final (${positionBuffer.length} positions restantes)`);
         await flushPositionBatch();
       }
     }
+    });
+    taskRegistered = true;
+    console.log(`[LocationTask] ✅ Tâche "${LOCATION_TASK_NAME}" enregistrée avec succès`);
+  } catch (error: any) {
+    console.error(`[LocationTask] ❌ Erreur lors de l'enregistrement de la tâche:`, error?.message || error);
+    taskRegistered = false;
+    taskDefinitionAttempted = false; // Permettre de réessayer en cas d'erreur
   }
-});
+} else if (!TaskManager) {
+  console.warn("[LocationTask] TaskManager non disponible - la tâche en arrière-plan ne sera pas active");
+} else {
+  console.log(`[LocationTask] ℹ️ Tentative de définition de tâche déjà effectuée → skip (protection double appel)`);
+}
+
+// Fonction pour vérifier si la tâche est enregistrée
+export function isTaskRegistered(): boolean {
+  return taskRegistered && TaskManager !== null;
+}
+
+// Exporter TaskManager pour utilisation dans useLocation
+export { TaskManager };
 
 // Démarrer le flush périodique
 function startPeriodicFlush() {

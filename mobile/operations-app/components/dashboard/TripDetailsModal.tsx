@@ -176,7 +176,7 @@ export default function TripDetailsModal({ visible, tripId, onClose }: Props) {
             }}
           >
             <Text style={{ fontSize: 18, fontWeight: "700", color: "#104F55" }}>
-              Détails du trajet #{tripId}
+              Détails du trajet {tripId ? `#${tripId}` : ""}
             </Text>
             <TouchableOpacity onPress={onClose} style={{ padding: 8 }}>
               <Ionicons name="close" size={28} color="#666" />
@@ -202,7 +202,7 @@ export default function TripDetailsModal({ visible, tripId, onClose }: Props) {
               <View style={styles.section}>
                 <View style={styles.rowBetween}>
                   <Text style={styles.label}>Client :</Text>
-                  <Text style={styles.value}>{trip.client_name}</Text>
+                  <Text style={styles.value}>{trip.client_name || "Non spécifié"}</Text>
                 </View>
               </View>
 
@@ -210,13 +210,13 @@ export default function TripDetailsModal({ visible, tripId, onClose }: Props) {
               <View style={styles.section}>
                 <View style={styles.rowBetween}>
                   <Text style={styles.label}>De :</Text>
-                  <Text style={styles.value}>{trip.pickup_location}</Text>
+                  <Text style={styles.value}>{trip.pickup_location || "Non spécifié"}</Text>
                 </View>
               </View>
               <View style={styles.section}>
                 <View style={styles.rowBetween}>
                   <Text style={styles.label}>Vers :</Text>
-                  <Text style={styles.value}>{trip.dropoff_location}</Text>
+                  <Text style={styles.value}>{trip.dropoff_location || "Non spécifié"}</Text>
                 </View>
               </View>
 
@@ -235,7 +235,7 @@ export default function TripDetailsModal({ visible, tripId, onClose }: Props) {
                 <View style={styles.rowBetween}>
                   <Text style={styles.label}>Montant :</Text>
                   <Text style={styles.value}>
-                    {trip.amount?.toFixed(2)} CHF
+                    {trip.amount ? `${trip.amount.toFixed(2)} CHF` : "Non spécifié"}
                   </Text>
                 </View>
               </View>
@@ -375,7 +375,7 @@ export default function TripDetailsModal({ visible, tripId, onClose }: Props) {
                 <View style={styles.rowBetween}>
                   <Text style={styles.label}>Statut :</Text>
                   <Text style={[styles.value, { color: "#00796B" }]}>
-                    {trip.status}
+                    {trip.status || "Non spécifié"}
                   </Text>
                 </View>
               </View>

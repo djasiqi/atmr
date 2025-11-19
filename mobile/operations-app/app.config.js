@@ -67,6 +67,7 @@ module.exports = withAndroidBackButtonMod(() => ({
     "expo-web-browser",
     "expo-secure-store",
     "sentry-expo",
+    "expo-task-manager", // ✅ Nécessaire pour le tracking en arrière-plan
     [
       "expo-notifications",
       {
