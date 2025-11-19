@@ -357,49 +357,32 @@ export default function ProfileScreen() {
       >
         <View style={profileStyles.modalOverlay}>
           <View style={profileStyles.logoutModalContainer}>
-            <View style={profileStyles.logoutModalHeader}>
-              <View style={profileStyles.logoutIconContainer}>
-                <Ionicons name="log-out-outline" size={28} color="#D32F2F" />
-              </View>
-              <Text style={profileStyles.logoutModalTitle}>
-                Déconnexion
-              </Text>
+            <View style={profileStyles.logoutIconContainer}>
+              <Ionicons name="log-out-outline" size={32} color="#D32F2F" />
+            </View>
+            <Text style={profileStyles.logoutModalTitle}>
+              Déconnexion
+            </Text>
+            <Text style={profileStyles.logoutModalMessage}>
+              Êtes-vous sûr de vouloir vous déconnecter ?
+            </Text>
+            <View style={profileStyles.logoutModalActions}>
               <TouchableOpacity
-                style={profileStyles.modalCloseButton}
+                style={profileStyles.logoutCancelButton}
                 onPress={() => setLogoutModalVisible(false)}
               >
-                <Ionicons name="close" size={24} color="#5F7369" />
+                <Text style={profileStyles.logoutCancelButtonText}>
+                  Annuler
+                </Text>
               </TouchableOpacity>
-            </View>
-
-            <View style={profileStyles.logoutModalContent}>
-              <Text style={profileStyles.logoutModalMessage}>
-                Êtes-vous sûr de vouloir vous déconnecter ?
-              </Text>
-              <Text style={profileStyles.logoutModalSubtext}>
-                Vous devrez vous reconnecter pour accéder à l'application
-              </Text>
-
-              <View style={profileStyles.logoutModalActions}>
-                <TouchableOpacity
-                  style={profileStyles.logoutCancelButton}
-                  onPress={() => setLogoutModalVisible(false)}
-                >
-                  <Text style={profileStyles.logoutCancelButtonText}>
-                    Annuler
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={profileStyles.logoutConfirmButton}
-                  onPress={confirmLogout}
-                >
-                  <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
-                  <Text style={profileStyles.logoutConfirmButtonText}>
-                    Se déconnecter
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={profileStyles.logoutConfirmButton}
+                onPress={confirmLogout}
+              >
+                <Text style={profileStyles.logoutConfirmButtonText}>
+                  Se déconnecter
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
