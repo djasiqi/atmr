@@ -405,10 +405,7 @@ const NewInvoiceModal = ({ open, onClose, onInvoiceGenerated, companyId, initial
           const amount = Number.isNaN(baseAmount) ? 0 : baseAmount;
           const vatRate = vatConfig.applicable
             ? Number(
-                reservation?.vat_rate ??
-                  reservation?.default_vat_rate ??
-                  vatConfig.defaultRate ??
-                  0
+                reservation?.vat_rate ?? reservation?.default_vat_rate ?? vatConfig.defaultRate ?? 0
               )
             : 0;
           const sanitizedRate = Number.isNaN(vatRate) ? 0 : vatRate;

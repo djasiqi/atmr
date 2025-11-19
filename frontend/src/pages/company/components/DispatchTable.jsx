@@ -567,8 +567,8 @@ const DispatchTable = ({
                 isDispatching
                   ? `Moteur en cours (${progress || 0}%)`
                   : !dispatchDay
-                  ? 'Sélectionne une date'
-                  : "Lancer l'optimisation"
+                    ? 'Sélectionne une date'
+                    : "Lancer l'optimisation"
               }
             >
               {isDispatching ? 'Optimisation...' : 'Optimiser cette journée'}
@@ -671,8 +671,8 @@ const DispatchTable = ({
                         (b.status || '').toLowerCase() === 'completed'
                           ? 'success'
                           : (b.status || '').toLowerCase() === 'cancelled'
-                          ? 'error'
-                          : 'default'
+                            ? 'error'
+                            : 'default'
                       }
                       variant="outlined"
                     />

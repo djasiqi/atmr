@@ -1,8 +1,8 @@
 // src/pages/DriverSchedulePage.jsx
-import React from "react";
-import HeaderDashboard from "../../components/layout/Header/HeaderDashboard";
-import DriverSidebar from "../../components/layout/Sidebar/DriverSidebar/DriverSidebar";
-import DriverSchedule from "./components/Dashboard/DriverSchedule";
+import React from 'react';
+import HeaderDashboard from '../../components/layout/Header/HeaderDashboard';
+import DriverSidebar from '../../components/layout/Sidebar/DriverSidebar/DriverSidebar';
+import DriverSchedule from './components/Dashboard/DriverSchedule';
 import styles from './Dashboard/DriverDashboard.module.css';
 
 const DriverSchedulePage = () => {

@@ -257,7 +257,9 @@
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm);
   font-size: var(--font-sm);
-  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  transition:
+    border-color var(--transition-base),
+    box-shadow var(--transition-base);
 }
 
 .input:focus,
@@ -403,4 +405,3 @@
     grid-template-columns: 1fr;
   }
 }
-

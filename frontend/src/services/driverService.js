@@ -1,6 +1,6 @@
 // src/services/driverService.js
-import apiClient from "../utils/apiClient";
-import axios from "axios";
+import apiClient from '../utils/apiClient';
+import axios from 'axios';
 
 export const fetchDriverProfile = async () => {
   try {
@@ -13,7 +13,7 @@ export const fetchDriverProfile = async () => {
 
 // src/services/driverService.js
 export const updateDriverPhoto = async (photoData) => {
-  const token = localStorage.getItem("authToken");
+  const token = localStorage.getItem('authToken');
   try {
     const response = await axios.put(
       `${process.env.REACT_APP_API_BASE_URL}/driver/me/photo`,
@@ -28,8 +28,8 @@ export const updateDriverPhoto = async (photoData) => {
 
 export const fetchDriverBookings = async () => {
   try {
-    const token = localStorage.getItem("authToken");
-    const response = await apiClient.get("/driver/me/bookings", {
+    const token = localStorage.getItem('authToken');
+    const response = await apiClient.get('/driver/me/bookings', {
       headers: { Authorization: `Bearer ${token}` },
     });
     return response.data;
@@ -40,9 +40,9 @@ export const fetchDriverBookings = async () => {
 
 export const updateDriverLocation = async (latitude, longitude) => {
   try {
-    const token = localStorage.getItem("authToken");
+    const token = localStorage.getItem('authToken');
     const response = await apiClient.put(
-      "/driver/me/location",
+      '/driver/me/location',
       { latitude, longitude },
       { headers: { Authorization: `Bearer ${token}` } }
     );
@@ -54,7 +54,7 @@ export const updateDriverLocation = async (latitude, longitude) => {
 
 export const fetchDriverBookingDetails = async (bookingId) => {
   try {
-    const token = localStorage.getItem("authToken");
+    const token = localStorage.getItem('authToken');
     const response = await apiClient.get(`/driver/me/bookings/${bookingId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -66,7 +66,7 @@ export const fetchDriverBookingDetails = async (bookingId) => {
 
 export const updateBookingStatus = async (bookingId, newStatus) => {
   try {
-    const token = localStorage.getItem("authToken");
+    const token = localStorage.getItem('authToken');
     const response = await apiClient.put(
       `/driver/me/bookings/${bookingId}/status`,
       { status: newStatus },
@@ -80,7 +80,7 @@ export const updateBookingStatus = async (bookingId, newStatus) => {
 
 export const rejectBooking = async (bookingId) => {
   try {
-    const token = localStorage.getItem("authToken");
+    const token = localStorage.getItem('authToken');
     const response = await apiClient.delete(`/driver/me/bookings/${bookingId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -92,9 +92,9 @@ export const rejectBooking = async (bookingId) => {
 
 export const updateDriverAvailability = async (isAvailable) => {
   try {
-    const token = localStorage.getItem("authToken");
+    const token = localStorage.getItem('authToken');
     const response = await apiClient.put(
-      "/driver/me/availability",
+      '/driver/me/availability',
       { is_available: isAvailable },
       { headers: { Authorization: `Bearer ${token}` } }
     );
@@ -104,10 +104,9 @@ export const updateDriverAvailability = async (isAvailable) => {
   }
 };
 
-
 export const updateDriverProfile = async (profileData) => {
   // Utilisez la clé "authToken" si c'est celle qui est utilisée pour stocker le token
-  const token = localStorage.getItem("authToken");
+  const token = localStorage.getItem('authToken');
   try {
     const response = await axios.put(
       `${process.env.REACT_APP_API_BASE_URL}/driver/me/profile`,
@@ -124,7 +123,7 @@ export const updateDriverProfile = async (profileData) => {
 
 export const fetchDriverAssignments = async () => {
   try {
-    const response = await apiClient.get("/driver/me/bookings");
+    const response = await apiClient.get('/driver/me/bookings');
     return response.data; // Assurez-vous que l'API renvoie un tableau de courses
   } catch (error) {
     throw error;
@@ -133,12 +132,16 @@ export const fetchDriverAssignments = async () => {
 
 export const startBooking = async (bookingId) => {
   try {
-    const token = localStorage.getItem("authToken");
-    const response = await apiClient.put(`/driver/me/bookings/${bookingId}/status`, {
-      status: "in_progress"
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const token = localStorage.getItem('authToken');
+    const response = await apiClient.put(
+      `/driver/me/bookings/${bookingId}/status`,
+      {
+        status: 'in_progress',
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
     return response.data;
   } catch (error) {
     throw error;
@@ -147,32 +150,36 @@ export const startBooking = async (bookingId) => {
 
 export const reportBookingIssue = async (bookingId, issueMessage) => {
   try {
-    const token = localStorage.getItem("authToken");
-    const response = await apiClient.post(`/driver/me/bookings/${bookingId}/report`, {
-      issue: issueMessage
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const token = localStorage.getItem('authToken');
+    const response = await apiClient.post(
+      `/driver/me/bookings/${bookingId}/report`,
+      {
+        issue: issueMessage,
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
     return response.data;
   } catch (error) {
     throw error;
   }
 };
-
 
 export const completeBooking = async (bookingId) => {
   try {
-    const token = localStorage.getItem("authToken");
-    const response = await apiClient.put(`/driver/me/bookings/${bookingId}/status`, {
-      status: "completed"
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const token = localStorage.getItem('authToken');
+    const response = await apiClient.put(
+      `/driver/me/bookings/${bookingId}/status`,
+      {
+        status: 'completed',
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
     return response.data;
   } catch (error) {
     throw error;
   }
 };
-
-
-

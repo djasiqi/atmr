@@ -1,181 +1,182 @@
 /* Conteneur principal */
 .account-container {
-    font-family: Arial, sans-serif;
-    margin: 0 auto;
-    max-width: 1000px;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-  
-  /* Contenu principal */
-  .account-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 20px;
-  }
-  
-  /* Titre principal */
-  .title {
-    font-size: 2.5em;
-    font-weight: bold;
-    margin-bottom: 20px;
-    color: #00796b;
-    text-align: center;
-  }
-  
-  /* Carte de profil */
-  .profile-card {
-    background-color: #fff;
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    width: 100%;
-    max-width: 600px;
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 15px;
-  }
-  
-  /* En-tête du profil */
-  .profile-header {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-  }
-  
-  /* Photo de profil */
-  .profile-pic {
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 3px solid #00796b;
-  }
-  
-  /* Bouton Modifier */
-  .edit-button {
-    background-color: #00796b;
-    color: white;
-    padding: 8px 15px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background 0.3s;
-  }
-  
-  .edit-button:hover {
-    background-color: #004d40;
-  }
-  
-  /* Informations du profil */
-  .profile-info {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  
-  .profile-info label {
-    font-weight: bold;
-    color: #333;
-  }
-  
-  .profile-info input,
-  .profile-info select {
-    font-size: 1.1em;
-    padding: 10px;
-    border: 2px solid #ddd;
-    border-radius: 8px;
-    width: 100%;
-    box-sizing: border-box;
-    transition: border-color 0.3s, box-shadow 0.3s;
-  }
-  
-  .profile-info input:focus,
-  .profile-info select:focus {
-    border-color: #00796b;
-    box-shadow: 0 0 8px rgba(0, 121, 107, 0.5);
-    outline: none;
-  }
-  
-  /* Bouton Sauvegarder */
-  .save-button {
-    width: 100%;
-    padding: 12px;
-    background-color: #00796b;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 1.2em;
-    margin-top: 15px;
-    transition: background 0.3s;
-  }
-  
-  .save-button:hover {
-    background-color: #004d40;
-  }
-  
-  /* Section Paiement */
+  font-family: Arial, sans-serif;
+  margin: 0 auto;
+  max-width: 1000px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Contenu principal */
+.account-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Titre principal */
+.title {
+  font-size: 2.5em;
+  font-weight: bold;
+  margin-bottom: 20px;
+  color: #00796b;
+  text-align: center;
+}
+
+/* Carte de profil */
+.profile-card {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 600px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+/* En-tête du profil */
+.profile-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Photo de profil */
+.profile-pic {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #00796b;
+}
+
+/* Bouton Modifier */
+.edit-button {
+  background-color: #00796b;
+  color: white;
+  padding: 8px 15px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.edit-button:hover {
+  background-color: #004d40;
+}
+
+/* Informations du profil */
+.profile-info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-info label {
+  font-weight: bold;
+  color: #333;
+}
+
+.profile-info input,
+.profile-info select {
+  font-size: 1.1em;
+  padding: 10px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  transition:
+    border-color 0.3s,
+    box-shadow 0.3s;
+}
+
+.profile-info input:focus,
+.profile-info select:focus {
+  border-color: #00796b;
+  box-shadow: 0 0 8px rgba(0, 121, 107, 0.5);
+  outline: none;
+}
+
+/* Bouton Sauvegarder */
+.save-button {
+  width: 100%;
+  padding: 12px;
+  background-color: #00796b;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1.2em;
+  margin-top: 15px;
+  transition: background 0.3s;
+}
+
+.save-button:hover {
+  background-color: #004d40;
+}
+
+/* Section Paiement */
+.payment-section {
+  background-color: #f9f9f9;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 600px;
+  text-align: center;
+}
+
+.payment-section h2 {
+  color: #00796b;
+  font-size: 1.8em;
+  margin-bottom: 15px;
+}
+
+.payment-section select {
+  font-size: 1.1em;
+  padding: 10px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.add-payment {
+  background-color: #00796b;
+  color: white;
+  padding: 10px;
+  margin-top: 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.3s;
+}
+
+.add-payment:hover {
+  background-color: #004d40;
+}
+
+/* Messages d'erreur */
+.error {
+  color: red;
+  font-weight: bold;
+  text-align: center;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .profile-card,
   .payment-section {
-    background-color: #f9f9f9;
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    width: 100%;
-    max-width: 600px;
-    text-align: center;
+    width: 90%;
   }
-  
-  .payment-section h2 {
-    color: #00796b;
-    font-size: 1.8em;
-    margin-bottom: 15px;
-  }
-  
-  .payment-section select {
-    font-size: 1.1em;
-    padding: 10px;
-    border: 2px solid #ddd;
-    border-radius: 8px;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  
-  .add-payment {
-    background-color: #00796b;
-    color: white;
-    padding: 10px;
-    margin-top: 10px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    width: 100%;
-    transition: background 0.3s;
-  }
-  
-  .add-payment:hover {
-    background-color: #004d40;
-  }
-  
-  /* Messages d'erreur */
-  .error {
-    color: red;
-    font-weight: bold;
-    text-align: center;
-  }
-  
-  /* Responsive */
-  @media (max-width: 768px) {
-    .profile-card,
-    .payment-section {
-      width: 90%;
-    }
-  }
-  
+}

@@ -1,32 +1,32 @@
 // src/components/DriverProfile.jsx
-import React, { useState, useEffect } from "react";
-import styles from "./DriverProfile.module.css";
-import { fetchDriverProfile } from "../../../services/driverService";
-import PhotoCaptureModal from "../components/Dashboard/PhotoCaptureModal";
+import React, { useState, useEffect } from 'react';
+import styles from './DriverProfile.module.css';
+import { fetchDriverProfile } from '../../../services/driverService';
+import PhotoCaptureModal from '../components/Dashboard/PhotoCaptureModal';
 
 const DriverProfile = ({ public_id, onEdit }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [profilePic, setProfilePic] = useState("/images/default-driver.png");
+  const [error, setError] = useState('');
+  const [profilePic, setProfilePic] = useState('/images/default-driver.png');
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
       try {
         setLoading(true);
-        setError("");
+        setError('');
         const data = await fetchDriverProfile();
         if (data && data.profile) {
           setProfile(data.profile);
         } else if (data) {
           setProfile(data);
         } else {
-          setError("Profil introuvable.");
+          setError('Profil introuvable.');
         }
       } catch (err) {
-        console.error("Erreur lors du chargement du profil", err);
-        setError("Erreur lors du chargement du profil.");
+        console.error('Erreur lors du chargement du profil', err);
+        setError('Erreur lors du chargement du profil.');
       } finally {
         setLoading(false);
       }
@@ -37,7 +37,7 @@ const DriverProfile = ({ public_id, onEdit }) => {
 
   useEffect(() => {
     if (profile) {
-      setProfilePic(profile.photo || "/images/default-driver.png");
+      setProfilePic(profile.photo || '/images/default-driver.png');
     }
   }, [profile]);
 
@@ -55,9 +55,7 @@ const DriverProfile = ({ public_id, onEdit }) => {
   }
 
   if (error || !profile) {
-    return (
-      <div className={styles.profile}>{error || "Profil introuvable"}</div>
-    );
+    return <div className={styles.profile}>{error || 'Profil introuvable'}</div>;
   }
 
   const { firstName, lastName, phone, vehicle, status } = profile;
@@ -74,26 +72,22 @@ const DriverProfile = ({ public_id, onEdit }) => {
         />
         <div className={styles.profileInfo}>
           <h2 className={styles.profileName}>
-            {firstName || "Non spécifié"} {lastName || ""}
+            {firstName || 'Non spécifié'} {lastName || ''}
           </h2>
           <p className={styles.profileStatus}>
-            Statut:{" "}
-            <span
-              className={
-                status === "Disponible" ? styles.available : styles.busy
-              }
-            >
-              {status || "Non spécifié"}
+            Statut:{' '}
+            <span className={status === 'Disponible' ? styles.available : styles.busy}>
+              {status || 'Non spécifié'}
             </span>
           </p>
         </div>
       </div>
       <div className={styles.profileDetails}>
         <div className={styles.detailItem}>
-          <strong>Téléphone :</strong> <span>{phone || "Non spécifié"}</span>
+          <strong>Téléphone :</strong> <span>{phone || 'Non spécifié'}</span>
         </div>
         <div className={styles.detailItem}>
-          <strong>Véhicule :</strong> <span>{vehicle || "Non spécifié"}</span>
+          <strong>Véhicule :</strong> <span>{vehicle || 'Non spécifié'}</span>
         </div>
       </div>
       {onEdit && (
@@ -105,10 +99,7 @@ const DriverProfile = ({ public_id, onEdit }) => {
       )}
 
       {photoModalOpen && (
-        <PhotoCaptureModal
-          onClose={handlePhotoModalClose}
-          onCapture={handlePhotoCapture}
-        />
+        <PhotoCaptureModal onClose={handlePhotoModalClose} onCapture={handlePhotoCapture} />
       )}
     </section>
   );

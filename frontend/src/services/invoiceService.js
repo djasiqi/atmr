@@ -287,7 +287,10 @@ export const canCancelInvoice = (invoice) => {
 };
 
 export const canDuplicateInvoice = (invoice) => {
-  return ['sent', 'partially_paid', 'paid', 'overdue'].includes(invoice.status) || invoice.status === 'cancelled';
+  return (
+    ['sent', 'partially_paid', 'paid', 'overdue'].includes(invoice.status) ||
+    invoice.status === 'cancelled'
+  );
 };
 
 export const duplicateInvoice = async (companyId, invoiceId) => {

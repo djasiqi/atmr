@@ -1,11 +1,11 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import { showComingSoonToast } from "../../../utils/showComingSoonToast";
-import styles from "./Footer.module.css";
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { showComingSoonToast } from '../../../utils/showComingSoonToast';
+import styles from './Footer.module.css';
 
 const Footer = () => {
-  const [language, setLanguage] = useState("Français (Suisse)");
-  const [location] = useState("En cours de développement");
+  const [language, setLanguage] = useState('Français (Suisse)');
+  const [location] = useState('En cours de développement');
 
   // Fonction pour changer la langue
   const handleLanguageChange = (event) => {
@@ -29,7 +29,7 @@ const Footer = () => {
               className={styles.contactLink}
               onClick={(event) => event.stopPropagation()}
             >
-              {" "}
+              {' '}
               info@lirie.ch
             </a>
           </p>
@@ -40,56 +40,32 @@ const Footer = () => {
             <h3>Entreprise</h3>
             <ul>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   À propos
                 </button>
               </li>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Nos services
                 </button>
               </li>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Espace presse
                 </button>
               </li>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Investisseurs
                 </button>
               </li>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Blog
                 </button>
               </li>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Offres d'emploi
                 </button>
               </li>
@@ -100,56 +76,32 @@ const Footer = () => {
             <h3>Produits</h3>
             <ul>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Déplacez-vous avec nous
                 </button>
               </li>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Conduire
                 </button>
               </li>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Livrez
                 </button>
               </li>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Commandez un repas
                 </button>
               </li>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Transport pour les entreprises
                 </button>
               </li>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Cartes-cadeaux
                 </button>
               </li>
@@ -160,29 +112,17 @@ const Footer = () => {
             <h3>Citoyens du monde</h3>
             <ul>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Sécurité
                 </button>
               </li>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Diversité et intégration
                 </button>
               </li>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Développement durable
                 </button>
               </li>
@@ -193,29 +133,17 @@ const Footer = () => {
             <h3>Déplacements</h3>
             <ul>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Réservez
                 </button>
               </li>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Aéroports
                 </button>
               </li>
               <li>
-                <button
-                  type="button"
-                  className={styles.linkButton}
-                  onClick={handleComingSoon}
-                >
+                <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                   Villes
                 </button>
               </li>
@@ -230,54 +158,38 @@ const Footer = () => {
           <span>© 2025 MonTransport Inc.</span>
           <ul>
             <li>
-              <button
-                type="button"
-                className={styles.linkButton}
-                onClick={handleComingSoon}
-              >
+              <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                 Facebook
               </button>
             </li>
             <li>
-              <button
-                type="button"
-                className={styles.linkButton}
-                onClick={handleComingSoon}
-              >
+              <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                 Twitter
               </button>
             </li>
             <li>
-              <button
-                type="button"
-                className={styles.linkButton}
-                onClick={handleComingSoon}
-              >
+              <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                 YouTube
               </button>
             </li>
             <li>
-              <button
-                type="button"
-                className={styles.linkButton}
-                onClick={handleComingSoon}
-              >
+              <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                 LinkedIn
               </button>
             </li>
             <li>
-              <button
-                type="button"
-                className={styles.linkButton}
-                onClick={handleComingSoon}
-              >
+              <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
                 Instagram
               </button>
             </li>
           </ul>
         </div>
         <div className={styles.language}>
-          <select value={language} onChange={handleLanguageChange} className={styles.languageSelector}>
+          <select
+            value={language}
+            onChange={handleLanguageChange}
+            className={styles.languageSelector}
+          >
             <option value="Français (Suisse)">Français (Suisse)</option>
             <option value="English (US)">English (US)</option>
           </select>
@@ -286,21 +198,13 @@ const Footer = () => {
         <div className={styles.legal}>
           <Link to="/privacy" className={styles.linkButton}>
             Confidentialité
-          </Link>{" "}
-          |{" "}
-          <button
-            type="button"
-            className={styles.linkButton}
-            onClick={handleComingSoon}
-          >
+          </Link>{' '}
+          |{' '}
+          <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
             Accessibilité
-          </button>{" "}
-          |{" "}
-          <button
-            type="button"
-            className={styles.linkButton}
-            onClick={handleComingSoon}
-          >
+          </button>{' '}
+          |{' '}
+          <button type="button" className={styles.linkButton} onClick={handleComingSoon}>
             Conditions
           </button>
         </div>

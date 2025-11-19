@@ -76,7 +76,9 @@
   border-radius: var(--radius-full);
   cursor: pointer;
   font-size: var(--font-sm);
-  transition: background-color var(--transition-base), color var(--transition-base);
+  transition:
+    background-color var(--transition-base),
+    color var(--transition-base);
 }
 
 .signUp:hover {
@@ -144,4 +146,3 @@
     align-self: center;
   }
 }
-

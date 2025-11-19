@@ -13,8 +13,12 @@
 }
 
 /* Si tu veux facilement changer la hauteur via une classe utilitaire */
-.h480 { height: 480px; }
-.h600 { height: 600px; }
+.h480 {
+  height: 480px;
+}
+.h600 {
+  height: 600px;
+}
 
 /* --- Carte Leaflet --- */
 .leafletMap, /* à passer sur <MapContainer className={styles.leafletMap} /> */
@@ -55,7 +59,7 @@
 /* On ajoute un halo pour lisibilité + une animation discrète */
 .pickup-marker,
 .dropoff-marker {
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,.25));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
 }
 .pickup-marker .marker-dot,
 .dropoff-marker .marker-dot {
@@ -71,13 +75,22 @@
 }
 
 /* Si un jour tu remplaces l'HTML inline par un wrapper <div class="marker-dot">P</div> */
-.pickup-marker .marker-dot { background: #52c41a; }   /* vert */
-.dropoff-marker .marker-dot { background: #f5222d; }  /* rouge */
+.pickup-marker .marker-dot {
+  background: #52c41a;
+} /* vert */
+.dropoff-marker .marker-dot {
+  background: #f5222d;
+} /* rouge */
 
 /* Animation douce (respect reduced motion) */
 @keyframes pinPulse {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-1px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1px);
+  }
 }
 .pickup-marker,
 .dropoff-marker {
@@ -85,7 +98,9 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .pickup-marker,
-  .dropoff-marker { animation: none; }
+  .dropoff-marker {
+    animation: none;
+  }
 }
 
 /* --- Légende optionnelle (si tu l'ajoutes plus tard) --- */
@@ -122,9 +137,15 @@
   height: 4px;
   border-radius: var(--radius-full);
 }
-.swatchRoute { background: var(--blue-500); }
-.swatchLateMild { background: var(--warning-primary); }
-.swatchLateHigh { background: var(--danger-primary); }
+.swatchRoute {
+  background: var(--blue-500);
+}
+.swatchLateMild {
+  background: var(--warning-primary);
+}
+.swatchLateHigh {
+  background: var(--danger-primary);
+}
 
 /* --- Badges d'état si besoin dans la légende --- */
 .badge {
@@ -134,28 +155,51 @@
   font-size: var(--font-xs);
   font-weight: var(--font-weight-bold);
 }
-.badgeOk { background: var(--success-bg); color: var(--success-primary); }
-.badgeWarn { background: var(--warning-bg); color: var(--warning-primary); }
-.badgeDanger { background: var(--danger-bg); color: var(--danger-primary); }
+.badgeOk {
+  background: var(--success-bg);
+  color: var(--success-primary);
+}
+.badgeWarn {
+  background: var(--warning-bg);
+  color: var(--warning-primary);
+}
+.badgeDanger {
+  background: var(--danger-bg);
+  color: var(--danger-primary);
+}
 
 /* --- Responsiveness --- */
 @media (max-width: 900px) {
-  .driverMapContainer { height: 360px; }
+  .driverMapContainer {
+    height: 360px;
+  }
 }
 @media (max-width: 640px) {
-  .driverMapContainer { height: 320px; }
-  .legend { right: var(--spacing-xs); bottom: var(--spacing-xs); padding: var(--spacing-xs); }
+  .driverMapContainer {
+    height: 320px;
+  }
+  .legend {
+    right: var(--spacing-xs);
+    bottom: var(--spacing-xs);
+    padding: var(--spacing-xs);
+  }
 }
 
 /* --- Dark mode --- */
 @media (prefers-color-scheme: dark) {
-  .driverMapContainer { box-shadow: none; }
+  .driverMapContainer {
+    box-shadow: none;
+  }
   .driverMapContainer :global(.leaflet-popup-content-wrapper) {
     background: var(--bg-primary);
     border-color: var(--border-primary);
   }
-  .driverMapContainer :global(.leaflet-popup-content) { color: var(--text-secondary); }
-  .driverMapContainer :global(.leaflet-popup-tip) { border-color: var(--border-primary); }
+  .driverMapContainer :global(.leaflet-popup-content) {
+    color: var(--text-secondary);
+  }
+  .driverMapContainer :global(.leaflet-popup-tip) {
+    border-color: var(--border-primary);
+  }
 }
 
 /* --- Scroll & touch tweaks --- */

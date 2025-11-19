@@ -23,19 +23,21 @@
   padding: var(--spacing-lg);
   background-color: var(--bg-primary);
   border-radius: var(--radius-lg);
-  
+
   /* S'adapte à la largeur de la sidebar (72px ou 240px) */
   margin: var(--spacing-lg);
   margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
   max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
-  
+
   box-shadow: var(--shadow-md);
   overflow-x: hidden;
   overflow-y: visible;
   position: relative;
   z-index: var(--z-base);
   box-sizing: border-box;
-  transition: margin-left var(--transition-base), max-width var(--transition-base);
+  transition:
+    margin-left var(--transition-base),
+    max-width var(--transition-base);
 }
 
 .separator {
@@ -81,7 +83,7 @@
   font-size: var(--font-sm);
 }
 
-.inlineControls input[type="date"] {
+.inlineControls input[type='date'] {
   padding: var(--spacing-xs) var(--spacing-sm);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
@@ -308,13 +310,15 @@
 }
 
 /* Effets visuels selon l'état du moteur reçu via data-dispatch-status */
-.dispatchSection[data-dispatch-status*="running"],
-.dispatchSection[data-dispatch-status*="optim"] {
+.dispatchSection[data-dispatch-status*='running'],
+.dispatchSection[data-dispatch-status*='optim'] {
   border-color: var(--warning-border);
-  box-shadow: 0 0 0 2px var(--warning-bg), var(--shadow-md);
+  box-shadow:
+    0 0 0 2px var(--warning-bg),
+    var(--shadow-md);
 }
 
-.dispatchSection[data-dispatch-status*="completed"] {
+.dispatchSection[data-dispatch-status*='completed'] {
   border-color: var(--success-border);
 }
 
@@ -645,7 +649,7 @@
   .overviewCards {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .mapSection {
     height: 300px;
   }
@@ -655,11 +659,11 @@
   .overviewCards {
     grid-template-columns: 1fr;
   }
-  
+
   .mapSection {
     height: 250px;
   }
-  
+
   .card:hover {
     transform: none;
   }
@@ -701,46 +705,46 @@
     border-radius: var(--radius-sm);
     box-sizing: border-box;
   }
-  
+
   /* Titre principal plus petit */
   .dashboard h1 {
     font-size: var(--font-xl);
     margin-bottom: var(--spacing-md);
   }
-  
+
   /* Sections avec moins d'espace */
   .separator {
     margin-bottom: var(--spacing-lg);
   }
-  
+
   /* KPI Cards en 2 colonnes sur mobile */
   .overviewCards {
     grid-template-columns: repeat(2, 1fr);
     gap: var(--spacing-sm);
     margin-bottom: var(--spacing-md);
   }
-  
+
   .card {
     padding: var(--spacing-sm) var(--spacing-md);
     gap: var(--spacing-sm);
   }
-  
+
   .cardIcon {
     font-size: var(--font-2xl);
   }
-  
+
   .cardContent h3 {
     font-size: 0.7rem;
   }
-  
+
   .cardContent p {
     font-size: var(--font-xl);
   }
-  
+
   .card:hover {
     transform: none;
   }
-  
+
   /* Map plus petite */
   .mapSection {
     height: 200px;
@@ -749,12 +753,12 @@
     max-width: 100% !important;
     box-sizing: border-box;
   }
-  
+
   .searchDriverInput {
     font-size: var(--font-xs);
     padding: var(--spacing-xs) var(--spacing-sm);
   }
-  
+
   /* Layout 1 colonne */
   .twoColumnLayout {
     grid-template-columns: 1fr;
@@ -763,7 +767,7 @@
     max-width: 100% !important;
     box-sizing: border-box;
   }
-  
+
   .leftColumn,
   .rightColumn {
     gap: var(--spacing-sm);
@@ -771,7 +775,7 @@
     max-width: 100% !important;
     box-sizing: border-box;
   }
-  
+
   /* Boutons d'action compacts */
   .quickActions {
     gap: var(--spacing-xs);
@@ -779,7 +783,7 @@
     max-width: 100% !important;
     box-sizing: border-box;
   }
-  
+
   .actionButton {
     padding: var(--spacing-sm);
     font-size: var(--font-xs);
@@ -788,19 +792,19 @@
     max-width: 100% !important;
     box-sizing: border-box;
   }
-  
+
   .actionIcon {
     font-size: var(--font-lg);
   }
-  
+
   .actionText strong {
     font-size: var(--font-xs);
   }
-  
+
   .actionText small {
     font-size: 0.65rem;
   }
-  
+
   /* Sections headers compacts */
   .sectionHeader {
     flex-direction: column;
@@ -808,7 +812,7 @@
     gap: var(--spacing-xs);
     margin-bottom: var(--spacing-xs);
   }
-  
+
   .sectionHeader h2 {
     font-size: var(--font-sm);
   }
@@ -820,12 +824,12 @@
     gap: var(--spacing-xs);
     font-size: var(--font-xs);
   }
-  
-  .inlineControls input[type="date"] {
+
+  .inlineControls input[type='date'] {
     font-size: var(--font-xs);
     padding: var(--spacing-xs);
   }
-  
+
   /* Tabs scrollables */
   .tabsHeader {
     overflow-x: auto;
@@ -833,25 +837,25 @@
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
   }
-  
+
   .tab {
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-xs);
     white-space: nowrap;
     min-width: 80px;
   }
-  
+
   .tabBadge {
     min-width: 16px;
     height: 16px;
     font-size: 0.65rem;
     padding: 0 var(--spacing-xs);
   }
-  
+
   .tabContent {
     padding: var(--spacing-xs);
   }
-  
+
   /* Sections scrollables */
   .reservationsSection,
   .driverSection,
@@ -862,15 +866,15 @@
     margin-bottom: var(--spacing-sm);
     box-sizing: border-box;
   }
-  
+
   .collapsibleHeader {
     padding: var(--spacing-sm);
   }
-  
+
   .collapsibleHeader h2 {
     font-size: var(--font-sm);
   }
-  
+
   /* Tables compactes */
   .table {
     font-size: var(--font-xs);
@@ -878,18 +882,18 @@
     width: 100% !important;
     box-sizing: border-box;
   }
-  
+
   .table th,
   .table td {
     padding: var(--spacing-xs);
     font-size: 0.7rem;
   }
-  
+
   .table button {
     padding: var(--spacing-xs);
     font-size: var(--font-xs);
   }
-  
+
   /* Wrapper pour les tableaux */
   .tableWrapper {
     width: 100% !important;
@@ -897,7 +901,7 @@
     overflow-x: auto;
     box-sizing: border-box;
   }
-  
+
   /* Charts compacts */
   .chartContainer {
     padding: var(--spacing-sm);
@@ -919,47 +923,47 @@
     border-radius: 0;
     box-sizing: border-box;
   }
-  
+
   /* Titre très compact */
   .dashboard h1 {
     font-size: var(--font-lg);
     margin-bottom: var(--spacing-sm);
   }
-  
+
   .separator {
     margin-bottom: var(--spacing-sm);
   }
-  
+
   /* KPI ultra compacts */
   .overviewCards {
     gap: var(--spacing-xs);
     margin-bottom: var(--spacing-sm);
   }
-  
+
   .card {
     padding: var(--spacing-xs) var(--spacing-sm);
     gap: var(--spacing-xs);
     flex-direction: row;
   }
-  
+
   .cardIcon {
     font-size: var(--font-xl);
   }
-  
+
   .cardContent {
     text-align: left;
   }
-  
+
   .cardContent h3 {
     font-size: 0.6rem;
     margin-bottom: 2px;
   }
-  
+
   .cardContent p {
     font-size: var(--font-md);
     font-weight: var(--font-weight-bold);
   }
-  
+
   /* Map ultra compacte */
   .mapSection {
     height: 180px;
@@ -968,30 +972,30 @@
     max-width: 100% !important;
     box-sizing: border-box;
   }
-  
+
   .searchDriverContainer {
     flex-direction: column;
     gap: var(--spacing-xs);
   }
-  
+
   .searchDriverInput {
     font-size: 0.75rem;
     padding: var(--spacing-xs);
   }
-  
+
   .clearSearchButton {
     width: 20px;
     height: 20px;
     font-size: 0.7rem;
   }
-  
+
   /* Boutons d'action très compacts */
   .quickActions {
     width: 100% !important;
     max-width: 100% !important;
     box-sizing: border-box;
   }
-  
+
   .actionButton {
     padding: var(--spacing-xs);
     gap: var(--spacing-xs);
@@ -1000,51 +1004,51 @@
     max-width: 100% !important;
     box-sizing: border-box;
   }
-  
+
   .actionIcon {
     font-size: var(--font-md);
   }
-  
+
   .actionText strong {
     font-size: 0.7rem;
   }
-  
+
   .actionText small {
     display: none;
   }
-  
+
   /* Sections headers très compacts */
   .sectionHeader h2 {
     font-size: var(--font-xs);
   }
-  
+
   .inlineControls {
     font-size: 0.7rem;
   }
-  
-  .inlineControls input[type="date"] {
+
+  .inlineControls input[type='date'] {
     font-size: 0.7rem;
     padding: 2px var(--spacing-xs);
   }
-  
+
   /* Tabs ultra compacts */
   .tab {
     padding: var(--spacing-xs);
     font-size: 0.65rem;
     min-width: 60px;
   }
-  
+
   .tabBadge {
     min-width: 14px;
     height: 14px;
     font-size: 0.6rem;
     padding: 0 2px;
   }
-  
+
   .tabContent {
     padding: var(--spacing-xs);
   }
-  
+
   /* Tables ultra compactes */
   .table {
     font-size: 0.65rem;
@@ -1052,25 +1056,25 @@
     width: 100% !important;
     box-sizing: border-box;
   }
-  
+
   .tableWrapper {
     width: 100% !important;
     max-width: 100% !important;
     overflow-x: auto;
     box-sizing: border-box;
   }
-  
+
   .table th,
   .table td {
     padding: 2px var(--spacing-xs);
     font-size: 0.65rem;
   }
-  
+
   .table button {
     padding: 2px var(--spacing-xs);
     font-size: 0.65rem;
   }
-  
+
   /* Charts */
   .chartContainer {
     padding: var(--spacing-xs);
@@ -1079,7 +1083,7 @@
     max-width: 100% !important;
     box-sizing: border-box;
   }
-  
+
   /* Sections compactes */
   .reservationsSection,
   .driverSection,
@@ -1088,7 +1092,7 @@
     max-width: 100% !important;
     box-sizing: border-box;
   }
-  
+
   .twoColumnLayout,
   .leftColumn,
   .rightColumn {
@@ -1096,16 +1100,16 @@
     max-width: 100% !important;
     box-sizing: border-box;
   }
-  
+
   /* Collapsible headers */
   .collapsibleHeader {
     padding: var(--spacing-xs);
   }
-  
+
   .collapsibleHeader h2 {
     font-size: var(--font-xs);
   }
-  
+
   .collapseIcon {
     font-size: var(--font-md);
   }
@@ -1113,7 +1117,7 @@
 
 /* Téléphones très étroits (< 390px): compaction supplémentaire */
 @media (max-width: 390px) {
-  .content { 
+  .content {
     margin: 0 !important;
     margin-left: 60px !important;
     max-width: calc(100vw - 60px) !important;
@@ -1124,26 +1128,53 @@
   }
 
   /* KPI en grille 2 colonnes pour réduire la hauteur */
-  .overviewCards { grid-template-columns: repeat(2, 1fr); gap: var(--spacing-xs); }
-  .card { padding: var(--spacing-xs); gap: var(--spacing-xs); }
-  .cardIcon { font-size: var(--font-lg); }
-  .cardContent h3 { font-size: 0.6rem; }
-  .cardContent p { font-size: var(--font-md); }
+  .overviewCards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-xs);
+  }
+  .card {
+    padding: var(--spacing-xs);
+    gap: var(--spacing-xs);
+  }
+  .cardIcon {
+    font-size: var(--font-lg);
+  }
+  .cardContent h3 {
+    font-size: 0.6rem;
+  }
+  .cardContent p {
+    font-size: var(--font-md);
+  }
 
   /* Carte et contrôles plus petits */
-  .mapSection { 
+  .mapSection {
     height: 170px;
     width: 100% !important;
     max-width: 100% !important;
     box-sizing: border-box;
   }
-  .searchDriverContainer { flex-direction: row; gap: var(--spacing-xs); }
-  .searchDriverInput { font-size: 0.7rem; padding: 4px 8px; width: 100%; }
-  .mapSection :global(.leaflet-control) { transform: scale(0.85); transform-origin: top left; }
+  .searchDriverContainer {
+    flex-direction: row;
+    gap: var(--spacing-xs);
+  }
+  .searchDriverInput {
+    font-size: 0.7rem;
+    padding: 4px 8px;
+    width: 100%;
+  }
+  .mapSection :global(.leaflet-control) {
+    transform: scale(0.85);
+    transform-origin: top left;
+  }
 
   /* En-têtes de section compacts */
-  .sectionHeader { gap: 4px; margin-bottom: 4px; }
-  .sectionHeader h2 { font-size: var(--font-xs); }
+  .sectionHeader {
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+  .sectionHeader h2 {
+    font-size: var(--font-xs);
+  }
 
   /* Boutons d'action compacts */
   .quickActions {
@@ -1151,27 +1182,44 @@
     max-width: 100% !important;
     box-sizing: border-box;
   }
-  
-  .actionButton { 
+
+  .actionButton {
     padding: 6px;
     gap: 6px;
     width: 100% !important;
     max-width: 100% !important;
     box-sizing: border-box;
   }
-  .actionIcon { font-size: var(--font-md); }
-  .actionText small { display: none; }
+  .actionIcon {
+    font-size: var(--font-md);
+  }
+  .actionText small {
+    display: none;
+  }
 
   /* Tabs sans scrollbar visible */
-  .tabsHeader { padding-bottom: 2px; scrollbar-width: none; }
-  .tabsHeader::-webkit-scrollbar { display: none; }
-  .tab { padding: 4px 6px; min-width: 64px; font-size: 0.65rem; }
-  .tabBadge { min-width: 14px; height: 14px; font-size: 0.6rem; }
+  .tabsHeader {
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+  .tabsHeader::-webkit-scrollbar {
+    display: none;
+  }
+  .tab {
+    padding: 4px 6px;
+    min-width: 64px;
+    font-size: 0.65rem;
+  }
+  .tabBadge {
+    min-width: 14px;
+    height: 14px;
+    font-size: 0.6rem;
+  }
 
   /* Sections */
   .reservationsSection,
   .driverSection,
-  .compactSection { 
+  .compactSection {
     margin-bottom: var(--spacing-xs);
     width: 100% !important;
     max-width: 100% !important;
@@ -1179,14 +1227,17 @@
   }
 
   /* Table plus étroite */
-  .table { 
+  .table {
     min-width: 360px;
     font-size: 0.65rem;
     width: 100% !important;
     box-sizing: border-box;
   }
-  .table th, .table td { padding: 2px 6px; }
-  
+  .table th,
+  .table td {
+    padding: 2px 6px;
+  }
+
   .tableWrapper {
     width: 100% !important;
     max-width: 100% !important;
@@ -1204,7 +1255,7 @@
     box-shadow: none;
   }
 
-  .inlineControls input[type="date"] {
+  .inlineControls input[type='date'] {
     background: var(--bg-primary);
     color: var(--text-primary);
     border-color: var(--border-primary);

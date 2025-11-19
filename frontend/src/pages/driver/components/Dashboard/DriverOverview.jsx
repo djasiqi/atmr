@@ -1,17 +1,17 @@
 // Fichier: C:\Users\jasiq\atmr\frontend\src\pages\driver\components\Dashboard\DriverOverview.jsx
-import React from "react";
-import styles from "./DriverOverview.module.css";
-import { FiList, FiTruck, FiCheckSquare } from "react-icons/fi"; // Importation des icônes
+import React from 'react';
+import styles from './DriverOverview.module.css';
+import { FiList, FiTruck, FiCheckSquare } from 'react-icons/fi'; // Importation des icônes
 
 const DriverOverview = ({ assignments }) => {
   const total = assignments.length;
   // Correction: inclure 'in_progress' pour une meilleure correspondance avec les statuts de la DB
   const inProgress = assignments.filter(
-    (a) => a.status === "assigned" || a.status === "in_progress"
+    (a) => a.status === 'assigned' || a.status === 'in_progress'
   ).length;
   // Correction: inclure tous les statuts terminés
   const completed = assignments.filter(
-    (a) => a.status === "completed" || a.status === "return_completed"
+    (a) => a.status === 'completed' || a.status === 'return_completed'
   ).length;
 
   return (

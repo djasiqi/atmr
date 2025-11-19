@@ -47,6 +47,7 @@ describe('useAuthToken', () => {
       isClient: false,
       companyId: 5,
       userId: 'user-123',
+      public_id: 'user-123',
     });
   });
 

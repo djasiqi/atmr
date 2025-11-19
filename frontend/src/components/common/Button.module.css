@@ -183,9 +183,8 @@
     font-size: var(--font-sm);
     padding: var(--spacing-xs) var(--spacing-md);
   }
-  
+
   .lg {
     padding: var(--spacing-sm) var(--spacing-lg);
   }
 }
-

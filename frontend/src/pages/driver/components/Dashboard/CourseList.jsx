@@ -1,13 +1,11 @@
 // src/components/CourseList.jsx
-import React, { useState, useEffect } from "react";
-import styles from "./CourseList.module.css";
-import { fetchDriverAssignments } from "../../../../services/driverService";
+import React, { useState, useEffect } from 'react';
+import styles from './CourseList.module.css';
+import { fetchDriverAssignments } from '../../../../services/driverService';
 
 const CourseList = ({ assignments: initialAssignments, onRowClick }) => {
   const [assignments, setAssignments] = useState(initialAssignments || []);
-  const [loading, setLoading] = useState(
-    !initialAssignments || initialAssignments.length === 0
-  );
+  const [loading, setLoading] = useState(!initialAssignments || initialAssignments.length === 0);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -19,8 +17,8 @@ const CourseList = ({ assignments: initialAssignments, onRowClick }) => {
           const data = await fetchDriverAssignments();
           setAssignments(data);
         } catch (err) {
-          console.error("Erreur lors du chargement des courses:", err);
-          setError("Erreur lors du chargement des courses.");
+          console.error('Erreur lors du chargement des courses:', err);
+          setError('Erreur lors du chargement des courses.');
         } finally {
           setLoading(false);
         }
@@ -45,17 +43,11 @@ const CourseList = ({ assignments: initialAssignments, onRowClick }) => {
       ) : (
         <ul>
           {assignments.map((course) => (
-            <li
-              key={course.id}
-              onClick={() => onRowClick(course)}
-              className={styles.courseItem}
-            >
+            <li key={course.id} onClick={() => onRowClick(course)} className={styles.courseItem}>
               <span>
                 {course.pickup} → {course.dropoff}
               </span>
-              <span>
-                {new Date(course.scheduled_time).toLocaleTimeString("fr-FR")}
-              </span>
+              <span>{new Date(course.scheduled_time).toLocaleTimeString('fr-FR')}</span>
             </li>
           ))}
         </ul>

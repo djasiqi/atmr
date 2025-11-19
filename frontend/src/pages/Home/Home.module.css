@@ -53,7 +53,9 @@
   border-radius: var(--radius-md);
   width: 100%;
   box-sizing: border-box;
-  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  transition:
+    border-color var(--transition-base),
+    box-shadow var(--transition-base);
 }
 
 .input:focus {

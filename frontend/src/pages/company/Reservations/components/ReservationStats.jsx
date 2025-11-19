@@ -7,32 +7,32 @@ const ReservationStats = ({ stats }) => {
       label: 'Total',
       value: stats.total,
       icon: '📅',
-      color: '#00796b'
+      color: '#00796b',
     },
     {
       label: 'En cours',
       value: stats.inProgress,
       icon: '🚗',
-      color: '#ff9800'
+      color: '#ff9800',
     },
     {
       label: 'Terminées',
       value: stats.completed,
       icon: '✅',
-      color: '#4caf50'
+      color: '#4caf50',
     },
     {
       label: 'Annulées',
       value: stats.canceled,
       icon: '❌',
-      color: '#f44336'
+      color: '#f44336',
     },
     {
       label: 'Revenus',
       value: `${stats.revenue.toFixed(2)} CHF`,
       icon: '💰',
-      color: '#2196f3'
-    }
+      color: '#2196f3',
+    },
   ];
 
   return (

@@ -25,7 +25,7 @@
 .select:focus {
   outline: none;
   border-color: var(--info-primary);
-  box-shadow: 0 0 0 3px rgba(59,130,246,.2);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
 
 .select:disabled {

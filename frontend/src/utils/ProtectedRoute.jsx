@@ -1,11 +1,11 @@
-import React from "react";
-import { Navigate, useLocation } from "react-router-dom";
-import { jwtDecode } from "jwt-decode";
+import React from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 
 const ProtectedRoute = ({ allowedRoles, children }) => {
   const location = useLocation();
-  const token = localStorage.getItem("authToken");
-  const rawUser = localStorage.getItem("user");
+  const token = localStorage.getItem('authToken');
+  const rawUser = localStorage.getItem('user');
   const user = rawUser ? JSON.parse(rawUser) : null;
 
   // Pas de token → login
@@ -18,12 +18,12 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
   try {
     const payload = jwtDecode(token);
     const now = Math.floor(Date.now() / 1000);
-    if (typeof payload.exp === "number" && payload.exp <= now) {
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("refreshToken");
+    if (typeof payload.exp === 'number' && payload.exp <= now) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
       return <Navigate to="/login" replace state={{ from: location }} />;
     }
-    role = String(payload?.role ?? user?.role ?? "").toLowerCase();
+    role = String(payload?.role ?? user?.role ?? '').toLowerCase();
   } catch {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }

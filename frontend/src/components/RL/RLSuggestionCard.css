@@ -317,19 +317,19 @@
   .driver-change {
     flex-direction: column;
   }
-  
+
   .change-arrow {
     transform: rotate(90deg);
   }
-  
+
   .suggestion-metrics {
     grid-template-columns: 1fr;
   }
-  
+
   .suggestion-actions {
     flex-direction: column;
   }
-  
+
   .btn-apply,
   .btn-details {
     width: 100%;
@@ -429,4 +429,3 @@
     transform: translateY(0);
   }
 }
-

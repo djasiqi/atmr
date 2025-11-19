@@ -1,5 +1,8 @@
-const RAW_API_BASE =
-  (process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_API_URL || '').trim();
+const RAW_API_BASE = (
+  process.env.REACT_APP_API_BASE_URL ||
+  process.env.REACT_APP_API_URL ||
+  ''
+).trim();
 
 const API_BASE = RAW_API_BASE.replace(/\/+$/, '');
 
@@ -9,9 +12,9 @@ const getApiOrigin = () => {
     console.log('[resolveLogoUrl] RAW_API_BASE est vide');
     return '';
   }
-  
+
   console.log('[resolveLogoUrl] RAW_API_BASE:', RAW_API_BASE);
-  
+
   // Si c'est déjà une URL complète, extraire l'origine
   if (RAW_API_BASE.startsWith('http://') || RAW_API_BASE.startsWith('https://')) {
     try {
@@ -33,7 +36,7 @@ const getApiOrigin = () => {
   } else {
     console.log('[resolveLogoUrl] RAW_API_BASE ne commence pas par http:// ou https://');
   }
-  
+
   return '';
 };
 
@@ -46,7 +49,7 @@ export const resolveLogoUrl = (value) => {
   }
 
   const str = String(value).trim();
-  
+
   // Si c'est déjà une URL complète (http/https/data/blob), la retourner telle quelle
   if (/^(https?:|data:|blob:)/i.test(str)) {
     return str;
@@ -58,11 +61,11 @@ export const resolveLogoUrl = (value) => {
   // Pour les fichiers uploads, utiliser l'origine de l'API ou l'origine du navigateur
   if (normalized.startsWith('/uploads/')) {
     let base = '';
-    
+
     console.log('[resolveLogoUrl] Construction URL pour uploads:', normalized);
     console.log('[resolveLogoUrl] API_ORIGIN:', API_ORIGIN);
     console.log('[resolveLogoUrl] API_BASE:', API_BASE);
-    
+
     // Priorité 1: API_ORIGIN si défini et valide (doit être https://domain ou http://domain)
     if (API_ORIGIN && /^https?:\/\/[^/]+$/.test(API_ORIGIN)) {
       base = API_ORIGIN;
@@ -90,20 +93,20 @@ export const resolveLogoUrl = (value) => {
       base = window.location.origin;
       console.log('[resolveLogoUrl] Utilisation window.location.origin:', base);
     }
-    
+
     // S'assurer que base est valide avant de concaténer (doit être https://domain ou http://domain)
     if (base && /^https?:\/\/[^/]+$/.test(base)) {
       const finalUrl = `${base}${normalized}`;
       console.log('[resolveLogoUrl] URL finale construite:', finalUrl);
       return finalUrl;
     }
-    
+
     // Si on arrive ici, log pour debug
     console.error('[resolveLogoUrl] ❌ Impossible de construire une URL valide pour:', normalized, {
       API_ORIGIN,
       API_BASE,
       base,
-      windowOrigin: typeof window !== 'undefined' ? window.location?.origin : 'N/A'
+      windowOrigin: typeof window !== 'undefined' ? window.location?.origin : 'N/A',
     });
   }
 
@@ -121,4 +124,3 @@ export const resolveLogoUrl = (value) => {
 };
 
 export default resolveLogoUrl;
-

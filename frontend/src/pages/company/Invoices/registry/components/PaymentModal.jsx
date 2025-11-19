@@ -6,7 +6,7 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
     amount: '',
     paid_at: new Date().toISOString().split('T')[0],
     method: 'bank_transfer',
-    reference: ''
+    reference: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -15,12 +15,12 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
     { value: 'bank_transfer', label: 'Virement bancaire' },
     { value: 'cash', label: 'Espèces' },
     { value: 'card', label: 'Carte' },
-    { value: 'adjustment', label: 'Ajustement' }
+    { value: 'adjustment', label: 'Ajustement' },
   ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
       setError('Le montant doit être positif');
       return;
@@ -34,16 +34,16 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const paymentData = {
         ...formData,
         amount: parseFloat(formData.amount),
-        paid_at: new Date(formData.paid_at).toISOString()
+        paid_at: new Date(formData.paid_at).toISOString(),
       };
-      
+
       await onPayment(invoice.id, paymentData);
     } catch (err) {
-      setError(err.message || 'Erreur lors de l\'enregistrement du paiement');
+      setError(err.message || "Erreur lors de l'enregistrement du paiement");
     } finally {
       setLoading(false);
     }
@@ -51,11 +51,11 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
-    
+
     // Réinitialiser l'erreur quand l'utilisateur tape
     if (error) setError(null);
   };
@@ -65,7 +65,7 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
       amount: '',
       paid_at: new Date().toISOString().split('T')[0],
       method: 'bank_transfer',
-      reference: ''
+      reference: '',
     });
     setError(null);
     onClose();
@@ -86,10 +86,13 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
         <div className="modal-body">
           <div className={styles.invoiceInfo}>
             <h3>Facture {invoice.invoice_number}</h3>
-            <p>Client: {invoice.client ? 
-              `${invoice.client.first_name || ''} ${invoice.client.last_name || ''}`.trim() || invoice.client.username
-              : 'Client inconnu'
-            }</p>
+            <p>
+              Client:{' '}
+              {invoice.client
+                ? `${invoice.client.first_name || ''} ${invoice.client.last_name || ''}`.trim() ||
+                  invoice.client.username
+                : 'Client inconnu'}
+            </p>
             <p>Montant total: {invoice.total_amount.toFixed(2)} CHF</p>
             <p>Déjà payé: {invoice.amount_paid.toFixed(2)} CHF</p>
             <p className={styles.balanceDue}>Solde dû: {invoice.balance_due.toFixed(2)} CHF</p>
@@ -142,7 +145,7 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
                 className="form-select"
                 required
               >
-                {paymentMethods.map(method => (
+                {paymentMethods.map((method) => (
                   <option key={method.value} value={method.value}>
                     {method.label}
                   </option>
@@ -165,11 +168,7 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
               />
             </div>
 
-            {error && (
-              <div className="alert alert-error mb-md">
-                {error}
-              </div>
-            )}
+            {error && <div className="alert alert-error mb-md">{error}</div>}
 
             <div className="modal-footer">
               <button
@@ -180,11 +179,7 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
               >
                 Annuler
               </button>
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={loading}
-              >
+              <button type="submit" className="btn btn-primary" disabled={loading}>
                 {loading ? 'Enregistrement...' : 'Enregistrer le paiement'}
               </button>
             </div>

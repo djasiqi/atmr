@@ -1,13 +1,12 @@
 /* src/components/DriverHistory.module.css */
 .history {
-    margin: var(--spacing-lg) 0;
-  }
-  .history ul {
-    list-style: none;
-    padding: 0;
-  }
-  .history li {
-    padding: var(--spacing-sm);
-    border-bottom: 1px solid var(--border-secondary);
-  }
-  
+  margin: var(--spacing-lg) 0;
+}
+.history ul {
+  list-style: none;
+  padding: 0;
+}
+.history li {
+  padding: var(--spacing-sm);
+  border-bottom: 1px solid var(--border-secondary);
+}

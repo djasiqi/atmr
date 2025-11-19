@@ -1,8 +1,8 @@
-import React from "react";
-import styles from "../Dashboard/CompanyDashboard.module.css";
-import CompanyHeader from "../../../components/layout/Header/CompanyHeader";
-import CompanySidebar from "../../../components/layout/Sidebar/CompanySidebar/CompanySidebar";
-import InvoicesRegistry from "./registry/InvoicesRegistry";
+import React from 'react';
+import styles from '../Dashboard/CompanyDashboard.module.css';
+import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
+import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
+import InvoicesRegistry from './registry/InvoicesRegistry';
 
 const ClientInvoices = () => {
   return (

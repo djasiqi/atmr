@@ -1,20 +1,20 @@
 // src/components/layout/HeaderDashboard.jsx
-import React, { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import styles from "./HeaderDashboard.module.css";
-import { logoutUser } from "../../../utils/apiClient";
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import styles from './HeaderDashboard.module.css';
+import { logoutUser } from '../../../utils/apiClient';
 
 const HeaderDashboard = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [userName, setUserName] = useState("Utilisateur");
+  const [userName, setUserName] = useState('Utilisateur');
   const [publicId, setPublicId] = useState(null);
-  const [userRole, setUserRole] = useState("");
+  const [userRole, setUserRole] = useState('');
   const navigate = useNavigate();
   const menuRef = useRef(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("authToken");
-    const userData = localStorage.getItem("user");
+    const token = localStorage.getItem('authToken');
+    const userData = localStorage.getItem('user');
     if (token && userData) {
       try {
         const user = JSON.parse(userData);
@@ -22,10 +22,7 @@ const HeaderDashboard = () => {
         if (user?.public_id) setPublicId(user.public_id);
         if (user?.role) setUserRole(user.role);
       } catch (error) {
-        console.error(
-          "Erreur lors de la récupération de l'utilisateur :",
-          error
-        );
+        console.error("Erreur lors de la récupération de l'utilisateur :", error);
       }
     }
   }, []);
@@ -49,12 +46,11 @@ const HeaderDashboard = () => {
         setIsMenuOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const dashboardLink =
-    publicId && userRole ? `/dashboard/${userRole}/${publicId}` : "/dashboard";
+  const dashboardLink = publicId && userRole ? `/dashboard/${userRole}/${publicId}` : '/dashboard';
 
   return (
     <header className={styles.header}>
@@ -99,17 +95,11 @@ const HeaderDashboard = () => {
                 Gestion du compte
               </button>
               {publicId ? (
-                <Link
-                  to={`/reservations/${publicId}`}
-                  className={styles.menuLink}
-                >
+                <Link to={`/reservations/${publicId}`} className={styles.menuLink}>
                   Mes Réservations
                 </Link>
               ) : (
-                <span
-                  className={styles.menuLink}
-                  style={{ cursor: "not-allowed", opacity: 0.5 }}
-                >
+                <span className={styles.menuLink} style={{ cursor: 'not-allowed', opacity: 0.5 }}>
                   Mes Réservations (Indisponible)
                 </span>
               )}

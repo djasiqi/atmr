@@ -113,14 +113,14 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
                       minute: '2-digit',
                     })
                   : reservation.scheduled_time
-                  ? new Date(reservation.scheduled_time).toLocaleString('fr-CH', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : 'Non spécifié'}
+                    ? new Date(reservation.scheduled_time).toLocaleString('fr-CH', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : 'Non spécifié'}
               </span>
             </div>
             <div className={styles.infoRow}>

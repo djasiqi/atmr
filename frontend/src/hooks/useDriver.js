@@ -1,10 +1,6 @@
 // src/hooks/useDriver.js
-import { useState, useEffect, useCallback } from "react";
-import {
-  fetchCompanyDriver,
-  updateDriverStatus,
-  deleteDriver,
-} from "../services/companyService";
+import { useState, useEffect, useCallback } from 'react';
+import { fetchCompanyDriver, updateDriverStatus, deleteDriver } from '../services/companyService';
 
 const useDriver = () => {
   // CORRECTION : On utilise "drivers" (pluriel) pour la liste
@@ -21,7 +17,7 @@ const useDriver = () => {
       setError(null);
     } catch (err) {
       console.error(err);
-      setError("Erreur lors du chargement des chauffeurs.");
+      setError('Erreur lors du chargement des chauffeurs.');
     } finally {
       setLoading(false);
     }
@@ -33,12 +29,10 @@ const useDriver = () => {
       await updateDriverStatus(driverId, newStatus);
       // Met à jour l'état local pour un retour visuel immédiat
       setDrivers((prev) =>
-        prev.map((d) =>
-          d.id === driverId ? { ...d, is_active: newStatus } : d
-        )
+        prev.map((d) => (d.id === driverId ? { ...d, is_active: newStatus } : d))
       );
     } catch (err) {
-      console.error("Erreur lors de la mise à jour du statut :", err);
+      console.error('Erreur lors de la mise à jour du statut :', err);
     }
   }, []);
 
@@ -48,7 +42,7 @@ const useDriver = () => {
       // Met à jour l'état local
       setDrivers((prev) => prev.filter((d) => d.id !== driverId));
     } catch (err) {
-      console.error("Erreur lors de la suppression :", err);
+      console.error('Erreur lors de la suppression :', err);
     }
   }, []);
 

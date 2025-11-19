@@ -189,7 +189,9 @@
   overflow-x: hidden;
   overflow-y: auto;
   box-sizing: border-box;
-  transition: margin-left var(--transition-base), max-width var(--transition-base);
+  transition:
+    margin-left var(--transition-base),
+    max-width var(--transition-base);
 }
 
 .unifiedDispatch {
@@ -547,7 +549,7 @@
   background: var(--bg-secondary);
 }
 
-.checkbox input[type="checkbox"] {
+.checkbox input[type='checkbox'] {
   width: var(--spacing-md);
   height: var(--spacing-md);
   cursor: pointer;
@@ -762,12 +764,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.3),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
   animation: shimmerProgress 2s infinite;
 }
 
@@ -1879,9 +1876,9 @@
 
 .advancedBtn {
   padding: 10px 20px;
-  border: 2px solid #2196F3;
+  border: 2px solid #2196f3;
   background: white;
-  color: #2196F3;
+  color: #2196f3;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
@@ -1893,20 +1890,20 @@
 }
 
 .advancedBtn:hover {
-  background: #2196F3;
+  background: #2196f3;
   color: white;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
 }
 
 .advancedBtn.hasOverrides {
-  border-color: #4CAF50;
-  color: #4CAF50;
+  border-color: #4caf50;
+  color: #4caf50;
   background: #f1f8f4;
 }
 
 .advancedBtn.hasOverrides:hover {
-  background: #4CAF50;
+  background: #4caf50;
   color: white;
   box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
 }
@@ -1965,8 +1962,12 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes fadeInOut {
@@ -1998,4 +1999,3 @@
     transform: translateY(0) scale(1);
   }
 }
-

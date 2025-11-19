@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
-import HeaderDashboard from "../../../components/layout/Header/HeaderDashboard";
-import Sidebar from "../../../components/layout/Sidebar/AdminSidebar/AdminSidebar";
-import { fetchRecentBookings } from "../../../services/adminService";
-import styles from "./AdminReservations.module.css";
+import React, { useEffect, useState } from 'react';
+import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
+import Sidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
+import { fetchRecentBookings } from '../../../services/adminService';
+import styles from './AdminReservations.module.css';
 
 const AdminReservations = () => {
   const [bookings, setBookings] = useState([]);
@@ -17,7 +17,7 @@ const AdminReservations = () => {
         const data = await fetchRecentBookings();
         setBookings(Array.isArray(data) ? data : []);
       } catch (err) {
-        const message = err?.response?.data?.message || err?.message || "Erreur inconnue";
+        const message = err?.response?.data?.message || err?.message || 'Erreur inconnue';
         setError(message);
       } finally {
         setLoading(false);
@@ -58,18 +58,22 @@ const AdminReservations = () => {
                 <tbody>
                   {bookings.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className={styles.empty}>Aucune reservation recente.</td>
+                      <td colSpan="7" className={styles.empty}>
+                        Aucune reservation recente.
+                      </td>
                     </tr>
                   ) : (
                     bookings.map((booking) => (
                       <tr key={booking.id ?? booking.booking_id}>
-                        <td>{booking.id ?? booking.booking_id ?? "N/A"}</td>
-                        <td>{booking.date_formatted ?? "--"} {booking.time_formatted ?? ""}</td>
-                        <td>{booking.customer_name ?? "--"}</td>
-                        <td>{booking.pickup_location ?? "--"}</td>
-                        <td>{booking.dropoff_location ?? "--"}</td>
-                        <td>{booking.amount != null ? `${booking.amount} CHF` : "--"}</td>
-                        <td>{booking.status ?? "--"}</td>
+                        <td>{booking.id ?? booking.booking_id ?? 'N/A'}</td>
+                        <td>
+                          {booking.date_formatted ?? '--'} {booking.time_formatted ?? ''}
+                        </td>
+                        <td>{booking.customer_name ?? '--'}</td>
+                        <td>{booking.pickup_location ?? '--'}</td>
+                        <td>{booking.dropoff_location ?? '--'}</td>
+                        <td>{booking.amount != null ? `${booking.amount} CHF` : '--'}</td>
+                        <td>{booking.status ?? '--'}</td>
                       </tr>
                     ))
                   )}
@@ -84,4 +88,3 @@ const AdminReservations = () => {
 };
 
 export default AdminReservations;
-

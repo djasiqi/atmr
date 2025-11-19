@@ -89,8 +89,8 @@ export default function AddressAutocomplete({
           postcode && city
             ? `${street}, ${postcode}, ${city}`
             : city
-            ? `${street}, ${city}`
-            : street;
+              ? `${street}, ${city}`
+              : street;
       } else if (city) {
         // Au moins la ville
         label = postcode ? `${postcode} ${city}` : city;

@@ -69,8 +69,8 @@ const CompanyClients = () => {
         filterType === 'all'
           ? true
           : filterType === 'institution'
-          ? client.is_institution
-          : !client.is_institution;
+            ? client.is_institution
+            : !client.is_institution;
 
       return matchesSearch && matchesType;
     });

@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { FaUser, FaCar, FaChartBar, FaFileInvoice } from "react-icons/fa";
+import React, { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { FaUser, FaCar, FaChartBar, FaFileInvoice } from 'react-icons/fa';
 import {
   fetchAdminStats,
   fetchRecentBookings,
   fetchRecentUsers,
-} from "../../../services/adminService";
+} from '../../../services/adminService';
 import {
   LineChart,
   Line,
@@ -15,10 +15,10 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-} from "recharts";
-import styles from "./AdminDashboard.module.css";
-import HeaderDashboard from "../../../components/layout/Header/HeaderDashboard";
-import Sidebar from "../../../components/layout/Sidebar/AdminSidebar/AdminSidebar";
+} from 'recharts';
+import styles from './AdminDashboard.module.css';
+import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
+import Sidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 
 const AdminDashboard = () => {
   // La route est /dashboard/admin/:public_id → on récupère public_id
@@ -41,7 +41,7 @@ const AdminDashboard = () => {
       const data = await fetchAdminStats();
       setStats(data);
     } catch (error) {
-      setError("Erreur lors du chargement des statistiques.");
+      setError('Erreur lors du chargement des statistiques.');
     }
     setLoading(false);
   };
@@ -52,7 +52,7 @@ const AdminDashboard = () => {
       setRecentBookings(data);
     } catch (error) {
       console.error(
-        "🔴 Erreur lors du chargement des réservations :",
+        '🔴 Erreur lors du chargement des réservations :',
         error.response?.data || error.message
       );
     }
@@ -63,7 +63,7 @@ const AdminDashboard = () => {
       const data = await fetchRecentUsers();
       setRecentUsers(data);
     } catch (error) {
-      console.error("Erreur chargement des utilisateurs :", error);
+      console.error('Erreur chargement des utilisateurs :', error);
     }
   };
 
@@ -71,8 +71,7 @@ const AdminDashboard = () => {
     <div className={styles.adminContainer}>
       <HeaderDashboard />
       <div className={styles.dashboard}>
-        <Sidebar adminId={adminId} />{" "}
-        {/* ✅ Passer public_id (adminId) à la Sidebar */}
+        <Sidebar adminId={adminId} /> {/* ✅ Passer public_id (adminId) à la Sidebar */}
         <main className={styles.content}>
           <h1>📊 Tableau de bord administrateur</h1>
 
@@ -139,20 +138,20 @@ const AdminDashboard = () => {
               <tbody>
                 {recentBookings.map((booking) => (
                   <tr key={booking.id}>
-                    <td>{booking.date_formatted || "Non spécifié"}</td>
-                    <td>{booking.time_formatted || "Non spécifié"}</td>
-                    <td>{booking.customer_name || "Non spécifié"}</td>
-                    <td>{booking.pickup_location || "Non spécifié"}</td>
-                    <td>{booking.dropoff_location || "Non spécifié"}</td>
+                    <td>{booking.date_formatted || 'Non spécifié'}</td>
+                    <td>{booking.time_formatted || 'Non spécifié'}</td>
+                    <td>{booking.customer_name || 'Non spécifié'}</td>
+                    <td>{booking.pickup_location || 'Non spécifié'}</td>
+                    <td>{booking.dropoff_location || 'Non spécifié'}</td>
                     <td>{booking.amount} CHF</td>
                     <td>
                       <span
                         className={`${styles.status} ${
-                          booking.status === "PENDING"
+                          booking.status === 'PENDING'
                             ? styles.pending
-                            : booking.status === "CANCELED"
-                            ? styles.canceled
-                            : styles.completed
+                            : booking.status === 'CANCELED'
+                              ? styles.canceled
+                              : styles.completed
                         }`}
                       >
                         {booking.status}

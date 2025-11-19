@@ -3,7 +3,18 @@ import { loginUser, registerUser, logoutUser, resetPassword } from 'services/aut
 import apiClient from 'utils/apiClient';
 
 // Mock apiClient
-jest.mock('utils/apiClient');
+const mockCleanLocalSession = jest.fn();
+const mockCoreLogoutUser = jest.fn();
+
+jest.mock('utils/apiClient', () => {
+  const actual = jest.requireActual('utils/apiClient');
+  return {
+    ...actual,
+    default: actual.default,
+    logoutUser: mockCoreLogoutUser,
+    cleanLocalSession: mockCleanLocalSession,
+  };
+});
 
 describe('authService', () => {
   beforeEach(() => {
@@ -132,17 +143,35 @@ describe('authService', () => {
   });
 
   describe('logoutUser', () => {
-    it('devrait nettoyer le localStorage', () => {
+    it('devrait nettoyer le localStorage', async () => {
       // Préparer localStorage
       localStorage.setItem('authToken', 'fake-token');
       localStorage.setItem('user', JSON.stringify({ id: 1 }));
       localStorage.setItem('public_id', 'user-123');
 
-      logoutUser();
+      // Mock coreLogoutUser pour qu'il ne fasse pas d'appel réel
+      mockCoreLogoutUser.mockResolvedValue(undefined);
+      mockCleanLocalSession.mockImplementation(() => {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        localStorage.removeItem('public_id');
+      });
 
+      // Mock window.location pour éviter l'erreur de navigation
+      const originalLocation = window.location;
+      delete window.location;
+      window.location = { href: '' };
+
+      await logoutUser({ redirect: false });
+
+      expect(mockCoreLogoutUser).toHaveBeenCalledWith({ redirect: false });
+      expect(mockCleanLocalSession).toHaveBeenCalled();
       expect(localStorage.getItem('authToken')).toBeNull();
       expect(localStorage.getItem('user')).toBeNull();
       expect(localStorage.getItem('public_id')).toBeNull();
+
+      // Restaurer window.location
+      window.location = originalLocation;
     });
   });
 

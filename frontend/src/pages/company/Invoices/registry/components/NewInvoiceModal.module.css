@@ -29,7 +29,9 @@
   border-radius: 8px;
   background: white;
   font-size: 14px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .select:focus {
@@ -94,7 +96,7 @@
   border-color: #9ca3af;
 }
 
-.radioLabel input[type="radio"] {
+.radioLabel input[type='radio'] {
   cursor: pointer;
   width: 16px;
   height: 16px;
@@ -123,7 +125,7 @@
   background: #e5e7eb;
 }
 
-.checkboxLabel input[type="checkbox"] {
+.checkboxLabel input[type='checkbox'] {
   cursor: pointer;
   width: 16px;
   height: 16px;
@@ -305,15 +307,15 @@
     width: 95%;
     margin: 20px;
   }
-  
+
   .formRow {
     grid-template-columns: 1fr;
   }
-  
+
   .modalActions {
     flex-direction: column;
   }
-  
+
   .cancelBtn,
   .submitBtn {
     width: 100%;

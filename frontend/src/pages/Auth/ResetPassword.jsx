@@ -1,46 +1,46 @@
-import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import apiClient from "../../utils/apiClient";
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import apiClient from '../../utils/apiClient';
 
 const ResetPassword = () => {
   const { token, userId } = useParams();
   const navigate = useNavigate();
 
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isForced, setIsForced] = useState(false);
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user"));
+    const user = JSON.parse(localStorage.getItem('user'));
     if (user && user.force_password_change) {
-      console.log("⚠️ Réinitialisation forcée du mot de passe requise.");
+      console.log('⚠️ Réinitialisation forcée du mot de passe requise.');
       setIsForced(true);
     }
   }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setMessage("");
-    setError("");
+    setMessage('');
+    setError('');
 
     // Vérification basique : mots de passe identiques
     if (newPassword !== confirmPassword) {
-      setError("Les mots de passe ne correspondent pas.");
+      setError('Les mots de passe ne correspondent pas.');
       return;
     }
 
-    console.log("📌 Soumission du formulaire de réinitialisation");
+    console.log('📌 Soumission du formulaire de réinitialisation');
     console.log("🔗 Token extrait de l'URL :", token);
     console.log("🔗 userId extrait de l'URL :", userId);
 
     setIsLoading(true);
-    
+
     try {
       let response;
-      
+
       // ---------------------------------------------------------------------
       // 1) Mode "réinitialisation par token" (lien e-mail)
       //    => URL /reset-password/:token
@@ -51,30 +51,30 @@ const ResetPassword = () => {
           confirm_password: confirmPassword,
         });
 
-        console.log("✅ Réinitialisation (par token) réussie :", response.data);
-        setMessage("Votre mot de passe a été mis à jour avec succès !");
-        
+        console.log('✅ Réinitialisation (par token) réussie :', response.data);
+        setMessage('Votre mot de passe a été mis à jour avec succès !');
+
         // Redirection standard vers le login
-        navigate("/login");
+        navigate('/login');
 
         // ---------------------------------------------------------------------
-      // 2) Mode "réinitialisation forcée par userId" (admin)
-      //    => URL /force-reset-password/:userId
-      // ---------------------------------------------------------------------
+        // 2) Mode "réinitialisation forcée par userId" (admin)
+        //    => URL /force-reset-password/:userId
+        // ---------------------------------------------------------------------
       } else if (userId) {
         response = await apiClient.post(`/auth/reset-password/${userId}`, {
           new_password: newPassword,
           confirm_password: confirmPassword,
         });
 
-        console.log("✅ Réinitialisation (par userId) réussie :", response.data);
-        setMessage("Mot de passe réinitialisé avec succès !");
+        console.log('✅ Réinitialisation (par userId) réussie :', response.data);
+        setMessage('Mot de passe réinitialisé avec succès !');
 
         // Mise à jour du localStorage, si on a un user forcé
-        const updatedUser = JSON.parse(localStorage.getItem("user"));
+        const updatedUser = JSON.parse(localStorage.getItem('user'));
         if (updatedUser) {
           updatedUser.force_password_change = false;
-          localStorage.setItem("user", JSON.stringify(updatedUser));
+          localStorage.setItem('user', JSON.stringify(updatedUser));
 
           // Redirection vers le dashboard (ou autre)
           setTimeout(() => {
@@ -83,21 +83,19 @@ const ResetPassword = () => {
         } else {
           // Si aucun user dans le localStorage, on redirige éventuellement ailleurs
           setTimeout(() => {
-            navigate("/login");
+            navigate('/login');
           }, 2000);
         }
-
       } else {
         // Ni token ni userId ? On prévient l’utilisateur.
         setError("Aucun token ni identifiant utilisateur n'est fourni.");
         return;
       }
-
     } catch (err) {
-      console.error("❌ Erreur lors de la réinitialisation :", err);
+      console.error('❌ Erreur lors de la réinitialisation :', err);
       setError(
         err.response?.data?.error ||
-        "Une erreur est survenue lors de la réinitialisation du mot de passe."
+          'Une erreur est survenue lors de la réinitialisation du mot de passe.'
       );
     } finally {
       setIsLoading(false);
@@ -107,9 +105,7 @@ const ResetPassword = () => {
   return (
     <div className="max-w-sm mx-auto mt-10 p-4 border rounded shadow-lg bg-white">
       <h2 className="text-xl font-bold mb-4 text-center">
-        {isForced
-          ? "🔒 Modification obligatoire du mot de passe"
-          : "Réinitialiser le mot de passe"}
+        {isForced ? '🔒 Modification obligatoire du mot de passe' : 'Réinitialiser le mot de passe'}
       </h2>
       <form onSubmit={handleSubmit}>
         <input
@@ -133,7 +129,7 @@ const ResetPassword = () => {
           className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded transition duration-200"
           disabled={isLoading}
         >
-          {isLoading ? "Réinitialisation..." : "Confirmer le changement"}
+          {isLoading ? 'Réinitialisation...' : 'Confirmer le changement'}
         </button>
       </form>
 

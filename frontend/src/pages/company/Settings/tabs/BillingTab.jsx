@@ -97,20 +97,26 @@ const BillingTab = () => {
 
     try {
       const formData = updatedForm || form;
-      
+
       // Nettoyer les données avant envoi
       const cleanedData = {
         ...formData,
         // S'assurer que reminder_schedule_days a les bonnes clés (strings)
-        reminder_schedule_days: formData.reminder_schedule_days ? {
-          '1': parseInt(formData.reminder_schedule_days['1']) || 0,
-          '2': parseInt(formData.reminder_schedule_days['2']) || 0,
-          '3': parseInt(formData.reminder_schedule_days['3']) || 0,
-        } : { '1': 10, '2': 5, '3': 3 },
+        reminder_schedule_days: formData.reminder_schedule_days
+          ? {
+              1: parseInt(formData.reminder_schedule_days['1']) || 0,
+              2: parseInt(formData.reminder_schedule_days['2']) || 0,
+              3: parseInt(formData.reminder_schedule_days['3']) || 0,
+            }
+          : { 1: 10, 2: 5, 3: 3 },
         // Convertir les valeurs null en undefined pour les champs optionnels
         // Pour vat_rate, s'assurer que c'est un nombre valide ou null
         vat_rate: (() => {
-          if (formData.vat_rate === null || formData.vat_rate === '' || formData.vat_rate === undefined) {
+          if (
+            formData.vat_rate === null ||
+            formData.vat_rate === '' ||
+            formData.vat_rate === undefined
+          ) {
             return null;
           }
           const parsed = parseFloat(formData.vat_rate);
@@ -125,14 +131,15 @@ const BillingTab = () => {
         overdue_fee: parseFloat(formData.overdue_fee) || 0,
         payment_terms_days: parseInt(formData.payment_terms_days) || 10,
       };
-      
+
       console.log('[BillingTab] Sending data:', cleanedData);
       await updateBillingSettings(cleanedData);
       setMessage('✅ Sauvegardé automatiquement');
       setTimeout(() => setMessage(''), 2000);
     } catch (err) {
       console.error('Auto-save failed:', err);
-      const errorMessage = err?.response?.data?.error || err?.message || 'Erreur lors de la sauvegarde';
+      const errorMessage =
+        err?.response?.data?.error || err?.message || 'Erreur lors de la sauvegarde';
       setError(`❌ ${errorMessage}`);
       setTimeout(() => setError(''), 5000);
     }
@@ -230,475 +237,486 @@ const BillingTab = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
           {/* Paramètres de paiement et rappels */}
           <section className={styles.section}>
-        <h2>💳 Paramètres de paiement</h2>
+            <h2>💳 Paramètres de paiement</h2>
 
-        <div className={styles.formGroup}>
-          <label htmlFor="payment_terms_days">Délai de paiement</label>
-          <div className={styles.inputWithUnit}>
-            <input
-              type="number"
-              id="payment_terms_days"
-              name="payment_terms_days"
-              value={form.payment_terms_days}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              min="1"
-              max="90"
+            <div className={styles.formGroup}>
+              <label htmlFor="payment_terms_days">Délai de paiement</label>
+              <div className={styles.inputWithUnit}>
+                <input
+                  type="number"
+                  id="payment_terms_days"
+                  name="payment_terms_days"
+                  value={form.payment_terms_days}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  min="1"
+                  max="90"
+                />
+                <span className={styles.unit}>jours</span>
+              </div>
+              <small className={styles.hint}>
+                Délai accordé aux clients pour payer (défaut: 10 jours)
+              </small>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="overdue_fee">Frais de retard</label>
+              <div className={styles.inputWithUnit}>
+                <input
+                  type="number"
+                  id="overdue_fee"
+                  name="overdue_fee"
+                  value={form.overdue_fee}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  step="0.01"
+                  min="0"
+                />
+                <span className={styles.unit}>CHF</span>
+              </div>
+              <small className={styles.hint}>
+                Montant facturé automatiquement lorsque le paiement est en retard après l'échéance
+              </small>
+            </div>
+          </section>
+
+          {/* Section Rappels */}
+          <section className={styles.section}>
+            <h2>📧 Rappels de paiement</h2>
+            <small className={styles.hint} style={{ display: 'block', marginBottom: '16px' }}>
+              Configurez les frais et délais pour chaque niveau de rappel. Les frais sont toujours
+              facturés lors de l'émission du rappel, même si l'envoi automatique est désactivé.
+            </small>
+
+            {/* 1er rappel - Délai et Frais ensemble */}
+            <div className={styles.reminderRow}>
+              <h4 className={styles.reminderTitle}>1er rappel</h4>
+              <div className={styles.reminderFields}>
+                <div className={styles.formGroup}>
+                  <label>Frais (CHF)</label>
+                  <div className={styles.inputWithUnit}>
+                    <input
+                      type="number"
+                      name="reminder1_fee"
+                      value={form.reminder1_fee}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      step="0.01"
+                      min="0"
+                    />
+                    <span className={styles.unit}>CHF</span>
+                  </div>
+                  <small className={styles.hint}>Montant facturé lors de l'émission</small>
+                </div>
+                {form.auto_reminders_enabled && (
+                  <div className={styles.formGroup}>
+                    <label>Délai d'envoi (jours)</label>
+                    <input
+                      type="number"
+                      value={form.reminder_schedule_days['1'] || 10}
+                      onChange={(e) => handleReminderScheduleChange('1', e.target.value)}
+                      onBlur={handleReminderScheduleBlur}
+                      min="1"
+                      max="90"
+                    />
+                    <small className={styles.hint}>Jours après l'échéance</small>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 2e rappel - Délai et Frais ensemble */}
+            <div className={styles.reminderRow}>
+              <h4 className={styles.reminderTitle}>2e rappel</h4>
+              <div className={styles.reminderFields}>
+                <div className={styles.formGroup}>
+                  <label>Frais (CHF)</label>
+                  <div className={styles.inputWithUnit}>
+                    <input
+                      type="number"
+                      name="reminder2_fee"
+                      value={form.reminder2_fee}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      step="0.01"
+                      min="0"
+                    />
+                    <span className={styles.unit}>CHF</span>
+                  </div>
+                  <small className={styles.hint}>Montant facturé lors de l'émission</small>
+                </div>
+                {form.auto_reminders_enabled && (
+                  <div className={styles.formGroup}>
+                    <label>Délai d'envoi (jours)</label>
+                    <input
+                      type="number"
+                      value={form.reminder_schedule_days['2'] || 5}
+                      onChange={(e) => handleReminderScheduleChange('2', e.target.value)}
+                      onBlur={handleReminderScheduleBlur}
+                      min="1"
+                      max="90"
+                    />
+                    <small className={styles.hint}>Jours après le 1er rappel</small>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 3e rappel - Délai et Frais ensemble */}
+            <div className={styles.reminderRow}>
+              <h4 className={styles.reminderTitle}>3e rappel (Mise en demeure)</h4>
+              <div className={styles.reminderFields}>
+                <div className={styles.formGroup}>
+                  <label>Frais (CHF)</label>
+                  <div className={styles.inputWithUnit}>
+                    <input
+                      type="number"
+                      name="reminder3_fee"
+                      value={form.reminder3_fee}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      step="0.01"
+                      min="0"
+                    />
+                    <span className={styles.unit}>CHF</span>
+                  </div>
+                  <small className={styles.hint}>Montant facturé lors de l'émission</small>
+                </div>
+                {form.auto_reminders_enabled && (
+                  <div className={styles.formGroup}>
+                    <label>Délai d'envoi (jours)</label>
+                    <input
+                      type="number"
+                      value={form.reminder_schedule_days['3'] || 3}
+                      onChange={(e) => handleReminderScheduleChange('3', e.target.value)}
+                      onBlur={handleReminderScheduleBlur}
+                      min="1"
+                      max="90"
+                    />
+                    <small className={styles.hint}>Jours après le 2e rappel</small>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Activation des rappels automatiques */}
+            <div
+              style={{
+                marginTop: '24px',
+                paddingTop: '24px',
+                borderTop: '1px solid var(--border-primary)',
+              }}
+            >
+              <ToggleField
+                label="Activer l'envoi automatique des rappels"
+                name="auto_reminders_enabled"
+                value={form.auto_reminders_enabled}
+                onChange={handleToggle}
+                hint="Si activé, les rappels seront envoyés automatiquement selon les délais configurés ci-dessus. Les frais seront toujours facturés même si l'envoi est manuel."
+              />
+            </div>
+          </section>
+
+          {/* Templates d'emails */}
+          <section className={styles.section}>
+            <h2>✉️ Templates d'emails</h2>
+
+            <ToggleField
+              label="Activer les templates d'emails personnalisés"
+              name="email_templates_enabled"
+              value={form.email_templates_enabled || false}
+              onChange={(e) =>
+                handleToggle({
+                  target: {
+                    name: 'email_templates_enabled',
+                    checked: e.target.checked,
+                  },
+                })
+              }
+              hint="Personnaliser les messages d'email pour les factures et rappels"
             />
-            <span className={styles.unit}>jours</span>
-          </div>
-          <small className={styles.hint}>
-            Délai accordé aux clients pour payer (défaut: 10 jours)
-          </small>
+
+            {form.email_templates_enabled && (
+              <>
+                <div className={styles.formGroup}>
+                  <label htmlFor="email_sender">Email expéditeur</label>
+                  <input
+                    type="email"
+                    id="email_sender"
+                    name="email_sender"
+                    value={form.email_sender}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    placeholder="facturation@emmenezmoi.ch"
+                  />
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label htmlFor="invoice_message_template">Message envoi de facture</label>
+                  <textarea
+                    id="invoice_message_template"
+                    name="invoice_message_template"
+                    value={form.invoice_message_template}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    rows={5}
+                    placeholder="Bonjour {client_name},&#10;&#10;Veuillez trouver ci-joint la facture {invoice_number} d'un montant de {amount} CHF.&#10;&#10;Merci de procéder au paiement avant le {due_date}."
+                  />
+                  <small className={styles.hint}>
+                    Variables: {'{client_name}'}, {'{amount}'}, {'{due_date}'}, {'{invoice_number}'}
+                  </small>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label htmlFor="reminder1_template">Message 1er rappel</label>
+                  <textarea
+                    id="reminder1_template"
+                    name="reminder1_template"
+                    value={form.reminder1_template}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    rows={4}
+                    placeholder="Rappel: votre facture {invoice_number} n'a pas encore été réglée."
+                  />
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label htmlFor="reminder2_template">Message 2e rappel</label>
+                  <textarea
+                    id="reminder2_template"
+                    name="reminder2_template"
+                    value={form.reminder2_template}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    rows={4}
+                    placeholder="2e rappel: merci de régler la facture {invoice_number} sous 5 jours."
+                  />
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label htmlFor="reminder3_template">Message 3e rappel (Mise en demeure)</label>
+                  <textarea
+                    id="reminder3_template"
+                    name="reminder3_template"
+                    value={form.reminder3_template}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    rows={4}
+                    placeholder="Mise en demeure: dernier rappel avant procédures légales."
+                  />
+                </div>
+              </>
+            )}
+          </section>
         </div>
 
-        <div className={styles.formGroup}>
-          <label htmlFor="overdue_fee">Frais de retard</label>
-          <div className={styles.inputWithUnit}>
-            <input
-              type="number"
-              id="overdue_fee"
-              name="overdue_fee"
-              value={form.overdue_fee}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              step="0.01"
-              min="0"
+        {/* COLONNE DROITE */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          {/* Format de facturation et pied de page */}
+          <section className={styles.section}>
+            <h2>🧾 Format de facturation</h2>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="invoice_prefix">Préfixe des factures</label>
+              <input
+                id="invoice_prefix"
+                name="invoice_prefix"
+                value={form.invoice_prefix}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                maxLength={10}
+                placeholder="EM"
+              />
+              <small className={styles.hint}>Ex: EM → {generatePreview()}</small>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="invoice_number_format">Format de numérotation</label>
+              <select
+                id="invoice_number_format"
+                name="invoice_number_format"
+                value={form.invoice_number_format}
+                onChange={(e) => {
+                  handleChange(e);
+                  autoSave({ ...form, invoice_number_format: e.target.value });
+                }}
+              >
+                <option value="{PREFIX}-{YYYY}-{MM}-{SEQ4}">
+                  {form.invoice_prefix}-2025-10-0001
+                </option>
+                <option value="{PREFIX}-{YYYY}-{SEQ5}">{form.invoice_prefix}-2025-00001</option>
+                <option value="{PREFIX}{YYYYMM}{SEQ3}">{form.invoice_prefix}202510001</option>
+              </select>
+            </div>
+
+            <div className={styles.previewBadge}>
+              <strong>Prévisualisation :</strong> {generatePreview()}
+            </div>
+
+            {/* Pied de page légal */}
+            <h2 style={{ marginTop: '24px' }}>📄 Pied de page légal</h2>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="legal_footer">Texte du pied de page</label>
+              <textarea
+                id="legal_footer"
+                name="legal_footer"
+                value={form.legal_footer}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                rows={3}
+                placeholder="Emmenez Moi Sàrl - CHE-123.456.789 - Genève, Suisse"
+              />
+              <small className={styles.hint}>Affiché sur toutes les factures PDF</small>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="pdf_template_variant">Variante de template PDF</label>
+              <select
+                id="pdf_template_variant"
+                name="pdf_template_variant"
+                value={form.pdf_template_variant}
+                onChange={(e) => {
+                  handleChange(e);
+                  autoSave({ ...form, pdf_template_variant: e.target.value });
+                }}
+              >
+                <option value="standard">Standard</option>
+                <option value="minimal">Minimal</option>
+                <option value="detailed">Détaillé</option>
+              </select>
+            </div>
+          </section>
+
+          {/* TVA */}
+          <section className={styles.section}>
+            <h2>💰 TVA (Taxe sur la valeur ajoutée)</h2>
+
+            <ToggleField
+              label="TVA applicable"
+              name="vat_applicable"
+              value={form.vat_applicable}
+              onChange={handleToggle}
+              hint="Activez la TVA si votre entreprise est assujettie à la TVA"
             />
-            <span className={styles.unit}>CHF</span>
-          </div>
-          <small className={styles.hint}>
-            Montant facturé automatiquement lorsque le paiement est en retard après l'échéance
-          </small>
-        </div>
-      </section>
 
-      {/* Section Rappels */}
-      <section className={styles.section}>
-        <h2>📧 Rappels de paiement</h2>
-        <small className={styles.hint} style={{ display: 'block', marginBottom: '16px' }}>
-          Configurez les frais et délais pour chaque niveau de rappel. Les frais sont toujours facturés lors de l'émission du rappel, même si l'envoi automatique est désactivé.
-        </small>
+            {form.vat_applicable && (
+              <>
+                <div className={styles.formGroup}>
+                  <label htmlFor="vat_rate">Taux de TVA (%)</label>
+                  <div className={styles.inputWithUnit}>
+                    <input
+                      type="number"
+                      id="vat_rate"
+                      name="vat_rate"
+                      value={form.vat_rate || ''}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      placeholder="7.7"
+                    />
+                    <span className={styles.unit}>%</span>
+                  </div>
+                  <small className={styles.hint}>
+                    Taux de TVA standard en Suisse: 7.7% (réduit: 2.5%, réduit spécial: 3.7%)
+                  </small>
+                </div>
 
-        {/* 1er rappel - Délai et Frais ensemble */}
-        <div className={styles.reminderRow}>
-          <h4 className={styles.reminderTitle}>1er rappel</h4>
-          <div className={styles.reminderFields}>
-            <div className={styles.formGroup}>
-              <label>Frais (CHF)</label>
-              <div className={styles.inputWithUnit}>
-                <input
-                  type="number"
-                  name="reminder1_fee"
-                  value={form.reminder1_fee}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  step="0.01"
-                  min="0"
-                />
-                <span className={styles.unit}>CHF</span>
-              </div>
-              <small className={styles.hint}>Montant facturé lors de l'émission</small>
-            </div>
-            {form.auto_reminders_enabled && (
-              <div className={styles.formGroup}>
-                <label>Délai d'envoi (jours)</label>
-                <input
-                  type="number"
-                  value={form.reminder_schedule_days['1'] || 10}
-                  onChange={(e) => handleReminderScheduleChange('1', e.target.value)}
-                  onBlur={handleReminderScheduleBlur}
-                  min="1"
-                  max="90"
-                />
-                <small className={styles.hint}>Jours après l'échéance</small>
-              </div>
+                <div className={styles.formGroup}>
+                  <label htmlFor="vat_label">Libellé TVA</label>
+                  <input
+                    type="text"
+                    id="vat_label"
+                    name="vat_label"
+                    value={form.vat_label}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    placeholder="TVA"
+                    maxLength={50}
+                  />
+                  <small className={styles.hint}>
+                    Libellé affiché sur les factures (ex: "TVA", "TVA 7.7%", "TVA incluse")
+                  </small>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label htmlFor="vat_number">Numéro de TVA</label>
+                  <input
+                    type="text"
+                    id="vat_number"
+                    name="vat_number"
+                    value={form.vat_number}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    placeholder="CHE-123.456.789 TVA"
+                    maxLength={50}
+                  />
+                  <small className={styles.hint}>
+                    Numéro d'identification TVA de l'entreprise (optionnel)
+                  </small>
+                </div>
+              </>
             )}
-          </div>
-        </div>
+          </section>
 
-        {/* 2e rappel - Délai et Frais ensemble */}
-        <div className={styles.reminderRow}>
-          <h4 className={styles.reminderTitle}>2e rappel</h4>
-          <div className={styles.reminderFields}>
+          {/* Informations bancaires */}
+          <section className={styles.section}>
+            <h2>🏦 Informations bancaires</h2>
+
             <div className={styles.formGroup}>
-              <label>Frais (CHF)</label>
-              <div className={styles.inputWithUnit}>
-                <input
-                  type="number"
-                  name="reminder2_fee"
-                  value={form.reminder2_fee}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  step="0.01"
-                  min="0"
-                />
-                <span className={styles.unit}>CHF</span>
-              </div>
-              <small className={styles.hint}>Montant facturé lors de l'émission</small>
-            </div>
-            {form.auto_reminders_enabled && (
-              <div className={styles.formGroup}>
-                <label>Délai d'envoi (jours)</label>
-                <input
-                  type="number"
-                  value={form.reminder_schedule_days['2'] || 5}
-                  onChange={(e) => handleReminderScheduleChange('2', e.target.value)}
-                  onBlur={handleReminderScheduleBlur}
-                  min="1"
-                  max="90"
-                />
-                <small className={styles.hint}>Jours après le 1er rappel</small>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 3e rappel - Délai et Frais ensemble */}
-        <div className={styles.reminderRow}>
-          <h4 className={styles.reminderTitle}>3e rappel (Mise en demeure)</h4>
-          <div className={styles.reminderFields}>
-            <div className={styles.formGroup}>
-              <label>Frais (CHF)</label>
-              <div className={styles.inputWithUnit}>
-                <input
-                  type="number"
-                  name="reminder3_fee"
-                  value={form.reminder3_fee}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  step="0.01"
-                  min="0"
-                />
-                <span className={styles.unit}>CHF</span>
-              </div>
-              <small className={styles.hint}>Montant facturé lors de l'émission</small>
-            </div>
-            {form.auto_reminders_enabled && (
-              <div className={styles.formGroup}>
-                <label>Délai d'envoi (jours)</label>
-                <input
-                  type="number"
-                  value={form.reminder_schedule_days['3'] || 3}
-                  onChange={(e) => handleReminderScheduleChange('3', e.target.value)}
-                  onBlur={handleReminderScheduleBlur}
-                  min="1"
-                  max="90"
-                />
-                <small className={styles.hint}>Jours après le 2e rappel</small>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Activation des rappels automatiques */}
-        <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--border-primary)' }}>
-          <ToggleField
-            label="Activer l'envoi automatique des rappels"
-            name="auto_reminders_enabled"
-            value={form.auto_reminders_enabled}
-            onChange={handleToggle}
-            hint="Si activé, les rappels seront envoyés automatiquement selon les délais configurés ci-dessus. Les frais seront toujours facturés même si l'envoi est manuel."
-          />
-        </div>
-      </section>
-
-      {/* Templates d'emails */}
-      <section className={styles.section}>
-        <h2>✉️ Templates d'emails</h2>
-
-        <ToggleField
-          label="Activer les templates d'emails personnalisés"
-          name="email_templates_enabled"
-          value={form.email_templates_enabled || false}
-          onChange={(e) =>
-            handleToggle({
-              target: {
-                name: 'email_templates_enabled',
-                checked: e.target.checked,
-              },
-            })
-          }
-          hint="Personnaliser les messages d'email pour les factures et rappels"
-        />
-
-        {form.email_templates_enabled && (
-          <>
-            <div className={styles.formGroup}>
-              <label htmlFor="email_sender">Email expéditeur</label>
+              <label htmlFor="iban">IBAN</label>
               <input
-                type="email"
-                id="email_sender"
-                name="email_sender"
-                value={form.email_sender}
+                id="iban"
+                name="iban"
+                value={form.iban}
                 onChange={handleChange}
                 onBlur={handleBlur}
-                placeholder="facturation@emmenezmoi.ch"
-              />
-            </div>
-
-            <div className={styles.formGroup}>
-              <label htmlFor="invoice_message_template">Message envoi de facture</label>
-              <textarea
-                id="invoice_message_template"
-                name="invoice_message_template"
-                value={form.invoice_message_template}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                rows={5}
-                placeholder="Bonjour {client_name},&#10;&#10;Veuillez trouver ci-joint la facture {invoice_number} d'un montant de {amount} CHF.&#10;&#10;Merci de procéder au paiement avant le {due_date}."
+                placeholder="CH93 0076 2011 6238 5295 7"
+                maxLength={34}
               />
               <small className={styles.hint}>
-                Variables: {'{client_name}'}, {'{amount}'}, {'{due_date}'}, {'{invoice_number}'}
+                {form.iban && (
+                  <span className={ibanChecksumIsValid(form.iban) ? styles.valid : styles.invalid}>
+                    {ibanChecksumIsValid(form.iban) ? '✅ IBAN valide' : '❌ IBAN invalide'}
+                  </span>
+                )}
               </small>
             </div>
 
             <div className={styles.formGroup}>
-              <label htmlFor="reminder1_template">Message 1er rappel</label>
-              <textarea
-                id="reminder1_template"
-                name="reminder1_template"
-                value={form.reminder1_template}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                rows={4}
-                placeholder="Rappel: votre facture {invoice_number} n'a pas encore été réglée."
-              />
-            </div>
-
-            <div className={styles.formGroup}>
-              <label htmlFor="reminder2_template">Message 2e rappel</label>
-              <textarea
-                id="reminder2_template"
-                name="reminder2_template"
-                value={form.reminder2_template}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                rows={4}
-                placeholder="2e rappel: merci de régler la facture {invoice_number} sous 5 jours."
-              />
-            </div>
-
-            <div className={styles.formGroup}>
-              <label htmlFor="reminder3_template">Message 3e rappel (Mise en demeure)</label>
-              <textarea
-                id="reminder3_template"
-                name="reminder3_template"
-                value={form.reminder3_template}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                rows={4}
-                placeholder="Mise en demeure: dernier rappel avant procédures légales."
-              />
-            </div>
-          </>
-        )}
-      </section>
-    </div>
-
-    {/* COLONNE DROITE */}
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-      {/* Format de facturation et pied de page */}
-      <section className={styles.section}>
-        <h2>🧾 Format de facturation</h2>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="invoice_prefix">Préfixe des factures</label>
-          <input
-            id="invoice_prefix"
-            name="invoice_prefix"
-            value={form.invoice_prefix}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            maxLength={10}
-            placeholder="EM"
-          />
-          <small className={styles.hint}>Ex: EM → {generatePreview()}</small>
-        </div>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="invoice_number_format">Format de numérotation</label>
-          <select
-            id="invoice_number_format"
-            name="invoice_number_format"
-            value={form.invoice_number_format}
-            onChange={(e) => {
-              handleChange(e);
-              autoSave({ ...form, invoice_number_format: e.target.value });
-            }}
-          >
-            <option value="{PREFIX}-{YYYY}-{MM}-{SEQ4}">{form.invoice_prefix}-2025-10-0001</option>
-            <option value="{PREFIX}-{YYYY}-{SEQ5}">{form.invoice_prefix}-2025-00001</option>
-            <option value="{PREFIX}{YYYYMM}{SEQ3}">{form.invoice_prefix}202510001</option>
-          </select>
-        </div>
-
-        <div className={styles.previewBadge}>
-          <strong>Prévisualisation :</strong> {generatePreview()}
-        </div>
-
-        {/* Pied de page légal */}
-        <h2 style={{ marginTop: '24px' }}>📄 Pied de page légal</h2>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="legal_footer">Texte du pied de page</label>
-          <textarea
-            id="legal_footer"
-            name="legal_footer"
-            value={form.legal_footer}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            rows={3}
-            placeholder="Emmenez Moi Sàrl - CHE-123.456.789 - Genève, Suisse"
-          />
-          <small className={styles.hint}>Affiché sur toutes les factures PDF</small>
-        </div>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="pdf_template_variant">Variante de template PDF</label>
-          <select
-            id="pdf_template_variant"
-            name="pdf_template_variant"
-            value={form.pdf_template_variant}
-            onChange={(e) => {
-              handleChange(e);
-              autoSave({ ...form, pdf_template_variant: e.target.value });
-            }}
-          >
-            <option value="standard">Standard</option>
-            <option value="minimal">Minimal</option>
-            <option value="detailed">Détaillé</option>
-          </select>
-        </div>
-      </section>
-
-      {/* TVA */}
-      <section className={styles.section}>
-        <h2>💰 TVA (Taxe sur la valeur ajoutée)</h2>
-
-        <ToggleField
-          label="TVA applicable"
-          name="vat_applicable"
-          value={form.vat_applicable}
-          onChange={handleToggle}
-          hint="Activez la TVA si votre entreprise est assujettie à la TVA"
-        />
-
-        {form.vat_applicable && (
-          <>
-            <div className={styles.formGroup}>
-              <label htmlFor="vat_rate">Taux de TVA (%)</label>
-              <div className={styles.inputWithUnit}>
-                <input
-                  type="number"
-                  id="vat_rate"
-                  name="vat_rate"
-                  value={form.vat_rate || ''}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  step="0.01"
-                  min="0"
-                  max="100"
-                  placeholder="7.7"
-                />
-                <span className={styles.unit}>%</span>
-              </div>
-              <small className={styles.hint}>
-                Taux de TVA standard en Suisse: 7.7% (réduit: 2.5%, réduit spécial: 3.7%)
-              </small>
-            </div>
-
-            <div className={styles.formGroup}>
-              <label htmlFor="vat_label">Libellé TVA</label>
+              <label htmlFor="qr_iban">IBAN pour QR-Code</label>
               <input
-                type="text"
-                id="vat_label"
-                name="vat_label"
-                value={form.vat_label}
+                id="qr_iban"
+                name="qr_iban"
+                value={form.qr_iban}
                 onChange={handleChange}
                 onBlur={handleBlur}
-                placeholder="TVA"
-                maxLength={50}
+                placeholder="CH93 0076 2011 6238 5295 7"
+                maxLength={34}
               />
               <small className={styles.hint}>
-                Libellé affiché sur les factures (ex: "TVA", "TVA 7.7%", "TVA incluse")
+                Utilisé pour la génération des QR-codes de paiement
               </small>
             </div>
 
             <div className={styles.formGroup}>
-              <label htmlFor="vat_number">Numéro de TVA</label>
+              <label htmlFor="esr_ref_base">Référence ESR de base</label>
               <input
-                type="text"
-                id="vat_number"
-                name="vat_number"
-                value={form.vat_number}
+                id="esr_ref_base"
+                name="esr_ref_base"
+                value={form.esr_ref_base}
                 onChange={handleChange}
                 onBlur={handleBlur}
-                placeholder="CHE-123.456.789 TVA"
-                maxLength={50}
+                placeholder="00000000000000000000"
+                maxLength={27}
               />
               <small className={styles.hint}>
-                Numéro d'identification TVA de l'entreprise (optionnel)
+                Référence de base pour les paiements ESR (20 chiffres + 7 chiffres)
               </small>
             </div>
-          </>
-        )}
-      </section>
-
-      {/* Informations bancaires */}
-      <section className={styles.section}>
-        <h2>🏦 Informations bancaires</h2>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="iban">IBAN</label>
-          <input
-            id="iban"
-            name="iban"
-            value={form.iban}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            placeholder="CH93 0076 2011 6238 5295 7"
-            maxLength={34}
-          />
-          <small className={styles.hint}>
-            {form.iban && (
-              <span className={ibanChecksumIsValid(form.iban) ? styles.valid : styles.invalid}>
-                {ibanChecksumIsValid(form.iban) ? '✅ IBAN valide' : '❌ IBAN invalide'}
-              </span>
-            )}
-          </small>
-        </div>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="qr_iban">IBAN pour QR-Code</label>
-          <input
-            id="qr_iban"
-            name="qr_iban"
-            value={form.qr_iban}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            placeholder="CH93 0076 2011 6238 5295 7"
-            maxLength={34}
-          />
-          <small className={styles.hint}>Utilisé pour la génération des QR-codes de paiement</small>
-        </div>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="esr_ref_base">Référence ESR de base</label>
-          <input
-            id="esr_ref_base"
-            name="esr_ref_base"
-            value={form.esr_ref_base}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            placeholder="00000000000000000000"
-            maxLength={27}
-          />
-          <small className={styles.hint}>
-            Référence de base pour les paiements ESR (20 chiffres + 7 chiffres)
-          </small>
-        </div>
-      </section>
+          </section>
         </div>
       </div>
     </div>

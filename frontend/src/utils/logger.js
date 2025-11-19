@@ -27,7 +27,7 @@ export const logger = {
    */
   error: (message, error, additionalData = {}) => {
     console.error(`❌ ${message}`, error, additionalData);
-    
+
     if (error instanceof Error) {
       Sentry.captureException(error, {
         tags: { context: message },
@@ -82,4 +82,3 @@ export const logger = {
 };
 
 export default logger;
-

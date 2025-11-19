@@ -50,7 +50,7 @@ export const useRLSuggestions = (date, options = {}) => {
         // Refresh réussi, ne pas logger l'erreur
         return;
       }
-      
+
       // Ne logger que les vraies erreurs (pas les 401 en cours de refresh)
       if (err?.response?.status !== 401) {
         setError(err.message);

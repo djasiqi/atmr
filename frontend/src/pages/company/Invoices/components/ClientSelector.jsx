@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { fetchCompanyClients } from "../../../../services/companyService";
-import styles from "./ClientSelector.module.css";
+import React, { useEffect, useState } from 'react';
+import { fetchCompanyClients } from '../../../../services/companyService';
+import styles from './ClientSelector.module.css';
 export default function ClientSelector({ onSelectClient }) {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +21,9 @@ export default function ClientSelector({ onSelectClient }) {
 
   return (
     <div className={styles.selectorWrap}>
-      <label className={styles.label} htmlFor="clientSelector">Choisir un client :</label>
+      <label className={styles.label} htmlFor="clientSelector">
+        Choisir un client :
+      </label>
       <select
         id="clientSelector"
         className={styles.select}
@@ -32,7 +34,7 @@ export default function ClientSelector({ onSelectClient }) {
         <option value="">-- Sélectionner --</option>
         {(clients || []).map((client) => (
           <option key={client.id} value={client.id}>
-            {client.first_name} {client.last_name} {client.email ? `(${client.email})` : ""}
+            {client.first_name} {client.last_name} {client.email ? `(${client.email})` : ''}
           </option>
         ))}
       </select>
@@ -40,4 +42,3 @@ export default function ClientSelector({ onSelectClient }) {
     </div>
   );
 }
-

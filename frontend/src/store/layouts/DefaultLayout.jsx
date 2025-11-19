@@ -1,7 +1,7 @@
-import React from "react";
-import { Toaster } from "react-hot-toast";
-import Header from "../../components/layout/Header/Header";
-import Footer from "../../components/layout/Footer/Footer";
+import React from 'react';
+import { Toaster } from 'react-hot-toast';
+import Header from '../../components/layout/Header/Header';
+import Footer from '../../components/layout/Footer/Footer';
 
 const DefaultLayout = ({ children }) => {
   return (
@@ -12,11 +12,10 @@ const DefaultLayout = ({ children }) => {
         toastOptions={{
           duration: 5000,
           style: {
-            fontSize: "14px",
-            borderRadius: "12px",
-            padding: "16px 18px",
-            boxShadow:
-              "0 18px 40px rgba(15, 23, 42, 0.12), 0 4px 16px rgba(15, 23, 42, 0.08)",
+            fontSize: '14px',
+            borderRadius: '12px',
+            padding: '16px 18px',
+            boxShadow: '0 18px 40px rgba(15, 23, 42, 0.12), 0 4px 16px rgba(15, 23, 42, 0.08)',
           },
         }}
       />
@@ -29,13 +28,13 @@ const DefaultLayout = ({ children }) => {
 
 const styles = {
   container: {
-    display: "flex",
-    flexDirection: "column",
-    minHeight: "100vh",
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: '100vh',
   },
   main: {
-    flex: "1",
-    padding: "20px",
+    flex: '1',
+    padding: '20px',
   },
 };
 

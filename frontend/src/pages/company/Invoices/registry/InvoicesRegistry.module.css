@@ -67,7 +67,8 @@
   align-items: center;
 }
 
-.settingsBtn, .newInvoiceBtn {
+.settingsBtn,
+.newInvoiceBtn {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
@@ -190,14 +191,16 @@
   margin-bottom: 0.5rem;
 }
 
-.filterInput, .filterSelect {
+.filterInput,
+.filterSelect {
   padding: 0.75rem;
   border: 1px solid #ddd;
   border-radius: 6px;
   font-size: 0.9rem;
 }
 
-.filterInput:focus, .filterSelect:focus {
+.filterInput:focus,
+.filterSelect:focus {
   outline: none;
   border-color: #007bff;
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
@@ -209,7 +212,7 @@
   gap: 0.5rem;
 }
 
-.filterCheckbox input[type="checkbox"] {
+.filterCheckbox input[type='checkbox'] {
   width: 18px;
   height: 18px;
 }
@@ -329,14 +332,16 @@
 }
 
 /* Colonnes avec largeur limitée - format uniforme */
-.table td:nth-child(2) { /* Client */
+.table td:nth-child(2) {
+  /* Client */
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.table td:nth-child(3) { /* Période */
+.table td:nth-child(3) {
+  /* Période */
   max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -567,7 +572,7 @@
   .content {
     padding: 1rem;
   }
-  
+
   .header {
     flex-direction: column;
     gap: 1rem;
@@ -601,23 +606,23 @@
   .statLabel {
     font-size: 0.7rem;
   }
-  
+
   .headerActions {
     justify-content: center;
   }
-  
+
   .stats {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .filtersGrid {
     grid-template-columns: 1fr;
   }
-  
+
   .table {
     min-width: 800px;
   }
-  
+
   .actions {
     flex-direction: column;
   }
@@ -650,7 +655,7 @@
   .statLabel {
     font-size: 0.6rem;
   }
-  
+
   .header h1 {
     font-size: 1.5rem;
   }
@@ -667,11 +672,13 @@
   }
 
   /* Colonnes adaptées petit mobile */
-  .table td:nth-child(2) { /* Client */
+  .table td:nth-child(2) {
+    /* Client */
     max-width: 110px;
   }
 
-  .table td:nth-child(3) { /* Période */
+  .table td:nth-child(3) {
+    /* Période */
     max-width: 70px;
   }
 }
@@ -702,11 +709,13 @@
   }
 
   /* Colonnes adaptées très petit mobile */
-  .table td:nth-child(2) { /* Client */
+  .table td:nth-child(2) {
+    /* Client */
     max-width: 100px;
   }
 
-  .table td:nth-child(3) { /* Période */
+  .table td:nth-child(3) {
+    /* Période */
     max-width: 60px;
   }
 }

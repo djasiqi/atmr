@@ -1,14 +1,12 @@
 // src/services/adminService.js
-import apiClient from "../utils/apiClient";
+import apiClient from '../utils/apiClient';
 /**
  * Récupère le token JWT stocké en local.
  */
 const getAuthToken = () => {
-  const token = localStorage.getItem("authToken");
+  const token = localStorage.getItem('authToken');
   if (!token) {
-    console.error(
-      "🚨 Erreur : Aucun token JWT trouvé. L'utilisateur doit être connecté."
-    );
+    console.error("🚨 Erreur : Aucun token JWT trouvé. L'utilisateur doit être connecté.");
   }
   return token;
 };
@@ -19,15 +17,12 @@ const getAuthToken = () => {
 export const fetchAdminStats = async () => {
   try {
     const token = getAuthToken();
-    const response = await apiClient.get("/admin/stats", {
+    const response = await apiClient.get('/admin/stats', {
       headers: { Authorization: `Bearer ${token}` },
     });
     return response.data;
   } catch (error) {
-    console.error(
-      "❌ Erreur chargement stats admin :",
-      error.response?.data || error.message
-    );
+    console.error('❌ Erreur chargement stats admin :', error.response?.data || error.message);
     throw error;
   }
 };
@@ -38,13 +33,13 @@ export const fetchAdminStats = async () => {
 export const fetchRecentBookings = async () => {
   try {
     const token = getAuthToken();
-    const response = await apiClient.get("/admin/recent-bookings", {
+    const response = await apiClient.get('/admin/recent-bookings', {
       headers: { Authorization: `Bearer ${token}` },
     });
     return response.data;
   } catch (error) {
     console.error(
-      "❌ Erreur chargement des courses récentes :",
+      '❌ Erreur chargement des courses récentes :',
       error.response?.data || error.message
     );
     throw error;
@@ -57,13 +52,13 @@ export const fetchRecentBookings = async () => {
 export const fetchRecentUsers = async () => {
   try {
     const token = getAuthToken();
-    const response = await apiClient.get("/admin/recent-users", {
+    const response = await apiClient.get('/admin/recent-users', {
       headers: { Authorization: `Bearer ${token}` },
     });
     return response.data;
   } catch (error) {
     console.error(
-      "❌ Erreur chargement des utilisateurs récents :",
+      '❌ Erreur chargement des utilisateurs récents :',
       error.response?.data || error.message
     );
     throw error;
@@ -76,24 +71,24 @@ export const fetchRecentUsers = async () => {
 export const fetchUsers = async () => {
   try {
     const token = getAuthToken();
-    console.log("📡 Envoi de la requête GET /admin/users...");
+    console.log('📡 Envoi de la requête GET /admin/users...');
 
-    const response = await apiClient.get("/admin/users", {
+    const response = await apiClient.get('/admin/users', {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    console.log("📌 Données reçues de /admin/users :", response.data);
+    console.log('📌 Données reçues de /admin/users :', response.data);
 
     // Vérifie si "users" existe bien dans la réponse JSON
     if (!response.data || !response.data.users) {
-      console.warn("⚠️ Aucune donnée utilisateur reçue !");
+      console.warn('⚠️ Aucune donnée utilisateur reçue !');
       return [];
     }
 
     return response.data.users;
   } catch (error) {
     console.error(
-      "❌ Erreur récupération des utilisateurs :",
+      '❌ Erreur récupération des utilisateurs :',
       error.response?.data || error.message
     );
     return [];
@@ -107,15 +102,15 @@ export const fetchUsers = async () => {
 export const fetchCompanies = async () => {
   try {
     const token = getAuthToken();
-    const response = await apiClient.get("/companies", {
+    const response = await apiClient.get('/companies', {
       headers: { Authorization: `Bearer ${token}` },
     });
-    console.log("📌 Données reçues de /companies :", response.data);
+    console.log('📌 Données reçues de /companies :', response.data);
     // La réponse peut être un array ou un objet { companies: [...] }
     return response.data?.companies ?? (Array.isArray(response.data) ? response.data : []);
   } catch (error) {
     console.error(
-      "❌ Erreur lors de la récupération des entreprises :",
+      '❌ Erreur lors de la récupération des entreprises :',
       error.response?.data || error.message
     );
     throw error;
@@ -137,10 +132,7 @@ export const updateUserRole = async (userId, updatedData) => {
 
     // Si le rôle est 'driver' et qu'aucun company_id n'est fourni,
     // on renvoie une erreur pour signaler à l'interface de demander la sélection.
-    if (
-      updatedData.role.toLowerCase() === "driver" &&
-      !updatedData.company_id
-    ) {
+    if (updatedData.role.toLowerCase() === 'driver' && !updatedData.company_id) {
       throw new Error("Un company_id est requis pour le rôle 'driver'.");
     }
 
@@ -148,17 +140,13 @@ export const updateUserRole = async (userId, updatedData) => {
       ...updatedData,
       role: String(updatedData.role).toLowerCase(), // <-- normalisation
     };
-    const response = await apiClient.put(
-      `/admin/users/${userId}/role`,
-      payload,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
+    const response = await apiClient.put(`/admin/users/${userId}/role`, payload, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     return response.data;
   } catch (error) {
     console.error(
-      "❌ Erreur mise à jour du rôle utilisateur :",
+      '❌ Erreur mise à jour du rôle utilisateur :',
       error.response?.data || error.message
     );
     throw error;
@@ -177,7 +165,7 @@ export const deleteUser = async (userId) => {
     const response = await apiClient.delete(`/admin/users/${userId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    console.log("✅ Utilisateur supprimé avec succès :", response.data);
+    console.log('✅ Utilisateur supprimé avec succès :', response.data);
     return response.data;
   } catch (error) {
     console.error(
@@ -194,15 +182,13 @@ export const deleteUser = async (userId) => {
  */
 export const resetUserPassword = async (userId) => {
   if (!userId) {
-    console.error("❌ Erreur : userId est undefined dans resetUserPassword !");
+    console.error('❌ Erreur : userId est undefined dans resetUserPassword !');
     return;
   }
   try {
     const token = getAuthToken();
     if (!token) {
-      console.error(
-        "❌ Erreur : Aucun token JWT trouvé. L'utilisateur doit être connecté."
-      );
+      console.error("❌ Erreur : Aucun token JWT trouvé. L'utilisateur doit être connecté.");
       return;
     }
     console.log(`🔄 Réinitialisation du mot de passe pour user ID: ${userId}`);
@@ -213,11 +199,11 @@ export const resetUserPassword = async (userId) => {
         headers: { Authorization: `Bearer ${token}` },
       }
     );
-    console.log("✅ Mot de passe réinitialisé :", response.data);
+    console.log('✅ Mot de passe réinitialisé :', response.data);
     return response.data;
   } catch (error) {
     console.error(
-      "❌ Erreur lors de la réinitialisation du mot de passe :",
+      '❌ Erreur lors de la réinitialisation du mot de passe :',
       error.response?.data || error.message
     );
     throw error;

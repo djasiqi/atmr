@@ -169,16 +169,16 @@
     flex-direction: column;
     gap: 0.25rem;
   }
-  
+
   .actionBtn {
     padding: 0.75rem;
     justify-content: center;
   }
-  
+
   .actionLabel {
     font-size: 0.8rem;
   }
-  
+
   .menu {
     right: -50px;
     min-width: 180px;
@@ -190,16 +190,16 @@
     padding: 0.5rem;
     font-size: 0.7rem;
   }
-  
+
   .actionLabel {
     font-size: 0.7rem;
   }
-  
+
   .menu {
     right: -100px;
     min-width: 160px;
   }
-  
+
   .menuItem {
     padding: 0.5rem 0.75rem;
     font-size: 0.8rem;

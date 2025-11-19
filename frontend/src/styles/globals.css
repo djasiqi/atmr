@@ -53,19 +53,36 @@ a:hover {
 }
 
 /* Titres */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   margin: 0 0 var(--spacing-md) 0;
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
   color: var(--text-primary);
 }
 
-h1 { font-size: var(--font-size-3xl); }
-h2 { font-size: var(--font-size-2xl); }
-h3 { font-size: var(--font-size-xl); }
-h4 { font-size: var(--font-size-lg); }
-h5 { font-size: var(--font-size-base); }
-h6 { font-size: var(--font-size-sm); }
+h1 {
+  font-size: var(--font-size-3xl);
+}
+h2 {
+  font-size: var(--font-size-2xl);
+}
+h3 {
+  font-size: var(--font-size-xl);
+}
+h4 {
+  font-size: var(--font-size-lg);
+}
+h5 {
+  font-size: var(--font-size-base);
+}
+h6 {
+  font-size: var(--font-size-sm);
+}
 
 /* Paragraphes */
 p {
@@ -73,7 +90,8 @@ p {
 }
 
 /* Listes */
-ul, ol {
+ul,
+ol {
   margin: 0 0 var(--spacing-md) 0;
   padding-left: var(--spacing-lg);
 }
@@ -85,7 +103,8 @@ img {
 }
 
 /* Code */
-code, pre {
+code,
+pre {
   font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
   background-color: var(--bg-tertiary);
@@ -114,7 +133,7 @@ code, pre {
 
 /* Focus visible pour l'accessibilité - Seulement pour les éléments non-formulaire */
 a:focus-visible,
-[role="button"]:focus-visible,
+[role='button']:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid var(--brand-primary);
   outline-offset: 2px;
@@ -139,18 +158,18 @@ select,
 select:hover,
 select:focus,
 select:focus-visible,
-input[type="checkbox"],
-input[type="checkbox"]:hover,
-input[type="checkbox"]:focus,
-input[type="checkbox"]:focus-visible,
-input[type="checkbox"]:active,
-input[type="checkbox"]:checked,
-input[type="checkbox"]:checked:hover,
-input[type="checkbox"]:checked:focus,
-input[type="radio"],
-input[type="radio"]:hover,
-input[type="radio"]:focus,
-input[type="radio"]:focus-visible {
+input[type='checkbox'],
+input[type='checkbox']:hover,
+input[type='checkbox']:focus,
+input[type='checkbox']:focus-visible,
+input[type='checkbox']:active,
+input[type='checkbox']:checked,
+input[type='checkbox']:checked:hover,
+input[type='checkbox']:checked:focus,
+input[type='radio'],
+input[type='radio']:hover,
+input[type='radio']:focus,
+input[type='radio']:focus-visible {
   outline: none !important;
   outline-width: 0 !important;
   outline-style: none !important;
@@ -175,4 +194,3 @@ input[type="radio"]:focus-visible {
 .leaflet-tooltip-pane {
   z-index: 15 !important;
 }
-  

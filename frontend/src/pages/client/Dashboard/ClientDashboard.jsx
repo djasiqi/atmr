@@ -1,27 +1,20 @@
-import React, { useEffect, useMemo, useState } from "react";
-import apiClient from "../../../utils/apiClient";
-import { useParams, useNavigate } from "react-router-dom";
-import "./ClientDashboard.css";
-import { useMutation } from "@tanstack/react-query";
+import React, { useEffect, useMemo, useState } from 'react';
+import apiClient from '../../../utils/apiClient';
+import { useParams, useNavigate } from 'react-router-dom';
+import './ClientDashboard.css';
+import { useMutation } from '@tanstack/react-query';
 
 // 🔁 Leaflet (remplace Google Maps)
-import {
-  MapContainer,
-  TileLayer,
-  Polyline,
-  Marker,
-  Popup,
-  useMap,
-} from "react-leaflet";
-import L from "leaflet";
-import polyline from "@mapbox/polyline";
+import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import polyline from '@mapbox/polyline';
 
 // UI
-import HeaderDashboard from "../../../components/layout/Header/HeaderDashboard";
-import Footer from "../../../components/layout/Footer/Footer";
-import Slider from "react-slick";
-import "slick-carousel/slick/slick.css";
-import "slick-carousel/slick/slick-theme.css";
+import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
+import Footer from '../../../components/layout/Footer/Footer';
+import Slider from 'react-slick';
+import 'slick-carousel/slick/slick.css';
+import 'slick-carousel/slick/slick-theme.css';
 
 // Petit helper pour fitBounds dynamique
 const FitBounds = ({ bounds }) => {
@@ -47,8 +40,8 @@ const ClientDashboard = () => {
   const [loadingBookings, setLoadingBookings] = useState(false);
 
   // Formulaire
-  const [pickup, setPickup] = useState("");
-  const [destination, setDestination] = useState("");
+  const [pickup, setPickup] = useState('');
+  const [destination, setDestination] = useState('');
 
   // 🔁 Remplace "directions" Google par des latlngs pour Leaflet
   const [routeLatLngs, setRouteLatLngs] = useState([]); // [[lat,lng], ...]
@@ -58,19 +51,19 @@ const ClientDashboard = () => {
 
   // ID client effectif (URL ou storage)
   const effectiveClientId = useMemo(() => {
-    return clientId || localStorage.getItem("public_id");
+    return clientId || localStorage.getItem('public_id');
   }, [clientId]);
 
   // Profil client
   useEffect(() => {
-    const token = localStorage.getItem("authToken");
+    const token = localStorage.getItem('authToken');
     if (!token) {
-      navigate("/login");
+      navigate('/login');
       return;
     }
     if (!effectiveClientId) {
       setLoadingProfile(false);
-      setError("Identifiant client introuvable.");
+      setError('Identifiant client introuvable.');
       return;
     }
     setLoadingProfile(true);
@@ -80,66 +73,60 @@ const ClientDashboard = () => {
       })
       .then((response) => setProfile(response.data))
       .catch((err) => {
-        console.error("Erreur profil :", err);
-        setError("Impossible de charger le profil utilisateur.");
+        console.error('Erreur profil :', err);
+        setError('Impossible de charger le profil utilisateur.');
       })
       .finally(() => setLoadingProfile(false));
   }, [effectiveClientId, navigate]);
 
   // Mutation: optimisation d’itinéraire (backend IA/OSRM)
-  const { mutate: triggerOptimizeRoute, isPending: isOptimizing } = useMutation(
-    {
-      mutationFn: async () => {
-        if (!pickup || !destination) return null;
-        setLoadingOptimization(true);
-        const response = await apiClient.post("/ai/optimized-route", {
-          pickup,
-          dropoff: destination,
-        });
-        return response.data;
-      },
-      onSuccess: (data) => {
-        setLoadingOptimization(false);
-        try {
-          // On accepte plusieurs formats renvoyés par ton backend:
-          // 1) { polyline: "<enc>" }
-          // 2) { route: { polyline: "<enc>" } }
-          // 3) { route: [[lat,lng], ...] }
-          // 4) { route: { coordinates: [[lng,lat], ...] } } (GeoJSON-like)
-          // 5) { geometry: { coordinates: [[lng,lat], ...] } }
+  const { mutate: triggerOptimizeRoute, isPending: isOptimizing } = useMutation({
+    mutationFn: async () => {
+      if (!pickup || !destination) return null;
+      setLoadingOptimization(true);
+      const response = await apiClient.post('/ai/optimized-route', {
+        pickup,
+        dropoff: destination,
+      });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      setLoadingOptimization(false);
+      try {
+        // On accepte plusieurs formats renvoyés par ton backend:
+        // 1) { polyline: "<enc>" }
+        // 2) { route: { polyline: "<enc>" } }
+        // 3) { route: [[lat,lng], ...] }
+        // 4) { route: { coordinates: [[lng,lat], ...] } } (GeoJSON-like)
+        // 5) { geometry: { coordinates: [[lng,lat], ...] } }
 
-          let latlngs = [];
-          if (data?.polyline) {
-            latlngs = polyline
-              .decode(data.polyline)
-              .map(([lat, lng]) => [lat, lng]);
-          } else if (data?.route?.polyline) {
-            latlngs = polyline
-              .decode(data.route.polyline)
-              .map(([lat, lng]) => [lat, lng]);
-          } else if (Array.isArray(data?.route)) {
-            latlngs = data.route; // supposé [lat,lng]
-          } else if (data?.route?.coordinates) {
-            latlngs = data.route.coordinates.map(([lng, lat]) => [lat, lng]);
-          } else if (data?.geometry?.coordinates) {
-            latlngs = data.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-          }
-
-          if (!latlngs.length) throw new Error("Format d'itinéraire inconnu");
-          setRouteLatLngs(latlngs);
-        } catch (e) {
-          console.error("Parsing itinéraire:", e);
-          setError("Impossible d'obtenir l'itinéraire optimisé.");
-          setRouteLatLngs([]);
+        let latlngs = [];
+        if (data?.polyline) {
+          latlngs = polyline.decode(data.polyline).map(([lat, lng]) => [lat, lng]);
+        } else if (data?.route?.polyline) {
+          latlngs = polyline.decode(data.route.polyline).map(([lat, lng]) => [lat, lng]);
+        } else if (Array.isArray(data?.route)) {
+          latlngs = data.route; // supposé [lat,lng]
+        } else if (data?.route?.coordinates) {
+          latlngs = data.route.coordinates.map(([lng, lat]) => [lat, lng]);
+        } else if (data?.geometry?.coordinates) {
+          latlngs = data.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
         }
-      },
-      onError: () => {
-        setLoadingOptimization(false);
-        setError("Erreur lors de la récupération de l'itinéraire.");
+
+        if (!latlngs.length) throw new Error("Format d'itinéraire inconnu");
+        setRouteLatLngs(latlngs);
+      } catch (e) {
+        console.error('Parsing itinéraire:', e);
+        setError("Impossible d'obtenir l'itinéraire optimisé.");
         setRouteLatLngs([]);
-      },
-    }
-  );
+      }
+    },
+    onError: () => {
+      setLoadingOptimization(false);
+      setError("Erreur lors de la récupération de l'itinéraire.");
+      setRouteLatLngs([]);
+    },
+  });
 
   // Déclenche auto après 2s si pickup/destination changent
   useEffect(() => {
@@ -153,7 +140,7 @@ const ClientDashboard = () => {
   // Réservations
   useEffect(() => {
     if (!effectiveClientId) return;
-    const token = localStorage.getItem("authToken");
+    const token = localStorage.getItem('authToken');
     setLoadingBookings(true);
     apiClient
       .get(`/clients/${effectiveClientId}/bookings`, {
@@ -162,12 +149,8 @@ const ClientDashboard = () => {
       .then((response) => {
         const bookingsArray = response.data;
         const now = Date.now();
-        const upcoming = bookingsArray.filter(
-          (b) => Date.parse(b.scheduled_time) > now
-        );
-        const past = bookingsArray.filter(
-          (b) => Date.parse(b.scheduled_time) <= now
-        );
+        const upcoming = bookingsArray.filter((b) => Date.parse(b.scheduled_time) > now);
+        const past = bookingsArray.filter((b) => Date.parse(b.scheduled_time) <= now);
         setUpcomingBookings(upcoming);
         setPastBookings(past);
         setOngoingBookings([]);
@@ -177,38 +160,31 @@ const ClientDashboard = () => {
         setSuggestions(sortedPast.slice(0, 3).map((b) => b.dropoff_location));
       })
       .catch((err) => {
-        console.error("Erreur réservations :", err);
-        setError("Impossible de charger les réservations.");
+        console.error('Erreur réservations :', err);
+        setError('Impossible de charger les réservations.');
       })
       .finally(() => setLoadingBookings(false));
   }, [effectiveClientId]);
 
   // Champs médicaux (inchangé)
-  const [medicalFacility, setMedicalFacility] = useState("");
-  const [doctorName, setDoctorName] = useState("");
+  const [medicalFacility, setMedicalFacility] = useState('');
+  const [doctorName, setDoctorName] = useState('');
   const [showMedicalFields, setShowMedicalFields] = useState(false);
 
   useEffect(() => {
     if (!destination) return;
     const lower = destination.toLowerCase();
     const medicalKeywords = [
-      "hôpital",
-      "hopital",
-      "hug",
-      "ems",
-      "cabinet",
-      "clinique",
-      "médecin",
-      "docteur",
+      'hôpital',
+      'hopital',
+      'hug',
+      'ems',
+      'cabinet',
+      'clinique',
+      'médecin',
+      'docteur',
     ];
-    const doctorKeywords = [
-      "docteur",
-      "dr",
-      "dr.",
-      "dr med",
-      "dr méd",
-      "médecin",
-    ];
+    const doctorKeywords = ['docteur', 'dr', 'dr.', 'dr med', 'dr méd', 'médecin'];
 
     const isMedicalFacility = medicalKeywords.some((k) => lower.includes(k));
     const isDoctor = doctorKeywords.some((k) => lower.includes(k));
@@ -223,17 +199,12 @@ const ClientDashboard = () => {
     }
   }, [destination]);
 
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedTime, setSelectedTime] = useState("");
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedTime, setSelectedTime] = useState('');
 
   const handleOptimizeRoute = () => {
-    if (
-      !pickup ||
-      pickup.length < 5 ||
-      !destination ||
-      destination.length < 5
-    ) {
-      setError("Veuillez entrer une adresse complète et valide.");
+    if (!pickup || pickup.length < 5 || !destination || destination.length < 5) {
+      setError('Veuillez entrer une adresse complète et valide.');
       return;
     }
     setError(null);
@@ -241,24 +212,23 @@ const ClientDashboard = () => {
   };
 
   const handleBooking = () => {
-    const token = localStorage.getItem("authToken");
+    const token = localStorage.getItem('authToken');
     if (!token) {
       setError("Token d'authentification manquant.");
       return;
     }
     if (!pickup || !destination) {
-      setError("Veuillez saisir le lieu de départ et la destination.");
+      setError('Veuillez saisir le lieu de départ et la destination.');
       return;
     }
     if (!selectedDate || !selectedTime) {
-      setError("Veuillez sélectionner une date et une heure.");
+      setError('Veuillez sélectionner une date et une heure.');
       return;
     }
 
     const scheduledDateTime = new Date(`${selectedDate}T${selectedTime}:00`);
     const scheduledDateTimeUTC = new Date(
-      scheduledDateTime.getTime() -
-        scheduledDateTime.getTimezoneOffset() * 60000
+      scheduledDateTime.getTime() - scheduledDateTime.getTimezoneOffset() * 60000
     );
 
     const bookingData = {
@@ -274,22 +244,22 @@ const ClientDashboard = () => {
       .post(`/clients/${effectiveClientId}/bookings`, bookingData, {
         headers: {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       })
       .then((response) => {
-        alert("Réservation effectuée avec succès !");
+        alert('Réservation effectuée avec succès !');
         setUpcomingBookings([...upcomingBookings, response.data.booking]);
-        setPickup("");
-        setDestination("");
-        setSelectedDate("");
-        setSelectedTime("");
-        setMedicalFacility("");
-        setDoctorName("");
+        setPickup('');
+        setDestination('');
+        setSelectedDate('');
+        setSelectedTime('');
+        setMedicalFacility('');
+        setDoctorName('');
       })
       .catch((err) => {
-        console.error("Erreur réservation :", err);
-        setError("Une erreur est survenue lors de la réservation.");
+        console.error('Erreur réservation :', err);
+        setError('Une erreur est survenue lors de la réservation.');
       });
   };
 
@@ -304,7 +274,7 @@ const ClientDashboard = () => {
           p.username ??
           p.user?.first_name ??
           p.user?.username ??
-          "Utilisateur";
+          'Utilisateur';
         return <HeaderDashboard userName={userName} />;
       })()}
 
@@ -402,7 +372,7 @@ const ClientDashboard = () => {
                           settings: {
                             slidesToShow: 3,
                             slidesToScroll: 1,
-                            centerPadding: "30px",
+                            centerPadding: '30px',
                           },
                         },
                         {
@@ -410,17 +380,14 @@ const ClientDashboard = () => {
                           settings: {
                             slidesToShow: 1,
                             slidesToScroll: 1,
-                            centerPadding: "20px",
+                            centerPadding: '20px',
                           },
                         },
                       ]}
                     >
                       {suggestions.map((dest, index) => (
                         <div key={index} className="suggestionSlide">
-                          <div
-                            className="suggestionCard"
-                            onClick={() => setDestination(dest)}
-                          >
+                          <div className="suggestionCard" onClick={() => setDestination(dest)}>
                             {dest}
                           </div>
                         </div>
@@ -438,16 +405,10 @@ const ClientDashboard = () => {
                 onClick={handleOptimizeRoute}
                 disabled={loadingOptimization}
               >
-                {loadingOptimization
-                  ? "Optimisation en cours..."
-                  : "🔍 Optimiser mon trajet"}
+                {loadingOptimization ? 'Optimisation en cours...' : '🔍 Optimiser mon trajet'}
               </button>
 
-              <button
-                type="button"
-                className="primaryButton"
-                onClick={handleBooking}
-              >
+              <button type="button" className="primaryButton" onClick={handleBooking}>
                 Réserver la course
               </button>
             </form>
@@ -455,12 +416,8 @@ const ClientDashboard = () => {
 
           {/* Section droite : Carte Leaflet */}
           <div className="rightSection">
-            <div style={{ height: "400px", width: "100%" }}>
-              <MapContainer
-                center={center}
-                zoom={12}
-                style={{ width: "100%", height: "100%" }}
-              >
+            <div style={{ height: '400px', width: '100%' }}>
+              <MapContainer center={center} zoom={12} style={{ width: '100%', height: '100%' }}>
                 <TileLayer
                   attribution="&copy; OpenStreetMap contributors"
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -469,7 +426,7 @@ const ClientDashboard = () => {
                 {/* Affiche des marqueurs si l'utilisateur saisit "lat,lng" */}
                 {/^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(pickup) &&
                   (() => {
-                    const [lat, lng] = pickup.split(",").map(Number);
+                    const [lat, lng] = pickup.split(',').map(Number);
                     return (
                       <Marker position={[lat, lng]}>
                         <Popup>Départ</Popup>
@@ -479,7 +436,7 @@ const ClientDashboard = () => {
 
                 {/^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(destination) &&
                   (() => {
-                    const [lat, lng] = destination.split(",").map(Number);
+                    const [lat, lng] = destination.split(',').map(Number);
                     return (
                       <Marker position={[lat, lng]}>
                         <Popup>Arrivée</Popup>
@@ -487,16 +444,12 @@ const ClientDashboard = () => {
                     );
                   })()}
 
-                {routeLatLngs.length > 0 && (
-                  <Polyline positions={routeLatLngs} />
-                )}
+                {routeLatLngs.length > 0 && <Polyline positions={routeLatLngs} />}
 
                 {/* Fit automatique sur l’itinéraire */}
                 {routeLatLngs.length > 0 && (
                   <FitBounds
-                    bounds={L.latLngBounds(
-                      routeLatLngs.map(([lat, lng]) => [lat, lng])
-                    )}
+                    bounds={L.latLngBounds(routeLatLngs.map(([lat, lng]) => [lat, lng]))}
                   />
                 )}
               </MapContainer>
@@ -514,27 +467,21 @@ const ClientDashboard = () => {
               {upcomingBookings.length > 0 ? (
                 (() => {
                   const nearest = [...upcomingBookings].sort(
-                    (a, b) =>
-                      new Date(a.scheduled_time) - new Date(b.scheduled_time)
+                    (a, b) => new Date(a.scheduled_time) - new Date(b.scheduled_time)
                   )[0];
                   return (
                     <div className="bookingCard">
                       <p>
-                        <strong>Destination :</strong>{" "}
-                        {nearest.dropoff_location}
+                        <strong>Destination :</strong> {nearest.dropoff_location}
                       </p>
                       <p>
-                        <strong>Date et Heure :</strong>{" "}
+                        <strong>Date et Heure :</strong>{' '}
                         {new Date(nearest.scheduled_time).toLocaleString()}
                       </p>
                       <p>
                         <strong>Prix :</strong> {nearest.amount} €
                       </p>
-                      <button
-                        onClick={() =>
-                          navigate(`/dashboard/booking-details/${nearest.id}`)
-                        }
-                      >
+                      <button onClick={() => navigate(`/dashboard/booking-details/${nearest.id}`)}>
                         Consultez les détails
                       </button>
                     </div>
@@ -551,45 +498,34 @@ const ClientDashboard = () => {
               {ongoingBookings.length > 0 ? (
                 (() => {
                   const now = new Date();
-                  const today = now.toISOString().split("T")[0];
+                  const today = now.toISOString().split('T')[0];
                   const valid = ongoingBookings
                     .filter((b) => {
                       const d = new Date(b.scheduled_time);
-                      const day = d.toISOString().split("T")[0];
+                      const day = d.toISOString().split('T')[0];
                       return day === today && d >= now;
                     })
-                    .sort(
-                      (a, b) =>
-                        new Date(a.scheduled_time) - new Date(b.scheduled_time)
-                    );
+                    .sort((a, b) => new Date(a.scheduled_time) - new Date(b.scheduled_time));
                   return valid.length ? (
                     <div className="bookingCard">
                       <p>
-                        <strong>Destination :</strong>{" "}
-                        {valid[0].dropoff_location}
+                        <strong>Destination :</strong> {valid[0].dropoff_location}
                       </p>
                       <p>
-                        <strong>Date et Heure :</strong>{" "}
-                        {new Date(valid[0].scheduled_time).toLocaleString(
-                          "fr-FR",
-                          {
-                            weekday: "long",
-                            day: "2-digit",
-                            month: "long",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          }
-                        )}
+                        <strong>Date et Heure :</strong>{' '}
+                        {new Date(valid[0].scheduled_time).toLocaleString('fr-FR', {
+                          weekday: 'long',
+                          day: '2-digit',
+                          month: 'long',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
                       </p>
                       <p>
                         <strong>Prix :</strong> {valid[0].amount} €
                       </p>
-                      <button
-                        onClick={() =>
-                          navigate(`/dashboard/booking-details/${valid[0].id}`)
-                        }
-                      >
+                      <button onClick={() => navigate(`/dashboard/booking-details/${valid[0].id}`)}>
                         Consultez les détails
                       </button>
                     </div>
@@ -608,8 +544,7 @@ const ClientDashboard = () => {
               {pastBookings.length > 0 ? (
                 (() => {
                   const latest = [...pastBookings].sort(
-                    (a, b) =>
-                      new Date(b.scheduled_time) - new Date(a.scheduled_time)
+                    (a, b) => new Date(b.scheduled_time) - new Date(a.scheduled_time)
                   )[0];
                   return (
                     <div className="bookingCard">
@@ -617,17 +552,13 @@ const ClientDashboard = () => {
                         <strong>Destination :</strong> {latest.dropoff_location}
                       </p>
                       <p>
-                        <strong>Date et Heure :</strong>{" "}
+                        <strong>Date et Heure :</strong>{' '}
                         {new Date(latest.scheduled_time).toLocaleString()}
                       </p>
                       <p>
                         <strong>Prix :</strong> {latest.amount} €
                       </p>
-                      <button
-                        onClick={() =>
-                          navigate(`/dashboard/booking-details/${latest.id}`)
-                        }
-                      >
+                      <button onClick={() => navigate(`/dashboard/booking-details/${latest.id}`)}>
                         Consultez les détails
                       </button>
                     </div>

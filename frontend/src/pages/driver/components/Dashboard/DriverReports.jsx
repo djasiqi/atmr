@@ -1,6 +1,6 @@
 // src/components/DriverReports.jsx
-import React from "react";
-import styles from "./DriverReports.module.css";
+import React from 'react';
+import styles from './DriverReports.module.css';
 
 const DriverReports = ({ reports }) => {
   return (

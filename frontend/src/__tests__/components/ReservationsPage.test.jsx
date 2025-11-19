@@ -149,7 +149,10 @@ describe('ReservationsPage', () => {
   it("devrait permettre d'annuler une réservation", async () => {
     render(<ReservationsPage />, { wrapper: createWrapper() });
 
-    const cancelButtons = await screen.findAllByText('Annuler');
+    // Attendre que les réservations soient chargées
+    const cancelButtons = await screen.findAllByText('Annuler', {}, { timeout: 3000 });
+    expect(cancelButtons.length).toBeGreaterThan(0);
+
     fireEvent.click(cancelButtons[0]);
 
     await waitFor(() => {
@@ -165,7 +168,10 @@ describe('ReservationsPage', () => {
     global.confirm.mockReturnValue(false);
     render(<ReservationsPage />, { wrapper: createWrapper() });
 
-    const cancelButtons = await screen.findAllByText('Annuler');
+    // Attendre que les réservations soient chargées
+    const cancelButtons = await screen.findAllByText('Annuler', {}, { timeout: 3000 });
+    expect(cancelButtons.length).toBeGreaterThan(0);
+
     fireEvent.click(cancelButtons[0]);
 
     await waitFor(() => {

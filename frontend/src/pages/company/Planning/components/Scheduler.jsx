@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from 'react';
 
 // Very lightweight timeline grid with basic drag/resize interactions (MVP adapter)
 export default function Scheduler({
@@ -24,15 +24,14 @@ export default function Scheduler({
   const spanMs = dayEnd - dayStart;
 
   const statusColor = (s) => {
-    const st = String(s.status || "planned").toLowerCase();
-    if (st === "active") return "#0f766e";
-    if (st === "completed") return "#2563eb";
-    if (st === "cancelled") return "#b91c1c";
-    return "#9ca3af"; // planned
+    const st = String(s.status || 'planned').toLowerCase();
+    if (st === 'active') return '#0f766e';
+    if (st === 'completed') return '#2563eb';
+    if (st === 'cancelled') return '#b91c1c';
+    return '#9ca3af'; // planned
   };
 
-  const toX = (ms) =>
-    `${Math.max(0, Math.min(1, (ms - dayStart) / spanMs)) * 100}%`;
+  const toX = (ms) => `${Math.max(0, Math.min(1, (ms - dayStart) / spanMs)) * 100}%`;
 
   const onMouseDown = (e, item, edge) => {
     e.stopPropagation();
@@ -47,20 +46,19 @@ export default function Scheduler({
   const onMouseMove = (e) => {
     if (!drag) return;
     const step = 15 * 60000; // 15min grid
-    const delta =
-      (e.movementX / (containerRef.current?.clientWidth || 1)) * spanMs;
-    if (drag.mode === "move") {
+    const delta = (e.movementX / (containerRef.current?.clientWidth || 1)) * spanMs;
+    if (drag.mode === 'move') {
       setDrag((d) => ({
         ...d,
         startMs: d.startMs + delta,
         endMs: d.endMs + delta,
       }));
-    } else if (drag.mode === "resize-start") {
+    } else if (drag.mode === 'resize-start') {
       setDrag((d) => ({
         ...d,
         startMs: Math.min(d.endMs - step, d.startMs + delta),
       }));
-    } else if (drag.mode === "resize-end") {
+    } else if (drag.mode === 'resize-end') {
       setDrag((d) => ({
         ...d,
         endMs: Math.max(d.startMs + step, d.endMs + delta),
@@ -89,62 +87,62 @@ export default function Scheduler({
       <div
         key={s.id}
         style={{
-          position: "relative",
+          position: 'relative',
           height: 28,
           marginBottom: 6,
-          background: "#f9fafb",
+          background: '#f9fafb',
           borderRadius: 6,
         }}
       >
         <div
-          title={`${s.type || "Shift"} · ${s.status}`}
+          title={`${s.type || 'Shift'} · ${s.status}`}
           style={{
-            position: "absolute",
+            position: 'absolute',
             left,
             width,
             top: 4,
             bottom: 4,
             background: statusColor(s),
-            color: "#fff",
+            color: '#fff',
             borderRadius: 6,
-            display: "flex",
-            alignItems: "center",
-            padding: "0 8px",
-            cursor: "move",
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 8px',
+            cursor: 'move',
           }}
-          onMouseDown={(e) => onMouseDown(e, s, "move")}
+          onMouseDown={(e) => onMouseDown(e, s, 'move')}
         >
           <div
             style={{
               fontSize: 12,
               fontWeight: 600,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}
           >
-            {s.type || "Shift"} · {s.vehicle_plate || "—"}
+            {s.type || 'Shift'} · {s.vehicle_plate || '—'}
           </div>
           <div
-            onMouseDown={(e) => onMouseDown(e, s, "resize-start")}
+            onMouseDown={(e) => onMouseDown(e, s, 'resize-start')}
             style={{
-              position: "absolute",
+              position: 'absolute',
               left: 0,
               top: 0,
               bottom: 0,
               width: 6,
-              cursor: "ew-resize",
+              cursor: 'ew-resize',
             }}
           />
           <div
-            onMouseDown={(e) => onMouseDown(e, s, "resize-end")}
+            onMouseDown={(e) => onMouseDown(e, s, 'resize-end')}
             style={{
-              position: "absolute",
+              position: 'absolute',
               right: 0,
               top: 0,
               bottom: 0,
               width: 6,
-              cursor: "ew-resize",
+              cursor: 'ew-resize',
             }}
           />
         </div>
@@ -158,14 +156,14 @@ export default function Scheduler({
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
       style={{
-        background: "#fff",
-        border: "1px solid #e5e7eb",
+        background: '#fff',
+        border: '1px solid #e5e7eb',
         borderRadius: 8,
         padding: 12,
       }}
     >
       <div style={{ marginBottom: 8, fontWeight: 700 }}>Timeline (MVP)</div>
-      <div style={{ position: "relative" }}>{rendered}</div>
+      <div style={{ position: 'relative' }}>{rendered}</div>
       <div style={{ marginTop: 8 }}>
         <button
           onClick={() =>
@@ -173,8 +171,8 @@ export default function Scheduler({
               driver_id: items[0]?.driver_id || 1,
               start_local: new Date().toISOString(),
               end_local: new Date(Date.now() + 2 * 3600 * 1000).toISOString(),
-              type: "regular",
-              status: "planned",
+              type: 'regular',
+              status: 'planned',
             })
           }
         >

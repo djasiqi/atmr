@@ -6,7 +6,6 @@ import { FiMessageSquare, FiX, FiPaperclip, FiSend, FiImage, FiFileText } from '
 import useCompanySocket from '../../hooks/useCompanySocket';
 import apiClient from '../../utils/apiClient';
 import { v4 as uuidv4 } from 'uuid';
-import { jwtDecode } from 'jwt-decode';
 import './ChatWidget.css';
 
 export default function ChatWidget({ companyId }) {
@@ -26,15 +25,26 @@ export default function ChatWidget({ companyId }) {
   const isAtBottomRef = useRef(true);
   const hasDoneInitialScrollRef = useRef(false);
 
-  // Récupérer l'ID de l'utilisateur actuel depuis le token
+  // Récupérer l'ID numérique de l'utilisateur actuel
+  // Le backend utilise user.id (ID numérique) comme sender_id dans les messages
+  // On doit récupérer l'ID depuis l'objet user stocké dans localStorage
   const currentUserId = useMemo(() => {
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) return null;
-      const decoded = jwtDecode(token);
-      // Le backend envoie user_id dans le token, ou on peut utiliser sub/public_id
-      return decoded.user_id || decoded.sub || null;
-    } catch {
+      // D'abord, essayer de récupérer depuis l'objet user dans localStorage
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        // Le backend stocke l'ID numérique dans user.id
+        if (user.id) {
+          return Number(user.id);
+        }
+      }
+      // Fallback: si user.id n'est pas dans localStorage, on ne peut pas déterminer l'ID
+      // Le token JWT contient public_id dans 'sub', mais pas user.id (ID numérique)
+      // On retourne null si on ne trouve pas user.id dans localStorage
+      return null;
+    } catch (error) {
+      console.error('❌ Erreur récupération currentUserId:', error);
       return null;
     }
   }, []);
@@ -75,8 +85,16 @@ export default function ChatWidget({ companyId }) {
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
     const colors = [
-      '#0A7F59', '#5F7369', '#8B4513', '#4169E1', '#DC143C',
-      '#FF6347', '#32CD32', '#FFD700', '#9370DB', '#20B2AA'
+      '#0A7F59',
+      '#5F7369',
+      '#8B4513',
+      '#4169E1',
+      '#DC143C',
+      '#FF6347',
+      '#32CD32',
+      '#FFD700',
+      '#9370DB',
+      '#20B2AA',
     ];
     return colors[Math.abs(hash) % colors.length];
   };
@@ -142,7 +160,12 @@ export default function ChatWidget({ companyId }) {
 
   // 2️⃣ Scroll automatique vers le bas pour nouveaux messages si on est déjà en bas
   useEffect(() => {
-    if (messages.length && listRef.current && hasDoneInitialScrollRef.current && isAtBottomRef.current) {
+    if (
+      messages.length &&
+      listRef.current &&
+      hasDoneInitialScrollRef.current &&
+      isAtBottomRef.current
+    ) {
       scrollToBottom(true);
     }
   }, [messages.length, scrollToBottom]);
@@ -182,8 +205,8 @@ export default function ChatWidget({ companyId }) {
             // Trier et dédupliquer
             setMessages((prev) => {
               const combined = [...formatted, ...prev];
-              const unique = combined.filter((msg, idx, arr) => 
-                arr.findIndex(m => m.id === msg.id) === idx
+              const unique = combined.filter(
+                (msg, idx, arr) => arr.findIndex((m) => m.id === msg.id) === idx
               );
               return unique.sort((a, b) => {
                 const timeA = new Date(a.timestamp || 0).getTime();
@@ -261,12 +284,15 @@ export default function ChatWidget({ companyId }) {
   // 5️⃣ Envoi d'un message (optimistic update)
   const sendMessage = useCallback(() => {
     const text = input.trim();
-    if (!text || !socket || !companyId) return;
+    if (!text || !socket || !companyId || !currentUserId) {
+      console.warn('❌ Impossible d\'envoyer: text=', text, 'socket=', !!socket, 'companyId=', companyId, 'currentUserId=', currentUserId);
+      return;
+    }
 
     const localId = uuidv4();
     const newMsg = {
       id: localId,
-      sender_id: currentUserId,
+      sender_id: currentUserId, // ID numérique de l'utilisateur (user.id)
       company_id: companyId,
       content: text,
       timestamp: new Date().toISOString(),
@@ -299,57 +325,66 @@ export default function ChatWidget({ companyId }) {
   }, [input, socket, companyId, currentUserId, myName, scrollToBottom]);
 
   // Typing indicator
-  const handleTyping = useCallback((text) => {
-    setInput(text);
-    if (!socket) return;
-    socket.emit('typing_start');
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      socket.emit('typing_stop');
-    }, 900);
-  }, [socket]);
+  const handleTyping = useCallback(
+    (text) => {
+      setInput(text);
+      if (!socket) return;
+      socket.emit('typing_start');
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        socket.emit('typing_stop');
+      }, 900);
+    },
+    [socket]
+  );
 
   // Envoi d'image
-  const handleSendImage = useCallback(async (file) => {
-    if (!socket || !companyId) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const uploadRes = await apiClient.post('/messages/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const { url } = uploadRes.data;
-      socket.emit('team_chat_message', {
-        content: '',
-        image_url: url,
-        receiver_id: null,
-      });
-    } catch (error) {
-      console.error('❌ Erreur upload image:', error);
-    }
-  }, [socket, companyId]);
+  const handleSendImage = useCallback(
+    async (file) => {
+      if (!socket || !companyId) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const uploadRes = await apiClient.post('/messages/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const { url } = uploadRes.data;
+        socket.emit('team_chat_message', {
+          content: '',
+          image_url: url,
+          receiver_id: null,
+        });
+      } catch (error) {
+        console.error('❌ Erreur upload image:', error);
+      }
+    },
+    [socket, companyId]
+  );
 
   // Envoi de PDF
-  const handleSendPdf = useCallback(async (file) => {
-    if (!socket || !companyId) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const uploadRes = await apiClient.post('/messages/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const { url, filename, size_bytes } = uploadRes.data;
-      socket.emit('team_chat_message', {
-        content: '',
-        pdf_url: url,
-        pdf_filename: filename,
-        pdf_size: size_bytes,
-        receiver_id: null,
-      });
-    } catch (error) {
-      console.error('❌ Erreur upload PDF:', error);
-    }
-  }, [socket, companyId]);
+  const handleSendPdf = useCallback(
+    async (file) => {
+      if (!socket || !companyId) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const uploadRes = await apiClient.post('/messages/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const { url, filename, size_bytes } = uploadRes.data;
+        socket.emit('team_chat_message', {
+          content: '',
+          pdf_url: url,
+          pdf_filename: filename,
+          pdf_size: size_bytes,
+          receiver_id: null,
+        });
+      } catch (error) {
+        console.error('❌ Erreur upload PDF:', error);
+      }
+    },
+    [socket, companyId]
+  );
 
   // Construction de la liste avec séparateurs de date
   const listItemsWithDates = useMemo(() => {
@@ -367,10 +402,22 @@ export default function ChatWidget({ companyId }) {
   }, [messages]);
 
   // Déterminer si un message est envoyé par l'utilisateur actuel
-  const isOwnMessage = useCallback((msg) => {
-    if (!currentUserId || !msg.sender_id) return false;
-    return Number(msg.sender_id) === Number(currentUserId);
-  }, [currentUserId]);
+  // Le backend utilise user.id (ID numérique) comme sender_id
+  const isOwnMessage = useCallback(
+    (msg) => {
+      if (!currentUserId || !msg.sender_id) {
+        // Si on n'a pas currentUserId, on ne peut pas déterminer
+        // On peut aussi vérifier par sender_role si c'est une entreprise
+        // Mais pour l'instant, on retourne false si pas d'ID
+        return false;
+      }
+      // Comparer les IDs numériques
+      const msgSenderId = Number(msg.sender_id);
+      const currentId = Number(currentUserId);
+      return msgSenderId === currentId;
+    },
+    [currentUserId]
+  );
 
   return (
     <>
@@ -419,21 +466,17 @@ export default function ChatWidget({ companyId }) {
                     )}
                     <div className={`chat-message ${isOwn ? 'sent' : 'received'}`}>
                       {msg.image_url && (
-                        <div
-                          className="chat-image"
-                          onClick={() => setImagePreview(msg.image_url)}
-                        >
-                          <img src={msg.image_url} alt="Image" />
+                        <div className="chat-image" onClick={() => setImagePreview(msg.image_url)}>
+                          <img src={msg.image_url} alt="" />
                         </div>
                       )}
                       {msg.pdf_url && (
-                        <div
-                          className="chat-pdf"
-                          onClick={() => setPdfPreview(msg.pdf_url)}
-                        >
+                        <div className="chat-pdf" onClick={() => setPdfPreview(msg.pdf_url)}>
                           <FiFileText size={28} />
                           <div>
-                            <div className="chat-pdf-name">{msg.pdf_filename || 'Document PDF'}</div>
+                            <div className="chat-pdf-name">
+                              {msg.pdf_filename || 'Document PDF'}
+                            </div>
                             {msg.pdf_size && (
                               <div className="chat-pdf-size">{formatSize(msg.pdf_size)}</div>
                             )}
@@ -464,31 +507,35 @@ export default function ChatWidget({ companyId }) {
           <div className="chat-input">
             {showAttachmentMenu && (
               <div className="chat-attachment-menu">
-                <button onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'image/*';
-                  input.onchange = (e) => {
-                    const file = e.target.files[0];
-                    if (file) handleSendImage(file);
-                    setShowAttachmentMenu(false);
-                  };
-                  input.click();
-                }}>
+                <button
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = (e) => {
+                      const file = e.target.files[0];
+                      if (file) handleSendImage(file);
+                      setShowAttachmentMenu(false);
+                    };
+                    input.click();
+                  }}
+                >
                   <FiImage size={20} />
                   <span>Photo</span>
                 </button>
-                <button onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'application/pdf';
-                  input.onchange = (e) => {
-                    const file = e.target.files[0];
-                    if (file) handleSendPdf(file);
-                    setShowAttachmentMenu(false);
-                  };
-                  input.click();
-                }}>
+                <button
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'application/pdf';
+                    input.onchange = (e) => {
+                      const file = e.target.files[0];
+                      if (file) handleSendPdf(file);
+                      setShowAttachmentMenu(false);
+                    };
+                    input.click();
+                  }}
+                >
                   <FiFileText size={20} />
                   <span>PDF</span>
                 </button>
@@ -508,11 +555,7 @@ export default function ChatWidget({ companyId }) {
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
               aria-label="Champ de saisie du message"
             />
-            <button
-              className="chat-send-button"
-              onClick={sendMessage}
-              disabled={!input.trim()}
-            >
+            <button className="chat-send-button" onClick={sendMessage} disabled={!input.trim()}>
               <FiSend size={18} />
             </button>
           </div>
@@ -526,7 +569,7 @@ export default function ChatWidget({ companyId }) {
             <button className="chat-modal-close" onClick={() => setImagePreview(null)}>
               <FiX size={24} />
             </button>
-            <img src={imagePreview} alt="Preview" />
+            <img src={imagePreview} alt="Message preview" />
           </div>
         </div>
       )}
@@ -537,7 +580,11 @@ export default function ChatWidget({ companyId }) {
             <button className="chat-modal-close" onClick={() => setPdfPreview(null)}>
               <FiX size={24} />
             </button>
-            <iframe src={pdfPreview} style={{ width: '100%', height: '80vh', border: 'none' }} />
+            <iframe
+              src={pdfPreview}
+              title="PDF preview"
+              style={{ width: '100%', height: '80vh', border: 'none' }}
+            />
           </div>
         </div>
       )}

@@ -23,7 +23,7 @@ const SecurityTab = () => {
       id: 3,
       timestamp: '13/10/2025 16:45',
       user: 'Admin (vous)',
-      action: 'Ajout d\'un nouveau client',
+      action: "Ajout d'un nouveau client",
       ip: '192.168.1.1',
     },
   ];
@@ -121,4 +121,3 @@ const SecurityTab = () => {
 };
 
 export default SecurityTab;
-

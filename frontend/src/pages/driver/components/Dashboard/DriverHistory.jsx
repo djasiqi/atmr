@@ -1,6 +1,6 @@
 // src/components/DriverHistory.jsx
-import React from "react";
-import styles from "./DriverHistory.module.css";
+import React from 'react';
+import styles from './DriverHistory.module.css';
 
 const DriverHistory = ({ history }) => {
   return (
@@ -12,9 +12,7 @@ const DriverHistory = ({ history }) => {
         <ul>
           {history.map((course) => (
             <li key={course.id}>
-              <span>
-                {new Date(course.scheduled_time).toLocaleString("fr-FR")}
-              </span>
+              <span>{new Date(course.scheduled_time).toLocaleString('fr-FR')}</span>
               <span>
                 {course.pickup} → {course.dropoff}
               </span>

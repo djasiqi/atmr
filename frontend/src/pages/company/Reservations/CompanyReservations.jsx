@@ -216,7 +216,10 @@ const CompanyReservations = () => {
 
   const handleEdit = (reservation) => {
     // Passer l'objet complet
-    const resObj = typeof reservation === 'object' ? reservation : reservations.find((r) => r.id === reservation);
+    const resObj =
+      typeof reservation === 'object'
+        ? reservation
+        : reservations.find((r) => r.id === reservation);
     if (!resObj) return;
     setEditModalReservation(resObj);
     setEditModalOpen(true);
@@ -230,14 +233,17 @@ const CompanyReservations = () => {
       setEditModalReservation(null);
       loadReservations();
     } catch (err) {
-      console.error('Erreur lors de l\'édition:', err);
+      console.error("Erreur lors de l'édition:", err);
       throw err;
     }
   };
 
   const handleSchedule = (reservation) => {
     // Passer l'objet complet
-    const resObj = typeof reservation === 'object' ? reservation : reservations.find((r) => r.id === reservation);
+    const resObj =
+      typeof reservation === 'object'
+        ? reservation
+        : reservations.find((r) => r.id === reservation);
     if (!resObj) return;
     setScheduleModalReservation(resObj);
     setScheduleModalOpen(true);

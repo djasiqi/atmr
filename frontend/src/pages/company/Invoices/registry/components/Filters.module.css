@@ -29,7 +29,8 @@
   letter-spacing: 0.5px;
 }
 
-.filterInput, .filterSelect {
+.filterInput,
+.filterSelect {
   width: 100%;
   padding: var(--spacing-sm) var(--spacing-md);
   border: 2px solid var(--border-primary);
@@ -41,14 +42,16 @@
   color: var(--text-primary);
 }
 
-.filterInput:focus, .filterSelect:focus {
+.filterInput:focus,
+.filterSelect:focus {
   outline: none;
   border-color: var(--brand-primary);
   box-shadow: var(--focus-ring);
   background: var(--success-bg-hover);
 }
 
-.filterInput:disabled, .filterSelect:disabled {
+.filterInput:disabled,
+.filterSelect:disabled {
   background-color: var(--bg-disabled);
   opacity: 0.6;
   cursor: not-allowed;
@@ -68,7 +71,7 @@
   gap: var(--spacing-xs);
 }
 
-.filterCheckbox input[type="checkbox"] {
+.filterCheckbox input[type='checkbox'] {
   width: 18px;
   height: 18px;
   cursor: pointer;
@@ -170,7 +173,7 @@
     font-size: var(--font-xs);
     width: 100%;
   }
-  
+
   .advancedFilters {
     flex-direction: column;
     gap: var(--spacing-sm);
@@ -184,13 +187,13 @@
   .filterCheckbox label {
     font-size: var(--font-xs);
   }
-  
+
   .filterActions {
     flex-direction: row;
     gap: var(--spacing-xs);
     padding-top: var(--spacing-sm);
   }
-  
+
   .filterBtn {
     flex: 1;
     padding: var(--spacing-xs) var(--spacing-sm);
@@ -207,7 +210,7 @@
   .filtersGrid {
     gap: var(--spacing-xs);
   }
-  
+
   .filterInput,
   .filterSelect {
     padding: var(--spacing-xs);
@@ -222,11 +225,11 @@
     font-size: 0.7rem;
   }
 
-  .filterCheckbox input[type="checkbox"] {
+  .filterCheckbox input[type='checkbox'] {
     width: 16px;
     height: 16px;
   }
-  
+
   .filterBtn {
     padding: var(--spacing-xs);
     font-size: 0.7rem;

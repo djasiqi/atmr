@@ -1,8 +1,8 @@
 /* src/components/layout/Sidebar/CompanySidebar/CompanySidebar.module.css */
 
 :root {
-  --hdr-h: 64px;            /* hauteur du header sticky */
-  --sidebar-w: 72px;        /* largeur dynamique (modifiée par JS) */
+  --hdr-h: 64px; /* hauteur du header sticky */
+  --sidebar-w: 72px; /* largeur dynamique (modifiée par JS) */
 }
 
 .sidebar {
@@ -56,12 +56,14 @@
 }
 
 /* État OUVERT : plus foncé (pas de "vert clair" résiduel) */
-.toggler[aria-expanded="true"] {
+.toggler[aria-expanded='true'] {
   background: var(--brand-hover);
 }
 
 /* Press feedback */
-.toggler:active { transform: translateY(1px) scale(0.98); }
+.toggler:active {
+  transform: translateY(1px) scale(0.98);
+}
 
 /* Focus accessible */
 .toggler:focus-visible {
@@ -82,7 +84,9 @@
   margin: 0;
 }
 
-.menu li + li { margin-top: var(--spacing-xxs); }
+.menu li + li {
+  margin-top: var(--spacing-xxs);
+}
 
 .menu a {
   display: flex;
@@ -96,7 +100,9 @@
   white-space: nowrap;
   overflow: hidden; /* masque le texte quand réduit */
 
-  transition: background-color var(--transition-fast), color var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .menu a:hover {
@@ -120,7 +126,9 @@
 /* Label texte */
 .text {
   opacity: 1;
-  transition: opacity var(--transition-fast), width var(--transition-fast);
+  transition:
+    opacity var(--transition-fast),
+    width var(--transition-fast);
 }
 
 /* Sidebar réduite : on masque proprement le texte */
@@ -156,7 +164,7 @@
     width: 60px !important;
     padding: var(--spacing-xs);
   }
-  
+
   /* Toujours masquer le texte sur mobile */
   .text {
     opacity: 0 !important;
@@ -164,24 +172,24 @@
     pointer-events: none;
     overflow: hidden;
   }
-  
+
   /* Toggler plus petit */
   .toggler {
     width: 32px;
     height: 32px;
     margin: var(--spacing-xs);
   }
-  
+
   .toggler svg {
     width: 14px;
     height: 14px;
   }
-  
+
   /* Icônes plus petites */
   .icon {
     font-size: var(--font-md);
   }
-  
+
   /* Liens plus compacts */
   .menu a {
     padding: var(--spacing-xs);

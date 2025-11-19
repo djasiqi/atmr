@@ -119,7 +119,6 @@ const ReservationSelector = ({
     }
   };
 
-
   const handleNoteChange = (reservationId, value) => {
     if (!onOverrideChange) return;
     onOverrideChange(reservationId, { note: value?.trim?.() ? value : null });
@@ -156,11 +155,7 @@ const ReservationSelector = ({
         override.amount ?? reservation.amount ?? reservation.estimated_amount ?? 0
       );
       const vatRate = vatApplicable
-        ? Number(
-            reservation.vat_rate ??
-              reservation.default_vat_rate ??
-              defaultVatRate
-          )
+        ? Number(reservation.vat_rate ?? reservation.default_vat_rate ?? defaultVatRate)
         : 0;
       const sanitizedAmount = Number.isNaN(amount) ? 0 : amount;
       const sanitizedVatRate = Number.isNaN(vatRate) ? 0 : vatRate;
@@ -328,7 +323,6 @@ const ReservationSelector = ({
                           onChange={(e) => handleAmountChange(reservation.id, e.target.value)}
                         />
                       </label>
-
                     </div>
 
                     <label className={styles.field}>

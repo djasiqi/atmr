@@ -1,22 +1,21 @@
 // src/pages/Dashboard/DriverDashboard.jsx
-import React, { useEffect, useState, useCallback } from "react";
-import { useParams } from "react-router-dom";
-import HeaderDashboard from "../../../components/layout/Header/HeaderDashboard";
-import DriverSidebar from "../../../components/layout/Sidebar/DriverSidebar/DriverSidebar";
-import DriverProfile from "../Profile/DriverProfile";
-import DriverProfileModal from "../components/Profile/DriverProfileModal";
-import DriverOverview from "../components/Dashboard/DriverOverview";
-import DriverSchedule from "../components/Dashboard/DriverSchedule";
-import CourseList from "../components/Dashboard/CourseList";
-import CourseDetailsModal from "../../../components/widgets/CourseDetailsModal";
-import DriverMap from "../components/Dashboard/DriverMap";
-import Notifications from "../components/Dashboard/Notifications";
-import DriverHistory from "../components/Dashboard/DriverHistory";
-import DriverReports from "../components/Dashboard/DriverReports";
-import VoiceControl from "../components/Dashboard/VoiceControl";
-import useDriverLocation from "../../../hooks/useDriverLocation";
-import styles from "./DriverDashboard.module.css";
-
+import React, { useEffect, useState, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
+import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
+import DriverSidebar from '../../../components/layout/Sidebar/DriverSidebar/DriverSidebar';
+import DriverProfile from '../Profile/DriverProfile';
+import DriverProfileModal from '../components/Profile/DriverProfileModal';
+import DriverOverview from '../components/Dashboard/DriverOverview';
+import DriverSchedule from '../components/Dashboard/DriverSchedule';
+import CourseList from '../components/Dashboard/CourseList';
+import CourseDetailsModal from '../../../components/widgets/CourseDetailsModal';
+import DriverMap from '../components/Dashboard/DriverMap';
+import Notifications from '../components/Dashboard/Notifications';
+import DriverHistory from '../components/Dashboard/DriverHistory';
+import DriverReports from '../components/Dashboard/DriverReports';
+import VoiceControl from '../components/Dashboard/VoiceControl';
+import useDriverLocation from '../../../hooks/useDriverLocation';
+import styles from './DriverDashboard.module.css';
 
 const DriverDashboard = () => {
   const { public_id } = useParams();
@@ -35,7 +34,7 @@ const DriverDashboard = () => {
   // Utilisation du hook pour obtenir la position GPS du chauffeur
   const { location: myLocation, error: locationError } = useDriverLocation(
     (newLocation) => {
-      console.log("Position mise à jour:", newLocation);
+      console.log('Position mise à jour:', newLocation);
       // Ici, vous pouvez envoyer la nouvelle position à votre serveur en temps réel via Socket.IO
     },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
@@ -48,13 +47,13 @@ const DriverDashboard = () => {
       const fetchedAssignments = [
         {
           id: 1,
-          customer_name: "Client A",
+          customer_name: 'Client A',
           scheduled_time: new Date().toISOString(),
-          pickup: "Adresse A",
-          dropoff: "Adresse B",
-          status: "assigned",
+          pickup: 'Adresse A',
+          dropoff: 'Adresse B',
+          status: 'assigned',
           revenue: 50,
-          location: { lat: "46.2044", lng: "6.1432" },
+          location: { lat: '46.2044', lng: '6.1432' },
           is_on_trip: false,
           route: [],
         },
@@ -67,7 +66,7 @@ const DriverDashboard = () => {
       });
     } catch (err) {
       console.error(err);
-      setError("Erreur lors du chargement des données du chauffeur.");
+      setError('Erreur lors du chargement des données du chauffeur.');
     } finally {
       setLoading(false);
     }
@@ -105,18 +104,11 @@ const DriverDashboard = () => {
         <DriverSchedule assignments={assignments} />
 
         {/* Liste des courses assignées */}
-        <CourseList
-          assignments={assignments}
-          onRowClick={(course) => setSelectedCourse(course)}
-        />
+        <CourseList assignments={assignments} onRowClick={(course) => setSelectedCourse(course)} />
 
         {/* Carte en temps réel : 
             Nous passons la position actuelle du chauffeur (myLocation) en plus des assignments */}
-        <DriverMap
-          assignments={assignments}
-          myLocation={myLocation}
-          isLoaded={true}
-        />
+        <DriverMap assignments={assignments} myLocation={myLocation} isLoaded={true} />
 
         {/* Modal des détails d'une course */}
         {selectedCourse && (
@@ -125,23 +117,21 @@ const DriverDashboard = () => {
             onClose={closeModal} // Utilisation de la fonction définie
             onStartCourse={(id) => {
               // Logique pour démarrer la course, par exemple appeler l'API startBooking
-              console.log("Démarrer la course", id);
+              console.log('Démarrer la course', id);
             }}
             onReportIssue={(id) => {
               // Logique pour signaler un problème
-              console.log("Signaler un problème pour la course", id);
+              console.log('Signaler un problème pour la course', id);
             }}
             onCompleteCourse={(id) => {
               // Logique pour terminer la course
-              console.log("Terminer la course", id);
+              console.log('Terminer la course', id);
             }}
           />
         )}
 
         {/* Historique des courses terminées */}
-        <DriverHistory
-          history={assignments.filter((a) => a.status === "completed")}
-        />
+        <DriverHistory history={assignments.filter((a) => a.status === 'completed')} />
 
         {/* Rapports du jour */}
         <DriverReports reports={reports} />
@@ -163,9 +153,7 @@ const DriverDashboard = () => {
 
         {/* Optionnel : Affichage d'erreurs de géolocalisation */}
         {locationError && (
-          <div className={styles.error}>
-            Erreur de géolocalisation : {locationError}
-          </div>
+          <div className={styles.error}>Erreur de géolocalisation : {locationError}</div>
         )}
       </main>
     </div>

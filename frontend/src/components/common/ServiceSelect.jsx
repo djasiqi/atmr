@@ -98,8 +98,8 @@ export default function ServiceSelect({
         !establishmentId
           ? "Sélectionnez d'abord un établissement"
           : inputValue
-          ? `Aucun service trouvé pour "${inputValue}"`
-          : 'Tapez pour rechercher un service'
+            ? `Aucun service trouvé pour "${inputValue}"`
+            : 'Tapez pour rechercher un service'
       }
       loadingMessage={() => 'Chargement des services...'}
       styles={{

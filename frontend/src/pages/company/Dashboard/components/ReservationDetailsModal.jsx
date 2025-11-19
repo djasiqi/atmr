@@ -1,7 +1,7 @@
 // src/pages/Dashboard/ReservationDetailsModal.jsx
-import React from "react";
-import styles from "../CompanyDashboard.module.css";
-import { renderBookingDateTime } from "../../../../utils/formatDate";
+import React from 'react';
+import styles from '../CompanyDashboard.module.css';
+import { renderBookingDateTime } from '../../../../utils/formatDate';
 
 const ReservationDetailsModal = ({ reservation, onClose }) => {
   return (

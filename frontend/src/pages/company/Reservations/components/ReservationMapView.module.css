@@ -133,7 +133,7 @@
   .mapContainer {
     height: 400px;
   }
-  
+
   .mapLegend {
     position: static;
     flex-direction: row;

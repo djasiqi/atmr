@@ -8,8 +8,10 @@
   padding: var(--spacing-xl);
   max-width: 600px;
   margin: var(--spacing-lg) auto;
-  font-family: "Roboto", sans-serif;
-  transition: transform var(--transition-base), box-shadow var(--transition-base);
+  font-family: 'Roboto', sans-serif;
+  transition:
+    transform var(--transition-base),
+    box-shadow var(--transition-base);
 }
 
 .profileCard:hover {

@@ -28,7 +28,9 @@
   overflow-x: hidden;
   overflow-y: visible;
   box-sizing: border-box;
-  transition: margin-left var(--transition-base), max-width var(--transition-base);
+  transition:
+    margin-left var(--transition-base),
+    max-width var(--transition-base);
 }
 
 .content h1 {
@@ -172,22 +174,22 @@
 }
 
 .table td:last-child::before {
-  content: "• ";
+  content: '• ';
   font-size: var(--font-lg);
   vertical-align: middle;
   margin-right: var(--spacing-xs);
 }
 
-.table td:last-child:contains("PAID") {
+.table td:last-child:contains('PAID') {
   color: var(--success-primary);
 }
 
-.table td:last-child:contains("PENDING") {
+.table td:last-child:contains('PENDING') {
   color: var(--warning-primary);
 }
 
-.table td:last-child:contains("CANCELED"),
-.table td:last-child:contains("FAILED") {
+.table td:last-child:contains('CANCELED'),
+.table td:last-child:contains('FAILED') {
   color: var(--danger-primary);
 }
 

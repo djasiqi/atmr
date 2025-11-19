@@ -1,17 +1,10 @@
 // src/pages/driver/components/Dashboard/DriverMap.jsx
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  Polyline,
-  Marker,
-  Popup,
-  useMap,
-} from "react-leaflet";
-import L from "leaflet";
-import myLocationIcon from "../../../../assets/icons/my-location.png";
-import styles from "./DriverMap.module.css";
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import myLocationIcon from '../../../../assets/icons/my-location.png';
+import styles from './DriverMap.module.css';
 
 // --- Styles & constants ---
 const defaultCenter = { lat: 46.8182, lng: 8.2275 }; // Suisse
@@ -25,9 +18,7 @@ function haversineDistance(a, b) {
   const dLng = toRad(b.lng - a.lng);
   const lat1 = toRad(a.lat);
   const lat2 = toRad(b.lat);
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+  const x = Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
   const c = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   return R * c;
 }
@@ -52,17 +43,15 @@ const myIcon = L.icon({
 });
 
 const pickupDivIcon = L.divIcon({
-  className: "pickup-marker",
-  html:
-    '<div style="width:22px;height:22px;border-radius:50%;background:#52c41a;border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;">P</div>',
+  className: 'pickup-marker',
+  html: '<div style="width:22px;height:22px;border-radius:50%;background:#52c41a;border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;">P</div>',
   iconSize: [22, 22],
   iconAnchor: [11, 11],
 });
 
 const dropoffDivIcon = L.divIcon({
-  className: "dropoff-marker",
-  html:
-    '<div style="width:22px;height:22px;border-radius:50%;background:#f5222d;border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;">D</div>',
+  className: 'dropoff-marker',
+  html: '<div style="width:22px;height:22px;border-radius:50%;background:#f5222d;border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;">D</div>',
   iconSize: [22, 22],
   iconAnchor: [11, 11],
 });
@@ -179,8 +168,8 @@ const DriverMap = ({ assignments = [], myLocation, delays = {} }) => {
   // On accepte soit booking.pickup {lat,lng}, soit {latitude,longitude}
   const getLatLng = (pt) => {
     if (!pt) return null;
-    if ("lat" in pt && "lng" in pt) return [pt.lat, pt.lng];
-    if ("latitude" in pt && "longitude" in pt) return [pt.latitude, pt.longitude];
+    if ('lat' in pt && 'lng' in pt) return [pt.lat, pt.lng];
+    if ('latitude' in pt && 'longitude' in pt) return [pt.latitude, pt.longitude];
     if (Array.isArray(pt) && pt.length >= 2) return [pt[0], pt[1]];
     return null;
   };
@@ -195,7 +184,7 @@ const DriverMap = ({ assignments = [], myLocation, delays = {} }) => {
       const latLngs = normalizeToLatLngPairs(a.route || []);
 
       // Couleur par défaut
-      let color = "#3388ff";
+      let color = '#3388ff';
 
       // Si retard connu: jaune si <10min, rouge sinon. On distingue pickup vs dropoff
       const b = a.booking;
@@ -203,7 +192,7 @@ const DriverMap = ({ assignments = [], myLocation, delays = {} }) => {
         const dl = delays[b.id];
         const late = Number(dl.delay_minutes || 0);
         if (late > 0) {
-          color = late < 10 ? "#faad14" : "#f5222d";
+          color = late < 10 ? '#faad14' : '#f5222d';
         }
       }
 
@@ -232,9 +221,7 @@ const DriverMap = ({ assignments = [], myLocation, delays = {} }) => {
           (b.coordinates && b.coordinates.pickup)
       );
       const dropoff = getLatLng(
-        b.dropoff ||
-          b.dropoff_location ||
-          (b.coordinates && b.coordinates.dropoff)
+        b.dropoff || b.dropoff_location || (b.coordinates && b.coordinates.dropoff)
       );
 
       if (pickup) {
@@ -251,16 +238,10 @@ const DriverMap = ({ assignments = [], myLocation, delays = {} }) => {
       }
       if (dropoff) {
         items.push(
-          <Marker
-            key={`dropoff-${a.id}`}
-            position={dropoff}
-            icon={dropoffDivIcon}
-          >
+          <Marker key={`dropoff-${a.id}`} position={dropoff} icon={dropoffDivIcon}>
             <Popup>
               <strong>Dropoff</strong>
-              {b.dropoff_time ? (
-                <div>Heure: {fmtTime(b.dropoff_time)}</div>
-              ) : null}
+              {b.dropoff_time ? <div>Heure: {fmtTime(b.dropoff_time)}</div> : null}
               {b.client_name ? <div>Client: {b.client_name}</div> : null}
               {b.status ? <div>Statut: {b.status}</div> : null}
             </Popup>
@@ -348,11 +329,9 @@ const DriverMap = ({ assignments = [], myLocation, delays = {} }) => {
 function fmtTime(t) {
   try {
     const d = new Date(t);
-    return `${String(d.getHours()).padStart(2, "0")}:${String(
-      d.getMinutes()
-    ).padStart(2, "0")}`;
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   } catch {
-    return t || "";
+    return t || '';
   }
 }
 

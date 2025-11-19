@@ -167,8 +167,15 @@
 }
 
 @keyframes pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.05); opacity: 0.8; }
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
 }
 
 /* ================== CARTES MOBILES (comme KPI) ================== */
@@ -254,7 +261,7 @@
     max-width: 100%;
     box-sizing: border-box;
   }
-  
+
   .table {
     font-size: var(--font-sm);
   }
@@ -270,21 +277,21 @@
     -webkit-overflow-scrolling: touch;
     box-sizing: border-box;
   }
-  
+
   .table {
     width: 100% !important;
     min-width: 100%; /* S'adapte à la largeur, pas de min-width fixe */
     font-size: var(--font-xs);
     box-sizing: border-box;
   }
-  
+
   .table th,
   .table td {
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-xs);
     white-space: nowrap; /* Empêche le retour à la ligne */
   }
-  
+
   .table th {
     position: sticky;
     top: 0;
@@ -317,11 +324,11 @@
   .tableContainer {
     margin-top: var(--spacing-xs);
   }
-  
+
   .table {
     font-size: var(--font-xs);
   }
-  
+
   .table th,
   .table td {
     padding: var(--spacing-xxs) var(--spacing-xs);

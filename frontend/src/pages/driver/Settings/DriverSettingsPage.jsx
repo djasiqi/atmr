@@ -1,28 +1,28 @@
 // src/pages/DriverSettingsPage.jsx
-import React, { useState } from "react";
-import HeaderDashboard from "../../../components/layout/Header/HeaderDashboard";
-import DriverSidebar from "../../../components/layout/Sidebar/DriverSidebar/DriverSidebar";
+import React, { useState } from 'react';
+import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
+import DriverSidebar from '../../../components/layout/Sidebar/DriverSidebar/DriverSidebar';
 import styles from '../Dashboard/DriverDashboard.module.css';
 
 const DriverSettingsPage = () => {
   const [settings, setSettings] = useState({
     notifications: true,
     darkMode: false,
-    language: "fr",
+    language: 'fr',
   });
 
   const handleChange = (e) => {
     const { name, type, value, checked } = e.target;
     setSettings({
       ...settings,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: type === 'checkbox' ? checked : value,
     });
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     // Sauvegarder les paramètres via API ou dans l'état local
-    console.log("Settings saved:", settings);
+    console.log('Settings saved:', settings);
   };
 
   return (
@@ -57,11 +57,7 @@ const DriverSettingsPage = () => {
           <div>
             <label>
               Langue:
-              <select
-                name="language"
-                value={settings.language}
-                onChange={handleChange}
-              >
+              <select name="language" value={settings.language} onChange={handleChange}>
                 <option value="fr">Français</option>
                 <option value="en">English</option>
                 <option value="de">Deutsch</option>

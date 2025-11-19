@@ -1,7 +1,7 @@
 :root {
-  --hdr-h: 64px;             /* hauteur du header */
-  --brand-gap: 0px;          /* pas d'espace si pas de nom */
-  --brand-max-w: 48vw;       /* coupe les logos très longs */
+  --hdr-h: 64px; /* hauteur du header */
+  --brand-gap: 0px; /* pas d'espace si pas de nom */
+  --brand-max-w: 48vw; /* coupe les logos très longs */
 }
 
 .header {
@@ -29,7 +29,9 @@
   min-width: 0; /* pour ellipsis éventuels */
   transition: opacity var(--transition-fast);
 }
-.brand:hover { opacity: .92; }
+.brand:hover {
+  opacity: 0.92;
+}
 
 /* Wrapper du logo (pas de bordure/ombre, fond neutre) */
 .logoWrap {
@@ -72,7 +74,9 @@
 }
 
 /* on masque explicitement le nom si jamais présent */
-.companyName { display: none !important; }
+.companyName {
+  display: none !important;
+}
 
 .rightZone {
   display: flex;
@@ -120,7 +124,9 @@
     max-height: 40px;
     height: 40px;
   }
-  .logoImg { max-width: 200px; }
+  .logoImg {
+    max-width: 200px;
+  }
 }
 
 /* ============================================================
@@ -172,7 +178,8 @@
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -186,7 +193,7 @@
     padding: var(--spacing-xxs) var(--spacing-sm);
     font-size: var(--font-xs);
   }
-  
+
   .badgeIcon {
     font-size: var(--font-md);
   }

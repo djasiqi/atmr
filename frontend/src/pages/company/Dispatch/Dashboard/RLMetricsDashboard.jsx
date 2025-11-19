@@ -182,8 +182,8 @@ const RLMetricsDashboard = () => {
             {metrics.avg_confidence >= 0.8
               ? '📈 Excellent'
               : metrics.avg_confidence >= 0.6
-              ? '✅ Bon'
-              : '⚠️ À améliorer'}
+                ? '✅ Bon'
+                : '⚠️ À améliorer'}
           </div>
         </div>
 

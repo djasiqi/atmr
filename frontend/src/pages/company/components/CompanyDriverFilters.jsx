@@ -1,13 +1,8 @@
 // src/pages/company/Driver/components/CompanyDriverFilters.jsx
-import React from "react";
-import styles from "./CompanyDriverFilters.module.css"; // Créez ce fichier CSS
+import React from 'react';
+import styles from './CompanyDriverFilters.module.css'; // Créez ce fichier CSS
 
-const CompanyDriverFilters = ({
-  searchTerm,
-  setSearchTerm,
-  statusFilter,
-  setStatusFilter,
-}) => {
+const CompanyDriverFilters = ({ searchTerm, setSearchTerm, statusFilter, setStatusFilter }) => {
   return (
     <div className={styles.filters}>
       <input
