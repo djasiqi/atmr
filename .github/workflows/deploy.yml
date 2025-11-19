@@ -93,7 +93,7 @@ jobs:
           target: "/srv/atmr"
 
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v0.1.10
+        uses: appleboy/ssh-action@v1.2.3
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
