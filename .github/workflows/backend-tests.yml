@@ -130,7 +130,7 @@ jobs:
           FLASK_CONFIG: testing
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
-          APP_ENCRYPTION_KEY_B64: dGVzdC1lbmNyeXB0aW9uLWtleS1mb3ItdGVzdHMtMzJieXRlcw
+          APP_ENCRYPTION_KEY_B64: dGVzdC1lbmNyeXB0aW9uLWtleS0zMmJ5dGVzISE=
         run: |
           cd backend
           pytest -v --cov=. --cov-report=xml --cov-report=html --cov-report=term-missing
@@ -143,7 +143,7 @@ jobs:
           FLASK_CONFIG: testing
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
-          APP_ENCRYPTION_KEY_B64: dGVzdC1lbmNyeXB0aW9uLWtleS1mb3ItdGVzdHMtMzJieXRlcw
+          APP_ENCRYPTION_KEY_B64: dGVzdC1lbmNyeXB0aW9uLWtleS0zMmJ5dGVzISE=
         run: |
           cd backend
           echo "📊 Vérification couverture globale >= 70%..."
@@ -158,7 +158,7 @@ jobs:
           FLASK_CONFIG: testing
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
-          APP_ENCRYPTION_KEY_B64: dGVzdC1lbmNyeXB0aW9uLWtleS1mb3ItdGVzdHMtMzJieXRlcw
+          APP_ENCRYPTION_KEY_B64: dGVzdC1lbmNyeXB0aW9uLWtleS0zMmJ5dGVzISE=
         run: |
           cd backend
           echo "🚨 Vérification couverture modules critiques >= 80%..."
@@ -341,7 +341,7 @@ jobs:
           FLASK_CONFIG: testing
           SECRET_KEY: test-secret
           JWT_SECRET_KEY: test-jwt
-          APP_ENCRYPTION_KEY_B64: dGVzdC1lbmNyeXB0aW9uLWtleS1mb3ItdGVzdHMtMzJieXRlcw
+          APP_ENCRYPTION_KEY_B64: dGVzdC1lbmNyeXB0aW9uLWtleS0zMmJ5dGVzISE=
         run: |
           cd backend
           flask db upgrade head
@@ -352,7 +352,7 @@ jobs:
           FLASK_CONFIG: testing
           SECRET_KEY: test-secret
           JWT_SECRET_KEY: test-jwt
-          APP_ENCRYPTION_KEY_B64: dGVzdC1lbmNyeXB0aW9uLWtleS1mb3ItdGVzdHMtMzJieXRlcw
+          APP_ENCRYPTION_KEY_B64: dGVzdC1lbmNyeXB0aW9uLWtleS0zMmJ5dGVzISE=
         run: |
           cd backend
           flask db downgrade -1
@@ -364,7 +364,7 @@ jobs:
           FLASK_CONFIG: testing
           SECRET_KEY: test-secret
           JWT_SECRET_KEY: test-jwt
-          APP_ENCRYPTION_KEY_B64: dGVzdC1lbmNyeXB0aW9uLWtleS1mb3ItdGVzdHMtMzJieXRlcw
+          APP_ENCRYPTION_KEY_B64: dGVzdC1lbmNyeXB0aW9uLWtleS0zMmJ5dGVzISE=
         run: |
           cd backend
           # Vérifier aucune migration auto-détectée non commitée
