@@ -60,6 +60,10 @@ def _lazy_import_rl():
             raise
 
 
+# Alias public pour les tests
+lazy_import_rl = _lazy_import_rl
+
+
 class RLSuggestionGenerator:
     """Générateur de suggestions RL pour le dispatch.
 
