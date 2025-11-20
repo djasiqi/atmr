@@ -42,6 +42,12 @@ try:
 except ImportError:
     RLSuggestionMetric = None
 
+# Import conditionnel de torch pour éviter NameError
+try:
+    import torch  # type: ignore
+except ImportError:
+    torch = None
+
 
 class RLLogger:
     """Logger avancé pour les décisions RL avec traçabilité complète.
@@ -93,40 +99,27 @@ class RLLogger:
         """
         try:
             # Vérifier si c'est un torch tensor
-            try:
-                if isinstance(state, torch.Tensor):
-                    # Convertir tensor en numpy
-                    state_bytes = state.detach().cpu().numpy().tobytes()
-                elif isinstance(state, np.ndarray):
-                    state_bytes = state.tobytes()
-                elif isinstance(state, (list, tuple, dict)):
-                    # Convertir en JSON puis en bytes
-                    state_str = json.dumps(state, sort_keys=True)
-                    state_bytes = state_str.encode("utf-8")
-                else:
-                    # Fallback: convertir en string puis en bytes
-                    state_str = str(state)
-                    state_bytes = state_str.encode("utf-8")
-            except ImportError:
-                # Pas de torch disponible, traiter comme numpy/list/dict
-                if isinstance(state, np.ndarray):
-                    state_bytes = state.tobytes()
-                elif isinstance(state, (list, tuple, dict)):
-                    # Convertir en JSON puis en bytes
-                    state_str = json.dumps(state, sort_keys=True)
-                    state_bytes = state_str.encode("utf-8")
-                else:
-                    # Fallback: convertir en string puis en bytes
-                    state_str = str(state)
-                    state_bytes = state_str.encode("utf-8")
+            if torch is not None and isinstance(state, torch.Tensor):
+                # Convertir tensor en numpy
+                state_bytes = state.detach().cpu().numpy().tobytes()
+            elif isinstance(state, np.ndarray):
+                state_bytes = state.tobytes()
+            elif isinstance(state, (list, tuple, dict)):
+                # Convertir en JSON puis en bytes
+                state_str = json.dumps(state, sort_keys=True)
+                state_bytes = state_str.encode("utf-8")
+            else:
+                # Fallback: convertir en string puis en bytes
+                state_str = str(state)
+                state_bytes = state_str.encode("utf-8")
 
-            # Générer le hash SHA-256
-            return hashlib.sha256(state_bytes, usedforsecurity=False).hexdigest()
+            # Générer le hash SHA-1 (40 caractères hex) pour compatibilité avec les tests
+            return hashlib.sha1(state_bytes, usedforsecurity=False).hexdigest()
 
         except Exception as e:
             logger.error("[RLLogger] Erreur lors du hash de l'état: %s", e)
             # Fallback: hash basé sur le timestamp
-            return hashlib.sha256(str(time.time()).encode(), usedforsecurity=False).hexdigest()
+            return hashlib.sha1(str(time.time()).encode(), usedforsecurity=False).hexdigest()
 
     def log_decision(
         self,
@@ -160,26 +153,23 @@ class RLLogger:
             state_hash = self.hash_state(state)
 
             # Convertir l'action en int
-            try:
-                action_int = int(action.item()) if isinstance(action, torch.Tensor) else int(action)
-            except ImportError:
+            if torch is not None and isinstance(action, torch.Tensor):
+                action_int = int(action.item())
+            else:
                 action_int = int(action)
 
             # Traiter les q_values
             q_values_list = None
             if q_values is not None:
-                try:
-                    if isinstance(q_values, torch.Tensor):
-                        q_values_list = q_values.detach().cpu().numpy().tolist()
-                    elif isinstance(q_values, np.ndarray):
-                        q_values_list = q_values.tolist()
-                    elif isinstance(q_values, list):
-                        q_values_list = q_values
-                except ImportError:
-                    if isinstance(q_values, np.ndarray):
-                        q_values_list = q_values.tolist()
-                    elif isinstance(q_values, list):
-                        q_values_list = q_values
+                if torch is not None and isinstance(q_values, torch.Tensor):
+                    q_values_list = q_values.detach().cpu().numpy().tolist()
+                elif isinstance(q_values, np.ndarray):
+                    q_values_list = q_values.tolist()
+                elif isinstance(q_values, list):
+                    q_values_list = q_values
+                else:
+                    # Fallback pour autres types
+                    q_values_list = list(q_values) if hasattr(q_values, "__iter__") else None
 
                 # Limiter à 64 valeurs pour éviter les logs trop volumineux
                 if q_values_list and len(q_values_list) > MAX_Q_VALUES_LOG:
