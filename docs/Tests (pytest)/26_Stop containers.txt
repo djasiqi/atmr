@@ -1,176 +1,89 @@
-﻿2025-11-20T09:35:03.4037241Z Print service container logs: d1acc017f0f44d31a60a53e286f94aa3_postgres16alpine_5f219f
-2025-11-20T09:35:03.4042251Z ##[command]/usr/bin/docker logs --details feea6df2f977683fb62ca4cfd1da07f7fdc87bd9c0cb1bb79664972194f4ca99
-2025-11-20T09:35:03.4167173Z  The files belonging to this database system will be owned by user "postgres".
-2025-11-20T09:35:03.4168616Z  sh: locale: not found
-2025-11-20T09:35:03.4169246Z  2025-11-20 09:23:14.490 UTC [35] WARNING:  no usable system locales were found
-2025-11-20T09:35:03.4170445Z  initdb: warning: enabling "trust" authentication for local connections
-2025-11-20T09:35:03.4171846Z  initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
-2025-11-20T09:35:03.4173099Z  This user must also own the server process.
-2025-11-20T09:35:03.4174379Z  2025-11-20 09:23:15.411 UTC [1] LOG:  starting PostgreSQL 16.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
-2025-11-20T09:35:03.4175422Z  2025-11-20 09:23:15.412 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
-2025-11-20T09:35:03.4176105Z  2025-11-20 09:23:15.412 UTC [1] LOG:  listening on IPv6 address "::", port 5432
-2025-11-20T09:35:03.4176833Z  2025-11-20 09:23:15.413 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
-2025-11-20T09:35:03.4177334Z  2025-11-20 09:23:15.415 UTC [57] LOG:  database system was shut down at 2025-11-20 09:23:15 UTC
-2025-11-20T09:35:03.4177794Z  2025-11-20 09:23:15.420 UTC [1] LOG:  database system is ready to accept connections
-2025-11-20T09:35:03.4178176Z  2025-11-20 09:28:15.441 UTC [55] LOG:  checkpoint starting: time
-2025-11-20T09:35:03.4179188Z  2025-11-20 09:28:19.656 UTC [55] LOG:  checkpoint complete: wrote 45 buffers (0.3%); 0 WAL file(s) added, 0 removed, 0 recycled; write=4.209 s, sync=0.001 s, total=4.215 s; sync files=12, longest=0.001 s, average=0.001 s; distance=260 kB, estimate=260 kB; lsn=0/195FC00, redo lsn=0/195FBC8
-2025-11-20T09:35:03.4180544Z  2025-11-20 09:28:57.821 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4181171Z  2025-11-20 09:28:57.821 UTC [316] DETAIL:  Key (company_id)=(1) is not present in table "company".
-2025-11-20T09:35:03.4181517Z  
-2025-11-20T09:35:03.4181764Z  The database cluster will be initialized with locale "en_US.utf8".
-2025-11-20T09:35:03.4182148Z  The default database encoding has accordingly been set to "UTF8".
-2025-11-20T09:35:03.4182528Z  The default text search configuration will be set to "english".
-2025-11-20T09:35:03.4182814Z  
-2025-11-20T09:35:03.4182979Z  Data page checksums are disabled.
-2025-11-20T09:35:03.4183190Z  
-2025-11-20T09:35:03.4183450Z  fixing permissions on existing directory /var/lib/postgresql/data ... ok
-2025-11-20T09:35:03.4183911Z  creating subdirectories ... ok
-2025-11-20T09:35:03.4184190Z  selecting dynamic shared memory implementation ... posix
-2025-11-20T09:35:03.4184497Z  selecting default max_connections ... 100
-2025-11-20T09:35:03.4184759Z  selecting default shared_buffers ... 128MB
-2025-11-20T09:35:03.4185007Z  selecting default time zone ... UTC
-2025-11-20T09:35:03.4185248Z  creating configuration files ... ok
-2025-11-20T09:35:03.4185484Z  running bootstrap script ... ok
-2025-11-20T09:35:03.4185740Z  performing post-bootstrap initialization ... ok
-2025-11-20T09:35:03.4186008Z  syncing data to disk ... ok
-2025-11-20T09:35:03.4186206Z  
-2025-11-20T09:35:03.4186348Z  
-2025-11-20T09:35:03.4186540Z  Success. You can now start the database server using:
-2025-11-20T09:35:03.4186797Z  
-2025-11-20T09:35:03.4186999Z      pg_ctl -D /var/lib/postgresql/data -l logfile start
-2025-11-20T09:35:03.4187250Z  
-2025-11-20T09:35:03.4187760Z  waiting for server to start....2025-11-20 09:23:15.150 UTC [41] LOG:  starting PostgreSQL 16.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
-2025-11-20T09:35:03.4188903Z  2025-11-20 09:23:15.151 UTC [41] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
-2025-11-20T09:35:03.4189780Z  2025-11-20 09:23:15.154 UTC [44] LOG:  database system was shut down at 2025-11-20 09:23:15 UTC
-2025-11-20T09:35:03.4190412Z  2025-11-20 09:23:15.159 UTC [41] LOG:  database system is ready to accept connections
-2025-11-20T09:35:03.4190722Z   done
-2025-11-20T09:35:03.4190887Z  server started
-2025-11-20T09:35:03.4191061Z  CREATE DATABASE
-2025-11-20T09:35:03.4191225Z  
-2025-11-20T09:35:03.4191363Z  
-2025-11-20T09:35:03.4191650Z  /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
-2025-11-20T09:35:03.4192025Z  
-2025-11-20T09:35:03.4192325Z  waiting for server to shut down...2025-11-20 09:23:15.292 UTC [41] LOG:  received fast shutdown request
-2025-11-20T09:35:03.4192784Z  .2025-11-20 09:23:15.293 UTC [41] LOG:  aborting any active transactions
-2025-11-20T09:35:03.4193272Z  2025-11-20 09:23:15.295 UTC [41] LOG:  background worker "logical replication launcher" (PID 47) exited with exit code 1
-2025-11-20T09:35:03.4193726Z  2025-11-20 09:23:15.297 UTC [42] LOG:  shutting down
-2025-11-20T09:35:03.4194066Z  2025-11-20 09:23:15.297 UTC [42] LOG:  checkpoint starting: shutdown immediate
-2025-11-20T09:35:03.4194931Z  2025-11-20 09:23:15.315 UTC [42] LOG:  checkpoint complete: wrote 926 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.015 s, sync=0.002 s, total=0.019 s; sync files=301, longest=0.001 s, average=0.001 s; distance=4272 kB, estimate=4272 kB; lsn=0/191E920, redo lsn=0/191E920
-2025-11-20T09:35:03.4195775Z  2025-11-20 09:23:15.321 UTC [41] LOG:  database system is shut down
-2025-11-20T09:35:03.4196049Z   done
-2025-11-20T09:35:03.4196208Z  server stopped
-2025-11-20T09:35:03.4196455Z  
-2025-11-20T09:35:03.4196665Z  PostgreSQL init process complete; ready for start up.
-2025-11-20T09:35:03.4196929Z  
-2025-11-20T09:35:03.4197984Z  2025-11-20 09:28:57.821 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (1, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:28:57.819867+00:00'::timestamptz, NULL, '2025-11-20T09:28:57.819872+00:00'::timestamptz, '{"mode": "auto", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4199324Z  2025-11-20 09:28:57.839 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4199922Z  2025-11-20 09:28:57.839 UTC [316] DETAIL:  Key (company_id)=(1) is not present in table "company".
-2025-11-20T09:35:03.4201319Z  2025-11-20 09:28:57.839 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (1, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:28:57.838223+00:00'::timestamptz, NULL, '2025-11-20T09:28:57.838228+00:00'::timestamptz, '{"mode": "auto", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4202729Z  2025-11-20 09:30:44.041 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4203323Z  2025-11-20 09:30:44.041 UTC [316] DETAIL:  Key (company_id)=(3) is not present in table "company".
-2025-11-20T09:35:03.4204512Z  2025-11-20 09:30:44.041 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (3, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:30:44.040536+00:00'::timestamptz, NULL, '2025-11-20T09:30:44.040541+00:00'::timestamptz, '{"mode": "auto", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4205831Z  2025-11-20 09:30:44.470 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4206415Z  2025-11-20 09:30:44.470 UTC [316] DETAIL:  Key (company_id)=(3) is not present in table "company".
-2025-11-20T09:35:03.4207604Z  2025-11-20 09:30:44.470 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (3, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:30:44.464195+00:00'::timestamptz, NULL, '2025-11-20T09:30:44.464202+00:00'::timestamptz, '{"mode": "auto", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4208999Z  2025-11-20 09:30:49.396 UTC [316] ERROR:  null value in column "company_id" of relation "client" violates not-null constraint
-2025-11-20T09:35:03.4209914Z  2025-11-20 09:30:49.396 UTC [316] DETAIL:  Failing row contains (17, 39, null, PRIVATE, null, null, null, null, null, null, null, null, null, null, null, patient, null, null, t, 2025-11-20 09:30:49.119527+00, f, null, null, null, null, null, null, null, null, null, null, null, f).
-2025-11-20T09:35:03.4212821Z  2025-11-20 09:30:49.396 UTC [316] STATEMENT:  INSERT INTO client (user_id, company_id, client_type, billing_address, billing_lat, billing_lon, contact_email, contact_phone, domicile_address, domicile_zip, domicile_city, domicile_lat, domicile_lon, door_code, floor, access_notes, gp_name, gp_phone, default_billed_to_company_id, default_billed_to_contact, institution_name, residence_facility, preferential_rate, contact_phone_encrypted, gp_name_encrypted, gp_phone_encrypted, billing_address_encrypted, encryption_migrated) VALUES (39, NULL, 'PRIVATE', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false) RETURNING client.id, client.default_billed_to_type, client.is_institution, client.is_active, client.created_at
-2025-11-20T09:35:03.4215318Z  2025-11-20 09:30:50.874 UTC [316] ERROR:  null value in column "company_id" of relation "client" violates not-null constraint
-2025-11-20T09:35:03.4216239Z  2025-11-20 09:30:50.874 UTC [316] DETAIL:  Failing row contains (18, 41, null, PRIVATE, null, null, null, null, null, null, null, null, null, null, null, patient, null, null, t, 2025-11-20 09:30:50.599306+00, f, null, null, null, null, null, null, null, null, null, null, null, f).
-2025-11-20T09:35:03.4218949Z  2025-11-20 09:30:50.874 UTC [316] STATEMENT:  INSERT INTO client (user_id, company_id, client_type, billing_address, billing_lat, billing_lon, contact_email, contact_phone, domicile_address, domicile_zip, domicile_city, domicile_lat, domicile_lon, door_code, floor, access_notes, gp_name, gp_phone, default_billed_to_company_id, default_billed_to_contact, institution_name, residence_facility, preferential_rate, contact_phone_encrypted, gp_name_encrypted, gp_phone_encrypted, billing_address_encrypted, encryption_migrated) VALUES (41, NULL, 'PRIVATE', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false) RETURNING client.id, client.default_billed_to_type, client.is_institution, client.is_active, client.created_at
-2025-11-20T09:35:03.4221694Z  2025-11-20 09:30:52.523 UTC [316] ERROR:  null value in column "company_id" of relation "client" violates not-null constraint
-2025-11-20T09:35:03.4222619Z  2025-11-20 09:30:52.523 UTC [316] DETAIL:  Failing row contains (19, 44, null, PRIVATE, null, null, null, null, null, null, null, null, null, null, null, patient, null, null, t, 2025-11-20 09:30:52.521038+00, f, null, null, null, null, null, null, null, null, null, null, null, f).
-2025-11-20T09:35:03.4225326Z  2025-11-20 09:30:52.523 UTC [316] STATEMENT:  INSERT INTO client (user_id, company_id, client_type, billing_address, billing_lat, billing_lon, contact_email, contact_phone, domicile_address, domicile_zip, domicile_city, domicile_lat, domicile_lon, door_code, floor, access_notes, gp_name, gp_phone, default_billed_to_company_id, default_billed_to_contact, institution_name, residence_facility, preferential_rate, contact_phone_encrypted, gp_name_encrypted, gp_phone_encrypted, billing_address_encrypted, encryption_migrated) VALUES (44, NULL, 'PRIVATE', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false) RETURNING client.id, client.default_billed_to_type, client.is_institution, client.is_active, client.created_at
-2025-11-20T09:35:03.4227898Z  2025-11-20 09:30:53.721 UTC [316] ERROR:  null value in column "company_id" of relation "client" violates not-null constraint
-2025-11-20T09:35:03.4228854Z  2025-11-20 09:30:53.721 UTC [316] DETAIL:  Failing row contains (20, 45, null, PRIVATE, null, null, null, null, null, null, null, null, null, null, null, patient, null, null, t, 2025-11-20 09:30:53.718747+00, f, null, null, null, null, null, null, null, null, null, null, null, f).
-2025-11-20T09:35:03.4231766Z  2025-11-20 09:30:53.721 UTC [316] STATEMENT:  INSERT INTO client (user_id, company_id, client_type, billing_address, billing_lat, billing_lon, contact_email, contact_phone, domicile_address, domicile_zip, domicile_city, domicile_lat, domicile_lon, door_code, floor, access_notes, gp_name, gp_phone, default_billed_to_company_id, default_billed_to_contact, institution_name, residence_facility, preferential_rate, contact_phone_encrypted, gp_name_encrypted, gp_phone_encrypted, billing_address_encrypted, encryption_migrated) VALUES (45, NULL, 'PRIVATE', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false) RETURNING client.id, client.default_billed_to_type, client.is_institution, client.is_active, client.created_at
-2025-11-20T09:35:03.4234291Z  2025-11-20 09:30:56.766 UTC [316] ERROR:  null value in column "company_id" of relation "client" violates not-null constraint
-2025-11-20T09:35:03.4243297Z  2025-11-20 09:30:56.766 UTC [316] DETAIL:  Failing row contains (23, 54, null, PRIVATE, null, null, null, null, null, null, null, null, null, null, null, patient, null, null, t, 2025-11-20 09:30:56.764508+00, f, null, null, null, null, null, null, null, null, null, null, null, f).
-2025-11-20T09:35:03.4246098Z  2025-11-20 09:30:56.766 UTC [316] STATEMENT:  INSERT INTO client (user_id, company_id, client_type, billing_address, billing_lat, billing_lon, contact_email, contact_phone, domicile_address, domicile_zip, domicile_city, domicile_lat, domicile_lon, door_code, floor, access_notes, gp_name, gp_phone, default_billed_to_company_id, default_billed_to_contact, institution_name, residence_facility, preferential_rate, contact_phone_encrypted, gp_name_encrypted, gp_phone_encrypted, billing_address_encrypted, encryption_migrated) VALUES (54, NULL, 'PRIVATE', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false) RETURNING client.id, client.default_billed_to_type, client.is_institution, client.is_active, client.created_at
-2025-11-20T09:35:03.4248621Z  2025-11-20 09:30:57.958 UTC [316] ERROR:  null value in column "company_id" of relation "client" violates not-null constraint
-2025-11-20T09:35:03.4249550Z  2025-11-20 09:30:57.958 UTC [316] DETAIL:  Failing row contains (24, 55, null, PRIVATE, null, null, null, null, null, null, null, null, null, null, null, patient, null, null, t, 2025-11-20 09:30:57.956119+00, f, null, null, null, null, null, null, null, null, null, null, null, f).
-2025-11-20T09:35:03.4252489Z  2025-11-20 09:30:57.958 UTC [316] STATEMENT:  INSERT INTO client (user_id, company_id, client_type, billing_address, billing_lat, billing_lon, contact_email, contact_phone, domicile_address, domicile_zip, domicile_city, domicile_lat, domicile_lon, door_code, floor, access_notes, gp_name, gp_phone, default_billed_to_company_id, default_billed_to_contact, institution_name, residence_facility, preferential_rate, contact_phone_encrypted, gp_name_encrypted, gp_phone_encrypted, billing_address_encrypted, encryption_migrated) VALUES (55, NULL, 'PRIVATE', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false) RETURNING client.id, client.default_billed_to_type, client.is_institution, client.is_active, client.created_at
-2025-11-20T09:35:03.4255035Z  2025-11-20 09:30:58.888 UTC [316] ERROR:  null value in column "company_id" of relation "client" violates not-null constraint
-2025-11-20T09:35:03.4255939Z  2025-11-20 09:30:58.888 UTC [316] DETAIL:  Failing row contains (25, 56, null, PRIVATE, null, null, null, null, null, null, null, null, null, null, null, patient, null, null, t, 2025-11-20 09:30:58.886467+00, f, null, null, null, null, null, null, null, null, null, null, null, f).
-2025-11-20T09:35:03.4258622Z  2025-11-20 09:30:58.888 UTC [316] STATEMENT:  INSERT INTO client (user_id, company_id, client_type, billing_address, billing_lat, billing_lon, contact_email, contact_phone, domicile_address, domicile_zip, domicile_city, domicile_lat, domicile_lon, door_code, floor, access_notes, gp_name, gp_phone, default_billed_to_company_id, default_billed_to_contact, institution_name, residence_facility, preferential_rate, contact_phone_encrypted, gp_name_encrypted, gp_phone_encrypted, billing_address_encrypted, encryption_migrated) VALUES (56, NULL, 'PRIVATE', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false) RETURNING client.id, client.default_billed_to_type, client.is_institution, client.is_active, client.created_at
-2025-11-20T09:35:03.4261189Z  2025-11-20 09:31:00.032 UTC [316] ERROR:  null value in column "company_id" of relation "client" violates not-null constraint
-2025-11-20T09:35:03.4262092Z  2025-11-20 09:31:00.032 UTC [316] DETAIL:  Failing row contains (26, 57, null, PRIVATE, null, null, null, null, null, null, null, null, null, null, null, patient, null, null, t, 2025-11-20 09:31:00.030181+00, f, null, null, null, null, null, null, null, null, null, null, null, f).
-2025-11-20T09:35:03.4264887Z  2025-11-20 09:31:00.032 UTC [316] STATEMENT:  INSERT INTO client (user_id, company_id, client_type, billing_address, billing_lat, billing_lon, contact_email, contact_phone, domicile_address, domicile_zip, domicile_city, domicile_lat, domicile_lon, door_code, floor, access_notes, gp_name, gp_phone, default_billed_to_company_id, default_billed_to_contact, institution_name, residence_facility, preferential_rate, contact_phone_encrypted, gp_name_encrypted, gp_phone_encrypted, billing_address_encrypted, encryption_migrated) VALUES (57, NULL, 'PRIVATE', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false) RETURNING client.id, client.default_billed_to_type, client.is_institution, client.is_active, client.created_at
-2025-11-20T09:35:03.4267308Z  2025-11-20 09:31:01.175 UTC [316] ERROR:  null value in column "company_id" of relation "client" violates not-null constraint
-2025-11-20T09:35:03.4268274Z  2025-11-20 09:31:01.175 UTC [316] DETAIL:  Failing row contains (27, 58, null, PRIVATE, null, null, null, null, null, null, null, null, null, null, null, patient, null, null, t, 2025-11-20 09:31:01.17276+00, f, null, null, null, null, null, null, null, null, null, null, null, f).
-2025-11-20T09:35:03.4271166Z  2025-11-20 09:31:01.175 UTC [316] STATEMENT:  INSERT INTO client (user_id, company_id, client_type, billing_address, billing_lat, billing_lon, contact_email, contact_phone, domicile_address, domicile_zip, domicile_city, domicile_lat, domicile_lon, door_code, floor, access_notes, gp_name, gp_phone, default_billed_to_company_id, default_billed_to_contact, institution_name, residence_facility, preferential_rate, contact_phone_encrypted, gp_name_encrypted, gp_phone_encrypted, billing_address_encrypted, encryption_migrated) VALUES (58, NULL, 'PRIVATE', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false) RETURNING client.id, client.default_billed_to_type, client.is_institution, client.is_active, client.created_at
-2025-11-20T09:35:03.4273591Z  2025-11-20 09:31:02.455 UTC [316] ERROR:  null value in column "company_id" of relation "client" violates not-null constraint
-2025-11-20T09:35:03.4274831Z  2025-11-20 09:31:02.455 UTC [316] DETAIL:  Failing row contains (28, 59, null, PRIVATE, null, null, null, null, null, null, null, null, null, null, null, patient, null, null, t, 2025-11-20 09:31:02.452995+00, f, null, null, null, null, null, null, null, null, null, null, null, f).
-2025-11-20T09:35:03.4277533Z  2025-11-20 09:31:02.455 UTC [316] STATEMENT:  INSERT INTO client (user_id, company_id, client_type, billing_address, billing_lat, billing_lon, contact_email, contact_phone, domicile_address, domicile_zip, domicile_city, domicile_lat, domicile_lon, door_code, floor, access_notes, gp_name, gp_phone, default_billed_to_company_id, default_billed_to_contact, institution_name, residence_facility, preferential_rate, contact_phone_encrypted, gp_name_encrypted, gp_phone_encrypted, billing_address_encrypted, encryption_migrated) VALUES (59, NULL, 'PRIVATE', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false) RETURNING client.id, client.default_billed_to_type, client.is_institution, client.is_active, client.created_at
-2025-11-20T09:35:03.4279831Z  2025-11-20 09:33:15.756 UTC [55] LOG:  checkpoint starting: time
-2025-11-20T09:35:03.4280601Z  2025-11-20 09:33:54.973 UTC [316] ERROR:  insert or update on table "autonomous_action" violates foreign key constraint "autonomous_action_booking_id_fkey"
-2025-11-20T09:35:03.4281238Z  2025-11-20 09:33:54.973 UTC [316] DETAIL:  Key (booking_id)=(1) is not present in table "booking".
-2025-11-20T09:35:03.4283749Z  2025-11-20 09:33:54.973 UTC [316] STATEMENT:  INSERT INTO autonomous_action (company_id, booking_id, driver_id, action_type, action_description, action_data, success, error_message, execution_time_ms, confidence_score, expected_improvement_minutes, trigger_source, reviewed_by_admin, reviewed_at, admin_notes, created_at, updated_at) VALUES (87, 1, 2, 'notify_customer', 'Test message', '{"suggestion": {"action": "notify_customer", "priority": "medium", "message": "Test message", "estimated_gain_minutes": null, "booking_id": 1, "driver_id": 2, "alternative_driver_id": null, "additional_data": {}, "auto_applicable": true}, "result": {"success": true}}', true, NULL, 0.03910064697265625, NULL, NULL, 'autonomous_manager', false, NULL, NULL, '2025-11-20T09:33:54.972771+00:00'::timestamptz, '2025-11-20T09:33:54.972775+00:00'::timestamptz) RETURNING autonomous_action.id
-2025-11-20T09:35:03.4286623Z  2025-11-20 09:33:57.657 UTC [55] LOG:  checkpoint complete: wrote 421 buffers (2.6%); 1 WAL file(s) added, 0 removed, 0 recycled; write=41.878 s, sync=0.004 s, total=41.901 s; sync files=422, longest=0.001 s, average=0.001 s; distance=2651 kB, estimate=2651 kB; lsn=0/1C0C258, redo lsn=0/1BF6B68
-2025-11-20T09:35:03.4287723Z  2025-11-20 09:34:08.318 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4288334Z  2025-11-20 09:34:08.318 UTC [316] DETAIL:  Key (company_id)=(101) is not present in table "company".
-2025-11-20T09:35:03.4289602Z  2025-11-20 09:34:08.318 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (101, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:08.317699+00:00'::timestamptz, NULL, '2025-11-20T09:34:08.317704+00:00'::timestamptz, '{"mode": "heuristic_only", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4291185Z  2025-11-20 09:34:08.410 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4291785Z  2025-11-20 09:34:08.410 UTC [316] DETAIL:  Key (company_id)=(102) is not present in table "company".
-2025-11-20T09:35:03.4293021Z  2025-11-20 09:34:08.410 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (102, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:08.410057+00:00'::timestamptz, NULL, '2025-11-20T09:34:08.410062+00:00'::timestamptz, '{"mode": "heuristic_only", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4294510Z  2025-11-20 09:34:08.489 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4295097Z  2025-11-20 09:34:08.489 UTC [316] DETAIL:  Key (company_id)=(103) is not present in table "company".
-2025-11-20T09:35:03.4296331Z  2025-11-20 09:34:08.489 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (103, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:08.489023+00:00'::timestamptz, NULL, '2025-11-20T09:34:08.489028+00:00'::timestamptz, '{"mode": "heuristic_only", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4297695Z  2025-11-20 09:34:08.568 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4298280Z  2025-11-20 09:34:08.568 UTC [316] DETAIL:  Key (company_id)=(104) is not present in table "company".
-2025-11-20T09:35:03.4299510Z  2025-11-20 09:34:08.568 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (104, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:08.567518+00:00'::timestamptz, NULL, '2025-11-20T09:34:08.567523+00:00'::timestamptz, '{"mode": "heuristic_only", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4301096Z  2025-11-20 09:34:08.647 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4301687Z  2025-11-20 09:34:08.647 UTC [316] DETAIL:  Key (company_id)=(105) is not present in table "company".
-2025-11-20T09:35:03.4302911Z  2025-11-20 09:34:08.647 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (105, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:08.646931+00:00'::timestamptz, NULL, '2025-11-20T09:34:08.646935+00:00'::timestamptz, '{"mode": "solver_only", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4304255Z  2025-11-20 09:34:18.154 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4304908Z  2025-11-20 09:34:18.154 UTC [316] DETAIL:  Key (company_id)=(107) is not present in table "company".
-2025-11-20T09:35:03.4306135Z  2025-11-20 09:34:18.154 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (107, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:18.153937+00:00'::timestamptz, NULL, '2025-11-20T09:34:18.153942+00:00'::timestamptz, '{"mode": "heuristic_only", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4307495Z  2025-11-20 09:34:21.783 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4308074Z  2025-11-20 09:34:21.783 UTC [316] DETAIL:  Key (company_id)=(115) is not present in table "company".
-2025-11-20T09:35:03.4309315Z  2025-11-20 09:34:21.783 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (115, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:21.782931+00:00'::timestamptz, NULL, '2025-11-20T09:34:21.782936+00:00'::timestamptz, '{"mode": "heuristic_only", "regular_first": true, "allow_emergency": true, "for_date": "invalid-date"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4310999Z  2025-11-20 09:34:21.861 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4311575Z  2025-11-20 09:34:21.861 UTC [316] DETAIL:  Key (company_id)=(116) is not present in table "company".
-2025-11-20T09:35:03.4312782Z  2025-11-20 09:34:21.861 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (116, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:21.860728+00:00'::timestamptz, NULL, '2025-11-20T09:34:21.860733+00:00'::timestamptz, '{"mode": "auto", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4314109Z  2025-11-20 09:34:21.953 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4314693Z  2025-11-20 09:34:21.953 UTC [316] DETAIL:  Key (company_id)=(117) is not present in table "company".
-2025-11-20T09:35:03.4315891Z  2025-11-20 09:34:21.953 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (117, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:21.952555+00:00'::timestamptz, NULL, '2025-11-20T09:34:21.952559+00:00'::timestamptz, '{"mode": "auto", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4317207Z  2025-11-20 09:34:22.045 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4317861Z  2025-11-20 09:34:22.045 UTC [316] DETAIL:  Key (company_id)=(118) is not present in table "company".
-2025-11-20T09:35:03.4319058Z  2025-11-20 09:34:22.045 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (118, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:22.044337+00:00'::timestamptz, NULL, '2025-11-20T09:34:22.044342+00:00'::timestamptz, '{"mode": "auto", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4320564Z  2025-11-20 09:34:22.151 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4321146Z  2025-11-20 09:34:22.151 UTC [316] DETAIL:  Key (company_id)=(119) is not present in table "company".
-2025-11-20T09:35:03.4322372Z  2025-11-20 09:34:22.151 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (119, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:22.150669+00:00'::timestamptz, NULL, '2025-11-20T09:34:22.150674+00:00'::timestamptz, '{"mode": "heuristic_only", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4323810Z  2025-11-20 09:34:22.159 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4324393Z  2025-11-20 09:34:22.159 UTC [316] DETAIL:  Key (company_id)=(119) is not present in table "company".
-2025-11-20T09:35:03.4325617Z  2025-11-20 09:34:22.159 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (119, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:22.158877+00:00'::timestamptz, NULL, '2025-11-20T09:34:22.158881+00:00'::timestamptz, '{"mode": "solver_only", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4326985Z  2025-11-20 09:34:22.167 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4327567Z  2025-11-20 09:34:22.167 UTC [316] DETAIL:  Key (company_id)=(119) is not present in table "company".
-2025-11-20T09:35:03.4328912Z  2025-11-20 09:34:22.167 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (119, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:22.166986+00:00'::timestamptz, NULL, '2025-11-20T09:34:22.166990+00:00'::timestamptz, '{"mode": "hybrid", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4330432Z  2025-11-20 09:34:22.245 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4331029Z  2025-11-20 09:34:22.245 UTC [316] DETAIL:  Key (company_id)=(120) is not present in table "company".
-2025-11-20T09:35:03.4332265Z  2025-11-20 09:34:22.245 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (120, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:22.244512+00:00'::timestamptz, NULL, '2025-11-20T09:34:22.244517+00:00'::timestamptz, '{"mode": "heuristic_only", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4333630Z  2025-11-20 09:34:22.321 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4334212Z  2025-11-20 09:34:22.321 UTC [316] DETAIL:  Key (company_id)=(121) is not present in table "company".
-2025-11-20T09:35:03.4335439Z  2025-11-20 09:34:22.321 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (121, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:22.321049+00:00'::timestamptz, NULL, '2025-11-20T09:34:22.321054+00:00'::timestamptz, '{"mode": "heuristic_only", "regular_first": true, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4336880Z  2025-11-20 09:34:22.509 UTC [316] ERROR:  insert or update on table "dispatch_run" violates foreign key constraint "dispatch_run_company_id_fkey"
-2025-11-20T09:35:03.4337463Z  2025-11-20 09:34:22.509 UTC [316] DETAIL:  Key (company_id)=(123) is not present in table "company".
-2025-11-20T09:35:03.4338695Z  2025-11-20 09:34:22.509 UTC [316] STATEMENT:  INSERT INTO dispatch_run (company_id, day, status, started_at, completed_at, created_at, config) VALUES (123, '2025-11-20'::date, 'RUNNING', '2025-11-20T09:34:22.508218+00:00'::timestamptz, NULL, '2025-11-20T09:34:22.508222+00:00'::timestamptz, '{"mode": "heuristic_only", "regular_first": false, "allow_emergency": true, "for_date": "2025-11-20"}'::JSON) RETURNING dispatch_run.id
-2025-11-20T09:35:03.4345666Z Stop and remove container: d1acc017f0f44d31a60a53e286f94aa3_postgres16alpine_5f219f
-2025-11-20T09:35:03.4350482Z ##[command]/usr/bin/docker rm --force feea6df2f977683fb62ca4cfd1da07f7fdc87bd9c0cb1bb79664972194f4ca99
-2025-11-20T09:35:03.5717417Z feea6df2f977683fb62ca4cfd1da07f7fdc87bd9c0cb1bb79664972194f4ca99
-2025-11-20T09:35:03.5737593Z Print service container logs: 694ef501580e4bce8f62de2e20068afd_redis7alpine_db9baa
-2025-11-20T09:35:03.5738739Z ##[command]/usr/bin/docker logs --details 38221e8e8bcbcf3a90775878851cee7989b76bfb35881a2f0e31dcf6e2bb9f56
-2025-11-20T09:35:03.5856615Z  1:C 20 Nov 2025 09:23:15.134 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures without low memory condition, see https://github.com/jemalloc/jemalloc/issues/1328. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
-2025-11-20T09:35:03.5859097Z  1:C 20 Nov 2025 09:23:15.134 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
-2025-11-20T09:35:03.5859830Z  1:C 20 Nov 2025 09:23:15.134 * Redis version=7.4.7, bits=64, commit=00000000, modified=0, pid=1, just started
-2025-11-20T09:35:03.5861426Z  1:C 20 Nov 2025 09:23:15.134 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf
-2025-11-20T09:35:03.5862367Z  1:M 20 Nov 2025 09:23:15.135 * monotonic clock: POSIX clock_gettime
-2025-11-20T09:35:03.5862946Z  1:M 20 Nov 2025 09:23:15.136 * Running mode=standalone, port=6379.
-2025-11-20T09:35:03.5863447Z  1:M 20 Nov 2025 09:23:15.136 * Server initialized
-2025-11-20T09:35:03.5863921Z  1:M 20 Nov 2025 09:23:15.136 * Ready to accept connections tcp
-2025-11-20T09:35:03.5871877Z Stop and remove container: 694ef501580e4bce8f62de2e20068afd_redis7alpine_db9baa
-2025-11-20T09:35:03.5872996Z ##[command]/usr/bin/docker rm --force 38221e8e8bcbcf3a90775878851cee7989b76bfb35881a2f0e31dcf6e2bb9f56
-2025-11-20T09:35:03.7307606Z 38221e8e8bcbcf3a90775878851cee7989b76bfb35881a2f0e31dcf6e2bb9f56
-2025-11-20T09:35:03.7336788Z Remove container network: github_network_7def087dc2934636835435e19c89dc87
-2025-11-20T09:35:03.7341468Z ##[command]/usr/bin/docker network rm github_network_7def087dc2934636835435e19c89dc87
-2025-11-20T09:35:03.8515485Z github_network_7def087dc2934636835435e19c89dc87
+﻿2025-11-20T17:27:47.1457538Z Print service container logs: a64d60153f3b4f429d08b536c6690caf_postgres16alpine_32b653
+2025-11-20T17:27:47.1464010Z ##[command]/usr/bin/docker logs --details c11ebb9b4e61c42df94d8a9fc952618addcda8f68ba09064b2f77782a2560a16
+2025-11-20T17:27:47.1601216Z  The files belonging to this database system will be owned by user "postgres".
+2025-11-20T17:27:47.1601967Z  This user must also own the server process.
+2025-11-20T17:27:47.1602395Z  
+2025-11-20T17:27:47.1602830Z  The database cluster will be initialized with locale "en_US.utf8".
+2025-11-20T17:27:47.1603553Z  The default database encoding has accordingly been set to "UTF8".
+2025-11-20T17:27:47.1605457Z  sh: locale: not found
+2025-11-20T17:27:47.1606032Z  2025-11-20 17:18:22.215 UTC [35] WARNING:  no usable system locales were found
+2025-11-20T17:27:47.1606786Z  initdb: warning: enabling "trust" authentication for local connections
+2025-11-20T17:27:47.1607931Z  initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+2025-11-20T17:27:47.1608952Z  The default text search configuration will be set to "english".
+2025-11-20T17:27:47.1609299Z  
+2025-11-20T17:27:47.1609510Z  Data page checksums are disabled.
+2025-11-20T17:27:47.1609765Z  
+2025-11-20T17:27:47.1610071Z  fixing permissions on existing directory /var/lib/postgresql/data ... ok
+2025-11-20T17:27:47.1610483Z  creating subdirectories ... ok
+2025-11-20T17:27:47.1610811Z  selecting dynamic shared memory implementation ... posix
+2025-11-20T17:27:47.1611195Z  selecting default max_connections ... 100
+2025-11-20T17:27:47.1611494Z  selecting default shared_buffers ... 128MB
+2025-11-20T17:27:47.1611790Z  selecting default time zone ... UTC
+2025-11-20T17:27:47.1612072Z  creating configuration files ... ok
+2025-11-20T17:27:47.1612349Z  running bootstrap script ... ok
+2025-11-20T17:27:47.1612647Z  performing post-bootstrap initialization ... ok
+2025-11-20T17:27:47.1623806Z  syncing data to disk ... ok
+2025-11-20T17:27:47.1624216Z  
+2025-11-20T17:27:47.1624487Z  
+2025-11-20T17:27:47.1624816Z  Success. You can now start the database server using:
+2025-11-20T17:27:47.1625301Z  
+2025-11-20T17:27:47.1625666Z      pg_ctl -D /var/lib/postgresql/data -l logfile start
+2025-11-20T17:27:47.1626164Z  
+2025-11-20T17:27:47.1626663Z  waiting for server to start....2025-11-20 17:18:22.737 UTC [41] LOG:  starting PostgreSQL 16.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
+2025-11-20T17:27:47.1627374Z  2025-11-20 17:18:22.737 UTC [41] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2025-11-20T17:27:47.1627873Z  2025-11-20 17:18:22.740 UTC [44] LOG:  database system was shut down at 2025-11-20 17:18:22 UTC
+2025-11-20T17:27:47.1628322Z  2025-11-20 17:18:22.745 UTC [41] LOG:  database system is ready to accept connections
+2025-11-20T17:27:47.1628664Z   done
+2025-11-20T17:27:47.1628827Z  server started
+2025-11-20T17:27:47.1629011Z  CREATE DATABASE
+2025-11-20T17:27:47.1629186Z  
+2025-11-20T17:27:47.1629340Z  
+2025-11-20T17:27:47.1629641Z  /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+2025-11-20T17:27:47.1630023Z  
+2025-11-20T17:27:47.1630352Z  waiting for server to shut down....2025-11-20 17:18:22.888 UTC [41] LOG:  received fast shutdown request
+2025-11-20T17:27:47.1630841Z  2025-11-20 17:18:22.888 UTC [41] LOG:  aborting any active transactions
+2025-11-20T17:27:47.1631347Z  2025-11-20 17:18:22.891 UTC [41] LOG:  background worker "logical replication launcher" (PID 47) exited with exit code 1
+2025-11-20T17:27:47.1631816Z  2025-11-20 17:18:22.892 UTC [42] LOG:  shutting down
+2025-11-20T17:27:47.1632169Z  2025-11-20 17:18:22.892 UTC [42] LOG:  checkpoint starting: shutdown immediate
+2025-11-20T17:27:47.1633190Z  2025-11-20 17:18:22.910 UTC [42] LOG:  checkpoint complete: wrote 926 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.015 s, sync=0.002 s, total=0.019 s; sync files=301, longest=0.001 s, average=0.001 s; distance=4272 kB, estimate=4272 kB; lsn=0/191E920, redo lsn=0/191E920
+2025-11-20T17:27:47.1634500Z  2025-11-20 17:18:22.919 UTC [41] LOG:  database system is shut down
+2025-11-20T17:27:47.1634797Z   done
+2025-11-20T17:27:47.1634958Z  server stopped
+2025-11-20T17:27:47.1635141Z  
+2025-11-20T17:27:47.1635362Z  PostgreSQL init process complete; ready for start up.
+2025-11-20T17:27:47.1635635Z  
+2025-11-20T17:27:47.1636047Z  2025-11-20 17:18:23.010 UTC [1] LOG:  starting PostgreSQL 16.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
+2025-11-20T17:27:47.1636614Z  2025-11-20 17:18:23.010 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2025-11-20T17:27:47.1637030Z  2025-11-20 17:18:23.010 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2025-11-20T17:27:47.1637493Z  2025-11-20 17:18:23.011 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2025-11-20T17:27:47.1637983Z  2025-11-20 17:18:23.015 UTC [57] LOG:  database system was shut down at 2025-11-20 17:18:22 UTC
+2025-11-20T17:27:47.1638434Z  2025-11-20 17:18:23.021 UTC [1] LOG:  database system is ready to accept connections
+2025-11-20T17:27:47.1638840Z  2025-11-20 17:23:23.082 UTC [55] LOG:  checkpoint starting: time
+2025-11-20T17:27:47.1639728Z  2025-11-20 17:24:06.698 UTC [55] LOG:  checkpoint complete: wrote 435 buffers (2.7%); 1 WAL file(s) added, 0 removed, 0 recycled; write=43.586 s, sync=0.011 s, total=43.617 s; sync files=438, longest=0.001 s, average=0.001 s; distance=2724 kB, estimate=2724 kB; lsn=0/1C47378, redo lsn=0/1BC7978
+2025-11-20T17:27:47.1640820Z  2025-11-20 17:26:32.956 UTC [213] ERROR:  insert or update on table "assignment" violates foreign key constraint "fk_assignment_dispatch_run_id"
+2025-11-20T17:27:47.1641478Z  2025-11-20 17:26:32.956 UTC [213] DETAIL:  Key (dispatch_run_id)=(1) is not present in table "dispatch_run".
+2025-11-20T17:27:47.1642826Z  2025-11-20 17:26:32.956 UTC [213] STATEMENT:  INSERT INTO assignment (dispatch_run_id, booking_id, driver_id, status, planned_pickup_at, planned_dropoff_at, actual_pickup_at, actual_dropoff_at, eta_pickup_at, eta_dropoff_at, delay_seconds, created_at, updated_at) VALUES (1, 75, 32, 'SCHEDULED', NULL, NULL, NULL, NULL, NULL, NULL, 0, '2025-11-20T17:26:32.954412+00:00'::timestamptz, NULL) RETURNING assignment.id
+2025-11-20T17:27:47.1649526Z Stop and remove container: a64d60153f3b4f429d08b536c6690caf_postgres16alpine_32b653
+2025-11-20T17:27:47.1655162Z ##[command]/usr/bin/docker rm --force c11ebb9b4e61c42df94d8a9fc952618addcda8f68ba09064b2f77782a2560a16
+2025-11-20T17:27:47.3041719Z c11ebb9b4e61c42df94d8a9fc952618addcda8f68ba09064b2f77782a2560a16
+2025-11-20T17:27:47.3062953Z Print service container logs: 26b1171ea0894af2828707f51951beba_redis7alpine_8ef4e3
+2025-11-20T17:27:47.3064766Z ##[command]/usr/bin/docker logs --details cc4576165668ba0a6b32fa7bd0f027f25071ce0ae1882c13787da1ed5fd8e5a4
+2025-11-20T17:27:47.3192663Z  1:C 20 Nov 2025 17:18:23.756 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures without low memory condition, see https://github.com/jemalloc/jemalloc/issues/1328. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
+2025-11-20T17:27:47.3194516Z  1:C 20 Nov 2025 17:18:23.757 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+2025-11-20T17:27:47.3194989Z  1:C 20 Nov 2025 17:18:23.757 * Redis version=7.4.7, bits=64, commit=00000000, modified=0, pid=1, just started
+2025-11-20T17:27:47.3195714Z  1:C 20 Nov 2025 17:18:23.757 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf
+2025-11-20T17:27:47.3196548Z  1:M 20 Nov 2025 17:18:23.757 * monotonic clock: POSIX clock_gettime
+2025-11-20T17:27:47.3196905Z  1:M 20 Nov 2025 17:18:23.757 * Running mode=standalone, port=6379.
+2025-11-20T17:27:47.3197223Z  1:M 20 Nov 2025 17:18:23.758 * Server initialized
+2025-11-20T17:27:47.3197525Z  1:M 20 Nov 2025 17:18:23.758 * Ready to accept connections tcp
+2025-11-20T17:27:47.3198048Z  1:M 20 Nov 2025 17:24:16.160 * 100 changes in 300 seconds. Saving...
+2025-11-20T17:27:47.3198398Z  1:M 20 Nov 2025 17:24:16.161 * Background saving started by pid 231
+2025-11-20T17:27:47.3198709Z  231:C 20 Nov 2025 17:24:16.164 * DB saved on disk
+2025-11-20T17:27:47.3199051Z  231:C 20 Nov 2025 17:24:16.165 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+2025-11-20T17:27:47.3199455Z  1:M 20 Nov 2025 17:24:16.262 * Background saving terminated with success
+2025-11-20T17:27:47.3207351Z Stop and remove container: 26b1171ea0894af2828707f51951beba_redis7alpine_8ef4e3
+2025-11-20T17:27:47.3208511Z ##[command]/usr/bin/docker rm --force cc4576165668ba0a6b32fa7bd0f027f25071ce0ae1882c13787da1ed5fd8e5a4
+2025-11-20T17:27:47.4455530Z cc4576165668ba0a6b32fa7bd0f027f25071ce0ae1882c13787da1ed5fd8e5a4
+2025-11-20T17:27:47.4479731Z Remove container network: github_network_19c60c1229354b1a87e209780702a4bb
+2025-11-20T17:27:47.4484773Z ##[command]/usr/bin/docker network rm github_network_19c60c1229354b1a87e209780702a4bb
+2025-11-20T17:27:47.5723532Z github_network_19c60c1229354b1a87e209780702a4bb

@@ -57,10 +57,15 @@ class ProactiveAlertsService:
     - Intégration avec notification_service
     """
 
-    def __init__(self):
-        """Initialise le service d'alertes proactives."""
+    def __init__(self, notification_service=None, delay_predictor=None):
+        """Initialise le service d'alertes proactives.
+        
+        Args:
+            notification_service: Service de notification optionnel (pour injection de dépendances dans les tests)
+            delay_predictor: Prédicteur de retard optionnel (pour injection de dépendances dans les tests)
+        """
         super().__init__()
-        self.notification_service = NotificationService() if NotificationService else None
+        self.notification_service = notification_service or (NotificationService() if NotificationService else None)
         self.ml_predictor = MLPredictor() if MLPredictor else None
 
         # Seuils configurables
@@ -77,8 +82,9 @@ class ProactiveAlertsService:
         self.alert_frequency_tracker: Dict[str, List[datetime]] = {}
 
         # Modèle de prédiction de retard
-        self.delay_predictor = None
-        self._load_delay_predictor()
+        self.delay_predictor = delay_predictor
+        if self.delay_predictor is None:
+            self._load_delay_predictor()
 
         # Cache pour explicabilité
         self.explanation_cache: Dict[str, Dict[str, Any]] = {}

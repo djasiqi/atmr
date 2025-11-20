@@ -28,21 +28,21 @@ class TestCompanyUpdateSchema:
         data = {"iban": "INVALID-IBAN"}
         with pytest.raises(ValidationError) as exc_info:
             validate_request(CompanyUpdateSchema(), data, strict=False)
-        assert "iban" in exc_info.value.messages
+        assert "iban" in exc_info.value.messages.get("errors", {})
 
     def test_invalid_uid_ide(self):
         """Test erreur si UID IDE invalide."""
         data = {"uid_ide": "INVALID-UID"}
         with pytest.raises(ValidationError) as exc_info:
             validate_request(CompanyUpdateSchema(), data, strict=False)
-        assert "uid_ide" in exc_info.value.messages
+        assert "uid_ide" in exc_info.value.messages.get("errors", {})
 
     def test_invalid_email(self):
         """Test erreur si email invalide."""
         data = {"contact_email": "invalid-email"}
         with pytest.raises(ValidationError) as exc_info:
             validate_request(CompanyUpdateSchema(), data, strict=False)
-        assert "contact_email" in exc_info.value.messages
+        assert "contact_email" in exc_info.value.messages.get("errors", {})
 
 
 class TestDriverCreateSchema:
@@ -69,7 +69,7 @@ class TestDriverCreateSchema:
         data = {"username": "driver1"}  # Manque email, password, etc.
         with pytest.raises(ValidationError) as exc_info:
             validate_request(DriverCreateSchema(), data)
-        errors = exc_info.value.messages
+        errors = exc_info.value.messages.get("errors", {})
         assert "email" in errors or "password" in errors
 
     def test_password_too_short(self):
@@ -86,7 +86,7 @@ class TestDriverCreateSchema:
         }
         with pytest.raises(ValidationError) as exc_info:
             validate_request(DriverCreateSchema(), data)
-        assert "password" in exc_info.value.messages
+        assert "password" in exc_info.value.messages.get("errors", {})
 
 
 class TestClientUpdateSchema:
@@ -110,21 +110,21 @@ class TestClientUpdateSchema:
         data = {"phone": "123"}  # Trop court
         with pytest.raises(ValidationError) as exc_info:
             validate_request(ClientUpdateSchema(), data, strict=False)
-        assert "phone" in exc_info.value.messages
+        assert "phone" in exc_info.value.messages.get("errors", {})
 
     def test_invalid_gender(self):
         """Test erreur si gender invalide."""
         data = {"gender": "invalid"}
         with pytest.raises(ValidationError) as exc_info:
             validate_request(ClientUpdateSchema(), data, strict=False)
-        assert "gender" in exc_info.value.messages
+        assert "gender" in exc_info.value.messages.get("errors", {})
 
     def test_invalid_birth_date_format(self):
         """Test erreur si format date invalide."""
         data = {"birth_date": "01/01/1990"}  # Format invalide
         with pytest.raises(ValidationError) as exc_info:
             validate_request(ClientUpdateSchema(), data, strict=False)
-        assert "birth_date" in exc_info.value.messages
+        assert "birth_date" in exc_info.value.messages.get("errors", {})
 
 
 class TestDriverProfileUpdateSchema:
@@ -149,18 +149,18 @@ class TestDriverProfileUpdateSchema:
         data = {"status": "invalid"}
         with pytest.raises(ValidationError) as exc_info:
             validate_request(DriverProfileUpdateSchema(), data, strict=False)
-        assert "status" in exc_info.value.messages
+        assert "status" in exc_info.value.messages.get("errors", {})
 
     def test_weekly_hours_too_high(self):
         """Test erreur si weekly_hours > 168."""
         data = {"weekly_hours": 200}  # > 168
         with pytest.raises(ValidationError) as exc_info:
             validate_request(DriverProfileUpdateSchema(), data, strict=False)
-        assert "weekly_hours" in exc_info.value.messages
+        assert "weekly_hours" in exc_info.value.messages.get("errors", {})
 
     def test_invalid_date_format(self):
         """Test erreur si format date invalide."""
         data = {"license_valid_until": "31/12/2025"}
         with pytest.raises(ValidationError) as exc_info:
             validate_request(DriverProfileUpdateSchema(), data, strict=False)
-        assert "license_valid_until" in exc_info.value.messages
+        assert "license_valid_until" in exc_info.value.messages.get("errors", {})

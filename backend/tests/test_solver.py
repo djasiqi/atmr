@@ -93,6 +93,9 @@ class TestSolverEmptyProblems:
             "bookings": [],
             "drivers": [],
             "time_matrix": [],
+            "num_vehicles": 0,
+            "starts": [],
+            "ends": [],
             "service_times": [],
             "time_windows": [],
             "driver_windows": [],
@@ -121,6 +124,9 @@ class TestSolverEmptyProblems:
             "bookings": [booking],
             "drivers": [],  # Pas de drivers
             "time_matrix": [[0]],
+            "num_vehicles": 0,
+            "starts": [],
+            "ends": [],
             "service_times": [5],
             "time_windows": [(60, 120)],
             "driver_windows": [],
@@ -148,6 +154,9 @@ class TestSolverEmptyProblems:
             "bookings": [],  # Pas de bookings
             "drivers": [driver],
             "time_matrix": [[0]],
+            "num_vehicles": 1,
+            "starts": [0],
+            "ends": [0],
             "service_times": [],
             "time_windows": [],
             "driver_windows": [(0, 480)],
@@ -189,6 +198,9 @@ class TestSolverBasicScenarios:
                 [10, 0, 5],  # pickup
                 [15, 5, 0],  # dropoff
             ],
+            "num_vehicles": 1,
+            "starts": [0],
+            "ends": [0],
             "service_times": [5],  # 5 min de service au pickup
             "time_windows": [(60, 180)],  # Fenêtre 1h-3h
             "driver_windows": [(0, 480)],  # 8h de travail
@@ -239,6 +251,9 @@ class TestSolverBasicScenarios:
                 [12, 8, 15, 0, 10],  # pickup2
                 [18, 12, 5, 10, 0],  # dropoff2
             ],
+            "num_vehicles": 2,
+            "starts": [0, 0],
+            "ends": [0, 0],
             "service_times": [5, 5],
             "time_windows": [(30, 120), (60, 180)],
             "driver_windows": [(0, 480), (0, 480)],
@@ -272,6 +287,9 @@ class TestSolverConstraints:
             "bookings": [booking],
             "drivers": [driver],
             "time_matrix": [[0, 10, 15], [10, 0, 5], [15, 5, 0]],
+            "num_vehicles": 1,
+            "starts": [0],
+            "ends": [0],
             "service_times": [5],
             "time_windows": [(120, 125)],  # Très étroit
             "driver_windows": [(0, 480)],
@@ -312,6 +330,9 @@ class TestSolverConstraints:
                 [8, 6, 10, 0, 8],
                 [12, 10, 5, 8, 0],
             ],
+            "num_vehicles": 1,
+            "starts": [0],
+            "ends": [0],
             "service_times": [5, 5],
             "time_windows": [(60, 120), (70, 130)],
             "driver_windows": [(0, 480)],
@@ -362,6 +383,9 @@ class TestSolverDebugInfo:
             "bookings": [booking],
             "drivers": [driver],
             "time_matrix": [[0, 10, 15], [10, 0, 5], [15, 5, 0]],
+            "num_vehicles": 1,
+            "starts": [0],
+            "ends": [0],
             "service_times": [5],
             "time_windows": [(60, 120)],
             "driver_windows": [(0, 480)],
@@ -391,6 +415,9 @@ class TestSolverDebugInfo:
             "bookings": [booking],
             "drivers": [driver],
             "time_matrix": [[0, 10, 15], [10, 0, 5], [15, 5, 0]],
+            "num_vehicles": 1,
+            "starts": [0],
+            "ends": [0],
             "service_times": [5],
             "time_windows": [(-60, -30)],  # Dans le passé !
             "driver_windows": [(0, 480)],

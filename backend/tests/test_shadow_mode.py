@@ -253,21 +253,21 @@ class TestShadowModeManager(unittest.TestCase):
             context=self.context,
         )
 
-        # Décision d'hier pour test_company
-        with patch.object(self.manager, "decision_metadata") as mock_metadata:
-            mock_metadata["timestamp"] = [datetime.combine(yesterday, datetime.min.time()).replace(tzinfo=UTC)]
-            mock_metadata["company_id"] = [self.test_company_id]
-            mock_metadata["booking_id"] = ["booking_yesterday"]
-            mock_metadata["driver_id"] = ["driver_test"]
-            mock_metadata["human_decision"] = [self.human_decision]
-            mock_metadata["rl_decision"] = [self.rl_decision]
-            mock_metadata["context"] = [self.context]
+        # Décision d'hier pour test_company (ajouter directement aux métadonnées)
+        yesterday_timestamp = datetime.combine(yesterday, datetime.min.time()).replace(tzinfo=UTC)
+        self.manager.decision_metadata["timestamp"].append(yesterday_timestamp)
+        self.manager.decision_metadata["company_id"].append(self.test_company_id)
+        self.manager.decision_metadata["booking_id"].append("booking_yesterday")
+        self.manager.decision_metadata["driver_id"].append("driver_test")
+        self.manager.decision_metadata["human_decision"].append(self.human_decision)
+        self.manager.decision_metadata["rl_decision"].append(self.rl_decision)
+        self.manager.decision_metadata["context"].append(self.context)
 
-            # Filtrer pour aujourd'hui
-            filtered_data = self.manager._filter_data_by_company_and_date(self.test_company_id, today)
+        # Filtrer pour aujourd'hui
+        filtered_data = self.manager._filter_data_by_company_and_date(self.test_company_id, today)
 
-            assert len(filtered_data["decisions"]) == 1
-            assert filtered_data["decisions"][0]["booking_id"] == "booking_today"
+        assert len(filtered_data["decisions"]) == 1
+        assert filtered_data["decisions"][0]["booking_id"] == "booking_today"
 
     def test_calculate_daily_statistics(self):
         """Test le calcul des statistiques quotidiennes."""
@@ -289,7 +289,7 @@ class TestShadowModeManager(unittest.TestCase):
 
         # Vérifier les statistiques ETA
         eta_stats = stats["eta_delta"]
-        assert eta_stats["mean"] == -1.33  # (-2 + 1 - 3) / 3
+        assert eta_stats["mean"] == pytest.approx(-1.33, abs=0.01)  # (-2 + 1 - 3) / 3
         assert eta_stats["min"] == -3
         assert eta_stats["max"] == 1
 
