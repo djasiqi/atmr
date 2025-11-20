@@ -24,7 +24,7 @@ from tests.factories import (
 def test_company(db):
     """Crée une company de test."""
     company = CompanyFactory()
-    db.session.commit()
+    db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
     return company
 
 
@@ -32,7 +32,7 @@ def test_company(db):
 def test_drivers(db, test_company):
     """Crée des drivers de test."""
     drivers = [DriverFactory(company=test_company, is_available=True) for _ in range(3)]
-    db.session.commit()
+    db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
     return drivers
 
 

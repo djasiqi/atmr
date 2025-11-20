@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from ext import db
 from models import Assignment, Booking, BookingStatus, DispatchRun, Driver, DriverState, DriverStatus, DriverType
 from services.unified_dispatch.apply import apply_assignments
+from tests.factories import BookingFactory, CompanyFactory, DispatchRunFactory, DriverFactory
 
 logger = logging.getLogger(__name__)
 
@@ -64,18 +65,19 @@ class TestIdempotence:
         Ce test vérifie que si on applique le même dispatch_run_id deux fois
         avec les mêmes (booking_id, driver_id), il n'y a pas de doublon créé.
         """
-        # Créer des objets réels en DB
-        from ext import db as db_ext
+        # Créer une company d'abord (requis pour FK)
+        company = CompanyFactory()
+        db_session.add(company)
+        db_session.flush()
 
-        # Créer un dispatch run
-        dispatch_run = DispatchRun(company_id=1, day=datetime.now(UTC).date(), status="PENDING")
+        # Créer un dispatch run avec la company
+        dispatch_run = DispatchRunFactory(company=company, day=datetime.now(UTC).date())
         db_session.add(dispatch_run)
         db_session.flush()
 
-        # Créer un booking
-        booking = Booking(
-            id=999,
-            company_id=1,
+        # Créer un booking avec la company
+        booking = BookingFactory(
+            company=company,
             pickup_lat=46.2044,
             pickup_lon=6.1432,
             dropoff_lat=46.2080,
@@ -86,17 +88,17 @@ class TestIdempotence:
         )
         db_session.add(booking)
 
-        # Créer un driver
-        driver = Driver(
-            id=123, company_id=1, latitude=46.2044, longitude=6.1432, driver_type=DriverType.REGULAR, is_active=True
+        # Créer un driver avec la company
+        driver = DriverFactory(
+            company=company, latitude=46.2044, longitude=6.1432, driver_type=DriverType.REGULAR, is_active=True
         )
         db_session.add(driver)
 
         # Créer DriverStatus
-        driver_status = DriverStatus(driver_id=123, state=DriverState.AVAILABLE)
+        driver_status = DriverStatus(driver_id=driver.id, state=DriverState.AVAILABLE)
         db_session.add(driver_status)
 
-        db_session.commit()
+        db_session.commit()  # Commit nécessaire pour tester l'idempotence réelle
 
         # Créer une assignation
         assignment_data = {
@@ -108,7 +110,7 @@ class TestIdempotence:
 
         # Premier appel
         result1 = apply_assignments(
-            company_id=1, assignments=[assignment_data], dispatch_run_id=dispatch_run.id, allow_reassign=True
+            company_id=company.id, assignments=[assignment_data], dispatch_run_id=dispatch_run.id, allow_reassign=True
         )
 
         logger.info("✅ Premier appel: %s", result1)
@@ -124,7 +126,7 @@ class TestIdempotence:
 
         # Deuxième appel IDENTIQUE (idempotence)
         result2 = apply_assignments(
-            company_id=1, assignments=[assignment_data], dispatch_run_id=dispatch_run.id, allow_reassign=True
+            company_id=company.id, assignments=[assignment_data], dispatch_run_id=dispatch_run.id, allow_reassign=True
         )
 
         logger.info("✅ Deuxième appel (idempotent): %s", result2)
@@ -143,15 +145,19 @@ class TestIdempotence:
     def test_unique_constraint_enforced(self, app_context, db_session):
         """Test: violation de contrainte unique (booking_id, dispatch_run_id) → erreur."""
 
-        # Créer un dispatch run
-        dispatch_run = DispatchRun(company_id=1, day=datetime.now(UTC).date(), status="PENDING")
+        # Créer une company d'abord (requis pour FK)
+        company = CompanyFactory()
+        db_session.add(company)
+        db_session.flush()
+
+        # Créer un dispatch run avec la company
+        dispatch_run = DispatchRunFactory(company=company, day=datetime.now(UTC).date())
         db_session.add(dispatch_run)
         db_session.flush()
 
-        # Créer un booking
-        booking = Booking(
-            id=888,
-            company_id=1,
+        # Créer un booking avec la company
+        booking = BookingFactory(
+            company=company,
             pickup_lat=46.2044,
             pickup_lon=6.1432,
             dropoff_lat=46.2080,
@@ -162,17 +168,17 @@ class TestIdempotence:
         )
         db_session.add(booking)
 
-        # Créer un driver
-        driver = Driver(
-            id=456, company_id=1, latitude=46.2044, longitude=6.1432, driver_type=DriverType.REGULAR, is_active=True
+        # Créer un driver avec la company
+        driver = DriverFactory(
+            company=company, latitude=46.2044, longitude=6.1432, driver_type=DriverType.REGULAR, is_active=True
         )
         db_session.add(driver)
 
         # Créer DriverStatus
-        driver_status = DriverStatus(driver_id=456, state=DriverState.AVAILABLE)
+        driver_status = DriverStatus(driver_id=driver.id, state=DriverState.AVAILABLE)
         db_session.add(driver_status)
 
-        db_session.commit()
+        db_session.commit()  # Commit nécessaire pour tester la contrainte unique
 
         # Créer une première assignation
         assignment1 = Assignment(
@@ -198,15 +204,19 @@ class TestIdempotence:
     def test_transaction_rollback_on_error(self, app_context, db_session):
         """Test: rollback automatique en cas d'erreur."""
 
-        # Créer un dispatch run
-        dispatch_run = DispatchRun(company_id=1, day=datetime.now(UTC).date(), status="PENDING")
+        # Créer une company d'abord (requis pour FK)
+        company = CompanyFactory()
+        db_session.add(company)
+        db_session.flush()
+
+        # Créer un dispatch run avec la company
+        dispatch_run = DispatchRunFactory(company=company, day=datetime.now(UTC).date())
         db_session.add(dispatch_run)
         db_session.flush()
 
-        # Créer un booking avec un driver_id inexistant (déclenchera une erreur)
-        booking = Booking(
-            id=777,
-            company_id=1,
+        # Créer un booking avec la company
+        booking = BookingFactory(
+            company=company,
             pickup_lat=46.2044,
             pickup_lon=6.1432,
             dropoff_lat=46.2080,
@@ -227,7 +237,7 @@ class TestIdempotence:
         }
 
         result = apply_assignments(
-            company_id=1, assignments=[assignment_data], dispatch_run_id=dispatch_run.id, allow_reassign=True
+            company_id=company.id, assignments=[assignment_data], dispatch_run_id=dispatch_run.id, allow_reassign=True
         )
 
         # Vérifier que la transaction a été rollbackée (pas d'assignation créée)
@@ -244,15 +254,19 @@ class TestIdempotence:
         # Ce test serait plus complexe et nécessite deux threads/processus
         # Pour simplifier, on teste juste que with_for_update est utilisé
 
-        from models import Booking, Driver
+        # Créer une company d'abord (requis pour FK)
+        company = CompanyFactory()
+        db_session.add(company)
+        db_session.flush()
 
-        # Créer des objets
-        dispatch_run = DispatchRun(company_id=1, day=datetime.now(UTC).date(), status="PENDING")
+        # Créer un dispatch run avec la company
+        dispatch_run = DispatchRunFactory(company=company, day=datetime.now(UTC).date())
         db_session.add(dispatch_run)
+        db_session.flush()
 
-        booking = Booking(
-            id=666,
-            company_id=1,
+        # Créer un booking avec la company
+        booking = BookingFactory(
+            company=company,
             pickup_lat=46.2044,
             pickup_lon=6.1432,
             dropoff_lat=46.2080,
@@ -263,12 +277,13 @@ class TestIdempotence:
         )
         db_session.add(booking)
 
-        driver = Driver(
-            id=789, company_id=1, latitude=46.2044, longitude=6.1432, driver_type=DriverType.REGULAR, is_active=True
+        # Créer un driver avec la company
+        driver = DriverFactory(
+            company=company, latitude=46.2044, longitude=6.1432, driver_type=DriverType.REGULAR, is_active=True
         )
         db_session.add(driver)
 
-        driver_status = DriverStatus(driver_id=789, state=DriverState.AVAILABLE)
+        driver_status = DriverStatus(driver_id=driver.id, state=DriverState.AVAILABLE)
         db_session.add(driver_status)
 
         db_session.commit()
@@ -282,7 +297,7 @@ class TestIdempotence:
         }
 
         result = apply_assignments(
-            company_id=1,
+            company_id=company.id,
             assignments=[assignment_data],
             dispatch_run_id=dispatch_run.id,
             allow_reassign=True,

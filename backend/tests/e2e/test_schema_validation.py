@@ -75,7 +75,7 @@ class TestSchemaValidationE2E:
 
     # ========== BOOKINGS ENDPOINTS ==========
 
-    def test_create_booking_valid_schema(self, client, auth_headers, sample_user, db):
+    def test_create_booking_valid_schema(self, client, auth_headers, sample_user, db, sample_company):
         """Test POST /api/v1/clients/<id>/bookings avec payload valide."""
         from models import Client, User
 
@@ -94,12 +94,10 @@ class TestSchemaValidationE2E:
 
         test_client = Client()
         test_client.user_id = client_user.id
-        test_client.company_id = (
-            sample_user.company.id if hasattr(sample_user, "company") and sample_user.company else None
-        )
+        test_client.company_id = sample_company.id  # Utiliser sample_company pour garantir company_id non-None
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Générer un JWT client directement
         from flask_jwt_extended import create_access_token
@@ -129,7 +127,7 @@ class TestSchemaValidationE2E:
         )
         assert response.status_code in [201, 400, 404, 500]  # 400 si géocodage échoue
 
-    def test_create_booking_invalid_schema(self, client, auth_headers, sample_user, db):
+    def test_create_booking_invalid_schema(self, client, auth_headers, sample_user, db, sample_company):
         """Test POST /api/v1/clients/<id>/bookings avec payload invalide (champs manquants)."""
         from models import Client, User
 
@@ -147,12 +145,10 @@ class TestSchemaValidationE2E:
 
         test_client = Client()
         test_client.user_id = client_user.id
-        test_client.company_id = (
-            sample_user.company.id if hasattr(sample_user, "company") and sample_user.company else None
-        )
+        test_client.company_id = sample_company.id  # Utiliser sample_company pour garantir company_id non-None
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         from flask_jwt_extended import create_access_token
 
@@ -225,7 +221,7 @@ class TestSchemaValidationE2E:
         booking.scheduled_time = future_time
         booking.amount = 50.0
         db.session.add(booking)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Générer un JWT client directement
         from flask_jwt_extended import create_access_token
@@ -298,7 +294,7 @@ class TestSchemaValidationE2E:
         booking.amount = 50.0
         booking.user_id = client_user.id
         db.session.add(booking)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         from flask_jwt_extended import create_access_token
 
@@ -363,7 +359,7 @@ class TestSchemaValidationE2E:
         test_client.company_id = sample_company.id
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Authentification: générer un JWT company directement
         company_user = sample_company.user if hasattr(sample_company, "user") else None
@@ -432,7 +428,7 @@ class TestSchemaValidationE2E:
         test_client.company_id = sample_company.id
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Auth company via JWT direct
         company_user = sample_company.user if hasattr(sample_company, "user") else None
@@ -795,7 +791,7 @@ class TestSchemaValidationE2E:
         booking.amount = 50.0
         booking.user_id = client_user.id
         db.session.add(booking)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Générer un JWT pour le client
         from datetime import timedelta
@@ -870,7 +866,7 @@ class TestSchemaValidationE2E:
         booking.amount = 50.0
         booking.user_id = client_user.id
         db.session.add(booking)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         from datetime import timedelta
 
@@ -1024,7 +1020,7 @@ class TestSchemaValidationE2E:
         # Utiliser la méthode de hachage standard de l'application
         admin_user.set_password("password123", force_change=False)
         db.session.add(admin_user)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Générer un JWT pour l'admin
         from datetime import timedelta
@@ -1118,7 +1114,7 @@ class TestSchemaValidationE2E:
         # Utiliser la méthode de hachage standard de l'application
         admin_user.set_password("password123", force_change=False)
         db.session.add(admin_user)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Générer un JWT pour l'admin
         from datetime import timedelta
@@ -1200,7 +1196,7 @@ class TestSchemaValidationE2E:
         test_client.phone = "+41211234567"
         test_client.address = "Old Address"
         db.session.add(test_client)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Authentification: générer un JWT client directement
         from datetime import timedelta
@@ -1267,7 +1263,7 @@ class TestSchemaValidationE2E:
         test_client.user_id = client_user.id
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         from datetime import timedelta
 
@@ -1403,7 +1399,7 @@ class TestSchemaValidationE2E:
         test_driver.contract_type = "CDI"
         test_driver.weekly_hours = 40
         db.session.add(test_driver)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Authentification: générer un JWT direct (éviter dépendance login)
         from flask_jwt_extended import create_access_token
@@ -1475,7 +1471,7 @@ class TestSchemaValidationE2E:
         test_driver.user_id = driver_user.id
         test_driver.company_id = sample_company.id
         db.session.add(test_driver)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         from flask_jwt_extended import create_access_token
 
@@ -1612,7 +1608,7 @@ class TestSchemaValidationE2E:
         billing_settings = CompanyBillingSettings()
         billing_settings.company_id = sample_company.id
         db.session.add(billing_settings)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Login en tant que company
         company_user = sample_company.user if hasattr(sample_company, "user") else None
@@ -1673,7 +1669,7 @@ class TestSchemaValidationE2E:
         billing_settings = CompanyBillingSettings()
         billing_settings.company_id = sample_company.id
         db.session.add(billing_settings)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Login en tant que company
         company_user = sample_company.user if hasattr(sample_company, "user") else None
@@ -1889,7 +1885,7 @@ class TestSchemaValidationE2E:
         test_client.company_id = sample_company.id
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Login en tant que company
         company_user = sample_company.user if hasattr(sample_company, "user") else None
@@ -1935,7 +1931,7 @@ class TestSchemaValidationE2E:
         institution_client.client_type = "CORPORATE"
         institution_client.is_institution = True
         db.session.add(institution_client)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         response = client.post(
             f"/api/v1/invoices/companies/{sample_company.id}/invoices/generate",
@@ -2491,7 +2487,7 @@ class TestSchemaValidationE2E:
         # Utiliser la méthode de hachage standard de l'application
         admin_user.set_password("password123", force_change=False)
         db.session.add(admin_user)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Auth admin via JWT
         from flask_jwt_extended import create_access_token
@@ -2509,7 +2505,7 @@ class TestSchemaValidationE2E:
         admin_user.public_id = str(uuid.uuid4())
         target_user.set_password("password123", force_change=False)
         db.session.add(target_user)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         response = client.put(
             f"/api/v1/admin/users/{target_user.id}/role",
@@ -2529,7 +2525,7 @@ class TestSchemaValidationE2E:
         admin_user.public_id = str(uuid.uuid4())
         admin_user.set_password("password123", force_change=False)
         db.session.add(admin_user)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         from flask_jwt_extended import create_access_token
 
@@ -2562,7 +2558,7 @@ class TestSchemaValidationE2E:
         password_hash = bcrypt.generate_password_hash("password123")
         admin_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
         db.session.add(admin_user)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Générer un token JWT admin directement pour éviter flakiness du login en tests
         from flask_jwt_extended import create_access_token
@@ -2582,7 +2578,7 @@ class TestSchemaValidationE2E:
         company.name = "Admin Test Co"
         company.user_id = admin_user.id
         db.session.add(company)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Créer une action autonome
         action = AutonomousAction()
@@ -2591,7 +2587,7 @@ class TestSchemaValidationE2E:
         action.action_description = "Réassignation automatique test"
         action.success = True
         db.session.add(action)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Review avec notes valides
         resp = client.post(
@@ -2630,7 +2626,7 @@ class TestSchemaValidationE2E:
         password_hash = bcrypt.generate_password_hash("password123")
         admin_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
         db.session.add(admin_user)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         from flask_jwt_extended import create_access_token
 
@@ -2649,7 +2645,7 @@ class TestSchemaValidationE2E:
         company.name = "Admin Test Co 2"
         company.user_id = admin_user.id
         db.session.add(company)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Créer une action autonome
         action = AutonomousAction()
@@ -2658,7 +2654,7 @@ class TestSchemaValidationE2E:
         action.action_description = "Réassignation automatique test"
         action.success = True
         db.session.add(action)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Payload invalide: notes > 1000 caractères
         too_long_notes = "a" * 1001

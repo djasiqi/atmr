@@ -65,7 +65,7 @@ class TestAutonomousActionModel:
             execution_time_ms=0.12345,
         )
         db.session.add(action)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         assert action.id is not None
         assert action.company_id == company_fully_auto.id
@@ -97,7 +97,7 @@ class TestAutonomousActionModel:
             created_at=now - timedelta(hours=2),
         )
         db.session.add(old_action)
-        db.session.commit()
+        db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
         # Vérifier le comptage
         count = AutonomousAction.count_actions_last_hour(company_fully_auto.id)

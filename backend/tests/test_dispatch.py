@@ -24,10 +24,18 @@ def mock_osrm(monkeypatch):
 @pytest.fixture
 def sample_driver(db, sample_company):
     """Crée un chauffeur de test."""
+    import uuid
+
     from ext import bcrypt
 
+    # Utiliser un email unique pour éviter les conflits de contrainte unique
+    unique_suffix = str(uuid.uuid4())[:8]
     user = User(
-        username="driver1", email="driver@example.com", role=UserRole.driver, first_name="John", last_name="Driver"
+        username=f"driver_{unique_suffix}",
+        email=f"driver_{unique_suffix}@example.com",
+        role=UserRole.driver,
+        first_name="John",
+        last_name="Driver",
     )
     user.password = bcrypt.generate_password_hash("password123").decode("utf-8")
     db.session.add(user)
@@ -50,7 +58,7 @@ def sample_vehicle(db, sample_company, sample_driver):
         wheelchair_accessible=True,
     )
     db.session.add(vehicle)
-    db.session.commit()
+    db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
     return vehicle
 
 
@@ -67,13 +75,13 @@ def test_dispatch_requires_auth(client):
     assert response.status_code == 401
 
 
-def test_create_booking_for_dispatch(client, auth_headers, db, sample_user, sample_client):
+def test_create_booking_for_dispatch(client, auth_headers, db, sample_user, sample_client, sample_company):
     """Créer des bookings en attente pour dispatch."""
     # Créer 2 bookings PENDING
     for i in range(2):
         booking = Booking(
             client_id=sample_client.id,
-            company_id=sample_user.company_id,
+            company_id=sample_company.id,  # Utiliser sample_company.id au lieu de sample_user.company_id
             user_id=sample_client.user_id,
             customer_name=f"Client {i}",
             pickup_location="Lausanne Gare",
@@ -85,7 +93,7 @@ def test_create_booking_for_dispatch(client, auth_headers, db, sample_user, samp
             duration_seconds=0.900,
         )
         db.session.add(booking)
-    db.session.commit()
+    db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
     # Vérifier que les bookings sont créés
     bookings = Booking.query.filter_by(status=BookingStatus.PENDING).all()
