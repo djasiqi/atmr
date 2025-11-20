@@ -650,6 +650,7 @@ class ETADelayModel:
         with Path(self.model_path).open("wb") as f:
             # Utilisation de joblib (recommandé pour scikit-learn) au lieu de pickle direct
             # joblib utilise pickle en interne mais avec des optimisations pour numpy/scipy
+            # nosec B301: Modèles internes uniquement, provenant de sources de confiance
             joblib.dump(model_data, f)  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
 
         logger.info("[ETADelayModel] Modèle sauvegardé: %s", self.model_path)
@@ -663,6 +664,7 @@ class ETADelayModel:
             with Path(self.model_path).open("rb") as f:
                 # Utilisation de joblib (recommandé pour scikit-learn) au lieu de pickle direct
                 # joblib utilise pickle en interne mais avec des optimisations pour numpy/scipy
+                # nosec B301: Modèles internes uniquement, provenant de sources de confiance
                 model_data = joblib.load(f)  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
 
             self.regression_model = model_data["regression_model"]

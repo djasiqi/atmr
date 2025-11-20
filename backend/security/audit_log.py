@@ -9,7 +9,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any, Dict, Optional
 
-from sqlalchemy import BigInteger, DateTime, Integer, String, Text
+from sqlalchemy import BigInteger, DateTime, Index, Integer, String, Text
 
 from ext import db
 
@@ -23,6 +23,15 @@ class AuditLog(db.Model):
     """
 
     __tablename__ = "audit_logs"
+    __table_args__ = (
+        Index("ix_audit_logs_created_at", "created_at"),
+        Index("ix_audit_logs_user_id", "user_id"),
+        Index("ix_audit_logs_action_type", "action_type"),
+        Index("ix_audit_logs_action_category", "action_category"),
+        Index("ix_audit_logs_company_id", "company_id"),
+        Index("ix_audit_logs_booking_id", "booking_id"),
+        Index("ix_audit_logs_driver_id", "driver_id"),
+    )
 
     # Identifiant unique (auto-incrémental)
     id = db.Column(BigInteger, primary_key=True)

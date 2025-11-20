@@ -192,12 +192,17 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 ) -> Dict[str, Any]:
     """Exécute un dispatch avec métriques Prometheus intégrées."""
     # ✅ Context manager pour métriques Prometheus
+    # Note: dispatch_run_id sera disponible après création du DispatchRun
+    # On utilisera le context manager plus tard dans la fonction
     try:
-        from services.unified_dispatch.dispatch_prometheus_metrics import dispatch_metrics_context
-        # Note: dispatch_run_id sera disponible après création du DispatchRun
-        # On utilisera le context manager plus tard dans la fonction
+        from services.unified_dispatch.dispatch_prometheus_metrics import (
+            dispatch_metrics_context as _dispatch_metrics_context,
+        )
+
+        _ = _dispatch_metrics_context  # Utilisé plus tard dans la fonction
     except ImportError:
-        dispatch_metrics_context = None
+        _dispatch_metrics_context = None
+        _ = _dispatch_metrics_context
     """Run the dispatch optimization for a company on a specific date.
     Creates a DispatchRun record and links assignments to it.
     """
@@ -1015,7 +1020,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     # L'heuristique fonctionne et assigne tout, même si la répartition n'est pas parfaite.
                     # TODO : Améliorer l'heuristique pour mieux équilibrer dès
                     # le départ
-                    if False:  # Désactivé temporairement - voir commentaires ci-dessus
+                    # Code désactivé temporairement - voir commentaires ci-dessus
+                    # pylint: disable=simplifiable-if-statement
+                    if False:
                         # Calculer la charge par chauffeur
                         driver_loads = {}
                         for a in final_assignments:

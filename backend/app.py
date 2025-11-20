@@ -40,6 +40,7 @@ from ext import bcrypt, db, jwt, limiter, mail, migrate, socketio
 
 # ---------- Chargement .env ----------
 BASE_DIR = Path(__file__).resolve().parent
+# nosec B104: override=True nécessaire pour permettre la surcharge des variables en développement
 load_dotenv(BASE_DIR / ".env", override=True)
 
 # ---------- Types ----------
@@ -517,11 +518,7 @@ def create_app(config_name: str | None = None):
             remote = request.remote_addr or ""
             host = request.host or ""
             # Si c'est depuis localhost OU si le schéma est HTTP (pas HTTPS), retourner directement
-            if (
-                remote in ("127.0.0.1", "::1", "localhost") 
-                or request.scheme == "http"
-                or "localhost" in host
-            ):
+            if remote in ("127.0.0.1", "::1", "localhost") or request.scheme == "http" or "localhost" in host:
                 # Retourner directement la réponse JSON sans passer par Talisman
                 return jsonify(
                     {
@@ -609,7 +606,11 @@ def create_app(config_name: str | None = None):
 
         import models
 
+        # ✅ D2: Importer AuditLog pour qu'Alembic le détecte lors des migrations
+        from security.audit_log import AuditLog
+
         _ = models  # Force l'import pour enregistrer les mappers
+        _ = AuditLog  # Force l'import pour qu'Alembic le détecte
 
         configure_mappers()
 
@@ -834,7 +835,7 @@ def create_app(config_name: str | None = None):
 
         # JWT : handlers d'erreurs
         @jwt.expired_token_loader
-        def expired_token_callback(jwt_header, jwt_payload):  # pyright: ignore[reportUnusedFunction]  # noqa: ARG001
+        def expired_token_callback(_jwt_header, _jwt_payload):  # pyright: ignore[reportUnusedFunction]
             return jsonify({"error": "token_expired", "message": "Signature has expired"}), 401
 
         @jwt.invalid_token_loader

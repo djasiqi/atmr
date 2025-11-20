@@ -10,7 +10,7 @@ import logging
 import pytest
 from opentelemetry import trace
 
-from shared.otel_setup import create_span, get_tracer, inject_trace_id_to_logs, setup_opentelemetry
+from shared.otel_setup import get_tracer, inject_trace_id_to_logs, setup_opentelemetry
 
 logger = logging.getLogger(__name__)
 

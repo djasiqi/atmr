@@ -477,6 +477,8 @@ class ImprovedDQNAgent:
         if torch is None:
             msg = "PyTorch is required but not available"
             raise ImportError(msg)
+        # nosec B506: Les checkpoints contiennent optimizer state et config, pas seulement des poids
+        # Les modèles proviennent de sources internes de confiance uniquement
         checkpoint = torch.load(filepath, map_location=self.device, weights_only=False)
         self.q_network.load_state_dict(checkpoint["q_network_state_dict"])
         self.target_network.load_state_dict(checkpoint["target_network_state_dict"])

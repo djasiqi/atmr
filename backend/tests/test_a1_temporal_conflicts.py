@@ -16,7 +16,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 import pytest
-from freezegun import freeze_time
 
 from services.unified_dispatch import data, heuristics
 from services.unified_dispatch.settings import Settings

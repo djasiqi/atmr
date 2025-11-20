@@ -155,8 +155,8 @@ def retrain_dqn_model_task():
                 if loss is not None:
                     total_loss += loss
 
-                if True:  # MAGIC_VALUE_10
-                    logger.debug("[RL] Échantillon %s/%s traité", i + 1, len(training_samples))
+                # MAGIC_VALUE_10: logging toujours activé
+                logger.debug("[RL] Échantillon %s/%s traité", i + 1, len(training_samples))
 
             avg_loss = total_loss / len(training_samples) if len(training_samples) > 0 else 0
 

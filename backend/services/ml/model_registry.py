@@ -169,7 +169,7 @@ class ModelRegistry:
         self,
         model: torch.nn.Module,
         metadata: ModelMetadata,
-        model_file_path: Path | None = None,  # noqa: ARG002
+        _model_file_path: Path | None = None,
     ) -> Path:
         """Enregistre un nouveau modèle dans le registre.
 

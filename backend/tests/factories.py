@@ -15,6 +15,7 @@ from faker import Faker
 
 from db import db
 from models.ab_test_result import ABTestResult
+from models.autonomous_action import AutonomousAction
 from models.booking import Booking
 from models.client import Client
 from models.company import Company
@@ -101,8 +102,8 @@ class ClientFactory(SQLAlchemyModelFactory):
     class Meta:  # type: ignore[misc]
         model = Client
 
-    user = factory.SubFactory(UserFactory, role="client")
-    company = factory.SubFactory(CompanyFactory)
+    user = factory.SubFactory(UserFactory, role=UserRole.CLIENT)
+    company = factory.SubFactory(CompanyFactory)  # Toujours créer une company pour éviter NULL company_id
 
     billing_address = factory.LazyAttribute(lambda _: fake.address().replace("\n", ", ")[:255])
     contact_email = factory.LazyAttribute(lambda _: fake.email())
@@ -118,8 +119,8 @@ class DriverFactory(SQLAlchemyModelFactory):
     class Meta:  # type: ignore[misc]
         model = Driver
 
-    user = factory.SubFactory(UserFactory, role="driver")
-    company = factory.SubFactory(CompanyFactory)
+    user = factory.SubFactory(UserFactory, role=UserRole.DRIVER)
+    company = factory.SubFactory(CompanyFactory)  # Toujours créer une company pour éviter NULL company_id
 
     vehicle_assigned = factory.LazyAttribute(lambda _: fake.word().capitalize())
     brand = factory.LazyAttribute(lambda _: fake.company()[:100])
@@ -302,6 +303,41 @@ class ABTestResultFactory(SQLAlchemyModelFactory):
     driver = factory.SubFactory(DriverFactory)
     test_timestamp = factory.LazyFunction(datetime.utcnow)
 
+
+# ========== AUTONOMOUS ACTION ==========
+
+
+class AutonomousActionFactory(SQLAlchemyModelFactory):
+    """Factory pour AutonomousAction."""
+
+    class Meta:  # type: ignore[misc]
+        model = AutonomousAction
+
+    company = factory.SubFactory(CompanyFactory)  # REQUIRED: company_id NOT NULL
+    booking = factory.SubFactory(BookingFactory)  # Optionnel mais créé par défaut pour éviter FK errors
+    driver = factory.LazyAttribute(
+        lambda obj: obj.booking.driver_id if obj.booking and hasattr(obj.booking, "driver_id") else None
+    )
+
+    action_type = fuzzy.FuzzyChoice(["reassign", "adjust_time", "notify_customer", "redistribute", "reoptimize"])
+    action_description = factory.LazyAttribute(lambda obj: f"Action {obj.action_type} for booking {obj.booking_id}")
+    action_data = factory.LazyAttribute(lambda _: '{"before": {}, "after": {}}')
+
+    success = True
+    error_message = None
+    execution_time_ms = factory.LazyAttribute(lambda _: round(fake.random.uniform(10.0, 500.0), 2))
+    confidence_score = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.5, 0.95), 3))
+    expected_improvement_minutes = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.0, 15.0), 2))
+
+    trigger_source = fuzzy.FuzzyChoice(["autorun_scheduler", "realtime_optimizer", "ml_prediction", "manual_trigger"])
+
+    reviewed_by_admin = False
+    reviewed_at = None
+    admin_notes = None
+
+    created_at = factory.LazyFunction(datetime.utcnow)
+    updated_at = factory.LazyFunction(datetime.utcnow)
+
     ml_delay_minutes = factory.LazyAttribute(lambda _: round(fake.random.uniform(3.0, 10.0), 2))
     ml_confidence = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.5, 0.9), 3))
     ml_risk_level = fuzzy.FuzzyChoice(["low", "medium", "high"])
@@ -360,7 +396,7 @@ def create_driver_with_position(
 
     return DriverFactory(
         company=company,
-        user=UserFactory(role="driver"),
+        user=UserFactory(role=UserRole.DRIVER),
         latitude=0.0,
         longitude=0.0,
         is_available=is_available,

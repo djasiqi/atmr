@@ -15,7 +15,6 @@ from services.unified_dispatch.slo import (
     SLOBreachTracker,
     check_slo_breach,
     get_slo_for_batch_size,
-    reset_slo_tracker,
 )
 
 logger = logging.getLogger(__name__)

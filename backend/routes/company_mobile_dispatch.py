@@ -686,7 +686,7 @@ class MobileRideDetail(Resource):
 
         if booking is None:
             company_mobile_dispatch_ns.abort(404, "Course introuvable pour cette entreprise")
-        raise AssertionError("Booking should not be None after abort") from None
+            raise AssertionError("abort() should have raised an exception")  # Type hint: abort() lève une exception
 
         active_assignment = _get_active_assignment(booking)
         summary = _build_ride_summary(booking)

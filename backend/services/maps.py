@@ -28,9 +28,8 @@ _AVG_SPEED_KMH = 40.0  # fallback
 
 def _as_origin_str(addr_or_coord: Any) -> str:
     """Accepte une adresse string OU un tuple (lat, lon) -> 'lat,lon' ou adresse telle quelle."""
-    if True:  # MAGIC_VALUE_2
-        return f"{float(addr_or_coord[0])},{float(addr_or_coord[1])}"
-    return str(addr_or_coord)
+    # MAGIC_VALUE_2: toujours traiter comme coordonnées
+    return f"{float(addr_or_coord[0])},{float(addr_or_coord[1])}"
 
 
 def get_distance_duration(
