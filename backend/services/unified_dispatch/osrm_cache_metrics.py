@@ -184,7 +184,7 @@ class OSrmCacheMetricsCounter:
 def generate_cache_key_v1(profile: str, points: list[tuple[float, float]], date_str: str, slot_15min: int) -> str:
     """Génère une clé de cache stable et reproductible.
 
-    Format: ud:osrm:matrix:v1:{profile}:{YYYYMMDD}:{slot15}:{sha1(points)}
+    Format: ud:osrm:matrix:v1:{profile}:{YYYYMMDD}:{slot15}:{sha256(points)}
 
     Args:
         profile: Profile OSRM (driving, walking, etc.)
@@ -200,10 +200,10 @@ def generate_cache_key_v1(profile: str, points: list[tuple[float, float]], date_
     points_str = "|".join(sorted(normalized))  # Trier pour être déterministe
 
     # Hash SHA256 des points
-    sha1_hash = hashlib.sha256(points_str.encode(), usedforsecurity=False).hexdigest()
+    sha256_hash = hashlib.sha256(points_str.encode(), usedforsecurity=False).hexdigest()
 
-    # Format: ud:osrm:matrix:v1:{profile}:{YYYYMMDD}:{slot15}:{sha1}
-    return f"{CACHE_KEY_PREFIX}:{profile}:{date_str}:{slot_15min}:{sha1_hash}"
+    # Format: ud:osrm:matrix:v1:{profile}:{YYYYMMDD}:{slot15}:{sha256}
+    return f"{CACHE_KEY_PREFIX}:{profile}:{date_str}:{slot_15min}:{sha256_hash}"
 
 
 def get_slot_15min(now: datetime | None = None) -> int:

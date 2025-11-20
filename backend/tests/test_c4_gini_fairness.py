@@ -10,6 +10,7 @@ import logging
 import pytest
 
 from services.unified_dispatch.dispatch_metrics import DispatchMetricsCollector
+from tests.factories import CompanyFactory
 
 logger = logging.getLogger(__name__)
 
@@ -17,14 +18,21 @@ logger = logging.getLogger(__name__)
 class TestGiniFairness:
     """Tests pour Fairness Gini (C4)."""
 
-    def test_gini_perfectly_fair(self):
+    @pytest.fixture
+    def test_company(self, db):
+        """Crée une company pour les tests."""
+        company = CompanyFactory()
+        db.session.flush()
+        return company
+
+    def test_gini_perfectly_fair(self, db, test_company):
         """Test: Gini = 0 pour distribution parfaitement équitable."""
 
         # Distribution parfaitement équitable: [5, 5, 5, 5]
         values = [5, 5, 5, 5]
 
         collector = DispatchMetricsCollector(
-            dispatch_run_id=1, company_id=1, date="2025-01-27", all_bookings=[], run_metadata={}
+            dispatch_run_id=1, company_id=test_company.id, date="2025-01-27", all_bookings=[], run_metadata={}
         )
 
         gini = collector._calculate_gini_index(values)
@@ -33,14 +41,14 @@ class TestGiniFairness:
 
         logger.info("✅ Test: Gini = 0 pour distribution parfaitement équitable")
 
-    def test_gini_perfectly_unfair(self):
+    def test_gini_perfectly_unfair(self, db, test_company):
         """Test: Gini = 1 pour distribution parfaitement inéquitable."""
 
         # Distribution parfaitement inéquitable: [10, 0, 0, 0] (un seul driver)
         values = [10, 0, 0, 0]
 
         collector = DispatchMetricsCollector(
-            dispatch_run_id=1, company_id=1, date="2025-01-27", all_bookings=[], run_metadata={}
+            dispatch_run_id=1, company_id=test_company.id, date="2025-01-27", all_bookings=[], run_metadata={}
         )
 
         gini = collector._calculate_gini_index(values)
@@ -50,11 +58,11 @@ class TestGiniFairness:
 
         logger.info("✅ Test: Gini = %.2f pour distribution inéquitable", gini)
 
-    def test_gini_bounds(self):
+    def test_gini_bounds(self, db, test_company):
         """Test: Gini toujours dans [0, 1]."""
 
         collector = DispatchMetricsCollector(
-            dispatch_run_id=1, company_id=1, date="2025-01-27", all_bookings=[], run_metadata={}
+            dispatch_run_id=1, company_id=test_company.id, date="2025-01-27", all_bookings=[], run_metadata={}
         )
 
         # Tester différentes distributions
@@ -146,7 +154,7 @@ class TestGiniFairness:
 
         logger.info("✅ Test: Tradeoff équité vs efficacité fonctionnel")
 
-    def test_gini_exposed_in_metrics(self):
+    def test_gini_exposed_in_metrics(self, db, test_company):
         """Test: Gini exposé dans DispatchQualityMetrics."""
 
         from datetime import date, datetime
@@ -156,7 +164,7 @@ class TestGiniFairness:
         # Créer métriques mock
         metrics = DispatchQualityMetrics(
             dispatch_run_id=1,
-            company_id=1,
+            company_id=test_company.id,
             date=date.today(),
             calculated_at=datetime.now(),
             total_bookings=10,

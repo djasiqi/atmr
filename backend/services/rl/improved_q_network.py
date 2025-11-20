@@ -48,7 +48,7 @@ class ImprovedQNetwork(nn.Module):
         self.hidden_sizes = hidden_sizes
 
         # Batch normalization pour l'input
-        self.batch_norm = nn.BatchNorm1d(state_dim)
+        self.batch_norm = nn.BatchNorm1d(int(state_dim))
 
         # Couches cachées
         self.fc1 = nn.Linear(state_dim, hidden_sizes[0])
@@ -184,7 +184,7 @@ class DuelingQNetwork(nn.Module):
         self.action_dim = action_dim
 
         # Batch normalization pour l'input
-        self.batch_norm = nn.BatchNorm1d(state_dim)
+        self.batch_norm = nn.BatchNorm1d(int(state_dim))
 
         # Couches partagées (shared layers)
         self.shared_fc1 = nn.Linear(state_dim, shared_hidden_sizes[0])

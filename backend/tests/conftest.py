@@ -53,6 +53,19 @@ def app() -> Flask:
 
 
 @pytest.fixture
+def app_context(app):
+    """Crée un contexte d'application Flask pour les tests."""
+    with app.app_context():
+        yield app
+
+
+@pytest.fixture
+def db_session(db):
+    """Alias pour db pour compatibilité avec les tests existants."""
+    return db
+
+
+@pytest.fixture
 def db(app):
     """Crée une DB propre pour chaque test en utilisant des savepoints."""
     with app.app_context():
@@ -226,6 +239,12 @@ def simple_driver(db, sample_company):
 
 
 @pytest.fixture
+def sample_driver(factory_driver):
+    """Alias pour factory_driver pour compatibilité avec les tests existants."""
+    return factory_driver()
+
+
+@pytest.fixture
 def simple_assignment(db, simple_booking, simple_driver):
     """Crée un assignment simple avec booking et driver."""
     from tests.factories import create_assignment_with_booking_driver
@@ -343,6 +362,20 @@ def mock_weather_service(monkeypatch):
 
     monkeypatch.setattr(weather_service, "WeatherService", MockWeatherService)
     return MockWeatherService
+
+
+# ========== FIXTURES SAFETY GUARDS ==========
+
+
+@pytest.fixture
+def safety_guards():
+    """Crée une instance de SafetyGuards pour les tests."""
+    try:
+        from services.safety_guards import SafetyGuards
+
+        return SafetyGuards()
+    except ImportError:
+        pytest.skip("SafetyGuards non disponible")
 
 
 # ========== FIXTURES HELPERS ==========

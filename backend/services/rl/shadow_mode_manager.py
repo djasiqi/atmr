@@ -140,29 +140,46 @@ class ShadowModeManager:
         return kpis
 
     def _calculate_kpis(
-        self, human_decision: Dict[str, Any], rl_decision: Dict[str, Any], context: Dict[str, Any]
+        self,
+        human_decision: Dict[str, Any] | None = None,
+        rl_decision: Dict[str, Any] | None = None,
+        context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Calcule les KPIs détaillés pour la comparaison.
 
+        Si aucun paramètre n'est fourni, calcule des KPIs agrégés depuis les logs stockés.
+
         Args:
-            human_decision: Décision humaine
-            rl_decision: Décision RL
-            context: Contexte
+            human_decision: Décision humaine (optionnel)
+            rl_decision: Décision RL (optionnel)
+            context: Contexte (optionnel)
 
         Returns:
             Dictionnaire des KPIs calculés
 
         """
+        # Si aucun paramètre n'est fourni, calculer des KPIs agrégés depuis les logs
+        if human_decision is None and rl_decision is None and context is None:
+            return self._calculate_aggregated_kpis()
+
+        # Sinon, calculer les KPIs pour une seule décision
+        if human_decision is None:
+            human_decision = {}
+        if rl_decision is None:
+            rl_decision = {}
+        if context is None:
+            context = {}
+
         kpis = {}
 
         # 1. Delta ETA (minutes)
-        human_eta = human_decision.get("eta_minutes", 0)
-        rl_eta = rl_decision.get("eta_minutes", 0)
+        human_eta = human_decision.get("eta_minutes", 0) or 0
+        rl_eta = rl_decision.get("eta_minutes", 0) or 0
         kpis["eta_delta"] = rl_eta - human_eta
 
         # 2. Delta retard (minutes)
-        human_delay = human_decision.get("delay_minutes", 0)
-        rl_delay = rl_decision.get("delay_minutes", 0)
+        human_delay = human_decision.get("delay_minutes", 0) or 0
+        rl_delay = rl_decision.get("delay_minutes", 0) or 0
         kpis["delay_delta"] = rl_delay - human_delay
 
         # 3. Second best driver
@@ -185,6 +202,119 @@ class ShadowModeManager:
         kpis["performance_impact"] = self._calculate_performance_impact(human_decision, rl_decision, context)
 
         return kpis
+
+    def _calculate_aggregated_kpis(self) -> Dict[str, Any]:
+        """Calcule les KPIs agrégés depuis les logs stockés.
+
+        Returns:
+            Dictionnaire des KPIs agrégés
+
+        """
+        # Vérifier si decision_logs existe (défini par les tests)
+        if hasattr(self, "decision_logs") and self.decision_logs:
+            logs = self.decision_logs
+        # Sinon, construire depuis decision_metadata
+        elif self.decision_metadata["human_decision"]:
+            logs = []
+            for i in range(len(self.decision_metadata["human_decision"])):
+                human_dec = self.decision_metadata["human_decision"][i]
+                rl_dec = self.decision_metadata["rl_decision"][i]
+                logs.append(
+                    {
+                        "company_id": self.decision_metadata["company_id"][i],
+                        "booking_id": self.decision_metadata["booking_id"][i],
+                        "human_driver_id": human_dec.get("driver_id"),
+                        "rl_driver_id": rl_dec.get("driver_id"),
+                        "human_eta_minutes": human_dec.get("eta_minutes", 0) or 0,
+                        "rl_eta_minutes": rl_dec.get("eta_minutes", 0) or 0,
+                        "human_delay_minutes": human_dec.get("delay_minutes", 0) or 0,
+                        "rl_delay_minutes": rl_dec.get("delay_minutes", 0) or 0,
+                        "timestamp": self.decision_metadata["timestamp"][i],
+                    }
+                )
+        else:
+            # Aucun log disponible
+            return {
+                "total_decisions": 0,
+                "rl_wins": 0,
+                "human_wins": 0,
+                "avg_human_eta": 0.0,
+                "avg_rl_eta": 0.0,
+                "avg_human_delay": 0.0,
+                "avg_rl_delay": 0.0,
+                "rl_win_rate": 0.0,
+                "eta_improvement_rate": 0.0,
+                "delay_reduction_rate": 0.0,
+            }
+
+        # Calculer les KPIs agrégés
+        total_decisions = len(logs)
+        if total_decisions == 0:
+            return {
+                "total_decisions": 0,
+                "rl_wins": 0,
+                "human_wins": 0,
+                "avg_human_eta": 0.0,
+                "avg_rl_eta": 0.0,
+                "avg_human_delay": 0.0,
+                "avg_rl_delay": 0.0,
+                "rl_win_rate": 0.0,
+                "eta_improvement_rate": 0.0,
+                "delay_reduction_rate": 0.0,
+            }
+
+        rl_wins = 0
+        human_wins = 0
+        total_human_eta = 0.0
+        total_rl_eta = 0.0
+        total_human_delay = 0.0
+        total_rl_delay = 0.0
+        eta_improvements = 0
+        delay_reductions = 0
+
+        for log in logs:
+            human_eta = float(log.get("human_eta_minutes", 0) or 0)
+            rl_eta = float(log.get("rl_eta_minutes", 0) or 0)
+            human_delay = float(log.get("human_delay_minutes", 0) or 0)
+            rl_delay = float(log.get("rl_delay_minutes", 0) or 0)
+
+            total_human_eta += human_eta
+            total_rl_eta += rl_eta
+            total_human_delay += human_delay
+            total_rl_delay += rl_delay
+
+            # Déterminer qui gagne (RL gagne si ETA ou delay est meilleur, ou si les deux sont égaux et RL a un meilleur delay)
+            if rl_eta < human_eta or (rl_eta == human_eta and rl_delay < human_delay):
+                rl_wins += 1
+            elif human_eta < rl_eta or (human_eta == rl_eta and human_delay < rl_delay):
+                human_wins += 1
+
+            # Compter les améliorations
+            if rl_eta < human_eta:
+                eta_improvements += 1
+            if rl_delay < human_delay:
+                delay_reductions += 1
+
+        avg_human_eta = total_human_eta / total_decisions if total_decisions > 0 else 0.0
+        avg_rl_eta = total_rl_eta / total_decisions if total_decisions > 0 else 0.0
+        avg_human_delay = total_human_delay / total_decisions if total_decisions > 0 else 0.0
+        avg_rl_delay = total_rl_delay / total_decisions if total_decisions > 0 else 0.0
+        rl_win_rate = rl_wins / total_decisions if total_decisions > 0 else 0.0
+        eta_improvement_rate = eta_improvements / total_decisions if total_decisions > 0 else 0.0
+        delay_reduction_rate = delay_reductions / total_decisions if total_decisions > 0 else 0.0
+
+        return {
+            "total_decisions": total_decisions,
+            "rl_wins": rl_wins,
+            "human_wins": human_wins,
+            "avg_human_eta": avg_human_eta,
+            "avg_rl_eta": avg_rl_eta,
+            "avg_human_delay": avg_human_delay,
+            "avg_rl_delay": avg_rl_delay,
+            "rl_win_rate": rl_win_rate,
+            "eta_improvement_rate": eta_improvement_rate,
+            "delay_reduction_rate": delay_reduction_rate,
+        }
 
     def _extract_decision_reasons(self, rl_decision: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
         """Extrait les raisons de la décision RL."""

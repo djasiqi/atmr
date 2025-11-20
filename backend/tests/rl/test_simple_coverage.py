@@ -119,7 +119,7 @@ class TestSimpleCoverage:
         state_hash = logger.hash_state(state)
 
         assert isinstance(state_hash, str)
-        assert len(state_hash) == 40  # SHA-1
+        assert len(state_hash) == 64  # SHA-256
 
     def test_rl_logger_get_stats(self):
         """Test récupération des statistiques"""

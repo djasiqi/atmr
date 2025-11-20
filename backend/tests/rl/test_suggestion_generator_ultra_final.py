@@ -662,21 +662,21 @@ class TestRLLoggerUltraFinal:
         state = {"feature1": 1.0, "feature2": 2.0}
         state_hash = logger.hash_state(state)
         assert isinstance(state_hash, str)
-        assert len(state_hash) == 40  # SHA-1 hash length
+        assert len(state_hash) == 64  # SHA-256 hash length
 
     def test_hash_state_with_none(self):
         """Test hashage d'état avec None"""
         logger = RLLogger()
         state_hash = logger.hash_state(None)
         assert isinstance(state_hash, str)
-        assert len(state_hash) == 40
+        assert len(state_hash) == 64
 
     def test_hash_state_with_empty_dict(self):
         """Test hashage d'état avec dictionnaire vide"""
         logger = RLLogger()
         state_hash = logger.hash_state({})
         assert isinstance(state_hash, str)
-        assert len(state_hash) == 40
+        assert len(state_hash) == 64
 
     def test_log_decision_basic(self):
         """Test log de décision basique"""

@@ -113,13 +113,13 @@ class RLLogger:
                 state_str = str(state)
                 state_bytes = state_str.encode("utf-8")
 
-            # Générer le hash SHA-1 (40 caractères hex) pour compatibilité avec les tests
-            return hashlib.sha1(state_bytes, usedforsecurity=False).hexdigest()
+            # Générer le hash SHA-256 (64 caractères hex) pour sécurité
+            return hashlib.sha256(state_bytes, usedforsecurity=False).hexdigest()
 
         except Exception as e:
             logger.error("[RLLogger] Erreur lors du hash de l'état: %s", e)
             # Fallback: hash basé sur le timestamp
-            return hashlib.sha1(str(time.time()).encode(), usedforsecurity=False).hexdigest()
+            return hashlib.sha256(str(time.time()).encode(), usedforsecurity=False).hexdigest()
 
     def log_decision(
         self,
@@ -152,11 +152,8 @@ class RLLogger:
             # Générer le hash de l'état
             state_hash = self.hash_state(state)
 
-            # Convertir l'action en int
-            if torch is not None and isinstance(action, torch.Tensor):
-                action_int = int(action.item())
-            else:
-                action_int = int(action)
+            # Convertir l'action en int, using ternary for compliance with flake8-simplicity
+            action_int = int(action.item()) if torch is not None and isinstance(action, torch.Tensor) else int(action)
 
             # Traiter les q_values
             q_values_list = None

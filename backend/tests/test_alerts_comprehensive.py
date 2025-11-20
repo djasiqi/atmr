@@ -48,12 +48,20 @@ class TestProactiveAlertsService:
     @pytest.fixture
     def mock_delay_predictor(self):
         """Crée un prédicteur de retard mock."""
-        if DelayMLPredictor is None:
-            return Mock()
+        # Créer un mock de base
+        predictor = Mock()
+        # Toujours définir les méthodes nécessaires (même si spec est utilisé)
+        predictor.predict_delay_probability = Mock(return_value=0.75)
+        predictor.predict_delay_minutes = Mock(return_value=15)
 
-        predictor = Mock(spec=DelayMLPredictor)
-        predictor.predict_delay_probability.return_value = 0.75
-        predictor.predict_delay_minutes.return_value = 15
+        # Si DelayMLPredictor est disponible, utiliser spec mais garder les méthodes définies
+        if DelayMLPredictor is not None:
+            # Créer un nouveau mock avec spec mais copier les méthodes
+            spec_predictor = Mock(spec=DelayMLPredictor)
+            spec_predictor.predict_delay_probability = Mock(return_value=0.75)
+            spec_predictor.predict_delay_minutes = Mock(return_value=15)
+            return spec_predictor
+
         return predictor
 
     @pytest.fixture

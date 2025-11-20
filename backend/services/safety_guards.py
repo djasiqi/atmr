@@ -110,7 +110,8 @@ class SafetyGuards:
             metrics = self._extract_metrics(dispatch_result, rl_metadata)
 
             # Effectuer tous les checks de sécurité
-            checks = self._perform_safety_checks(metrics)
+            # Si rl_metadata est None, on ne vérifie pas les checks RL
+            checks = self._perform_safety_checks(metrics, has_rl_metadata=rl_metadata is not None)
 
             # Déterminer si le résultat est sûr
             is_safe = all(checks.values())
@@ -178,8 +179,13 @@ class SafetyGuards:
 
         return metrics
 
-    def _perform_safety_checks(self, metrics: Dict[str, Any]) -> Dict[str, bool]:
-        """Effectue tous les checks de sécurité."""
+    def _perform_safety_checks(self, metrics: Dict[str, Any], has_rl_metadata: bool = True) -> Dict[str, bool]:
+        """Effectue tous les checks de sécurité.
+
+        Args:
+            metrics: Métriques extraites du résultat de dispatch
+            has_rl_metadata: Si False, on ne vérifie pas les checks RL (pas d'implication RL)
+        """
         checks = {}
 
         # Check 1: Retards
@@ -204,17 +210,25 @@ class SafetyGuards:
         checks["avg_distance_ok"] = metrics["avg_distance_km"] <= self.thresholds.max_avg_distance_km
         checks["max_distance_ok"] = metrics["max_distance_km"] <= self.thresholds.max_single_distance_km
 
-        # Check 7: Confiance RL
-        checks["rl_confidence_ok"] = metrics["rl_confidence"] >= self.thresholds.min_rl_confidence
+        # Checks RL: seulement si rl_metadata est fourni
+        if has_rl_metadata:
+            # Check 7: Confiance RL
+            checks["rl_confidence_ok"] = metrics["rl_confidence"] >= self.thresholds.min_rl_confidence
 
-        # Check 8: Incertitude RL
-        checks["rl_uncertainty_ok"] = metrics["rl_uncertainty"] <= self.thresholds.max_uncertainty_threshold
+            # Check 8: Incertitude RL
+            checks["rl_uncertainty_ok"] = metrics["rl_uncertainty"] <= self.thresholds.max_uncertainty_threshold
 
-        # Check 9: Temps de décision
-        checks["decision_time_ok"] = metrics["decision_time_ms"] <= self.thresholds.max_decision_time_ms
+            # Check 9: Temps de décision
+            checks["decision_time_ok"] = metrics["decision_time_ms"] <= self.thresholds.max_decision_time_ms
 
-        # Check 10: Longueur d'épisode
-        checks["episode_length_ok"] = metrics["episode_length"] >= self.thresholds.min_episode_length
+            # Check 10: Longueur d'épisode
+            checks["episode_length_ok"] = metrics["episode_length"] >= self.thresholds.min_episode_length
+        else:
+            # Pas d'implication RL → tous les checks RL passent
+            checks["rl_confidence_ok"] = True
+            checks["rl_uncertainty_ok"] = True
+            checks["decision_time_ok"] = True
+            checks["episode_length_ok"] = True
 
         return checks
 

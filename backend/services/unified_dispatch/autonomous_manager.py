@@ -299,12 +299,21 @@ class AutonomousDispatchManager:
 
                             # Logger l'action dans la table autonomous_action
                             # (audit trail)
+                            from models import Booking, Driver
                             from models.autonomous_action import AutonomousAction
 
                             action_record = AutonomousAction()
                             action_record.company_id = self.company_id
-                            action_record.booking_id = suggestion.booking_id
-                            action_record.driver_id = suggestion.driver_id
+                            # Vérifier que le booking existe avant d'assigner booking_id
+                            if suggestion.booking_id is not None:
+                                booking = Booking.query.get(int(suggestion.booking_id))
+                                if booking is not None:
+                                    action_record.booking_id = int(suggestion.booking_id)
+                            # Vérifier que le driver existe avant d'assigner driver_id
+                            if suggestion.driver_id is not None:
+                                driver = Driver.query.get(int(suggestion.driver_id))
+                                if driver is not None:
+                                    action_record.driver_id = int(suggestion.driver_id)
                             action_record.action_type = suggestion.action
                             action_record.action_description = suggestion.message
                             action_record.action_data = json.dumps(
@@ -321,7 +330,11 @@ class AutonomousDispatchManager:
                             action_record.expected_improvement_minutes = getattr(suggestion, "expected_gain", None)
                             action_record.trigger_source = "autonomous_manager"
                             database.session.add(action_record)
-                            database.session.commit()
+                            try:
+                                database.session.flush()
+                            except Exception as e:
+                                logger.warning("[AutonomousManager] Failed to log action (non-critical): %s", e)
+                                database.session.rollback()
 
                         else:
                             stats["errors"] += 1
@@ -332,12 +345,21 @@ class AutonomousDispatchManager:
                             )
 
                             # Logger l'échec aussi (pour monitoring)
+                            from models import Booking, Driver
                             from models.autonomous_action import AutonomousAction
 
                             action_record = AutonomousAction()
                             action_record.company_id = self.company_id
-                            action_record.booking_id = suggestion.booking_id
-                            action_record.driver_id = suggestion.driver_id
+                            # Vérifier que le booking existe avant d'assigner booking_id
+                            if suggestion.booking_id is not None:
+                                booking = Booking.query.get(int(suggestion.booking_id))
+                                if booking is not None:
+                                    action_record.booking_id = int(suggestion.booking_id)
+                            # Vérifier que le driver existe avant d'assigner driver_id
+                            if suggestion.driver_id is not None:
+                                driver = Driver.query.get(int(suggestion.driver_id))
+                                if driver is not None:
+                                    action_record.driver_id = int(suggestion.driver_id)
                             action_record.action_type = suggestion.action
                             action_record.action_description = suggestion.message
                             action_record.action_data = json.dumps(
@@ -352,7 +374,11 @@ class AutonomousDispatchManager:
                             action_record.error_message = result.get("error")
                             action_record.execution_time_ms = execution_time_ms
                             database.session.add(action_record)
-                            database.session.commit()
+                            try:
+                                database.session.flush()
+                            except Exception as e:
+                                logger.warning("[AutonomousManager] Failed to log failed action (non-critical): %s", e)
+                                database.session.rollback()
                     else:
                         stats["auto_applied"] += 1
                         logger.info(

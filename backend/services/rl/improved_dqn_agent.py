@@ -128,7 +128,7 @@ class ImprovedDQNAgent:
         elif use_prioritized_replay:
             self.memory = PrioritizedReplayBuffer(buffer_size, alpha, beta_start, beta_end)
         else:
-            self.memory = deque(maxlen=buffer_size)
+            self.memory = deque(maxlen=int(buffer_size))
 
         # Métriques
         self.training_step = 0
