@@ -471,7 +471,7 @@ class TestOptimalHyperparameters:
             patch("services.rl.optimal_hyperparameters.OptimalHyperparameters.save_config") as mock_save,
         ):
             # Simuler l'exécution du module principal
-            import services.rl.optimal_hyperparameters  # noqa: F401  # Import pour effet de bord
+            import services.rl.optimal_hyperparameters  # Import pour effet de bord
 
             # Vérifier que logging.info est appelé (peut être 0 si le module est déjà importé)
             assert mock_logging.call_count >= 0
