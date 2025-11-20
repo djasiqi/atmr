@@ -1,0 +1,19 @@
+# Fichiers à ignorer par Semgrep
+# Format: patterns de fichiers (glob patterns)
+
+# Ignorer les fichiers générés ou temporaires
+**/__pycache__/**
+**/*.pyc
+**/.pytest_cache/**
+
+# Ignorer les fichiers de configuration locaux
+**/.env*
+**/local_settings.py
+
+# Ignorer les fichiers de migration (optionnel - à activer si nécessaire)
+# **/migrations/**
+
+# Ignorer les fichiers de test (optionnel - décommenter si vous ne voulez pas scanner les tests)
+# **/tests/**
+# **/test_*.py
+

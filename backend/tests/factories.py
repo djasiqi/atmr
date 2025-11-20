@@ -26,6 +26,7 @@ from models.enums import (
     DispatchMode,
     DispatchStatus,
     DriverType,
+    UserRole,
 )
 from models.invoice import Invoice
 from models.ml_prediction import MLPrediction
@@ -61,7 +62,7 @@ class UserFactory(SQLAlchemyModelFactory):
     first_name = factory.LazyAttribute(lambda _: fake.first_name())
     last_name = factory.LazyAttribute(lambda _: fake.last_name())
     phone = factory.LazyAttribute(lambda _: f"+41{fake.numerify('##########')}")  # Format suisse valide
-    role = fuzzy.FuzzyChoice(["driver", "dispatcher", "admin", "client"])
+    role = fuzzy.FuzzyChoice([UserRole.ADMIN, UserRole.CLIENT, UserRole.DRIVER, UserRole.COMPANY])
     created_at = factory.LazyFunction(datetime.utcnow)
 
 
@@ -83,7 +84,7 @@ class CompanyFactory(SQLAlchemyModelFactory):
     uid_ide = factory.LazyAttribute(lambda _: f"CHE-{fake.random_number(digits=9, fix_len=True)}")
     billing_email = factory.LazyAttribute(lambda _: fake.email())
 
-    user = factory.SubFactory(UserFactory, role="admin")
+    user = factory.SubFactory(UserFactory, role=UserRole.ADMIN)
     is_approved = True
     created_at = factory.LazyFunction(datetime.utcnow)
 
