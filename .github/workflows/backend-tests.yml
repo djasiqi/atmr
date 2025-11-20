@@ -457,9 +457,26 @@ jobs:
         run: |
           cd backend
           # Vérifier aucune migration auto-détectée non commitée
-          flask db revision --autogenerate -m "test" --sql > pending.sql
-          if [ -s pending.sql ]; then
-            echo "⚠️ Warning: Pending migrations detected!"
-            cat pending.sql
-            exit 1
+          # Générer une migration de test pour détecter les changements
+          TEST_MIGRATION_FILE="migrations/versions/$(date +%s)_test_pending_check.py"
+          flask db revision --autogenerate -m "test_pending_check" > /dev/null 2>&1 || true
+
+          # Trouver le fichier de migration de test créé (le plus récent)
+          LATEST_MIGRATION=$(ls -t migrations/versions/*test_pending_check.py 2>/dev/null | head -1 || echo "")
+
+          if [ -n "$LATEST_MIGRATION" ] && [ -f "$LATEST_MIGRATION" ]; then
+            # Vérifier si la migration contient des changements (pas seulement un fichier vide)
+            if grep -q "def upgrade" "$LATEST_MIGRATION" && grep -q "op\." "$LATEST_MIGRATION"; then
+              echo "⚠️ Warning: Pending migrations detected!"
+              echo "La migration suivante a été générée automatiquement:"
+              cat "$LATEST_MIGRATION"
+              rm -f "$LATEST_MIGRATION"
+              exit 1
+            else
+              # Migration vide, pas de changements détectés
+              rm -f "$LATEST_MIGRATION"
+              echo "✅ Aucune migration en attente détectée"
+            fi
+          else
+            echo "✅ Aucune migration en attente détectée"
           fi

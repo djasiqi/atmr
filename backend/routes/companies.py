@@ -2036,7 +2036,8 @@ class CompanyClients(Resource):
             # Validation explicite du mot de passe auto-généré avant set_password (sécurité)
             validate_password_or_raise(pwd, _user=user)
             # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
-            user.set_password(pwd)  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            user.set_password(pwd)
         else:
             generated_pwd = uuid4().hex
             # Validation explicite du mot de passe auto-généré avant set_password (sécurité)
