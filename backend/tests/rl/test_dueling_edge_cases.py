@@ -37,11 +37,11 @@ class TestDuelingShapesEdgeCases:
             pytest.skip("DuelingQNetwork ou torch non disponible")
 
         return DuelingQNetwork(
-            state_dim=0.100,
+            state_dim=100,
             action_dim=10,
             shared_hidden_sizes=(512, 256),
-            value_hidden_size=0.128,
-            advantage_hidden_size=0.128,
+            value_hidden_size=128,
+            advantage_hidden_size=128,
         )
 
     def test_dueling_network_with_minimal_dimensions(self):
@@ -71,11 +71,11 @@ class TestDuelingShapesEdgeCases:
             pytest.skip("DuelingQNetwork ou torch non disponible")
 
         network = DuelingQNetwork(
-            state_dim=0.1000,
-            action_dim=0.100,
+            state_dim=1000,
+            action_dim=100,
             shared_hidden_sizes=(2048, 1024, 512),
-            value_hidden_size=0.256,
-            advantage_hidden_size=0.256,
+            value_hidden_size=256,
+            advantage_hidden_size=256,
         )
 
         # Test forward pass
@@ -92,11 +92,11 @@ class TestDuelingShapesEdgeCases:
             pytest.skip("DuelingQNetwork ou torch non disponible")
 
         network = DuelingQNetwork(
-            state_dim=0.100,
+            state_dim=100,
             action_dim=1,
             shared_hidden_sizes=(512, 256),
-            value_hidden_size=0.128,
-            advantage_hidden_size=0.128,
+            value_hidden_size=128,
+            advantage_hidden_size=128,
         )
 
         # Test forward pass
@@ -116,8 +116,8 @@ class TestDuelingShapesEdgeCases:
             state_dim=1,
             action_dim=10,
             shared_hidden_sizes=(512, 256),
-            value_hidden_size=0.128,
-            advantage_hidden_size=0.128,
+            value_hidden_size=128,
+            advantage_hidden_size=128,
         )
 
         # Test forward pass
@@ -191,11 +191,11 @@ class TestDuelingValueAdvantageEdgeCases:
             pytest.skip("DuelingQNetwork ou torch non disponible")
 
         return DuelingQNetwork(
-            state_dim=0.100,
+            state_dim=100,
             action_dim=10,
             shared_hidden_sizes=(512, 256),
-            value_hidden_size=0.128,
-            advantage_hidden_size=0.128,
+            value_hidden_size=128,
+            advantage_hidden_size=128,
         )
 
     def test_value_stream_with_extreme_values(self, dueling_network):
@@ -295,11 +295,11 @@ class TestDuelingAggregationEdgeCases:
             pytest.skip("DuelingQNetwork ou torch non disponible")
 
         return DuelingQNetwork(
-            state_dim=0.100,
+            state_dim=100,
             action_dim=10,
             shared_hidden_sizes=(512, 256),
-            value_hidden_size=0.128,
-            advantage_hidden_size=0.128,
+            value_hidden_size=128,
+            advantage_hidden_size=128,
         )
 
     def test_aggregation_formula_with_single_action(self):
@@ -308,11 +308,11 @@ class TestDuelingAggregationEdgeCases:
             pytest.skip("DuelingQNetwork ou torch non disponible")
 
         network = DuelingQNetwork(
-            state_dim=0.100,
+            state_dim=100,
             action_dim=1,
             shared_hidden_sizes=(512, 256),
-            value_hidden_size=0.128,
-            advantage_hidden_size=0.128,
+            value_hidden_size=128,
+            advantage_hidden_size=128,
         )
 
         state = torch.randn(1, 100)
@@ -328,11 +328,11 @@ class TestDuelingAggregationEdgeCases:
             pytest.skip("DuelingQNetwork ou torch non disponible")
 
         network = DuelingQNetwork(
-            state_dim=0.100,
+            state_dim=100,
             action_dim=2,
             shared_hidden_sizes=(512, 256),
-            value_hidden_size=0.128,
-            advantage_hidden_size=0.128,
+            value_hidden_size=128,
+            advantage_hidden_size=128,
         )
 
         state = torch.randn(1, 100)
@@ -492,11 +492,11 @@ class TestDuelingInitializationEdgeCases:
             pytest.skip("DuelingQNetwork ou torch non disponible")
 
         network = DuelingQNetwork(
-            state_dim=0.100,
+            state_dim=100,
             action_dim=10,
             shared_hidden_sizes=(512, 256),
-            value_hidden_size=0.128,
-            advantage_hidden_size=0.128,
+            value_hidden_size=128,
+            advantage_hidden_size=128,
         )
 
         # Vérifier que les poids ne sont pas tous zéro (sauf pour les paramètres normalement initialisés à zéro)
@@ -517,11 +517,11 @@ class TestDuelingInitializationEdgeCases:
             pytest.skip("DuelingQNetwork ou torch non disponible")
 
         network = DuelingQNetwork(
-            state_dim=0.100,
+            state_dim=100,
             action_dim=10,
             shared_hidden_sizes=(512, 256),
-            value_hidden_size=0.128,
-            advantage_hidden_size=0.128,
+            value_hidden_size=128,
+            advantage_hidden_size=128,
         )
 
         state = torch.randn(1, 100, requires_grad=True)
