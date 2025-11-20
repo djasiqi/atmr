@@ -23,23 +23,27 @@ from tests.factories import BookingFactory, CompanyFactory, DriverFactory
 
 
 @pytest.fixture
-def company():
+def company(db):
     """Créer une entreprise pour les tests."""
-    return CompanyFactory()
+    company = CompanyFactory()
+    db.session.flush()  # ✅ FIX: S'assurer que la company est flushée avant utilisation
+    return company
 
 
 @pytest.fixture
-def drivers(company):
+def drivers(db, company):
     """Créer plusieurs chauffeurs pour les tests."""
-    return [
+    drivers_list = [
         DriverFactory(company=company, is_active=True, is_available=True),
         DriverFactory(company=company, is_active=True, is_available=True),
         DriverFactory(company=company, is_active=True, is_available=True),
     ]
+    db.session.flush()  # ✅ FIX: S'assurer que les drivers sont flushés avant utilisation
+    return drivers_list
 
 
 @pytest.fixture
-def bookings(company):
+def bookings(db, company):
     """Créer plusieurs bookings pour les tests."""
     today = date.today()
     bookings_list = []
@@ -51,6 +55,7 @@ def bookings(company):
             scheduled_time=scheduled_time,
         )
         bookings_list.append(booking)
+    db.session.flush()  # ✅ FIX: S'assurer que les bookings sont flushés avant utilisation
     return bookings_list
 
 
@@ -201,6 +206,9 @@ class TestDispatchE2E:
 
     def test_recovery_apres_crash(self, company, drivers, bookings):
         """Test : Récupération après crash simulé."""
+        # ✅ FIX: S'assurer que company est flushée avant de créer DispatchRun
+        db.session.flush()
+
         # Simuler un crash en créant un DispatchRun en état RUNNING
         today = date.today()
         dispatch_run = DispatchRun(
@@ -210,7 +218,7 @@ class TestDispatchE2E:
             started_at=datetime.now(UTC) - timedelta(minutes=10),  # Il y a 10 min
         )
         db.session.add(dispatch_run)
-        db.session.commit()
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         # Relancer le dispatch (devrait réutiliser ou créer un nouveau run)
         for_date = today.isoformat()

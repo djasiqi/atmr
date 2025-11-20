@@ -99,7 +99,7 @@ class SuggestionEngine:
             Liste de suggestions classées par priorité
 
         """
-        suggestions = []
+        suggestions: list[Suggestion] = []
 
         # Récupérer le booking et le driver
         booking_id = int(assignment.booking_id) if assignment.booking_id is not None else None  # type: ignore[arg-type]
@@ -155,7 +155,7 @@ class SuggestionEngine:
         threshold_km: float = 10.0,
     ) -> List[Suggestion]:
         """Suggère de réassigner à un chauffeur plus proche."""
-        suggestions = []
+        suggestions: list[Suggestion] = []
 
         try:
             # Trouver des chauffeurs disponibles à proximité
@@ -240,7 +240,7 @@ class SuggestionEngine:
         self, booking: Booking, driver: Driver | None, advance_minutes: int, company_id: int
     ) -> List[Suggestion]:
         """Suggère d'ajouter une course supplémentaire quand le chauffeur est très en avance."""
-        suggestions = []
+        suggestions: list[Suggestion] = []
 
         if not driver or advance_minutes < ADVANCE_MINUTES_THRESHOLD:
             return suggestions
@@ -426,16 +426,15 @@ class SuggestionEngine:
             time_window_end = now + timedelta(minutes=time_window_minutes)
 
             # Bookings en attente
-            from typing import Any as TAny
             from typing import cast as tcast
 
             pending_bookings = Booking.query.filter(
                 Booking.company_id == company_id,
-                tcast("TAny", Booking.status).in_([BookingStatus.PENDING, BookingStatus.ACCEPTED]),
+                tcast("Any", Booking.status).in_([BookingStatus.PENDING, BookingStatus.ACCEPTED]),
                 Booking.scheduled_time >= now,
                 Booking.scheduled_time <= time_window_end,
                 # Exclure le booking actuel
-                tcast("TAny", Booking.id) != int(tcast("TAny", booking.id)),
+                tcast("Any", Booking.id) != int(tcast("Any", booking.id)),
             ).all()
 
             results = []

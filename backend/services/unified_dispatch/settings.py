@@ -324,7 +324,7 @@ def _validate_merge_result(
 
     logger = logging.getLogger(__name__)
 
-    validation_result = {
+    validation_result: dict[str, list[str]] = {
         "applied": [],
         "ignored": [],
         "errors": [],

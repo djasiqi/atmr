@@ -142,8 +142,8 @@ class DispatchEnv(gym.Env):
         self.drivers: List[Dict[str, Any]] = []
         self.bookings: List[Dict[str, Any]] = []
         self.current_time = 0  # Minutes depuis début simulation
-        self.episode_stats = {
-            "total_reward": 0,
+        self.episode_stats: Dict[str, Any] = {
+            "total_reward": 0.0,  # Float pour permettre les récompenses fractionnaires
             "assignments": 0,
             "late_pickups": 0,
             "cancellations": 0,
@@ -161,12 +161,13 @@ class DispatchEnv(gym.Env):
         self.bureau_lon = 6.1432
 
         # ⭐ NOUVEAU: Coordonnées des maisons des chauffeurs (simulées)
-        self.driver_homes = []
+        self.driver_homes: list[tuple[float, float]] = []
 
         self.active_driver_count = num_drivers
         self.active_booking_count = max_bookings
 
         # Initialiser le système de reward shaping avancé
+        self.reward_shaping: Any | None = None
         try:
             from services.rl.reward_shaping import AdvancedRewardShaping, RewardShapingConfig
 
@@ -212,7 +213,7 @@ class DispatchEnv(gym.Env):
             # Zone résidentielle
             home_lat = self.center_lat + self.np_random.uniform(-0.08, 0.08)
             home_lon = self.center_lon + self.np_random.uniform(-0.08, 0.08)
-            self.driver_homes.append({"lat": home_lat, "lon": home_lon})
+            self.driver_homes.append((home_lat, home_lon))
 
             self.drivers.append(
                 {
@@ -239,7 +240,7 @@ class DispatchEnv(gym.Env):
         # Réinitialiser le temps et les stats
         self.current_time = 0  # Démarrage à 8h00
         self.episode_stats = {
-            "total_reward": 0,
+            "total_reward": 0.0,  # Float pour permettre les récompenses fractionnaires
             "assignments": 0,
             "late_pickups": 0,
             "cancellations": 0,
@@ -347,7 +348,7 @@ class DispatchEnv(gym.Env):
         if terminated:
             reward += self._calculate_episode_bonus()
 
-        self.episode_stats["total_reward"] += int(reward)
+        self.episode_stats["total_reward"] = float(self.episode_stats.get("total_reward", 0.0)) + reward
         info = self._get_info()
 
         return observation, reward, terminated, truncated, info
@@ -677,7 +678,7 @@ class DispatchEnv(gym.Env):
 
             # Petite pénalité pour idle time accumulé
             if driver["idle_time"] > IDLE_TIME_THRESHOLD:  # > 100 minutes idle
-                self.episode_stats["total_reward"] -= 5
+                self.episode_stats["total_reward"] = float(self.episode_stats.get("total_reward", 0.0)) - 5.0
 
     def _calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """Calcule la distance haversine entre deux points (en km).

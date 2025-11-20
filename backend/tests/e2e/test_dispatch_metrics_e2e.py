@@ -46,7 +46,7 @@ def test_bookings(db, test_company):
         )
         for _ in range(5)
     ]
-    db.session.commit()
+    db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
     return bookings
 
 
@@ -122,7 +122,7 @@ def test_dispatch_metrics_present(metrics_endpoint):
         assert metric in content, f"Métrique {metric} non trouvée"
 
 
-def test_dispatch_increments_metrics(db, test_company, test_drivers, test_bookings, metrics_endpoint):
+def test_dispatch_increments_metrics(db, test_company, metrics_endpoint):
     """Test: un dispatch incrémente les métriques."""
     # Récupérer métriques avant
     response_before = requests.get(metrics_endpoint, timeout=10)
@@ -131,14 +131,16 @@ def test_dispatch_increments_metrics(db, test_company, test_drivers, test_bookin
     runs_before = get_metric_value(metrics_before, "dispatch_runs_total")
 
     # Créer et exécuter un dispatch
+    # ✅ FIX: S'assurer que la company est flushée avant de créer DispatchRun
+    db.session.flush()
     dispatch_run = DispatchRunFactory(company=test_company, status="PENDING")
-    db.session.commit()
+    db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
     # Exécuter le dispatch (simulation)
     try:
         engine.run(
             company_id=test_company.id,
-            dispatch_day=dispatch_run.day,
+            for_date=dispatch_run.day.isoformat(),
             mode="semi_auto",
         )
 
@@ -161,8 +163,10 @@ def test_dispatch_increments_metrics(db, test_company, test_drivers, test_bookin
 def test_metrics_correlation_with_logs(db, test_company):
     """Test: corrélation entre métriques et logs avec dispatch_run_id."""
     # Créer un dispatch run
+    # ✅ FIX: S'assurer que la company est flushée avant de créer DispatchRun
+    db.session.flush()
     dispatch_run = DispatchRunFactory(company=test_company, status="PENDING")
-    db.session.commit()
+    db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
     dispatch_run_id = dispatch_run.id
 

@@ -13,7 +13,7 @@ import os
 from typing import Optional
 
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import padding
+from cryptography.hazmat.primitives import hashes, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
@@ -58,7 +58,7 @@ class EncryptionService:
     def _derive_key(self, password: bytes, salt: bytes) -> bytes:
         """Dérive une clé à partir d'un mot de passe et d'un sel."""
         kdf = PBKDF2HMAC(
-            algorithm=algorithms.SHA256(),
+            algorithm=hashes.SHA256(),
             length=DEFAULT_KEY_LENGTH,
             salt=salt,
             iterations=KEY_DERIVATION_ITERATIONS,

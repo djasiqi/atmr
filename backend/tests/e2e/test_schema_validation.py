@@ -205,6 +205,16 @@ class TestSchemaValidationE2E:
 
         test_client = Client()
         test_client.user_id = client_user.id
+        # ✅ FIX: company_id est NOT NULL dans la base de données (migration initiale)
+        # Créer une company temporaire pour ce test
+        from models import Company
+
+        temp_company = Company()
+        temp_company.name = "Temp Company for Client Test"
+        temp_company.user_id = client_user.id
+        db.session.add(temp_company)
+        db.session.flush()
+        test_client.company_id = temp_company.id
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
         db.session.flush()
@@ -278,6 +288,16 @@ class TestSchemaValidationE2E:
 
         test_client = Client()
         test_client.user_id = client_user.id
+        # ✅ FIX: company_id est NOT NULL dans la base de données (migration initiale)
+        # Créer une company temporaire pour ce test
+        from models import Company
+
+        temp_company = Company()
+        temp_company.name = "Temp Company for Client Test"
+        temp_company.user_id = client_user.id
+        db.session.add(temp_company)
+        db.session.flush()
+        test_client.company_id = temp_company.id
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
         db.session.flush()
@@ -775,6 +795,16 @@ class TestSchemaValidationE2E:
 
         test_client = Client()
         test_client.user_id = client_user.id
+        # ✅ FIX: company_id est NOT NULL dans la base de données (migration initiale)
+        # Créer une company temporaire pour ce test
+        from models import Company
+
+        temp_company = Company()
+        temp_company.name = "Temp Company for Client Test"
+        temp_company.user_id = client_user.id
+        db.session.add(temp_company)
+        db.session.flush()
+        test_client.company_id = temp_company.id
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
         db.session.flush()
@@ -851,6 +881,16 @@ class TestSchemaValidationE2E:
 
         test_client = Client()
         test_client.user_id = client_user.id
+        # ✅ FIX: company_id est NOT NULL dans la base de données (migration initiale)
+        # Créer une company temporaire pour ce test
+        from models import Company
+
+        temp_company = Company()
+        temp_company.name = "Temp Company for Client Test"
+        temp_company.user_id = client_user.id
+        db.session.add(temp_company)
+        db.session.flush()
+        test_client.company_id = temp_company.id
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
         db.session.flush()
@@ -991,6 +1031,16 @@ class TestSchemaValidationE2E:
 
         test_client = Client()
         test_client.user_id = client_user.id
+        # ✅ FIX: company_id est NOT NULL dans la base de données (migration initiale)
+        # Créer une company temporaire pour ce test
+        from models import Company
+
+        temp_company = Company()
+        temp_company.name = "Temp Company for Client Test"
+        temp_company.user_id = client_user.id
+        db.session.add(temp_company)
+        db.session.flush()
+        test_client.company_id = temp_company.id
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
         db.session.flush()
@@ -1085,6 +1135,16 @@ class TestSchemaValidationE2E:
 
         test_client = Client()
         test_client.user_id = client_user.id
+        # ✅ FIX: company_id est NOT NULL dans la base de données (migration initiale)
+        # Créer une company temporaire pour ce test
+        from models import Company
+
+        temp_company = Company()
+        temp_company.name = "Temp Company for Client Test"
+        temp_company.user_id = client_user.id
+        db.session.add(temp_company)
+        db.session.flush()
+        test_client.company_id = temp_company.id
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
         db.session.flush()
@@ -1192,6 +1252,16 @@ class TestSchemaValidationE2E:
 
         test_client = Client()
         test_client.user_id = client_user.id
+        # ✅ FIX: company_id est NOT NULL dans la base de données (migration initiale)
+        # Créer une company temporaire pour ce test
+        from models import Company
+
+        temp_company = Company()
+        temp_company.name = "Temp Company for Client Test"
+        temp_company.user_id = client_user.id
+        db.session.add(temp_company)
+        db.session.flush()
+        test_client.company_id = temp_company.id
         test_client.client_type = "PRIVATE"
         test_client.phone = "+41211234567"
         test_client.address = "Old Address"
@@ -1261,6 +1331,16 @@ class TestSchemaValidationE2E:
 
         test_client = Client()
         test_client.user_id = client_user.id
+        # ✅ FIX: company_id est NOT NULL dans la base de données (migration initiale)
+        # Créer une company temporaire pour ce test
+        from models import Company
+
+        temp_company = Company()
+        temp_company.name = "Temp Company for Client Test"
+        temp_company.user_id = client_user.id
+        db.session.add(temp_company)
+        db.session.flush()
+        test_client.company_id = temp_company.id
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints

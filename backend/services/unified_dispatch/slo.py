@@ -226,7 +226,7 @@ class SLOBreachTracker:
         """
         recent = self.get_recent_breaches(current_time)
 
-        by_type = {}
+        by_type: dict[str, int] = {}
         for breach in recent:
             btype = breach["type"]
             by_type[btype] = by_type.get(btype, 0) + 1
@@ -259,4 +259,7 @@ def get_slo_tracker() -> SLOBreachTracker:
 def reset_slo_tracker() -> None:
     """Réinitialise le tracker SLO (pour tests)."""
     # module-level mutable is acceptable for singleton
-    _global_slo_tracker.__init__(window_minutes=15, breach_threshold=3)
+    # Réinitialiser l'instance existante plutôt que d'appeler __init__ directement
+    _global_slo_tracker.window_minutes = 15
+    _global_slo_tracker.breach_threshold = 3
+    _global_slo_tracker.breaches.clear()

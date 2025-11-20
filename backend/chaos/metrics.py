@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # ✅ D3: Métriques globales de chaos (thread-safe)
 _chaos_metrics_lock = threading.Lock()
-_chaos_metrics = {
+_chaos_metrics: dict[str, Any] = {
     # Compteurs d'injections de chaos
     "injections_total": defaultdict(int),  # {type: count}
     # Fallbacks utilisés

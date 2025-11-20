@@ -21,7 +21,8 @@ class PrioritizedReplayBuffer:
         beta_start: float = 0.4,
         beta_end: float = 1.0,
         beta_increment: float = 0.0001,
-    ):  # pyright: ignore[reportMissingSuperCall]
+    ):
+        super().__init__()
         self.capacity = capacity
         self.alpha = alpha  # Exposant de priorité
         self.beta_start = beta_start  # Début importance sampling
@@ -29,8 +30,8 @@ class PrioritizedReplayBuffer:
         self.beta_increment = beta_increment  # Incrément de beta
 
         # Buffer circulaire
-        self.buffer = deque(maxlen=capacity)
-        self.priorities = deque(maxlen=capacity)
+        self.buffer: deque[Any] = deque(maxlen=capacity)
+        self.priorities: deque[float] = deque(maxlen=capacity)
 
         # Arbre binaire pour priorités
         self.tree_size = 1

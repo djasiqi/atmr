@@ -57,10 +57,16 @@ class TestQualityScoreVersioning:
 
         from datetime import UTC, datetime
 
-        from models import Company, DispatchRun, DispatchStatus
+        from models import Company, DispatchRun, DispatchStatus, User, UserRole
+
+        # ✅ FIX: Créer un user d'abord, puis la company avec user_id
+        user = User(username="testuser_quality", email="test@quality.com", role=UserRole.COMPANY)
+        user.set_password("password123", force_change=False)
+        db_session.add(user)
+        db_session.flush()
 
         # Créer un DispatchRun minimal
-        company = Company(name="Test Company")
+        company = Company(name="Test Company", user_id=user.id)
         db_session.add(company)
         db_session.flush()
 
@@ -68,7 +74,7 @@ class TestQualityScoreVersioning:
             company_id=company.id, day=datetime.now(UTC).date(), status=DispatchStatus.COMPLETED, config={}
         )
         db_session.add(run)
-        db_session.commit()
+        db_session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         collector = DispatchMetricsCollector(company.id)
 
@@ -91,9 +97,15 @@ class TestQualityScoreVersioning:
 
         from datetime import UTC, datetime
 
-        from models import Company, DispatchRun, DispatchStatus
+        from models import Company, DispatchRun, DispatchStatus, User, UserRole
 
-        company = Company(name="Test Company")
+        # ✅ FIX: Créer un user d'abord, puis la company avec user_id
+        user = User(username="testuser_quality2", email="test2@quality.com", role=UserRole.COMPANY)
+        user.set_password("password123", force_change=False)
+        db_session.add(user)
+        db_session.flush()
+
+        company = Company(name="Test Company", user_id=user.id)
         db_session.add(company)
         db_session.flush()
 
@@ -101,7 +113,7 @@ class TestQualityScoreVersioning:
             company_id=company.id, day=datetime.now(UTC).date(), status=DispatchStatus.COMPLETED, config={}
         )
         db_session.add(run)
-        db_session.commit()
+        db_session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         collector = DispatchMetricsCollector(company.id)
 
