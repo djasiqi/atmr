@@ -312,8 +312,8 @@ jobs:
       - name: Run Semgrep (OWASP rules)
         run: |
           cd backend
-          # Générer rapport JSON avec configuration personnalisée (ne bloque pas)
-          semgrep --config ../../.semgrep.yml --config p/ci --config p/security-audit . --json -o ../artifacts/semgrep.json || true
+          # Générer rapport JSON (ne bloque pas)
+          semgrep --config p/ci --config p/security-audit . --json -o ../artifacts/semgrep.json || true
 
           # Afficher un résumé des findings pour améliorer la lisibilité
           if [ -f ../artifacts/semgrep.json ]; then
@@ -347,7 +347,7 @@ jobs:
           fi
 
           # Vérifier règles de sécurité (bloque si trouvées)
-          semgrep --config ../../.semgrep.yml --config p/ci --config p/security-audit . --error
+          semgrep --config p/ci --config p/security-audit . --error
         continue-on-error: false
 
       - name: Upload security reports
