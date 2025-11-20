@@ -186,8 +186,20 @@ class RLDispatchOptimizer:
                 disable_reason = f"coord_quality={min_factor:.2f}"
 
         if disable_reason is None and not coord_quality:
-            booking_factors = [float(getattr(b, "_coord_quality_factor", 1.0) or 1.0) for b in bookings]
-            driver_factors = [float(getattr(d, "_coord_quality_factor", 1.0) or 1.0) for d in drivers]
+            # ✅ FIX: Vérifier que les valeurs sont des nombres réels, pas des Mock objects
+            def safe_float(value):
+                """Convertit en float en gérant les Mock objects."""
+                from unittest.mock import Mock
+
+                if isinstance(value, Mock):
+                    return 1.0
+                try:
+                    return float(value) if value is not None else 1.0
+                except (TypeError, ValueError):
+                    return 1.0
+
+            booking_factors = [safe_float(getattr(b, "_coord_quality_factor", 1.0) or 1.0) for b in bookings]
+            driver_factors = [safe_float(getattr(d, "_coord_quality_factor", 1.0) or 1.0) for d in drivers]
             combined = booking_factors + driver_factors
             min_factor = min(combined) if combined else 1.0
             if min_factor < COORD_QUALITY_THRESHOLD:

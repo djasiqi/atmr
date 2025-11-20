@@ -7,7 +7,11 @@ import time
 from typing import Any
 
 import pytest
-import requests
+
+try:
+    import requests
+except ImportError:
+    requests = None  # type: ignore
 
 from app import create_app
 from models import Booking, BookingStatus, Company, DispatchRun, Driver
@@ -50,12 +54,6 @@ def test_bookings(db, test_company):
     return bookings
 
 
-@pytest.fixture
-def metrics_endpoint():
-    """Endpoint Prometheus."""
-    return "http://localhost:5000/api/v1/prometheus/metrics"
-
-
 def parse_metrics(content: str) -> dict[str, Any]:
     """Parse les métriques Prometheus."""
     metrics = {}
@@ -80,17 +78,17 @@ def get_metric_value(metrics: dict[str, Any], metric_name: str) -> float:
     return sum(values) if values else 0.0
 
 
-def test_metrics_endpoint_accessible(metrics_endpoint):
+def test_metrics_endpoint_accessible(authenticated_client):
     """Test: l'endpoint metrics est accessible."""
-    response = requests.get(metrics_endpoint, timeout=10)
+    response = authenticated_client.get("/api/v1/prometheus/metrics")
     assert response.status_code == 200
     assert "text/plain" in response.headers.get("Content-Type", "")
 
 
-def test_metrics_format_valid(metrics_endpoint):
+def test_metrics_format_valid(authenticated_client):
     """Test: le format Prometheus est valide."""
-    response = requests.get(metrics_endpoint, timeout=10)
-    content = response.text
+    response = authenticated_client.get("/api/v1/prometheus/metrics")
+    content = response.get_data(as_text=True)
 
     # Vérifier la présence de lignes TYPE et HELP
     assert "# TYPE" in content
@@ -104,10 +102,10 @@ def test_metrics_format_valid(metrics_endpoint):
         )
 
 
-def test_dispatch_metrics_present(metrics_endpoint):
+def test_dispatch_metrics_present(authenticated_client):
     """Test: les métriques dispatch sont présentes."""
-    response = requests.get(metrics_endpoint, timeout=10)
-    content = response.text
+    response = authenticated_client.get("/api/v1/prometheus/metrics")
+    content = response.get_data(as_text=True)
 
     expected_metrics = [
         "dispatch_runs_total",
@@ -122,11 +120,11 @@ def test_dispatch_metrics_present(metrics_endpoint):
         assert metric in content, f"Métrique {metric} non trouvée"
 
 
-def test_dispatch_increments_metrics(db, test_company, metrics_endpoint):
+def test_dispatch_increments_metrics(db, test_company, authenticated_client):
     """Test: un dispatch incrémente les métriques."""
     # Récupérer métriques avant
-    response_before = requests.get(metrics_endpoint, timeout=10)
-    metrics_before = parse_metrics(response_before.text)
+    response_before = authenticated_client.get("/api/v1/prometheus/metrics")
+    metrics_before = parse_metrics(response_before.get_data(as_text=True))
 
     runs_before = get_metric_value(metrics_before, "dispatch_runs_total")
 
@@ -148,8 +146,8 @@ def test_dispatch_increments_metrics(db, test_company, metrics_endpoint):
         time.sleep(2)
 
         # Récupérer métriques après
-        response_after = requests.get(metrics_endpoint, timeout=10)
-        metrics_after = parse_metrics(response_after.text)
+        response_after = authenticated_client.get("/api/v1/prometheus/metrics")
+        metrics_after = parse_metrics(response_after.get_data(as_text=True))
 
         runs_after = get_metric_value(metrics_after, "dispatch_runs_total")
 
@@ -178,10 +176,10 @@ def test_metrics_correlation_with_logs(db, test_company):
     assert DispatchRun.query.get(dispatch_run_id) is not None
 
 
-def test_osrm_metrics_present(metrics_endpoint):
+def test_osrm_metrics_present(authenticated_client):
     """Test: les métriques OSRM sont présentes."""
-    response = requests.get(metrics_endpoint, timeout=10)
-    content = response.text
+    response = authenticated_client.get("/api/v1/prometheus/metrics")
+    content = response.get_data(as_text=True)
 
     expected_metrics = [
         "osrm_cache_hits_total",
@@ -197,10 +195,10 @@ def test_osrm_metrics_present(metrics_endpoint):
             assert re.search(rf"^{metric}(\{{[^}}]*\}})?\s+[0-9.+-eE]+", content, re.MULTILINE)
 
 
-def test_slo_metrics_present(metrics_endpoint):
+def test_slo_metrics_present(authenticated_client):
     """Test: les métriques SLO sont présentes."""
-    response = requests.get(metrics_endpoint, timeout=10)
-    content = response.text
+    response = authenticated_client.get("/api/v1/prometheus/metrics")
+    content = response.get_data(as_text=True)
 
     expected_metrics = [
         "dispatch_slo_breaches_total",
@@ -212,10 +210,10 @@ def test_slo_metrics_present(metrics_endpoint):
         assert metric in content, f"Métrique SLO {metric} non trouvée"
 
 
-def test_metrics_labels(db, test_company, metrics_endpoint):
+def test_metrics_labels(db, test_company, authenticated_client):
     """Test: les métriques ont les bons labels."""
-    response = requests.get(metrics_endpoint, timeout=10)
-    content = response.text
+    response = authenticated_client.get("/api/v1/prometheus/metrics")
+    content = response.get_data(as_text=True)
 
     # Vérifier que dispatch_runs_total a les labels attendus
     if "dispatch_runs_total" in content:
@@ -236,6 +234,9 @@ def test_metrics_in_prometheus():
     Note: Ce test nécessite Prometheus en cours d'exécution.
     """
     # Ce test devrait être exécuté dans un environnement avec Prometheus
+    if requests is None:
+        pytest.skip("requests library not installed")
+
     prometheus_url = "http://localhost:9090"
 
     try:

@@ -1,89 +1,95 @@
-﻿2025-11-20T17:27:47.1457538Z Print service container logs: a64d60153f3b4f429d08b536c6690caf_postgres16alpine_32b653
-2025-11-20T17:27:47.1464010Z ##[command]/usr/bin/docker logs --details c11ebb9b4e61c42df94d8a9fc952618addcda8f68ba09064b2f77782a2560a16
-2025-11-20T17:27:47.1601216Z  The files belonging to this database system will be owned by user "postgres".
-2025-11-20T17:27:47.1601967Z  This user must also own the server process.
-2025-11-20T17:27:47.1602395Z  
-2025-11-20T17:27:47.1602830Z  The database cluster will be initialized with locale "en_US.utf8".
-2025-11-20T17:27:47.1603553Z  The default database encoding has accordingly been set to "UTF8".
-2025-11-20T17:27:47.1605457Z  sh: locale: not found
-2025-11-20T17:27:47.1606032Z  2025-11-20 17:18:22.215 UTC [35] WARNING:  no usable system locales were found
-2025-11-20T17:27:47.1606786Z  initdb: warning: enabling "trust" authentication for local connections
-2025-11-20T17:27:47.1607931Z  initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
-2025-11-20T17:27:47.1608952Z  The default text search configuration will be set to "english".
-2025-11-20T17:27:47.1609299Z  
-2025-11-20T17:27:47.1609510Z  Data page checksums are disabled.
-2025-11-20T17:27:47.1609765Z  
-2025-11-20T17:27:47.1610071Z  fixing permissions on existing directory /var/lib/postgresql/data ... ok
-2025-11-20T17:27:47.1610483Z  creating subdirectories ... ok
-2025-11-20T17:27:47.1610811Z  selecting dynamic shared memory implementation ... posix
-2025-11-20T17:27:47.1611195Z  selecting default max_connections ... 100
-2025-11-20T17:27:47.1611494Z  selecting default shared_buffers ... 128MB
-2025-11-20T17:27:47.1611790Z  selecting default time zone ... UTC
-2025-11-20T17:27:47.1612072Z  creating configuration files ... ok
-2025-11-20T17:27:47.1612349Z  running bootstrap script ... ok
-2025-11-20T17:27:47.1612647Z  performing post-bootstrap initialization ... ok
-2025-11-20T17:27:47.1623806Z  syncing data to disk ... ok
-2025-11-20T17:27:47.1624216Z  
-2025-11-20T17:27:47.1624487Z  
-2025-11-20T17:27:47.1624816Z  Success. You can now start the database server using:
-2025-11-20T17:27:47.1625301Z  
-2025-11-20T17:27:47.1625666Z      pg_ctl -D /var/lib/postgresql/data -l logfile start
-2025-11-20T17:27:47.1626164Z  
-2025-11-20T17:27:47.1626663Z  waiting for server to start....2025-11-20 17:18:22.737 UTC [41] LOG:  starting PostgreSQL 16.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
-2025-11-20T17:27:47.1627374Z  2025-11-20 17:18:22.737 UTC [41] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
-2025-11-20T17:27:47.1627873Z  2025-11-20 17:18:22.740 UTC [44] LOG:  database system was shut down at 2025-11-20 17:18:22 UTC
-2025-11-20T17:27:47.1628322Z  2025-11-20 17:18:22.745 UTC [41] LOG:  database system is ready to accept connections
-2025-11-20T17:27:47.1628664Z   done
-2025-11-20T17:27:47.1628827Z  server started
-2025-11-20T17:27:47.1629011Z  CREATE DATABASE
-2025-11-20T17:27:47.1629186Z  
-2025-11-20T17:27:47.1629340Z  
-2025-11-20T17:27:47.1629641Z  /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
-2025-11-20T17:27:47.1630023Z  
-2025-11-20T17:27:47.1630352Z  waiting for server to shut down....2025-11-20 17:18:22.888 UTC [41] LOG:  received fast shutdown request
-2025-11-20T17:27:47.1630841Z  2025-11-20 17:18:22.888 UTC [41] LOG:  aborting any active transactions
-2025-11-20T17:27:47.1631347Z  2025-11-20 17:18:22.891 UTC [41] LOG:  background worker "logical replication launcher" (PID 47) exited with exit code 1
-2025-11-20T17:27:47.1631816Z  2025-11-20 17:18:22.892 UTC [42] LOG:  shutting down
-2025-11-20T17:27:47.1632169Z  2025-11-20 17:18:22.892 UTC [42] LOG:  checkpoint starting: shutdown immediate
-2025-11-20T17:27:47.1633190Z  2025-11-20 17:18:22.910 UTC [42] LOG:  checkpoint complete: wrote 926 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.015 s, sync=0.002 s, total=0.019 s; sync files=301, longest=0.001 s, average=0.001 s; distance=4272 kB, estimate=4272 kB; lsn=0/191E920, redo lsn=0/191E920
-2025-11-20T17:27:47.1634500Z  2025-11-20 17:18:22.919 UTC [41] LOG:  database system is shut down
-2025-11-20T17:27:47.1634797Z   done
-2025-11-20T17:27:47.1634958Z  server stopped
-2025-11-20T17:27:47.1635141Z  
-2025-11-20T17:27:47.1635362Z  PostgreSQL init process complete; ready for start up.
-2025-11-20T17:27:47.1635635Z  
-2025-11-20T17:27:47.1636047Z  2025-11-20 17:18:23.010 UTC [1] LOG:  starting PostgreSQL 16.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
-2025-11-20T17:27:47.1636614Z  2025-11-20 17:18:23.010 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
-2025-11-20T17:27:47.1637030Z  2025-11-20 17:18:23.010 UTC [1] LOG:  listening on IPv6 address "::", port 5432
-2025-11-20T17:27:47.1637493Z  2025-11-20 17:18:23.011 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
-2025-11-20T17:27:47.1637983Z  2025-11-20 17:18:23.015 UTC [57] LOG:  database system was shut down at 2025-11-20 17:18:22 UTC
-2025-11-20T17:27:47.1638434Z  2025-11-20 17:18:23.021 UTC [1] LOG:  database system is ready to accept connections
-2025-11-20T17:27:47.1638840Z  2025-11-20 17:23:23.082 UTC [55] LOG:  checkpoint starting: time
-2025-11-20T17:27:47.1639728Z  2025-11-20 17:24:06.698 UTC [55] LOG:  checkpoint complete: wrote 435 buffers (2.7%); 1 WAL file(s) added, 0 removed, 0 recycled; write=43.586 s, sync=0.011 s, total=43.617 s; sync files=438, longest=0.001 s, average=0.001 s; distance=2724 kB, estimate=2724 kB; lsn=0/1C47378, redo lsn=0/1BC7978
-2025-11-20T17:27:47.1640820Z  2025-11-20 17:26:32.956 UTC [213] ERROR:  insert or update on table "assignment" violates foreign key constraint "fk_assignment_dispatch_run_id"
-2025-11-20T17:27:47.1641478Z  2025-11-20 17:26:32.956 UTC [213] DETAIL:  Key (dispatch_run_id)=(1) is not present in table "dispatch_run".
-2025-11-20T17:27:47.1642826Z  2025-11-20 17:26:32.956 UTC [213] STATEMENT:  INSERT INTO assignment (dispatch_run_id, booking_id, driver_id, status, planned_pickup_at, planned_dropoff_at, actual_pickup_at, actual_dropoff_at, eta_pickup_at, eta_dropoff_at, delay_seconds, created_at, updated_at) VALUES (1, 75, 32, 'SCHEDULED', NULL, NULL, NULL, NULL, NULL, NULL, 0, '2025-11-20T17:26:32.954412+00:00'::timestamptz, NULL) RETURNING assignment.id
-2025-11-20T17:27:47.1649526Z Stop and remove container: a64d60153f3b4f429d08b536c6690caf_postgres16alpine_32b653
-2025-11-20T17:27:47.1655162Z ##[command]/usr/bin/docker rm --force c11ebb9b4e61c42df94d8a9fc952618addcda8f68ba09064b2f77782a2560a16
-2025-11-20T17:27:47.3041719Z c11ebb9b4e61c42df94d8a9fc952618addcda8f68ba09064b2f77782a2560a16
-2025-11-20T17:27:47.3062953Z Print service container logs: 26b1171ea0894af2828707f51951beba_redis7alpine_8ef4e3
-2025-11-20T17:27:47.3064766Z ##[command]/usr/bin/docker logs --details cc4576165668ba0a6b32fa7bd0f027f25071ce0ae1882c13787da1ed5fd8e5a4
-2025-11-20T17:27:47.3192663Z  1:C 20 Nov 2025 17:18:23.756 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures without low memory condition, see https://github.com/jemalloc/jemalloc/issues/1328. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
-2025-11-20T17:27:47.3194516Z  1:C 20 Nov 2025 17:18:23.757 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
-2025-11-20T17:27:47.3194989Z  1:C 20 Nov 2025 17:18:23.757 * Redis version=7.4.7, bits=64, commit=00000000, modified=0, pid=1, just started
-2025-11-20T17:27:47.3195714Z  1:C 20 Nov 2025 17:18:23.757 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf
-2025-11-20T17:27:47.3196548Z  1:M 20 Nov 2025 17:18:23.757 * monotonic clock: POSIX clock_gettime
-2025-11-20T17:27:47.3196905Z  1:M 20 Nov 2025 17:18:23.757 * Running mode=standalone, port=6379.
-2025-11-20T17:27:47.3197223Z  1:M 20 Nov 2025 17:18:23.758 * Server initialized
-2025-11-20T17:27:47.3197525Z  1:M 20 Nov 2025 17:18:23.758 * Ready to accept connections tcp
-2025-11-20T17:27:47.3198048Z  1:M 20 Nov 2025 17:24:16.160 * 100 changes in 300 seconds. Saving...
-2025-11-20T17:27:47.3198398Z  1:M 20 Nov 2025 17:24:16.161 * Background saving started by pid 231
-2025-11-20T17:27:47.3198709Z  231:C 20 Nov 2025 17:24:16.164 * DB saved on disk
-2025-11-20T17:27:47.3199051Z  231:C 20 Nov 2025 17:24:16.165 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
-2025-11-20T17:27:47.3199455Z  1:M 20 Nov 2025 17:24:16.262 * Background saving terminated with success
-2025-11-20T17:27:47.3207351Z Stop and remove container: 26b1171ea0894af2828707f51951beba_redis7alpine_8ef4e3
-2025-11-20T17:27:47.3208511Z ##[command]/usr/bin/docker rm --force cc4576165668ba0a6b32fa7bd0f027f25071ce0ae1882c13787da1ed5fd8e5a4
-2025-11-20T17:27:47.4455530Z cc4576165668ba0a6b32fa7bd0f027f25071ce0ae1882c13787da1ed5fd8e5a4
-2025-11-20T17:27:47.4479731Z Remove container network: github_network_19c60c1229354b1a87e209780702a4bb
-2025-11-20T17:27:47.4484773Z ##[command]/usr/bin/docker network rm github_network_19c60c1229354b1a87e209780702a4bb
-2025-11-20T17:27:47.5723532Z github_network_19c60c1229354b1a87e209780702a4bb
+﻿2025-11-20T21:02:28.6379351Z Print service container logs: 35b6b7e4be4547febacf5f898fcacac7_postgres16alpine_1c8407
+2025-11-20T21:02:28.6384313Z ##[command]/usr/bin/docker logs --details af861b67c9170cd81aeafceff92a47e33623639fe7f5c579f397104308892c33
+2025-11-20T21:02:28.6507702Z  The files belonging to this database system will be owned by user "postgres".
+2025-11-20T21:02:28.6509622Z  sh: locale: not found
+2025-11-20T21:02:28.6510131Z  2025-11-20 20:52:58.826 UTC [35] WARNING:  no usable system locales were found
+2025-11-20T21:02:28.6510823Z  initdb: warning: enabling "trust" authentication for local connections
+2025-11-20T21:02:28.6511853Z  initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+2025-11-20T21:02:28.6513170Z  2025-11-20 20:52:59.529 UTC [1] LOG:  starting PostgreSQL 16.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
+2025-11-20T21:02:28.6514162Z  2025-11-20 20:52:59.529 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2025-11-20T21:02:28.6514894Z  2025-11-20 20:52:59.529 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2025-11-20T21:02:28.6515547Z  This user must also own the server process.
+2025-11-20T21:02:28.6515945Z  
+2025-11-20T21:02:28.6516366Z  The database cluster will be initialized with locale "en_US.utf8".
+2025-11-20T21:02:28.6517036Z  The default database encoding has accordingly been set to "UTF8".
+2025-11-20T21:02:28.6517672Z  The default text search configuration will be set to "english".
+2025-11-20T21:02:28.6518147Z  
+2025-11-20T21:02:28.6518413Z  Data page checksums are disabled.
+2025-11-20T21:02:28.6518758Z  
+2025-11-20T21:02:28.6519150Z  fixing permissions on existing directory /var/lib/postgresql/data ... ok
+2025-11-20T21:02:28.6520019Z  creating subdirectories ... ok
+2025-11-20T21:02:28.6520523Z  selecting dynamic shared memory implementation ... posix
+2025-11-20T21:02:28.6521060Z  selecting default max_connections ... 100
+2025-11-20T21:02:28.6521501Z  selecting default shared_buffers ... 128MB
+2025-11-20T21:02:28.6521902Z  selecting default time zone ... UTC
+2025-11-20T21:02:28.6522475Z  creating configuration files ... ok
+2025-11-20T21:02:28.6522855Z  running bootstrap script ... ok
+2025-11-20T21:02:28.6523295Z  performing post-bootstrap initialization ... ok
+2025-11-20T21:02:28.6523704Z  syncing data to disk ... ok
+2025-11-20T21:02:28.6523899Z  
+2025-11-20T21:02:28.6524034Z  
+2025-11-20T21:02:28.6524233Z  Success. You can now start the database server using:
+2025-11-20T21:02:28.6524481Z  
+2025-11-20T21:02:28.6524678Z      pg_ctl -D /var/lib/postgresql/data -l logfile start
+2025-11-20T21:02:28.6524917Z  
+2025-11-20T21:02:28.6525523Z  waiting for server to start....2025-11-20 20:52:59.270 UTC [41] LOG:  starting PostgreSQL 16.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
+2025-11-20T21:02:28.6526160Z  2025-11-20 20:52:59.270 UTC [41] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2025-11-20T21:02:28.6526613Z  2025-11-20 20:52:59.273 UTC [44] LOG:  database system was shut down at 2025-11-20 20:52:59 UTC
+2025-11-20T21:02:28.6527038Z  2025-11-20 20:52:59.277 UTC [41] LOG:  database system is ready to accept connections
+2025-11-20T21:02:28.6527333Z   done
+2025-11-20T21:02:28.6527493Z  server started
+2025-11-20T21:02:28.6527793Z  CREATE DATABASE
+2025-11-20T21:02:28.6527963Z  
+2025-11-20T21:02:28.6528097Z  
+2025-11-20T21:02:28.6528385Z  /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+2025-11-20T21:02:28.6528724Z  
+2025-11-20T21:02:28.6529019Z  waiting for server to shut down...2025-11-20 20:52:59.411 UTC [41] LOG:  received fast shutdown request
+2025-11-20T21:02:28.6529440Z  .2025-11-20 20:52:59.412 UTC [41] LOG:  aborting any active transactions
+2025-11-20T21:02:28.6529906Z  2025-11-20 20:52:59.414 UTC [41] LOG:  background worker "logical replication launcher" (PID 47) exited with exit code 1
+2025-11-20T21:02:28.6530334Z  2025-11-20 20:52:59.415 UTC [42] LOG:  shutting down
+2025-11-20T21:02:28.6530657Z  2025-11-20 20:52:59.415 UTC [42] LOG:  checkpoint starting: shutdown immediate
+2025-11-20T21:02:28.6531638Z  2025-11-20 20:52:59.434 UTC [42] LOG:  checkpoint complete: wrote 926 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.016 s, sync=0.002 s, total=0.020 s; sync files=301, longest=0.001 s, average=0.001 s; distance=4272 kB, estimate=4272 kB; lsn=0/191E920, redo lsn=0/191E920
+2025-11-20T21:02:28.6532458Z  2025-11-20 20:52:59.438 UTC [41] LOG:  database system is shut down
+2025-11-20T21:02:28.6532724Z   done
+2025-11-20T21:02:28.6532886Z  server stopped
+2025-11-20T21:02:28.6533054Z  
+2025-11-20T21:02:28.6533252Z  PostgreSQL init process complete; ready for start up.
+2025-11-20T21:02:28.6533512Z  
+2025-11-20T21:02:28.6533820Z  2025-11-20 20:52:59.530 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2025-11-20T21:02:28.6534269Z  2025-11-20 20:52:59.532 UTC [57] LOG:  database system was shut down at 2025-11-20 20:52:59 UTC
+2025-11-20T21:02:28.6534672Z  2025-11-20 20:52:59.535 UTC [1] LOG:  database system is ready to accept connections
+2025-11-20T21:02:28.6535035Z  2025-11-20 20:57:59.620 UTC [55] LOG:  checkpoint starting: time
+2025-11-20T21:02:28.6535985Z  2025-11-20 20:58:43.143 UTC [55] LOG:  checkpoint complete: wrote 436 buffers (2.7%); 1 WAL file(s) added, 0 removed, 0 recycled; write=43.495 s, sync=0.012 s, total=43.523 s; sync files=438, longest=0.001 s, average=0.001 s; distance=2724 kB, estimate=2724 kB; lsn=0/1C3C6C8, redo lsn=0/1BC7A68
+2025-11-20T21:02:28.6536980Z  2025-11-20 21:01:50.346 UTC [221] ERROR:  insert or update on table "ml_prediction" violates foreign key constraint "ml_prediction_booking_id_fkey"
+2025-11-20T21:02:28.6537568Z  2025-11-20 21:01:50.346 UTC [221] DETAIL:  Key (booking_id)=(0) is not present in table "booking".
+2025-11-20T21:02:28.6539357Z  2025-11-20 21:01:50.346 UTC [221] STATEMENT:  INSERT INTO ml_prediction (booking_id, driver_id, request_id, predicted_delay_minutes, confidence, risk_level, contributing_factors, model_version, prediction_time_ms, feature_flag_enabled, traffic_percentage, actual_delay_minutes, actual_pickup_at, actual_dropoff_at, prediction_error, is_accurate, created_at, updated_at) VALUES (0.123, 0.456, 'test_123', 8.5, 0.85, 'medium', '{"distance_x_weather": 0.42}', 'v1.0', 0.1325, true, 100, NULL, NULL, NULL, NULL, NULL, '2025-11-20T21:01:50.345263+00:00'::timestamptz, '2025-11-20T21:01:50.345269+00:00'::timestamptz) RETURNING ml_prediction.id
+2025-11-20T21:02:28.6541202Z  2025-11-20 21:01:51.138 UTC [221] ERROR:  insert or update on table "ml_prediction" violates foreign key constraint "ml_prediction_booking_id_fkey"
+2025-11-20T21:02:28.6541771Z  2025-11-20 21:01:51.138 UTC [221] DETAIL:  Key (booking_id)=(0) is not present in table "booking".
+2025-11-20T21:02:28.6543410Z  2025-11-20 21:01:51.138 UTC [221] STATEMENT:  INSERT INTO ml_prediction (booking_id, driver_id, request_id, predicted_delay_minutes, confidence, risk_level, contributing_factors, model_version, prediction_time_ms, feature_flag_enabled, traffic_percentage, actual_delay_minutes, actual_pickup_at, actual_dropoff_at, prediction_error, is_accurate, created_at, updated_at) VALUES (0.124, 0.456, NULL, 8.5, 0.85, 'medium', '{}', NULL, 0.1325, true, 100, NULL, NULL, NULL, NULL, NULL, '2025-11-20T21:01:51.137575+00:00'::timestamptz, '2025-11-20T21:01:51.137582+00:00'::timestamptz) RETURNING ml_prediction.id
+2025-11-20T21:02:28.6545447Z  2025-11-20 21:01:52.165 UTC [221] ERROR:  insert or update on table "ml_prediction" violates foreign key constraint "ml_prediction_booking_id_fkey"
+2025-11-20T21:02:28.6546031Z  2025-11-20 21:01:52.165 UTC [221] DETAIL:  Key (booking_id)=(0) is not present in table "booking".
+2025-11-20T21:02:28.6547654Z  2025-11-20 21:01:52.165 UTC [221] STATEMENT:  INSERT INTO ml_prediction (booking_id, driver_id, request_id, predicted_delay_minutes, confidence, risk_level, contributing_factors, model_version, prediction_time_ms, feature_flag_enabled, traffic_percentage, actual_delay_minutes, actual_pickup_at, actual_dropoff_at, prediction_error, is_accurate, created_at, updated_at) VALUES (0.2, 0.456, NULL, 5.0, 0.8, 'medium', '{}', NULL, 0.13, true, 100, NULL, NULL, NULL, NULL, NULL, '2025-11-20T21:01:52.165320+00:00'::timestamptz, '2025-11-20T21:01:52.165327+00:00'::timestamptz) RETURNING ml_prediction.id
+2025-11-20T21:02:28.6555005Z Stop and remove container: 35b6b7e4be4547febacf5f898fcacac7_postgres16alpine_1c8407
+2025-11-20T21:02:28.6559828Z ##[command]/usr/bin/docker rm --force af861b67c9170cd81aeafceff92a47e33623639fe7f5c579f397104308892c33
+2025-11-20T21:02:28.8007319Z af861b67c9170cd81aeafceff92a47e33623639fe7f5c579f397104308892c33
+2025-11-20T21:02:28.8021730Z Print service container logs: 1e44df6d447b4f39a46bfcbf48f54433_redis7alpine_9450ed
+2025-11-20T21:02:28.8022796Z ##[command]/usr/bin/docker logs --details b3e5112a5f0b1f50c3cfa17becad24943d410f78df1af06fe28ffef69ecdfc6a
+2025-11-20T21:02:28.8143482Z  1:C 20 Nov 2025 20:52:59.972 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures without low memory condition, see https://github.com/jemalloc/jemalloc/issues/1328. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
+2025-11-20T21:02:28.8144942Z  1:C 20 Nov 2025 20:52:59.973 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+2025-11-20T21:02:28.8145528Z  1:C 20 Nov 2025 20:52:59.973 * Redis version=7.4.7, bits=64, commit=00000000, modified=0, pid=1, just started
+2025-11-20T21:02:28.8146158Z  1:C 20 Nov 2025 20:52:59.973 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf
+2025-11-20T21:02:28.8146903Z  1:M 20 Nov 2025 20:52:59.973 * monotonic clock: POSIX clock_gettime
+2025-11-20T21:02:28.8147234Z  1:M 20 Nov 2025 20:52:59.973 * Running mode=standalone, port=6379.
+2025-11-20T21:02:28.8147527Z  1:M 20 Nov 2025 20:52:59.974 * Server initialized
+2025-11-20T21:02:28.8147824Z  1:M 20 Nov 2025 20:52:59.974 * Ready to accept connections tcp
+2025-11-20T21:02:28.8148139Z  1:M 20 Nov 2025 20:58:57.770 * 100 changes in 300 seconds. Saving...
+2025-11-20T21:02:28.8148460Z  1:M 20 Nov 2025 20:58:57.770 * Background saving started by pid 231
+2025-11-20T21:02:28.8148748Z  231:C 20 Nov 2025 20:58:57.773 * DB saved on disk
+2025-11-20T21:02:28.8149081Z  231:C 20 Nov 2025 20:58:57.773 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+2025-11-20T21:02:28.8149446Z  1:M 20 Nov 2025 20:58:57.871 * Background saving terminated with success
+2025-11-20T21:02:28.8151941Z Stop and remove container: 1e44df6d447b4f39a46bfcbf48f54433_redis7alpine_9450ed
+2025-11-20T21:02:28.8152662Z ##[command]/usr/bin/docker rm --force b3e5112a5f0b1f50c3cfa17becad24943d410f78df1af06fe28ffef69ecdfc6a
+2025-11-20T21:02:28.9262263Z b3e5112a5f0b1f50c3cfa17becad24943d410f78df1af06fe28ffef69ecdfc6a
+2025-11-20T21:02:28.9280909Z Remove container network: github_network_783d53013c0843e08736efb865343add
+2025-11-20T21:02:28.9286482Z ##[command]/usr/bin/docker network rm github_network_783d53013c0843e08736efb865343add
+2025-11-20T21:02:29.0589384Z github_network_783d53013c0843e08736efb865343add

@@ -140,6 +140,7 @@ class TestDispatchE2E:
             status=BookingStatus.ACCEPTED,
             scheduled_time=same_time,  # Même heure = conflit
         )
+        db.session.commit()  # ✅ FIX: Commit pour rendre les objets persistants
 
         # Tenter dispatch (devrait détecter le conflit temporel)
         for_date = today.isoformat()
@@ -153,8 +154,9 @@ class TestDispatchE2E:
         )
 
         # Vérifier que le rollback a fonctionné (aucune assignation partielle)
-        db.session.refresh(booking1)
-        db.session.refresh(booking2)
+        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        booking1 = db.session.query(Booking).get(booking1.id)
+        booking2 = db.session.query(Booking).get(booking2.id)
 
         # Si validation stricte active, les bookings ne devraient pas être assignés
         # Vérifier que le résultat indique un échec ou que les bookings ne sont pas assignés
@@ -198,11 +200,12 @@ class TestDispatchE2E:
         assert len(result["applied"]) == 2
 
         # Vérifier que les bookings sont assignés en DB
-        db.session.refresh(bookings[0])
-        db.session.refresh(bookings[1])
+        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        booking0 = db.session.query(Booking).get(bookings[0].id)
+        booking1 = db.session.query(Booking).get(bookings[1].id)
 
-        assert bookings[0].driver_id == drivers[0].id
-        assert bookings[1].driver_id == drivers[1].id
+        assert booking0.driver_id == drivers[0].id
+        assert booking1.driver_id == drivers[1].id
 
     def test_recovery_apres_crash(self, company, drivers, bookings):
         """Test : Récupération après crash simulé."""
@@ -218,7 +221,7 @@ class TestDispatchE2E:
             started_at=datetime.now(UTC) - timedelta(minutes=10),  # Il y a 10 min
         )
         db.session.add(dispatch_run)
-        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
+        db.session.commit()  # ✅ FIX: Commit pour rendre l'objet persistant
 
         # Relancer le dispatch (devrait réutiliser ou créer un nouveau run)
         for_date = today.isoformat()
@@ -232,7 +235,8 @@ class TestDispatchE2E:
         assert result.get("meta", {}).get("reason") != "run_failed"
 
         # Vérifier que le DispatchRun est complété
-        db.session.refresh(dispatch_run)
+        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        dispatch_run = db.session.query(DispatchRun).get(dispatch_run.id)
         assert dispatch_run.status == DispatchStatus.COMPLETED
 
     def test_batch_dispatches(self, company, drivers):
