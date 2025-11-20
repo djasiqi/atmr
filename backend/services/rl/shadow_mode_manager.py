@@ -647,7 +647,7 @@ class ShadowModeManager:
 
         # Sauvegarder en JSON
         json_path = company_dir / f"report_{date_str}.json"
-        with Path(json_path, "w", encoding="utf-8").open() as f:
+        with json_path.open("w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
 
         # Sauvegarder en CSV (données tabulaires)

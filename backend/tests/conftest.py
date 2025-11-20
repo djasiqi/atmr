@@ -131,6 +131,25 @@ def sample_user(db):
 
 
 @pytest.fixture
+def sample_admin_user(db):
+    """Crée un utilisateur admin de test."""
+    import uuid
+
+    unique_suffix = str(uuid.uuid4())[:8]
+    user = User()
+    user.username = f"admin_{unique_suffix}"
+    user.email = f"admin-{unique_suffix}@example.com"
+    user.role = UserRole.admin
+    user.public_id = str(uuid.uuid4())
+    user.set_password("password123", force_change=False)
+
+    db.session.add(user)
+    db.session.flush()
+    db.session.refresh(user)
+    return user
+
+
+@pytest.fixture
 def auth_headers(client, sample_user):
     """Génère un token JWT valide pour l'utilisateur test sans appeler /login."""
     from flask_jwt_extended import create_access_token
@@ -151,6 +170,30 @@ def auth_headers(client, sample_user):
     with client.application.app_context():
         token = create_access_token(identity=str(sample_user.public_id), additional_claims=claims)
     auth_headers._token_cache[cache_key] = token  # type: ignore[attr-defined]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def admin_headers(client, sample_admin_user):
+    """Génère un token JWT valide pour un utilisateur admin."""
+    from flask_jwt_extended import create_access_token
+
+    cache_key = f"admin_token_{sample_admin_user.id}"
+    if not hasattr(admin_headers, "_token_cache"):
+        admin_headers._token_cache = {}  # type: ignore[attr-defined]
+    if cache_key in admin_headers._token_cache:  # type: ignore[attr-defined]
+        token = admin_headers._token_cache[cache_key]  # type: ignore[attr-defined]
+        return {"Authorization": f"Bearer {token}"}
+
+    claims = {
+        "role": sample_admin_user.role.value,
+        "company_id": getattr(sample_admin_user, "company_id", None),
+        "driver_id": getattr(sample_admin_user, "driver_id", None),
+        "aud": "atmr-api",
+    }
+    with client.application.app_context():
+        token = create_access_token(identity=str(sample_admin_user.public_id), additional_claims=claims)
+    admin_headers._token_cache[cache_key] = token  # type: ignore[attr-defined]
     return {"Authorization": f"Bearer {token}"}
 
 

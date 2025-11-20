@@ -1,92 +1,88 @@
-﻿2025-11-20T09:23:28.3533384Z ##[group]Run actions/checkout@v4
-2025-11-20T09:23:28.3533938Z with:
-2025-11-20T09:23:28.3534129Z   repository: djasiqi/atmr
-2025-11-20T09:23:28.3534501Z   token: ***
-2025-11-20T09:23:28.3534675Z   ssh-strict: true
-2025-11-20T09:23:28.3534858Z   ssh-user: git
-2025-11-20T09:23:28.3535045Z   persist-credentials: true
-2025-11-20T09:23:28.3535256Z   clean: true
-2025-11-20T09:23:28.3535446Z   sparse-checkout-cone-mode: true
-2025-11-20T09:23:28.3535667Z   fetch-depth: 1
-2025-11-20T09:23:28.3535842Z   fetch-tags: false
-2025-11-20T09:23:28.3536017Z   show-progress: true
-2025-11-20T09:23:28.3536196Z   lfs: false
-2025-11-20T09:23:28.3536351Z   submodules: false
-2025-11-20T09:23:28.3536531Z   set-safe-directory: true
-2025-11-20T09:23:28.3536925Z env:
-2025-11-20T09:23:28.3537288Z   DATABASE_URL: ***localhost:5432/atmr_test
-2025-11-20T09:23:28.3537532Z   PGHOST: localhost
-2025-11-20T09:23:28.3537712Z   PGPORT: 5432
-2025-11-20T09:23:28.3537873Z   PGUSER: test
-2025-11-20T09:23:28.3538044Z   PGPASSWORD: test
-2025-11-20T09:23:28.3538251Z   PGDATABASE: atmr_test
-2025-11-20T09:23:28.3538468Z   REDIS_URL: redis://localhost:6379/0
-2025-11-20T09:23:28.3538715Z   FLASK_CONFIG: testing
-2025-11-20T09:23:28.3538918Z   SECRET_KEY: test-secret-key
-2025-11-20T09:23:28.3539131Z   JWT_SECRET_KEY: test-jwt-secret
-2025-11-20T09:23:28.3539449Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
-2025-11-20T09:23:28.3539773Z   API_LEGACY_ENABLED: false
-2025-11-20T09:23:28.3540003Z   PYTHONPATH: /home/runner/work/atmr/atmr
-2025-11-20T09:23:28.3540477Z   SOCKETIO_ASYNC_MODE: threading
-2025-11-20T09:23:28.3540709Z   SKIP_SOCKETIO: true
-2025-11-20T09:23:28.3540911Z   SKIP_ROUTES_INIT: true
-2025-11-20T09:23:28.3541102Z ##[endgroup]
-2025-11-20T09:23:28.4645775Z Syncing repository: djasiqi/atmr
-2025-11-20T09:23:28.4647022Z ##[group]Getting Git version info
-2025-11-20T09:23:28.4647352Z Working directory is '/home/runner/work/atmr/atmr'
-2025-11-20T09:23:28.4647843Z [command]/usr/bin/git version
-2025-11-20T09:23:28.4725373Z git version 2.51.2
-2025-11-20T09:23:28.4752001Z ##[endgroup]
-2025-11-20T09:23:28.4765610Z Temporarily overriding HOME='/home/runner/work/_temp/7a8ae068-1b3a-4d60-8382-72ca528dd162' before making global git config changes
-2025-11-20T09:23:28.4766350Z Adding repository directory to the temporary git global config as a safe directory
-2025-11-20T09:23:28.4779875Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/atmr/atmr
-2025-11-20T09:23:28.4816868Z Deleting the contents of '/home/runner/work/atmr/atmr'
-2025-11-20T09:23:28.4820760Z ##[group]Initializing the repository
-2025-11-20T09:23:28.4825361Z [command]/usr/bin/git init /home/runner/work/atmr/atmr
-2025-11-20T09:23:28.4939385Z hint: Using 'master' as the name for the initial branch. This default branch name
-2025-11-20T09:23:28.4940424Z hint: is subject to change. To configure the initial branch name to use in all
-2025-11-20T09:23:28.4941112Z hint: of your new repositories, which will suppress this warning, call:
-2025-11-20T09:23:28.4941457Z hint:
-2025-11-20T09:23:28.4941735Z hint: 	git config --global init.defaultBranch <name>
-2025-11-20T09:23:28.4942012Z hint:
-2025-11-20T09:23:28.4942485Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
-2025-11-20T09:23:28.4943299Z hint: 'development'. The just-created branch can be renamed via this command:
-2025-11-20T09:23:28.4943681Z hint:
-2025-11-20T09:23:28.4943857Z hint: 	git branch -m <name>
-2025-11-20T09:23:28.4944058Z hint:
-2025-11-20T09:23:28.4944474Z hint: Disable this message with "git config set advice.defaultBranchName false"
-2025-11-20T09:23:28.4945316Z Initialized empty Git repository in /home/runner/work/atmr/atmr/.git/
-2025-11-20T09:23:28.4955542Z [command]/usr/bin/git remote add origin https://github.com/djasiqi/atmr
-2025-11-20T09:23:28.4988393Z ##[endgroup]
-2025-11-20T09:23:28.4988981Z ##[group]Disabling automatic garbage collection
-2025-11-20T09:23:28.4993721Z [command]/usr/bin/git config --local gc.auto 0
-2025-11-20T09:23:28.5021969Z ##[endgroup]
-2025-11-20T09:23:28.5022487Z ##[group]Setting up auth
-2025-11-20T09:23:28.5028788Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
-2025-11-20T09:23:28.5060010Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
-2025-11-20T09:23:28.5407695Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
-2025-11-20T09:23:28.5436373Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
-2025-11-20T09:23:28.5654884Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
-2025-11-20T09:23:28.5687470Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
-2025-11-20T09:23:28.5909784Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
-2025-11-20T09:23:28.5943718Z ##[endgroup]
-2025-11-20T09:23:28.5944346Z ##[group]Fetching the repository
-2025-11-20T09:23:28.5952861Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +f25083c2d0380adef6d04413946d91b68a342406:refs/remotes/origin/main
-2025-11-20T09:25:42.4615637Z ##[error]fatal: unable to access 'https://github.com/djasiqi/atmr/': Failed to connect to github.com port 443 after 133848 ms: Couldn't connect to server
-2025-11-20T09:25:42.4624175Z The process '/usr/bin/git' failed with exit code 128
-2025-11-20T09:25:42.4624542Z Waiting 17 seconds before trying again
-2025-11-20T09:25:59.4673615Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +f25083c2d0380adef6d04413946d91b68a342406:refs/remotes/origin/main
-2025-11-20T09:26:01.1799015Z From https://github.com/djasiqi/atmr
-2025-11-20T09:26:01.1799751Z  * [new ref]         f25083c2d0380adef6d04413946d91b68a342406 -> origin/main
-2025-11-20T09:26:01.1829284Z ##[endgroup]
-2025-11-20T09:26:01.1829855Z ##[group]Determining the checkout info
-2025-11-20T09:26:01.1832920Z ##[endgroup]
-2025-11-20T09:26:01.1837825Z [command]/usr/bin/git sparse-checkout disable
-2025-11-20T09:26:01.1877449Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
-2025-11-20T09:26:01.1902721Z ##[group]Checking out the ref
-2025-11-20T09:26:01.1907764Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
-2025-11-20T09:26:01.6826532Z Switched to a new branch 'main'
-2025-11-20T09:26:01.6827582Z branch 'main' set up to track 'origin/main'.
-2025-11-20T09:26:01.6862527Z ##[endgroup]
-2025-11-20T09:26:01.6902025Z [command]/usr/bin/git log -1 --format=%H
-2025-11-20T09:26:01.6929326Z f25083c2d0380adef6d04413946d91b68a342406
+﻿2025-11-20T17:18:38.0626228Z ##[group]Run actions/checkout@v4
+2025-11-20T17:18:38.0626782Z with:
+2025-11-20T17:18:38.0626981Z   repository: djasiqi/atmr
+2025-11-20T17:18:38.0627344Z   token: ***
+2025-11-20T17:18:38.0627522Z   ssh-strict: true
+2025-11-20T17:18:38.0627702Z   ssh-user: git
+2025-11-20T17:18:38.0627885Z   persist-credentials: true
+2025-11-20T17:18:38.0628107Z   clean: true
+2025-11-20T17:18:38.0628289Z   sparse-checkout-cone-mode: true
+2025-11-20T17:18:38.0628524Z   fetch-depth: 1
+2025-11-20T17:18:38.0628698Z   fetch-tags: false
+2025-11-20T17:18:38.0628882Z   show-progress: true
+2025-11-20T17:18:38.0629061Z   lfs: false
+2025-11-20T17:18:38.0629219Z   submodules: false
+2025-11-20T17:18:38.0629399Z   set-safe-directory: true
+2025-11-20T17:18:38.0629757Z env:
+2025-11-20T17:18:38.0630087Z   DATABASE_URL: ***localhost:5432/atmr_test
+2025-11-20T17:18:38.0630350Z   PGHOST: localhost
+2025-11-20T17:18:38.0630522Z   PGPORT: 5432
+2025-11-20T17:18:38.0630686Z   PGUSER: test
+2025-11-20T17:18:38.0630846Z   PGPASSWORD: test
+2025-11-20T17:18:38.0631062Z   PGDATABASE: atmr_test
+2025-11-20T17:18:38.0631291Z   REDIS_URL: redis://localhost:6379/0
+2025-11-20T17:18:38.0631525Z   FLASK_CONFIG: testing
+2025-11-20T17:18:38.0631723Z   SECRET_KEY: test-secret-key
+2025-11-20T17:18:38.0631949Z   JWT_SECRET_KEY: test-jwt-secret
+2025-11-20T17:18:38.0632276Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+2025-11-20T17:18:38.0632616Z   API_LEGACY_ENABLED: false
+2025-11-20T17:18:38.0632843Z   PYTHONPATH: /home/runner/work/atmr/atmr
+2025-11-20T17:18:38.0633102Z   SOCKETIO_ASYNC_MODE: threading
+2025-11-20T17:18:38.0633417Z   SKIP_SOCKETIO: true
+2025-11-20T17:18:38.0633936Z   SKIP_ROUTES_INIT: true
+2025-11-20T17:18:38.0634150Z ##[endgroup]
+2025-11-20T17:18:38.1719031Z Syncing repository: djasiqi/atmr
+2025-11-20T17:18:38.1720336Z ##[group]Getting Git version info
+2025-11-20T17:18:38.1720804Z Working directory is '/home/runner/work/atmr/atmr'
+2025-11-20T17:18:38.1721335Z [command]/usr/bin/git version
+2025-11-20T17:18:38.1798014Z git version 2.51.2
+2025-11-20T17:18:38.1825187Z ##[endgroup]
+2025-11-20T17:18:38.1840212Z Temporarily overriding HOME='/home/runner/work/_temp/ccf9275d-d432-405b-9892-3a9e34e54c54' before making global git config changes
+2025-11-20T17:18:38.1841394Z Adding repository directory to the temporary git global config as a safe directory
+2025-11-20T17:18:38.1853989Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/atmr/atmr
+2025-11-20T17:18:38.1893175Z Deleting the contents of '/home/runner/work/atmr/atmr'
+2025-11-20T17:18:38.1897204Z ##[group]Initializing the repository
+2025-11-20T17:18:38.1901704Z [command]/usr/bin/git init /home/runner/work/atmr/atmr
+2025-11-20T17:18:38.1996723Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-11-20T17:18:38.1997607Z hint: is subject to change. To configure the initial branch name to use in all
+2025-11-20T17:18:38.1998476Z hint: of your new repositories, which will suppress this warning, call:
+2025-11-20T17:18:38.1998915Z hint:
+2025-11-20T17:18:38.1999236Z hint: 	git config --global init.defaultBranch <name>
+2025-11-20T17:18:38.1999592Z hint:
+2025-11-20T17:18:38.1999935Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-11-20T17:18:38.2000848Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-11-20T17:18:38.2001434Z hint:
+2025-11-20T17:18:38.2001647Z hint: 	git branch -m <name>
+2025-11-20T17:18:38.2001905Z hint:
+2025-11-20T17:18:38.2002267Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-11-20T17:18:38.2002882Z Initialized empty Git repository in /home/runner/work/atmr/atmr/.git/
+2025-11-20T17:18:38.2013135Z [command]/usr/bin/git remote add origin https://github.com/djasiqi/atmr
+2025-11-20T17:18:38.2047911Z ##[endgroup]
+2025-11-20T17:18:38.2048782Z ##[group]Disabling automatic garbage collection
+2025-11-20T17:18:38.2053254Z [command]/usr/bin/git config --local gc.auto 0
+2025-11-20T17:18:38.2081721Z ##[endgroup]
+2025-11-20T17:18:38.2082320Z ##[group]Setting up auth
+2025-11-20T17:18:38.2089990Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-11-20T17:18:38.2120348Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-11-20T17:18:38.2441891Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-11-20T17:18:38.2473209Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-11-20T17:18:38.2699897Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2025-11-20T17:18:38.2736535Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2025-11-20T17:18:38.2964946Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-11-20T17:18:38.2999151Z ##[endgroup]
+2025-11-20T17:18:38.2999760Z ##[group]Fetching the repository
+2025-11-20T17:18:38.3008196Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +47bd8024b10e0b0925f37bbe16070ecb670fa993:refs/remotes/origin/main
+2025-11-20T17:18:40.3675345Z From https://github.com/djasiqi/atmr
+2025-11-20T17:18:40.3675909Z  * [new ref]         47bd8024b10e0b0925f37bbe16070ecb670fa993 -> origin/main
+2025-11-20T17:18:40.3706794Z ##[endgroup]
+2025-11-20T17:18:40.3707525Z ##[group]Determining the checkout info
+2025-11-20T17:18:40.3710463Z ##[endgroup]
+2025-11-20T17:18:40.3716215Z [command]/usr/bin/git sparse-checkout disable
+2025-11-20T17:18:40.3757496Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-11-20T17:18:40.3782789Z ##[group]Checking out the ref
+2025-11-20T17:18:40.3787125Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2025-11-20T17:18:40.8853887Z Switched to a new branch 'main'
+2025-11-20T17:18:40.8854711Z branch 'main' set up to track 'origin/main'.
+2025-11-20T17:18:40.8889335Z ##[endgroup]
+2025-11-20T17:18:40.8934315Z [command]/usr/bin/git log -1 --format=%H
+2025-11-20T17:18:40.8957862Z 47bd8024b10e0b0925f37bbe16070ecb670fa993

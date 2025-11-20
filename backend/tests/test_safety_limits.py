@@ -164,7 +164,7 @@ class TestAutonomousActionModel:
             action_type="reassign",
             action_description="Test action",
             success=True,
-            execution_time_ms=0.1005,
+            execution_time_ms=100.5,
             confidence_score=0.95,
         )
         db.session.add(action)
@@ -410,6 +410,7 @@ class TestActionLogging:
         # Créer une suggestion avec des IDs réels
         suggestion = Suggestion(
             action="reassign",
+            priority="medium",
             message="Test reassignment",
             booking_id=int(booking.id),
             driver_id=int(driver.id),
@@ -448,6 +449,7 @@ class TestActionLogging:
 
         suggestion = Suggestion(
             action="reassign",
+            priority="medium",
             message="Test failed reassignment",
             booking_id=int(booking.id),
             driver_id=int(driver.id),
@@ -497,6 +499,7 @@ class TestActionLogging:
 
         suggestion = Suggestion(
             action="reassign",
+            priority="medium",
             message="Should be blocked",
             booking_id=int(booking.id),
             driver_id=int(driver.id),

@@ -59,10 +59,7 @@ class TestOSRMFallbackExceptionEdgeCases:
                 contextlib.suppress(requests.exceptions.Timeout),
             ):
                 # Essayer de calculer un temps de trajet (gérera l'exception via fallback)
-                try:
-                    env._calculate_travel_time(driver, booking)
-                except requests.exceptions.Timeout:
-                    pass  # Exception attendue, fallback sera utilisé
+                env._calculate_travel_time(driver, booking)
 
     def test_osrm_service_unavailable(self, mock_osrm_service):
         """Test service OSRM indisponible."""
@@ -93,10 +90,7 @@ class TestOSRMFallbackExceptionEdgeCases:
                 contextlib.suppress(requests.exceptions.ConnectionError),
             ):
                 # Essayer de calculer un temps de trajet (gérera l'exception via fallback)
-                try:
-                    env._calculate_travel_time(driver, booking)
-                except requests.exceptions.ConnectionError:
-                    pass  # Exception attendue, fallback sera utilisé
+                env._calculate_travel_time(driver, booking)
 
     def test_osrm_service_invalid_response(self, mock_osrm_service):
         """Test réponse invalide du service OSRM."""
@@ -151,10 +145,7 @@ class TestOSRMFallbackExceptionEdgeCases:
                 contextlib.suppress(requests.exceptions.HTTPError),
             ):
                 # Essayer de calculer un temps de trajet (gérera l'exception via fallback)
-                try:
-                    env._calculate_travel_time(driver, booking)
-                except requests.exceptions.HTTPError:
-                    pass  # Exception attendue, fallback sera utilisé
+                env._calculate_travel_time(driver, booking)
 
     def test_osrm_service_server_error(self, mock_osrm_service):
         """Test erreur serveur du service OSRM."""
@@ -185,10 +176,7 @@ class TestOSRMFallbackExceptionEdgeCases:
                 contextlib.suppress(requests.exceptions.HTTPError),
             ):
                 # Essayer de calculer un temps de trajet (gérera l'exception via fallback)
-                try:
-                    env._calculate_travel_time(driver, booking)
-                except requests.exceptions.HTTPError:
-                    pass  # Exception attendue, fallback sera utilisé
+                env._calculate_travel_time(driver, booking)
 
     def test_osrm_service_data_corruption(self, mock_osrm_service):
         """Test corruption de données du service OSRM."""
@@ -408,10 +396,8 @@ class TestOSRMFallbackExceptionEdgeCases:
                 # Mesurer le temps d'exécution
                 start_time = time.time()
                 for _ in range(100):
-                    try:
+                    with contextlib.suppress(Exception):
                         env._calculate_travel_time(driver, booking)
-                    except Exception:
-                        pass  # Exception gérée rapidement
                 end_time = time.time()
 
                 # Vérifier que le fallback est rapide

@@ -53,24 +53,24 @@ class TestRateLimitingBookings:
 class TestRateLimitingAdmin:
     """Tests rate limiting pour les endpoints admin."""
 
-    def test_admin_stats_rate_limit(self, client, auth_headers):
+    def test_admin_stats_rate_limit(self, client, admin_headers):
         """Test que les stats admin sont limitées à 100/heure."""
         # Faire 101 tentatives
         for i in range(101):
-            response = client.get("/api/admin/stats", headers=auth_headers)
+            response = client.get("/api/admin/stats", headers=admin_headers)
 
             if i < 100:
                 assert response.status_code in (200, 401, 403)  # Pas de 429
             else:
                 assert response.status_code == 429, f"Expected 429, got {response.status_code}"
 
-    def test_reset_password_rate_limit(self, client, auth_headers):
+    def test_reset_password_rate_limit(self, client, admin_headers):
         """Test que le reset password est limité à 10/heure (sécurité)."""
         # Faire 11 tentatives
         for i in range(11):
             response = client.post(
                 "/api/admin/users/1/reset-password",
-                headers=auth_headers,
+                headers=admin_headers,
             )
 
             if i < 10:

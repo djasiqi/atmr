@@ -2,8 +2,6 @@
 
 from marshmallow import Schema, fields, validate
 
-from schemas.validation_utils import ISO8601_DATE_REGEX
-
 
 class DriverProfileUpdateSchema(Schema):
     """Schema pour mise à jour profil chauffeur (PUT /api/driver/me/profile)."""
@@ -26,10 +24,11 @@ class DriverProfileUpdateSchema(Schema):
     hourly_rate_cents = fields.Int(validate=validate.Range(min=0, error="hourly_rate_cents doit être >= 0"))
 
     # Dates (format YYYY-MM-DD)
-    employment_start_date = fields.Date(validate=validate.Regexp(ISO8601_DATE_REGEX), allow_none=True)
-    employment_end_date = fields.Date(validate=validate.Regexp(ISO8601_DATE_REGEX), allow_none=True)
-    license_valid_until = fields.Date(validate=validate.Regexp(ISO8601_DATE_REGEX), allow_none=True)
-    medical_valid_until = fields.Date(validate=validate.Regexp(ISO8601_DATE_REGEX), allow_none=True)
+    # Note: fields.Date gère déjà le format ISO8601, pas besoin de Regexp
+    employment_start_date = fields.Date(allow_none=True)
+    employment_end_date = fields.Date(allow_none=True)
+    license_valid_until = fields.Date(allow_none=True)
+    medical_valid_until = fields.Date(allow_none=True)
 
     # Listes
     license_categories = fields.List(
