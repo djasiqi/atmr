@@ -10,6 +10,7 @@ on:
     paths:
       - "backend/**"
       - ".github/workflows/backend-tests.yml"
+  workflow_dispatch: # Permet de déclencher manuellement le workflow
   pull_request:
     branches: [main, develop]
     paths:
