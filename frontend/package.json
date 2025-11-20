@@ -119,6 +119,7 @@
     "postcss": "^8.4.49",
     "js-yaml": "^4.1.0",
     "webpack-dev-server": "^5.2.2",
-    "@sentry/browser": "^8.47.0"
+    "@sentry/browser": "^8.47.0",
+    "glob": "^11.1.0"
   }
 }
