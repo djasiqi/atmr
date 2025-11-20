@@ -1,13 +1,15 @@
 # backend/tests/services/unified_dispatch/test_apply.py
 """Tests pour apply_assignments avec rollback transactionnel complet."""
 
+from datetime import UTC, date, datetime
+
 import pytest
 from flask import Flask
 from sqlalchemy.exc import IntegrityError
 
 from models import Assignment, Booking, BookingStatus, Driver, DriverType
 from services.unified_dispatch.apply import apply_assignments
-from tests.factories import BookingFactory, CompanyFactory, DriverFactory
+from tests.factories import BookingFactory, CompanyFactory, DispatchRunFactory, DriverFactory
 
 
 @pytest.fixture(autouse=True)
@@ -142,11 +144,16 @@ class TestRollbackTransactionnel:
 
     def test_rollback_en_cas_de_conflit_db(self, db, company, driver, bookings):
         """Test : Conflit DB → rollback et pas de corruption."""
+        # Créer DispatchRun avant Assignment
+        dispatch_run = DispatchRunFactory(company=company, day=date.today())
+        db.session.add(dispatch_run)
+        db.session.flush()
+
         # Créer une assignation existante pour créer un conflit
         existing_assignment = Assignment(
             booking_id=bookings[0].id,
             driver_id=driver.id,
-            dispatch_run_id=1,
+            dispatch_run_id=dispatch_run.id,
         )
         db.session.add(existing_assignment)
         db.session.commit()
@@ -159,7 +166,7 @@ class TestRollbackTransactionnel:
                 {
                     "booking_id": bookings[0].id,  # Conflit potentiel
                     "driver_id": driver.id,
-                    "dispatch_run_id": 1,  # Même dispatch_run_id
+                    "dispatch_run_id": dispatch_run.id,  # Même dispatch_run_id
                     "score": 1.0,
                 },
             )(),
@@ -178,7 +185,7 @@ class TestRollbackTransactionnel:
         result = apply_assignments(
             company_id=company.id,
             assignments=assignments,
-            dispatch_run_id=1,
+            dispatch_run_id=dispatch_run.id,
         )
 
         # Vérifier que le conflit est géré (idempotence)

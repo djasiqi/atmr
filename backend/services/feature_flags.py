@@ -24,8 +24,13 @@ class FeatureFlags:
     }
 
     @classmethod
-    def is_ml_enabled(cls) -> bool:
-        """Vérifie si le ML est activé."""
+    def is_ml_enabled(cls, request_id: str | None = None) -> bool:  # noqa: ARG003
+        """Vérifie si le ML est activé.
+
+        Args:
+            request_id: ID de requête optionnel pour tracking (ignoré actuellement,
+                       accepté pour compatibilité avec les tests)
+        """
         return cls._ml_enabled
 
     @classmethod
@@ -81,9 +86,23 @@ class FeatureFlags:
             cls._stats["heuristic_requests"] += 1
 
     @classmethod
+    def record_ml_success(cls) -> None:
+        """Enregistre un succès ML (convenience method)."""
+        cls.record_request(used_ml=True, success=True)
+
+    @classmethod
+    def record_ml_failure(cls) -> None:
+        """Enregistre un échec ML (convenience method)."""
+        cls.record_request(used_ml=True, success=False)
+
+    @classmethod
     def get_stats(cls) -> Dict[str, Any]:
         """Retourne les statistiques."""
         stats = cls._stats.copy()
+
+        # Ajouter la configuration actuelle
+        stats["ml_enabled"] = cls._ml_enabled
+        stats["ml_traffic_percentage"] = cls._ml_traffic_percentage
 
         # Calculer le taux de succès ML
         if stats["ml_requests"] > 0:

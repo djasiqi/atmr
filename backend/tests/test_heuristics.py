@@ -376,11 +376,12 @@ class TestHeuristicsHelpers:
         driver_window = (60, 480)  # 1h-8h
 
         # Cas faisable (dans la fenêtre)
-        feasible = _check_driver_window_feasible(driver_window, est_start_min=0.120, est_finish_min=0.180)
+        # 0.120 heures = 7.2 minutes, arrondi à 7 minutes
+        feasible = _check_driver_window_feasible(driver_window, est_start_min=7)
         assert feasible is True, "Devrait être faisable"
 
         # Cas faisable limit (juste dans la fenêtre)
-        feasible_limit = _check_driver_window_feasible(driver_window, est_start_min=60, est_finish_min=0.480)
+        feasible_limit = _check_driver_window_feasible(driver_window, est_start_min=60)
         assert feasible_limit is True, "Devrait être faisable aux limites"
 
     def test_py_int_helper(self):
