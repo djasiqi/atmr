@@ -155,7 +155,7 @@ class TestDisasterScenarios:
         # Désactiver chaos (fait automatiquement par fixture reset_chaos)
         injector.disable()
 
-    def test_db_read_only(self, app_context: Flask, client, auth_headers, reset_chaos, sample_company, sample_client):
+    def test_db_read_only(self, app_context: Flask, authenticated_client, reset_chaos, sample_company, sample_client):
         """✅ D3: Test quand la DB est en read-only.
 
         Objectif: Les lectures fonctionnent, les écritures retournent une erreur
@@ -184,7 +184,7 @@ class TestDisasterScenarios:
         assert users_before is not None
 
         # Test GET (lecture) - doit fonctionner même en read-only
-        response_get = client.get("/api/bookings/", headers=auth_headers)
+        response_get = authenticated_client.get("/api/bookings/")
         assert response_get.status_code in [200, 404], (
             f"GET devrait fonctionner même en read-only, reçu: {response_get.status_code}"
         )
@@ -198,7 +198,7 @@ class TestDisasterScenarios:
         users_read = User.query.limit(1).all()
         assert users_read is not None, "Lectures doivent fonctionner en read-only"
 
-        response_get_readonly = client.get("/api/bookings/", headers=auth_headers)
+        response_get_readonly = authenticated_client.get("/api/bookings/")
         assert response_get_readonly.status_code in [200, 404], (
             f"GET devrait fonctionner en read-only, reçu: {response_get_readonly.status_code}"
         )
@@ -217,8 +217,8 @@ class TestDisasterScenarios:
 
         # ✅ Utiliser pytest.raises() pour vérifier HTTP 503 ou exception
         # Le middleware app.py doit bloquer et retourner 503
-        response_post = client.post(
-            f"/api/clients/{sample_client.user.public_id}/bookings", headers=auth_headers, json=booking_data
+        response_post = authenticated_client.post(
+            f"/api/clients/{sample_client.user.public_id}/bookings", json=booking_data
         )
 
         # ✅ Vérifier HTTP 503 retourné
@@ -252,8 +252,8 @@ class TestDisasterScenarios:
         logger.info("[D3] DB read-only désactivé - vérifier écritures reprennent")
 
         # Réessayer l'écriture (devrait fonctionner maintenant)
-        response_post_after = client.post(
-            f"/api/clients/{sample_client.user.public_id}/bookings", headers=auth_headers, json=booking_data
+        response_post_after = authenticated_client.post(
+            f"/api/clients/{sample_client.user.public_id}/bookings", json=booking_data
         )
 
         # Maintenant ça devrait fonctionner (201 créé ou 500 si autre problème, mais pas 503 read-only)

@@ -171,17 +171,17 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code in [400, 500]
-        data = response.get_json()
+        data = response.get_json() or {}
         assert ("message" in data) or ("errors" in data) or ("error" in data)
 
-    def test_list_bookings_valid_query_params(self, client, auth_headers):
+    def test_list_bookings_valid_query_params(self, authenticated_client):
         """Test GET /api/bookings avec query params valides."""
-        response = client.get("/api/v1/bookings?page=1&per_page=20&status=PENDING", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/bookings?page=1&per_page=20&status=PENDING")
         assert response.status_code in [200, 400, 403]  # 400 si validation stricte des params
 
-    def test_list_bookings_invalid_query_params(self, client, auth_headers):
+    def test_list_bookings_invalid_query_params(self, authenticated_client):
         """Test GET /api/bookings avec query params invalides (per_page trop élevé)."""
-        response = client.get("/api/v1/bookings?page=1&per_page=1000", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/bookings?page=1&per_page=1000")
         # Devrait valider et limiter à 500 max
         assert response.status_code in [200, 400, 403]
 
@@ -265,7 +265,7 @@ class TestSchemaValidationE2E:
         # Peut être 200 (succès) ou 400 si géocodage échoue
         assert response.status_code in [200, 400]
         if response.status_code == 200:
-            data = response.get_json()
+            data = response.get_json() or {}
             assert "message" in data
 
     def test_update_booking_invalid_schema(self, client, db):
@@ -333,7 +333,7 @@ class TestSchemaValidationE2E:
             f"/api/v1/bookings/{booking.id}", json={"scheduled_time": "invalid-date-format"}, headers=client_headers
         )
         assert response.status_code in [400, 500]
-        data = response.get_json()
+        data = response.get_json() or {}
         assert ("message" in data) or ("errors" in data) or ("error" in data)
         # Vérifier que l'erreur mentionne scheduled_time
         error_str = str(data).lower()
@@ -344,7 +344,7 @@ class TestSchemaValidationE2E:
             f"/api/v1/bookings/{booking.id}", json={"status": "invalid_status"}, headers=client_headers
         )
         assert response.status_code in [400, 500]
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
         # Vérifier que l'erreur mentionne status
         error_str = str(data).lower()
@@ -353,7 +353,7 @@ class TestSchemaValidationE2E:
         # Test avec amount négatif
         response = client.put(f"/api/v1/bookings/{booking.id}", json={"amount": -10.0}, headers=client_headers)
         assert response.status_code in [400, 500]
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
     def test_create_manual_booking_valid_schema(self, client, db, sample_company):
@@ -422,7 +422,7 @@ class TestSchemaValidationE2E:
         # Peut être 201 (succès) ou 400 si géocodage échoue
         assert response.status_code in [201, 400, 429, 500]
         if response.status_code == 201:
-            data = response.get_json()
+            data = response.get_json() or {}
             assert "id" in data or "booking_id" in data or "message" in data
 
     def test_create_manual_booking_invalid_schema(self, client, db, sample_company):
@@ -733,7 +733,7 @@ class TestSchemaValidationE2E:
             headers=company_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -842,7 +842,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code in [200, 201, 400, 500]
-        data = response.get_json()
+        data = response.get_json() or {}
         if response.status_code in [200, 201]:
             assert "message" in data
             assert "payment_id" in data
@@ -854,7 +854,7 @@ class TestSchemaValidationE2E:
             f"/api/v1/payments/booking/{booking.id}", json={"amount": 75.5, "method": "paypal"}, headers=client_headers
         )
         assert response.status_code in [200, 201, 400, 500]
-        data = response.get_json()
+        data = response.get_json() or {}
         if response.status_code in [200, 201]:
             assert "message" in data
             assert "payment_id" in data
@@ -929,7 +929,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -946,7 +946,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -963,7 +963,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -975,7 +975,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -990,7 +990,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code in [400, 500]
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1006,7 +1006,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1089,7 +1089,7 @@ class TestSchemaValidationE2E:
             f"/api/v1/payments/{test_payment_id}", json={"status": "completed"}, headers=admin_headers
         )
         assert response.status_code in [200, 404]
-        data = response.get_json()
+        data = response.get_json() or {}
         if response.status_code == 200:
             assert "message" in data
             assert "completed" in data["message"].lower() or "updated" in data["message"].lower()
@@ -1099,7 +1099,7 @@ class TestSchemaValidationE2E:
         # Test mise à jour status à "failed"
         response = client.put(f"/api/v1/payments/{test_payment_id}", json={"status": "failed"}, headers=admin_headers)
         assert response.status_code in [200, 404]
-        data = response.get_json()
+        data = response.get_json() or {}
         if response.status_code == 200:
             assert "message" in data
             assert "failed" in data["message"].lower() or "updated" in data["message"].lower()
@@ -1109,7 +1109,7 @@ class TestSchemaValidationE2E:
         # Test mise à jour status à "pending"
         response = client.put(f"/api/v1/payments/{test_payment_id}", json={"status": "pending"}, headers=admin_headers)
         assert response.status_code in [200, 404]
-        data = response.get_json()
+        data = response.get_json() or {}
         if response.status_code == 200:
             assert "message" in data
         else:
@@ -1191,7 +1191,7 @@ class TestSchemaValidationE2E:
         # Test avec status manquant (requis)
         response = client.put(f"/api/v1/payments/{test_payment_id}", json={}, headers=admin_headers)
         assert response.status_code in [400, 404]
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1203,7 +1203,7 @@ class TestSchemaValidationE2E:
             f"/api/v1/payments/{test_payment_id}", json={"status": "INVALID_STATUS"}, headers=admin_headers
         )
         assert response.status_code in [400, 404]
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1219,7 +1219,7 @@ class TestSchemaValidationE2E:
             headers=admin_headers,
         )
         assert response.status_code in [400, 404]
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1227,7 +1227,7 @@ class TestSchemaValidationE2E:
         # Test avec status vide
         response = client.put(f"/api/v1/payments/{test_payment_id}", json={"status": ""}, headers=admin_headers)
         assert response.status_code in [400, 404]
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1294,7 +1294,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code == 200
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data
 
         # Test mise à jour partielle (seulement certains champs)
@@ -1304,13 +1304,13 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code == 200
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data
 
         # Test mise à jour vide (tous les champs sont optionnels)
         response = client.put(f"/api/v1/clients/{client_user.public_id}", json={}, headers=client_headers)
         assert response.status_code == 200
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data
 
     def test_update_client_invalid_schema(self, client, db):
@@ -1365,7 +1365,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1379,7 +1379,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1393,7 +1393,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1407,7 +1407,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1421,7 +1421,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1435,7 +1435,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1449,7 +1449,7 @@ class TestSchemaValidationE2E:
             headers=client_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1510,7 +1510,7 @@ class TestSchemaValidationE2E:
             headers=driver_headers,
         )
         assert response.status_code in [200, 400]
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data
         if response.status_code == 200:
             assert "profile" in data
@@ -1522,13 +1522,13 @@ class TestSchemaValidationE2E:
             headers=driver_headers,
         )
         assert response.status_code == 200
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data
 
         # Test mise à jour vide (tous les champs sont optionnels)
         response = client.put("/api/v1/driver/me/profile", json={}, headers=driver_headers)
         assert response.status_code == 200
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data
 
     def test_update_driver_profile_invalid_schema(self, client, db, sample_company):
@@ -1569,7 +1569,7 @@ class TestSchemaValidationE2E:
             headers=driver_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1583,7 +1583,7 @@ class TestSchemaValidationE2E:
             headers=driver_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1591,7 +1591,7 @@ class TestSchemaValidationE2E:
         # Test avec status invalide (pas dans ["disponible", "hors service"])
         response = client.put("/api/v1/driver/me/profile", json={"status": "INVALID"}, headers=driver_headers)
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1605,7 +1605,7 @@ class TestSchemaValidationE2E:
             headers=driver_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1619,7 +1619,7 @@ class TestSchemaValidationE2E:
             headers=driver_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1633,7 +1633,7 @@ class TestSchemaValidationE2E:
             headers=driver_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1647,7 +1647,7 @@ class TestSchemaValidationE2E:
             headers=driver_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1661,7 +1661,7 @@ class TestSchemaValidationE2E:
             headers=driver_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1675,7 +1675,7 @@ class TestSchemaValidationE2E:
             headers=driver_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1769,7 +1769,7 @@ class TestSchemaValidationE2E:
             headers=company_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1783,7 +1783,7 @@ class TestSchemaValidationE2E:
             headers=company_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1797,7 +1797,7 @@ class TestSchemaValidationE2E:
             headers=company_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1811,7 +1811,7 @@ class TestSchemaValidationE2E:
             headers=company_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1825,7 +1825,7 @@ class TestSchemaValidationE2E:
             headers=company_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1839,7 +1839,7 @@ class TestSchemaValidationE2E:
             headers=company_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1853,7 +1853,7 @@ class TestSchemaValidationE2E:
             headers=company_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1867,7 +1867,7 @@ class TestSchemaValidationE2E:
             headers=company_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1881,7 +1881,7 @@ class TestSchemaValidationE2E:
             headers=company_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1895,7 +1895,7 @@ class TestSchemaValidationE2E:
             headers=company_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1909,7 +1909,7 @@ class TestSchemaValidationE2E:
             headers=company_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1923,7 +1923,7 @@ class TestSchemaValidationE2E:
             headers=company_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -1937,7 +1937,7 @@ class TestSchemaValidationE2E:
             headers=company_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -2247,9 +2247,9 @@ class TestSchemaValidationE2E:
 
     # ========== COMPANIES ENDPOINTS ==========
 
-    def test_update_company_valid_schema(self, client, auth_headers):
+    def test_update_company_valid_schema(self, authenticated_client):
         """Test PUT /api/companies/me avec payload valide."""
-        response = client.put(
+        response = authenticated_client.put(
             "/api/companies/me",
             json={
                 "name": "Updated Company Name",
@@ -2257,23 +2257,22 @@ class TestSchemaValidationE2E:
                 "iban": "CH9300762011623852957",
                 "uid_ide": "CHE-123.456.789",
             },
-            headers=auth_headers,
         )
         assert response.status_code in [200, 404]  # 404 si pas de company
 
-    def test_update_company_invalid_schema(self, client, auth_headers):
+    def test_update_company_invalid_schema(self, authenticated_client):
         """Test PUT /api/companies/me avec payload invalide (IBAN invalide)."""
-        response = client.put(
-            "/api/companies/me", json={"name": "Updated Company", "iban": "INVALID-IBAN"}, headers=auth_headers
+        response = authenticated_client.put(
+            "/api/companies/me", json={"name": "Updated Company", "iban": "INVALID-IBAN"}
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
-    def test_create_driver_valid_schema(self, client, auth_headers):
+    def test_create_driver_valid_schema(self, authenticated_client):
         """Test POST /api/companies/me/drivers/create avec payload valide."""
         unique_email = f"driver_{uuid.uuid4().hex[:6]}@example.com"
-        response = client.post(
+        response = authenticated_client.post(
             "/api/v1/companies/me/drivers/create",
             json={
                 "username": f"driver_{uuid.uuid4().hex[:6]}",
@@ -2285,133 +2284,127 @@ class TestSchemaValidationE2E:
                 "brand": "Mercedes",
                 "license_plate": "GE-12345",
             },
-            headers=auth_headers,
         )
         assert response.status_code in [201, 400, 404]  # 404 si pas de company
 
-    def test_create_driver_invalid_schema(self, client, auth_headers):
+    def test_create_driver_invalid_schema(self, authenticated_client):
         """Test POST /api/companies/me/drivers/create avec payload invalide (champs manquants)."""
-        response = client.post(
+        response = authenticated_client.post(
             "/api/v1/companies/me/drivers/create",
             json={
                 "username": "driver1"
                 # email, password, etc. manquants
             },
-            headers=auth_headers,
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
     # ========== MEDICAL ENDPOINTS (QUERY PARAMS) ==========
 
-    def test_medical_establishments_valid_query(self, client):
+    def test_medical_establishments_valid_query(self, authenticated_client):
         """Test GET /api/medical/establishments avec query params valides."""
-        response = client.get("/api/v1/medical/establishments?q=hospital&limit=10")
+        response = authenticated_client.get("/api/v1/medical/establishments?q=hospital&limit=10")
         assert response.status_code == 200
 
-    def test_medical_establishments_invalid_query(self, client):
+    def test_medical_establishments_invalid_query(self, authenticated_client):
         """Test GET /api/medical/establishments avec query params invalides (limit trop élevé).
 
         Note: La route utilise un fallback sur reqparse qui limite automatiquement à 25,
         donc on accepte 200 avec limit=25 appliqué.
         """
-        response = client.get("/api/v1/medical/establishments?limit=100")
+        response = authenticated_client.get("/api/v1/medical/establishments?limit=100")
         # La route limite automatiquement à 25 (fallback reqparse), donc 200 OK
         assert response.status_code == 200
         # Vérifier que le résultat respecte la limite max
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list):
             assert len(data) <= 25
         elif isinstance(data, dict) and "results" in data:
             assert len(data["results"]) <= 25
 
-    def test_medical_services_valid_query(self, client):
+    def test_medical_services_valid_query(self, authenticated_client):
         """Test GET /api/medical/services avec query params valides."""
-        response = client.get("/api/v1/medical/services?establishment_id=1&q=cardio")
+        response = authenticated_client.get("/api/v1/medical/services?establishment_id=1&q=cardio")
         assert response.status_code in [200, 404]  # 404 si établissement introuvable
 
-    def test_medical_services_invalid_query(self, client):
+    def test_medical_services_invalid_query(self, authenticated_client):
         """Test GET /api/medical/services avec query params invalides (establishment_id manquant)."""
-        response = client.get("/api/v1/medical/services?q=cardio")
+        response = authenticated_client.get("/api/v1/medical/services?q=cardio")
         # establishment_id est requis, donc 400 attendu
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data or "error" in data
 
     # ========== ANALYTICS ENDPOINTS (QUERY PARAMS) ==========
 
-    def test_analytics_dashboard_valid_query(self, client, auth_headers):
+    def test_analytics_dashboard_valid_query(self, authenticated_client):
         """Test GET /api/analytics/dashboard avec query params valides."""
-        response = client.get("/api/v1/analytics/dashboard?period=30d", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/analytics/dashboard?period=30d")
         assert response.status_code in [200, 404]  # 404 si pas de company
 
-    def test_analytics_dashboard_invalid_query(self, client, auth_headers):
+    def test_analytics_dashboard_invalid_query(self, authenticated_client):
         """Test GET /api/analytics/dashboard avec query params invalides (period invalide)."""
-        response = client.get("/api/v1/analytics/dashboard?period=invalid", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/analytics/dashboard?period=invalid")
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
-    def test_analytics_insights_valid_query(self, client, auth_headers):
+    def test_analytics_insights_valid_query(self, authenticated_client):
         """Test GET /api/analytics/insights avec query params valides."""
-        response = client.get("/api/v1/analytics/insights?lookback_days=30", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/analytics/insights?lookback_days=30")
         assert response.status_code in [200, 404]
 
-    def test_analytics_insights_invalid_query(self, client, auth_headers):
+    def test_analytics_insights_invalid_query(self, authenticated_client):
         """Test GET /api/analytics/insights avec query params invalides (lookback_days trop élevé)."""
-        response = client.get("/api/v1/analytics/insights?lookback_days=400", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/analytics/insights?lookback_days=400")
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
-    def test_analytics_export_valid_query(self, client, auth_headers):
+    def test_analytics_export_valid_query(self, authenticated_client):
         """Test GET /api/analytics/export avec query params valides."""
         start_date = date.today() - timedelta(days=7)
         end_date = date.today()
-        response = client.get(
-            f"/api/v1/analytics/export?start_date={start_date.isoformat()}&end_date={end_date.isoformat()}&format=csv",
-            headers=auth_headers,
+        response = authenticated_client.get(
+            f"/api/v1/analytics/export?start_date={start_date.isoformat()}&end_date={end_date.isoformat()}&format=csv"
         )
         assert response.status_code in [200, 404]
 
-    def test_analytics_export_invalid_query(self, client, auth_headers):
+    def test_analytics_export_invalid_query(self, authenticated_client):
         """Test GET /api/analytics/export avec query params invalides (dates manquantes)."""
-        response = client.get("/api/v1/analytics/export?format=csv", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/analytics/export?format=csv")
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
-    def test_analytics_weekly_summary_valid_query(self, client, auth_headers):
+    def test_analytics_weekly_summary_valid_query(self, authenticated_client):
         """✅ Test E2E GET /api/analytics/weekly-summary avec AnalyticsWeeklySummaryQuerySchema valide."""
         from datetime import date, timedelta
 
         # Test avec week_start spécifié
         week_start = date.today() - timedelta(days=7)
-        response = client.get(
-            f"/api/v1/analytics/weekly-summary?week_start={week_start.isoformat()}", headers=auth_headers
-        )
+        response = authenticated_client.get(f"/api/v1/analytics/weekly-summary?week_start={week_start.isoformat()}")
         # Peut être 200 (succès) ou 404 (pas de company) ou 500 (erreur serveur)
         assert response.status_code in [200, 404, 500]
 
         # Test sans week_start (optionnel, utilise la semaine courante par défaut)
-        response = client.get("/api/v1/analytics/weekly-summary", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/analytics/weekly-summary")
         assert response.status_code in [200, 404, 500]
 
         # Si succès (200), vérifier la structure de la réponse
         if response.status_code == 200:
-            data = response.get_json()
+            data = response.get_json() or {}
             assert "success" in data or "data" in data
 
-    def test_analytics_weekly_summary_invalid_query(self, client, auth_headers):
+    def test_analytics_weekly_summary_invalid_query(self, authenticated_client):
         """✅ Test E2E GET /api/analytics/weekly-summary avec AnalyticsWeeklySummaryQuerySchema invalide."""
         # Test avec format date invalide (pas YYYY-MM-DD)
-        response = client.get(
-            "/api/v1/analytics/weekly-summary?week_start=01/15/2024",  # Format US invalide
-            headers=auth_headers,
+        response = authenticated_client.get(
+            "/api/v1/analytics/weekly-summary?week_start=01/15/2024"  # Format US invalide
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
@@ -2420,136 +2413,123 @@ class TestSchemaValidationE2E:
         assert "week_start" in error_str or "date" in error_str or "format" in error_str or "errors" in error_str
 
         # Test avec format date invalide (pas ISO8601)
-        response = client.get(
-            "/api/v1/analytics/weekly-summary?week_start=2024-1-1",  # Format invalide (sans zéro padding)
-            headers=auth_headers,
+        response = authenticated_client.get(
+            "/api/v1/analytics/weekly-summary?week_start=2024-1-1"  # Format invalide (sans zéro padding)
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
 
         # Test avec date mal formée
-        response = client.get("/api/v1/analytics/weekly-summary?week_start=invalid-date", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/analytics/weekly-summary?week_start=invalid-date")
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         assert "message" in data or "errors" in data
 
     # ========== PLANNING ENDPOINTS (QUERY PARAMS) ==========
 
-    def test_planning_shifts_valid_query(self, client, auth_headers):
+    def test_planning_shifts_valid_query(self, authenticated_client):
         """Test GET /api/planning/companies/me/planning/shifts avec query params valides."""
-        response = client.get("/api/v1/planning/companies/me/planning/shifts?driver_id=1", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/planning/companies/me/planning/shifts?driver_id=1")
         assert response.status_code in [200, 401]  # 401 si pas autorisé
 
-    def test_planning_shifts_invalid_query(self, client, auth_headers):
+    def test_planning_shifts_invalid_query(self, authenticated_client):
         """Test GET /api/planning/companies/me/planning/shifts avec query params invalides (driver_id négatif)."""
-        response = client.get("/api/v1/planning/companies/me/planning/shifts?driver_id=-1", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/planning/companies/me/planning/shifts?driver_id=-1")
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
-    def test_planning_unavailability_valid_query(self, client, auth_headers):
+    def test_planning_unavailability_valid_query(self, authenticated_client):
         """✅ Test E2E GET /api/planning/companies/me/planning/unavailability avec PlanningUnavailabilityQuerySchema valide."""
         # Test avec driver_id spécifié
-        response = client.get("/api/v1/planning/companies/me/planning/unavailability?driver_id=1", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/planning/companies/me/planning/unavailability?driver_id=1")
         # Peut être 200 (succès) ou 401 (pas autorisé)
         assert response.status_code in [200, 401]
 
         # Si succès (200), vérifier la structure de la réponse
         if response.status_code == 200:
-            data = response.get_json()
+            data = response.get_json() or {}
             assert "items" in data or "total" in data
 
         # Test sans driver_id (optionnel)
-        response = client.get("/api/v1/planning/companies/me/planning/unavailability", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/planning/companies/me/planning/unavailability")
         assert response.status_code in [200, 401]
 
         # Si succès, vérifier la structure
         if response.status_code == 200:
-            data = response.get_json()
+            data = response.get_json() or {}
             assert "items" in data or "total" in data
 
-    def test_planning_unavailability_invalid_query(self, client, auth_headers):
+    def test_planning_unavailability_invalid_query(self, authenticated_client):
         """✅ Test E2E GET /api/planning/companies/me/planning/unavailability avec PlanningUnavailabilityQuerySchema invalide."""
         # Test avec driver_id négatif (< 1)
-        response = client.get(
-            "/api/v1/planning/companies/me/planning/unavailability?driver_id=-1", headers=auth_headers
-        )
+        response = authenticated_client.get("/api/v1/planning/companies/me/planning/unavailability?driver_id=-1")
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
         # Vérifier que l'erreur mentionne driver_id
         error_str = str(data).lower()
         assert "driver_id" in error_str or "errors" in error_str
 
         # Test avec driver_id = 0 (invalide, doit être >= 1)
-        response = client.get("/api/v1/planning/companies/me/planning/unavailability?driver_id=0", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/planning/companies/me/planning/unavailability?driver_id=0")
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
         # Test avec driver_id non numérique (string)
-        response = client.get(
-            "/api/v1/planning/companies/me/planning/unavailability?driver_id=abc", headers=auth_headers
-        )
+        response = authenticated_client.get("/api/v1/planning/companies/me/planning/unavailability?driver_id=abc")
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
-    def test_planning_weekly_template_valid_query(self, client, auth_headers):
+    def test_planning_weekly_template_valid_query(self, authenticated_client):
         """✅ Test E2E GET /api/planning/companies/me/planning/weekly-template avec PlanningWeeklyTemplateQuerySchema valide."""
         # Test avec driver_id spécifié
-        response = client.get(
-            "/api/v1/planning/companies/me/planning/weekly-template?driver_id=1", headers=auth_headers
-        )
+        response = authenticated_client.get("/api/v1/planning/companies/me/planning/weekly-template?driver_id=1")
         # Peut être 200 (succès) ou 401 (pas autorisé)
         assert response.status_code in [200, 401]
 
         # Si succès (200), vérifier la structure de la réponse
         if response.status_code == 200:
-            data = response.get_json()
+            data = response.get_json() or {}
             assert "items" in data or "total" in data
 
         # Test sans driver_id (optionnel)
-        response = client.get("/api/v1/planning/companies/me/planning/weekly-template", headers=auth_headers)
+        response = authenticated_client.get("/api/v1/planning/companies/me/planning/weekly-template")
         assert response.status_code in [200, 401]
 
         # Si succès, vérifier la structure
         if response.status_code == 200:
-            data = response.get_json()
+            data = response.get_json() or {}
             assert "items" in data or "total" in data
 
-    def test_planning_weekly_template_invalid_query(self, client, auth_headers):
+    def test_planning_weekly_template_invalid_query(self, authenticated_client):
         """✅ Test E2E GET /api/planning/companies/me/planning/weekly-template avec PlanningWeeklyTemplateQuerySchema invalide."""
         # Test avec driver_id négatif (< 1)
-        response = client.get(
-            "/api/v1/planning/companies/me/planning/weekly-template?driver_id=-1", headers=auth_headers
-        )
+        response = authenticated_client.get("/api/v1/planning/companies/me/planning/weekly-template?driver_id=-1")
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
         # Vérifier que l'erreur mentionne driver_id
         error_str = str(data).lower()
         assert "driver_id" in error_str or "errors" in error_str
 
         # Test avec driver_id = 0 (invalide, doit être >= 1)
-        response = client.get(
-            "/api/v1/planning/companies/me/planning/weekly-template?driver_id=0", headers=auth_headers
-        )
+        response = authenticated_client.get("/api/v1/planning/companies/me/planning/weekly-template?driver_id=0")
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
         # Test avec driver_id non numérique (string)
-        response = client.get(
-            "/api/v1/planning/companies/me/planning/weekly-template?driver_id=abc", headers=auth_headers
-        )
+        response = authenticated_client.get("/api/v1/planning/companies/me/planning/weekly-template?driver_id=abc")
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
     # ========== ADMIN ENDPOINTS ==========
@@ -2618,7 +2598,7 @@ class TestSchemaValidationE2E:
             f"/api/v1/admin/users/{admin_user.id}/role", json={"role": "invalid_role"}, headers=admin_headers
         )
         assert response.status_code == 400
-        data = response.get_json()
+        data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
     # ========== ADMIN AUTONOMOUS ACTIONS REVIEW (E2E) ==========
@@ -2748,9 +2728,9 @@ class TestSchemaValidationE2E:
         assert "message" in data or "errors" in data
 
     # ========== COMPANIES ENDPOINTS ==========
-    def test_company_me_get_returns_company(self, client, auth_headers):
+    def test_company_me_get_returns_company(self, authenticated_client):
         url = "/api/v1/companies/me"
-        resp = client.get(url, headers=auth_headers)
+        resp = authenticated_client.get(url)
         assert resp.status_code in [200, 404]
         body = resp.get_json() or {}
         if resp.status_code == 200:
@@ -2758,7 +2738,7 @@ class TestSchemaValidationE2E:
             assert "id" in body
             assert ("name" in body) or ("contact_email" in body) or ("address" in body)
 
-    def test_company_me_update_valid_schema(self, client, auth_headers):
+    def test_company_me_update_valid_schema(self, authenticated_client):
         url = "/api/v1/companies/me"
         payload = {
             "name": "ATMR Transports SA",
@@ -2769,7 +2749,7 @@ class TestSchemaValidationE2E:
             "domicile_city": "Genève",
             "domicile_country": "CH",
         }
-        resp = client.put(url, json=payload, headers=auth_headers)
+        resp = authenticated_client.put(url, json=payload)
         assert resp.status_code in [200, 400]
         data = resp.get_json() or {}
         if resp.status_code == 200:
@@ -2789,7 +2769,7 @@ class TestSchemaValidationE2E:
         else:
             assert ("message" in data and "errors" in data) or ("error" in data)
 
-    def test_company_me_update_invalid_schema(self, client, auth_headers):
+    def test_company_me_update_invalid_schema(self, authenticated_client):
         url = "/api/v1/companies/me"
         payload = {
             "iban": "XX-INVALID",
@@ -2797,15 +2777,15 @@ class TestSchemaValidationE2E:
             "domicile_country": "CHE",
             "contact_email": "not-an-email",
         }
-        resp = client.put(url, json=payload, headers=auth_headers)
+        resp = authenticated_client.put(url, json=payload)
         assert resp.status_code in [400, 422]
         data = resp.get_json() or {}
         assert ("message" in data and "errors" in data) or ("error" in data)
 
-    def test_company_reservations_list(self, client, auth_headers):
+    def test_company_reservations_list(self, authenticated_client):
         """Test GET /api/v1/companies/me/reservations - liste des réservations."""
         url = "/api/v1/companies/me/reservations"
-        resp = client.get(url, headers=auth_headers)
+        resp = authenticated_client.get(url)
         assert resp.status_code in [200, 404]
         if resp.status_code == 200:
             data = resp.get_json() or {}
@@ -2814,44 +2794,44 @@ class TestSchemaValidationE2E:
             assert isinstance(data["reservations"], list)
             assert isinstance(data["total"], int)
 
-    def test_company_drivers_list(self, client, auth_headers):
+    def test_company_drivers_list(self, authenticated_client):
         """Test GET /api/v1/companies/me/drivers - liste des chauffeurs."""
         url = "/api/v1/companies/me/drivers"
-        resp = client.get(url, headers=auth_headers)
+        resp = authenticated_client.get(url)
         assert resp.status_code in [200, 404]
         if resp.status_code == 200:
             data = resp.get_json() or {}
             assert isinstance(data, list) or ("drivers" in data)
 
-    def test_company_clients_list(self, client, auth_headers):
+    def test_company_clients_list(self, authenticated_client):
         """Test GET /api/v1/companies/me/clients - liste des clients."""
         url = "/api/v1/companies/me/clients"
-        resp = client.get(url, headers=auth_headers)
+        resp = authenticated_client.get(url)
         assert resp.status_code in [200, 404]
         if resp.status_code == 200:
             data = resp.get_json() or {}
             assert "clients" in data or isinstance(data, list)
 
-    def test_company_dispatch_status(self, client, auth_headers):
+    def test_company_dispatch_status(self, authenticated_client):
         """Test GET /api/v1/companies/me/dispatch/status - statut dispatch."""
         url = "/api/v1/companies/me/dispatch/status"
-        resp = client.get(url, headers=auth_headers)
+        resp = authenticated_client.get(url)
         assert resp.status_code == 200
         data = resp.get_json() or {}
         assert "dispatch_enabled" in data
         assert isinstance(data["dispatch_enabled"], bool)
 
-    def test_company_dispatch_activate(self, client, auth_headers):
+    def test_company_dispatch_activate(self, authenticated_client):
         """Test POST /api/v1/companies/me/dispatch/activate - activer dispatch."""
         url = "/api/v1/companies/me/dispatch/activate"
-        resp = client.post(url, json={"enabled": True}, headers=auth_headers)
+        resp = authenticated_client.post(url, json={"enabled": True})
         assert resp.status_code in [200, 400]
         if resp.status_code == 200:
             data = resp.get_json() or {}
             assert "dispatch_enabled" in data
             assert isinstance(data["dispatch_enabled"], bool)
 
-    def test_company_driver_create_valid_schema(self, client, auth_headers):
+    def test_company_driver_create_valid_schema(self, authenticated_client):
         """Test POST /api/v1/companies/me/drivers/create - création chauffeur valide."""
         url = "/api/v1/companies/me/drivers/create"
         unique_suffix = uuid.uuid4().hex[:8]
@@ -2865,14 +2845,14 @@ class TestSchemaValidationE2E:
             "brand": "Mercedes",
             "license_plate": f"GE-{unique_suffix[:6]}",
         }
-        resp = client.post(url, json=payload, headers=auth_headers)
+        resp = authenticated_client.post(url, json=payload)
         assert resp.status_code in [201, 400, 409, 429, 500]
         if resp.status_code == 201:
             data = resp.get_json() or {}
             assert "id" in data
             assert "user_id" in data
 
-    def test_company_driver_create_invalid_schema(self, client, auth_headers):
+    def test_company_driver_create_invalid_schema(self, authenticated_client):
         """Test POST /api/v1/companies/me/drivers/create - création chauffeur invalide."""
         url = "/api/v1/companies/me/drivers/create"
         payload = {
@@ -2880,54 +2860,54 @@ class TestSchemaValidationE2E:
             "email": "invalid-email",  # format invalide
             "password": "short",  # trop court (< 8)
         }
-        resp = client.post(url, json=payload, headers=auth_headers)
+        resp = authenticated_client.post(url, json=payload)
         assert resp.status_code in [400, 422]
         data = resp.get_json() or {}
         assert ("message" in data and "errors" in data) or ("error" in data)
 
-    def test_company_vehicles_list(self, client, auth_headers):
+    def test_company_vehicles_list(self, authenticated_client):
         """Test GET /api/v1/companies/me/vehicles - liste véhicules."""
         url = "/api/v1/companies/me/vehicles"
-        resp = client.get(url, headers=auth_headers)
+        resp = authenticated_client.get(url)
         assert resp.status_code in [200, 404]
         if resp.status_code == 200:
             data = resp.get_json()
             assert isinstance(data, list)
 
-    def test_company_invoices_list(self, client, auth_headers):
+    def test_company_invoices_list(self, authenticated_client):
         """Test GET /api/v1/companies/me/invoices - liste factures."""
         url = "/api/v1/companies/me/invoices"
-        resp = client.get(url, headers=auth_headers)
+        resp = authenticated_client.get(url)
         assert resp.status_code in [200, 404, 500]
         if resp.status_code == 200:
             data = resp.get_json() or {}
             assert "invoices" in data or isinstance(data, list)
 
-    def test_company_dispatch_status_get(self, client, auth_headers):
+    def test_company_dispatch_status_get(self, authenticated_client):
         url = "/api/v1/companies/me/dispatch/status"
-        resp = client.get(url, headers=auth_headers)
+        resp = authenticated_client.get(url)
         assert resp.status_code in [200, 404, 400]
         data = resp.get_json() or {}
         # Réponse peut être un dict avec des clés de statut ou un message d'erreur
         assert isinstance(data, dict)
 
-    def test_company_dispatch_activate_post(self, client, auth_headers):
+    def test_company_dispatch_activate_post(self, authenticated_client):
         url = "/api/v1/companies/me/dispatch/activate"
-        resp = client.post(url, json={}, headers=auth_headers)
+        resp = authenticated_client.post(url, json={})
         assert resp.status_code in [200, 400, 404]
         data = resp.get_json() or {}
         assert isinstance(data, dict)
 
-    def test_company_dispatch_deactivate_post(self, client, auth_headers):
+    def test_company_dispatch_deactivate_post(self, authenticated_client):
         url = "/api/v1/companies/me/dispatch/deactivate"
-        resp = client.post(url, json={}, headers=auth_headers)
+        resp = authenticated_client.post(url, json={})
         assert resp.status_code in [200, 400, 404]
         data = resp.get_json() or {}
         assert isinstance(data, dict)
 
-    def test_company_assigned_reservations_get(self, client, auth_headers):
+    def test_company_assigned_reservations_get(self, authenticated_client):
         url = "/api/v1/companies/me/assigned-reservations"
-        resp = client.get(url, headers=auth_headers)
+        resp = authenticated_client.get(url)
         assert resp.status_code in [200, 404]
         if resp.status_code == 200:
             data = resp.get_json() or {}

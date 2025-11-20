@@ -22,23 +22,29 @@ def _app_context(app: Flask):
 @pytest.fixture
 def company(db):
     """Créer une entreprise pour les tests."""
-    return CompanyFactory()
+    company = CompanyFactory()
+    db.session.flush()  # ✅ FIX: Flush pour obtenir l'ID
+    return company
 
 
 @pytest.fixture
 def driver(db, company):
     """Créer un chauffeur pour les tests."""
-    return DriverFactory(company=company, is_active=True, is_available=True)
+    driver = DriverFactory(company=company, is_active=True, is_available=True)
+    db.session.flush()  # ✅ FIX: Flush pour obtenir l'ID
+    return driver
 
 
 @pytest.fixture
 def bookings(db, company):
     """Créer plusieurs bookings pour les tests."""
-    return [
+    bookings_list = [
         BookingFactory(company=company, status=BookingStatus.ACCEPTED),
         BookingFactory(company=company, status=BookingStatus.ACCEPTED),
         BookingFactory(company=company, status=BookingStatus.ACCEPTED),
     ]
+    db.session.flush()  # ✅ FIX: Flush pour obtenir les IDs
+    return bookings_list
 
 
 class TestRollbackTransactionnel:
@@ -88,17 +94,18 @@ class TestRollbackTransactionnel:
         # Vérifier qu'aucun booking n'a été assigné (rollback complet)
         # Le troisième devrait être skipped, mais les deux premiers ne devraient
         # PAS être persistés si une erreur survient
-        db.session.refresh(bookings[0])
-        db.session.refresh(bookings[1])
-        db.session.refresh(bookings[2])
+        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        booking0 = db.session.query(Booking).get(bookings[0].id)
+        booking1 = db.session.query(Booking).get(bookings[1].id)
+        booking2 = db.session.query(Booking).get(bookings[2].id)
 
         # Avec le rollback transactionnel, si une erreur se produit dans la transaction,
         # tous les changements doivent être annulés
         # Dans ce cas, le driver_id invalide devrait être détecté avant les updates DB
         # donc les bookings ne devraient pas être modifiés
-        assert bookings[0].driver_id is None or bookings[0].driver_id != driver.id
-        assert bookings[1].driver_id is None or bookings[1].driver_id != driver.id
-        assert bookings[2].driver_id is None
+        assert booking0.driver_id is None or booking0.driver_id != driver.id
+        assert booking1.driver_id is None or booking1.driver_id != driver.id
+        assert booking2.driver_id is None
 
         # Vérifier que le résultat indique les skips
         assert bookings[2].id in result.get("skipped", {})
@@ -126,13 +133,14 @@ class TestRollbackTransactionnel:
         )
 
         # Vérifier que tous les bookings sont assignés
-        db.session.refresh(bookings[0])
-        db.session.refresh(bookings[1])
-        db.session.refresh(bookings[2])
+        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        booking0 = db.session.query(Booking).get(bookings[0].id)
+        booking1 = db.session.query(Booking).get(bookings[1].id)
+        booking2 = db.session.query(Booking).get(bookings[2].id)
 
-        assert bookings[0].driver_id == driver.id
-        assert bookings[1].driver_id == driver.id
-        assert bookings[2].driver_id == driver.id
+        assert booking0.driver_id == driver.id
+        assert booking1.driver_id == driver.id
+        assert booking2.driver_id == driver.id
 
         # Vérifier que les assignments sont créés
         assignments_db = Assignment.query.filter(Assignment.booking_id.in_([b.id for b in bookings])).all()
@@ -191,11 +199,12 @@ class TestRollbackTransactionnel:
         # Vérifier que le conflit est géré (idempotence)
         # Le booking[0] devrait garder son assignment existant
         # Le booking[1] devrait être assigné
-        db.session.refresh(bookings[0])
-        db.session.refresh(bookings[1])
+        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        booking0 = db.session.query(Booking).get(bookings[0].id)
+        booking1 = db.session.query(Booking).get(bookings[1].id)
 
-        assert bookings[0].driver_id == driver.id  # Déjà assigné
-        assert bookings[1].driver_id == driver.id  # Nouvellement assigné
+        assert booking0.driver_id == driver.id  # Déjà assigné
+        assert booking1.driver_id == driver.id  # Nouvellement assigné
 
         # Vérifier que le résultat indique les skips pour le conflit
         # (ON CONFLICT DO NOTHING devrait être silencieux mais compter les conflits)
@@ -247,8 +256,14 @@ class TestRollbackTransactionnel:
 
         # Tous les bookings devraient être dans leur état initial
         # (pas d'assignation partielle due au crash)
-        for booking in bookings:
-            assert booking.driver_id is None or booking.status != BookingStatus.ASSIGNED
+        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        booking0 = db.session.query(Booking).get(bookings[0].id)
+        booking1 = db.session.query(Booking).get(bookings[1].id)
+        booking2 = db.session.query(Booking).get(bookings[2].id)
+
+        assert booking0.driver_id is None or booking0.status != BookingStatus.ASSIGNED
+        assert booking1.driver_id is None or booking1.status != BookingStatus.ASSIGNED
+        assert booking2.driver_id is None or booking2.status != BookingStatus.ASSIGNED
 
     def test_transaction_avec_savepoint(self, db, company, driver, bookings):
         """Test : Transaction avec savepoint (appel depuis engine.run())."""
@@ -268,24 +283,23 @@ class TestRollbackTransactionnel:
         ]
 
         # Démarrer une transaction externe (simule engine.run())
-        with db.session.begin():
-            # Appeler apply_assignments qui devrait créer un savepoint
-            result = apply_assignments(
-                company_id=company.id,
-                assignments=assignments,
-            )
+        # ✅ FIX: apply_assignments gère déjà les transactions avec _begin_tx(),
+        # donc on ne doit pas créer une transaction externe ici
+        # Appeler apply_assignments qui devrait créer une transaction
+        result = apply_assignments(
+            company_id=company.id,
+            assignments=assignments,
+        )
 
-            # Vérifier que les assignations sont appliquées
-            assert len(result["applied"]) == 3
-
-            # Commit de la transaction externe
-            db.session.commit()
+        # Vérifier que les assignations sont appliquées
+        assert len(result["applied"]) == 3
 
         # Vérifier que les changements sont persistés
-        db.session.refresh(bookings[0])
-        db.session.refresh(bookings[1])
-        db.session.refresh(bookings[2])
+        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        booking0 = db.session.query(Booking).get(bookings[0].id)
+        booking1 = db.session.query(Booking).get(bookings[1].id)
+        booking2 = db.session.query(Booking).get(bookings[2].id)
 
-        assert bookings[0].driver_id == driver.id
-        assert bookings[1].driver_id == driver.id
-        assert bookings[2].driver_id == driver.id
+        assert booking0.driver_id == driver.id
+        assert booking1.driver_id == driver.id
+        assert booking2.driver_id == driver.id

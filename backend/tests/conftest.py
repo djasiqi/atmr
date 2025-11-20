@@ -197,6 +197,94 @@ def admin_headers(client, sample_admin_user):
     return {"Authorization": f"Bearer {token}"}
 
 
+@pytest.fixture
+def authenticated_client(client, sample_user):
+    """Client Flask authentifié avec token JWT."""
+    from flask_jwt_extended import create_access_token
+
+    claims = {
+        "role": sample_user.role.value,
+        "company_id": getattr(sample_user, "company_id", None),
+        "driver_id": getattr(sample_user, "driver_id", None),
+        "aud": "atmr-api",
+    }
+    with client.application.app_context():
+        token = create_access_token(identity=str(sample_user.public_id), additional_claims=claims)
+
+    # Créer une classe wrapper qui ajoute automatiquement les headers
+    class AuthenticatedClient(object):
+        def __init__(self, client, token):
+            super().__init__()
+            self._client = client
+            self._token = token
+            self._headers = {"Authorization": f"Bearer {token}"}
+
+        def _add_headers(self, kwargs):
+            """Ajoute les headers d'authentification si non présents."""
+            if "headers" not in kwargs:
+                kwargs["headers"] = {}
+            kwargs["headers"].update(self._headers)
+            return kwargs
+
+        def get(self, *args, **kwargs):
+            kwargs = self._add_headers(kwargs)
+            return self._client.get(*args, **kwargs)
+
+        def post(self, *args, **kwargs):
+            kwargs = self._add_headers(kwargs)
+            return self._client.post(*args, **kwargs)
+
+        def put(self, *args, **kwargs):
+            kwargs = self._add_headers(kwargs)
+            return self._client.put(*args, **kwargs)
+
+        def patch(self, *args, **kwargs):
+            kwargs = self._add_headers(kwargs)
+            return self._client.patch(*args, **kwargs)
+
+        def delete(self, *args, **kwargs):
+            kwargs = self._add_headers(kwargs)
+            return self._client.delete(*args, **kwargs)
+
+        def __getattr__(self, name):
+            """Déléguer les autres attributs au client original."""
+            return getattr(self._client, name)
+
+    return AuthenticatedClient(client, token)
+
+
+@pytest.fixture
+def sample_booking(db, sample_company, sample_client):
+    """Crée un booking de test pour les tests ML monitoring et autres."""
+    from datetime import datetime, timedelta, timezone
+
+    from models.booking import Booking
+    from models.enums import BookingStatus
+
+    booking = Booking()
+    booking.customer_name = "Test Customer"
+    booking.pickup_location = "Rue de Test 1, 1000 Lausanne"
+    booking.dropoff_location = "Rue de Test 2, 1000 Lausanne"
+    booking.pickup_lat = 46.2044
+    booking.pickup_lon = 6.1432
+    booking.dropoff_lat = 46.2100
+    booking.dropoff_lon = 6.1500
+    booking.booking_type = "standard"
+    booking.scheduled_time = datetime.now(timezone.utc) + timedelta(hours=2)
+    booking.amount = 50.0
+    booking.status = BookingStatus.PENDING
+    booking.user_id = sample_client.user_id
+    booking.client_id = sample_client.id
+    booking.company_id = sample_company.id
+    booking.duration_seconds = 1800
+    booking.distance_meters = 5000
+
+    db.session.add(booking)
+    db.session.flush()  # Use flush instead of commit to work with savepoints
+    db.session.refresh(booking)
+    return booking
+
+
 # ========== FIXTURES AVANCÉES AVEC FACTORIES ==========
 
 

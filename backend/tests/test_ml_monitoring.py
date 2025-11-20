@@ -10,17 +10,17 @@ import pytest
 class TestMLMonitoringService:
     """Tests du service de monitoring ML."""
 
-    def test_log_prediction(self, app):
+    def test_log_prediction(self, app, sample_booking):
         """Test enregistrement d'une prédiction."""
         from db import db
         from models.ml_prediction import MLPrediction
         from services.ml_monitoring_service import MLMonitoringService
 
         with app.app_context():
-            # Log une prédiction
+            # Log une prédiction avec un booking réel
             prediction = MLMonitoringService.log_prediction(
-                booking_id=0.123,
-                driver_id=0.456,
+                booking_id=sample_booking.id,
+                driver_id=0,  # driver_id peut être 0 ou None pour les tests
                 predicted_delay=8.5,
                 confidence=0.85,
                 risk_level="medium",
@@ -31,7 +31,7 @@ class TestMLMonitoringService:
             )
 
             assert prediction.id is not None
-            assert prediction.booking_id == 123
+            assert prediction.booking_id == sample_booking.id
             assert prediction.predicted_delay_minutes == 8.5
             assert prediction.confidence == 0.85
 
@@ -41,16 +41,16 @@ class TestMLMonitoringService:
 
         print("✅ Log prediction OK")
 
-    def test_update_actual_delay(self, app):
+    def test_update_actual_delay(self, app, sample_booking):
         """Test mise à jour retard réel."""
         from db import db
         from services.ml_monitoring_service import MLMonitoringService
 
         with app.app_context():
-            # Log prédiction
+            # Log prédiction avec un booking réel
             prediction = MLMonitoringService.log_prediction(
-                booking_id=0.124,
-                driver_id=0.456,
+                booking_id=sample_booking.id,
+                driver_id=0,  # driver_id peut être 0 ou None pour les tests
                 predicted_delay=8.5,
                 confidence=0.85,
                 risk_level="medium",
@@ -59,7 +59,7 @@ class TestMLMonitoringService:
             )
 
             # Mettre à jour retard réel
-            MLMonitoringService.update_actual_delay(booking_id=0.124, actual_delay=9.2)
+            MLMonitoringService.update_actual_delay(booking_id=sample_booking.id, actual_delay=9.2)
 
             # Vérifier
             db.session.refresh(prediction)
@@ -73,18 +73,43 @@ class TestMLMonitoringService:
 
         print("✅ Update actual delay OK")
 
-    def test_get_metrics(self, app):
+    def test_get_metrics(self, app, sample_booking, db):
         """Test calcul métriques."""
-        from db import db
+        from models.booking import Booking
+        from models.enums import BookingStatus
         from services.ml_monitoring_service import MLMonitoringService
 
         with app.app_context():
-            # Créer quelques prédictions
-            predictions = []
+            # Créer plusieurs bookings pour les tests
+            bookings = []
             for i in range(5):
+                booking = Booking()
+                booking.customer_name = f"Test Customer {i}"
+                booking.pickup_location = f"Rue de Test {i}, 1000 Lausanne"
+                booking.dropoff_location = f"Rue de Test {i + 1}, 1000 Lausanne"
+                booking.pickup_lat = 46.2044
+                booking.pickup_lon = 6.1432
+                booking.dropoff_lat = 46.2100
+                booking.dropoff_lon = 6.1500
+                booking.booking_type = "standard"
+                booking.amount = 50.0
+                booking.status = BookingStatus.PENDING
+                booking.user_id = sample_booking.user_id
+                booking.client_id = sample_booking.client_id
+                booking.company_id = sample_booking.company_id
+                booking.duration_seconds = 1800
+                booking.distance_meters = 5000
+                db.session.add(booking)
+                bookings.append(booking)
+
+            db.session.flush()
+
+            # Créer quelques prédictions avec des bookings réels
+            predictions = []
+            for i, booking in enumerate(bookings):
                 p = MLMonitoringService.log_prediction(
-                    booking_id=0.200 + i,
-                    driver_id=0.456,
+                    booking_id=booking.id,
+                    driver_id=0,  # driver_id peut être 0 ou None pour les tests
                     predicted_delay=5.0 + i,
                     confidence=0.8,
                     risk_level="medium",
@@ -109,9 +134,11 @@ class TestMLMonitoringService:
             # Cleanup
             for p in predictions:
                 db.session.delete(p)
+            for booking in bookings:
+                db.session.delete(booking)
             db.session.commit()
 
-        print("✅ Get metrics OK (MAE: {metrics['mae']}, R²: {metrics['r2']})")
+        print(f"✅ Get metrics OK (MAE: {metrics['mae']}, R²: {metrics['r2']})")
 
 
 class TestMLMonitoringAPI:

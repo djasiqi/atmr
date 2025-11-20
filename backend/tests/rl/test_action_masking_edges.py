@@ -151,6 +151,9 @@ class TestActionMaskingEdges:
 
     def test_impossible_time_windows(self, mock_env):
         """Test avec fenêtres temporelles impossibles."""
+        # ✅ FIX: Définir current_time pour que les fenêtres soient vraiment impossibles
+        mock_env.current_time = 10  # Temps actuel > 0 pour que time_window_end=0 soit expiré
+
         # Créer des bookings avec des fenêtres temporelles impossibles
         mock_env.drivers = [{"id": 0, "lat": 46.2, "lon": 6.1, "available": True, "load": 0}]
         mock_env.bookings = [
@@ -159,16 +162,16 @@ class TestActionMaskingEdges:
                 "pickup_lat": 46.2,
                 "pickup_lon": 6.1,
                 "priority": 3,
-                "time_window_end": 0,  # Fenêtre expirée
+                "time_window_end": 0,  # Fenêtre expirée (current_time=10 > 0)
                 "time_remaining": -10,
                 "assigned": False,
             },
             {
                 "id": 1,
-                "pickup_lat": 46.3,  # Très loin
+                "pickup_lat": 46.3,  # Très loin (distance > 0, donc travel_time > 0)
                 "pickup_lon": 6.2,
                 "priority": 3,
-                "time_window_end": 5,  # Fenêtre très courte
+                "time_window_end": 5,  # Fenêtre très courte (current_time=10 + travel_time > 5)
                 "time_remaining": 5,
                 "assigned": False,
             },

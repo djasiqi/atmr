@@ -283,6 +283,7 @@ class TestSolverConstraints:
         booking = BookingFactory(company=company)
 
         # Fenêtre très stricte : 2h-2h05
+        # ✅ FIX: Le solver attend 2 * len(bookings) fenêtres (pickup + dropoff pour chaque booking)
         problem = {
             "bookings": [booking],
             "drivers": [driver],
@@ -291,7 +292,7 @@ class TestSolverConstraints:
             "starts": [0],
             "ends": [0],
             "service_times": [5],
-            "time_windows": [(120, 125)],  # Très étroit
+            "time_windows": [(120, 125), (180, 185)],  # ✅ FIX: Pickup (120-125) + Dropoff (180-185)
             "driver_windows": [(0, 480)],
             "capacities": {"passengers": [4], "wheelchairs": [1], "stretchers": [0]},
             "demands": {"passengers": [1], "wheelchairs": [0], "stretchers": [0]},

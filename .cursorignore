@@ -55,7 +55,7 @@ Redis/
 
 # ===== Logs =====
 *.log
-*.txt
+
 session/
 
 # ===== Backup files =====
