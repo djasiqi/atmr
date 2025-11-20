@@ -450,9 +450,8 @@ class ResetPassword(Resource):
                 return {"error": error_message}, 400
 
             # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
-            current_user.set_password(
-                new_password
-            )  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            current_user.set_password(new_password)
             db.session.commit()
 
             # Envoi de l'email de confirmation
