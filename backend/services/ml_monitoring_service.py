@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 
 from db import db
-from feature_flags import FeatureFlags
+from feature_flags import FeatureFlags, get_feature_flags_status
 from models.ml_prediction import MLPrediction
 from shared.time_utils import now_utc
 
@@ -57,7 +57,7 @@ class MLMonitoringService:
 
         """
         try:
-            stats = FeatureFlags.get_stats()
+            status = get_feature_flags_status()
 
             prediction = MLPrediction()
             prediction.booking_id = booking_id
@@ -69,8 +69,8 @@ class MLMonitoringService:
             prediction.contributing_factors = json.dumps(contributing_factors)
             prediction.model_version = model_version
             prediction.prediction_time_ms = prediction_time_ms
-            prediction.feature_flag_enabled = stats["ml_enabled"]
-            prediction.traffic_percentage = stats["ml_traffic_percentage"]
+            prediction.feature_flag_enabled = status["config"]["ML_ENABLED"]
+            prediction.traffic_percentage = status["config"]["ML_TRAFFIC_PERCENTAGE"]
 
             db.session.add(prediction)
             db.session.commit()

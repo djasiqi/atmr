@@ -45,11 +45,14 @@ def test_osrm_fallback_matrix():
 
 def test_osrm_table_mock_success(monkeypatch):
     """Mock OSRM table renvoie matrice de durées."""
+    from datetime import timedelta
+
     from services.osrm_client import _table
 
     def mock_requests_get(*args, **kwargs):
         class MockResponse:
             status_code = 200
+            elapsed = timedelta(seconds=0.05)  # 50ms
 
             def json(self):
                 return {"code": "Ok", "durations": [[0, 600], [600, 0]]}

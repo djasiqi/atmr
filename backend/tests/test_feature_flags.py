@@ -107,9 +107,9 @@ class TestFeatureFlags:
 class TestFeatureFlagsAPI:
     """Tests des routes API feature flags."""
 
-    def test_get_status(self, client):
+    def test_get_status(self, client, auth_headers):
         """Test endpoint GET /api/feature-flags/status."""
-        response = client.get("/api/feature-flags/status")
+        response = client.get("/api/feature-flags/status", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.get_json()
@@ -120,9 +120,9 @@ class TestFeatureFlagsAPI:
 
         print("✅ GET /status OK (health: {data['health']['status']})")
 
-    def test_enable_ml(self, client):
+    def test_enable_ml(self, client, auth_headers):
         """Test endpoint POST /api/feature-flags/ml/enable."""
-        response = client.post("/api/feature-flags/ml/enable", json={"percentage": 25})
+        response = client.post("/api/feature-flags/ml/enable", json={"percentage": 25}, headers=auth_headers)
 
         assert response.status_code == 200
         data = response.get_json()
@@ -134,9 +134,9 @@ class TestFeatureFlagsAPI:
 
         print("✅ POST /ml/enable OK (25%)")
 
-    def test_disable_ml(self, client):
+    def test_disable_ml(self, client, auth_headers):
         """Test endpoint POST /api/feature-flags/ml/disable."""
-        response = client.post("/api/feature-flags/ml/disable")
+        response = client.post("/api/feature-flags/ml/disable", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.get_json()
@@ -147,9 +147,9 @@ class TestFeatureFlagsAPI:
 
         print("✅ POST /ml/disable OK")
 
-    def test_set_percentage(self, client):
+    def test_set_percentage(self, client, auth_headers):
         """Test endpoint POST /api/feature-flags/ml/percentage."""
-        response = client.post("/api/feature-flags/ml/percentage", json={"percentage": 75})
+        response = client.post("/api/feature-flags/ml/percentage", json={"percentage": 75}, headers=auth_headers)
 
         assert response.status_code == 200
         data = response.get_json()
@@ -159,11 +159,12 @@ class TestFeatureFlagsAPI:
 
         print("✅ POST /ml/percentage OK (75%)")
 
-    def test_set_invalid_percentage(self, client):
+    def test_set_invalid_percentage(self, client, auth_headers):
         """Test validation pourcentage invalide."""
         response = client.post(
             "/api/feature-flags/ml/percentage",
             json={"percentage": 150},  # Invalide
+            headers=auth_headers,
         )
 
         assert response.status_code == 400
@@ -173,13 +174,13 @@ class TestFeatureFlagsAPI:
 
         print("✅ Validation percentage OK (rejection 150%)")
 
-    def test_reset_stats(self, client):
+    def test_reset_stats(self, client, auth_headers):
         """Test endpoint POST /api/feature-flags/reset-stats."""
         # D'abord créer des stats
-        client.post("/api/feature-flags/ml/enable", json={"percentage": 100})
+        client.post("/api/feature-flags/ml/enable", json={"percentage": 100}, headers=auth_headers)
 
         # Reset
-        response = client.post("/api/feature-flags/reset-stats")
+        response = client.post("/api/feature-flags/reset-stats", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.get_json()
@@ -189,9 +190,9 @@ class TestFeatureFlagsAPI:
 
         print("✅ POST /reset-stats OK")
 
-    def test_ml_health(self, client):
+    def test_ml_health(self, client, auth_headers):
         """Test endpoint GET /api/feature-flags/ml/health."""
-        response = client.get("/api/feature-flags/ml/health")
+        response = client.get("/api/feature-flags/ml/health", headers=auth_headers)
 
         # Le code peut être 200 (healthy) ou 503 (degraded)
         assert response.status_code in [200, 503]
