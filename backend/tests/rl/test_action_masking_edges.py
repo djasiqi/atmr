@@ -59,7 +59,7 @@ class TestActionMaskingEdges:
             pytest.skip("ImprovedDQNAgent non disponible")
 
         return ImprovedDQNAgent(
-            state_dim=0.100,
+            state_dim=100,
             action_dim=16,  # 3 drivers * 5 bookings + 1 wait
             learning_rate=0.0001,
             epsilon_start=0.1,

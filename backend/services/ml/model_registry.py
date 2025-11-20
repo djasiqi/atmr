@@ -150,7 +150,7 @@ class ModelRegistry:
     def _load_registry(self) -> Dict[str, Any]:
         """Charge le registre depuis le fichier."""
         if self.registry_file.exists():
-            with Path(self.registry_file, encoding="utf-8").open() as f:
+            with self.registry_file.open("r", encoding="utf-8") as f:
                 return json.load(f)
         return {
             "models": {},
@@ -162,7 +162,7 @@ class ModelRegistry:
     def _save_registry(self):
         """Sauvegarde le registre dans le fichier."""
         self.registry["last_updated"] = datetime.now(UTC).isoformat()
-        with Path(self.registry_file, "w", encoding="utf-8").open() as f:
+        with self.registry_file.open("w", encoding="utf-8") as f:
             json.dump(self.registry, f, indent=2, ensure_ascii=False)
 
     def register_model(
@@ -197,7 +197,7 @@ class ModelRegistry:
         metadata_filename = f"{metadata.model_name}_{metadata.model_arch}_{metadata.version}.json"
         metadata_path = self.metadata_path / metadata_filename
 
-        with Path(metadata_path, "w", encoding="utf-8").open() as f:
+        with metadata_path.open("w", encoding="utf-8") as f:
             json.dump(metadata.to_dict(), f, indent=2, ensure_ascii=False)
 
         # Mettre à jour le registre
@@ -294,7 +294,7 @@ class ModelRegistry:
 
         # Charger les métadonnées complètes
         metadata_path = Path(target_model["metadata_path"])
-        with Path(metadata_path, encoding="utf-8").open() as f:
+        with metadata_path.open("r", encoding="utf-8") as f:
             metadata_data = json.load(f)
 
         metadata = ModelMetadata.from_dict(metadata_data)
@@ -536,7 +536,7 @@ class ModelPromotionValidator:
             issues.append(f"Fichier de métadonnées manquant: {metadata_path}")
             return False, issues
 
-        with Path(metadata_path, encoding="utf-8").open() as f:
+        with metadata_path.open("r", encoding="utf-8") as f:
             metadata_data = json.load(f)
 
         metadata = ModelMetadata.from_dict(metadata_data)
