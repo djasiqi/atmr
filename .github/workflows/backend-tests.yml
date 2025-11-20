@@ -59,6 +59,7 @@ jobs:
         run: |
           cd backend
           mypy --install-types --non-interactive --ignore-missing-imports \
+            --explicit-package-bases \
             models/ routes/ services/ tasks/ shared/
         continue-on-error: true # MyPy strict peut être activé progressivement
 
@@ -101,7 +102,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U test -d atmr_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -161,6 +162,8 @@ jobs:
           echo "✅ PostgreSQL est prêt"
 
       - name: Run database migrations
+        env:
+          FLASK_APP: backend.wsgi
         run: |
           cd backend
           flask db upgrade head
@@ -382,7 +385,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U test -d atmr_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
