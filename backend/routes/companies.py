@@ -2035,16 +2035,16 @@ class CompanyClients(Resource):
             pwd = uuid4().hex[:12]
             # Validation explicite du mot de passe auto-généré avant set_password (sécurité)
             validate_password_or_raise(pwd, _user=user)
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
-            user.set_password(pwd)
+            user.set_password(pwd)  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
         else:
             generated_pwd = uuid4().hex
             # Validation explicite du mot de passe auto-généré avant set_password (sécurité)
             validate_password_or_raise(generated_pwd, _user=user)
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
-            user.set_password(generated_pwd)
+            user.set_password(
+                generated_pwd
+            )  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
 
         db.session.add(user)
         db.session.flush()  # pour récupérer user.id
@@ -2441,9 +2441,10 @@ class CreateDriver(Resource):
                 # Utiliser abort au lieu de return pour réduire le nombre de returns
                 companies_ns.abort(400, str(e))
 
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
-            new_user.set_password(validated_data["password"])
+            new_user.set_password(
+                validated_data["password"]
+            )  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             db.session.add(new_user)
             db.session.flush()  # Pour obtenir l'ID du nouvel utilisateur
 

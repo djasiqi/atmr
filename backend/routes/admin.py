@@ -358,9 +358,10 @@ class ResetUserPassword(Resource):
             from routes.utils import validate_password_or_raise
 
             validate_password_or_raise(new_password, _user=u)
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
-            u.set_password(new_password)
+            u.set_password(
+                new_password
+            )  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             u.force_password_change = True
             db.session.commit()
             return {

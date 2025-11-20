@@ -348,9 +348,10 @@ class ResetPassword(Resource):
             except ValueError as e:
                 return {"error": str(e)}, 400
 
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
-            user.set_password(new_password)
+            user.set_password(
+                new_password
+            )  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             user.force_password_change = False
             db.session.commit()
             return {"message": "Mot de passe réinitialisé avec succès."}, 200

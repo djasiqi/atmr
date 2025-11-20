@@ -33,10 +33,11 @@ def app() -> Flask:
 
     app = create_app()
 
-    # ✅ FIX: Utiliser la DB PostgreSQL du docker-compose pour les tests
+    # ✅ FIX: Utiliser la DB PostgreSQL du workflow GitHub Actions pour les tests
     # Évite les problèmes d'enums, contraintes nommées, et JSONB
     # Les tests utilisent des savepoints (transactions nested) donc pas de risque pour les données
-    database_url = os.getenv("DATABASE_URL", "postgresql+psycopg://atmr:atmr@postgres:5432/atmr")
+    # Workflow utilise test:test@localhost:5432/atmr_test
+    database_url = os.getenv("DATABASE_URL", "postgresql://test:test@localhost:5432/atmr_test")
 
     app.config.update(
         {

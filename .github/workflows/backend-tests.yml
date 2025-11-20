@@ -312,10 +312,42 @@ jobs:
       - name: Run Semgrep (OWASP rules)
         run: |
           cd backend
-          # Générer rapport JSON (ne bloque pas)
-          semgrep --config p/ci --config p/security-audit . --json -o ../artifacts/semgrep.json || true
+          # Générer rapport JSON avec configuration personnalisée (ne bloque pas)
+          semgrep --config ../../.semgrep.yml --config p/ci --config p/security-audit . --json -o ../artifacts/semgrep.json || true
+
+          # Afficher un résumé des findings pour améliorer la lisibilité
+          if [ -f ../artifacts/semgrep.json ]; then
+            echo "📊 Résumé Semgrep:"
+            python3 << 'EOF'
+          import json
+          import sys
+
+          try:
+              with open('../artifacts/semgrep.json', 'r') as f:
+                  data = json.load(f)
+                  results = data.get('results', [])
+                  if results:
+                      print(f"   ⚠️  Trouvé {len(results)} problème(s) de sécurité")
+                      # Afficher les 5 premiers findings
+                      for i, r in enumerate(results[:5], 1):
+                          check_id = r.get('check_id', 'unknown')
+                          path = r.get('path', 'unknown')
+                          line = r.get('start', {}).get('line', 'unknown')
+                          message = r.get('message', '')[:80]
+                          print(f"   {i}. {check_id}")
+                          print(f"      📁 {path}:{line}")
+                          print(f"      💬 {message}...")
+                      if len(results) > 5:
+                          print(f"   ... et {len(results) - 5} autre(s) problème(s)")
+                  else:
+                      print("   ✅ Aucun problème de sécurité détecté")
+          except Exception as e:
+              print(f"   ❌ Erreur lors de la lecture du rapport: {e}")
+          EOF
+          fi
+
           # Vérifier règles de sécurité (bloque si trouvées)
-          semgrep --config p/ci --config p/security-audit . --error
+          semgrep --config ../../.semgrep.yml --config p/ci --config p/security-audit . --error
         continue-on-error: false
 
       - name: Upload security reports
@@ -365,7 +397,7 @@ jobs:
         run: |
           cd backend
           python -m pip install --upgrade pip
-          pip install flask flask-sqlalchemy alembic
+          pip install flask flask-sqlalchemy alembic flask-migrate psycopg2-binary
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
@@ -378,6 +410,8 @@ jobs:
           JWT_SECRET_KEY: test-jwt
           APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
           API_LEGACY_ENABLED: "false"
+          PYTHONPATH: ${{ github.workspace }}
+          FLASK_APP: backend.wsgi
         run: |
           cd backend
           flask db upgrade head
@@ -390,6 +424,8 @@ jobs:
           JWT_SECRET_KEY: test-jwt
           APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
           API_LEGACY_ENABLED: "false"
+          PYTHONPATH: ${{ github.workspace }}
+          FLASK_APP: backend.wsgi
         run: |
           cd backend
           flask db downgrade -1
@@ -403,6 +439,8 @@ jobs:
           JWT_SECRET_KEY: test-jwt
           APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
           API_LEGACY_ENABLED: "false"
+          PYTHONPATH: ${{ github.workspace }}
+          FLASK_APP: backend.wsgi
         run: |
           cd backend
           # Vérifier aucune migration auto-détectée non commitée

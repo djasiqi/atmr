@@ -42,4 +42,4 @@ from app import create_app  # noqa: E402
 # On choisit la conf via FLASK_ENV/FLASK_CONFIG (fallback: production).
 _cfg = os.getenv("FLASK_ENV") or os.getenv("FLASK_CONFIG") or "production"
 app = create_app(_cfg)
-print("✅ [WSGI] Application Flask créée (config={_cfg})", flush=True)
+print(f"✅ [WSGI] Application Flask créée (config={_cfg})", flush=True)
