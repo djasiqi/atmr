@@ -91,6 +91,9 @@ jobs:
       APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
       API_LEGACY_ENABLED: "false"
       PYTHONPATH: ${{ github.workspace }}
+      SOCKETIO_ASYNC_MODE: threading
+      SKIP_SOCKETIO: "true"
+      SKIP_ROUTES_INIT: "true"
 
     services:
       postgres:
