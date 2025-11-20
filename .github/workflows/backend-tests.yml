@@ -401,7 +401,18 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcairo2-dev libffi-dev pkg-config
+          sudo apt-get install -y libcairo2-dev libffi-dev pkg-config postgresql-client
+
+      - name: Wait for PostgreSQL (migrations job)
+        run: |
+          echo "⏳ Attente que PostgreSQL soit prêt..."
+          for i in $(seq 1 30); do
+            PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1' > /dev/null 2>&1 && break
+            echo "  Tentative $i/30..."
+            sleep 1
+          done
+          PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1' || exit 1
+          echo "✅ PostgreSQL est prêt"
 
       - name: Install dependencies
         run: |
