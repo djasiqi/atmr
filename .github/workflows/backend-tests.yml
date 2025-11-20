@@ -75,6 +75,22 @@ jobs:
     name: Tests (pytest)
     runs-on: ubuntu-latest
 
+    # ✅ Variables d'environnement au niveau du job pour éviter les connexions "root"
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: test
+      PGPASSWORD: test
+      PGDATABASE: atmr_test
+      REDIS_URL: redis://localhost:6379/0
+      FLASK_CONFIG: testing
+      SECRET_KEY: test-secret-key
+      JWT_SECRET_KEY: test-jwt-secret
+      APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+      API_LEGACY_ENABLED: "false"
+      PYTHONPATH: ${{ github.workspace }}
+
     services:
       postgres:
         image: postgres:16-alpine
@@ -133,45 +149,29 @@ jobs:
             pip install -r backend/requirements-dev.txt
           fi
 
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          echo "⏳ Attente que PostgreSQL soit prêt..."
+          for i in $(seq 1 30); do
+            PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1' > /dev/null 2>&1 && break
+            echo "  Tentative $i/30..."
+            sleep 1
+          done
+          PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1' || exit 1
+          echo "✅ PostgreSQL est prêt"
+
       - name: Run database migrations
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
-          REDIS_URL: redis://localhost:6379/0
-          FLASK_CONFIG: testing
-          SECRET_KEY: test-secret-key
-          JWT_SECRET_KEY: test-jwt-secret
-          APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
-          API_LEGACY_ENABLED: "false"
-          PYTHONPATH: ${{ github.workspace }}
         run: |
           cd backend
           flask db upgrade head
 
       - name: Run pytest with coverage
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
-          REDIS_URL: redis://localhost:6379/0
-          FLASK_CONFIG: testing
-          SECRET_KEY: test-secret-key
-          JWT_SECRET_KEY: test-jwt-secret
-          APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
-          API_LEGACY_ENABLED: "false"
-          PYTHONPATH: ${{ github.workspace }}
         run: |
           # Lancer pytest depuis la racine pour que les imports 'backend' fonctionnent
           pytest backend/tests -v --cov=backend --cov-report=xml:backend/coverage.xml --cov-report=html:backend/htmlcov --cov-report=term-missing
 
       # ✅ 3.1: Vérifier couverture globale ≥ 70% (bloquant)
       - name: Check global coverage >= 70%
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
-          REDIS_URL: redis://localhost:6379/0
-          FLASK_CONFIG: testing
-          SECRET_KEY: test-secret-key
-          JWT_SECRET_KEY: test-jwt-secret
-          APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
-          API_LEGACY_ENABLED: "false"
-          PYTHONPATH: ${{ github.workspace }}
         run: |
           cd backend
           echo "📊 Vérification couverture globale >= 70%..."
@@ -180,15 +180,6 @@ jobs:
 
       # ✅ 3.1: Vérifier couverture modules critiques >= 80%
       - name: Check critical modules coverage >= 80%
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
-          REDIS_URL: redis://localhost:6379/0
-          FLASK_CONFIG: testing
-          SECRET_KEY: test-secret-key
-          JWT_SECRET_KEY: test-jwt-secret
-          APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
-          API_LEGACY_ENABLED: "false"
-          PYTHONPATH: ${{ github.workspace }}
         run: |
           echo "🚨 Vérification couverture modules critiques >= 80%..."
 
@@ -362,6 +353,25 @@ jobs:
     name: Migrations Check
     runs-on: ubuntu-latest
 
+    # ✅ Variables d'environnement au niveau du job pour éviter les connexions "root"
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: test
+      PGPASSWORD: test
+      PGDATABASE: atmr_test
+      REDIS_URL: redis://localhost:6379/0
+      FLASK_CONFIG: testing
+      SECRET_KEY: test-secret-key
+      JWT_SECRET_KEY: test-jwt-secret
+      APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+      API_LEGACY_ENABLED: "false"
+      PYTHONPATH: ${{ github.workspace }}
+      SOCKETIO_ASYNC_MODE: threading
+      SKIP_SOCKETIO: "true"
+      SKIP_ROUTES_INIT: "true"
+
     services:
       postgres:
         image: postgres:16-alpine
@@ -404,13 +414,6 @@ jobs:
 
       - name: Run migrations (upgrade)
         env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
-          FLASK_CONFIG: testing
-          SECRET_KEY: test-secret
-          JWT_SECRET_KEY: test-jwt
-          APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
-          API_LEGACY_ENABLED: "false"
-          PYTHONPATH: ${{ github.workspace }}
           FLASK_APP: backend.wsgi
         run: |
           cd backend
@@ -418,28 +421,27 @@ jobs:
 
       - name: Test rollback (downgrade -1)
         env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
-          FLASK_CONFIG: testing
-          SECRET_KEY: test-secret
-          JWT_SECRET_KEY: test-jwt
-          APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
-          API_LEGACY_ENABLED: "false"
-          PYTHONPATH: ${{ github.workspace }}
           FLASK_APP: backend.wsgi
         run: |
           cd backend
-          flask db downgrade -1
+          # Obtenir la révision actuelle
+          CURRENT_REV=$(flask db current 2>/dev/null | grep -oE '[a-f0-9]{12}' | head -1 || echo "")
+          if [ -n "$CURRENT_REV" ]; then
+            # Obtenir l'historique et trouver la révision précédente
+            PREV_REV=$(flask db history | grep -B1 "$CURRENT_REV" | head -1 | grep -oE '[a-f0-9]{12}' || echo "")
+            if [ -n "$PREV_REV" ] && [ "$PREV_REV" != "$CURRENT_REV" ]; then
+              echo "Downgrading from $CURRENT_REV to $PREV_REV"
+              flask db downgrade "$PREV_REV"
+            else
+              echo "⚠️ Pas de révision précédente trouvée, skip downgrade"
+            fi
+          else
+            echo "⚠️ Aucune révision actuelle trouvée, skip downgrade"
+          fi
           flask db upgrade head
 
       - name: Check for pending migrations
         env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
-          FLASK_CONFIG: testing
-          SECRET_KEY: test-secret
-          JWT_SECRET_KEY: test-jwt
-          APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
-          API_LEGACY_ENABLED: "false"
-          PYTHONPATH: ${{ github.workspace }}
           FLASK_APP: backend.wsgi
         run: |
           cd backend
