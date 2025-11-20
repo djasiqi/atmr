@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Replay Buffer avec priorités pour l'apprentissage par renforcement."""
+"""Replay Buffer avec priorités pour l'apprentissage par renforcement.
+
+Ce module implémente un buffer d'expérience priorisé pour l'apprentissage par renforcement.
+"""
 
 import random
 from collections import deque
