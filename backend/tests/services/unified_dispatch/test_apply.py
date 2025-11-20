@@ -2,28 +2,35 @@
 """Tests pour apply_assignments avec rollback transactionnel complet."""
 
 import pytest
+from flask import Flask
 from sqlalchemy.exc import IntegrityError
 
-from ext import db
 from models import Assignment, Booking, BookingStatus, Driver, DriverType
 from services.unified_dispatch.apply import apply_assignments
 from tests.factories import BookingFactory, CompanyFactory, DriverFactory
 
 
+@pytest.fixture(autouse=True)
+def _app_context(app: Flask):
+    """Assure que tous les tests s'exécutent dans un app context."""
+    with app.app_context():
+        yield
+
+
 @pytest.fixture
-def company():
+def company(db):
     """Créer une entreprise pour les tests."""
     return CompanyFactory()
 
 
 @pytest.fixture
-def driver(company):
+def driver(db, company):
     """Créer un chauffeur pour les tests."""
     return DriverFactory(company=company, is_active=True, is_available=True)
 
 
 @pytest.fixture
-def bookings(company):
+def bookings(db, company):
     """Créer plusieurs bookings pour les tests."""
     return [
         BookingFactory(company=company, status=BookingStatus.ACCEPTED),
@@ -35,7 +42,7 @@ def bookings(company):
 class TestRollbackTransactionnel:
     """Tests pour vérifier le rollback transactionnel complet."""
 
-    def test_rollback_complet_en_cas_derreur_partielle(self, company, driver, bookings):
+    def test_rollback_complet_en_cas_derreur_partielle(self, db, company, driver, bookings):
         """Test : Échec partiel → rollback complet."""
         # Préparer des assignations
         assignments = [
@@ -94,7 +101,7 @@ class TestRollbackTransactionnel:
         # Vérifier que le résultat indique les skips
         assert bookings[2].id in result.get("skipped", {})
 
-    def test_atomicite_batch_assignations(self, company, driver, bookings):
+    def test_atomicite_batch_assignations(self, db, company, driver, bookings):
         """Test : Atomicité sur un batch d'assignations."""
         # Préparer des assignations valides
         assignments = [
@@ -133,7 +140,7 @@ class TestRollbackTransactionnel:
         assert len(result["applied"]) == 3
         assert len(result["skipped"]) == 0
 
-    def test_rollback_en_cas_de_conflit_db(self, company, driver, bookings):
+    def test_rollback_en_cas_de_conflit_db(self, db, company, driver, bookings):
         """Test : Conflit DB → rollback et pas de corruption."""
         # Créer une assignation existante pour créer un conflit
         existing_assignment = Assignment(
@@ -187,7 +194,7 @@ class TestRollbackTransactionnel:
         # (ON CONFLICT DO NOTHING devrait être silencieux mais compter les conflits)
         assert len(result["applied"]) >= 1  # Au moins booking[1]
 
-    def test_etat_coherent_apres_crash_simule(self, company, driver, bookings):
+    def test_etat_coherent_apres_crash_simule(self, db, company, driver, bookings):
         """Test : État cohérent après crash simulé."""
         # Simuler un crash en levant une exception pendant l'application
         assignments = [
@@ -236,7 +243,7 @@ class TestRollbackTransactionnel:
         for booking in bookings:
             assert booking.driver_id is None or booking.status != BookingStatus.ASSIGNED
 
-    def test_transaction_avec_savepoint(self, company, driver, bookings):
+    def test_transaction_avec_savepoint(self, db, company, driver, bookings):
         """Test : Transaction avec savepoint (appel depuis engine.run())."""
         # Simuler un appel depuis engine.run() qui a déjà une transaction
         # En utilisant _begin_tx(), un savepoint devrait être créé

@@ -48,7 +48,7 @@ class TestRLLogger:
         hash_result = logger.hash_state(state)
 
         assert isinstance(hash_result, str)
-        assert len(hash_result) == 40  # SHA-1 hash length
+        assert len(hash_result) == 64  # SHA-256 hash length
 
     def test_hash_state_list(self):
         """Test hash_state avec liste."""
@@ -58,7 +58,7 @@ class TestRLLogger:
         hash_result = logger.hash_state(state)
 
         assert isinstance(hash_result, str)
-        assert len(hash_result) == 40
+        assert len(hash_result) == 64
 
     def test_hash_state_dict(self):
         """Test hash_state avec dictionnaire."""
@@ -68,7 +68,7 @@ class TestRLLogger:
         hash_result = logger.hash_state(state)
 
         assert isinstance(hash_result, str)
-        assert len(hash_result) == 40
+        assert len(hash_result) == 64
 
     def test_hash_state_empty(self):
         """Test hash_state avec état vide."""
@@ -78,7 +78,7 @@ class TestRLLogger:
         hash_result = logger.hash_state(state)
 
         assert isinstance(hash_result, str)
-        assert len(hash_result) == 40
+        assert len(hash_result) == 64
 
     def test_hash_state_with_nan(self):
         """Test hash_state avec valeurs NaN."""
@@ -88,7 +88,7 @@ class TestRLLogger:
         hash_result = logger.hash_state(state)
 
         assert isinstance(hash_result, str)
-        assert len(hash_result) == 40
+        assert len(hash_result) == 64
 
     def test_hash_state_with_inf(self):
         """Test hash_state avec valeurs infinies."""
@@ -98,7 +98,7 @@ class TestRLLogger:
         hash_result = logger.hash_state(state)
 
         assert isinstance(hash_result, str)
-        assert len(hash_result) == 40
+        assert len(hash_result) == 64
 
     def test_log_decision_basic(self):
         """Test log_decision avec paramètres de base."""

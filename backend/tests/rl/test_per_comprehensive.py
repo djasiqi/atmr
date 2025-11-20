@@ -34,7 +34,7 @@ class TestPrioritizedReplayBuffer:
         if PrioritizedReplayBuffer is None:
             pytest.skip("PrioritizedReplayBuffer non disponible")
 
-        return PrioritizedReplayBuffer(capacity=0.1000, alpha=0.6, beta_start=0.4, beta_end=1.0)
+        return PrioritizedReplayBuffer(capacity=1000, alpha=0.6, beta_start=0.4, beta_end=1.0)
 
     def test_buffer_initialization(self, buffer):
         """Test l'initialisation du buffer."""
@@ -339,7 +339,7 @@ class TestPEREdgeCases:
         if PrioritizedReplayBuffer is None:
             pytest.skip("PrioritizedReplayBuffer non disponible")
 
-        buffer = PrioritizedReplayBuffer(capacity=0.100)
+        buffer = PrioritizedReplayBuffer(capacity=100)
 
         # Ajouter des transitions
         for i in range(5):
@@ -360,7 +360,7 @@ class TestPEREdgeCases:
         if PrioritizedReplayBuffer is None:
             pytest.skip("PrioritizedReplayBuffer non disponible")
 
-        buffer = PrioritizedReplayBuffer(capacity=0.100)
+        buffer = PrioritizedReplayBuffer(capacity=100)
 
         # Ajouter une seule transition
         buffer.add(np.array([1, 2, 3]), 1, 0.5, np.array([4, 5, 6]), False)
@@ -377,7 +377,7 @@ class TestPEREdgeCases:
         if PrioritizedReplayBuffer is None:
             pytest.skip("PrioritizedReplayBuffer non disponible")
 
-        buffer = PrioritizedReplayBuffer(capacity=0.1000)
+        buffer = PrioritizedReplayBuffer(capacity=1000)
 
         # Simuler des ajouts concurrents
         for i in range(100):

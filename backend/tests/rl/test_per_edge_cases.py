@@ -31,7 +31,7 @@ class TestPERPriorityUpdateEdgeCases:
         if PrioritizedReplayBuffer is None:
             pytest.skip("PrioritizedReplayBuffer non disponible")
 
-        return PrioritizedReplayBuffer(capacity=0.100, alpha=0.6, beta_start=0.4, beta_end=1.0)
+        return PrioritizedReplayBuffer(capacity=100, alpha=0.6, beta_start=0.4, beta_end=1.0)
 
     def test_priority_update_with_zero_td_error(self, buffer):
         """Test mise à jour priorité avec TD-error = 0."""
@@ -336,7 +336,7 @@ class TestPERBufferOverflowEdgeCases:
 
         # Vérifier que tous les indices sont valides
         for idx in indices:
-            assert 0 <= idx < 5
+            assert 0 <= int(idx) < 5
 
     def test_buffer_overflow_max_priority(self, small_buffer):
         """Test max_priority après débordement du buffer."""
@@ -364,7 +364,7 @@ class TestPERSamplingEdgeCases:
         if PrioritizedReplayBuffer is None:
             pytest.skip("PrioritizedReplayBuffer non disponible")
 
-        return PrioritizedReplayBuffer(capacity=0.100, alpha=0.6, beta_start=0.4, beta_end=1.0)
+        return PrioritizedReplayBuffer(capacity=100, alpha=0.6, beta_start=0.4, beta_end=1.0)
 
     def test_sampling_with_zero_priorities(self, buffer):
         """Test échantillonnage avec priorités zéro."""

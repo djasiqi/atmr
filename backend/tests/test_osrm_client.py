@@ -114,7 +114,7 @@ def test_osrm_cache_key_generation():
     assert key1 != key3
     # Clés sont des strings hexadécimales
     assert isinstance(key1, str)
-    assert len(key1) == 40  # SHA-1 hex = 40 caractères
+    assert len(key1) == 64  # SHA-256 hex = 64 caractères
 
 
 def test_osrm_eta_fallback():

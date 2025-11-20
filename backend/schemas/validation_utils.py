@@ -66,11 +66,26 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
         # Si c'est une liste de messages, prendre directement
         if isinstance(messages, list):
             formatted["errors"][field] = messages
-        # Si c'est un dict (champs nested), formater récursivement mais éviter la récursion infinie
+        # Si c'est un dict (champs nested ou erreurs de liste), formater récursivement
         elif isinstance(messages, dict):
+            # ⚡ Détecter si c'est une erreur de validation de liste (clés = indices entiers)
+            # Exemple: {'client_ids': {1: ['Must be greater than or equal to 1.']}}
+            all_keys_are_int_indices = all(
+                (isinstance(k, int) or (isinstance(k, str) and k.isdigit())) for k in messages
+            )
+
+            if all_keys_are_int_indices:
+                # ⚡ Cas: erreur de validation de liste (regrouper toutes les erreurs sous le nom du champ)
+                all_list_errors: list[str] = []
+                for _, index_msgs in messages.items():
+                    if isinstance(index_msgs, list):
+                        all_list_errors.extend(index_msgs)
+                    else:
+                        all_list_errors.append(str(index_msgs))
+                formatted["errors"][field] = all_list_errors
             # ⚡ Éviter de créer une structure errors.errors.errors...
             # Si le dict contient déjà "errors" ou "message", extraire directement les champs
-            if "errors" in messages and isinstance(messages["errors"], dict):
+            elif "errors" in messages and isinstance(messages["errors"], dict):
                 # Cas: erreur nested avec structure {errors: {...}}
                 for nested_field, nested_msgs in messages["errors"].items():
                     if isinstance(nested_msgs, list):
@@ -78,7 +93,7 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
                     else:
                         formatted["errors"][f"{field}.{nested_field}"] = [str(nested_msgs)]
             else:
-                # Formatage normal récursif
+                # Formatage normal récursif pour champs nested
                 nested_formatted = _format_validation_errors(cast(Dict[str, Any], messages))
                 # Fusionner les erreurs nested directement dans formatted["errors"]
                 if "errors" in nested_formatted:

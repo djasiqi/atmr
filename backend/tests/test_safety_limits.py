@@ -20,7 +20,7 @@ from models.company import Company
 from models.enums import DispatchMode
 from services.unified_dispatch.autonomous_manager import AutonomousDispatchManager
 from services.unified_dispatch.reactive_suggestions import Suggestion
-from tests.factories import CompanyFactory
+from tests.factories import BookingFactory, CompanyFactory, DriverFactory
 
 
 @pytest.fixture
@@ -399,14 +399,21 @@ class TestActionLogging:
     @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
     def test_successful_action_logged(self, mock_apply, db, company_fully_auto):
         """Test qu'une action réussie est loggée."""
-        from services.unified_dispatch.reactive_suggestions import Suggestion
+        # Créer un booking et un driver réels pour éviter FK violations
+        booking = BookingFactory(company=company_fully_auto)
+        driver = DriverFactory(company=company_fully_auto)
+        db.session.flush()
 
         # Mock apply_suggestion pour retourner succès
         mock_apply.return_value = {"success": True}
 
-        # Créer une suggestion
+        # Créer une suggestion avec des IDs réels
         suggestion = Suggestion(
-            action="reassign", message="Test reassignment", booking_id=0.123, driver_id=0.456, auto_applicable=True
+            action="reassign",
+            message="Test reassignment",
+            booking_id=int(booking.id),
+            driver_id=int(driver.id),
+            auto_applicable=True,
         )
 
         # Mock de l'opportunité
@@ -431,6 +438,10 @@ class TestActionLogging:
     @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
     def test_failed_action_logged(self, mock_apply, db, company_fully_auto):
         """Test qu'une action échouée est loggée."""
+        # Créer un booking et un driver réels pour éviter FK violations
+        booking = BookingFactory(company=company_fully_auto)
+        driver = DriverFactory(company=company_fully_auto)
+        db.session.flush()
 
         # Mock apply_suggestion pour retourner échec
         mock_apply.return_value = {"success": False, "error": "Test error message"}
@@ -438,8 +449,8 @@ class TestActionLogging:
         suggestion = Suggestion(
             action="reassign",
             message="Test failed reassignment",
-            booking_id=0.123,
-            driver_id=0.456,
+            booking_id=int(booking.id),
+            driver_id=int(driver.id),
             auto_applicable=True,
         )
 
@@ -479,8 +490,17 @@ class TestActionLogging:
         # Essayer d'exécuter une nouvelle action
         mock_apply.return_value = {"success": True}
 
+        # Créer un booking et un driver réels pour éviter FK violations
+        booking = BookingFactory(company=company_fully_auto)
+        driver = DriverFactory(company=company_fully_auto)
+        db.session.flush()
+
         suggestion = Suggestion(
-            action="reassign", message="Should be blocked", booking_id=0.123, driver_id=0.456, auto_applicable=True
+            action="reassign",
+            message="Should be blocked",
+            booking_id=int(booking.id),
+            driver_id=int(driver.id),
+            auto_applicable=True,
         )
 
         mock_opportunity = MagicMock()

@@ -40,7 +40,7 @@ class TestRLLoggerMinimal:
         state_hash = logger.hash_state(state)
 
         assert isinstance(state_hash, str)
-        assert len(state_hash) == 40  # SHA-1 hash length
+        assert len(state_hash) == 64  # SHA-256 hash length
 
     def test_hash_state_with_different_inputs(self):
         """Test hachage d'état avec différents inputs"""

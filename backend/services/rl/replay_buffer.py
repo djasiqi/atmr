@@ -23,19 +23,19 @@ class PrioritizedReplayBuffer:
         beta_increment: float = 0.0001,
     ):
         super().__init__()
-        self.capacity = capacity
+        self.capacity = int(capacity)
         self.alpha = alpha  # Exposant de priorité
         self.beta_start = beta_start  # Début importance sampling
         self.beta_end = beta_end  # Fin importance sampling
         self.beta_increment = beta_increment  # Incrément de beta
 
         # Buffer circulaire
-        self.buffer: deque[Any] = deque(maxlen=capacity)
-        self.priorities: deque[float] = deque(maxlen=capacity)
+        self.buffer: deque[Any] = deque(maxlen=self.capacity)
+        self.priorities: deque[float] = deque(maxlen=self.capacity)
 
         # Arbre binaire pour priorités
         self.tree_size = 1
-        while self.tree_size < capacity:
+        while self.tree_size < self.capacity:
             self.tree_size *= 2
 
         self.tree = np.zeros(2 * self.tree_size - 1)
@@ -67,17 +67,20 @@ class PrioritizedReplayBuffer:
             self.priorities[self.position] = priority
 
         # Mettre à jour l'arbre
-        self._update_tree(self.position, priority)
+        # S'assurer que position est un entier valide
+        current_position = int(self.position)
+        self._update_tree(current_position, priority)
 
         # Mettre à jour la priorité maximale
         self.max_priority = max(self.max_priority, priority)
 
         # Avancer la position
-        self.position = (self.position + 1) % self.capacity
-        self.size = min(self.size + 1, self.capacity)
+        self.position = int((self.position + 1) % self.capacity)
+        self.size = int(min(self.size + 1, self.capacity))
 
     def sample(self, batch_size: int) -> Tuple[List[Tuple[Any, int, float, Any, bool]], List[int], List[float]]:
         """Échantillonne un batch avec importance sampling."""
+        batch_size = int(batch_size)
         if self.size < batch_size:
             msg = f"Buffer trop petit: {self.size} < {batch_size}"
             raise ValueError(msg)
@@ -91,7 +94,7 @@ class PrioritizedReplayBuffer:
 
         for _ in range(batch_size):
             # Sélectionner un index basé sur les priorités
-            index = self._sample_index()
+            index = int(self._sample_index())
             indices.append(index)
 
             # Calculer le poids d'importance sampling
@@ -124,7 +127,8 @@ class PrioritizedReplayBuffer:
         """Met à jour les priorités des transitions échantillonnées."""
         for index, original_priority in zip(indices, priorities, strict=False):
             # Vérifier que l'index est valide
-            if 0 <= index < len(self.priorities):
+            validated_index = int(index)
+            if 0 <= validated_index < len(self.priorities):
                 # Gérer les cas edge
                 if np.isnan(original_priority):
                     processed_priority = 1.0  # Valeur par défaut pour NaN
@@ -138,20 +142,24 @@ class PrioritizedReplayBuffer:
                 else:
                     processed_priority = original_priority
 
-                self.priorities[index] = processed_priority
-                self._update_tree(index, processed_priority)
+                self.priorities[validated_index] = processed_priority
+                self._update_tree(validated_index, processed_priority)
                 self.max_priority = max(self.max_priority, processed_priority)
 
     def _update_tree(self, index: int, priority: float) -> None:
         """Met à jour l'arbre binaire."""
-        tree_index = index + self.tree_size - 1
+        # S'assurer que index est un entier valide et non négatif
+        index = int(index)
+        if index < 0:
+            raise ValueError(f"Index must be non-negative, got {index}")
+        tree_index = int(index + self.tree_size - 1)
         self.tree[tree_index] = priority**self.alpha
 
         # Remonter l'arbre
         while tree_index > 0:
-            tree_index = (tree_index - 1) // 2
-            left_child = 2 * tree_index + 1
-            right_child = 2 * tree_index + 2
+            tree_index = int((tree_index - 1) // 2)
+            left_child = int(2 * tree_index + 1)
+            right_child = int(2 * tree_index + 2)
             self.tree[tree_index] = self.tree[left_child] + self.tree[right_child]
 
     def _sample_index(self) -> int:
@@ -160,8 +168,8 @@ class PrioritizedReplayBuffer:
 
         tree_index = 0
         while tree_index < self.tree_size - 1:
-            left_child = 2 * tree_index + 1
-            right_child = 2 * tree_index + 2
+            left_child = int(2 * tree_index + 1)
+            right_child = int(2 * tree_index + 2)
 
             if value <= self.tree[left_child]:
                 tree_index = left_child
@@ -169,10 +177,10 @@ class PrioritizedReplayBuffer:
                 value -= self.tree[left_child]
                 tree_index = right_child
 
-        return tree_index - self.tree_size + 1
+        return int(tree_index - self.tree_size + 1)
 
     def __len__(self) -> int:
-        return self.size
+        return int(self.size)
 
     @property
     def beta(self) -> float:

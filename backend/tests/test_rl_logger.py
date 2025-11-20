@@ -80,7 +80,7 @@ class TestRLLogger:
 
         # Même état = même hash
         assert hash1 == hash2
-        assert len(hash1) == 40  # SHA-1 = 40 caractères hex
+        assert len(hash1) == 64  # SHA-256 = 64 caractères hex
 
         # État différent = hash différent
         different_state = sample_state + 1
@@ -95,7 +95,7 @@ class TestRLLogger:
         tensor = torch.tensor([1.0, 2.0, 3.0])
         hash1 = rl_logger.hash_state(tensor)
 
-        assert len(hash1) == 40
+        assert len(hash1) == 64
         assert isinstance(hash1, str)
 
     def test_hash_state_list(self, rl_logger):
@@ -103,7 +103,7 @@ class TestRLLogger:
         state_list = [1.0, 2.0, 3.0, 4.0]
         hash1 = rl_logger.hash_state(state_list)
 
-        assert len(hash1) == 40
+        assert len(hash1) == 64
         assert isinstance(hash1, str)
 
     def test_hash_state_dict(self, rl_logger):
@@ -111,7 +111,7 @@ class TestRLLogger:
         state_dict = {"feature1": 1.0, "feature2": 2.0}
         hash1 = rl_logger.hash_state(state_dict)
 
-        assert len(hash1) == 40
+        assert len(hash1) == 64
         assert isinstance(hash1, str)
 
     def test_log_decision_basic(self, rl_logger, sample_state):

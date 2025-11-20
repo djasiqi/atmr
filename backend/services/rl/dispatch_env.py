@@ -652,7 +652,7 @@ class DispatchEnv(gym.Env):
         for booking in self.bookings:
             booking["time_remaining"] -= 5  # 5 minutes par step
 
-            if booking["time_remaining"] <= 0 and not booking["assigned"]:
+            if booking["time_remaining"] <= 0 and not booking.get("assigned", False):
                 expired.append(booking)
                 # === V3.3: PÉNALITÉ FORTE POUR ANNULATION ===
                 # Règle business : 0 annulation tolérée, pénalité claire pour
@@ -784,7 +784,7 @@ class DispatchEnv(gym.Env):
         total_bookings = (
             self.episode_stats["assignments"]
             + self.episode_stats["cancellations"]
-            + len([b for b in self.bookings if not b["assigned"]])
+            + len([b for b in self.bookings if not b.get("assigned", False)])
         )
         if total_bookings > TOTAL_BOOKINGS_ZERO:
             completion_rate = self.episode_stats["assignments"] / total_bookings
@@ -845,7 +845,7 @@ class DispatchEnv(gym.Env):
         return {
             "current_time": self.current_time,
             "hour_of_day": 8 + (self.current_time / 60),
-            "active_bookings": len([b for b in self.bookings if not b["assigned"]]),
+            "active_bookings": len([b for b in self.bookings if not b.get("assigned", False)]),
             "available_drivers": len([d for d in self.drivers if d["available"]]),
             "traffic_density": self._get_traffic_density(),
             "avg_workload": avg_load,

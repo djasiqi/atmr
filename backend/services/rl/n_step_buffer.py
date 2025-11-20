@@ -38,19 +38,20 @@ class NStepBuffer:
 
     def __init__(
         self,
-        capacity: int = 100000,  # pyright: ignore[reportMissingSuperCall]
+        capacity: int = 100000,
         n_step: int = 3,
         gamma: float = 0.99,
     ):
-        self.capacity = capacity
-        self.n_step = n_step
+        super().__init__()
+        self.capacity = int(capacity)
+        self.n_step = int(n_step)
         self.gamma = gamma
 
         # Buffer principal pour les transitions complètes
-        self.buffer: deque[Dict[str, Any]] = deque(maxlen=capacity)
+        self.buffer: deque[Dict[str, Any]] = deque(maxlen=self.capacity)
 
         # Buffer temporaire pour les transitions N-step
-        self.temp_buffer: deque[Dict[str, Any]] = deque(maxlen=n_step)
+        self.temp_buffer: deque[Dict[str, Any]] = deque(maxlen=self.n_step)
 
         # Compteurs
         self.total_added = 0
@@ -309,7 +310,7 @@ class NStepPrioritizedBuffer(NStepBuffer):
         self.beta = beta_start
 
         # Buffer de priorités
-        self.priorities = np.zeros(capacity, dtype=np.float32)
+        self.priorities = np.zeros(int(capacity), dtype=np.float32)
         self.max_priority = 1
 
         self.logger.info(

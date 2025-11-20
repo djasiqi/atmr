@@ -48,13 +48,15 @@ _model_loaded = False
 
 def _lazy_import_rl():
     """Import RL modules only when needed."""
-    global _dqn_agent, _dispatch_env  # noqa: PLW0603
+    global _dqn_agent, _dispatch_env, ImprovedDQNAgent  # noqa: PLW0603
     if _dqn_agent is None:
         try:
             from services.rl import dispatch_env, improved_dqn_agent
+            from services.rl.improved_dqn_agent import ImprovedDQNAgent as _ImprovedDQNAgent
 
             _dqn_agent = improved_dqn_agent
             _dispatch_env = dispatch_env
+            ImprovedDQNAgent = _ImprovedDQNAgent
         except ImportError as e:
             logger.warning("[RL] Could not import RL modules: %s", e)
             raise
@@ -499,9 +501,50 @@ class RLSuggestionGenerator:
 
         return suggestions[:max_suggestions]
 
+    def _calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """Calcule la distance haversine entre deux coordonnées GPS.
+
+        Args:
+            lat1: Latitude du premier point
+            lon1: Longitude du premier point
+            lat2: Latitude du deuxième point
+            lon2: Longitude du deuxième point
+
+        Returns:
+            Distance en kilomètres
+
+        """
+        from shared.geo_utils import haversine_distance
+
+        try:
+            return haversine_distance(lat1, lon1, lat2, lon2)
+        except Exception:
+            # Fallback: formule haversine simplifiée
+            R = 6371  # Rayon de la Terre en km
+
+            dlat = np.radians(lat2 - lat1)
+            dlon = np.radians(lon2 - lon1)
+
+            a = np.sin(dlat / 2) ** 2 + np.cos(np.radians(lat1)) * np.cos(np.radians(lat2)) * np.sin(dlon / 2) ** 2
+            c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+
+            return R * c
+
+    def _is_model_loaded(self) -> bool:
+        """Vérifie si le modèle DQN est chargé.
+
+        Returns:
+            True si le modèle est chargé, False sinon
+
+        """
+        return self.agent is not None
+
 
 # Singleton global
 _generator: RLSuggestionGenerator | None = None
+
+# Exposer ImprovedDQNAgent pour les tests (lazy import via _lazy_import_rl())
+ImprovedDQNAgent = None
 
 
 def get_suggestion_generator() -> RLSuggestionGenerator:
