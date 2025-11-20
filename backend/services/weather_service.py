@@ -72,7 +72,8 @@ class WeatherService:
         try:
             import requests
 
-            params = {
+            # Typer correctement params pour satisfaire mypy
+            params: dict[str, str | float] = {
                 "lat": lat,
                 "lon": lon,
                 "appid": OPENWEATHER_API_KEY,

@@ -146,7 +146,8 @@ def geocode_address_nominatim(address: str, *, country: str | None = None) -> Di
         raise ValueError(msg)
 
     url = "https://nominatim.openstreetmap.org/search"
-    params = {
+    # Typer correctement params pour satisfaire mypy
+    params: dict[str, str | int] = {
         "q": address,
         "format": "json",
         "limit": 1,

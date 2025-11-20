@@ -32,8 +32,11 @@ def test_create_client(client, auth_headers, db, sample_company):
 
 def test_client_validation_email_required():
     """Email requis pour clients self-service."""
-    # Test unitaire du modèle
-    user = User(username="testclient", email="client@test.com", role=UserRole.client)
+    import uuid
+
+    # Test unitaire du modèle - utiliser un email unique pour cohérence
+    unique_suffix = str(uuid.uuid4())[:8]
+    user = User(username=f"testclient_{unique_suffix}", email=f"client_{unique_suffix}@test.com", role=UserRole.client)
 
     # Email est requis
     assert user.email is not None
@@ -107,7 +110,7 @@ def test_company_clients_pagination(client, auth_headers, db, sample_company, sa
             contact_phone=f"07912345{i:02d}",
         )
         db.session.add(client_obj)
-    db.session.commit()
+    db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
     # Test page 1 avec 5 résultats par page
     response = client.get("/api/companies/me/clients?page=1&per_page=5", headers=auth_headers)
@@ -191,7 +194,7 @@ def test_company_clients_search_pagination(client, auth_headers, db, sample_comp
         )
         db.session.add(client_obj)
 
-    db.session.commit()
+    db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
     # Recherche "ClientSearch" paginée
     response = client.get("/api/companies/me/clients?search=ClientSearch&page=1&per_page=3", headers=auth_headers)

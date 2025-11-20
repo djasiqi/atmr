@@ -66,7 +66,8 @@ def looks_like_hospital(q: str) -> bool:
 
 
 def photon_query(q: str, lat: float, lon: float, limit: int, hospital_hint: bool) -> Dict[str, Any]:
-    params = {
+    # Typer correctement params pour satisfaire mypy
+    params: dict[str, str | int | float] = {
         "q": q,
         "limit": max(1, min(limit, 12)),
         "lang": "fr",

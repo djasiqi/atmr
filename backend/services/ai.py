@@ -31,9 +31,11 @@ def geocode_address(address: str):
     if not address or len(address) < MIN_ADDRESS_LENGTH:
         return None
     try:
+        # Typer correctement params pour satisfaire mypy
+        params: dict[str, str | int] = {"q": address, "limit": 1, "lang": "fr"}
         r = requests.get(
             f"{PHOTON_BASE_URL}/api",
-            params={"q": address, "limit": 1, "lang": "fr"},
+            params=params,
             timeout=8,
         )
         r.raise_for_status()

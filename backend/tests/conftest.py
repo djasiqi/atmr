@@ -78,16 +78,20 @@ def client(app, db):
 @pytest.fixture
 def sample_company(db, sample_user):
     """Crée une entreprise de test."""
+    import uuid
+
     # ✅ Vérifier si une company existe déjà pour cet utilisateur
     existing_company = Company.query.filter_by(user_id=sample_user.id).first()
     if existing_company:
         return existing_company
 
+    # Utiliser un email unique pour éviter les conflits potentiels
+    unique_suffix = str(uuid.uuid4())[:8]
     company = Company()
     company.name = "Test Transport SA"
     company.address = "Rue de Test 1, 1000 Lausanne"
     company.contact_phone = "0211234567"
-    company.contact_email = "contact@test-transport.ch"
+    company.contact_email = f"contact_{unique_suffix}@test-transport.ch"
     company.user_id = sample_user.id
     db.session.add(company)
     db.session.flush()  # Use flush instead of commit to work with savepoints

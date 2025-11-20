@@ -1,0 +1,46 @@
+﻿2025-11-20T09:28:36.1082432Z ##[group]Run cd backend
+2025-11-20T09:28:36.1082700Z [36;1mcd backend[0m
+2025-11-20T09:28:36.1082927Z [36;1mecho "📋 Liste des heads Alembic:"[0m
+2025-11-20T09:28:36.1083199Z [36;1mflask db heads || true[0m
+2025-11-20T09:28:36.1083419Z [36;1mecho ""[0m
+2025-11-20T09:28:36.1116191Z shell: /usr/bin/bash -e {0}
+2025-11-20T09:28:36.1116415Z env:
+2025-11-20T09:28:36.1116815Z   DATABASE_URL: ***localhost:5432/atmr_test
+2025-11-20T09:28:36.1117073Z   PGHOST: localhost
+2025-11-20T09:28:36.1117260Z   PGPORT: 5432
+2025-11-20T09:28:36.1117435Z   PGUSER: test
+2025-11-20T09:28:36.1117601Z   PGPASSWORD: test
+2025-11-20T09:28:36.1117792Z   PGDATABASE: atmr_test
+2025-11-20T09:28:36.1118018Z   REDIS_URL: redis://localhost:6379/0
+2025-11-20T09:28:36.1118271Z   FLASK_CONFIG: testing
+2025-11-20T09:28:36.1118465Z   SECRET_KEY: test-secret-key
+2025-11-20T09:28:36.1118685Z   JWT_SECRET_KEY: test-jwt-secret
+2025-11-20T09:28:36.1119018Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+2025-11-20T09:28:36.1119376Z   API_LEGACY_ENABLED: false
+2025-11-20T09:28:36.1119606Z   PYTHONPATH: /home/runner/work/atmr/atmr
+2025-11-20T09:28:36.1119859Z   SOCKETIO_ASYNC_MODE: threading
+2025-11-20T09:28:36.1120257Z   SKIP_SOCKETIO: true
+2025-11-20T09:28:36.1120458Z   SKIP_ROUTES_INIT: true
+2025-11-20T09:28:36.1120722Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-20T09:28:36.1121109Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+2025-11-20T09:28:36.1121490Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-20T09:28:36.1121827Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-20T09:28:36.1122160Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-20T09:28:36.1122500Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+2025-11-20T09:28:36.1122793Z   FLASK_APP: backend.wsgi
+2025-11-20T09:28:36.1122992Z ##[endgroup]
+2025-11-20T09:28:36.1173028Z 📋 Liste des heads Alembic:
+2025-11-20T09:28:36.7343292Z [4.1 Vault] Aucune authentification configurée, désactivation
+2025-11-20T09:28:36.7346154Z [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=dev/mail/password, key=value)
+2025-11-20T09:28:36.7347087Z [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=prod/mail/password, key=value)
+2025-11-20T09:28:37.6268402Z [2.9] OpenTelemetry non installé - installer avec: pip install -r requirements-otel.txt
+2025-11-20T09:28:37.6271596Z [2025-11-20 09:28:37,626] WARNING in app: [2.9] Échec instrumentation SQLAlchemy: Working outside of application context.
+2025-11-20T09:28:37.6272067Z 
+2025-11-20T09:28:37.6272306Z This typically means that you attempted to use functionality that needed
+2025-11-20T09:28:37.6272849Z the current application. To solve this, set up an application context
+2025-11-20T09:28:37.6273353Z with app.app_context(). See the documentation for more information.
+2025-11-20T09:28:37.9650783Z [2025-11-20 09:28:37,964] INFO in app: ⏭️  Initialisation des routes désactivée (SKIP_ROUTES_INIT=1)
+2025-11-20T09:28:38.2493072Z ✅ [WSGI] Application Flask créée (config=testing)
+2025-11-20T09:28:38.3437683Z a1b2c3d4e5f6 (head)
+2025-11-20T09:28:38.3438058Z add_message_file_fields (head)
+2025-11-20T09:28:38.6398563Z 

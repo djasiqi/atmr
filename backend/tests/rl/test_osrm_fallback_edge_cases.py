@@ -22,10 +22,8 @@ import requests
 # Imports conditionnels
 try:
     from services.rl.dispatch_env import DispatchEnv
-    from services.unified_dispatch.engine import DispatchEngine
 except ImportError:
     DispatchEnv = None
-    DispatchEngine = None
 
 
 class TestOSRMFallbackExceptionEdgeCases:

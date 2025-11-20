@@ -58,13 +58,13 @@ def test_list_bookings_authenticated(client, auth_headers, sample_user):
     assert isinstance(data["bookings"], list)
 
 
-def test_list_bookings_pagination(client, auth_headers, db, sample_user, sample_client):
+def test_list_bookings_pagination(client, auth_headers, db, sample_user, sample_client, sample_company):
     """GET /bookings?page=1&per_page=10 renvoie pagination."""
     # Créer quelques bookings de test
     for i in range(15):
         booking = Booking(
             client_id=sample_client.id,
-            company_id=sample_user.company_id,
+            company_id=sample_company.id,  # Utiliser sample_company.id au lieu de sample_user.company_id
             user_id=sample_client.user_id,
             customer_name=f"Client {i}",
             pickup_location="Lausanne Gare",
@@ -76,7 +76,7 @@ def test_list_bookings_pagination(client, auth_headers, db, sample_user, sample_
             duration_seconds=0.900,
         )
         db.session.add(booking)
-    db.session.commit()
+    db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
     response = client.get("/api/bookings/?page=1&per_page=10", headers=auth_headers)
     assert response.status_code == 200
@@ -89,11 +89,11 @@ def test_list_bookings_pagination(client, auth_headers, db, sample_user, sample_
     assert "X-Page" in response.headers
 
 
-def test_get_booking_details(client, auth_headers, db, sample_user, sample_client):
+def test_get_booking_details(client, auth_headers, db, sample_user, sample_client, sample_company):
     """GET /bookings/<id> renvoie les détails d'une réservation."""
     booking = Booking(
         client_id=sample_client.id,
-        company_id=sample_user.company_id,
+        company_id=sample_company.id,  # Utiliser sample_company.id au lieu de sample_user.company_id
         user_id=sample_client.user_id,
         customer_name="Jean Dupont",
         pickup_location="Lausanne Gare",
@@ -105,7 +105,7 @@ def test_get_booking_details(client, auth_headers, db, sample_user, sample_clien
         duration_seconds=0.900,
     )
     db.session.add(booking)
-    db.session.commit()
+    db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
     response = client.get(f"/api/bookings/{booking.id}", headers=auth_headers)
     assert response.status_code == 200
