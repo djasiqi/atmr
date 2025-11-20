@@ -161,12 +161,21 @@ jobs:
           PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1' || exit 1
           echo "✅ PostgreSQL est prêt"
 
+      - name: Show Alembic heads (diagnostic)
+        env:
+          FLASK_APP: backend.wsgi
+        run: |
+          cd backend
+          echo "📋 Liste des heads Alembic:"
+          flask db heads || true
+          echo ""
+
       - name: Run database migrations
         env:
           FLASK_APP: backend.wsgi
         run: |
           cd backend
-          flask db upgrade head
+          flask db upgrade heads
 
       - name: Run pytest with coverage
         run: |
@@ -426,12 +435,21 @@ jobs:
             pip install -r requirements.txt
           fi
 
+      - name: Show Alembic heads (diagnostic)
+        env:
+          FLASK_APP: backend.wsgi
+        run: |
+          cd backend
+          echo "📋 Liste des heads Alembic:"
+          flask db heads || true
+          echo ""
+
       - name: Run migrations (upgrade)
         env:
           FLASK_APP: backend.wsgi
         run: |
           cd backend
-          flask db upgrade head
+          flask db upgrade heads
 
       - name: Test rollback (downgrade -1)
         env:
@@ -452,7 +470,7 @@ jobs:
           else
             echo "⚠️ Aucune révision actuelle trouvée, skip downgrade"
           fi
-          flask db upgrade head
+          flask db upgrade heads
 
       - name: Check for pending migrations
         env:
