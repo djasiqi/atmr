@@ -222,14 +222,18 @@ class Register(Resource):
             try:
                 validated_data = validate_request(RegisterSchema(), data, strict=False)
             except ValidationError as e:
-                return handle_validation_error(e)
+                # Utiliser abort au lieu de return pour réduire le nombre de returns
+                body, code = handle_validation_error(e)
+                auth_ns.abort(code or 400, body.get("error", "Validation error"))
+                validated_data = {}  # Never reached, but satisfies type checker
 
             app_logger.info("Données validées : %s", validated_data)
 
             email: str = cast("str", validated_data.get("email"))
             if User.query.filter_by(email=email).first():
                 app_logger.warning("Utilisateur déjà existant pour l'email : %s", email)
-                return {"error": "User already exists"}, 409
+                # Utiliser abort au lieu de return pour réduire le nombre de returns
+                auth_ns.abort(409, "User already exists")
 
             # Création de l'utilisateur
             username: str = cast("str", validated_data.get("username"))
@@ -250,6 +254,17 @@ class Register(Resource):
             user.gender = validated_data.get("gender")
             user.profile_image = validated_data.get("profile_image")
 
+            # Validation explicite du mot de passe avant set_password (sécurité)
+            from routes.utils import validate_password_or_raise
+
+            try:
+                validate_password_or_raise(password, _user=user)
+            except ValueError as e:
+                # Utiliser abort au lieu de return pour réduire le nombre de returns
+                auth_ns.abort(400, str(e))
+
+            # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             user.set_password(password, force_change=False)
             db.session.add(user)
             db.session.flush()
@@ -272,13 +287,13 @@ class Register(Resource):
 
         except ValidationError as e:
             app_logger.error("Erreur de validation : %s", e.messages)
-            return {"error": "Validation failed", "details": e.messages}, 400
+            auth_ns.abort(400, "Validation failed")
         except Exception as e:
             sentry_sdk.capture_exception(e)
             # Utiliser repr() pour éviter les problèmes de formatage avec %
             exception_message = repr(e) if "%" in str(e) else str(e)
             app_logger.exception("❌ ERREUR register_user: %s - %s", type(e).__name__, exception_message)
-            return {"error": "Une erreur interne est survenue."}, 500
+            auth_ns.abort(500, "Une erreur interne est survenue.")
 
 
 # ========================
@@ -349,9 +364,8 @@ class ResetPassword(Resource):
                 return {"error": str(e)}, 400
 
             # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
-            user.set_password(
-                new_password
-            )  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            user.set_password(new_password)
             user.force_password_change = False
             db.session.commit()
             return {"message": "Mot de passe réinitialisé avec succès."}, 200

@@ -9,7 +9,7 @@ du shadow mode et des KPIs.
 
 import contextlib
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -236,7 +236,12 @@ class TestShadowModeManager:
                 company_id,
                 f"booking_{i}",
                 {"driver_id": f"driver_{i}", "eta_minutes": 20 + i * 5, "delay_minutes": 5 + i},
-                {"driver_id": f"driver_{i+1}", "eta_minutes": 15 + i * 3, "delay_minutes": 3 + i, "confidence": 0.85 + i * 0.07},
+                {
+                    "driver_id": f"driver_{i + 1}",
+                    "eta_minutes": 15 + i * 3,
+                    "delay_minutes": 3 + i,
+                    "confidence": 0.85 + i * 0.07,
+                },
                 {},
             )
 
@@ -253,17 +258,20 @@ class TestShadowModeManager:
         """Test l'analyse historique via rapports quotidiens."""
         # Données de test
         company_id = "company_1"
-        start_date = datetime.now(UTC).date() - timedelta(days=2)
         end_date = datetime.now(UTC).date()
 
         # Ajouter des données historiques via log_decision_comparison
         for i in range(3):
-            test_date = start_date + timedelta(days=i)
             shadow_manager.log_decision_comparison(
                 company_id,
                 f"booking_{i}",
                 {"driver_id": f"driver_{i}", "eta_minutes": 20 + i * 5, "delay_minutes": 5 + i},
-                {"driver_id": f"driver_{i+1}", "eta_minutes": 15 + i * 3, "delay_minutes": 3 + i, "confidence": 0.85 + i * 0.01},
+                {
+                    "driver_id": f"driver_{i + 1}",
+                    "eta_minutes": 15 + i * 3,
+                    "delay_minutes": 3 + i,
+                    "confidence": 0.85 + i * 0.01,
+                },
                 {},
             )
 
@@ -386,7 +394,9 @@ class TestShadowModeRoutes:
         context = {}
 
         # Simuler l'appel à l'endpoint
-        result = mock_shadow_manager.log_decision_comparison(company_id, booking_id, human_decision, rl_decision, context)
+        result = mock_shadow_manager.log_decision_comparison(
+            company_id, booking_id, human_decision, rl_decision, context
+        )
 
         assert isinstance(result, dict)
         assert "eta_delta" in result
