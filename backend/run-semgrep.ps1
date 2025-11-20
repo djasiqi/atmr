@@ -15,7 +15,7 @@ Write-Host ""
 
 # Vérifier que Docker est en cours d'exécution
 try {
-    $dockerInfo = docker info 2>&1
+    $null = docker info 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Docker n'est pas démarré"
     }
