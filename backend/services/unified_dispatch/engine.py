@@ -235,7 +235,7 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         company: Company | None = Company.query.get(company_id)
         if not company:
             logger.warning("[Engine] Company %s introuvable", company_id)
-            result = {
+            return {  # ✅ FIX: Retourner immédiatement si company n'existe pas
                 "assignments": [],
                 "unassigned": [],
                 "bookings": [],
@@ -410,6 +410,17 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 
         if dispatch_run is None:
             # TX courte de création ; en cas de race → IntegrityError
+            # ✅ FIX: Vérifier que la company existe avant de créer DispatchRun
+            if company is None:
+                logger.error("[Engine] Cannot create DispatchRun: company_id=%s does not exist", company_id)
+                return {  # ✅ FIX: Retourner immédiatement si company n'existe pas
+                    "assignments": [],
+                    "unassigned": [],
+                    "bookings": [],
+                    "drivers": [],
+                    "meta": {"reason": "company_not_found"},
+                    "debug": {"reason": "company_not_found", "company_id": company_id},
+                }
             try:
                 with _begin_tx():
                     dr_any: Any = DispatchRun()
@@ -1021,53 +1032,54 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     # TODO : Améliorer l'heuristique pour mieux équilibrer dès
                     # le départ
                     # Code désactivé temporairement - voir commentaires ci-dessus
-                    # pylint: disable=simplifiable-if-statement
-                    if False:
-                        # Calculer la charge par chauffeur
-                        driver_loads = {}
-                        for a in final_assignments:
-                            did = getattr(a, "driver_id", None)
-                            if did:
-                                driver_loads[did] = driver_loads.get(did, 0) + 1
-
-                        if driver_loads:
-                            max_load = max(driver_loads.values())
-                            min_load = min(driver_loads.values())
-                            load_gap = max_load - min_load
-
-                            # Si écart > ECART_THRESHOLD courses ET fairness
-                            # activé, forcer solver
-                            fairness_threshold = 2
-                            if load_gap > fairness_threshold and getattr(s.fairness, "enabled", True):
-                                logger.warning(
-                                    "[Engine] ⚖️ Équité insatisfaisante après heuristique : écart=%d courses (max=%d, min=%d). Relancement avec solver pour optimisation globale...",
-                                    load_gap,
-                                    max_load,
-                                    min_load,
-                                )
-                                # Vider final_assignments pour que le solver
-                                # réassigne TOUT
-                                final_assignments.clear()
-                                assigned_set.clear()
-                                # Recréer un problème vierge pour le solver
-                                # (sans état précédent)
-                                prob_regs = data.build_vrptw_problem(
-                                    company, problem["bookings"], regs, settings=s, base_time=problem.get("base_time")
-                                )
-                                # ⚡ CRUCIAL: Propager preferred_driver_id, company_coords, driver_load_multipliers depuis le problème original
-                                if "preferred_driver_id" in problem:
-                                    prob_regs["preferred_driver_id"] = problem["preferred_driver_id"]
-                                if "company_coords" in problem:
-                                    prob_regs["company_coords"] = problem["company_coords"]
-                                if "driver_load_multipliers" in problem:
-                                    prob_regs["driver_load_multipliers"] = problem["driver_load_multipliers"]
-                                # Forcer remaining_ids à contenir TOUTES les
-                                # courses
-                                h_res.unassigned_booking_ids = [b.id for b in prob_regs.get("bookings", [])]
-                                logger.info(
-                                    "[Engine] ♻️ Problème recréé from scratch pour solver: %d courses",
-                                    len(prob_regs.get("bookings", [])),
-                                )
+                    # NOTE: Code commenté pour éviter l'erreur de linter "unsatisfiable if condition"
+                    # TODO: Réactiver ce code quand l'heuristique sera améliorée
+                    # if False:
+                    #     # Calculer la charge par chauffeur
+                    #     driver_loads = {}
+                    #     for a in final_assignments:
+                    #         did = getattr(a, "driver_id", None)
+                    #         if did:
+                    #             driver_loads[did] = driver_loads.get(did, 0) + 1
+                    #
+                    #     if driver_loads:
+                    #         max_load = max(driver_loads.values())
+                    #         min_load = min(driver_loads.values())
+                    #         load_gap = max_load - min_load
+                    #
+                    #         # Si écart > ECART_THRESHOLD courses ET fairness
+                    #         # activé, forcer solver
+                    #         fairness_threshold = 2
+                    #         if load_gap > fairness_threshold and getattr(s.fairness, "enabled", True):
+                    #             logger.warning(
+                    #                 "[Engine] ⚖️ Équité insatisfaisante après heuristique : écart=%d courses (max=%d, min=%d). Relancement avec solver pour optimisation globale...",
+                    #                 load_gap,
+                    #                 max_load,
+                    #                 min_load,
+                    #             )
+                    #             # Vider final_assignments pour que le solver
+                    #             # réassigne TOUT
+                    #             final_assignments.clear()
+                    #             assigned_set.clear()
+                    #             # Recréer un problème vierge pour le solver
+                    #             # (sans état précédent)
+                    #             prob_regs = data.build_vrptw_problem(
+                    #                 company, problem["bookings"], regs, settings=s, base_time=problem.get("base_time")
+                    #             )
+                    #             # ⚡ CRUCIAL: Propager preferred_driver_id, company_coords, driver_load_multipliers depuis le problème original
+                    #             if "preferred_driver_id" in problem:
+                    #                 prob_regs["preferred_driver_id"] = problem["preferred_driver_id"]
+                    #             if "company_coords" in problem:
+                    #                 prob_regs["company_coords"] = problem["company_coords"]
+                    #             if "driver_load_multipliers" in problem:
+                    #                 prob_regs["driver_load_multipliers"] = problem["driver_load_multipliers"]
+                    #             # Forcer remaining_ids à contenir TOUTES les
+                    #             # courses
+                    #             h_res.unassigned_booking_ids = [b.id for b in prob_regs.get("bookings", [])]
+                    #             logger.info(
+                    #                 "[Engine] ♻️ Problème recréé from scratch pour solver: %d courses",
+                    #                 len(prob_regs.get("bookings", [])),
+                    #             )
 
                     if mode == "heuristic_only":
                         _apply_and_emit(

@@ -158,7 +158,7 @@ def get_recommended_routes(company_id: int):
         if not company:
             return {"recommended_routes": []}
         bookings = Booking.query.filter_by(company_id=company_id).all()
-        route_counts = {}
+        route_counts: dict[str, int] = {}
         for b in bookings:
             key = f"{b.pickup_location} -> {b.dropoff_location}"
             route_counts[key] = route_counts.get(key, 0) + 1

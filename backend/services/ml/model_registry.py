@@ -436,7 +436,7 @@ class ModelRegistry:
             Dictionnaire des modèles par architecture
 
         """
-        result = {}
+        result: dict[str, list[str]] = {}
         for model_key, _versions in self.registry["models"].items():
             model_name, model_arch = model_key.rsplit("_", 1)
             if model_name not in result:

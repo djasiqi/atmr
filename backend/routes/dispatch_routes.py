@@ -2996,7 +2996,6 @@ class RLMetricsResource(Resource):
 
             # Évolution par jour (derniers 7 jours)
             from collections import defaultdict
-            from typing import List as TList
 
             daily_stats: dict[str, dict[str, Any]] = defaultdict(
                 lambda: {"generated": 0, "applied": 0, "avg_confidence": []}
@@ -3005,7 +3004,7 @@ class RLMetricsResource(Resource):
             for m in metrics:
                 day_key = m.generated_at.date().isoformat() if m.generated_at else "unknown"
                 daily_stats[day_key]["generated"] += 1
-                conf_list = cast("TList[float]", daily_stats[day_key]["avg_confidence"])
+                conf_list = cast("list[float]", daily_stats[day_key]["avg_confidence"])
                 conf_list.append(m.confidence)
                 if m.applied_at:
                     daily_stats[day_key]["applied"] += 1
@@ -3013,7 +3012,7 @@ class RLMetricsResource(Resource):
             # Formater daily_stats
             confidence_history = []
             for day, stats in sorted(daily_stats.items(), reverse=True)[:7]:
-                conf_values = cast("TList[float]", stats["avg_confidence"])
+                conf_values = cast("list[float]", stats["avg_confidence"])
                 avg_conf = sum(conf_values) / len(conf_values) if conf_values else 0
                 confidence_history.append(
                     {

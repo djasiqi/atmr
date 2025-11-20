@@ -1179,7 +1179,9 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
 
     # Vérifier si parallélisation activée
     use_parallel = getattr(settings.features, "enable_parallel_heuristics", False)
-    scores_dict = {}  # Initialiser pour éviter "unbound"
+    scores_dict: dict[
+        tuple[int, int], tuple[float, Dict[str, float], int, int]
+    ] = {}  # Initialiser pour éviter "unbound"
 
     logger.warning(
         "[HEURISTIC] 🔍 Début scoring de %s courses régulières avec %s chauffeurs (parallel=%s)...",
@@ -1208,8 +1210,7 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
                 # ✅ C2: Réduire allocations - stocker seulement les IDs
                 scoring_tasks.append((b_id, did, b, d))
 
-        # ✅ C2: Exécuter en parallèle avec ThreadPoolExecutor
-        scores_dict = {}
+        # ✅ C2: Exécuter en parallèle avec ThreadPoolExecutor (scores_dict déjà initialisé ligne 1182)
         max_workers = min(len(scoring_tasks), PARALLEL_MAX_WORKERS)
 
         start_parallel = time.time()  # ✅ C2: Mesurer temps parallélisation

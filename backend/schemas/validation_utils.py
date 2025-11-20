@@ -52,7 +52,7 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dict formaté avec structure standardisée
     """
-    formatted = {"message": "Erreur de validation des données", "errors": {}}
+    formatted: Dict[str, Any] = {"message": "Erreur de validation des données", "errors": {}}
 
     for field, messages in errors.items():
         # ⚡ Ignorer les clés spéciales de Marshmallow (_schema, _nested, etc.)

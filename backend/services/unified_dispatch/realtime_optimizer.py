@@ -377,7 +377,7 @@ class RealtimeOptimizer:
             drivers_map = {d.id: d for d in Driver.query.filter(Driver.id.in_(driver_ids)).all()} if driver_ids else {}
 
             # Grouper les assignations par chauffeur
-            driver_delays = {}
+            driver_delays: dict[int, list[dict[str, Any]]] = {}
             for assignment in assignments:
                 driver_id_val = int(tcast("Any", assignment.driver_id)) if assignment.driver_id else None  # type: ignore[arg-type]
                 if not driver_id_val:

@@ -360,7 +360,7 @@ class UncertaintyCapture:
 
         """
         self.method = method
-        self.uncertainty_history = []
+        self.uncertainty_history: list[Dict[str, float]] = []
 
     def calculate_uncertainty(self, distribution: torch.Tensor) -> Dict[str, float]:
         """Calcule l'incertitude à partir de la distribution.

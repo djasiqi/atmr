@@ -46,10 +46,12 @@ def company_fully_auto(db):
         },
     }
 
-    return CompanyFactory.create(
+    company = CompanyFactory(
         dispatch_mode=DispatchMode.FULLY_AUTO,
         autonomous_config=json.dumps(config),  # Convertir en JSON string
     )
+    db.session.flush()  # ✅ FIX: S'assurer que la company est flushée avant utilisation
+    return company
 
 
 class TestAutonomousActionModel:
@@ -117,7 +119,7 @@ class TestAutonomousActionModel:
                 success=True,
                 created_at=today - timedelta(hours=i),
             )
-            db.add(action)
+            db.session.add(action)
 
         # Créer 2 actions hier (ne devraient pas compter)
         for i in range(2):
@@ -128,8 +130,8 @@ class TestAutonomousActionModel:
                 success=True,
                 created_at=yesterday,
             )
-            db.add(action)
-        db.commit()
+            db.session.add(action)
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         # Vérifier le comptage
         count = AutonomousAction.count_actions_today(company_fully_auto.id)
@@ -145,8 +147,8 @@ class TestAutonomousActionModel:
                 action_description=f"Action {action_type}",
                 success=True,
             )
-            db.add(action)
-        db.commit()
+            db.session.add(action)
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         # Vérifier comptage par type
         reassign_count = AutonomousAction.count_actions_last_hour(company_fully_auto.id, "reassign")
@@ -165,8 +167,8 @@ class TestAutonomousActionModel:
             execution_time_ms=0.1005,
             confidence_score=0.95,
         )
-        db.add(action)
-        db.commit()
+        db.session.add(action)
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         data = action.to_dict()
         assert data["company_id"] == company_fully_auto.id
@@ -195,8 +197,8 @@ class TestSafetyLimits:
             action = AutonomousAction(
                 company_id=company_fully_auto.id, action_type="reassign", action_description=f"Action {i}", success=True
             )
-            db.add(action)
-        db.commit()
+            db.session.add(action)
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         manager = AutonomousDispatchManager(company_fully_auto.id)
         can_proceed, reason = manager.check_safety_limits("reassign")
@@ -216,8 +218,8 @@ class TestSafetyLimits:
                 success=True,
                 created_at=datetime.utcnow() - timedelta(hours=i % 12),
             )
-            db.add(action)
-        db.commit()
+            db.session.add(action)
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         manager = AutonomousDispatchManager(company_fully_auto.id)
         can_proceed, reason = manager.check_safety_limits("notify_customer")
@@ -236,8 +238,8 @@ class TestSafetyLimits:
                 action_description=f"Reassign {i}",
                 success=True,
             )
-            db.add(action)
-        db.commit()
+            db.session.add(action)
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         manager = AutonomousDispatchManager(company_fully_auto.id)
         can_proceed, reason = manager.check_safety_limits("reassign")
@@ -257,8 +259,8 @@ class TestSafetyLimits:
                 success=True,
                 created_at=datetime.utcnow() - timedelta(hours=i),
             )
-            db.add(action)
-        db.commit()
+            db.session.add(action)
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         manager = AutonomousDispatchManager(company_fully_auto.id)
         can_proceed, reason = manager.check_safety_limits("reassign")
@@ -278,8 +280,8 @@ class TestSafetyLimits:
                 success=False,
                 error_message="Test error",
             )
-            db.add(action)
-        db.commit()
+            db.session.add(action)
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         manager = AutonomousDispatchManager(company_fully_auto.id)
         can_proceed, reason = manager.check_safety_limits("reassign")
@@ -298,8 +300,8 @@ class TestSafetyLimits:
             action = AutonomousAction(
                 company_id=other_company.id, action_type="reassign", action_description=f"Action {i}", success=True
             )
-            db.add(action)
-        db.commit()
+            db.session.add(action)
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         # Vérifier que company_fully_auto n'est pas affectée
         manager = AutonomousDispatchManager(company_fully_auto.id)
@@ -322,8 +324,8 @@ class TestSafetyLimitsIntegration:
                 action_description=f"Reassign {i}",
                 success=True,
             )
-            db.add(action)
-        db.commit()
+            db.session.add(action)
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         manager = AutonomousDispatchManager(company_fully_auto.id)
 
@@ -349,8 +351,8 @@ class TestSafetyLimitsIntegration:
                 success=True,
                 created_at=two_hours_ago,
             )
-            db.add(action)
-        db.commit()
+            db.session.add(action)
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         manager = AutonomousDispatchManager(company_fully_auto.id)
         can_proceed, reason = manager.check_safety_limits("reassign")
@@ -371,8 +373,8 @@ class TestSafetyLimitsIntegration:
         action = AutonomousAction(
             company_id=company_fully_auto.id, action_type="reassign", action_description="Action 1", success=True
         )
-        db.add(action)
-        db.commit()
+        db.session.add(action)
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         # Deuxième vérification : encore OK (1/2)
         can_proceed, _ = manager.check_safety_limits("reassign")
@@ -382,8 +384,8 @@ class TestSafetyLimitsIntegration:
         action2 = AutonomousAction(
             company_id=company_fully_auto.id, action_type="reassign", action_description="Action 2", success=True
         )
-        db.add(action2)
-        db.commit()
+        db.session.add(action2)
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         # Troisième vérification : limite atteinte (2/2)
         can_proceed, reason = manager.check_safety_limits("reassign")
@@ -462,6 +464,8 @@ class TestActionLogging:
         """Test qu'une action bloquée par les limites n'est pas loggée."""
 
         # Atteindre la limite
+        # ✅ FIX: S'assurer que company est flushée avant de créer AutonomousAction
+        db.session.flush()
         for i in range(2):
             action = AutonomousAction(
                 company_id=company_fully_auto.id,
@@ -469,8 +473,8 @@ class TestActionLogging:
                 action_description=f"Limit action {i}",
                 success=True,
             )
-            db.add(action)
-        db.commit()
+            db.session.add(action)
+        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         # Essayer d'exécuter une nouvelle action
         mock_apply.return_value = {"success": True}
