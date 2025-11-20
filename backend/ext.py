@@ -73,7 +73,7 @@ def setup_sql_event_listener():
 
     from services.unified_dispatch import performance_metrics
 
-    def _receive_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):  # noqa: ARG001
+    def _receive_before_cursor_execute(_conn, _cursor, statement, _parameters, _context, _executemany):
         """Compteur SQL pour performance metrics."""
         # Détecter type de requête
         query_type = "SELECT"  # par défaut
@@ -146,22 +146,22 @@ def setup_db_profiler(app):
 
 #  JWT error handlers
 @jwt.expired_token_loader
-def expired_token_callback(jwt_header, jwt_payload):  # noqa: ARG001
+def expired_token_callback(_jwt_header, _jwt_payload):
     return jsonify({"error": "Le token a expiré. Veuillez vous reconnecter."}), 401
 
 
 @jwt.invalid_token_loader
-def invalid_token_callback(error):  # noqa: ARG001
+def invalid_token_callback(_error):
     return jsonify({"error": "Token invalide. Veuillez vous reconnecter."}), 422
 
 
 @jwt.unauthorized_loader
-def missing_token_callback(error):  # noqa: ARG001
+def missing_token_callback(_error):
     return jsonify({"error": "Token d'accès manquant. Veuillez vous authentifier."}), 401
 
 
 @jwt.needs_fresh_token_loader
-def token_not_fresh_callback(jwt_header, jwt_payload):  # noqa: ARG001
+def token_not_fresh_callback(_jwt_header, _jwt_payload):
     return jsonify({"error": "Le token n'est pas frais. Veuillez vous reconnecter."}), 401
 
 

@@ -536,7 +536,7 @@ def mock_redis(monkeypatch):
         def __init__(self):
             self.store = {}
 
-        def set(self, key, value, nx=False, ex=None):
+        def set(self, key, value, nx=False, _ex=None):
             if nx and key in self.store:
                 return False
             self.store[key] = value

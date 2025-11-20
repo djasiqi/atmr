@@ -1425,7 +1425,13 @@ class CreateManualReservation(Resource):
             def geocode_with_nominatim(address: str):
                 try:
                     url = "https://nominatim.openstreetmap.org/search"
-                    params = {"q": address, "format": "json", "limit": 1, "addressdetails": 1}
+                    # Convertir les valeurs en str pour satisfaire mypy (requests.get attend des types spécifiques)
+                    params: dict[str, str | int] = {
+                        "q": address,
+                        "format": "json",
+                        "limit": 1,
+                        "addressdetails": 1,
+                    }
                     headers = {"User-Agent": "ATMR-Transport/1"}
                     resp = requests.get(url, params=params, headers=headers, timeout=5)
                     data = resp.json()

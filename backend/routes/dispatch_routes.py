@@ -1195,7 +1195,7 @@ class ReassignResource(Resource):
                             Assignment.query.join(Booking)
                             .filter(
                                 Booking.company_id == company.id,
-                                Assignment.status.in_([AssignmentStatus.pending, AssignmentStatus.confirmed]),
+                                Assignment.status.in_([AssignmentStatus.SCHEDULED, AssignmentStatus.EN_ROUTE_PICKUP]),
                             )
                             .all()
                         )
@@ -1549,11 +1549,13 @@ def _calculate_eta_for_assignment(
     # ✅ Si OSRM est indisponible (circuit breaker OPEN), utiliser directement Haversine
     if use_haversine_only:
         try:
-            from services.unified_dispatch.settings import DEFAULT_SETTINGS
+            from services.unified_dispatch.settings import Settings
             from shared.geo_utils import haversine_distance
 
+            # Créer une instance par défaut (DEFAULT_SETTINGS n'existe pas dans settings.py)
+            default_settings = Settings()
             distance_km = haversine_distance(driver_pos[0], driver_pos[1], pickup_pos[0], pickup_pos[1])
-            avg_speed_kmh = float(getattr(getattr(DEFAULT_SETTINGS, "matrix", None), "avg_speed_kmh", 25))
+            avg_speed_kmh = float(getattr(getattr(default_settings, "matrix", None), "avg_speed_kmh", 25))
             eta_seconds = int((distance_km / max(avg_speed_kmh, 1e-3)) * 3600.0)
             return max(1, eta_seconds)
         except Exception as e:

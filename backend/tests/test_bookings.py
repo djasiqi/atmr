@@ -12,11 +12,15 @@ from models import Booking, BookingStatus, Client, User, UserRole
 @pytest.fixture
 def sample_client(db, sample_company):
     """Crée un client de test."""
+    import uuid
+
     from ext import bcrypt
 
+    # Utiliser un email unique pour éviter les conflits de contrainte unique
+    unique_suffix = str(uuid.uuid4())[:8]
     user = User(
-        username="clientuser",
-        email="client@example.com",
+        username=f"clientuser_{unique_suffix}",
+        email=f"client_{unique_suffix}@example.com",
         role=UserRole.client,
         first_name="Jean",
         last_name="Dupont",
@@ -31,11 +35,11 @@ def sample_client(db, sample_company):
         user_id=user.id,
         company_id=sample_company.id,
         billing_address="Rue Client 1, 1000 Lausanne",
-        contact_email="client@example.com",
+        contact_email=f"client_{unique_suffix}@example.com",
         contact_phone="0791234567",
     )
     db.session.add(client)
-    db.session.commit()
+    db.session.flush()  # Use flush instead of commit to work with savepoints
     return client
 
 

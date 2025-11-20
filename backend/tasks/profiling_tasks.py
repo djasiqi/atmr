@@ -13,7 +13,7 @@ import pstats
 import time
 from datetime import UTC, datetime, timedelta
 from io import StringIO
-from typing import Any
+from typing import Any, cast
 
 try:
     import psutil  # type: ignore[import-untyped]
@@ -118,6 +118,8 @@ def _profile_endpoints(profiler: cProfile.Profile, duration_seconds: int = 30) -
         stats_buffer = StringIO()
         stats = pstats.Stats(profiler, stream=stats_buffer)
         stats.sort_stats("cumulative")
+        # Cast pour éviter les erreurs mypy (les attributs existent à l'exécution)
+        stats_any = cast(Any, stats)
 
         # Extraire top N fonctions
         top_functions = []
@@ -163,8 +165,8 @@ def _profile_endpoints(profiler: cProfile.Profile, duration_seconds: int = 30) -
             "duration_seconds": round(actual_duration, 2),
             "top_functions": top_functions[:TOP_FUNCTIONS_COUNT],
             "total_stats": {
-                "total_calls": stats.total_calls,
-                "primitive_calls": stats.primitive_calls,
+                "total_calls": stats_any.total_calls,
+                "primitive_calls": stats_any.primitive_calls,
             },
         }
 

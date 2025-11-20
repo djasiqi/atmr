@@ -521,10 +521,14 @@ class TestClientCreateSchema:
 
     def test_valid_self_service_client(self):
         """✅ Test validation création client SELF_SERVICE."""
-        data = {"client_type": "SELF_SERVICE", "email": "client@example.com"}
+        import uuid
+
+        # Utiliser un email unique pour éviter les conflits de contrainte unique
+        unique_email = f"client_{uuid.uuid4().hex[:8]}@example.com"
+        data = {"client_type": "SELF_SERVICE", "email": unique_email}
         result = validate_request(ClientCreateSchema(), data, strict=False)
         assert result["client_type"] == "SELF_SERVICE"
-        assert result["email"] == "client@example.com"
+        assert result["email"] == unique_email
 
         # SELF_SERVICE avec champs optionnels
         data = {
@@ -599,8 +603,12 @@ class TestClientCreateSchema:
 
     def test_missing_client_type(self):
         """✅ Test erreur si client_type manquant (requis)."""
+        import uuid
+
+        # Utiliser un email unique pour éviter les conflits de contrainte unique
+        unique_email = f"client_{uuid.uuid4().hex[:8]}@example.com"
         data = {
-            "email": "client@example.com"
+            "email": unique_email
             # client_type manquant
         }
         with pytest.raises(ValidationError) as exc_info:

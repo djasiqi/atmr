@@ -21,12 +21,10 @@ import pytest
 try:
     from celery import Celery
 
-    from services.tasks.rl_tasks import evaluate_rl_model, optimize_rl_hyperparameters, train_rl_model
+    from services.tasks.rl_tasks import train_rl_model
 except ImportError:
     Celery = None
     train_rl_model = None
-    evaluate_rl_model = None
-    optimize_rl_hyperparameters = None
 
 
 class TestRLCeleryErrorEdgeCases:

@@ -220,59 +220,56 @@ class RLSuggestionGenerator:
                 rank = 0
 
                 # Traiter la meilleure suggestion
-                if True:
-                    if driver_idx >= len(drivers):
-                        continue
+                if driver_idx >= len(drivers):
+                    continue
 
-                    alt_driver = drivers[driver_idx]
+                alt_driver = drivers[driver_idx]
 
-                    # Calculer confiance basée sur Q-value et rang
-                    # Q-value positif = bon, négatif = mauvais
-                    # Normaliser entre 0.5 et 0.95
-                    confidence = self._calculate_confidence(q_value, rank)
+                # Calculer confiance basée sur Q-value et rang
+                # Q-value positif = bon, négatif = mauvais
+                # Normaliser entre 0.5 et 0.95
+                confidence = self._calculate_confidence(q_value, rank)
 
-                    if confidence < min_confidence:
-                        continue
+                if confidence < min_confidence:
+                    continue
 
-                    # Estimer le gain en minutes (basé sur Q-value)
-                    expected_gain = max(0, int(q_value * 2))  # Rough estimate
+                # Estimer le gain en minutes (basé sur Q-value)
+                expected_gain = max(0, int(q_value * 2))  # Rough estimate
 
-                    # Get driver names from user relation
-                    current_user = getattr(current_driver, "user", None)
-                    current_name = (
-                        f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}".strip()
-                        if current_user
-                        else f"Driver #{current_driver.id}"
-                    )
+                # Get driver names from user relation
+                current_user = getattr(current_driver, "user", None)
+                current_name = (
+                    f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}".strip()
+                    if current_user
+                    else f"Driver #{current_driver.id}"
+                )
 
-                    alt_user = getattr(alt_driver, "user", None)
-                    alt_name = (
-                        f"{getattr(alt_user, 'first_name', '')} {getattr(alt_user, 'last_name', '')}".strip()
-                        if alt_user
-                        else f"Driver #{alt_driver.id}"
-                    )
+                alt_user = getattr(alt_driver, "user", None)
+                alt_name = (
+                    f"{getattr(alt_user, 'first_name', '')} {getattr(alt_user, 'last_name', '')}".strip()
+                    if alt_user
+                    else f"Driver #{alt_driver.id}"
+                )
 
-                    suggestion = {
-                        "booking_id": booking.id,
-                        "assignment_id": assignment.id,
-                        "suggested_driver_id": alt_driver.id,
-                        "suggested_driver_name": alt_name,
-                        "current_driver_id": current_driver.id,
-                        "current_driver_name": current_name,
-                        "confidence": round(confidence, 2),
-                        "q_value": round(float(q_value), 2),
-                        "expected_gain_minutes": expected_gain,
-                        "distance_km": None,
-                        "action": "reassign",
-                        "message": (
-                            f"MDI suggère: Réassigner de {current_name} "
-                            f"à {alt_name} "
-                            f"(gain estimé: +{expected_gain} min)"
-                        ),
-                        "source": "dqn_model",
-                    }
+                suggestion = {
+                    "booking_id": booking.id,
+                    "assignment_id": assignment.id,
+                    "suggested_driver_id": alt_driver.id,
+                    "suggested_driver_name": alt_name,
+                    "current_driver_id": current_driver.id,
+                    "current_driver_name": current_name,
+                    "confidence": round(confidence, 2),
+                    "q_value": round(float(q_value), 2),
+                    "expected_gain_minutes": expected_gain,
+                    "distance_km": None,
+                    "action": "reassign",
+                    "message": (
+                        f"MDI suggère: Réassigner de {current_name} à {alt_name} (gain estimé: +{expected_gain} min)"
+                    ),
+                    "source": "dqn_model",
+                }
 
-                    suggestions.append(suggestion)
+                suggestions.append(suggestion)
 
         except Exception as e:
             logger.error("[RL] Erreur génération suggestions DQN: %s", e)

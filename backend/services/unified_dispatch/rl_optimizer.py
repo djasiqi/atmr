@@ -88,6 +88,8 @@ class RLDispatchOptimizer:
         try:
             import torch  # pyright: ignore[reportMissingImports]
 
+            # nosec B506: Les checkpoints contiennent optimizer state et config, pas seulement des poids
+            # Les modèles proviennent de sources internes de confiance uniquement
             checkpoint = torch.load(str(self.model_path), map_location="cpu", weights_only=False)
 
             config = checkpoint.get("config", {})

@@ -100,7 +100,7 @@ class TestPreferredDriverPropagation:
 
         mock_query = MagicMock()
         mock_query.get.return_value = mock_company
-        mock_company_query.__get__ = lambda self, obj, objtype: mock_query
+        mock_company_query.__get__ = lambda self, obj, _objtype: mock_query
 
         # Mock de la matrice de temps
         n = len(mock_bookings) + len(mock_drivers)
@@ -143,7 +143,7 @@ class TestPreferredDriverPropagation:
 
         mock_query = MagicMock()
         mock_query.get.return_value = mock_company
-        mock_company_query.__get__ = lambda self, obj, objtype: mock_query
+        mock_company_query.__get__ = lambda self, obj, _objtype: mock_query
 
         n = len(mock_bookings) + len(mock_drivers)
         mock_matrix = [[0 if i == j else 10 for j in range(n)] for i in range(n)]
@@ -183,7 +183,7 @@ class TestPreferredDriverPropagation:
 
         mock_query = MagicMock()
         mock_query.get.return_value = mock_company
-        mock_company_query.__get__ = lambda self, obj, objtype: mock_query
+        mock_company_query.__get__ = lambda self, obj, _objtype: mock_query
 
         n = len(mock_bookings) + len(mock_drivers)
         mock_matrix = [[0 if i == j else 10 for j in range(n)] for i in range(n)]
@@ -225,7 +225,7 @@ class TestPreferredDriverPropagation:
 
         mock_query = MagicMock()
         mock_query.get.return_value = mock_company
-        mock_company_query.__get__ = lambda self, obj, objtype: mock_query
+        mock_company_query.__get__ = lambda self, obj, _objtype: mock_query
 
         n = len(mock_bookings) + len(mock_drivers)
         mock_matrix = [[0 if i == j else 10 for j in range(n)] for i in range(n)]

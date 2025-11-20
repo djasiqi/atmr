@@ -23,7 +23,7 @@ except ImportError:
     torch = None
 
 from services.rl.improved_dqn_agent import ImprovedDQNAgent
-from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer, create_n_step_buffer
+from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
 
 
 class TestNStepBuffer(unittest.TestCase):
