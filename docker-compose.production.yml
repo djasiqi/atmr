@@ -95,6 +95,10 @@ services:
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
+      # API Configuration
+      API_LEGACY_ENABLED: "false"  # Désactiver API legacy pour éviter conflit endpoint specs
+      API_DOCS: "off"  # Désactiver Swagger UI en production
+
       # ML Models
       ML_MODELS_PATH: /app/data/ml
       RL_MODELS_PATH: /app/data/rl
