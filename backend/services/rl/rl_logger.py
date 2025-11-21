@@ -8,6 +8,8 @@ Auteur: ATMR Project - RL Team
 Date: 21 octobre 2025
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import logging
@@ -18,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Union
 import numpy as np
 
 if TYPE_CHECKING:
-    import torch  # type: ignore
+    import torch  # type: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +45,9 @@ except ImportError:
     RLSuggestionMetric = None
 
 # Import conditionnel de torch pour éviter NameError
+# Note: torch est aussi importé dans TYPE_CHECKING pour les annotations de type
 try:
-    import torch  # type: ignore
+    import torch  # type: ignore[import-untyped]
 except ImportError:
     torch = None
 
@@ -87,7 +90,7 @@ class RLLogger:
 
         logger.info("[RLLogger] Initialisé - Redis: %s, DB: %s", enable_redis_logging, enable_db_logging)
 
-    def hash_state(self, state: Union[np.ndarray[Any, Any], "torch.Tensor", List[Any], Dict[str, Any]]) -> str:
+    def hash_state(self, state: Union[np.ndarray[Any, Any], Any, List[Any], Dict[str, Any]]) -> str:
         """Génère un hash unique pour l'état donné.
 
         Args:
@@ -123,9 +126,9 @@ class RLLogger:
 
     def log_decision(
         self,
-        state: Union[np.ndarray[Any, Any], "torch.Tensor", List[Any], Dict[str, Any]],
-        action: Union[float, "torch.Tensor"],
-        q_values: Union[np.ndarray[Any, Any], "torch.Tensor", List[Any]] | None = None,
+        state: Union[np.ndarray[Any, Any], Any, List[Any], Dict[str, Any]],  # torch.Tensor
+        action: Union[float, Any],  # torch.Tensor
+        q_values: Union[np.ndarray[Any, Any], Any, List[Any]] | None = None,  # torch.Tensor
         reward: float | None = None,
         latency_ms: float | None = None,
         model_version: str = "unknown",

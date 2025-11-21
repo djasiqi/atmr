@@ -9,5 +9,23 @@ exclude =
     .env,
     */site-packages/*
 
-# Vous pouvez aussi augmenter la longueur max des lignes si besoin
-max-line-length = 88
+# Aligner avec Ruff (line-length=120)
+max-line-length = 120
+
+# Ignorer certaines règles qui sont gérées par Ruff
+extend-ignore =
+    E203,  # whitespace before ':' (conflit avec black/ruff)
+    W503,  # line break before binary operator (conflit avec black/ruff)
+
+# Ignorations par fichier
+per-file-ignores =
+    # Fichier d'entrée avec monkey patching avant imports
+    backend/manage.py:E402
+    # Scripts avec setup avant imports (intentionnel)
+    backend/scripts/**/*.py:E402
+    # Tests avec setup avant imports (intentionnel)
+    backend/tests/conftest.py:E402
+    backend/tests/**/*.py:E402
+    # Migrations Alembic autogénérées
+    backend/migrations/**/*.py:F401,E501
+    backend/migrations/versions/**/*.py:F401,E501

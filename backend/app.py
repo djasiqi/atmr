@@ -178,7 +178,6 @@ def create_app(config_name: str | None = None):
     # ✅ 2.9: Setup OpenTelemetry avec instrumentation complète
     try:
         from shared.otel_setup import (
-            instrument_celery,
             instrument_flask,
             instrument_sqlalchemy,
             setup_opentelemetry,
