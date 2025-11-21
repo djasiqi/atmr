@@ -26,7 +26,10 @@ class TestMergeOverrides:
         """Test: merge de chemins imbriqués (heuristic.proximity, etc.)."""
         base = Settings()
 
-        overrides = {"heuristic": {"proximity": 0.05, "driver_load_balance": 0.95}, "solver": {"time_limit_sec": 120}}
+        overrides = {
+            "heuristic": {"proximity": 0.05, "driver_load_balance": 0.95},
+            "solver": {"time_limit_sec": 120},
+        }
 
         merged = merge_overrides(base, overrides)
 
@@ -100,7 +103,8 @@ class TestMergeOverrides:
             "fairness": {"fairness_weight": 0.7},
             "matrix": {
                 "provider": "osrm",
-                "cache_ttl_sec": 1800,  # Utiliser un attribut existant de MatrixSettings
+                # Utiliser un attribut existant de MatrixSettings
+                "cache_ttl_sec": 1800,
             },
         }
 
