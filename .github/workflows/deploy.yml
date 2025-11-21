@@ -24,7 +24,6 @@ on:
 
 jobs:
   build-and-push:
-    if: false  # Suspendu temporairement pendant la résolution des problèmes backend tests
     runs-on: ubuntu-latest
     env:
       DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
@@ -139,7 +138,6 @@ jobs:
     name: Deploy frontend to Vercel
     runs-on: ubuntu-latest
     needs: build-and-push
-    if: ${{ false }}
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
