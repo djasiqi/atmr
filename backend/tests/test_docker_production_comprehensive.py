@@ -11,7 +11,6 @@ du hardening Docker et des services de production.
 
 import json
 import os
-import subprocess
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, Mock, patch
 

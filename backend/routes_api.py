@@ -30,6 +30,7 @@ from routes.osrm_metrics import ns_osrm_metrics
 from routes.payments import payments_ns
 from routes.planning import planning_ns
 from routes.prometheus_metrics import prometheus_metrics_ns
+from routes.secret_rotation_monitoring import secret_rotation_ns
 from routes.shadow_mode_routes import shadow_mode_bp  # Shadow Mode RL
 from routes.utils import utils_ns
 
@@ -86,6 +87,7 @@ api_v1.add_namespace(clients_ns, path="/clients")
 
 # Routes admin
 api_v1.add_namespace(admin_ns, path="/admin")
+api_v1.add_namespace(secret_rotation_ns)
 
 # Routes companies
 api_v1.add_namespace(companies_ns, path="/companies")
@@ -167,13 +169,14 @@ _keep_legacy_api = os.getenv("API_LEGACY_ENABLED", "true").lower() == "true"
 
 if _keep_legacy_api:
     # Always disable docs/specs for the legacy API to avoid endpoint collisions
+    _doc_legacy: Any = False  # Désactiver complètement Swagger UI/docs pour legacy
     api_legacy = Api(
         title="ATMR Transport API (Legacy - Déprécié)",
         version="1.0",
         description="⚠️ API Legacy - Utiliser /api/v1/ ou /api/v2/ à la place. Cette version sera supprimée dans une version future.",
         prefix=API_PREFIX,
-        doc=False,          # completely disable swagger UI/docs for legacy
-        serve_spec=False,   # ensure no spec endpoint is created
+        doc=_doc_legacy,  # completely disable swagger UI/docs for legacy
+        serve_spec=False,  # ensure no spec endpoint is created
         authorizations=authorizations,
         security="BearerAuth",
         validate=True,

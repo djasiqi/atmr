@@ -40,8 +40,12 @@ from ext import bcrypt, db, jwt, limiter, mail, migrate, socketio
 
 # ---------- Chargement .env ----------
 BASE_DIR = Path(__file__).resolve().parent
-# nosec B104: override=True nécessaire pour permettre la surcharge des variables en développement
-load_dotenv(BASE_DIR / ".env", override=True)
+# Charger .env avec override uniquement en développement
+if os.getenv("FLASK_ENV") == "development":
+    load_dotenv(BASE_DIR / ".env", override=True)
+else:
+    # Production: ne jamais override les variables d'environnement système
+    load_dotenv(BASE_DIR / ".env", override=False)
 
 # ---------- Types ----------
 AsyncMode: TypeAlias = Literal["threading", "eventlet", "gevent", "gevent_uwsgi"]
@@ -132,6 +136,11 @@ def create_app(config_name: str | None = None):
     if os.getenv("FLASK_ENV", "production") != "production":
         app.config["PREFERRED_URL_SCHEME"] = "http"
         app.config["SESSION_COOKIE_SECURE"] = False
+    else:
+        # Sécurité cookies de session en production
+        app.config["SESSION_COOKIE_SECURE"] = True  # HTTPS uniquement
+        app.config["SESSION_COOKIE_HTTPONLY"] = True
+        app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     # Flask 2.3+ : JSON Provider ; fallback <2.3 : json_encoder
     try:
@@ -227,6 +236,14 @@ def create_app(config_name: str | None = None):
         setup_db_profiler(app)
     except Exception as e:
         app.logger.warning("[DB Profiler] Échec initialisation: %s", e)
+
+    # ✅ Phase 3: Setup centralisation des logs (ELK/Loki)
+    try:
+        from shared.logging_centralized import setup_centralized_logging
+
+        setup_centralized_logging(app)
+    except Exception as e:
+        app.logger.warning("[Centralized Logging] Échec initialisation: %s", e)
 
     # Prometheus middleware pour métriques HTTP (latence p50/p95/p99)
     try:
@@ -348,7 +365,9 @@ def create_app(config_name: str | None = None):
         try:
             from pathlib import Path
 
-            flag_file = Path("/tmp/atmr_maintenance_mode.flag")
+            # Utiliser variable d'environnement pour le chemin (défaut: /tmp/)
+            maintenance_tmp_dir = os.getenv("MAINTENANCE_TMP_DIR", "/tmp")
+            flag_file = Path(maintenance_tmp_dir) / "atmr_maintenance_mode.flag"
             if flag_file.exists():
                 reason = flag_file.read_text().strip()
                 # Permettre les healthchecks même en maintenance
@@ -471,6 +490,7 @@ def create_app(config_name: str | None = None):
         return response
 
     # 4) Sécurité (CSP)
+    # ✅ FIX: Désactiver HTTPS en mode testing pour éviter les redirections 302 dans les tests E2E
     if config_name in {"development", "testing"}:
         csp = {
             "default-src": "'self'",
@@ -481,7 +501,7 @@ def create_app(config_name: str | None = None):
         }
         force_https = False
     else:
-        frontend_url = os.getenv("FRONTEND_URL", "https://ton-frontend.tld")
+        frontend_url = os.getenv("FRONTEND_URL", "https://www.lirie.ch/")
         csp = {
             "default-src": "'self'",
             "script-src": "'self'",
@@ -528,7 +548,12 @@ def create_app(config_name: str | None = None):
                 ), 200
         return None
 
-    talisman = Talisman(content_security_policy=csp, force_https=force_https)
+    talisman = Talisman(
+        content_security_policy=csp,
+        force_https=force_https,
+        strict_transport_security=True,
+        strict_transport_security_max_age=31536000,  # 1 an
+    )
     talisman.init_app(app)
 
     # Retirer CSP pour les réponses JSON et forcer UTF-8

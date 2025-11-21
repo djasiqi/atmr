@@ -71,6 +71,7 @@ from .rl_suggestion import RLSuggestion
 from .rl_suggestion_metric import RLSuggestionMetric
 
 # A3: TaskFailure pour DLQ
+from .secret_rotation import SecretRotation
 from .task_failure import TaskFailure
 
 # ========== ÉTAPE 2 : Import models extraits ==========
@@ -135,6 +136,7 @@ __all__ = [
     "RealtimeEntityType",
     "RealtimeEvent",
     "RealtimeEventType",
+    "SecretRotation",  # Monitoring rotations de secrets
     "SenderRole",
     "ShiftStatus",
     "ShiftType",

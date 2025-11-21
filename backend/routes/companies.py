@@ -39,6 +39,10 @@ from routes.driver import (
 from services.unified_dispatch import queue
 from services.vacation_service import create_vacation
 from shared.time_utils import now_utc, parse_local_naive, to_geneva_local, to_utc
+from shared.upload_validation import (
+    ALLOWED_LOGO_EXT,
+    validate_file_upload,
+)
 
 # Constantes pour les valeurs magiques
 HOURS_PER_DAY = 24
@@ -56,12 +60,8 @@ SVG_THRESHOLD = 2
 app_logger = logging.getLogger("companies")
 companies_ns = Namespace("companies", description="Opérations liées aux entreprises et à la gestion des réservations")
 
-ALLOWED_LOGO_EXT = {"png", "jpg", "jpeg", "svg"}
 MAX_LOGO_MB = 2  # taille max
-
-
-def _allowed_logo(filename: str) -> bool:
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_LOGO_EXT
+MAX_LOGO_BYTES = MAX_LOGO_MB * 1024 * 1024
 
 
 def _remove_existing_logos(company_id: int, logos_dir: Path):
@@ -3258,21 +3258,25 @@ class CompanyLogo(Resource):
         if cid is None:
             return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
-        file = request.files["file"]
+        file = request.files.get("file")
         if not file or not file.filename:
             return {"error": "Fichier vide."}, 400
 
-        # filename peut être Optional[str] → on passe une str sûre à _allowed_logo
-        fname_in = file.filename or ""
-        if not _allowed_logo(fname_in):
-            return {"error": f"Extension non autorisée. Autorisées: {', '.join(sorted(ALLOWED_LOGO_EXT))}."}, 400
+        # Validation complète du fichier (extension, taille, contenu)
+        is_valid, error_msg = validate_file_upload(
+            file=file,
+            filename=file.filename,
+            allowed_extensions=ALLOWED_LOGO_EXT,
+            max_size_bytes=MAX_LOGO_BYTES,
+            validate_content=True,  # Valider magic bytes
+        )
+        if not is_valid:
+            return {"error": error_msg or "Fichier invalide."}, 400
 
-        # Vérif taille
+        # Obtenir la taille pour la réponse
         file.stream.seek(0, 2)  # SEEK_END
         size_bytes = file.stream.tell()
         file.stream.seek(0)
-        if size_bytes > MAX_LOGO_MB * 1024 * 1024:
-            return {"error": f"Fichier trop volumineux (max {MAX_LOGO_MB} Mo)."}, 400
 
         # Dossier uploads + sous-dossier logos
         upload_root = current_app.config.get("UPLOADS_DIR", str(Path(current_app.root_path) / "uploads"))

@@ -165,6 +165,27 @@ def token_not_fresh_callback(_jwt_header, _jwt_payload):
     return jsonify({"error": "Le token n'est pas frais. Veuillez vous reconnecter."}), 401
 
 
+# ✅ Phase 3: Callback pour vérifier la blacklist des tokens
+@jwt.token_in_blocklist_loader
+def check_if_token_revoked(_jwt_header, jwt_payload):
+    """Vérifie si le token JWT est dans la blacklist.
+
+    Args:
+        _jwt_header: En-tête JWT (non utilisé)
+        jwt_payload: Payload JWT
+
+    Returns:
+        True si le token est révoqué (blacklisté), False sinon
+    """
+    from security.token_blacklist import is_token_blacklisted
+
+    jti = jwt_payload.get("jti")
+    if jti:
+        return is_token_blacklisted(jti=jti)
+
+    return False
+
+
 #  Decorator role_required
 def role_required(*roles):
     def decorator(fn):

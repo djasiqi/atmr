@@ -108,8 +108,9 @@ class DispatchEnv(gym.Env):
         """
         super().__init__()
 
-        self.num_drivers = num_drivers
-        self.max_bookings = max_bookings
+        # ✅ FIX: Forcer les dimensions en int avec valeur par défaut 0
+        self.num_drivers = int(num_drivers or 0)
+        self.max_bookings = int(max_bookings or 0)
         self.simulation_hours = simulation_hours
         self.render_mode = render_mode
 
@@ -122,21 +123,24 @@ class DispatchEnv(gym.Env):
         # Drivers: positions(Nx2) + available(N) + load(N) = Nx4
         # Bookings: positions(Mx2) + priority(M) + time_window(M) = Mx4
         # Context: time(1) + traffic(1) = 2
-        state_dim = (
-            num_drivers * 4  # Drivers
-            + max_bookings * 4  # Bookings
+        # ✅ FIX: Forcer state_dim en int
+        state_dim = int(
+            self.num_drivers * 4  # Drivers
+            + self.max_bookings * 4  # Bookings
             + 2  # Context
         )
 
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=(state_dim,),
+            shape=(state_dim,),  # ✅ Déjà int
             dtype=np.float32,
         )
 
+        # ✅ FIX: Forcer action_size en int
         # Action: choisir un appariement (driver, booking) ou attendre
-        self.action_space = spaces.Discrete(num_drivers * max_bookings + 1)
+        action_size = int(self.num_drivers * self.max_bookings + 1)
+        self.action_space = spaces.Discrete(action_size)
 
         # État interne
         self.drivers: List[Dict[str, Any]] = []
@@ -253,6 +257,28 @@ class DispatchEnv(gym.Env):
 
         return observation, info
 
+    def _invalid_action_penalty(
+        self,
+    ) -> Tuple[np.ndarray[Any, np.dtype[np.float32]], float, bool, bool, Dict[str, Any]]:
+        """Retourne une pénalité pour action invalide.
+
+        Returns:
+            observation: État actuel (inchangé)
+            reward: Pénalité pour action invalide (-100.0)
+            terminated: False (l'épisode continue)
+            truncated: False
+            info: Informations avec flag invalid_action
+        """
+        observation = self._get_observation()
+        reward = -100.0
+        terminated = False
+        truncated = False
+        info = self._get_info()
+        info["invalid_action"] = True
+        info["reason"] = "action_out_of_space"
+        logging.debug("[DispatchEnv] Action invalide (hors action_space)")
+        return observation, reward, terminated, truncated, info
+
     def step(self, action: int) -> Tuple[np.ndarray[Any, np.dtype[np.float32]], float, bool, bool, Dict[str, Any]]:
         """Exécute une action dans l'environnement.
 
@@ -267,6 +293,10 @@ class DispatchEnv(gym.Env):
             info: Informations additionnelles
 
         """
+        # ✅ FIX: Validation de l'action avant traitement
+        if not self.action_space.contains(action):
+            return self._invalid_action_penalty()
+
         reward = 0
 
         # Action 0 = attendre (ne rien faire)
@@ -403,16 +433,23 @@ class DispatchEnv(gym.Env):
 
         """
         try:
+            # ✅ FIX: Vérifier disponibilité d'abord
+            if not driver.get("available", False):
+                return False
+
             # Calculer temps de trajet
             travel_time = self._calculate_travel_time(driver, booking)
-            arrival_time = self.current_time + travel_time
+            pickup_time = self.current_time + travel_time  # ✅ FIX: Renommer arrival_time en pickup_time pour clarté
 
-            # Vérifier les contraintes
-            time_window_ok = arrival_time <= booking.get("time_window_end", float("inf"))
+            # ✅ FIX: Vérifier fenêtre temporelle complète (start <= pickup_time <= end)
+            window_start = booking.get("time_window_start", 0)
+            window_end = booking.get("time_window_end", float("inf"))
+            time_window_ok = window_start <= pickup_time <= window_end
+
+            # Vérifier les autres contraintes
             load_ok = driver.get("load", 0) < MAX_DRIVER_LOAD  # Max 10 courses
-            available_ok = driver.get("available", False)
 
-            return time_window_ok and load_ok and available_ok
+            return time_window_ok and load_ok
         except Exception as e:
             logging.warning("[DispatchEnv] Erreur vérification contraintes: %s", e)
             return False
@@ -769,68 +806,24 @@ class DispatchEnv(gym.Env):
         return 0.2  # Normal
 
     def _calculate_episode_bonus(self) -> float:
-        """Calcule un bonus/pénalité de fin d'épisode.
+        """Calcule le bonus de fin d'épisode.
+
+        ✅ FIX: Simplifié selon le plan - bonus proportionnel au taux de complétion.
 
         Returns:
-            Bonus total (peut être négatif)
-
+            Bonus total (proportionnel au taux de complétion, peut être 0-100)
         """
-        bonus = 0
+        # ✅ FIX: Calculer taux de complétion basé sur les bookings assignés
+        completed_bookings = sum(1 for b in self.bookings if b.get("assigned", False))
+        total_bookings = len(self.bookings) if self.bookings else 1
 
-        # === V3: BONUS ALIGNÉ BUSINESS ===
+        completion_rate = completed_bookings / total_bookings
 
-        # Règle 1 : Bonus MASSIF pour taux de complétion élevé (priorité
-        # absolue)
-        total_bookings = (
-            self.episode_stats["assignments"]
-            + self.episode_stats["cancellations"]
-            + len([b for b in self.bookings if not b.get("assigned", False)])
-        )
-        if total_bookings > TOTAL_BOOKINGS_ZERO:
-            completion_rate = self.episode_stats["assignments"] / total_bookings
+        # ✅ FIX: Bonus proportionnel au taux de complétion
+        base_bonus = 100.0
+        bonus = base_bonus * completion_rate
 
-            if completion_rate >= COMPLETION_RATE_EXCELLENT:  # 95%+ assignments
-                bonus += 300  # ⭐ V3: Bonus MASSIF pour quasi 100%
-            elif completion_rate >= COMPLETION_RATE_GOOD:  # 85%+ assignments
-                bonus += 150  # ⭐ V3: Bon bonus
-            elif completion_rate >= COMPLETION_RATE_FAIR:  # 75%+ assignments
-                bonus += 50
-            else:  # < 75% assignments
-                bonus -= 200  # ⭐ V3: Pénalité pour taux faible
-
-        # Règle 2 : Pénalité MODÉRÉE pour chaque cancellation (0 toléré mais
-        # moins punitive)
-        if self.episode_stats["cancellations"] > 0:
-            # ⭐ V3.3: RÉDUIT -100 → -70 par cancellation
-            bonus -= self.episode_stats["cancellations"] * 70
-
-        # Règle 3 : Bonus pour workload équilibré entre chauffeurs
-        loads = [d["completed_bookings"] for d in self.drivers]
-        load_std = np.std(loads)
-        if load_std < LOAD_STD_ONE + 0.5:
-            bonus += 80  # ⭐ V3: Augmenté (très équilibré)
-        elif load_std < LOAD_STD_THRESHOLD + 0.5:
-            bonus += 40  # ⭐ V3: Augmenté (assez équilibré)
-        else:
-            bonus -= 40  # ⭐ V3: Pénalité modérée pour déséquilibre
-
-        # Règle 4 : Bonus pour distance totale optimisée
-        if self.episode_stats["assignments"] > 0:
-            avg_distance = self.episode_stats["total_distance"] / self.episode_stats["assignments"]
-            if avg_distance < AVG_DISTANCE_THRESHOLD:
-                bonus += 50  # ⭐ V3: Augmenté (excellente optimisation)
-            elif avg_distance < AVG_DISTANCE_THRESHOLD:
-                bonus += 25  # ⭐ V3: Augmenté (bonne optimisation)
-
-        # Règle 5 : Pénalité modérée pour taux de retards ALLER
-        # Note: Les retards RETOUR sont tolérés (15-30 min) et déjà gérés dans
-        # _assign_booking
-        if self.episode_stats["assignments"] > 0:
-            late_rate = self.episode_stats["late_pickups"] / self.episode_stats["assignments"]
-            if late_rate > LATE_RATE_THRESHOLD:  # Plus de 15% de retards
-                bonus -= 100  # ⭐ V3: Pénalité modérée
-
-        return bonus
+        return float(bonus)
 
     def _get_info(self) -> Dict[str, Any]:
         """Retourne des informations de débogage sur l'état actuel.

@@ -43,7 +43,7 @@ def _get_vault_client() -> Any:
 
 
 @celery.task(bind=True, name="tasks.vault_rotation_tasks.rotate_jwt_secret")
-def rotate_jwt_secret(self: Task) -> dict[str, Any]:  # noqa: ARG001
+def rotate_jwt_secret(self: Task) -> dict[str, Any]:
     """✅ 4.1: Rotation automatique de la clé JWT dans Vault.
 
     Génère une nouvelle clé JWT et la stocke dans Vault.
@@ -54,13 +54,53 @@ def rotate_jwt_secret(self: Task) -> dict[str, Any]:  # noqa: ARG001
     """
     if not HVAC_AVAILABLE:
         logger.warning("[4.1 Vault Rotation] hvac non installé, rotation JWT ignorée")
-        return {"status": "skipped", "reason": "hvac_not_available"}
+        result = {"status": "skipped", "reason": "hvac_not_available"}
+
+        # ✅ Enregistrer le skip dans le monitoring
+        try:
+            from services.secret_rotation_monitor import record_rotation
+
+            environment = os.getenv("FLASK_ENV", "production")
+            env_path = "dev" if environment == "development" else ("testing" if environment == "testing" else "prod")
+
+            record_rotation(
+                secret_type="jwt",
+                status="skipped",
+                environment=env_path,
+                metadata={"reason": "hvac_not_available"},
+                task_id=self.request.id if hasattr(self, "request") else None,
+            )
+        except Exception as monitor_error:
+            logger.warning("[4.1 Vault Rotation] Erreur enregistrement monitoring: %s", monitor_error)
+
+        return result
 
     try:
         vault_client = _get_vault_client()
         if not vault_client or not vault_client.use_vault or not vault_client._client:
             logger.warning("[4.1 Vault Rotation] Vault non disponible, rotation JWT ignorée")
-            return {"status": "skipped", "reason": "vault_not_available"}
+            result = {"status": "skipped", "reason": "vault_not_available"}
+
+            # ✅ Enregistrer le skip dans le monitoring
+            try:
+                from services.secret_rotation_monitor import record_rotation
+
+                environment = os.getenv("FLASK_ENV", "production")
+                env_path = (
+                    "dev" if environment == "development" else ("testing" if environment == "testing" else "prod")
+                )
+
+                record_rotation(
+                    secret_type="jwt",
+                    status="skipped",
+                    environment=env_path,
+                    metadata={"reason": "vault_not_available"},
+                    task_id=self.request.id if hasattr(self, "request") else None,
+                )
+            except Exception as monitor_error:
+                logger.warning("[4.1 Vault Rotation] Erreur enregistrement monitoring: %s", monitor_error)
+
+            return result
 
         # Déterminer l'environnement
         environment = os.getenv("FLASK_ENV", "production")
@@ -98,7 +138,7 @@ def rotate_jwt_secret(self: Task) -> dict[str, Any]:  # noqa: ARG001
         # ⚠️ IMPORTANT: Vider le cache pour forcer rechargement
         vault_client.clear_cache()
 
-        return {
+        result = {
             "status": "success",
             "environment": env_path,
             "rotated_at": datetime.now(UTC).isoformat(),
@@ -106,13 +146,50 @@ def rotate_jwt_secret(self: Task) -> dict[str, Any]:  # noqa: ARG001
             "old_secret_present": old_secret is not None,
         }
 
+        # ✅ Enregistrer la rotation dans le monitoring
+        try:
+            from services.secret_rotation_monitor import record_rotation
+
+            record_rotation(
+                secret_type="jwt",
+                status="success",
+                environment=env_path,
+                metadata={
+                    "next_rotation_days": JWT_ROTATION_INTERVAL_DAYS,
+                    "old_secret_present": old_secret is not None,
+                },
+                task_id=self.request.id if hasattr(self, "request") else None,
+            )
+        except Exception as monitor_error:
+            logger.warning("[4.1 Vault Rotation] Erreur enregistrement monitoring: %s", monitor_error)
+
+        return result
+
     except Exception as e:
         logger.exception("[4.1 Vault Rotation] ❌ Erreur rotation JWT secret: %s", e)
+
+        # ✅ Enregistrer l'échec dans le monitoring
+        try:
+            from services.secret_rotation_monitor import record_rotation
+
+            environment = os.getenv("FLASK_ENV", "production")
+            env_path = "dev" if environment == "development" else ("testing" if environment == "testing" else "prod")
+
+            record_rotation(
+                secret_type="jwt",
+                status="error",
+                environment=env_path,
+                error_message=str(e),
+                task_id=self.request.id if hasattr(self, "request") else None,
+            )
+        except Exception as monitor_error:
+            logger.warning("[4.1 Vault Rotation] Erreur enregistrement monitoring: %s", monitor_error)
+
         raise
 
 
 @celery.task(bind=True, name="tasks.vault_rotation_tasks.rotate_encryption_key")
-def rotate_encryption_key(self: Task) -> dict[str, Any]:  # noqa: ARG001
+def rotate_encryption_key(self: Task) -> dict[str, Any]:
     """✅ 4.1: Rotation automatique de la clé d'encryption dans Vault.
 
     Génère une nouvelle clé d'encryption et la stocke dans Vault.
@@ -123,13 +200,53 @@ def rotate_encryption_key(self: Task) -> dict[str, Any]:  # noqa: ARG001
     """
     if not HVAC_AVAILABLE:
         logger.warning("[4.1 Vault Rotation] hvac non installé, rotation encryption ignorée")
-        return {"status": "skipped", "reason": "hvac_not_available"}
+        result = {"status": "skipped", "reason": "hvac_not_available"}
+
+        # ✅ Enregistrer le skip dans le monitoring
+        try:
+            from services.secret_rotation_monitor import record_rotation
+
+            environment = os.getenv("FLASK_ENV", "production")
+            env_path = "dev" if environment == "development" else ("testing" if environment == "testing" else "prod")
+
+            record_rotation(
+                secret_type="encryption",
+                status="skipped",
+                environment=env_path,
+                metadata={"reason": "hvac_not_available"},
+                task_id=self.request.id if hasattr(self, "request") else None,
+            )
+        except Exception as monitor_error:
+            logger.warning("[4.1 Vault Rotation] Erreur enregistrement monitoring: %s", monitor_error)
+
+        return result
 
     try:
         vault_client = _get_vault_client()
         if not vault_client or not vault_client.use_vault or not vault_client._client:
             logger.warning("[4.1 Vault Rotation] Vault non disponible, rotation encryption ignorée")
-            return {"status": "skipped", "reason": "vault_not_available"}
+            result = {"status": "skipped", "reason": "vault_not_available"}
+
+            # ✅ Enregistrer le skip dans le monitoring
+            try:
+                from services.secret_rotation_monitor import record_rotation
+
+                environment = os.getenv("FLASK_ENV", "production")
+                env_path = (
+                    "dev" if environment == "development" else ("testing" if environment == "testing" else "prod")
+                )
+
+                record_rotation(
+                    secret_type="encryption",
+                    status="skipped",
+                    environment=env_path,
+                    metadata={"reason": "vault_not_available"},
+                    task_id=self.request.id if hasattr(self, "request") else None,
+                )
+            except Exception as monitor_error:
+                logger.warning("[4.1 Vault Rotation] Erreur enregistrement monitoring: %s", monitor_error)
+
+            return result
 
         # Déterminer l'environnement
         environment = os.getenv("FLASK_ENV", "production")
@@ -196,7 +313,7 @@ def rotate_encryption_key(self: Task) -> dict[str, Any]:  # noqa: ARG001
         # ✅ 2.5: Intégration avec système de rotation existant
         # Notifier le EncryptionService de la nouvelle clé (à faire manuellement ou via reload)
 
-        return {
+        result = {
             "status": "success",
             "environment": env_path,
             "rotated_at": datetime.now(UTC).isoformat(),
@@ -205,8 +322,192 @@ def rotate_encryption_key(self: Task) -> dict[str, Any]:  # noqa: ARG001
             "old_key_present": old_key_b64 is not None,
         }
 
+        # ✅ Enregistrer la rotation dans le monitoring
+        try:
+            from services.secret_rotation_monitor import record_rotation
+
+            record_rotation(
+                secret_type="encryption",
+                status="success",
+                environment=env_path,
+                metadata={
+                    "next_rotation_days": ENCRYPTION_ROTATION_INTERVAL_DAYS,
+                    "legacy_keys_count": len(legacy_keys),
+                    "old_key_present": old_key_b64 is not None,
+                },
+                task_id=self.request.id if hasattr(self, "request") else None,
+            )
+        except Exception as monitor_error:
+            logger.warning("[4.1 Vault Rotation] Erreur enregistrement monitoring: %s", monitor_error)
+
+        return result
+
     except Exception as e:
         logger.exception("[4.1 Vault Rotation] ❌ Erreur rotation encryption key: %s", e)
+
+        # ✅ Enregistrer l'échec dans le monitoring
+        try:
+            from services.secret_rotation_monitor import record_rotation
+
+            environment = os.getenv("FLASK_ENV", "production")
+            env_path = "dev" if environment == "development" else ("testing" if environment == "testing" else "prod")
+
+            record_rotation(
+                secret_type="encryption",
+                status="error",
+                environment=env_path,
+                error_message=str(e),
+                task_id=self.request.id if hasattr(self, "request") else None,
+            )
+        except Exception as monitor_error:
+            logger.warning("[4.1 Vault Rotation] Erreur enregistrement monitoring: %s", monitor_error)
+
+        raise
+
+
+@celery.task(bind=True, name="tasks.vault_rotation_tasks.rotate_flask_secret_key")
+def rotate_flask_secret_key(self: Task) -> dict[str, Any]:
+    """✅ 4.1: Rotation automatique de SECRET_KEY Flask dans Vault.
+
+    Génère une nouvelle SECRET_KEY et la stocke dans Vault.
+    L'ancienne clé est conservée temporairement pour transition.
+
+    Returns:
+        dict avec status, environment, rotated_at
+    """
+    if not HVAC_AVAILABLE:
+        logger.warning("[4.1 Vault Rotation] hvac non installé, rotation SECRET_KEY ignorée")
+        result = {"status": "skipped", "reason": "hvac_not_available"}
+
+        # ✅ Enregistrer le skip dans le monitoring
+        try:
+            from services.secret_rotation_monitor import record_rotation
+
+            environment = os.getenv("FLASK_ENV", "production")
+            env_path = "dev" if environment == "development" else ("testing" if environment == "testing" else "prod")
+
+            record_rotation(
+                secret_type="flask_secret_key",
+                status="skipped",
+                environment=env_path,
+                metadata={"reason": "hvac_not_available"},
+                task_id=self.request.id if hasattr(self, "request") else None,
+            )
+        except Exception as monitor_error:
+            logger.warning("[4.1 Vault Rotation] Erreur enregistrement monitoring: %s", monitor_error)
+
+        return result
+
+    try:
+        vault_client = _get_vault_client()
+        if not vault_client or not vault_client.use_vault or not vault_client._client:
+            logger.warning("[4.1 Vault Rotation] Vault non disponible, rotation SECRET_KEY ignorée")
+            result = {"status": "skipped", "reason": "vault_not_available"}
+
+            # ✅ Enregistrer le skip dans le monitoring
+            try:
+                from services.secret_rotation_monitor import record_rotation
+
+                environment = os.getenv("FLASK_ENV", "production")
+                env_path = (
+                    "dev" if environment == "development" else ("testing" if environment == "testing" else "prod")
+                )
+
+                record_rotation(
+                    secret_type="flask_secret_key",
+                    status="skipped",
+                    environment=env_path,
+                    metadata={"reason": "vault_not_available"},
+                    task_id=self.request.id if hasattr(self, "request") else None,
+                )
+            except Exception as monitor_error:
+                logger.warning("[4.1 Vault Rotation] Erreur enregistrement monitoring: %s", monitor_error)
+
+            return result
+
+        # Déterminer l'environnement
+        environment = os.getenv("FLASK_ENV", "production")
+        if environment == "development":
+            env_path = "dev"
+        elif environment == "testing":
+            env_path = "testing"
+        else:
+            env_path = "prod"
+
+        logger.info("[4.1 Vault Rotation] Début rotation SECRET_KEY Flask (env=%s)", env_path)
+
+        # Générer nouvelle SECRET_KEY
+        import secrets
+
+        new_secret = secrets.token_urlsafe(64)  # 64 bytes = ~86 caractères URL-safe
+
+        # Lire l'ancienne clé pour référence (optionnel)
+        old_secret = None
+        try:
+            old_secret_response = vault_client._client.secrets.kv.v2.read_secret_version(
+                path=f"atmr/data/{env_path}/flask/secret_key"
+            )
+            old_secret = old_secret_response["data"]["data"].get("value")
+        except Exception:
+            pass  # Première rotation, pas d'ancienne clé
+
+        # Stocker la nouvelle clé dans Vault
+        vault_client._client.secrets.kv.v2.create_or_update_secret(
+            path=f"atmr/data/{env_path}/flask/secret_key", secret={"value": new_secret}
+        )
+
+        logger.info("[4.1 Vault Rotation] ✅ SECRET_KEY Flask roté avec succès (env=%s)", env_path)
+
+        # ⚠️ IMPORTANT: Vider le cache pour forcer rechargement
+        vault_client.clear_cache()
+
+        result = {
+            "status": "success",
+            "environment": env_path,
+            "rotated_at": datetime.now(UTC).isoformat(),
+            "next_rotation_days": 90,  # Rotation tous les 90 jours par défaut
+            "old_secret_present": old_secret is not None,
+        }
+
+        # ✅ Enregistrer la rotation dans le monitoring
+        try:
+            from services.secret_rotation_monitor import record_rotation
+
+            record_rotation(
+                secret_type="flask_secret_key",
+                status="success",
+                environment=env_path,
+                metadata={
+                    "next_rotation_days": 90,
+                    "old_secret_present": old_secret is not None,
+                },
+                task_id=self.request.id if hasattr(self, "request") else None,
+            )
+        except Exception as monitor_error:
+            logger.warning("[4.1 Vault Rotation] Erreur enregistrement monitoring: %s", monitor_error)
+
+        return result
+
+    except Exception as e:
+        logger.exception("[4.1 Vault Rotation] ❌ Erreur rotation SECRET_KEY Flask: %s", e)
+
+        # ✅ Enregistrer l'échec dans le monitoring
+        try:
+            from services.secret_rotation_monitor import record_rotation
+
+            environment = os.getenv("FLASK_ENV", "production")
+            env_path = "dev" if environment == "development" else ("testing" if environment == "testing" else "prod")
+
+            record_rotation(
+                secret_type="flask_secret_key",
+                status="error",
+                environment=env_path,
+                error_message=str(e),
+                task_id=self.request.id if hasattr(self, "request") else None,
+            )
+        except Exception as monitor_error:
+            logger.warning("[4.1 Vault Rotation] Erreur enregistrement monitoring: %s", monitor_error)
+
         raise
 
 
@@ -229,6 +530,14 @@ def rotate_all_secrets(self: Task) -> dict[str, Any]:  # noqa: ARG001
         fake_task = FakeTask()
 
         results = {}
+
+        # Rotation SECRET_KEY Flask
+        try:
+            flask_secret_result = rotate_flask_secret_key(fake_task)  # type: ignore[arg-type]
+            results["flask_secret_key"] = flask_secret_result
+        except Exception as e:
+            logger.exception("[4.1 Vault Rotation] Erreur rotation SECRET_KEY Flask: %s", e)
+            results["flask_secret_key"] = {"status": "error", "error": str(e)}
 
         # Rotation JWT
         try:
@@ -253,6 +562,10 @@ def rotate_all_secrets(self: Task) -> dict[str, Any]:  # noqa: ARG001
 
         logger.info("[4.1 Vault Rotation] ✅ Rotation globale terminée: %d/%d succès", success_count, total_count)
 
+        # ✅ Notification en cas d'échec
+        if success_count < total_count:
+            _notify_rotation_failure(results)
+
         return {
             "status": "completed",
             "rotated_at": datetime.now(UTC).isoformat(),
@@ -263,4 +576,32 @@ def rotate_all_secrets(self: Task) -> dict[str, Any]:  # noqa: ARG001
 
     except Exception as e:
         logger.exception("[4.1 Vault Rotation] ❌ Erreur rotation globale: %s", e)
+        _notify_rotation_failure({"global_error": str(e)})
         raise
+
+
+def _notify_rotation_failure(results: dict[str, Any]) -> None:
+    """✅ 4.1: Notifie en cas d'échec de rotation des secrets.
+
+    Args:
+        results: Dictionnaire des résultats de rotation
+    """
+    try:
+        import sentry_sdk
+
+        # Envoyer à Sentry si configuré
+        failed_secrets = [key for key, result in results.items() if result.get("status") != "success"]
+        if failed_secrets:
+            sentry_sdk.capture_message(
+                f"Rotation secrets échouée: {', '.join(failed_secrets)}",
+                level="error",
+            )
+            logger.error("[4.1 Vault Rotation] ❌ Échecs détectés: %s", failed_secrets)
+
+        # TODO: Ajouter notification email/Slack si configuré
+        # Exemple:
+        # if os.getenv("ROTATION_NOTIFICATION_EMAIL"):
+        #     send_email(...)
+
+    except Exception as e:
+        logger.warning("[4.1 Vault Rotation] Erreur notification: %s", e)

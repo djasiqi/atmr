@@ -5,12 +5,14 @@ Tests de PII masking pour l'Étape 15.
 Ces tests valident le système de masquage des données personnelles
 identifiables (PII) pour garantir la conformité RGPD et la protection
 de la vie privée des utilisateurs.
+✅ FIX: Tests simplifiés pour utiliser les vraies fonctions de shared.logging_utils
+au lieu de mocks de classes inexistantes.
 """
 
-import json
+import logging
 import sys
+from io import StringIO
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 
@@ -18,302 +20,235 @@ import pytest
 backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
+from shared.logging_utils import (
+    PIIFilter,
+    mask_email,
+    mask_gps_coords,
+    mask_iban,
+    mask_phone,
+    sanitize_log_data,
+)
+
 
 class TestPIIMasking:
-    """Tests du système de masquage PII."""
-
-    def test_pii_detection(self):
-        """Test de détection des données PII."""
-        print("🧪 Test détection des données PII...")
-
-        # Mock du détecteur PII
-        with patch("services.privacy.pii_detector.PIIDetector") as mock_detector:
-            mock_detector.return_value.detect_pii.return_value = {
-                "email": ["user@example.com"],
-                "phone": ["+33123456789"],
-                "name": ["John Doe"],
-                "address": ["123 Main Street"],
-                "confidence": 0.95,
-            }
-
-            # Test de détection PII (mock)
-            PIIDetector = Mock()
-
-            detector = PIIDetector()
-
-            # Test de détection
-            test_data = {
-                "user_email": "user@example.com",
-                "user_phone": "+33123456789",
-                "user_name": "John Doe",
-                "user_address": "123 Main Street",
-            }
-
-            pii_detected = detector.detect_pii(test_data)
-
-            assert pii_detected is not None
-            assert "email" in pii_detected
-            assert "phone" in pii_detected
-            assert "name" in pii_detected
-            assert "confidence" in pii_detected
-            print("  ✅ Détection PII fonctionnelle")
+    """Tests du système de masquage PII avec les fonctions réelles."""
 
     def test_pii_masking_email(self):
         """Test de masquage des adresses email."""
         print("🧪 Test masquage des adresses email...")
 
-        # Mock du masqueur PII
-        with patch("services.privacy.pii_masker.PIIMasker") as mock_masker:
-            mock_masker.return_value.mask_email.return_value = "u***@e******.com"
+        original_email = "user@example.com"
+        masked_email = mask_email(original_email)
 
-            # Test de masquage email (mock)
-            PIIMasker = Mock()
-
-            masker = PIIMasker()
-
-            # Test de masquage
-            original_email = "user@example.com"
-            masked_email = masker.mask_email(original_email)
-
-            assert masked_email is not None
-            assert "@" in masked_email
-            assert "***" in masked_email
-            assert original_email != masked_email
-            print("  ✅ Masquage email fonctionnel")
+        assert masked_email is not None
+        assert "@" in masked_email
+        assert "***" in masked_email
+        assert original_email != masked_email
+        # Vérifier que le format masqué est correct
+        assert "u***@" in masked_email or "u***@" in masked_email.lower()
+        print("  ✅ Masquage email fonctionnel")
 
     def test_pii_masking_phone(self):
         """Test de masquage des numéros de téléphone."""
         print("🧪 Test masquage des numéros de téléphone...")
 
-        # Mock du masqueur PII
-        with patch("services.privacy.pii_masker.PIIMasker") as mock_masker:
-            mock_masker.return_value.mask_phone.return_value = "+33***56789"
+        original_phone = "+33123456789"
+        masked_phone = mask_phone(original_phone)
 
-            # Test de masquage téléphone (mock)
-            PIIMasker = Mock()
+        assert masked_phone is not None
+        assert original_phone != masked_phone
+        # Vérifier que le préfixe et les derniers chiffres sont présents
+        assert "+33" in masked_phone or "+3" in masked_phone
+        assert "***" in masked_phone
+        print("  ✅ Masquage téléphone fonctionnel")
 
-            masker = PIIMasker()
+    def test_pii_masking_iban(self):
+        """Test de masquage des IBAN."""
+        print("🧪 Test masquage des IBAN...")
 
-            # Test de masquage
-            original_phone = "+33123456789"
-            masked_phone = masker.mask_phone(original_phone)
+        original_iban = "CH6509000000123456789"
+        masked_iban = mask_iban(original_iban)
 
-            assert masked_phone is not None
-            assert "+33" in masked_phone
-            assert "***" in masked_phone
-            assert original_phone != masked_phone
-            print("  ✅ Masquage téléphone fonctionnel")
+        assert masked_iban is not None
+        assert original_iban != masked_iban
+        # Vérifier que le préfixe pays et les derniers chiffres sont présents
+        assert "CH**" in masked_iban or "CH" in masked_iban
+        assert "***" in masked_iban
+        print("  ✅ Masquage IBAN fonctionnel")
 
-    def test_pii_masking_name(self):
-        """Test de masquage des noms."""
-        print("🧪 Test masquage des noms...")
+    def test_pii_masking_gps(self):
+        """Test de masquage des coordonnées GPS."""
+        print("🧪 Test masquage des coordonnées GPS...")
 
-        # Mock du masqueur PII
-        with patch("services.privacy.pii_masker.PIIMasker") as mock_masker:
-            mock_masker.return_value.mask_name.return_value = "J*** D**"
+        original_lat = "46.519654"
+        original_lon = "6.632273"
+        masked_gps = mask_gps_coords(original_lat, original_lon)
 
-            # Test de masquage nom (mock)
-            PIIMasker = Mock()
+        assert masked_gps is not None
+        assert "[GPS_APPROX]" in masked_gps
+        # Vérifier que les coordonnées sont arrondies (4 décimales)
+        assert "46.5197" in masked_gps
+        assert "6.6323" in masked_gps
+        assert original_lat not in masked_gps  # Coordonnées précises masquées
+        assert original_lon not in masked_gps
+        print("  ✅ Masquage GPS fonctionnel")
 
-            masker = PIIMasker()
+    def test_sanitize_log_data_email(self):
+        """Test de sanitization des emails dans les données."""
+        print("🧪 Test sanitization des emails...")
 
-            # Test de masquage
-            original_name = "John Doe"
-            masked_name = masker.mask_name(original_name)
+        test_data = {
+            "user_email": "user@example.com",
+            "user_name": "John Doe",
+        }
 
-            assert masked_name is not None
-            assert "***" in masked_name
-            assert original_name != masked_name
-            print("  ✅ Masquage nom fonctionnel")
+        sanitized = sanitize_log_data(test_data)
 
-    def test_pii_masking_address(self):
-        """Test de masquage des adresses."""
-        print("🧪 Test masquage des adresses...")
+        assert isinstance(sanitized, dict)
+        # Vérifier que l'email est masqué
+        assert "user@example.com" not in str(sanitized)
+        assert "***" in str(sanitized["user_email"]) or "@" not in str(sanitized["user_email"])
+        print("  ✅ Sanitization email fonctionnelle")
 
-        # Mock du masqueur PII
-        with patch("services.privacy.pii_masker.PIIMasker") as mock_masker:
-            mock_masker.return_value.mask_address.return_value = "123 *** Street"
+    def test_sanitize_log_data_phone(self):
+        """Test de sanitization des téléphones dans les données."""
+        print("🧪 Test sanitization des téléphones...")
 
-            # Test de masquage adresse (mock)
-            PIIMasker = Mock()
+        test_data = {
+            "user_phone": "+33123456789",
+            "user_name": "John Doe",
+        }
 
-            masker = PIIMasker()
+        sanitized = sanitize_log_data(test_data)
 
-            # Test de masquage
-            original_address = "123 Main Street"
-            masked_address = masker.mask_address(original_address)
+        assert isinstance(sanitized, dict)
+        # Vérifier que le téléphone est masqué
+        assert "+33123456789" not in str(sanitized)
+        assert "[PHONE_REDACTED]" in str(sanitized["user_phone"]) or "***" in str(sanitized["user_phone"])
+        print("  ✅ Sanitization téléphone fonctionnelle")
 
-            assert masked_address is not None
-            assert "***" in masked_address
-            assert original_address != masked_address
-            print("  ✅ Masquage adresse fonctionnel")
+    def test_sanitize_log_data_gps(self):
+        """Test de sanitization des coordonnées GPS dans les données."""
+        print("🧪 Test sanitization des coordonnées GPS...")
 
-    def test_pii_masking_complete_data(self):
-        """Test de masquage complet des données."""
-        print("🧪 Test masquage complet des données...")
+        test_data = {
+            "location": "46.519654, 6.632273",
+            "user_name": "John Doe",
+        }
 
-        # Mock du masqueur PII
-        with patch("services.privacy.pii_masker.PIIMasker") as mock_masker:
-            mock_masker.return_value.mask_complete_data.return_value = {
-                "user_email": "u***@e******.com",
-                "user_phone": "+33***56789",
-                "user_name": "J*** D**",
-                "user_address": "123 *** Street",
-                "masking_applied": True,
-                "masking_timestamp": "2025-0.1-01T00:00:00Z",
-            }
+        sanitized = sanitize_log_data(test_data)
 
-            # Test de masquage complet (mock)
-            PIIMasker = Mock()
+        assert isinstance(sanitized, dict)
+        # Vérifier que les coordonnées précises sont masquées
+        assert "46.519654" not in str(sanitized)
+        assert "6.632273" not in str(sanitized)
+        assert "[GPS_APPROX]" in str(sanitized["location"])
+        print("  ✅ Sanitization GPS fonctionnelle")
 
-            masker = PIIMasker()
+    def test_sanitize_log_data_complete(self):
+        """Test de sanitization complète des données."""
+        print("🧪 Test sanitization complète des données...")
 
-            # Test de masquage
-            original_data = {
-                "user_email": "user@example.com",
-                "user_phone": "+33123456789",
-                "user_name": "John Doe",
-                "user_address": "123 Main Street",
-            }
+        test_data = {
+            "user_email": "user@example.com",
+            "user_phone": "+33123456789",
+            "user_iban": "CH6509000000123456789",
+            "location": "46.519654, 6.632273",
+            "password": "secret123",  # Clé sensible
+            "user_name": "John Doe",
+        }
 
-            masked_data = masker.mask_complete_data(original_data)
+        sanitized = sanitize_log_data(test_data)
 
-            assert masked_data is not None
-            assert "masking_applied" in masked_data
-            assert masked_data["masking_applied"] is True
-            assert "masking_timestamp" in masked_data
-            print("  ✅ Masquage complet des données fonctionnel")
+        assert isinstance(sanitized, dict)
+        # Vérifier que toutes les PII sont masquées
+        assert "user@example.com" not in str(sanitized)
+        assert "+33123456789" not in str(sanitized)
+        assert "CH6509000000123456789" not in str(sanitized)
+        assert "46.519654" not in str(sanitized)
+        assert "secret123" not in str(sanitized)
+        # Vérifier que les clés sensibles sont masquées
+        assert sanitized.get("password") == "[REDACTED]"
+        print("  ✅ Sanitization complète fonctionnelle")
 
-    def test_pii_masking_reversible(self):
-        """Test de masquage réversible des données."""
-        print("🧪 Test masquage réversible des données...")
+    def test_sanitize_log_data_string(self):
+        """Test de sanitization d'une chaîne de caractères."""
+        print("🧪 Test sanitization d'une chaîne...")
 
-        # Mock du masqueur PII
-        with patch("services.privacy.pii_masker.PIIMasker") as mock_masker:
-            mock_masker.return_value.mask_reversible.return_value = {
-                "masked_data": "u***@e******.com",
-                "masking_key": "encrypted_key_123",
-                "reversible": True,
-            }
+        test_string = "User user@example.com at 46.519654, 6.632273 called +33123456789"
 
-            # Test de masquage réversible (mock)
-            PIIMasker = Mock()
+        sanitized = sanitize_log_data(test_string)
 
-            masker = PIIMasker()
+        assert isinstance(sanitized, str)
+        # Vérifier que toutes les PII sont masquées dans la chaîne
+        assert "user@example.com" not in sanitized
+        assert "46.519654" not in sanitized
+        assert "6.632273" not in sanitized
+        assert "+33123456789" not in sanitized
+        # Vérifier que les versions masquées sont présentes
+        assert "***" in sanitized or "[PHONE_REDACTED]" in sanitized
+        assert "[GPS_APPROX]" in sanitized
+        print("  ✅ Sanitization chaîne fonctionnelle")
 
-            # Test de masquage réversible
-            original_data = "user@example.com"
-            masked_result = masker.mask_reversible(original_data)
+    def test_sanitize_log_data_nested(self):
+        """Test de sanitization dans des structures imbriquées."""
+        print("🧪 Test sanitization structures imbriquées...")
 
-            assert masked_result is not None
-            assert "masked_data" in masked_result
-            assert "masking_key" in masked_result
-            assert "reversible" in masked_result
-            assert masked_result["reversible"] is True
-            print("  ✅ Masquage réversible fonctionnel")
+        test_data = {
+            "user": {
+                "email": "user@example.com",
+                "phone": "+33123456789",
+                "location": {"coords": "46.519654, 6.632273", "address": "Rue Test"},
+            },
+            "bookings": [
+                {"id": 1, "patient_email": "patient@example.com"},
+                {"id": 2, "patient_phone": "+33111111111"},
+            ],
+        }
 
-    def test_pii_masking_irreversible(self):
-        """Test de masquage irréversible des données."""
-        print("🧪 Test masquage irréversible des données...")
+        sanitized = sanitize_log_data(test_data)
 
-        # Mock du masqueur PII
-        with patch("services.privacy.pii_masker.PIIMasker") as mock_masker:
-            mock_masker.return_value.mask_irreversible.return_value = {
-                "masked_data": "u***@e******.com",
-                "irreversible": True,
-                "hash": "sha256_hash_123",
-            }
+        assert isinstance(sanitized, dict)
+        # Vérifier que les PII sont masquées à tous les niveaux
+        assert "user@example.com" not in str(sanitized)
+        assert "+33123456789" not in str(sanitized)
+        assert "46.519654" not in str(sanitized)
+        assert "patient@example.com" not in str(sanitized)
+        assert "+33111111111" not in str(sanitized)
+        print("  ✅ Sanitization structures imbriquées fonctionnelle")
 
-            # Test de masquage irréversible (mock)
-            PIIMasker = Mock()
+    def test_pii_filter_integration(self):
+        """Test d'intégration du filtre PII avec logging."""
+        print("🧪 Test intégration filtre PII avec logging...")
 
-            masker = PIIMasker()
+        # Créer logger de test
+        logger = logging.getLogger("test_pii_filter")
+        logger.setLevel(logging.INFO)
+        logger.handlers.clear()  # Nettoyer handlers existants
 
-            # Test de masquage irréversible
-            original_data = "user@example.com"
-            masked_result = masker.mask_irreversible(original_data)
+        # Handler qui capture les logs
+        log_stream = StringIO()
+        handler = logging.StreamHandler(log_stream)
+        handler.setLevel(logging.INFO)
+        logger.addHandler(handler)
 
-            assert masked_result is not None
-            assert "masked_data" in masked_result
-            assert "irreversible" in masked_result
-            assert masked_result["irreversible"] is True
-            assert "hash" in masked_result
-            print("  ✅ Masquage irréversible fonctionnel")
+        # Ajouter filtre PII
+        pii_filter = PIIFilter()
+        logger.addFilter(pii_filter)
 
-    def test_pii_masking_anonymization(self):
-        """Test d'anonymisation des données."""
-        print("🧪 Test anonymisation des données...")
+        # Log avec PII
+        logger.info("User user@example.com at 46.519654, 6.632273 called +33123456789")
 
-        # Mock du masqueur PII
-        with patch("services.privacy.pii_masker.PIIMasker") as mock_masker:
-            mock_masker.return_value.anonymize_data.return_value = {
-                "anonymized_data": {
-                    "user_id": "user_123",
-                    "user_email": "u***@e******.com",
-                    "user_phone": "+33***56789",
-                    "user_name": "J*** D**",
-                    "user_address": "123 *** Street",
-                },
-                "anonymization_level": "high",
-                "anonymization_method": "k_anonymity",
-                "k_value": 5,
-            }
+        # Vérifier le log masqué
+        log_output = log_stream.getvalue()
 
-            # Test d'anonymisation (mock)
-            PIIMasker = Mock()
-
-            masker = PIIMasker()
-
-            # Test d'anonymisation
-            original_data = {
-                "user_id": "user_123",
-                "user_email": "user@example.com",
-                "user_phone": "+33123456789",
-                "user_name": "John Doe",
-                "user_address": "123 Main Street",
-            }
-
-            anonymized_result = masker.anonymize_data(original_data)
-
-            assert anonymized_result is not None
-            assert "anonymized_data" in anonymized_result
-            assert "anonymization_level" in anonymized_result
-            assert "anonymization_method" in anonymized_result
-            assert "k_value" in anonymized_result
-            print("  ✅ Anonymisation des données fonctionnelle")
-
-    def test_pii_masking_compliance_check(self):
-        """Test de vérification de conformité PII."""
-        print("🧪 Test vérification de conformité PII...")
-
-        # Mock du vérificateur de conformité
-        with patch("services.privacy.pii_compliance.PIIComplianceChecker") as mock_checker:
-            mock_checker.return_value.check_compliance.return_value = {
-                "compliant": True,
-                "violations": [],
-                "compliance_score": 0.95,
-                "recommendations": [
-                    "Consider using stronger masking for sensitive data",
-                    "Implement data retention policies",
-                ],
-            }
-
-            # Test de vérification de conformité (mock)
-            PIIComplianceChecker = Mock()
-
-            checker = PIIComplianceChecker()
-
-            # Test de vérification
-            test_data = {"user_email": "u***@e******.com", "user_phone": "+33***56789", "user_name": "J*** D**"}
-
-            compliance_result = checker.check_compliance(test_data)
-
-            assert compliance_result is not None
-            assert "compliant" in compliance_result
-            assert "violations" in compliance_result
-            assert "compliance_score" in compliance_result
-            assert "recommendations" in compliance_result
-            print("  ✅ Vérification de conformité PII fonctionnelle")
+        assert "user@example.com" not in log_output
+        assert "46.519654" not in log_output
+        assert "6.632273" not in log_output
+        assert "+33123456789" not in log_output
+        # Vérifier que les versions masquées sont présentes
+        assert "[GPS_APPROX]" in log_output or "***" in log_output
+        print("  ✅ Intégration filtre PII avec logging fonctionnelle")
 
 
 class TestPIIMaskingIntegration:
@@ -323,95 +258,55 @@ class TestPIIMaskingIntegration:
         """Test d'intégration du masquage PII avec le dispatch."""
         print("🧪 Test intégration masquage PII avec dispatch...")
 
-        # Mock de l'intégration dispatch
-        with patch("services.unified_dispatch.dispatch_manager.DispatchManager") as mock_dispatch:
-            mock_dispatch.return_value.mask_pii_in_booking.return_value = {
-                "booking_id": 123,
-                "masked_booking": {
-                    "patient_name": "J*** D**",
-                    "patient_phone": "+33***56789",
-                    "patient_address": "123 *** Street",
-                },
-                "masking_applied": True,
-            }
+        # Simuler un booking avec PII
+        original_booking = {
+            "booking_id": 123,
+            "patient_name": "John Doe",
+            "patient_email": "patient@example.com",
+            "patient_phone": "+33123456789",
+            "pickup_location": "46.519654, 6.632273",
+        }
 
-            # Test de l'intégration (mock)
-            DispatchManager = Mock()
+        # Utiliser sanitize_log_data pour masquer les PII
+        masked_booking = sanitize_log_data(original_booking)
 
-            dispatch_manager = DispatchManager()
-
-            # Test de masquage PII dans les réservations
-            original_booking = {
-                "booking_id": 123,
-                "patient_name": "John Doe",
-                "patient_phone": "+33123456789",
-                "patient_address": "123 Main Street",
-            }
-
-            masked_booking = dispatch_manager.mask_pii_in_booking(original_booking)
-
-            assert masked_booking is not None
-            assert "masked_booking" in masked_booking
-            assert "masking_applied" in masked_booking
-            assert masked_booking["masking_applied"] is True
-            print("  ✅ Intégration masquage PII avec dispatch fonctionnelle")
-
-    def test_pii_masking_rl_integration(self):
-        """Test d'intégration du masquage PII avec le système RL."""
-        print("🧪 Test intégration masquage PII avec RL...")
-
-        # Mock de l'intégration RL
-        with patch("services.rl.dispatch_env.DispatchEnv") as mock_env:
-            mock_env.return_value.mask_pii_in_state.return_value = {
-                "original_state": [0.1, 0.2, 0.3, 0.4, 0.5],
-                "masked_state": [0.1, 0.2, 0.3, 0.4, 0.5],
-                "pii_masked": True,
-                "masking_method": "anonymization",
-            }
-
-            # Test de l'intégration RL (mock)
-            DispatchEnv = Mock()
-
-            env = DispatchEnv()
-
-            # Test de masquage PII dans l'état RL
-            original_state = [0.1, 0.2, 0.3, 0.4, 0.5]
-            masked_state = env.mask_pii_in_state(original_state)
-
-            assert masked_state is not None
-            assert "masked_state" in masked_state
-            assert "pii_masked" in masked_state
-            assert masked_state["pii_masked"] is True
-            print("  ✅ Intégration masquage PII avec RL fonctionnelle")
+        assert masked_booking is not None
+        assert "patient@example.com" not in str(masked_booking)
+        assert "+33123456789" not in str(masked_booking)
+        assert "46.519654" not in str(masked_booking)
+        # Vérifier que les versions masquées sont présentes
+        assert "***" in str(masked_booking) or "[GPS_APPROX]" in str(masked_booking)
+        print("  ✅ Intégration masquage PII avec dispatch fonctionnelle")
 
     def test_pii_masking_logging_integration(self):
         """Test d'intégration du masquage PII avec le système de logging."""
         print("🧪 Test intégration masquage PII avec logging...")
 
-        # Mock de l'intégration logging
-        with patch("services.logging.pii_logger.PIILogger") as mock_logger:
-            mock_logger.return_value.log_masked_data.return_value = {
-                "log_entry": "PII masked successfully",
-                "masking_timestamp": "2025-0.1-01T00:00:00Z",
-                "masking_method": "anonymization",
-                "data_type": "booking_data",
-            }
+        # Créer logger avec filtre PII
+        logger = logging.getLogger("test_pii_logging")
+        logger.setLevel(logging.INFO)
+        logger.handlers.clear()
 
-            # Test de l'intégration logging (mock)
-            PIILogger = Mock()
+        log_stream = StringIO()
+        handler = logging.StreamHandler(log_stream)
+        handler.setLevel(logging.INFO)
+        logger.addHandler(handler)
 
-            logger = PIILogger()
+        pii_filter = PIIFilter()
+        logger.addFilter(pii_filter)
 
-            # Test de logging des données masquées
-            masked_data = {"user_email": "u***@e******.com", "user_phone": "+33***56789"}
+        # Log avec données PII
+        masked_data = {"user_email": "user@example.com", "user_phone": "+33123456789"}
+        logger.info("Processing booking with PII: %s", masked_data)
 
-            log_result = logger.log_masked_data(masked_data)
+        log_output = log_stream.getvalue()
 
-            assert log_result is not None
-            assert "log_entry" in log_result
-            assert "masking_timestamp" in log_result
-            assert "masking_method" in log_result
-            print("  ✅ Intégration masquage PII avec logging fonctionnelle")
+        # Vérifier que les PII sont masquées
+        assert "user@example.com" not in log_output
+        assert "+33123456789" not in log_output
+        # Vérifier que les versions masquées sont présentes
+        assert "***" in log_output or "[PHONE_REDACTED]" in log_output
+        print("  ✅ Intégration masquage PII avec logging fonctionnelle")
 
 
 if __name__ == "__main__":
@@ -422,21 +317,21 @@ if __name__ == "__main__":
     test_instance = TestPIIMasking()
 
     # Tests de base
-    test_instance.test_pii_detection()
     test_instance.test_pii_masking_email()
     test_instance.test_pii_masking_phone()
-    test_instance.test_pii_masking_name()
-    test_instance.test_pii_masking_address()
-    test_instance.test_pii_masking_complete_data()
-    test_instance.test_pii_masking_reversible()
-    test_instance.test_pii_masking_irreversible()
-    test_instance.test_pii_masking_anonymization()
-    test_instance.test_pii_masking_compliance_check()
+    test_instance.test_pii_masking_iban()
+    test_instance.test_pii_masking_gps()
+    test_instance.test_sanitize_log_data_email()
+    test_instance.test_sanitize_log_data_phone()
+    test_instance.test_sanitize_log_data_gps()
+    test_instance.test_sanitize_log_data_complete()
+    test_instance.test_sanitize_log_data_string()
+    test_instance.test_sanitize_log_data_nested()
+    test_instance.test_pii_filter_integration()
 
     # Tests d'intégration
     integration_instance = TestPIIMaskingIntegration()
     integration_instance.test_pii_masking_dispatch_integration()
-    integration_instance.test_pii_masking_rl_integration()
     integration_instance.test_pii_masking_logging_integration()
 
     print("=" * 50)
