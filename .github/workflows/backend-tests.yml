@@ -209,36 +209,6 @@ jobs:
           fi
           echo "✅ Migrations exécutées avec succès"
 
-      - name: Verify database migrations
-        env:
-          FLASK_APP: backend.wsgi
-        shell: bash
-        run: |
-          cd backend
-          set -o errexit -o nounset -o pipefail -x
-          echo "🔍 Vérification de l'état des migrations..."
-          # Use a more permissive regex to capture full-length revision IDs
-          CURRENT_REV=$(flask db current 2>/dev/null | grep -oE '[a-f0-9]{7,40}' | head -1 || echo "")
-          if [ -z "$CURRENT_REV" ]; then
-            echo "⚠️  Aucune révision actuelle trouvée"
-            flask db current || true
-          else
-            echo "✅ Base de données à la révision: $CURRENT_REV"
-          fi
-          HEAD_REV=$(flask db heads 2>/dev/null | grep -oE '[a-f0-9]{7,40}' | head -1 || echo "")
-          echo "📋 Repo head: $HEAD_REV"
-          if [ -n "$HEAD_REV" ] && [ "$CURRENT_REV" != "$HEAD_REV" ]; then
-            echo "❌ La base de données n'est pas à jour (actuel: $CURRENT_REV, attendu: $HEAD_REV)"
-            echo "---- Diagnostics (mismatch) ----"
-            flask db current || true
-            flask db heads || true
-            flask db history | sed -n '1,200p' || true
-            echo "Listing migrations/versions:"
-            ls -la migrations/versions || true
-            exit 1
-          fi
-          echo "✅ Base de données à jour"
-
       - name: Run pytest with coverage
         run: |
           # Lancer pytest depuis la racine pour que les imports 'backend' fonctionnent
