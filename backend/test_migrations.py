@@ -11,11 +11,11 @@ from pathlib import Path
 base_path = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(base_path))
 
-from alembic import command
-from alembic.config import Config
+from alembic import command  # noqa: E402
+from alembic.config import Config  # noqa: E402
 
 # Importer l'application Flask
-from app import create_app
+from app import create_app  # noqa: E402
 
 # Créer l'application Flask
 app = create_app("testing")

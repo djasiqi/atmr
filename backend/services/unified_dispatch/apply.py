@@ -155,8 +155,10 @@ def apply_assignments(
         logger.exception("[Apply] Transaction failed for company_id=%s: %s", company_id, e)
         # Rollback automatique en cas d'erreur
         db.session.rollback()
-        # ✅ FIX: Expirer tous les objets après rollback pour forcer le rechargement
+        # ✅ FIX RC2: Expirer tous les objets après rollback pour forcer le rechargement
         db.session.expire_all()
+        # ✅ FIX RC2: S'assurer que tous les objets modifiés sont bien restaurés
+        # En expirant tous les objets, SQLAlchemy les rechargera depuis la DB au prochain accès
         return {
             "applied": [],
             "skipped": {},
@@ -216,6 +218,9 @@ def _apply_assignments_inner(
     )
 
     # 2) Chargements + (optionnel) verrouillage
+    # ✅ FIX RC4: Flush la session pour s'assurer que les objets en attente sont visibles
+    db.session.flush()
+
     bookings_q = Booking.query.options(joinedload(Booking.driver)).filter(
         Booking.company_id == company_id, Booking.id.in_(booking_ids)
     )
@@ -256,12 +261,20 @@ def _apply_assignments_inner(
 
     for b_id, a in chosen_by_booking.items():
         b = booking_map.get(b_id)
-        # ✅ FIX RC2: Recharger le booking depuis la DB pour éviter problèmes de session
+        # ✅ FIX RC2/RC4: Recharger le booking depuis la DB pour éviter problèmes de session
         if b is None:
             # Essayer de flush la session pour voir les objets en attente
             db.session.flush()
-            b = db.session.query(Booking).filter_by(id=b_id, company_id=company_id).first()
+            # ✅ FIX: Utiliser filter au lieu de filter_by pour plus de flexibilité
+            b = db.session.query(Booking).filter(Booking.id == b_id, Booking.company_id == company_id).first()
         if b is None:
+            # ✅ FIX RC4: Logger plus d'infos pour debug
+            logger.warning(
+                "[Apply] Booking id=%s company_id=%s not found in booking_map (size=%d) or DB query",
+                b_id,
+                company_id,
+                len(booking_map),
+            )
             skipped[b_id] = "booking_not_found_or_wrong_company"
             continue
 
@@ -457,7 +470,7 @@ def _apply_assignments_inner(
         # Rollback du savepoint en cas d'erreur
         # La transaction principale sera rollbackée par apply_assignments()
         db.session.rollback()
-        # ✅ FIX: Expirer tous les objets après rollback pour forcer le rechargement
+        # ✅ FIX RC2: Expirer tous les objets après rollback pour forcer le rechargement
         db.session.expire_all()
         raise  # Propager l'erreur pour que apply_assignments() gère le rollback global
     if dispatch_run_id:

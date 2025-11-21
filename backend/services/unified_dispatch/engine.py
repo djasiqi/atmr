@@ -248,7 +248,7 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 # Si day_str invalide, utiliser aujourd'hui
                 day_date = datetime.now(UTC).date()
                 logger.warning("[Engine] Invalid day_str=%r, fallback to today for failed DispatchRun", day_str)
-            
+
             try:
                 with _begin_tx():
                     dr_failed: Any = DispatchRun()
@@ -277,7 +277,7 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     e,
                 )
                 dispatch_run_id = None
-            
+
             # ✅ Standardisation: Utiliser DispatchResult avec dispatch_run_id si créé
             return DispatchResult(
                 dispatch_run_id=dispatch_run_id,
@@ -2041,9 +2041,13 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
                 db.session.expire_all()
 
                 # ✅ FIX RC2: Recharger les bookings depuis la DB pour s'assurer qu'ils sont dans l'état d'avant dispatch
-                for booking_id in affected_booking_ids:
-                    booking = db.session.query(Booking).filter_by(id=booking_id).first()
-                    if booking:
+                # Utiliser une nouvelle requête pour forcer le rechargement depuis la DB
+                if affected_booking_ids:
+                    # Recharger depuis une nouvelle requête pour garantir l'état d'avant modification
+                    reloaded_bookings = db.session.query(Booking).filter(Booking.id.in_(affected_booking_ids)).all()
+                    for booking in reloaded_bookings:
+                        # S'assurer que l'objet est bien rechargé depuis la DB après rollback
+                        # Le rollback devrait avoir restauré l'état d'avant modification
                         db.session.refresh(booking)
 
                 # Lever une exception pour arrêter le dispatch
