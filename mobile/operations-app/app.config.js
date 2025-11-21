@@ -31,13 +31,19 @@ module.exports = withAndroidGoogleMapsKey(
     bundleIdentifier: isDevVariant
       ? "ch.liri.operations.dev"
       : "ch.liri.operations",
-    buildNumber: "1.0.0",
+    buildNumber: process.env.IOS_BUILD_NUMBER || "1",
+    version: pkg.version,
     // googleServicesFile: process.env.GOOGLE_SERVICES_PLIST ?? "./GoogleService-Info.plist",
+    config: {
+      usesNonExemptEncryption: false, // À définir selon vos besoins de conformité
+    },
   },
 
   android: {
     enableTablet: false,
     package: isDevVariant ? "ch.liri.operations.dev" : "ch.liri.operations",
+    versionCode: parseInt(process.env.ANDROID_VERSION_CODE || "1", 10),
+    version: pkg.version,
     googleServicesFile:
       process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
     adaptiveIcon: {

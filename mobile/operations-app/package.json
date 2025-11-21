@@ -12,6 +12,9 @@
     "env:generate": "node ./scripts/generate-env.js",
     "build:dev": "eas build -p android --profile development",
     "build:prod": "eas build -p android --profile production",
+    "build:prod:ios": "eas build -p ios --profile production",
+    "build:prod:all": "eas build -p all --profile production",
+    "check:build": "node ./scripts/check-build-ready.js",
     "version:patch": "node ./scripts/bump-version.js && git add app.config.js package.json",
     "test": "jest --watchAll=false"
   },

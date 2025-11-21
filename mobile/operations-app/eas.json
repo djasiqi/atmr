@@ -11,19 +11,53 @@
       "android": {
         "buildType": "apk",
         "withoutCredentials": false
+      },
+      "ios": {
+        "simulator": false,
+        "withoutCredentials": false
       }
     },
     "internal": {
       "distribution": "internal",
       "environment": "production",
+      "env": {
+        "APP_VARIANT": "prod"
+      },
       "android": {
         "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
       }
     },
     "production": {
+      "distribution": "store",
+      "environment": "production",
+      "env": {
+        "APP_VARIANT": "prod"
+      },
       "android": {
         "buildType": "app-bundle",
-        "autoIncrement": true
+        "autoIncrement": true,
+        "gradleCommand": ":app:bundleRelease"
+      },
+      "ios": {
+        "simulator": false,
+        "autoIncrement": true,
+        "buildConfiguration": "Release"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./credentials/google-play-service-account.json",
+        "track": "production"
+      },
+      "ios": {
+        "appleId": "your-apple-id@example.com",
+        "ascAppId": "your-app-store-connect-app-id",
+        "appleTeamId": "your-apple-team-id"
       }
     }
   }
