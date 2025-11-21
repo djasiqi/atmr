@@ -98,7 +98,8 @@ def client(app, db):
     class NoRedirectClient:
         """Wrapper client qui définit follow_redirects=False par défaut."""
 
-        def __init__(self, client):
+        def __init__(self, client):  # pyright: ignore[reportMissingSuperCall]
+            # Cette classe n'hérite pas d'une classe parente qui nécessite super().__init__()
             self._client = client
 
         def _with_defaults(self, kwargs):

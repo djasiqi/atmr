@@ -130,13 +130,17 @@ def notify_dispatch_run_completed(
         emit_company_event(company_id, "dispatch_run_completed", payload)
         if date_str:
             emit_date_event(date_str, "dispatch_run_completed", payload)
-    except Exception:
-        # Utiliser logger.exception pour éviter les erreurs de formatage
+    except Exception as e:
+        # ✅ FIX RC5: Utiliser json.dumps pour éviter les erreurs de formatage
         # (le message d'exception peut contenir des % qui interfèrent avec %s)
+        error_info = {
+            "company_id": company_id,
+            "dispatch_run_id": dispatch_run_id,
+            "error": str(e),
+        }
         app_logger.exception(
-            "[notify_dispatch_run_completed] emit failed: company_id=%s dispatch_run_id=%s",
-            company_id,
-            dispatch_run_id,
+            "[notify_dispatch_run_completed] emit failed: %s",
+            json.dumps(error_info),
         )
 
 
