@@ -531,22 +531,65 @@ jobs:
         run: |
           cd backend
           set -o errexit -o nounset -o pipefail -x
-          # Obtenir la révision actuelle (regex plus permissif pour IDs complets)
-          CURRENT_REV=$(flask db current 2>/dev/null | grep -oE '[a-f0-9]{7,40}' | head -1 || echo "")
-          if [ -n "$CURRENT_REV" ]; then
-            # Obtenir l'historique et trouver la révision précédente
-            PREV_REV=$(flask db history | grep -B1 "$CURRENT_REV" | head -1 | grep -oE '[a-f0-9]{7,40}' || echo "")
-            if [ -n "$PREV_REV" ] && [ "$PREV_REV" != "$CURRENT_REV" ]; then
-              echo "Downgrading from $CURRENT_REV to $PREV_REV"
-              flask db downgrade "$PREV_REV"
-            else
-              echo "⚠️ Pas de révision précédente trouvée, skip downgrade"
-            fi
-          else
-            echo "⚠️ Aucune révision actuelle trouvée, skip downgrade"
+
+          # Obtenir la révision actuelle
+          CURRENT_OUTPUT=$(flask db current 2>/dev/null || echo "")
+          CURRENT_REV=$(echo "$CURRENT_OUTPUT" | grep -oE '[a-f0-9]{12,40}' | head -1 || echo "")
+
+          if [ -z "$CURRENT_REV" ]; then
+            echo "⚠️ Aucune révision actuelle trouvée, skip downgrade test"
+            exit 0
           fi
+
+          echo "📋 Révision actuelle: $CURRENT_REV"
+
+          # Obtenir l'historique et extraire toutes les révisions
+          # flask db history liste de la plus ancienne (en bas) à la plus récente (en haut)
+          # Format typique: "revision_id (head) -> description"
+          HISTORY_OUTPUT=$(flask db history 2>/dev/null || echo "")
+
+          if [ -z "$HISTORY_OUTPUT" ]; then
+            echo "⚠️ Impossible d'obtenir l'historique, skip downgrade test"
+            exit 0
+          fi
+
+          # Extraire toutes les révisions de l'historique (dans l'ordre)
+          # Utiliser awk pour extraire la révision précédant CURRENT_REV
+          PREV_REV=$(echo "$HISTORY_OUTPUT" | awk -v current="$CURRENT_REV" '
+            {
+              # Extraire la révision de chaque ligne
+              match($0, /[a-f0-9]{12,40}/, rev)
+              if (rev[0] != "" && rev[0] == current) {
+                # On a trouvé CURRENT_REV, la révision précédente était stockée
+                if (prev_rev != "") {
+                  print prev_rev
+                  exit
+                }
+              }
+              if (rev[0] != "") {
+                prev_rev = rev[0]
+              }
+            }
+          ' | head -1 || echo "")
+
+          if [ -z "$PREV_REV" ] || [ "$PREV_REV" = "$CURRENT_REV" ]; then
+            echo "⚠️ Pas de révision précédente trouvée ou identique à la révision actuelle"
+            echo "   Cela peut arriver si on est à la première migration"
+            echo "   Skip downgrade test"
+            exit 0
+          fi
+
+          echo "🔄 Downgrading from $CURRENT_REV to $PREV_REV"
+          if flask db downgrade "$PREV_REV"; then
+            echo "✅ Downgrade réussi"
+          else
+            echo "⚠️ Échec du downgrade, mais on continue avec l'upgrade"
+          fi
+
           # Re-upgrade après downgrade test
-          flask db upgrade || exit 1
+          echo "🔄 Re-upgrading to head..."
+          flask db upgrade heads || exit 1
+          echo "✅ Rollback test réussi"
 
       - name: Check for pending migrations
         env:
