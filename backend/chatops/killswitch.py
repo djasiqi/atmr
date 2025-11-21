@@ -17,15 +17,16 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Fichier de flag pour le mode maintenance
-MAINTENANCE_FLAG_FILE = Path("/tmp/atmr_maintenance_mode.flag")
-MAINTENANCE_LOG_FILE = Path("/tmp/atmr_maintenance.log")
+# Utiliser variable d'environnement pour le chemin (défaut: /tmp/)
+_MAINTENANCE_TMP_DIR = os.getenv("MAINTENANCE_TMP_DIR", "/tmp")
+MAINTENANCE_FLAG_FILE = Path(_MAINTENANCE_TMP_DIR) / "atmr_maintenance_mode.flag"
+MAINTENANCE_LOG_FILE = Path(_MAINTENANCE_TMP_DIR) / "atmr_maintenance.log"
 
 
 def enable_maintenance(reason: str = "Maintenance mode activated"):
     """Active le mode maintenance."""
     try:
         # Créer le flag file
-        # nosec B108: Script d'administration nécessitant l'écriture de fichiers système
         MAINTENANCE_FLAG_FILE.write_text(reason)
 
         # Logger l'activation
@@ -83,7 +84,6 @@ def get_status() -> dict[str, bool | str | None]:
 
     if is_active:
         try:
-            # nosec B108: Script d'administration nécessitant la lecture de fichiers système
             reason = MAINTENANCE_FLAG_FILE.read_text().strip()
         except Exception:
             reason = "Unknown"

@@ -31,7 +31,8 @@ from models import Company, User, UserRole
 def app() -> Flask:
     """Crée une instance Flask en mode test."""
 
-    app = create_app()
+    # ✅ FIX: Passer explicitement "testing" pour désactiver force_https dans Talisman
+    app = create_app(config_name="testing")
 
     # ✅ FIX: Utiliser la DB PostgreSQL du workflow GitHub Actions pour les tests
     # Évite les problèmes d'enums, contraintes nommées, et JSONB
@@ -47,6 +48,9 @@ def app() -> Flask:
             "JWT_SECRET_KEY": "test-secret-key",
             "SECRET_KEY": "test-secret-key",
             "SQLALCHEMY_ECHO": False,  # Pas de logs SQL verbeux en tests
+            # ✅ FIX: Configurer pour éviter les redirections 302 dans les tests E2E
+            "SERVER_NAME": "localhost:5000",
+            "PREFERRED_URL_SCHEME": "http",
         }
     )
     return app
@@ -84,8 +88,10 @@ def db(app):
 
 @pytest.fixture
 def client(app, db):
-    """Client de test Flask."""
-    return app.test_client()
+    """Client de test Flask qui ne suit pas les redirections automatiquement."""
+    # ✅ FIX: Ne pas suivre les redirections pour éviter les 302 dans les tests E2E
+    # Les tests doivent pouvoir vérifier les codes HTTP directement (200, 400, etc.)
+    return app.test_client(follow_redirects=False)
 
 
 @pytest.fixture
@@ -427,27 +433,87 @@ def sample_client(db, sample_company):
 
 @pytest.fixture
 def mock_osrm_client(monkeypatch):
-    """Mock osrm_client fonctions pour éviter appels réseau."""
+    """Mock osrm_client fonctions pour éviter appels réseau.
 
-    def mock_get_distance_time(origin, dest, **kwargs):
-        return (15.0, 1800.0)  # 15km, 1800 secondes (30 min)
+    ✅ FIX: Mock les fonctions réelles utilisées (build_distance_matrix_osrm, route_info)
+    au lieu de fonctions qui n'existent pas.
+    """
 
-    def mock_get_matrix(origins, destinations, **kwargs):
-        n, m = len(origins), len(destinations)
-        return {"durations": [[1800.0] * m for _ in range(n)], "distances": [[15000.0] * m for _ in range(n)]}
+    def mock_build_distance_matrix_osrm(coords, **kwargs):
+        """Retourne une matrice de durées simulée (secondes) basée sur haversine."""
+        from services.osrm_client import _fallback_eta_seconds
 
-    def mock_eta_seconds(origin, dest, **kwargs):
-        return 1800
+        n = len(coords)
+        # Matrice symétrique avec durées simulées basées sur haversine
+        matrix = []
+        for i in range(n):
+            row = []
+            for j in range(n):
+                if i == j:
+                    row.append(0.0)
+                else:
+                    # Simuler une durée basée sur la distance haversine
+                    duration = _fallback_eta_seconds(coords[i], coords[j])
+                    row.append(float(duration))
+            matrix.append(row)
+        return matrix
 
     def mock_route_info(origin, dest, **kwargs):
-        return {"duration_s": 1800.0, "distance_m": 15000.0, "geometry": "mock_geometry"}
+        """Retourne des données de route simulées basées sur haversine."""
+        from services.osrm_client import _fallback_eta_seconds, _haversine_km
+
+        km = _haversine_km(origin, dest)
+        duration_s = _fallback_eta_seconds(origin, dest)
+
+        return {
+            "duration": float(duration_s),
+            "distance": int(km * 1000),  # mètres
+            "geometry": {"type": "LineString", "coordinates": [[origin[1], origin[0]], [dest[1], dest[0]]]},
+            "legs": [{"distance": int(km * 1000), "duration": float(duration_s)}],
+        }
+
+    def mock_get_distance_time(origin, dest, **kwargs):
+        """Mock pour compatibilité avec anciens tests."""
+        from services.osrm_client import _fallback_eta_seconds, _haversine_km
+
+        km = _haversine_km(origin, dest)
+        duration_s = _fallback_eta_seconds(origin, dest)
+        return (km * 1000, duration_s)  # mètres, secondes
+
+    def mock_get_matrix(origins, destinations, **kwargs):
+        """Mock pour compatibilité avec anciens tests."""
+        from services.osrm_client import _fallback_eta_seconds, _haversine_km
+
+        n, m = len(origins), len(destinations)
+        durations = []
+        distances = []
+        for i in range(n):
+            dur_row = []
+            dist_row = []
+            for j in range(m):
+                km = _haversine_km(origins[i], destinations[j])
+                duration_s = _fallback_eta_seconds(origins[i], destinations[j])
+                dur_row.append(float(duration_s))
+                dist_row.append(km * 1000)  # mètres
+            durations.append(dur_row)
+            distances.append(dist_row)
+        return {"durations": durations, "distances": distances}
+
+    def mock_eta_seconds(origin, dest, **kwargs):
+        """Mock pour compatibilité avec anciens tests."""
+        from services.osrm_client import _fallback_eta_seconds
+
+        return _fallback_eta_seconds(origin, dest)
 
     from services import osrm_client
 
+    # ✅ FIX: Mock les fonctions réelles utilisées
+    monkeypatch.setattr(osrm_client, "build_distance_matrix_osrm", mock_build_distance_matrix_osrm)
+    monkeypatch.setattr(osrm_client, "route_info", mock_route_info)
+    # Garder les anciens mocks pour compatibilité
     monkeypatch.setattr(osrm_client, "get_distance_time", mock_get_distance_time)
     monkeypatch.setattr(osrm_client, "get_matrix", mock_get_matrix)
     monkeypatch.setattr(osrm_client, "eta_seconds", mock_eta_seconds)
-    monkeypatch.setattr(osrm_client, "route_info", mock_route_info)
     return True
 
 
@@ -686,3 +752,22 @@ def mock_db_read_only():
                 injector.disable()
         except ImportError:
             pass
+
+
+# ========== FIXTURES PII MASKING ==========
+
+
+@pytest.fixture
+def pii_config():
+    """Configuration pour les tests PII masking.
+
+    ✅ FIX: Fixture optionnelle pour configurer les variables d'environnement
+    nécessaires aux tests PII (clés de chiffrement, etc.)
+    Note: Les fonctions PII dans shared.logging_utils sont statiques,
+    donc cette fixture est optionnelle mais utile pour certains tests.
+    """
+    import os
+
+    # Configurer les clés de chiffrement si nécessaire
+    os.environ.setdefault("APP_ENCRYPTION_KEY_B64", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY")
+    return True

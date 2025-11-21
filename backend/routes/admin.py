@@ -15,6 +15,7 @@ from sqlalchemy.orm import joinedload
 
 from ext import app_logger, db, limiter, role_required
 from models import Booking, BookingStatus, Client, Invoice, User, UserRole
+from security.ip_whitelist import ip_whitelist_required
 
 MONTH_THRESHOLD = 12
 TOTAL_ACTIONS_ZERO = 0
@@ -40,6 +41,7 @@ stats_model = admin_ns.model(
 class AdminStats(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
+    @ip_whitelist_required()  # ✅ Phase 3: IP whitelist pour endpoints admin
     @limiter.limit("100 per hour")  # ✅ 2.8: Rate limiting stats admin (coûteux)
     @admin_ns.marshal_with(stats_model)
     def get(self):
@@ -110,6 +112,7 @@ class RecentBookings(Resource):
 class AllUsers(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
+    @ip_whitelist_required()  # ✅ Phase 3: IP whitelist pour endpoints admin
     @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting liste utilisateurs
     def get(self):
         """Récupère la liste complète des utilisateurs."""

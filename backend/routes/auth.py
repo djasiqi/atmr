@@ -50,6 +50,22 @@ register_model = auth_ns.model(
     },
 )
 
+# Modèle Swagger pour la réponse de logout (succès)
+logout_response_model = auth_ns.model(
+    "LogoutResponse",
+    {
+        "message": fields.String(description="Message de confirmation de déconnexion"),
+    },
+)
+
+# Modèle Swagger pour la réponse d'erreur de logout
+logout_error_model = auth_ns.model(
+    "LogoutError",
+    {
+        "error": fields.String(description="Message d'erreur"),
+    },
+)
+
 # Schéma Marshmallow pour valider les données d'inscription
 
 
@@ -168,7 +184,38 @@ class RefreshToken(Resource):
 
 
 # ========================
-# 3. Informations Utilisateur
+# 3. Logout / Révoquer Token
+# ========================
+@auth_ns.route("/logout")
+class Logout(Resource):
+    @auth_ns.doc(
+        description=(
+            "Révoque le token JWT actuel et l'ajoute à la blacklist. "
+            "Après la déconnexion, le token ne pourra plus être utilisé pour accéder aux endpoints protégés."
+        ),
+        summary="Déconnexion utilisateur",
+    )
+    @auth_ns.response(200, "Déconnexion réussie", logout_response_model)
+    @auth_ns.response(401, "Token manquant ou invalide")
+    @auth_ns.response(500, "Erreur lors de la révocation du token", logout_error_model)
+    @jwt_required()
+    def post(self):
+        """Révoque le token JWT actuel (logout)."""
+        try:
+            from security.token_blacklist import revoke_token
+
+            if revoke_token():
+                return {"message": "Déconnexion réussie"}, 200
+            return {"error": "Impossible de révoquer le token"}, 500
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            app_logger.error("❌ ERREUR logout: %s - %s", type(e).__name__, str(e))
+            return {"error": "Une erreur interne est survenue."}, 500
+
+
+# ========================
+# 4. Informations Utilisateur
 # ========================
 @auth_ns.route("/me")
 class UserInfo(Resource):
@@ -196,7 +243,7 @@ class UserInfo(Resource):
 
 
 # ========================
-# 4. Inscription
+# 5. Inscription
 # ========================
 @auth_ns.route("/register")
 class Register(Resource):

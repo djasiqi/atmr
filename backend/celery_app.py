@@ -185,6 +185,15 @@ celery.conf.beat_schedule = {
             "jitter": 7200,  # ✅ 2.6: Jitter jusqu'à 2 heures (tasks mensuelles)
         },
     },
+    # ✅ 4.1: Rotation automatique SECRET_KEY Flask via Vault (tous les 90 jours)
+    "vault-rotate-flask-secret": {
+        "task": "tasks.vault_rotation_tasks.rotate_flask_secret_key",
+        "schedule": 90 * 24 * 3600,  # 90 jours
+        "options": {
+            "expires": 48 * 3600,  # Expire après 48h
+            "jitter": 7200,  # ✅ 2.6: Jitter jusqu'à 2 heures (tasks trimestrielles)
+        },
+    },
     # ✅ 4.1: Rotation automatique encryption key via Vault (tous les 90 jours)
     "vault-rotate-encryption": {
         "task": "tasks.vault_rotation_tasks.rotate_encryption_key",

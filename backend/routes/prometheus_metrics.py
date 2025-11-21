@@ -6,6 +6,7 @@ import time
 from flask import Response, make_response
 from flask_restx import Namespace, Resource
 
+from services.secret_rotation_monitor import get_days_since_last_rotation, get_rotation_stats
 from services.unified_dispatch.slo import get_slo_tracker
 
 logger = logging.getLogger(__name__)
@@ -75,11 +76,14 @@ class PrometheusMetrics(Resource):
                 # Combiner toutes les métriques
                 slo_metrics_str = "\n".join(slo_metrics)
 
-                # Combiner métriques prometheus_client + métriques SLO
+                # Ajouter les métriques de rotation de secrets
+                rotation_metrics = self._get_secret_rotation_metrics()
+
+                # Combiner métriques prometheus_client + métriques SLO + métriques rotations
                 # generate_latest() retourne toujours bytes
                 metrics_output_str = metrics_output.decode("utf-8")
 
-                full_metrics = metrics_output_str + "\n" + slo_metrics_str
+                full_metrics = metrics_output_str + "\n" + slo_metrics_str + "\n" + rotation_metrics
 
                 # Utiliser make_response pour éviter la sérialisation JSON de Flask-RESTX
                 response = make_response(full_metrics, 200)
@@ -123,7 +127,71 @@ class PrometheusMetrics(Resource):
 
         content = "\n".join(lines)
 
+        # Ajouter les métriques de rotation de secrets
+        rotation_metrics = self._get_secret_rotation_metrics()
+
+        content = "\n".join(lines) + "\n" + rotation_metrics
+
         # Utiliser make_response pour éviter la sérialisation JSON de Flask-RESTX
         response = make_response(content, 200)
         response.mimetype = "text/plain; version=0.0.4; charset=utf-8"
         return response
+
+    def _get_secret_rotation_metrics(self) -> str:
+        """Génère les métriques Prometheus pour les rotations de secrets.
+
+        Returns:
+            Chaîne de caractères au format Prometheus
+        """
+        try:
+            stats = get_rotation_stats()
+
+            lines = []
+
+            # Counter: Total rotations par type et status
+            lines.append("# HELP vault_rotation_total Total secret rotations by type and status")
+            lines.append("# TYPE vault_rotation_total counter")
+
+            for secret_type, type_stats in stats.get("by_type", {}).items():
+                for status in ["success", "error", "skipped"]:
+                    count = type_stats.get(status, 0)
+                    if count > 0:
+                        lines.append(f'vault_rotation_total{{secret_type="{secret_type}",status="{status}"}} {count}')
+
+            lines.append("")
+
+            # Gauge: Timestamp de dernière rotation réussie par type
+            lines.append(
+                "# HELP vault_rotation_last_success_timestamp Timestamp of last successful rotation (Unix seconds)"
+            )
+            lines.append("# TYPE vault_rotation_last_success_timestamp gauge")
+
+            for secret_type, last_rotation_iso in stats.get("last_rotations", {}).items():
+                if last_rotation_iso:
+                    try:
+                        from datetime import datetime
+
+                        last_dt = datetime.fromisoformat(last_rotation_iso.replace("Z", "+00:00"))
+                        timestamp = int(last_dt.timestamp())
+                        lines.append(
+                            f'vault_rotation_last_success_timestamp{{secret_type="{secret_type}"}} {timestamp}'
+                        )
+                    except Exception:
+                        pass  # Ignorer les erreurs de parsing
+
+            lines.append("")
+
+            # Gauge: Jours depuis dernière rotation réussie par type
+            lines.append("# HELP vault_rotation_days_since_last Days since last successful rotation")
+            lines.append("# TYPE vault_rotation_days_since_last gauge")
+
+            for secret_type in ["jwt", "encryption", "flask_secret_key"]:
+                days = get_days_since_last_rotation(secret_type)
+                if days is not None:
+                    lines.append(f'vault_rotation_days_since_last{{secret_type="{secret_type}"}} {days}')
+
+            return "\n".join(lines)
+
+        except Exception as e:
+            logger.warning("[PrometheusMetrics] Erreur génération métriques rotations: %s", e)
+            return ""

@@ -76,10 +76,52 @@ def mask_gps_coords(lat: str, lon: str) -> str:
         return f"{lat}, {lon} [GPS_REDACTED]"
 
 
+# Clés sensibles à masquer automatiquement dans les dictionnaires
+SENSITIVE_KEYS = {
+    "password",
+    "secret",
+    "token",
+    "api_key",
+    "access_key",
+    "secret_key",
+    "jwt",
+    "authorization",
+    "auth",
+    "apikey",
+    "access_token",
+    "refresh_token",
+    "private_key",
+    "privatekey",
+    "credential",
+    "credentials",
+}
+
+# Pattern pour détecter les tokens dans les chaînes (token: value, key: value, etc.)
+TOKEN_PATTERN = re.compile(
+    r"(?i)(token|key|secret|password|apikey|access_key|secret_key|authorization|auth)\s*[:=]\s*['\"]?([^'\"]\S+)",
+    re.IGNORECASE,
+)
+
+
 def sanitize_log_data(data: Any) -> Any:
-    """Nettoie récursivement les données sensibles dans dict/str."""
+    """Nettoie récursivement les données sensibles dans dict/str/list.
+
+    Masque automatiquement:
+    - Clés sensibles dans les dictionnaires (password, secret, token, etc.)
+    - Patterns de tokens dans les chaînes (token: value, key: value, etc.)
+    - PII (emails, téléphones, IBAN, cartes, GPS)
+    """
     if isinstance(data, dict):
-        return {k: sanitize_log_data(v) for k, v in data.items()}
+        sanitized = {}
+        for key, value in data.items():
+            key_lower = str(key).lower()
+            # Vérifier si la clé contient un mot-clé sensible
+            if any(sensitive in key_lower for sensitive in SENSITIVE_KEYS):
+                sanitized[key] = "[REDACTED]"
+            else:
+                # Sanitizer récursivement la valeur
+                sanitized[key] = sanitize_log_data(value)
+        return sanitized
 
     if isinstance(data, (list, tuple)):
         return [sanitize_log_data(item) for item in data]
@@ -88,14 +130,17 @@ def sanitize_log_data(data: Any) -> Any:
         # ✅ IMPORTANT: Appliquer patterns spécifiques AVANT patterns génériques
         # pour éviter conflits (ex: 0791234567 masqué par PHONE_PATTERN avant PHONE_CH_PATTERN)
 
-        # 1. Patterns spécifiques (prioritaires)
-        sanitized = IBAN_CH_PATTERN.sub("[IBAN_REDACTED]", data)
+        # 1. Masquer les patterns de tokens dans les chaînes (token: value, key: value, etc.)
+        sanitized = TOKEN_PATTERN.sub(r"\1: [REDACTED]", data)
+
+        # 2. Patterns spécifiques (prioritaires)
+        sanitized = IBAN_CH_PATTERN.sub("[IBAN_REDACTED]", sanitized)
         sanitized = CARD_PATTERN.sub("[CARD_REDACTED]", sanitized)
         sanitized = PHONE_CH_PATTERN.sub("[PHONE_REDACTED]", sanitized)
         # ✅ SECURITY CWE-778: Masquer coordonnées GPS précises (RGPD Art. 32)
         sanitized = GPS_PATTERN.sub(lambda m: mask_gps_coords(m.group(1), m.group(2)), sanitized)
 
-        # 2. Patterns génériques (fallback)
+        # 3. Patterns génériques (fallback)
         sanitized = EMAIL_PATTERN.sub(lambda m: mask_email(m.group(0)), sanitized)
         sanitized = PHONE_PATTERN.sub(lambda m: mask_phone(m.group(0)), sanitized)
         return IBAN_PATTERN.sub(lambda m: mask_iban(m.group(0)), sanitized)
