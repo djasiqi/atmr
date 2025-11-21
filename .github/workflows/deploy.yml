@@ -98,7 +98,7 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,POSTGRES_PASSWORD,POSTGRES_USER,POSTGRES_DB,MAIL_PASSWORD,SENTRY_DSN
+          envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,POSTGRES_PASSWORD,POSTGRES_USER,POSTGRES_DB,MAIL_PASSWORD,SENTRY_DSN,DOCKER_IMAGE,DOCKER_TAG
           script: |
             cd /srv/atmr
             set -o errexit -o nounset -o pipefail -x
@@ -110,6 +110,8 @@ jobs:
             export POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
             export MAIL_PASSWORD="${{ secrets.MAIL_PASSWORD }}"
             export SENTRY_DSN="${{ secrets.SENTRY_DSN }}"
+            export DOCKER_IMAGE="${{ secrets.DOCKER_IMAGE }}"
+            export DOCKER_TAG="${{ secrets.DOCKER_TAG }}"
             echo "🔄 Pull de l'image Docker..."
             docker compose -f docker-compose.production.yml pull
             echo "🔄 Arrêt des conteneurs existants..."
