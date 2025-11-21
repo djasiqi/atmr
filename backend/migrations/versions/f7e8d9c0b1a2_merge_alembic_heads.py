@@ -10,7 +10,6 @@ Create Date: 2025-01-28 12:00:00.000000
 
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
 revision = "f7e8d9c0b1a2"
 down_revision = ("a1b2c3d4e5f6", "add_message_file_fields", "b2c3d4e5f6a7")
