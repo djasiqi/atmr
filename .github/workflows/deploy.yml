@@ -118,10 +118,39 @@ jobs:
             docker compose -f docker-compose.production.yml down || true
             echo "🔄 Démarrage des services..."
             docker compose -f docker-compose.production.yml up -d
+            
             echo "⏳ Attente que PostgreSQL soit prêt..."
-            for i in $(seq 1 30); do
-              docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1 && break
-              echo "  Tentative $i/30..."
+            echo "📊 Vérification de l'état du conteneur PostgreSQL..."
+            for i in $(seq 1 60); do
+              # Vérifier l'état du conteneur
+              POSTGRES_STATUS=$(docker compose -f docker-compose.production.yml ps postgres --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+              if [ "$POSTGRES_STATUS" = "running" ]; then
+                # Vérifier le healthcheck
+                HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-postgres 2>/dev/null || echo "none")
+                if [ "$HEALTH" = "healthy" ]; then
+                  # Vérifier avec pg_isready
+                  if docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
+                    echo "✅ PostgreSQL est prêt et healthy"
+                    break
+                  fi
+                elif [ "$HEALTH" = "unhealthy" ]; then
+                  echo "⚠️  PostgreSQL est unhealthy, affichage des logs..."
+                  docker compose -f docker-compose.production.yml logs postgres | tail -50
+                fi
+              elif [ "$POSTGRES_STATUS" = "exited" ] || [ "$POSTGRES_STATUS" = "dead" ]; then
+                echo "❌ Le conteneur PostgreSQL a échoué, affichage des logs..."
+                docker compose -f docker-compose.production.yml logs postgres | tail -50
+                exit 1
+              fi
+              if [ $i -eq 60 ]; then
+                echo "❌ Timeout: PostgreSQL n'est pas prêt après 120 secondes"
+                echo "---- État du conteneur ----"
+                docker compose -f docker-compose.production.yml ps postgres
+                echo "---- Logs PostgreSQL (dernières 100 lignes) ----"
+                docker compose -f docker-compose.production.yml logs postgres | tail -100
+                exit 1
+              fi
+              echo "  Tentative $i/60 (État: ${POSTGRES_STATUS:-unknown}, Health: ${HEALTH:-none})..."
               sleep 2
             done
             echo "🔄 Exécution des migrations de base de données..."
