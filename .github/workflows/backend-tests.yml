@@ -57,7 +57,8 @@ jobs:
           ruff format .
 
       - name: Flake8 check
-        run: cd backend
+        run: |
+          cd backend
           flake8 .
 
       - name: MyPy type check
@@ -179,32 +180,39 @@ jobs:
       - name: Run database migrations
         env:
           FLASK_APP: backend.wsgi
+        shell: bash
         run: |
           cd backend
           set -o errexit -o nounset -o pipefail -x
           echo "🔄 Exécution des migrations de base de données..."
           echo "📋 Alembic heads before upgrade:"
           flask db heads || true
-          # Run the upgrade (use plain 'upgrade' which is more robust)
-          if flask db upgrade; then
-            echo "✅ Migrations exécutées avec succès"
-          else
+          # Run the upgrade (use 'heads' to handle multiple heads until merge migration is created)
+          if ! flask db upgrade heads 2>&1 | tee /tmp/alembic_upgrade.log; then
             echo "❌ Erreur lors de l'exécution des migrations"
-            echo "---- Diagnostics (upgrade failed) ----"
+            echo "---- Diagnostics (upgrade failed) - Log d'erreur ----"
+            sed -n '1,200p' /tmp/alembic_upgrade.log || true
+            echo "---- Diagnostics (upgrade failed) - État actuel ----"
             flask db current || true
             flask db heads || true
             flask db history | sed -n '1,200p' || true
+            echo "Listing migrations/versions:"
             ls -la migrations/versions || true
-            for f in migrations/versions/*.py 2>/dev/null; do
+            echo "---- Contenu des fichiers de migration ----"
+            shopt -s nullglob
+            for f in migrations/versions/*.py; do
+              [ -e "$f" ] || continue
               echo "---- $f ----"
               sed -n '1,200p' "$f"
-            done || true
+            done
             exit 1
           fi
+          echo "✅ Migrations exécutées avec succès"
 
       - name: Verify database migrations
         env:
           FLASK_APP: backend.wsgi
+        shell: bash
         run: |
           cd backend
           set -o errexit -o nounset -o pipefail -x
@@ -518,24 +526,34 @@ jobs:
       - name: Run migrations (upgrade)
         env:
           FLASK_APP: backend.wsgi
+        shell: bash
         run: |
           cd backend
           set -o errexit -o nounset -o pipefail -x
           echo "🔄 Exécution des migrations de base de données..."
           echo "📋 Alembic heads before upgrade:"
           flask db heads || true
-          # Run the upgrade (use plain 'upgrade' which is more robust)
-          if flask db upgrade; then
-            echo "✅ Migrations exécutées avec succès"
-          else
+          # Run the upgrade (use 'heads' to handle multiple heads until merge migration is created)
+          if ! flask db upgrade heads 2>&1 | tee /tmp/alembic_upgrade.log; then
             echo "❌ Erreur lors de l'exécution des migrations"
-            echo "---- Diagnostics (upgrade failed) ----"
+            echo "---- Diagnostics (upgrade failed) - Log d'erreur ----"
+            sed -n '1,200p' /tmp/alembic_upgrade.log || true
+            echo "---- Diagnostics (upgrade failed) - État actuel ----"
             flask db current || true
             flask db heads || true
             flask db history | sed -n '1,200p' || true
+            echo "Listing migrations/versions:"
             ls -la migrations/versions || true
+            echo "---- Contenu des fichiers de migration ----"
+            shopt -s nullglob
+            for f in migrations/versions/*.py; do
+              [ -e "$f" ] || continue
+              echo "---- $f ----"
+              sed -n '1,200p' "$f"
+            done
             exit 1
           fi
+          echo "✅ Migrations exécutées avec succès"
 
       - name: Test rollback (downgrade -1)
         env:
