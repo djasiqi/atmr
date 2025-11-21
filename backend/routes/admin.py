@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import sentry_sdk
 from flask import request
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from flask_restx import Namespace, Resource, fields
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import joinedload
@@ -332,6 +332,40 @@ class UpdateUserRole(Resource):
             # ---------- 5) Commit ----------
             db.session.commit()
 
+            # ✅ Priorité 7: Audit logging et métriques pour changement de rôle
+            try:
+                from security.audit_log import AuditLogger
+                from security.security_metrics import (
+                    security_permission_changes_total,
+                    security_sensitive_actions_total,
+                )
+                from shared.logging_utils import mask_email
+
+                current_user_id = get_jwt_identity()
+                current_user = User.query.filter_by(public_id=current_user_id).first()
+
+                AuditLogger.log_action(
+                    action_type="permission_changed",
+                    action_category="security",
+                    user_id=current_user.id if current_user else None,
+                    user_type=current_user.role.value if current_user and current_user.role else "admin",
+                    result_status="success",
+                    action_details={
+                        "modified_user_id": user.id,
+                        "modified_user_email": mask_email(str(user.email)) if user.email is not None else None,
+                        "old_role": old_role_value,
+                        "new_role": str(new_role_enum.value),
+                    },
+                    ip_address=request.remote_addr,
+                    user_agent=request.headers.get("User-Agent"),
+                )
+                # ✅ Priorité 7: Métriques Prometheus pour changement de permissions
+                security_sensitive_actions_total.labels(action_type="permission_changed").inc()
+                security_permission_changes_total.inc()
+            except Exception as audit_error:
+                # Ne pas bloquer la modification si l'audit logging échoue
+                app_logger.warning("Échec audit logging permission_changed: %s", audit_error)
+
             return {
                 "message": f"✅ Rôle de {user.username} mis à jour en {new_role_enum.value}",
                 "user": cast("Any", user).serialize,
@@ -403,37 +437,50 @@ class AutonomousActionsList(Resource):
         from models.autonomous_action import AutonomousAction
 
         try:
-            # Pagination
-            page = int(request.args.get("page", 1))
-            per_page = min(int(request.args.get("per_page", 50)), 200)
+            # ✅ 2.4: Validation Marshmallow des query parameters
+            from marshmallow import ValidationError
+
+            from schemas.admin_schemas import AutonomousActionsListQuerySchema
+            from schemas.validation_utils import handle_validation_error, validate_query_params
+
+            try:
+                validated_params = validate_query_params(AutonomousActionsListQuerySchema(), request.args, strict=False)
+            except ValidationError as e:
+                return handle_validation_error(e)
+
+            # Utiliser les paramètres validés
+            page = validated_params.get("page", 1)
+            per_page = validated_params.get("per_page", 50)
 
             # Construire la query
             query = AutonomousAction.query
 
-            # Filtres
-            company_id = request.args.get("company_id", type=int)
+            # Filtres (utiliser données validées)
+            company_id = validated_params.get("company_id")
             if company_id:
                 query = query.filter(AutonomousAction.company_id == company_id)
 
-            action_type = request.args.get("action_type")
+            action_type = validated_params.get("action_type")
             if action_type:
                 query = query.filter(AutonomousAction.action_type == action_type)
 
-            success = request.args.get("success")
+            success = validated_params.get("success")
             if success is not None:
+                # Convertir string en bool (déjà validé par le schéma)
                 success_bool = success.lower() in ["true", "1", "yes"]
                 query = query.filter(AutonomousAction.success == success_bool)
 
-            reviewed = request.args.get("reviewed")
+            reviewed = validated_params.get("reviewed")
             if reviewed is not None:
+                # Convertir string en bool (déjà validé par le schéma)
                 reviewed_bool = reviewed.lower() in ["true", "1", "yes"]
                 query = query.filter(AutonomousAction.reviewed_by_admin == reviewed_bool)
 
-            start_date = request.args.get("start_date")
+            start_date = validated_params.get("start_date")
             if start_date:
                 query = query.filter(AutonomousAction.created_at >= start_date)
 
-            end_date = request.args.get("end_date")
+            end_date = validated_params.get("end_date")
             if end_date:
                 query = query.filter(AutonomousAction.created_at <= end_date)
 

@@ -1134,17 +1134,23 @@ class DriverVacationsResource(Resource):
         # ex. @role_required(UserRole.company)
 
         data = request.get_json(silent=True) or {}
-        start_str = data.get("start_date")  # format "YYYY-MM-DD"
-        end_str = data.get("end_date")
-        vac_type = data.get("vacation_type", "VACANCES")
 
-        # Convertir en date
+        # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+        from marshmallow import ValidationError
+
+        from schemas.company_schemas import DriverVacationCreateSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+
         try:
-            if not start_str or not end_str:
-                msg = "start_date et end_date sont requis (YYYY-MM-DD)"
-                raise ValueError(msg)
-            start_date = date.fromisoformat(str(start_str))
-            end_date = date.fromisoformat(str(end_str))
+            validated_data = validate_request(DriverVacationCreateSchema(), data, strict=False)
+        except ValidationError as e:
+            return handle_validation_error(e)
+
+        # Convertir en date (déjà validé par le schéma)
+        try:
+            start_date = date.fromisoformat(validated_data["start_date"])
+            end_date = date.fromisoformat(validated_data["end_date"])
+            vac_type = validated_data.get("vacation_type", "VACANCES")
         except Exception as e:
             return {"error": f"Format de date invalide: {e!s}"}, 400
 
@@ -2098,6 +2104,37 @@ class CompanyClients(Resource):
             db.session.rollback()
             return {"error": "Conflit de données, vérifiez vos champs."}, 400
 
+        # ✅ Priorité 7: Audit logging et métriques pour création utilisateur (client)
+        try:
+            from security.audit_log import AuditLogger
+            from security.security_metrics import security_sensitive_actions_total
+            from shared.logging_utils import mask_email
+
+            current_user_id = get_jwt_identity()
+            current_user = User.query.filter_by(public_id=current_user_id).first()
+
+            AuditLogger.log_action(
+                action_type="user_created",
+                action_category="security",
+                user_id=current_user.id if current_user else None,
+                user_type=current_user.role.value if current_user and current_user.role else "unknown",
+                result_status="success",
+                action_details={
+                    "created_user_id": user.id,
+                    "created_user_email": mask_email(email) if email else None,
+                    "created_user_role": "client",
+                    "client_type": ctype.value if hasattr(ctype, "value") else str(ctype),
+                },
+                company_id=cid,
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get("User-Agent"),
+            )
+            # ✅ Priorité 7: Métrique Prometheus pour action sensible
+            security_sensitive_actions_total.labels(action_type="user_created").inc()
+        except Exception as audit_error:
+            # Ne pas bloquer la création si l'audit logging échoue
+            app_logger.warning("Échec audit logging user_created: %s", audit_error)
+
         # TODO: Implémenter l'envoi d'email de bienvenue
         # send_welcome_email(str(user.email), pwd)
 
@@ -2415,7 +2452,12 @@ class CreateDriver(Resource):
             validated_data = {}  # Never reached, but satisfies type checker
 
         # validated_data is guaranteed to be defined here (abort() raises exception)
-        assert validated_data is not None, "validated_data should be defined after validation"
+        # Défense en profondeur : vérification explicite pour robustesse en production
+        # Note: Le type checker considère cette vérification inatteignable, mais elle reste utile
+        # pour la robustesse si abort() ne lève pas d'exception dans un contexte non-Flask
+        if validated_data is None:  # type: ignore[comparison-overlap]
+            app_logger.error("[Companies] validated_data is None after validation (should not happen)")
+            companies_ns.abort(500, "Erreur interne de validation")
 
         # Vérifier si l'email ou le username existe déjà
         existing_email = User.query.filter_by(email=validated_data["email"]).first()
@@ -2464,6 +2506,38 @@ class CreateDriver(Resource):
             new_driver.is_available = True
             db.session.add(new_driver)
             db.session.commit()
+
+            # ✅ Priorité 7: Audit logging et métriques pour création utilisateur (chauffeur)
+            try:
+                from security.audit_log import AuditLogger
+                from security.security_metrics import security_sensitive_actions_total
+                from shared.logging_utils import mask_email
+
+                current_user_id = get_jwt_identity()
+                current_user = User.query.filter_by(public_id=current_user_id).first()
+
+                AuditLogger.log_action(
+                    action_type="user_created",
+                    action_category="security",
+                    user_id=current_user.id if current_user else None,
+                    user_type=current_user.role.value if current_user and current_user.role else "unknown",
+                    result_status="success",
+                    action_details={
+                        "created_user_id": new_user.id,
+                        "created_user_email": mask_email(validated_data["email"]),
+                        "created_user_role": "driver",
+                        "driver_id": new_driver.id,
+                    },
+                    company_id=cid,
+                    driver_id=new_driver.id,
+                    ip_address=request.remote_addr,
+                    user_agent=request.headers.get("User-Agent"),
+                )
+                # ✅ Priorité 7: Métrique Prometheus pour action sensible
+                security_sensitive_actions_total.labels(action_type="user_created").inc()
+            except Exception as audit_error:
+                # Ne pas bloquer la création si l'audit logging échoue
+                app_logger.warning("Échec audit logging user_created (driver): %s", audit_error)
 
             app_logger.info("✅ Nouveau chauffeur %s créé pour l'entreprise %s", getattr(new_driver, "id", "?"), cid)
             return new_driver.serialize, 201
@@ -3148,7 +3222,7 @@ class MyVehicle(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @companies_ns.expect(vehicle_update_model, validate=False)
-    def put(self, vehicle_id):
+    def put(self, vehicle_id):  # noqa: PLR0911
         company, err, code = get_company_from_token()
         if err:
             return err, code
@@ -3165,6 +3239,18 @@ class MyVehicle(Resource):
             return {"error": "Véhicule introuvable."}, 404
 
         data = request.get_json(silent=True) or {}
+
+        # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+        from marshmallow import ValidationError
+
+        from schemas.company_schemas import VehicleUpdateSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+
+        try:
+            validated_data = validate_request(VehicleUpdateSchema(), data, strict=False)
+        except ValidationError as e:
+            return handle_validation_error(e)
+
         try:
 
             def parse_dt(s):
@@ -3172,15 +3258,30 @@ class MyVehicle(Resource):
                     return None
                 return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
-            for k in ("model", "license_plate", "year", "vin", "seats", "wheelchair_accessible"):
-                if k in data:
-                    setattr(v, k, data[k])
+            # Utiliser les données validées
+            if "brand" in validated_data:
+                v.brand = validated_data["brand"]
+            if "model" in validated_data:
+                v.model = validated_data["model"]
+            if "license_plate" in validated_data:
+                v.license_plate = validated_data["license_plate"]
+            if "color" in validated_data:
+                v.color = validated_data["color"]
+            if "year" in validated_data:
+                v.year = validated_data["year"]
+            if "seats" in validated_data:
+                v.seats = validated_data["seats"]
+            if "is_wheelchair_accessible" in validated_data:
+                v.is_wheelchair_accessible = validated_data["is_wheelchair_accessible"]
+            if "is_active" in validated_data:
+                v.is_active = validated_data["is_active"]
+            if "notes" in validated_data:
+                v.notes = validated_data["notes"]
+            # Les champs dates ne sont pas dans le schéma de validation mais on les garde pour compatibilité
             if "insurance_expires_at" in data:
                 v.insurance_expires_at = parse_dt(data["insurance_expires_at"])
             if "inspection_expires_at" in data:
                 v.inspection_expires_at = parse_dt(data["inspection_expires_at"])
-            if "is_active" in data:
-                v.is_active = bool(data["is_active"])
 
             db.session.commit()
             return v.serialize, 200

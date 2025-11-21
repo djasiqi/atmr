@@ -79,6 +79,10 @@ class Config:
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(
         seconds=int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES_SECONDS", str(30 * 24 * 3600)))
     )
+    # Validation de l'audience JWT (prévention token replay)
+    JWT_DECODE_AUDIENCE = "atmr-api"
+    # Algorithme de signature JWT (HS256 = symétrique, secret partagé via Vault)
+    JWT_ALGORITHM = "HS256"
 
     # --- Redis / Socket.IO ---
     REDIS_URL = os.getenv("REDIS_URL", "redis://127.00.1:6379/0")
@@ -218,7 +222,7 @@ class TestingConfig(Config):
     UPLOADS_PUBLIC_BASE = "/uploads"
 
     @staticmethod
-    def init_app(app):
+    def init_app(app):  # pyright: ignore[reportImplicitOverride]
         """Ajuste les options d'engine selon le type de base de données."""
         # Utiliser DATABASE_URL de l'environnement si disponible (priorité sur valeur par défaut)
         database_url = os.getenv("DATABASE_URL")

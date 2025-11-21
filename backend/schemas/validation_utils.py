@@ -106,6 +106,54 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
     return formatted
 
 
+def validate_query_params(schema: Schema, query_params: Any, strict: bool = False) -> Dict[str, Any]:
+    """Valide les query parameters GET avec un schema Marshmallow.
+
+    Args:
+        schema: Schema Marshmallow à utiliser pour la validation
+        query_params: Query parameters à valider (dict, request.args ou ImmutableMultiDict)
+        strict: Si True, rejette les champs inconnus (défaut: False pour query params)
+
+    Returns:
+        Dict validé et nettoyé
+
+    Raises:
+        ValidationError: Si la validation échoue (avec détails par champ)
+
+    Usage:
+        from flask import request
+        from schemas.query_schemas import PaginationQuerySchema
+        from schemas.validation_utils import validate_query_params
+
+        try:
+            validated_params = validate_query_params(PaginationQuerySchema(), request.args)
+            page = validated_params.get("page", 1)
+            per_page = validated_params.get("per_page", 50)
+        except ValidationError as e:
+            return handle_validation_error(e)
+    """
+    # Convertir request.args (ImmutableMultiDict) en dict normal
+    if hasattr(query_params, "to_dict"):
+        # Flask request.args a une méthode to_dict(flat=True)
+        data = query_params.to_dict(flat=True)
+    elif hasattr(query_params, "dict"):
+        # Compatible avec d'autres types de MultiDict
+        data = query_params.dict()
+    elif isinstance(query_params, dict):
+        data = query_params
+    else:
+        # Fallback: convertir en dict
+        data = dict(query_params)
+
+    # Valider avec le schéma (même logique que validate_request)
+    try:
+        validated = schema.load(data, unknown="EXCLUDE" if strict else "INCLUDE")
+        return cast(Dict[str, Any], validated)
+    except ValidationError as err:
+        formatted_errors = _format_validation_errors(cast(Dict[str, Any], err.messages))
+        raise ValidationError(formatted_errors) from err
+
+
 def handle_validation_error(error: ValidationError):
     """Gère une ValidationError et retourne une réponse Flask 400.
 

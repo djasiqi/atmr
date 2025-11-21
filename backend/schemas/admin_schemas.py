@@ -2,6 +2,8 @@
 
 from marshmallow import Schema, fields, validate
 
+from schemas.query_schemas import DateRangeQuerySchema, FilterQuerySchema, PaginationQuerySchema
+
 
 class UserRoleUpdateSchema(Schema):
     """Schema pour mise à jour du rôle d'un utilisateur (PUT /api/admin/users/<id>/role)."""
@@ -25,3 +27,33 @@ class AutonomousActionReviewSchema(Schema):
         allow_none=True,
         load_default=None,
     )
+
+
+class AutonomousActionsListQuerySchema(PaginationQuerySchema, DateRangeQuerySchema, FilterQuerySchema):
+    """Schema pour validation query params GET /api/admin/autonomous-actions.
+
+    Combine pagination, date range et filtres communs, avec filtres spécifiques aux actions autonomes.
+    """
+
+    action_type = fields.Str(
+        load_default=None,
+        validate=validate.Length(max=50, error="action_type doit faire max 50 caractères"),
+        allow_none=True,
+    )
+    success = fields.Str(
+        load_default=None,
+        validate=validate.OneOf(
+            ["true", "false", "1", "0", "yes", "no"], error="success doit être: true, false, 1, 0, yes ou no"
+        ),
+        allow_none=True,
+    )
+    reviewed = fields.Str(
+        load_default=None,
+        validate=validate.OneOf(
+            ["true", "false", "1", "0", "yes", "no"], error="reviewed doit être: true, false, 1, 0, yes ou no"
+        ),
+        allow_none=True,
+    )
+
+    class Meta:  # type: ignore
+        unknown = "INCLUDE"  # Permettre des champs supplémentaires pour compatibilité

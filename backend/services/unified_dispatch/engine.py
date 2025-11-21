@@ -21,6 +21,7 @@ from services.unified_dispatch.clustering import GeographicClustering
 from services.unified_dispatch.rl_kpi_monitor import RLKPIMonitor
 from services.unified_dispatch.slo import check_slo_breach, get_slo_tracker
 from services.unified_dispatch.transaction_helpers import _begin_tx
+from services.unified_dispatch.types import DispatchResult
 from shared.otel_setup import get_tracer  # ✅ D1: OpenTelemetry
 
 # Constantes pour éviter les valeurs magiques
@@ -217,14 +218,8 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             db.session.rollback()
 
     # Variable pour stocker le résultat final
-    result: Dict[str, Any] = {
-        "assignments": [],
-        "unassigned": [],
-        "bookings": [],
-        "drivers": [],
-        "meta": {"reason": "unknown"},
-        "debug": {"reason": "unknown"},
-    }
+    # ✅ Standardisation: Initialiser comme None, sera remplacé par DispatchResult
+    result: DispatchResult | None = None
 
     day_str = for_date or datetime.now(UTC).strftime("%Y-%m-%d")
     dispatch_run: DispatchRun | None = None
@@ -235,15 +230,16 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         company: Company | None = Company.query.get(company_id)
         if not company:
             logger.warning("[Engine] Company %s introuvable", company_id)
-            return {  # ✅ FIX: Retourner immédiatement si company n'existe pas
-                "assignments": [],
-                "unassigned": [],
-                "bookings": [],
-                "drivers": [],
-                "meta": {"reason": "company_not_found", "dispatch_run_id": None},
-                "debug": {"reason": "company_not_found", "dispatch_run_id": None},
-                "dispatch_run_id": None,  # ✅ Toujours inclure dispatch_run_id
-            }
+            # ✅ Standardisation: Utiliser DispatchResult
+            return DispatchResult(
+                dispatch_run_id=None,
+                assignments=[],
+                unassigned=[],
+                bookings=[],
+                drivers=[],
+                meta={"reason": "company_not_found", "dispatch_run_id": None},
+                debug={"reason": "company_not_found", "dispatch_run_id": None},
+            ).to_dict()
         # 1) Configuration
         s = custom_settings or ud_settings.for_company(company)
 
@@ -340,15 +336,16 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         if not _acquire_day_lock(company_id, day_str):
             logger.warning("[Engine] Run skipped (locked) company=%s day=%s", company_id, day_str)
             # ✅ FIX: DispatchRun n'est pas créé si locked, donc dispatch_run_id est None
-            result = {
-                "assignments": [],
-                "unassigned": [],
-                "bookings": [],
-                "drivers": [],
-                "meta": {"reason": "locked", "for_date": for_date, "day": day_str, "dispatch_run_id": None},
-                "debug": {"reason": "locked", "for_date": for_date, "day": day_str, "dispatch_run_id": None},
-                "dispatch_run_id": None,  # ✅ Toujours inclure dispatch_run_id
-            }
+            # ✅ Standardisation: Utiliser DispatchResult
+            result = DispatchResult(
+                dispatch_run_id=None,
+                assignments=[],
+                unassigned=[],
+                bookings=[],
+                drivers=[],
+                meta={"reason": "locked", "for_date": for_date, "day": day_str, "dispatch_run_id": None},
+                debug={"reason": "locked", "for_date": for_date, "day": day_str, "dispatch_run_id": None},
+            )
 
         # 2) Créer / réutiliser le DispatchRun (unique: company_id+day)
         try:
@@ -436,8 +433,11 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     db.session.add(dr_any)
                     db.session.flush()
                     dispatch_run = cast("DispatchRun", dr_any)
-                    # ✅ FIX: Vérifier que l'ID est disponible après flush
-                    assert dispatch_run.id is not None, "DispatchRun ID should be available after flush"
+                    # ✅ FIX: Vérifier que l'ID est disponible après flush (éviter assert en production)
+                    if dispatch_run.id is None:
+                        error_msg = "DispatchRun ID should be available after flush"
+                        logger.error("[Engine] %s", error_msg)
+                        raise ValueError(error_msg)
                 logger.info(
                     "[Engine] Created DispatchRun id=%s for company=%s day=%s", dispatch_run.id, company_id, day_str
                 )
@@ -617,23 +617,24 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     logger.exception("[Engine] Failed to mark DispatchRun FAILED after build_problem_data error")
                 # ✅ FIX: Calculer dispatch_run_id avant retour
                 drid_on_error = _safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None
-                result = {
-                    "assignments": [],
-                    "unassigned": [],
-                    "bookings": [],
-                    "drivers": [],
-                    "meta": {
+                # ✅ Standardisation: Utiliser DispatchResult
+                result = DispatchResult(
+                    dispatch_run_id=drid_on_error,
+                    assignments=[],
+                    unassigned=[],
+                    bookings=[],
+                    drivers=[],
+                    meta={
                         "reason": "problem_build_failed",
                         "for_date": for_date or day_str,
                         "dispatch_run_id": drid_on_error,
                     },
-                    "debug": {
+                    debug={
                         "reason": "problem_build_failed",
                         "for_date": for_date or day_str,
                         "dispatch_run_id": drid_on_error,
                     },
-                    "dispatch_run_id": drid_on_error,  # ✅ Toujours inclure dispatch_run_id
-                }
+                )
                 # ✅ Retourner immédiatement si build_problem_data a échoué
                 if dispatch_run:
                     try:
@@ -641,7 +642,7 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                             dispatch_run.mark_failed("problem_build_failed")
                     except Exception:
                         logger.exception("[Engine] Failed to mark DispatchRun FAILED")
-                return result
+                return result.to_dict()
 
         # Continuer avec le traitement normal si problem est défini
         if not problem or not problem.get("bookings") or not problem.get("drivers"):
@@ -656,15 +657,16 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             # ✅ Retourner immédiatement si pas de données
             # ✅ FIX: Calculer dispatch_run_id avant retour
             drid_no_data = _safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None
-            return {
-                "assignments": [],
-                "unassigned": [],
-                "bookings": [],
-                "drivers": [],
-                "meta": {"reason": "no_data", "for_date": for_date or day_str, "dispatch_run_id": drid_no_data},
-                "debug": {"reason": "no_data", "for_date": for_date or day_str, "dispatch_run_id": drid_no_data},
-                "dispatch_run_id": drid_no_data,  # ✅ Toujours inclure dispatch_run_id
-            }
+            # ✅ Standardisation: Utiliser DispatchResult
+            return DispatchResult(
+                dispatch_run_id=drid_no_data,
+                assignments=[],
+                unassigned=[],
+                bookings=[],
+                drivers=[],
+                meta={"reason": "no_data", "for_date": for_date or day_str, "dispatch_run_id": drid_no_data},
+                debug={"reason": "no_data", "for_date": for_date or day_str, "dispatch_run_id": drid_no_data},
+            ).to_dict()
 
         # 5.5) Clustering géographique (si activé et > threshold)
         use_clustering = getattr(s.features, "enable_clustering", False)
@@ -1120,21 +1122,24 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                         db.session.commit()
                         # ✅ FIX: Inclure dispatch_run_id dans le résultat partiel
                         drid_heuristic = _safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None
-                        result = {
-                            "assignments": [_serialize_assignment(a) for a in final_assignments],
-                            "unassigned": remaining_ids_from(prob_regs),
-                            "debug": {
+                        # ✅ Standardisation: Utiliser DispatchResult
+                        result = DispatchResult(
+                            dispatch_run_id=drid_heuristic,
+                            assignments=[_serialize_assignment(a) for a in final_assignments],
+                            unassigned=remaining_ids_from(prob_regs),
+                            bookings=[],
+                            drivers=[],
+                            debug={
                                 "heuristic": getattr(h_res, "debug", None),
                                 "for_date": for_date or day_str,
                                 "dispatch_run_id": drid_heuristic,
                             },
-                            "meta": {
+                            meta={
                                 "heuristic": getattr(h_res, "debug", None),
                                 "for_date": for_date or day_str,
                                 "dispatch_run_id": drid_heuristic,
                             },
-                            "dispatch_run_id": drid_heuristic,  # ✅ Toujours inclure dispatch_run_id
-                        }
+                        )
                 except Exception:
                     logger.exception("[Engine] Heuristic pass-1 failed")
 
@@ -1187,21 +1192,24 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                         db.session.commit()
                         # ✅ FIX: Inclure dispatch_run_id dans le résultat partiel
                         drid_solver = _safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None
-                        result = {
-                            "assignments": [_serialize_assignment(a) for a in final_assignments],
-                            "unassigned": s_res.unassigned_booking_ids,
-                            "debug": {
+                        # ✅ Standardisation: Utiliser DispatchResult
+                        result = DispatchResult(
+                            dispatch_run_id=drid_solver,
+                            assignments=[_serialize_assignment(a) for a in final_assignments],
+                            unassigned=s_res.unassigned_booking_ids,
+                            bookings=[],
+                            drivers=[],
+                            debug={
                                 "solver": getattr(s_res, "debug", None),
                                 "for_date": for_date or day_str,
                                 "dispatch_run_id": drid_solver,
                             },
-                            "meta": {
+                            meta={
                                 "solver": getattr(s_res, "debug", None),
                                 "for_date": for_date or day_str,
                                 "dispatch_run_id": drid_solver,
                             },
-                            "dispatch_run_id": drid_solver,  # ✅ Toujours inclure dispatch_run_id
-                        }
+                        )
                 except Exception:
                     logger.exception("[Engine] Solver pass-1 failed")
 
@@ -1765,20 +1773,18 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         if "dispatch_run_id" not in debug_info:
             debug_info["dispatch_run_id"] = drid
 
-        result = {
-            "assignments": [_serialize_assignment(a) for a in final_assignments],
-            "unassigned": rem,
-            "unassigned_reasons": unassigned_reasons,
-            "bookings": ser_bookings,
-            "drivers": ser_drivers,
-            "meta": debug_info,  # ✅ Contient dispatch_run_id maintenant
-            "debug": debug_info,
-            "dispatch_run_id": drid,  # ✅ Toujours présent (même si None)
-        }
-
-        # Ajouter les métriques de performance si disponible
-        if perf_metrics:
-            result["performance_metrics"] = perf_metrics.to_dict()
+        # ✅ Standardisation: Utiliser DispatchResult
+        result = DispatchResult(
+            dispatch_run_id=drid,
+            assignments=[_serialize_assignment(a) for a in final_assignments],
+            unassigned=rem,
+            bookings=ser_bookings,
+            drivers=ser_drivers,
+            meta=debug_info,  # ✅ Contient dispatch_run_id maintenant
+            debug=debug_info,
+            unassigned_reasons=unassigned_reasons,
+            performance_metrics=perf_metrics.to_dict() if perf_metrics else None,
+        )
 
     except Exception as e:
         # ✅ logging SQLA enrichi pour capter la 1re requête fautive
@@ -1808,22 +1814,25 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         # Ajouter les métriques de performance même en cas d'erreur si perf_collector existe
         # ✅ FIX: Calculer dispatch_run_id même en cas d'erreur
         drid_on_exception = _safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None
-        result = {
-            "assignments": [],
-            "unassigned": [],
-            "bookings": [],
-            "drivers": [],
-            "meta": {"reason": "run_failed", "for_date": for_date or day_str, "dispatch_run_id": drid_on_exception},
-            "debug": {"reason": "run_failed", "for_date": for_date or day_str, "dispatch_run_id": drid_on_exception},
-            "dispatch_run_id": drid_on_exception,  # ✅ Toujours inclure dispatch_run_id
-        }
         # Si perf_collector a été initialisé, inclure les métriques partielles
+        perf_metrics_dict = None
         try:
             if perf_collector is not None:
                 perf_metrics = perf_collector.metrics
-                result["performance_metrics"] = perf_metrics.to_dict()
+                perf_metrics_dict = perf_metrics.to_dict()
         except Exception:
             pass
+        # ✅ Standardisation: Utiliser DispatchResult
+        result = DispatchResult(
+            dispatch_run_id=drid_on_exception,
+            assignments=[],
+            unassigned=[],
+            bookings=[],
+            drivers=[],
+            meta={"reason": "run_failed", "for_date": for_date or day_str, "dispatch_run_id": drid_on_exception},
+            debug={"reason": "run_failed", "for_date": for_date or day_str, "dispatch_run_id": drid_on_exception},
+            performance_metrics=perf_metrics_dict,
+        )
     finally:
         _release_day_lock(company_id, day_str)
         # ✅ Nettoyer le contexte logging
@@ -1834,7 +1843,20 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         except ImportError:
             pass  # Module optionnel
 
-    return result
+    # ✅ Standardisation: Convertir DispatchResult en dict pour compatibilité API
+    if result is None:
+        # Cas de fallback si result n'a pas été initialisé (ne devrait pas arriver)
+        result = DispatchResult(
+            dispatch_run_id=None,
+            assignments=[],
+            unassigned=[],
+            bookings=[],
+            drivers=[],
+            meta={"reason": "uninitialized"},
+            debug={"reason": "uninitialized"},
+        )
+
+    return result.to_dict()
 
 
 # ------------------------------------------------------------

@@ -559,7 +559,8 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             from ext import redis_client
 
             params_str = json.dumps(run_kwargs, sort_keys=True)
-            params_hash = hashlib.md5(params_str.encode(), usedforsecurity=False).hexdigest()
+            # SHA-256 au lieu de MD5 pour meilleures pratiques de sécurité
+            params_hash = hashlib.sha256(params_str.encode()).hexdigest()
             dedup_key = f"dispatch:enqueued:{company_id}:{params_hash}"
 
             if not redis_client.setnx(dedup_key, 1):

@@ -1,14 +1,29 @@
-# Configuration Bandit pour scan de sécurité Python
+# Configuration Bandit pour l'analyse de sécurité
+# Documentation: https://bandit.readthedocs.io/en/latest/config.html
 
 [bandit]
-# Exclure certains dossiers/tests
-exclude_dirs = tests,venv,__pycache__,migrations/versions,htmlcov,node_modules
+# Répertoires à exclure du scan
+exclude_dirs = /tests/,/migrations/,/venv/,/env/,/__pycache__/,/.pytest_cache/,/.mypy_cache/,/.ruff_cache/
 
-# Seuil de sévérité (low, medium, high)
-severity = medium
+# Règles à ignorer globalement
+skips = B101  # assert_used (acceptable dans tests/ mais exclu du scan)
 
-# Ignorer certaines règles si nécessaire
-# skips = B101,B601
+# Fichiers à tester (vide = tous les fichiers .py dans le répertoire de base)
+tests = []
 
-# Exclure des lignes spécifiques (peut être ajouté dans le code avec # nosec)
+# Niveau de confiance minimal (low, medium, high)
+confidence = medium
 
+# Niveau de gravité minimal (low, medium, high, critical)
+severity = low
+
+# Exclure les lignes correspondant à un motif regex
+# exclude = ^.*test_.*
+
+# [assert_used]
+# Fichiers où les assert sont acceptables (tests uniquement)
+# skips = tests/*
+
+# Note: Les faux positifs documentés dans docs/FAUX_POSITIFS_SECURITE.md sont exclus via:
+# - Commentaires # nosec BXXX dans le code pour les faux positifs légitimes
+# - Exclusion de répertoires ci-dessus pour les tests et migrations

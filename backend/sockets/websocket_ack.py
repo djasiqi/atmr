@@ -63,10 +63,10 @@ class WebSocketACKManager:
         Returns:
             message_id généré
         """
-        # Générer message_id si non fourni
+        # Générer message_id si non fourni (SHA-256 au lieu de MD5 pour meilleures pratiques)
         if message_id is None:
             payload_str = f"{event}:{room}:{payload!s}"
-            message_id = hashlib.md5(payload_str.encode(), usedforsecurity=False).hexdigest()[:16]
+            message_id = hashlib.sha256(payload_str.encode()).hexdigest()[:16]
 
         # Ajouter message_id au payload
         payload_with_id = {**payload, "_message_id": message_id}

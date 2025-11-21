@@ -41,3 +41,28 @@
 # Ignorer les fichiers de test (optionnel - décommenter si vous ne voulez pas scanner les tests)
 # **/tests/**
 # **/test_*.py
+
+# ===== FIXPOINT TIMEOUTS SEMGREP - FAUX POSITIFS =====
+# Les fixpoint timeouts Semgrep sur la règle python.boto3.security.hardcoded-token.hardcoded-token
+# sont des faux positifs causés par l'analyse de flux de données sur des définitions de méthodes
+# Flask-RESTX standards. Aucun secret hardcodé n'a été trouvé.
+#
+# Voir docs/AUDIT_SECRETS_DETAILLE.md pour l'analyse complète des 13 occurrences.
+#
+# Ces warnings ne peuvent pas être exclus directement car ce sont des timeouts d'analyse,
+# pas des résultats. Ils indiquent que Semgrep n'a pas pu terminer l'analyse sur ces lignes,
+# mais aucun secret hardcodé n'a été détecté après audit manuel.
+#
+# Fichiers concernés (documentés comme faux positifs) :
+# - routes/companies.py:1197 (méthode post() Flask-RESTX)
+# - routes/company_settings.py:173 (méthode put() Flask-RESTX)
+# - routes/dispatch_routes.py:1408, 1577, 2732 (méthodes get() Flask-RESTX)
+# - routes/messages.py:92 (méthode get() Flask-RESTX)
+# - scripts/validate_metrics.py:116 (fonction validate_metrics_endpoint())
+# - services/agent_dispatch/tools.py:529 (méthode reoptimize())
+# - services/invoice_service.py:136 (méthode generate_invoice())
+# - services/osrm_client.py:408 (fonction build_distance_matrix_osrm())
+# - services/unified_dispatch/apply.py:128 (fonction _apply_assignments_inner())
+# - services/unified_dispatch/autonomous_manager.py:224 (méthode process_opportunities())
+# - services/unified_dispatch/engine.py:182 (fonction run())
+# - services/unified_dispatch/heuristics.py:762, 2467 (fonctions assign(), closest_feasible())

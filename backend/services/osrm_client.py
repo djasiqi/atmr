@@ -164,7 +164,8 @@ def _rate_limit(rate_per_sec: float | None) -> None:
         _rl_last_ts["value"] = time.time()
 
 
-def _fallback_matrix(coords: List[Tuple[float, float]], avg_kmh: float = 25.0) -> List[List[float]]:
+def _fallback_matrix(coords: List[Tuple[float, float]], avg_kmh: float = 50.0) -> List[List[float]]:
+    # ✅ Standardisé à 50 km/h selon plan d'audit (au lieu de 25 km/h)
     """Fallback durations matrix (seconds) using haversine distance and an average speed.
     Symmetric, diagonal 0.0.
     """
@@ -182,7 +183,8 @@ def _fallback_matrix(coords: List[Tuple[float, float]], avg_kmh: float = 25.0) -
     return M
 
 
-def _fallback_eta_seconds(a: Tuple[float, float], b: Tuple[float, float], avg_kmh: float = 25.0) -> int:
+def _fallback_eta_seconds(a: Tuple[float, float], b: Tuple[float, float], avg_kmh: float = 50.0) -> int:
+    # ✅ Standardisé à 50 km/h selon plan d'audit (au lieu de 25 km/h)
     km = _haversine_km(a, b)
     sec = (km / max(avg_kmh, 1e-3)) * 3600.0
     return int(max(1, round(sec)))
@@ -657,7 +659,7 @@ def route_info(
     geometries: str = "geojson",
     steps: bool = False,
     annotations: bool = False,
-    avg_speed_kmh_fallback: float = 25.0,
+    avg_speed_kmh_fallback: float = 50.0,  # ✅ Standardisé à 50 km/h selon plan d'audit
     cache_ttl_s: int | None = None,
 ) -> Dict[str, Any]:
     """Retourne un dict: {"duration": sec, "distance": m, "geometry": ..., "legs": [...]}
@@ -677,6 +679,9 @@ def route_info(
                 if "duration" in cached and "distance" in cached:
                     # ✅ Track cache hit
                     increment_cache_hit(cache_type="route")
+                    # ✅ S'assurer que fallback est présent dans le cache (rétrocompatibilité)
+                    if "fallback" not in cached:
+                        cached["fallback"] = False
                     return cached
         except _RedisConnError:
             logger.warning("[OSRM] Redis connection failed - continuing without cache")
@@ -710,6 +715,7 @@ def route_info(
             "distance": float(r0.get("distance", 0.0)),
             "geometry": r0.get("geometry"),
             "legs": r0.get("legs", []),
+            "fallback": False,  # ✅ Résultat OSRM réel, pas de fallback
         }
 
     try:
@@ -720,9 +726,24 @@ def route_info(
             msg = "OSRM /route returned non-dict"
             raise RuntimeError(msg)
         res: Dict[str, Any] = cast("Dict[str, Any]", res_any)
-    except Exception as e:
-        # Fallback ETA/distance
-        logger.warning("[OSRM] route failed -> fallback haversine: %s", e)
+    except (
+        ConnectionError,
+        TimeoutError,
+        requests.Timeout,
+        requests.ConnectionError,
+        requests.RequestException,
+        Exception,
+    ) as e:
+        # ✅ Gestion d'erreurs améliorée : Fallback pour toutes les erreurs (réseau/timeout/autres)
+        error_type = (
+            "network/timeout"
+            if isinstance(
+                e,
+                (ConnectionError, TimeoutError, requests.Timeout, requests.ConnectionError, requests.RequestException),
+            )
+            else "unexpected"
+        )
+        logger.warning("[OSRM] route failed (%s error) -> fallback haversine: %s", error_type, e)
         pts: List[Tuple[float, float]] = [origin] + (waypoints or []) + [destination]
         dist_m = 0.0
         for a, b in itertools.pairwise(pts):
@@ -733,6 +754,7 @@ def route_info(
             "distance": float(dist_m),
             "geometry": {"type": "LineString", "coordinates": [[lon, lat] for (lat, lon) in pts]},
             "legs": [{"duration": float(sec), "distance": float(dist_m)}],
+            "fallback": True,  # ✅ Marquer comme fallback pour traçabilité
         }
 
     # Cache set
@@ -760,7 +782,7 @@ def eta_seconds(
     timeout: int = 10,  # ✅ Augmenté pour destinations lointaines
     redis_client: Any | None = None,
     coord_precision: int = 5,
-    avg_speed_kmh_fallback: float = 25.0,
+    avg_speed_kmh_fallback: float = 50.0,  # ✅ Standardisé à 50 km/h selon plan d'audit
 ) -> int:
     """Calcule un ETA (secondes) robuste via OSRM /route, avec cache + fallback haversine."""
     info = route_info(
@@ -924,8 +946,125 @@ def build_distance_matrix_osrm_with_cb(coords: List[Tuple[float, float]], **kwar
             type(e).__name__,
             exc_info=True,
         )
-        avg_kmh = kwargs.get("avg_speed_kmh_fallback", 25.0)
+        avg_kmh = kwargs.get("avg_speed_kmh_fallback", 50.0)  # ✅ Standardisé à 50 km/h
         return _fallback_matrix(coords, avg_kmh=avg_kmh)
+
+
+# ============================================================
+# ✅ OSRMClient: Classe pour fallback robuste
+# ============================================================
+
+
+class OSRMClient:
+    """Client OSRM avec fallback robuste.
+
+    Encapsule la logique OSRM avec gestion automatique du fallback haversine
+    en cas d'échec des requêtes OSRM.
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        profile: str = "driving",
+        avg_speed_kmh: float = 50.0,
+        redis_client: Any | None = None,
+        timeout: int = 15,
+    ):
+        """Initialise le client OSRM.
+
+        Args:
+            base_url: URL de base du serveur OSRM
+            profile: Profil de routage (driving, walking, cycling)
+            avg_speed_kmh: Vitesse moyenne pour le fallback haversine (défaut: 50 km/h)
+            redis_client: Client Redis optionnel pour le cache
+            timeout: Timeout par défaut pour les requêtes (secondes)
+        """
+        super().__init__()
+        self.base_url = base_url
+        self.profile = profile
+        self.avg_speed_kmh = avg_speed_kmh
+        self.redis_client = redis_client
+        self.timeout = timeout
+
+    def get_route(
+        self,
+        origin: Tuple[float, float],
+        destination: Tuple[float, float],
+        *,
+        waypoints: List[Tuple[float, float]] | None = None,
+        timeout: int | None = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Récupère un itinéraire avec fallback automatique.
+
+        Args:
+            origin: Point d'origine (lat, lon)
+            destination: Point de destination (lat, lon)
+            waypoints: Points intermédiaires optionnels
+            timeout: Timeout pour la requête (utilise self.timeout si None)
+            **kwargs: Arguments supplémentaires passés à route_info()
+
+        Returns:
+            Dict avec duration, distance, geometry, legs, et fallback (True si fallback utilisé)
+        """
+        timeout_used = timeout if timeout is not None else self.timeout
+        try:
+            # Utiliser route_info existante
+            result = route_info(
+                origin=origin,
+                destination=destination,
+                base_url=self.base_url,
+                profile=self.profile,
+                waypoints=waypoints,
+                timeout=timeout_used,
+                redis_client=self.redis_client,
+                avg_speed_kmh_fallback=self.avg_speed_kmh,
+                **kwargs,
+            )
+            # S'assurer que fallback est False si pas déjà défini
+            if "fallback" not in result:
+                result["fallback"] = False
+            return result
+        except (ConnectionError, TimeoutError, requests.RequestException, requests.Timeout) as e:
+            # Fallback heuristique en cas d'erreur réseau
+            logger.warning("[OSRM] Request failed, using fallback: %s", e)
+            return self._heuristic_route(origin, destination, waypoints=waypoints)
+        except Exception as e:
+            # Autres erreurs -> fallback aussi
+            logger.warning("[OSRM] Unexpected error, using fallback: %s", e)
+            return self._heuristic_route(origin, destination, waypoints=waypoints)
+
+    def _heuristic_route(
+        self,
+        origin: Tuple[float, float],
+        destination: Tuple[float, float],
+        *,
+        waypoints: List[Tuple[float, float]] | None = None,
+    ) -> Dict[str, Any]:
+        """Calcul heuristique de distance/temps avec haversine.
+
+        Args:
+            origin: Point d'origine (lat, lon)
+            destination: Point de destination (lat, lon)
+            waypoints: Points intermédiaires optionnels
+
+        Returns:
+            Dict avec distance (m), duration (s), geometry, legs, et fallback=True
+        """
+        pts: List[Tuple[float, float]] = [origin] + (waypoints or []) + [destination]
+        dist_m = 0.0
+        for a, b in itertools.pairwise(pts):
+            dist_m += _haversine_km(a, b) * 1000.0
+
+        duration_seconds = (dist_m / 1000.0) / max(self.avg_speed_kmh, 1e-3) * 3600.0
+
+        return {
+            "distance": float(dist_m),  # mètres
+            "duration": float(duration_seconds),  # secondes
+            "fallback": True,  # ⚠️ Marquer comme fallback
+            "geometry": {"type": "LineString", "coordinates": [[lon, lat] for (lat, lon) in pts]},
+            "legs": [{"duration": float(duration_seconds), "distance": float(dist_m)}],
+        }
 
 
 # ============================================================
@@ -1012,9 +1151,9 @@ def get_distance_time_cached(origin, dest, date_str=None):
 
         date_str = datetime.now(UTC).strftime("%Y-%m-%d")
 
-    # Créer une clé de cache plus robuste
-    origin_hash = hashlib.md5(f"{origin[ORIG_ZERO]},{origin[1]}".encode(), usedforsecurity=False).hexdigest()[:8]
-    dest_hash = hashlib.md5(f"{dest[0]},{dest[1]}".encode(), usedforsecurity=False).hexdigest()[:8]
+    # Créer une clé de cache plus robuste (SHA-256 au lieu de MD5 pour meilleures pratiques)
+    origin_hash = hashlib.sha256(f"{origin[ORIG_ZERO]},{origin[1]}".encode()).hexdigest()[:8]
+    dest_hash = hashlib.sha256(f"{dest[0]},{dest[1]}".encode()).hexdigest()[:8]
     cache_key = f"osrm:cache:{date_str}:{origin_hash}:{dest_hash}"
 
     try:
@@ -1061,10 +1200,10 @@ def get_matrix_cached(origins, destinations, date_str=None):
 
         date_str = datetime.now(UTC).strftime("%Y-%m-%d")
 
-    # Créer une clé de cache pour la matrice
+    # Créer une clé de cache pour la matrice (SHA-256 au lieu de MD5 pour meilleures pratiques)
     origins_str = ",".join([f"{o[0]},{o[1]}" for o in origins])
     dests_str = ",".join([f"{d[0]},{d[1]}" for d in destinations])
-    matrix_hash = hashlib.md5(f"{origins_str}|{dests_str}".encode(), usedforsecurity=False).hexdigest()[:16]
+    matrix_hash = hashlib.sha256(f"{origins_str}|{dests_str}".encode()).hexdigest()[:16]
     cache_key = f"osrm:matrix:{date_str}:{matrix_hash}"
 
     try:

@@ -4,7 +4,9 @@ Utilise Marshmallow pour une sérialisation cohérente et typée.
 Remplace les méthodes .serialize() et .to_dict() dispersées dans les modèles.
 """
 
-from marshmallow import Schema, fields
+from marshmallow import Schema, fields, validate
+
+from schemas.validation_utils import ISO8601_DATE_REGEX
 
 
 class DriverSchema(Schema):
@@ -114,8 +116,31 @@ class AssignmentSchema(Schema):
         ordered = True
 
 
+class DispatchRunRequestSchema(Schema):
+    """Schéma pour validation des requêtes POST /company_dispatch/run."""
+
+    for_date = fields.Str(
+        required=True,
+        validate=validate.Regexp(ISO8601_DATE_REGEX, error="for_date doit être au format YYYY-MM-DD"),
+    )
+    regular_first = fields.Bool(load_default=True)
+    allow_emergency = fields.Bool(allow_none=True, load_default=None)
+    async_mode = fields.Bool(load_default=True, data_key="async")
+    mode = fields.Str(
+        validate=validate.OneOf(
+            ["auto", "heuristic_only", "solver_only"], error="mode invalide (auto|heuristic_only|solver_only)"
+        ),
+        allow_none=True,
+    )
+    overrides = fields.Dict(allow_none=True, load_default=None)
+
+    class Meta:  # type: ignore
+        ordered = True
+        unknown = "EXCLUDE"  # Rejeter les champs inconnus pour sécurité
+
+
 class DispatchRunSchema(Schema):
-    """Schéma pour DispatchRun."""
+    """Schéma pour DispatchRun (sérialisation des réponses)."""
 
     id = fields.Int(dump_only=True)
     company_id = fields.Int(required=True)
@@ -238,9 +263,12 @@ assignments_schema = AssignmentSchema(many=True)
 assignment_with_relations_schema = AssignmentSchema()
 assignments_with_relations_schema = AssignmentSchema(many=True)
 
-# Dispatch runs
+# Dispatch runs (sérialisation)
 dispatch_run_schema = DispatchRunSchema()
 dispatch_runs_schema = DispatchRunSchema(many=True)
+
+# Dispatch run requests (validation)
+dispatch_run_request_schema = DispatchRunRequestSchema()
 
 # Suggestions
 suggestion_schema = DispatchSuggestionSchema()

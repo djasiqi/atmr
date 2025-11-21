@@ -431,6 +431,138 @@ def sample_client(db, sample_company):
 # ========== FIXTURES POUR MOCKS ==========
 
 
+@pytest.fixture(autouse=True)
+def mock_external_services(monkeypatch):
+    """Mock automatique des services externes (OSRM, Redis) pour tous les tests.
+
+    Cette fixture s'applique automatiquement à tous les tests pour éviter
+    les appels réseau et améliorer la performance et la fiabilité des tests.
+    """
+    from unittest.mock import MagicMock
+
+    # Mock OSRM - utiliser les mêmes fonctions que mock_osrm_client
+    def mock_build_distance_matrix_osrm(coords, **kwargs):
+        """Retourne une matrice de durées simulée (secondes) basée sur haversine."""
+        from services.osrm_client import _fallback_eta_seconds
+
+        n = len(coords)
+        matrix = []
+        for i in range(n):
+            row = []
+            for j in range(n):
+                if i == j:
+                    row.append(0.0)
+                else:
+                    duration = _fallback_eta_seconds(coords[i], coords[j])
+                    row.append(float(duration))
+            matrix.append(row)
+        return matrix
+
+    def mock_route_info(origin, dest, **kwargs):
+        """Retourne des données de route simulées basées sur haversine."""
+        from services.osrm_client import _fallback_eta_seconds, _haversine_km
+
+        km = _haversine_km(origin, dest)
+        duration_s = _fallback_eta_seconds(origin, dest)
+
+        return {
+            "duration": float(duration_s),
+            "distance": int(km * 1000),  # mètres
+            "geometry": {"type": "LineString", "coordinates": [[origin[1], origin[0]], [dest[1], dest[0]]]},
+            "legs": [{"distance": int(km * 1000), "duration": float(duration_s)}],
+            "fallback": False,  # Simuler un appel OSRM réussi
+        }
+
+    def mock_get_distance_time(origin, dest, **kwargs):
+        """Mock pour compatibilité avec anciens tests."""
+        from services.osrm_client import _fallback_eta_seconds, _haversine_km
+
+        km = _haversine_km(origin, dest)
+        duration_s = _fallback_eta_seconds(origin, dest)
+        return (km * 1000, duration_s)  # mètres, secondes
+
+    def mock_get_matrix(origins, destinations, **kwargs):
+        """Mock pour compatibilité avec anciens tests."""
+        from services.osrm_client import _fallback_eta_seconds, _haversine_km
+
+        n, m = len(origins), len(destinations)
+        durations = []
+        distances = []
+        for i in range(n):
+            dur_row = []
+            dist_row = []
+            for j in range(m):
+                km = _haversine_km(origins[i], destinations[j])
+                duration_s = _fallback_eta_seconds(origins[i], destinations[j])
+                dur_row.append(float(duration_s))
+                dist_row.append(km * 1000)  # mètres
+            durations.append(dur_row)
+            distances.append(dist_row)
+        return {"durations": durations, "distances": distances}
+
+    def mock_eta_seconds(origin, dest, **kwargs):
+        """Mock pour compatibilité avec anciens tests."""
+        from services.osrm_client import _fallback_eta_seconds
+
+        return _fallback_eta_seconds(origin, dest)
+
+    # Patcher OSRM
+    from services import osrm_client
+
+    monkeypatch.setattr(osrm_client, "build_distance_matrix_osrm", mock_build_distance_matrix_osrm)
+    monkeypatch.setattr(osrm_client, "route_info", mock_route_info)
+    monkeypatch.setattr(osrm_client, "get_distance_time", mock_get_distance_time)
+    monkeypatch.setattr(osrm_client, "get_matrix", mock_get_matrix)
+    monkeypatch.setattr(osrm_client, "eta_seconds", mock_eta_seconds)
+
+    # Mock Redis - créer un mock Redis centralisé
+    mock_redis = MagicMock()
+    # Configurer les méthodes Redis courantes
+    mock_redis.get.return_value = None
+    mock_redis.set.return_value = True
+    mock_redis.setex.return_value = True
+    mock_redis.delete.return_value = 1
+    mock_redis.exists.return_value = False
+    mock_redis.lpush.return_value = 1
+    mock_redis.lrange.return_value = []
+    mock_redis.ltrim.return_value = True
+    mock_redis.expire.return_value = True
+    mock_redis.keys.return_value = []
+    mock_redis.ping.return_value = True
+
+    # Patcher Redis dans les modules qui l'utilisent
+    # Note: On patch seulement si le module existe pour éviter les erreurs
+    try:
+        import redis
+
+        # Mock redis.from_url pour retourner notre mock
+        monkeypatch.setattr(redis, "from_url", lambda *args, **kwargs: mock_redis)
+    except ImportError:
+        pass
+
+    # Patcher les clients Redis spécifiques si disponibles
+    try:
+        from services import redis_client
+
+        monkeypatch.setattr(redis_client, "RedisClient", MagicMock(return_value=mock_redis))
+    except ImportError:
+        pass
+
+    # Retourner un dictionnaire avec les mocks pour permettre l'accès si nécessaire
+    # Note: Utilisation de return au lieu de yield car il n'y a pas de teardown nécessaire
+    # Les mocks sont déjà appliqués via monkeypatch, donc ils sont actifs pour tous les tests
+    return {
+        "osrm": {
+            "build_distance_matrix_osrm": mock_build_distance_matrix_osrm,
+            "route_info": mock_route_info,
+            "get_distance_time": mock_get_distance_time,
+            "get_matrix": mock_get_matrix,
+            "eta_seconds": mock_eta_seconds,
+        },
+        "redis": mock_redis,
+    }
+
+
 @pytest.fixture
 def mock_osrm_client(monkeypatch):
     """Mock osrm_client fonctions pour éviter appels réseau.

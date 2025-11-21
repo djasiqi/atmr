@@ -279,6 +279,29 @@ class DispatchEnv(gym.Env):
         logging.debug("[DispatchEnv] Action invalide (hors action_space)")
         return observation, reward, terminated, truncated, info
 
+    def _error_response(
+        self, error_msg: str
+    ) -> Tuple[np.ndarray[Any, np.dtype[np.float32]], float, bool, bool, Dict[str, Any]]:
+        """Réponse standardisée en cas d'erreur.
+
+        Args:
+            error_msg: Message d'erreur à inclure dans les infos
+
+        Returns:
+            observation: État actuel (inchangé)
+            reward: Pénalité élevée (-1000.0)
+            terminated: True (l'épisode est terminé)
+            truncated: True (l'épisode est tronqué)
+            info: Informations avec flag error
+        """
+        observation = self._get_observation()
+        reward = -1000.0  # Pénalité élevée
+        terminated = True  # Terminé
+        truncated = True  # Tronqué
+        info = self._get_info()
+        info["error"] = error_msg
+        return observation, reward, terminated, truncated, info
+
     def step(self, action: int) -> Tuple[np.ndarray[Any, np.dtype[np.float32]], float, bool, bool, Dict[str, Any]]:
         """Exécute une action dans l'environnement.
 
@@ -293,95 +316,102 @@ class DispatchEnv(gym.Env):
             info: Informations additionnelles
 
         """
-        # ✅ FIX: Validation de l'action avant traitement
-        if not self.action_space.contains(action):
-            return self._invalid_action_penalty()
+        try:
+            # ✅ FIX: Validation de l'action avant traitement
+            if not self.action_space.contains(action):
+                return self._invalid_action_penalty()
 
-        reward = 0
+            reward = 0
 
-        # Action 0 = attendre (ne rien faire)
-        if action == ACTION_ZERO:
-            # === V3: PÉNALISER FORTEMENT L'INACTION ===
-            # Règle business : Toutes courses doivent être assignées rapidement
-            num_unassigned = len([b for b in self.bookings if not b.get("assigned", False)])
-            # ⭐ V3: Pénalité proportionnelle aux bookings non assignés
-            reward = -10 * num_unassigned
-            # Incrémenter idle time pour tous les chauffeurs disponibles
-            for driver in self.drivers:
-                if driver["available"]:
-                    driver["idle_time"] += 1
-        else:
-            # Vérifier validité de l'action avec masquage
-            valid_mask = self._get_valid_actions_mask()
-            if not valid_mask[action]:
-                # Action invalide - pénalité forte
-                reward = -100
-                info = self._get_info()
-                info["invalid_action"] = True
-                info["action_masked"] = True
-                logging.debug("[DispatchEnv] Action invalide %s masquée", action)
+            # Action 0 = attendre (ne rien faire)
+            if action == ACTION_ZERO:
+                # === V3: PÉNALISER FORTEMENT L'INACTION ===
+                # Règle business : Toutes courses doivent être assignées rapidement
+                num_unassigned = len([b for b in self.bookings if not b.get("assigned", False)])
+                # ⭐ V3: Pénalité proportionnelle aux bookings non assignés
+                reward = -10 * num_unassigned
+                # Incrémenter idle time pour tous les chauffeurs disponibles
+                for driver in self.drivers:
+                    if driver["available"]:
+                        driver["idle_time"] += 1
             else:
-                # Action d'assignation valide
-                action_idx = action - 1
-                driver_idx = action_idx // self.max_bookings
-                booking_idx = action_idx % self.max_bookings
-
-                # Vérifications de sécurité pour éviter les index out of range
-                if driver_idx >= len(self.drivers) or booking_idx >= len(self.bookings):
-                    # Action invalide - index out of range
+                # Vérifier validité de l'action avec masquage
+                valid_mask = self._get_valid_actions_mask()
+                if not valid_mask[action]:
+                    # Action invalide - pénalité forte
                     reward = -100
                     info = self._get_info()
                     info["invalid_action"] = True
-                    info["index_out_of_range"] = True
-                    logging.warning(
-                        "[DispatchEnv] Index out of range: driver_idx=%s, booking_idx=%s", driver_idx, booking_idx
-                    )
+                    info["action_masked"] = True
+                    logging.debug("[DispatchEnv] Action invalide %s masquée", action)
                 else:
-                    driver = self.drivers[driver_idx]
-                    booking = self.bookings[booking_idx]
+                    # Action d'assignation valide
+                    action_idx = action - 1
+                    driver_idx = action_idx // self.max_bookings
+                    booking_idx = action_idx % self.max_bookings
 
-                    # Vérifier que le booking n'est pas déjà assigné
-                    if booking.get("assigned", False):
+                    # Vérifications de sécurité pour éviter les index out of range
+                    if driver_idx >= len(self.drivers) or booking_idx >= len(self.bookings):
+                        # Action invalide - index out of range
                         reward = -100
                         info = self._get_info()
                         info["invalid_action"] = True
-                        info["booking_already_assigned"] = True
-                        logging.warning("[DispatchEnv] Booking %s already assigned", booking_idx)
+                        info["index_out_of_range"] = True
+                        logging.warning(
+                            "[DispatchEnv] Index out of range: driver_idx=%s, booking_idx=%s", driver_idx, booking_idx
+                        )
                     else:
-                        # Assigner le booking
-                        reward = self._assign_booking(driver, booking)
+                        driver = self.drivers[driver_idx]
+                        booking = self.bookings[booking_idx]
 
-        # Avancer le temps (5 minutes par step)
-        self.current_time += 5
+                        # Vérifier que le booking n'est pas déjà assigné
+                        if booking.get("assigned", False):
+                            reward = -100
+                            info = self._get_info()
+                            info["invalid_action"] = True
+                            info["booking_already_assigned"] = True
+                            logging.warning("[DispatchEnv] Booking %s already assigned", booking_idx)
+                        else:
+                            # Assigner le booking
+                            reward = self._assign_booking(driver, booking)
 
-        # Générer de nouveaux bookings aléatoirement (pics aux heures de
-        # pointe)
-        new_bookings_prob = self._get_booking_generation_rate()
-        if self.np_random.random() < new_bookings_prob:
-            num_new = self.np_random.randint(1, 4)
-            self._generate_new_bookings(num_new)
+            # Avancer le temps (5 minutes par step)
+            self.current_time += 5
 
-        # Vérifier et retirer les bookings expirés
-        reward += self._check_expired_bookings()
+            # Générer de nouveaux bookings aléatoirement (pics aux heures de
+            # pointe)
+            new_bookings_prob = self._get_booking_generation_rate()
+            if self.np_random.random() < new_bookings_prob:
+                num_new = self.np_random.randint(1, 4)
+                self._generate_new_bookings(num_new)
 
-        # Mise à jour des chauffeurs (complétion de courses)
-        self._update_drivers()
+            # Vérifier et retirer les bookings expirés
+            reward += self._check_expired_bookings()
 
-        # Calculer l'observation
-        observation = self._get_observation()
+            # Mise à jour des chauffeurs (complétion de courses)
+            self._update_drivers()
 
-        # Vérifier si l'épisode est terminé
-        terminated = self.current_time >= (self.simulation_hours * 60)
-        truncated = False
+            # Calculer l'observation
+            observation = self._get_observation()
 
-        # Bonus/pénalité de fin d'épisode
-        if terminated:
-            reward += self._calculate_episode_bonus()
+            # Vérifier si l'épisode est terminé
+            terminated = self.current_time >= (self.simulation_hours * 60)
+            truncated = False
 
-        self.episode_stats["total_reward"] = float(self.episode_stats.get("total_reward", 0.0)) + reward
-        info = self._get_info()
+            # Bonus/pénalité de fin d'épisode
+            if terminated:
+                reward += self._calculate_episode_bonus()
 
-        return observation, reward, terminated, truncated, info
+            self.episode_stats["total_reward"] = float(self.episode_stats.get("total_reward", 0.0)) + reward
+            info = self._get_info()
+
+            return observation, reward, terminated, truncated, info
+        except Exception as e:
+            # ⚠️ Logger l'erreur
+            logging.exception("[DispatchEnv] Erreur dans step: %s", e)
+
+            # Retourner une réponse d'erreur sécurisée
+            return self._error_response(str(e))
 
     def _get_valid_actions_mask(self) -> np.ndarray[Any, np.dtype[np.bool_]]:
         """Retourne un masque des actions valides basé sur les contraintes VRPTW.

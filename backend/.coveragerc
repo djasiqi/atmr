@@ -31,6 +31,16 @@ exclude_lines =
 # ✅ 3.1: Seuils de couverture par module (optionnel)
 # Ces seuils sont utilisés par le script check_coverage.py
 # Modules critiques définis dans scripts/check_coverage.py (CRITICAL_MODULES)
+#
+# Seuils spécifiques par module (selon plan d'audit):
+# - backend/services/unified_dispatch/* : ≥95%
+#   (engine.py, solver.py, heuristics.py, autonomous_manager.py, queue.py, data.py, apply.py, settings.py)
+# - backend/routes/auth.py : ≥95%
+# - backend/services/osrm_client.py : ≥90%
+# - backend/services/rl/dispatch_env.py : ≥85%
+# - Autres modules critiques : ≥80% (seuil par défaut)
+#
+# Vérification automatique via: python scripts/check_coverage.py --coverage-xml coverage.xml
 
 [html]
 directory = htmlcov
