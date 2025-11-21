@@ -83,6 +83,7 @@ def db(app):
 
         # Rollback automatique du savepoint
         _db.session.rollback()
+        _db.session.expire_all()  # ✅ AJOUT: Expirer tous les objets pour forcer le rechargement après rollback
         _db.session.remove()
 
 

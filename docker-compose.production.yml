@@ -19,11 +19,7 @@ services:
     networks:
       - atmr-network
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}",
-        ]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -74,8 +70,13 @@ services:
       FLASK_ENV: production
       FLASK_APP: app.py
 
-      # Base de données
-      DATABASE_URL: postgresql://${POSTGRES_USER:-atmr_user}:${POSTGRES_PASSWORD:-atmr_password}@postgres:5432/${POSTGRES_DB:-atmr_db}
+      # Base de données (variables individuelles pour échappement URL automatique)
+      POSTGRES_USER: ${POSTGRES_USER:-atmr_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atmr_password}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-atmr_db}
+      # DATABASE_URL sera construit par config.py avec échappement URL automatique
 
       # Redis/Celery
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -96,8 +97,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
       # API Configuration
-      API_LEGACY_ENABLED: "false"  # Désactiver API legacy pour éviter conflit endpoint specs
-      API_DOCS: "off"  # Désactiver Swagger UI en production
+      API_LEGACY_ENABLED: "false" # Désactiver API legacy pour éviter conflit endpoint specs
+      API_DOCS: "off" # Désactiver Swagger UI en production
 
       # ML Models
       ML_MODELS_PATH: /app/data/ml
@@ -147,7 +148,13 @@ services:
     environment:
       # Même configuration que le backend
       FLASK_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:-atmr_user}:${POSTGRES_PASSWORD:-atmr_password}@postgres:5432/${POSTGRES_DB:-atmr_db}
+      # Base de données (variables individuelles pour échappement URL automatique)
+      POSTGRES_USER: ${POSTGRES_USER:-atmr_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atmr_password}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-atmr_db}
+      # DATABASE_URL sera construit par config.py avec échappement URL automatique
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
 
@@ -190,7 +197,13 @@ services:
     command: celery -A celery_app.celery beat --loglevel=info
     environment:
       FLASK_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:-atmr_user}:${POSTGRES_PASSWORD:-atmr_password}@postgres:5432/${POSTGRES_DB:-atmr_db}
+      # Base de données (variables individuelles pour échappement URL automatique)
+      POSTGRES_USER: ${POSTGRES_USER:-atmr_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atmr_password}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-atmr_db}
+      # DATABASE_URL sera construit par config.py avec échappement URL automatique
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       LOG_LEVEL: ${LOG_LEVEL:-INFO}

@@ -4,11 +4,12 @@
 Ce script contourne le problème avec rich/flask_limiter en utilisant Alembic directement.
 """
 
-import os
 import sys
+from pathlib import Path
 
 # Ajouter le répertoire parent au path pour les imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+base_path = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(base_path))
 
 from alembic import command
 from alembic.config import Config

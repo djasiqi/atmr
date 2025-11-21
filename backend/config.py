@@ -3,6 +3,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 from typing import ClassVar
+from urllib.parse import quote_plus
 
 # Il est préférable de ne charger les variables d'environnement que si nécessaire
 # from dotenv import load_dotenv
@@ -60,6 +61,34 @@ def _get_secret_from_vault_or_env(
         raise RuntimeError(f"Secret requis non trouvé: {env_key} (Vault path: {vault_path})")
 
     return None
+
+
+def _build_database_url_safe() -> str:
+    """Construit DATABASE_URL depuis variables individuelles avec échappement URL.
+
+    Si DATABASE_URL existe déjà dans l'environnement (depuis Vault ou env),
+    il est utilisé tel quel. Sinon, l'URL est construite depuis les variables
+    individuelles POSTGRES_* avec échappement automatique du mot de passe.
+
+    Returns:
+        URL de connexion PostgreSQL avec mot de passe échappé si nécessaire.
+    """
+    # Vérifier si DATABASE_URL existe déjà
+    db_url = os.getenv("DATABASE_URL")
+    if db_url:
+        return db_url
+
+    # Construire depuis variables individuelles
+    user = os.getenv("POSTGRES_USER", "atmr_user")
+    password = os.getenv("POSTGRES_PASSWORD", "atmr_password")
+    host = os.getenv("POSTGRES_HOST", "postgres")
+    port = os.getenv("POSTGRES_PORT", "5432")
+    db = os.getenv("POSTGRES_DB", "atmr_db")
+
+    # Échapper le mot de passe pour URL (caractères spéciaux comme !, @, #, etc.)
+    password_escaped = quote_plus(password)
+
+    return f"postgresql://{user}:{password_escaped}@{host}:{port}/{db}"
 
 
 class Config:
@@ -176,12 +205,14 @@ class ProductionConfig(Config):
         env_key="MAIL_PASSWORD",
     )
     # ✅ 4.1: Support dynamic secrets Database (via Vault) pour rotation automatique
-    SQLALCHEMY_DATABASE_URI = _get_secret_from_vault_or_env(
+    # Construire DATABASE_URL depuis Vault/env, ou depuis variables individuelles avec échappement
+    _db_url_from_secret = _get_secret_from_vault_or_env(
         vault_path="prod/database/url",
         vault_key="value",
         env_key="DATABASE_URL",
-        required=True,  # Requis en production
+        required=False,  # Pas requis si variables individuelles disponibles
     )
+    SQLALCHEMY_DATABASE_URI = _db_url_from_secret if _db_url_from_secret else _build_database_url_safe()
 
     # ✅ PostgreSQL-specific options
     SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {  # pyright: ignore[reportIncompatibleVariableOverride]

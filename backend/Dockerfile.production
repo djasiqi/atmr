@@ -45,9 +45,9 @@ RUN apt-get update && apt-get upgrade -y && \
 # Copier et installer les dépendances Python
 COPY requirements.txt requirements-rl.txt ./
 RUN python -m pip install --upgrade pip setuptools wheel && \
-    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt && \
+    pip wheel --no-cache-dir --wheel-dir /wheels --root-user-action=ignore -r requirements.txt && \
     (if [ "$WITH_RL" = "true" ] && [ -f requirements-rl.txt ]; then \
-    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-rl.txt; \
+    pip wheel --no-cache-dir --wheel-dir /wheels --root-user-action=ignore -r requirements-rl.txt; \
     else \
     echo "Skip RL wheels (WITH_RL=$WITH_RL)"; \
     fi) && \
@@ -170,7 +170,7 @@ RUN python -m pip install --upgrade pip && \
 
 # Création d'un utilisateur non-root sécurisé
 RUN groupadd -r appgroup && \
-    useradd -r -g appgroup -u 10001 -d /app -s /bin/bash -c "ATMR App User" appuser && \
+    useradd -r -g appgroup -u 999 -d /app -s /bin/bash -c "ATMR App User" appuser && \
     mkdir -p /app/logs /app/data /app/cache && \
     chown -R appuser:appgroup /app
 
@@ -274,4 +274,4 @@ USER appuser
 ENV FLASK_ENV=testing \
     TESTING=true
 
-CMD ["python", "-m", "pytest", "tests/", "-v", "--tb=short"]
+CMD ["sh", "-c", "if [ \"$WITH_RL\" = \"false\" ]; then pytest tests/ -v --tb=short --ignore=tests/rl --ignore=tests/e2e/test_dispatch_e2e.py --ignore=tests/e2e/test_dispatch_metrics_e2e.py; else pytest tests/ -v --tb=short; fi"]

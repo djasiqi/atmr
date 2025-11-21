@@ -26,8 +26,12 @@ from tests.factories import BookingFactory, CompanyFactory, DriverFactory
 def company(db):
     """Créer une entreprise pour les tests."""
     company = CompanyFactory()
-    db.session.flush()  # ✅ FIX: S'assurer que la company est flushée avant utilisation
-    return company
+    db.session.add(company)
+    db.session.flush()  # Force l'assignation de l'ID
+    db.session.refresh(company)  # Recharge depuis DB pour s'assurer que l'ID est disponible
+    # ✅ FIX: S'assurer que la Company est visible dans la session même après rollback défensif
+    # En utilisant merge, on garantit que l'objet est attaché à la session
+    return db.session.merge(company)
 
 
 @pytest.fixture
@@ -159,6 +163,8 @@ class TestDispatchE2E:
         )
 
         # Vérifier que le rollback a fonctionné (aucune assignation partielle)
+        # ✅ FIX: Expirer les objets pour forcer le rechargement après rollback
+        db.session.expire_all()
         # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
         booking1 = db.session.query(Booking).get(booking1.id)
         booking2 = db.session.query(Booking).get(booking2.id)
