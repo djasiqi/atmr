@@ -1734,7 +1734,10 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 
             n_bookings = len(final_assignments)
             assignment_rate = len(final_assignments) / max(len(problem.get("bookings", [])), 1)
-            quality_score = result.get("meta", {}).get("quality_score", 0.0)
+            # Défense en profondeur : result peut être None si le dispatch a échoué
+            quality_score = 0.0
+            if result is not None:
+                quality_score = result.get("meta", {}).get("quality_score", 0.0)
 
             slo_check = check_slo_breach(
                 total_time_sec=perf_metrics.total_time,
@@ -2056,12 +2059,20 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
                 if isinstance(dr_day, date):
                     date_str = dr_day.isoformat()
 
-            notify_dispatch_run_completed(
-                _safe_int(getattr(company, "id", None)) or 0,
-                int(dispatch_run_id),
-                applied_count,
-                date_str,
-            )
+            # Notification défensive : ne doit jamais faire échouer le dispatch
+            try:
+                notify_dispatch_run_completed(
+                    _safe_int(getattr(company, "id", None)) or 0,
+                    int(dispatch_run_id),
+                    applied_count,
+                    date_str,
+                )
+            except Exception:
+                logger.exception(
+                    "[Engine] Erreur notification dispatch_run_completed (dispatch_run_id=%s) - continuation",
+                    dispatch_run_id,
+                )
+                # Ne pas relancer l'exception : les notifications ne doivent pas bloquer le dispatch
             logger.info(
                 "[Engine] Notified dispatch completion: company_id=%s, dispatch_run_id=%s, assignments=%s, date=%s",
                 getattr(company, "id", None),
