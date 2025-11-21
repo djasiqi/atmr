@@ -1,6 +1,7 @@
 # backend/services/notification_service.py
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any, Dict, cast  # <-- ajout de cast
 
 import requests
@@ -123,7 +124,8 @@ def notify_dispatch_run_completed(
             "assignments_count": int(assignments_count),
             "date": date_str,
         }
-        app_logger.info("[notify_dispatch_run_completed] Emitting payload: %s", payload)
+        # ✅ Utiliser json.dumps pour éviter les erreurs de formatage si payload contient des %
+        app_logger.info("[notify_dispatch_run_completed] Emitting payload: %s", json.dumps(payload))
 
         emit_company_event(company_id, "dispatch_run_completed", payload)
         if date_str:

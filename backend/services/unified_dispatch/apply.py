@@ -54,6 +54,7 @@ def _get_scoped_session(db_instance):
         # Dernier recours : utiliser la session principale
         return db_instance.session
 
+
 _Assignment = Any
 
 
@@ -154,6 +155,8 @@ def apply_assignments(
         logger.exception("[Apply] Transaction failed for company_id=%s: %s", company_id, e)
         # Rollback automatique en cas d'erreur
         db.session.rollback()
+        # ✅ FIX: Expirer tous les objets après rollback pour forcer le rechargement
+        db.session.expire_all()
         return {
             "applied": [],
             "skipped": {},
@@ -253,6 +256,11 @@ def _apply_assignments_inner(
 
     for b_id, a in chosen_by_booking.items():
         b = booking_map.get(b_id)
+        # ✅ FIX RC2: Recharger le booking depuis la DB pour éviter problèmes de session
+        if b is None:
+            # Essayer de flush la session pour voir les objets en attente
+            db.session.flush()
+            b = db.session.query(Booking).filter_by(id=b_id, company_id=company_id).first()
         if b is None:
             skipped[b_id] = "booking_not_found_or_wrong_company"
             continue
@@ -449,6 +457,8 @@ def _apply_assignments_inner(
         # Rollback du savepoint en cas d'erreur
         # La transaction principale sera rollbackée par apply_assignments()
         db.session.rollback()
+        # ✅ FIX: Expirer tous les objets après rollback pour forcer le rechargement
+        db.session.expire_all()
         raise  # Propager l'erreur pour que apply_assignments() gère le rollback global
     if dispatch_run_id:
         logger.info("[Apply] Linked %d assignments to dispatch_run_id=%s", len(desired_assignments), dispatch_run_id)

@@ -490,7 +490,7 @@ def create_app(config_name: str | None = None):
 
     # 4) Sécurité (CSP)
     # ✅ FIX: Désactiver HTTPS en mode testing pour éviter les redirections 302 dans les tests E2E
-    if config_name in {"development", "testing"}:
+    if config_name in {"testing", "development"}:
         csp = {
             "default-src": "'self'",
             "script-src": "'self'",
@@ -500,6 +500,7 @@ def create_app(config_name: str | None = None):
         }
         force_https = False
     else:
+        # production
         frontend_url = os.getenv("FRONTEND_URL", "https://www.lirie.ch/")
         csp = {
             "default-src": "'self'",
@@ -547,11 +548,47 @@ def create_app(config_name: str | None = None):
                 ), 200
         return None
 
+    # ✅ FIX RC1: Intercepter /api/v1/prometheus/metrics avant Talisman
+    @app.before_request
+    def _bypass_talisman_for_prometheus_metrics():  # pyright: ignore[reportUnusedFunction]
+        """Court-circuite Talisman pour /api/v1/prometheus/metrics (prometheus scraping sans HTTPS)."""
+        if request.path == "/api/v1/prometheus/metrics":
+            # Vérifier si la requête vient de localhost ou utilise HTTP
+            remote = request.remote_addr or ""
+            host = request.host or ""
+            # Si c'est depuis localhost OU si le schéma est HTTP (pas HTTPS) OU en mode testing, retourner directement
+            if (
+                remote in ("127.0.0.1", "::1", "localhost")
+                or request.scheme == "http"
+                or "localhost" in host
+                or current_app.config.get("TESTING", False)
+            ):
+                # Appeler directement la méthode PrometheusMetrics.get() pour éviter Talisman
+                from routes.prometheus_metrics import PrometheusMetrics
+
+                metrics_resource = PrometheusMetrics()
+                return metrics_resource.get()
+        return None
+
+    # ✅ FIX RC1: Désactiver strict_transport_security et force_https en mode testing
+    # S'assurer que force_https est bien False en testing (force explicitement)
+    if config_name == "testing":
+        force_https = False  # Force explicitement pour testing
+        strict_transport_security = False
+    else:
+        strict_transport_security = config_name != "testing"
+
+    # ✅ FIX RC1: Double vérification pour s'assurer que force_https est False en testing
+    # (au cas où config_name n'est pas "testing" mais FLASK_CONFIG=testing)
+    if app.config.get("TESTING", False) or os.getenv("FLASK_CONFIG") == "testing":
+        force_https = False
+        strict_transport_security = False
+
     talisman = Talisman(
         content_security_policy=csp,
         force_https=force_https,
-        strict_transport_security=True,
-        strict_transport_security_max_age=31536000,  # 1 an
+        strict_transport_security=strict_transport_security,
+        strict_transport_security_max_age=31536000 if strict_transport_security else 0,  # 1 an
     )
     talisman.init_app(app)
 

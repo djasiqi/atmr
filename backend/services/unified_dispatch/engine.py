@@ -227,18 +227,66 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
     perf_collector: performance_metrics.DispatchMetricsCollector | None = None
 
     try:
+        # ✅ FIX RC3: Améliorer la recherche de Company pour gérer les objets flushés
         company: Company | None = Company.query.get(company_id)
+
+        # ✅ FIX RC3: Si pas trouvé, flush et réessayer
+        if not company:
+            db.session.flush()
+            company = Company.query.get(company_id)
+
+        # ✅ FIX RC3: Si toujours pas trouvé, essayer avec filter_by (plus robuste)
+        if not company:
+            company = Company.query.filter_by(id=company_id).first()
+
         if not company:
             logger.warning("[Engine] Company %s introuvable", company_id)
-            # ✅ Standardisation: Utiliser DispatchResult
+            # ✅ FIX RC3: Créer DispatchRun avec status 'failed' pour traçabilité
+            try:
+                day_date = _to_date_ymd(day_str)
+            except ValueError:
+                # Si day_str invalide, utiliser aujourd'hui
+                day_date = datetime.now(UTC).date()
+                logger.warning("[Engine] Invalid day_str=%r, fallback to today for failed DispatchRun", day_str)
+            
+            try:
+                with _begin_tx():
+                    dr_failed: Any = DispatchRun()
+                    dr_failed.company_id = int(company_id)
+                    dr_failed.day = day_date
+                    dr_failed.status = DispatchStatus.FAILED
+                    dr_failed.started_at = datetime.now(UTC)
+                    dr_failed.completed_at = datetime.now(UTC)
+                    dr_failed.created_at = datetime.now(UTC)
+                    dr_failed.config = {"error": f"Company {company_id} introuvable"}
+                    db.session.add(dr_failed)
+                    db.session.flush()
+                    dispatch_run = cast("DispatchRun", dr_failed)
+                    dispatch_run_id = dispatch_run.id if dispatch_run.id else None
+                    logger.info(
+                        "[Engine] Created failed DispatchRun id=%s for company=%s day=%s (company not found)",
+                        dispatch_run_id,
+                        company_id,
+                        day_str,
+                    )
+            except Exception as e:
+                # Si la création échoue (ex: ForeignKey constraint), logger l'erreur mais continuer
+                logger.error(
+                    "[Engine] Failed to create DispatchRun for company=%s: %s",
+                    company_id,
+                    e,
+                )
+                dispatch_run_id = None
+            
+            # ✅ Standardisation: Utiliser DispatchResult avec dispatch_run_id si créé
             return DispatchResult(
-                dispatch_run_id=None,
+                dispatch_run_id=dispatch_run_id,
                 assignments=[],
                 unassigned=[],
                 bookings=[],
                 drivers=[],
-                meta={"reason": "company_not_found", "dispatch_run_id": None},
-                debug={"reason": "company_not_found", "dispatch_run_id": None},
+                meta={"reason": "company_not_found", "dispatch_run_id": dispatch_run_id},
+                debug={"reason": "company_not_found", "dispatch_run_id": dispatch_run_id},
             ).to_dict()
         # 1) Configuration
         s = custom_settings or ud_settings.for_company(company)
@@ -1878,12 +1926,22 @@ def _filter_problem(problem: Dict[str, Any], booking_ids: List[int], s: ud_setti
         company_id = _safe_int(getattr(problem, "company_id", None))
         # repli : utiliser l'objet company reçu en param de run() si nécessaire
         # (on évite un N+1 en DB, mais on reste safe)
-        company_id = getattr(Company.query.get(getattr(problem, "company_id", None)), "id", None)
+        problem_company_id = getattr(problem, "company_id", None)
+        if problem_company_id:
+            # ✅ FIX: S'assurer que la Company est visible dans la session
+            db.session.flush()  # S'assurer que les objets flushés sont visibles
+            company_obj = Company.query.get(problem_company_id)
+            company_id = getattr(company_obj, "id", None) if company_obj else None
+        else:
+            company_id = None
 
     # Propager for_date et dispatch_run_id
     for_date = problem.get("for_date")
     dispatch_run_id = problem.get("dispatch_run_id")
 
+    # ✅ FIX: S'assurer que la Company est visible dans la session
+    if company_id:
+        db.session.flush()  # S'assurer que les objets flushés sont visibles
     company = cast("Company", Company.query.get(company_id))
     result = data.build_vrptw_problem(
         company, new_bookings, drivers, settings=s, base_time=problem.get("base_time"), for_date=problem.get("for_date")
@@ -1968,8 +2026,25 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
                 for error in validation_result["errors"]:
                     logger.error("[Engine]   %s", error)
 
+                # ✅ FIX RC2: Extraire les booking_ids affectés avant rollback
+                affected_booking_ids = []
+                for assignment in assignments:
+                    booking_id = getattr(assignment, "booking_id", None) or (
+                        assignment.get("booking_id") if isinstance(assignment, dict) else None
+                    )
+                    if booking_id:
+                        affected_booking_ids.append(booking_id)
+
                 # Rollback de la transaction
                 db.session.rollback()
+                # ✅ FIX RC2: Expirer tous les objets après rollback pour forcer le rechargement
+                db.session.expire_all()
+
+                # ✅ FIX RC2: Recharger les bookings depuis la DB pour s'assurer qu'ils sont dans l'état d'avant dispatch
+                for booking_id in affected_booking_ids:
+                    booking = db.session.query(Booking).filter_by(id=booking_id).first()
+                    if booking:
+                        db.session.refresh(booking)
 
                 # Lever une exception pour arrêter le dispatch
                 raise ValueError(
@@ -2019,6 +2094,8 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
             logger.exception("[Engine] DB apply failed")
             with suppress(Exception):
                 db.session.rollback()
+                # ✅ FIX: Expirer tous les objets après rollback pour forcer le rechargement
+                db.session.expire_all()
             raise
 
         # 2) Notifications par booking (ne touche pas à la session sauf pour le
