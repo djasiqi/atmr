@@ -128,8 +128,14 @@ def notify_dispatch_run_completed(
         emit_company_event(company_id, "dispatch_run_completed", payload)
         if date_str:
             emit_date_event(date_str, "dispatch_run_completed", payload)
-    except Exception as e:
-        app_logger.error("[notify_dispatch_run_completed] emit failed: %s", e)
+    except Exception:
+        # Utiliser logger.exception pour éviter les erreurs de formatage
+        # (le message d'exception peut contenir des % qui interfèrent avec %s)
+        app_logger.exception(
+            "[notify_dispatch_run_completed] emit failed: company_id=%s dispatch_run_id=%s",
+            company_id,
+            dispatch_run_id,
+        )
 
 
 def notify_dispatcher_optimization_opportunity(opportunity_data: Dict[str, Any]) -> None:
