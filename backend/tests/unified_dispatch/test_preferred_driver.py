@@ -236,7 +236,8 @@ class TestPreferredDriverPropagation:
         mock_bookings,
         app,
     ):
-        """Test: preferred_driver_id non présent dans la liste des drivers disponibles → ignoré."""
+        """Test: preferred_driver_id non présent dans la liste des drivers disponibles →
+        ignoré."""
         # Setup mocks
         mock_get_bookings.return_value = mock_bookings
         mock_get_drivers.return_value = (mock_drivers, [])
@@ -270,9 +271,7 @@ class TestPreferredDriverPropagation:
 class TestPreferredDriverInHeuristics:
     """Tests de l'effet de preferred_driver_id dans l'heuristique."""
 
-    def test_preferred_driver_selected_when_available(
-        self, mock_bookings, mock_drivers
-    ):
+    def test_preferred_driver_selected_when_available(self, mock_bookings, mock_drivers):
         """Test: si preferred_driver_id a de la capacité, il est le seul éligible."""
         problem: Dict[str, Any] = {
             "bookings": mock_bookings[:1],  # Une seule booking
@@ -301,9 +300,7 @@ class TestPreferredDriverInHeuristics:
             logger.info("✅ Driver assigné: %s (préféré: 2)", assigned_driver_id)
             # Note: On ne force pas == 2 car d'autres contraintes peuvent s'appliquer
 
-    def test_preferred_driver_at_capacity_fallback_to_fairness(
-        self, mock_bookings, mock_drivers
-    ):
+    def test_preferred_driver_at_capacity_fallback_to_fairness(self, mock_bookings, mock_drivers):
         """Test: si preferred_driver_id est au cap, on bascule vers équité stricte."""
         problem: Dict[str, Any] = {
             "bookings": mock_bookings,
