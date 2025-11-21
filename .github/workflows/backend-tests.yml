@@ -181,11 +181,24 @@ jobs:
           FLASK_APP: backend.wsgi
         run: |
           cd backend
+          set -o errexit -o nounset -o pipefail -x
           echo "🔄 Exécution des migrations de base de données..."
-          if flask db upgrade heads; then
+          echo "📋 Alembic heads before upgrade:"
+          flask db heads || true
+          # Run the upgrade (use plain 'upgrade' which is more robust)
+          if flask db upgrade; then
             echo "✅ Migrations exécutées avec succès"
           else
             echo "❌ Erreur lors de l'exécution des migrations"
+            echo "---- Diagnostics (upgrade failed) ----"
+            flask db current || true
+            flask db heads || true
+            flask db history | sed -n '1,200p' || true
+            ls -la migrations/versions || true
+            for f in migrations/versions/*.py 2>/dev/null; do
+              echo "---- $f ----"
+              sed -n '1,200p' "$f"
+            done || true
             exit 1
           fi
 
@@ -194,18 +207,26 @@ jobs:
           FLASK_APP: backend.wsgi
         run: |
           cd backend
+          set -o errexit -o nounset -o pipefail -x
           echo "🔍 Vérification de l'état des migrations..."
-          CURRENT_REV=$(flask db current 2>/dev/null | grep -oE '[a-f0-9]{12}' | head -1 || echo "")
+          # Use a more permissive regex to capture full-length revision IDs
+          CURRENT_REV=$(flask db current 2>/dev/null | grep -oE '[a-f0-9]{7,40}' | head -1 || echo "")
           if [ -z "$CURRENT_REV" ]; then
             echo "⚠️  Aucune révision actuelle trouvée"
             flask db current || true
           else
             echo "✅ Base de données à la révision: $CURRENT_REV"
           fi
-          # Vérifier qu'il n'y a pas de migrations en attente
-          HEAD_REV=$(flask db heads 2>/dev/null | grep -oE '[a-f0-9]{12}' | head -1 || echo "")
+          HEAD_REV=$(flask db heads 2>/dev/null | grep -oE '[a-f0-9]{7,40}' | head -1 || echo "")
+          echo "📋 Repo head: $HEAD_REV"
           if [ -n "$HEAD_REV" ] && [ "$CURRENT_REV" != "$HEAD_REV" ]; then
             echo "❌ La base de données n'est pas à jour (actuel: $CURRENT_REV, attendu: $HEAD_REV)"
+            echo "---- Diagnostics (mismatch) ----"
+            flask db current || true
+            flask db heads || true
+            flask db history | sed -n '1,200p' || true
+            echo "Listing migrations/versions:"
+            ls -la migrations/versions || true
             exit 1
           fi
           echo "✅ Base de données à jour"
@@ -347,7 +368,7 @@ jobs:
           # Vérifier vulnérabilités high/critical (bloque si trouvées)
           # Warning si vulnérabilité MEDIUM détectée, Fail si HIGH/CRITICAL
           echo "🔍 Exécution de Bandit avec configuration .bandit..."
-          bandit -r . -c .bandit --severity-level high --confidence-level medium -ll || {
+          bandit -r . -c .bandit --severity-level high --confidence-level medium -v || {
             echo "❌ Vulnérabilités HIGH ou CRITICAL détectées par Bandit"
             exit 1
           }
@@ -499,18 +520,34 @@ jobs:
           FLASK_APP: backend.wsgi
         run: |
           cd backend
-          flask db upgrade heads
+          set -o errexit -o nounset -o pipefail -x
+          echo "🔄 Exécution des migrations de base de données..."
+          echo "📋 Alembic heads before upgrade:"
+          flask db heads || true
+          # Run the upgrade (use plain 'upgrade' which is more robust)
+          if flask db upgrade; then
+            echo "✅ Migrations exécutées avec succès"
+          else
+            echo "❌ Erreur lors de l'exécution des migrations"
+            echo "---- Diagnostics (upgrade failed) ----"
+            flask db current || true
+            flask db heads || true
+            flask db history | sed -n '1,200p' || true
+            ls -la migrations/versions || true
+            exit 1
+          fi
 
       - name: Test rollback (downgrade -1)
         env:
           FLASK_APP: backend.wsgi
         run: |
           cd backend
-          # Obtenir la révision actuelle
-          CURRENT_REV=$(flask db current 2>/dev/null | grep -oE '[a-f0-9]{12}' | head -1 || echo "")
+          set -o errexit -o nounset -o pipefail -x
+          # Obtenir la révision actuelle (regex plus permissif pour IDs complets)
+          CURRENT_REV=$(flask db current 2>/dev/null | grep -oE '[a-f0-9]{7,40}' | head -1 || echo "")
           if [ -n "$CURRENT_REV" ]; then
             # Obtenir l'historique et trouver la révision précédente
-            PREV_REV=$(flask db history | grep -B1 "$CURRENT_REV" | head -1 | grep -oE '[a-f0-9]{12}' || echo "")
+            PREV_REV=$(flask db history | grep -B1 "$CURRENT_REV" | head -1 | grep -oE '[a-f0-9]{7,40}' || echo "")
             if [ -n "$PREV_REV" ] && [ "$PREV_REV" != "$CURRENT_REV" ]; then
               echo "Downgrading from $CURRENT_REV to $PREV_REV"
               flask db downgrade "$PREV_REV"
@@ -520,7 +557,8 @@ jobs:
           else
             echo "⚠️ Aucune révision actuelle trouvée, skip downgrade"
           fi
-          flask db upgrade heads
+          # Re-upgrade après downgrade test
+          flask db upgrade || exit 1
 
       - name: Check for pending migrations
         env:

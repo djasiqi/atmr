@@ -6,12 +6,13 @@ Fournit des fonctions pour échapper HTML/JS et nettoyer les inputs utilisateur.
 import html
 import re
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import urlparse
 
 # Constantes de sécurité
 MAX_STRING_LENGTH = 10000  # Longueur maximale par défaut pour les strings
 MAX_EMAIL_LENGTH = 254  # RFC 5321
 MAX_URL_LENGTH = 2048  # Limite raisonnable pour les URLs
+MIN_CONTROL_CHAR_CODE = 32  # Code ASCII minimum pour caractères non-contrôle (espace)
 HTML_TAG_PATTERN = re.compile(r"<[^>]+>", re.IGNORECASE)
 SCRIPT_TAG_PATTERN = re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
 
@@ -41,15 +42,16 @@ def escape_js(text: str | None) -> str | None:
     """
     if text is None:
         return None
-    text_str = str(text)
     # Échapper les caractères spéciaux JS
+    text_str = str(text)
     text_str = text_str.replace("\\", "\\\\")
     text_str = text_str.replace("'", "\\'")
     text_str = text_str.replace('"', '\\"')
     text_str = text_str.replace("\n", "\\n")
     text_str = text_str.replace("\r", "\\r")
-    text_str = text_str.replace("\t", "\\t")
-    return text_str
+    # Dernière transformation avant return (RET504 : assignment avant return nécessaire ici
+    # car on fait plusieurs transformations successives)
+    return text_str.replace("\t", "\\t")
 
 
 def sanitize_string(
@@ -173,8 +175,7 @@ def strip_control_characters(text: str | None) -> str | None:
 
     text_str = str(text)
     # Garder \n, \r, \t, supprimer les autres caractères de contrôle
-    cleaned = "".join(char for char in text_str if ord(char) >= 32 or char in "\n\r\t")
-    return cleaned
+    return "".join(char for char in text_str if ord(char) >= MIN_CONTROL_CHAR_CODE or char in "\n\r\t")
 
 
 def sanitize_integer(value: Any, min_val: int | None = None, max_val: int | None = None) -> int | None:
@@ -205,9 +206,7 @@ def sanitize_integer(value: Any, min_val: int | None = None, max_val: int | None
     return int_val
 
 
-def sanitize_float(
-    value: Any, min_val: float | None = None, max_val: float | None = None
-) -> float | None:
+def sanitize_float(value: Any, min_val: float | None = None, max_val: float | None = None) -> float | None:
     """Valide et convertit une valeur en float avec limites.
 
     Args:
@@ -233,4 +232,3 @@ def sanitize_float(
         return None
 
     return float_val
-
