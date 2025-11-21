@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FutureTimeoutError
@@ -21,7 +20,6 @@ from flask_jwt_extended import jwt_required
 from flask_restx import Namespace, Resource, fields
 from marshmallow import INCLUDE, Schema, validate
 from marshmallow import fields as ma_fields
-from werkzeug.exceptions import UnprocessableEntity
 
 from ext import db, limiter, role_required
 from models import Assignment, AssignmentStatus, Booking, BookingStatus, Client, Company, DispatchRun, Driver, UserRole
@@ -522,8 +520,23 @@ class CompanyDispatchRun(Resource):
         body: Dict[str, Any] = request.get_json(force=True) or {}
         logger.info("[Dispatch] /run body: %s", body)
 
-        requested_mode = (body.get("mode") or "").strip().lower() or None
-        final_mode = (body.get("finalMode") or body.get("final_mode") or "").strip().lower() or None
+        # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+        from marshmallow import ValidationError
+
+        from schemas.dispatch_schemas import DispatchRunRequestSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+
+        try:
+            validated_data = validate_request(DispatchRunRequestSchema(), body, strict=False)
+        except ValidationError as e:
+            return handle_validation_error(e)
+
+        requested_mode = (validated_data.get("mode") or "").strip().lower() if validated_data.get("mode") else None
+        final_mode = (
+            (validated_data.get("finalMode") or validated_data.get("final_mode") or "").strip().lower()
+            if (validated_data.get("finalMode") or validated_data.get("final_mode"))
+            else None
+        )
         if requested_mode not in {None, "auto", "heuristic_only", "solver_only"}:
             requested_mode = None
         if final_mode and final_mode not in {"auto", "heuristic_only", "solver_only"}:
@@ -532,19 +545,8 @@ class CompanyDispatchRun(Resource):
         if effective_mode == "semi_auto":
             effective_mode = "heuristic_only"
 
-        # --- Validation with Marshmallow
-        schema = DispatchRunSchema()
-        errors = schema.validate(body)
-        if errors:
-            dispatch_ns.abort(400, f"Paramètres invalides: {errors}")
-
-        # --- Validation for_date: doit matcher YYYY-MM-DD (double sécurité)
-        for_date = body.get("for_date")
-        if not for_date:
-            dispatch_ns.abort(400, "for_date manquant (YYYY-MM-DD). Utilisez plutôt POST /company_dispatch/run.")
-        if not re.match(r"^\d{4}-\d{2}-\d{2}$", str(for_date)):
-            msg = "for_date invalide: attendu 'YYYY-MM-DD' (ex: 2025-09-22)"
-            raise UnprocessableEntity(msg)
+        # for_date est déjà validé par DispatchRunRequestSchema (format YYYY-MM-DD)
+        for_date = validated_data.get("for_date")
 
         # --- Récupérer l'entreprise courante + id int safe (évite Column[int])
         company = _get_current_company()
@@ -552,20 +554,20 @@ class CompanyDispatchRun(Resource):
         company_id: int = _cid if isinstance(_cid, int) else int(cast("Any", _cid))
 
         # --- Mode async ou sync (unifié)
-        # La validation Marshmallow garantit que 'async' est présent avec défaut True
-        is_async = body.get("async", True)
+        # La validation Marshmallow garantit que 'async_mode' est présent avec défaut True
+        is_async = validated_data.get("async_mode", True)
 
-        mode = effective_mode or body.get("mode")
+        mode = effective_mode or validated_data.get("mode")
 
         # --- Paramètres
-        allow_emergency_val = body.get("allow_emergency")
+        allow_emergency_val = validated_data.get("allow_emergency")
         allow_emergency = bool(allow_emergency_val) if allow_emergency_val is not None else None
 
         params = {
             "company_id": company_id,
             "for_date": for_date,
             "mode": mode,
-            "regular_first": bool(body.get("regular_first", True)),
+            "regular_first": bool(validated_data.get("regular_first", True)),
             "allow_emergency": allow_emergency,
         }
 
@@ -575,7 +577,7 @@ class CompanyDispatchRun(Resource):
         elif mode:
             params["mode"] = mode
 
-        overrides = body.get("overrides")
+        overrides = validated_data.get("overrides")
         if overrides:
             params["overrides"] = overrides
 

@@ -1428,7 +1428,14 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
                     continue
 
                 # À ce point, existing_booking est défini (sinon on aurait fait continue)
-                assert existing_booking is not None, "existing_booking should be defined here"
+                # ✅ FIX: Éviter assert en production (remplacé par vérification explicite)
+                # Défense en profondeur : vérification explicite pour éviter AttributeError si None en production
+                # Note: Le type checker considère cette vérification inatteignable, mais elle reste nécessaire
+                # pour la robustesse en production (le assert original servait le même but)
+                if existing_booking is None:  # pyright: ignore[reportUnnecessaryComparison]
+                    error_msg = "existing_booking should be defined here"
+                    logger.error("[Heuristics] %s", error_msg)
+                    raise ValueError(error_msg)
                 # Vérifier si regroupement possible
                 if _can_be_pooled(b, existing_booking, settings):
                     can_pool = True

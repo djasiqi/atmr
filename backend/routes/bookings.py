@@ -219,7 +219,7 @@ class CreateBooking(Resource):
     @role_required(UserRole.client)
     @limiter.limit("50 per hour")  # ✅ 2.8: Rate limiting création réservations
     @bookings_ns.expect(booking_create_model)
-    def post(self, public_id):
+    def post(self, public_id):  # noqa: PLR0911
         """Créer une réservation pour un client (statut PENDING)."""
         try:
             data = request.get_json() or {}
@@ -236,8 +236,10 @@ class CreateBooking(Resource):
             user, client, auth_error = _validate_user_and_client(public_id)
             if auth_error:
                 return auth_error
-            assert user is not None  # Pour le type checker
-            assert client is not None  # Pour le type checker
+            # Défense en profondeur : vérification explicite pour éviter AttributeError si None en production
+            if user is None or client is None:
+                app_logger.error("[Bookings] user or client is None after validation (should not happen)")
+                return {"error": "Erreur interne d'authentification"}, 500
 
             # Horaire et distance
             from shared.time_utils import parse_local_naive

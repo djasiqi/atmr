@@ -18,7 +18,7 @@ on:
 
 jobs:
   lint:
-    name: Lint (Ruff + MyPy + Vulture)
+    name: Lint (Ruff + MyPy + Flake8 + Vulture)
     runs-on: ubuntu-latest
 
     steps:
@@ -41,7 +41,7 @@ jobs:
         run: |
           cd backend
           python -m pip install --upgrade pip
-          pip install ruff mypy vulture
+          pip install ruff mypy vulture flake8
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
@@ -56,13 +56,16 @@ jobs:
           cd backend
           ruff format .
 
+      - name: Flake8 check
+        run: cd backend
+          flake8 .
+
       - name: MyPy type check
         run: |
           cd backend
           mypy --install-types --non-interactive --ignore-missing-imports \
             --explicit-package-bases \
             models/ routes/ services/ tasks/ shared/
-        continue-on-error: true # MyPy strict peut être activé progressivement
 
       - name: Check dead code (vulture)
         run: |
@@ -71,7 +74,6 @@ jobs:
             --min-confidence 80 \
             --sort-by-size \
             --exclude venv,__pycache__,migrations,htmlcov,.pytest_cache,temp_*,instance,uploads,static/qrcodes,scripts/profiling,data/ml,data/rl
-        continue-on-error: true # Continue même si du code mort est détecté (alerte uniquement)
 
   test:
     name: Tests (pytest)
@@ -179,7 +181,34 @@ jobs:
           FLASK_APP: backend.wsgi
         run: |
           cd backend
-          flask db upgrade heads
+          echo "🔄 Exécution des migrations de base de données..."
+          if flask db upgrade heads; then
+            echo "✅ Migrations exécutées avec succès"
+          else
+            echo "❌ Erreur lors de l'exécution des migrations"
+            exit 1
+          fi
+
+      - name: Verify database migrations
+        env:
+          FLASK_APP: backend.wsgi
+        run: |
+          cd backend
+          echo "🔍 Vérification de l'état des migrations..."
+          CURRENT_REV=$(flask db current 2>/dev/null | grep -oE '[a-f0-9]{12}' | head -1 || echo "")
+          if [ -z "$CURRENT_REV" ]; then
+            echo "⚠️  Aucune révision actuelle trouvée"
+            flask db current || true
+          else
+            echo "✅ Base de données à la révision: $CURRENT_REV"
+          fi
+          # Vérifier qu'il n'y a pas de migrations en attente
+          HEAD_REV=$(flask db heads 2>/dev/null | grep -oE '[a-f0-9]{12}' | head -1 || echo "")
+          if [ -n "$HEAD_REV" ] && [ "$CURRENT_REV" != "$HEAD_REV" ]; then
+            echo "❌ La base de données n'est pas à jour (actuel: $CURRENT_REV, attendu: $HEAD_REV)"
+            exit 1
+          fi
+          echo "✅ Base de données à jour"
 
       - name: Run pytest with coverage
         run: |
@@ -310,10 +339,19 @@ jobs:
       - name: Run Bandit (SAST)
         run: |
           cd backend
-          # Générer rapport JSON (ne bloque pas)
-          bandit -r . -f json -o ../artifacts/bandit.json --severity-level high --confidence-level medium || true
+          # Utiliser la configuration .bandit pour exclusions
+          # Générer rapport JSON pour artefacts (ne bloque pas)
+          bandit -r . -c .bandit -f json -o ../artifacts/bandit.json || true
+          # Générer rapport HTML pour visualisation (ne bloque pas)
+          bandit -r . -c .bandit -f html -o ../artifacts/bandit.html || true
           # Vérifier vulnérabilités high/critical (bloque si trouvées)
-          bandit -r . --severity-level high --confidence-level medium -q
+          # Warning si vulnérabilité MEDIUM détectée, Fail si HIGH/CRITICAL
+          echo "🔍 Exécution de Bandit avec configuration .bandit..."
+          bandit -r . -c .bandit --severity-level high --confidence-level medium -ll || {
+            echo "❌ Vulnérabilités HIGH ou CRITICAL détectées par Bandit"
+            exit 1
+          }
+          echo "✅ Aucune vulnérabilité HIGH ou CRITICAL détectée"
         continue-on-error: false
 
       - name: Run Semgrep (OWASP rules)
@@ -363,6 +401,14 @@ jobs:
         with:
           name: security-reports
           path: artifacts/*.json
+          retention-days: 30
+
+      - name: Upload Bandit HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-html-report
+          path: artifacts/bandit.html
           retention-days: 30
 
   migrations:

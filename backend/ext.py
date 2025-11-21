@@ -4,7 +4,7 @@
 import logging
 import os
 from functools import wraps
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 import redis
 from flask import abort, jsonify, request
@@ -184,6 +184,42 @@ def check_if_token_revoked(_jwt_header, jwt_payload):
         return is_token_blacklisted(jti=jti)
 
     return False
+
+
+# ✅ Hardening JWT: Validation explicite de l'audience (défense en profondeur)
+@jwt.additional_claims_loader
+def add_claims_to_access_token(_identity):
+    """Ajoute des claims supplémentaires au token (déjà fait dans auth.py, mais défense en profondeur).
+
+    Args:
+        _identity: Identité de l'utilisateur (non utilisé, mais requis par Flask-JWT-Extended)
+    """
+    # Les claims sont déjà ajoutés dans auth.py lors de la création du token
+    # Ce callback est optionnel mais peut servir de vérification supplémentaire
+    return {}
+
+
+def validate_jwt_audience(jwt_payload: dict[str, Any]) -> bool:
+    """Valide que l'audience du token JWT correspond à l'audience attendue.
+
+    Args:
+        jwt_payload: Payload JWT décodé
+
+    Returns:
+        True si l'audience est valide, False sinon
+    """
+    expected_audience = "atmr-api"
+    token_audience = jwt_payload.get("aud")
+
+    if not token_audience:
+        app_logger.warning("[JWT Security] Token sans claim 'aud' (audience)")
+        return False
+
+    if token_audience != expected_audience:
+        app_logger.warning("[JWT Security] Audience invalide: %s (attendu: %s)", token_audience, expected_audience)
+        return False
+
+    return True
 
 
 #  Decorator role_required

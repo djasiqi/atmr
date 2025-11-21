@@ -99,12 +99,25 @@ class RotationHistory(Resource):
     def get(self):
         """Récupère l'historique des rotations de secrets."""
         try:
-            # Récupérer les paramètres de requête
-            secret_type = request.args.get("secret_type", type=str)
-            status = request.args.get("status", type=str)
-            environment = request.args.get("environment", type=str)
-            limit = min(request.args.get("limit", 50, type=int), 100)  # Max 100
-            offset = max(request.args.get("offset", 0, type=int), 0)
+            # ✅ 2.4: Validation Marshmallow des query parameters
+            from marshmallow import ValidationError
+
+            from schemas.secret_rotation_schemas import SecretRotationMonitoringQuerySchema
+            from schemas.validation_utils import handle_validation_error, validate_query_params
+
+            try:
+                validated_params = validate_query_params(
+                    SecretRotationMonitoringQuerySchema(), request.args, strict=False
+                )
+            except ValidationError as e:
+                return handle_validation_error(e)
+
+            # Utiliser les paramètres validés
+            secret_type = validated_params.get("secret_type")
+            status = validated_params.get("status")
+            environment = validated_params.get("environment")
+            limit = validated_params.get("limit", 50)
+            offset = validated_params.get("offset", 0)
 
             # Récupérer l'historique
             rotations, total = get_rotation_history(

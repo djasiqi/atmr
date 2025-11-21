@@ -207,15 +207,22 @@ class ClientBookings(Resource):
             if not client:
                 return {"error": "Client profile not found"}, 404
 
-            data = request.get_json()
-            required_fields = ["pickup_location", "dropoff_location", "scheduled_time"]
+            data = request.get_json() or {}
 
-            if not data or any(field not in data for field in required_fields):
-                return {"error": "Missing required fields"}, 400
+            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+            from marshmallow import ValidationError
+
+            from schemas.booking_schemas import BookingCreateSchema
+            from schemas.validation_utils import handle_validation_error, validate_request
+
+            try:
+                validated_data = validate_request(BookingCreateSchema(), data, strict=False)
+            except ValidationError as e:
+                return handle_validation_error(e)
 
             # Validation du format de date et de l'heure future
             try:
-                dt = datetime.fromisoformat(data["scheduled_time"])
+                dt = datetime.fromisoformat(validated_data["scheduled_time"])
                 scheduled_time = dt if dt.tzinfo else dt.replace(tzinfo=UTC)
                 if dt.tzinfo:
                     scheduled_time = dt.astimezone(UTC)
@@ -225,13 +232,13 @@ class ClientBookings(Resource):
             if scheduled_time <= datetime.now(UTC):
                 return {"error": "Scheduled time must be in the future"}, 400
 
-            # Création de la réservation
+            # Création de la réservation avec données validées
             new_booking = cast("Any", Booking)(
                 customer_name=f"{client.user.first_name} {client.user.last_name}",
-                pickup_location=data.get("pickup_location"),
-                dropoff_location=data["dropoff_location"],
+                pickup_location=validated_data["pickup_location"],
+                dropoff_location=validated_data["dropoff_location"],
                 scheduled_time=scheduled_time,
-                amount=data.get("amount", 10),
+                amount=validated_data.get("amount", 10),
                 user_id=current_user.id,
                 client_id=client.id,
                 status=BookingStatus.PENDING,

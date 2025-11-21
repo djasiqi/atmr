@@ -308,7 +308,19 @@ def clear_alert_history():
     """
     try:
         data = request.get_json() or {}
-        booking_id = data.get("booking_id")
+
+        # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+        from marshmallow import ValidationError
+
+        from schemas.alert_schemas import ClearAlertHistorySchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+
+        try:
+            validated_data = validate_request(ClearAlertHistorySchema(), data, strict=False)
+        except ValidationError as e:
+            return handle_validation_error(e)
+
+        booking_id = validated_data.get("booking_id")
 
         # Nettoyer l'historique
         alerts_service.clear_alert_history(booking_id)

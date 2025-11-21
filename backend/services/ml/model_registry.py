@@ -225,14 +225,14 @@ class ModelRegistry:
         return model_path
 
     def _calculate_checksum(self, file_path: Path) -> str:
-        """Calcule le checksum d'un fichier."""
+        """Calcule le checksum d'un fichier (SHA-256 au lieu de MD5 pour meilleures pratiques)."""
         import hashlib
 
-        hash_md5 = hashlib.md5(usedforsecurity=False)
+        hash_sha256 = hashlib.sha256()
         with file_path.open("rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
-                hash_md5.update(chunk)
-        return hash_md5.hexdigest()
+                hash_sha256.update(chunk)
+        return hash_sha256.hexdigest()
 
     def get_model_versions(self, model_name: str, model_arch: str) -> List[Dict[str, Any]]:
         """Obtient toutes les versions d'un modèle.

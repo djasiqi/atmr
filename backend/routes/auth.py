@@ -1,5 +1,4 @@
 import logging
-from datetime import timedelta
 from typing import cast
 
 import sentry_sdk  # CORRECTION : Importer directement
@@ -15,6 +14,14 @@ from ext import db, limiter, mail
 from models import Client, User, UserRole
 from schemas.auth_schemas import LoginSchema, RegisterSchema
 from schemas.validation_utils import handle_validation_error, validate_request
+from security.audit_log import AuditLogger
+from security.security_metrics import (
+    security_login_attempts_total,
+    security_login_failures_total,
+    security_logout_total,
+    security_token_refreshes_total,
+)
+from shared.logging_utils import mask_email
 
 app_logger = logging.getLogger("app")
 
@@ -109,6 +116,24 @@ class Login(Resource):
 
             user = User.query.filter_by(email=email).first()
             if not user or not user.check_password(password):
+                # ✅ Priorité 7: Audit logging pour login échoué
+                try:
+                    AuditLogger.log_action(
+                        action_type="login_failed",
+                        action_category="security",
+                        user_type="unknown",
+                        result_status="failure",
+                        result_message="Email ou mot de passe invalide",
+                        action_details={"email": mask_email(email), "reason": "invalid_credentials"},
+                        ip_address=request.remote_addr,
+                        user_agent=request.headers.get("User-Agent"),
+                    )
+                    # ✅ Priorité 7: Métriques Prometheus pour login échoué
+                    security_login_attempts_total.labels(type="failed").inc()
+                    security_login_failures_total.inc()
+                except Exception as audit_error:
+                    # Ne pas bloquer la réponse si l'audit logging échoue
+                    app_logger.warning("Échec audit logging login_failed: %s", audit_error)
                 return {"error": "Email ou mot de passe invalide."}, 401
 
             # Création du token avec le rôle dans additional_claims
@@ -123,11 +148,35 @@ class Login(Resource):
                 identity=str(user.public_id),
                 # ⚠️ ID numérique attendu par dispatch_routes
                 additional_claims=claims,
-                expires_delta=timedelta(hours=1),
+                expires_delta=current_app.config["JWT_ACCESS_TOKEN_EXPIRES"],
             )
 
-            # Création du refresh token (valide 30 jours)
-            refresh_token = create_refresh_token(identity=str(user.public_id), expires_delta=timedelta(days=30))
+            # Création du refresh token (durée configurée dans JWT_REFRESH_TOKEN_EXPIRES)
+            refresh_token = create_refresh_token(
+                identity=str(user.public_id), expires_delta=current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
+            )
+
+            # ✅ Priorité 7: Audit logging pour login réussi
+            try:
+                AuditLogger.log_action(
+                    action_type="login_success",
+                    action_category="security",
+                    user_id=user.id,
+                    user_type=user.role.value if user.role else "unknown",
+                    result_status="success",
+                    action_details={
+                        "email": mask_email(email),
+                        "username": user.username,
+                        "role": user.role.value if user.role else None,
+                    },
+                    ip_address=request.remote_addr,
+                    user_agent=request.headers.get("User-Agent"),
+                )
+                # ✅ Priorité 7: Métrique Prometheus pour login réussi
+                security_login_attempts_total.labels(type="success").inc()
+            except Exception as audit_error:
+                # Ne pas bloquer le login si l'audit logging échoue
+                app_logger.warning("Échec audit logging login_success: %s", audit_error)
 
             return {
                 "message": "Connexion réussie",
@@ -146,6 +195,21 @@ class Login(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
             app_logger.error("❌ ERREUR login: %s - %s", type(e).__name__, str(e))
+            # ✅ Priorité 7: Audit logging pour erreur interne login
+            try:
+                data = request.get_json() or {}
+                AuditLogger.log_action(
+                    action_type="login_error",
+                    action_category="security",
+                    user_type="unknown",
+                    result_status="failure",
+                    result_message=f"Erreur interne: {type(e).__name__}",
+                    action_details={"email": mask_email(data.get("email", "")) if data else ""},
+                    ip_address=request.remote_addr,
+                    user_agent=request.headers.get("User-Agent"),
+                )
+            except Exception:
+                pass  # Ignorer les erreurs d'audit logging dans le gestionnaire d'erreurs
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -173,8 +237,27 @@ class RefreshToken(Resource):
                 "aud": "atmr-api",  # Audience claim pour sécurité
             }
             new_token = create_access_token(
-                identity=str(user.public_id), additional_claims=claims, expires_delta=timedelta(hours=1)
+                identity=str(user.public_id),
+                additional_claims=claims,
+                expires_delta=current_app.config["JWT_ACCESS_TOKEN_EXPIRES"],
             )
+
+            # ✅ Priorité 7: Audit logging pour token refresh
+            try:
+                AuditLogger.log_action(
+                    action_type="token_refresh",
+                    action_category="security",
+                    user_id=user.id,
+                    user_type=user.role.value if user.role else "unknown",
+                    result_status="success",
+                    ip_address=request.remote_addr,
+                    user_agent=request.headers.get("User-Agent"),
+                )
+                # ✅ Priorité 7: Métrique Prometheus pour token refresh
+                security_token_refreshes_total.inc()
+            except Exception as audit_error:
+                app_logger.warning("Échec audit logging token_refresh: %s", audit_error)
+
             return {"access_token": new_token}, 200
 
         except Exception as e:
@@ -204,7 +287,28 @@ class Logout(Resource):
         try:
             from security.token_blacklist import revoke_token
 
+            # ✅ Priorité 7: Récupérer user_id pour audit logging
+            current_user_id = get_jwt_identity()
+            user = None
+            if current_user_id:
+                user = User.query.filter_by(public_id=current_user_id).first()
+
             if revoke_token():
+                # ✅ Priorité 7: Audit logging pour logout réussi
+                try:
+                    AuditLogger.log_action(
+                        action_type="logout",
+                        action_category="security",
+                        user_id=user.id if user else None,
+                        user_type=user.role.value if user and user.role else "unknown",
+                        result_status="success",
+                        ip_address=request.remote_addr,
+                        user_agent=request.headers.get("User-Agent"),
+                    )
+                    # ✅ Priorité 7: Métrique Prometheus pour logout
+                    security_logout_total.inc()
+                except Exception as audit_error:
+                    app_logger.warning("Échec audit logging logout: %s", audit_error)
                 return {"message": "Déconnexion réussie"}, 200
             return {"error": "Impossible de révoquer le token"}, 500
 

@@ -165,3 +165,37 @@ class DriverCreateSchema(Schema):
     vehicle_assigned = fields.Str(required=True, validate=validate.Length(min=1, max=100))
     brand = fields.Str(required=True, validate=validate.Length(min=1, max=100))
     license_plate = fields.Str(required=True, validate=validate.Length(min=1, max=20))
+
+
+class DriverVacationCreateSchema(Schema):
+    """Schema pour création de congés/vacances (POST /api/companies/me/drivers/<id>/vacations)."""
+
+    start_date = fields.Str(
+        required=True,
+        validate=validate.Regexp(ISO8601_DATE_REGEX, error="start_date doit être au format YYYY-MM-DD"),
+    )
+    end_date = fields.Str(
+        required=True,
+        validate=validate.Regexp(ISO8601_DATE_REGEX, error="end_date doit être au format YYYY-MM-DD"),
+    )
+    vacation_type = fields.Str(
+        validate=validate.OneOf(["VACANCES", "CONGE", "MALADIE", "AUTRE"], error="vacation_type invalide"),
+        load_default="VACANCES",
+    )
+
+
+class VehicleUpdateSchema(Schema):
+    """Schema pour mise à jour de véhicule (PUT /api/companies/me/vehicles/<id>)."""
+
+    brand = fields.Str(validate=validate.Length(min=1, max=100))
+    model = fields.Str(validate=validate.Length(max=100))
+    license_plate = fields.Str(validate=validate.Length(min=1, max=20))
+    color = fields.Str(validate=validate.Length(max=50))
+    year = fields.Int(validate=validate.Range(min=1900, max=2100))
+    seats = fields.Int(validate=validate.Range(min=1, max=50))
+    is_wheelchair_accessible = fields.Bool()
+    is_active = fields.Bool()
+    notes = fields.Str(validate=validate.Length(max=1000), allow_none=True)
+
+    class Meta:  # type: ignore
+        unknown = "INCLUDE"  # Permettre des champs supplémentaires

@@ -25,6 +25,7 @@ from services.osrm_client import build_distance_matrix_osrm_with_cb as build_dis
 from services.osrm_client import eta_seconds as osrm_eta_seconds
 from services.unified_dispatch.heuristics import baseline_and_cap_loads, haversine_minutes
 from services.unified_dispatch.settings import Settings, driver_work_window_from_config
+from shared import safe_execute
 from shared.time_utils import day_local_bounds, now_local, parse_local_naive
 
 # Constantes pour éviter les valeurs magiques
@@ -175,6 +176,7 @@ def _haversine_matrix_cached(coords_key_json: str, avg_speed_kmh: float) -> List
 # ============================================================
 
 
+@safe_execute(default_return=[], log_error=True)
 def get_bookings_for_dispatch(company_id: int, horizon_minutes: int) -> List[Booking]:
     now_ts = now_local()
     horizon_local = now_ts + timedelta(minutes=horizon_minutes)
@@ -234,6 +236,7 @@ def get_bookings_for_dispatch(company_id: int, horizon_minutes: int) -> List[Boo
     return filtered_bookings
 
 
+@safe_execute(default_return=[], log_error=True)
 def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
     """Improved version of get_bookings_for_day that handles both timezone-aware and naive datetimes.
 
@@ -411,6 +414,7 @@ def get_available_drivers(company_id: int) -> List[Driver]:
     return drivers
 
 
+@safe_execute(default_return=([], []), log_error=True)
 def get_available_drivers_split(company_id: int) -> tuple[List[Driver], List[Driver]]:
     """Retourne (réguliers, urgences) à partir du pool actif & dispo.
     Tolérant si driver_type est un Enum OU une chaîne ("regular"/"REGULAR"/...).
@@ -1177,11 +1181,15 @@ def build_vrptw_problem(
         s_min, e_min = _clamp_range(int(s_raw), int(e_raw), horizon)
         driver_windows.append((int(s_min), int(e_min)))
 
-    # (Optionnel) petits garde-fous
-    assert len(time_windows) == TW_THRESHOLD * len(bookings), "TW != TW_THRESHOLD par booking"
-    assert len(service_times) == SERVICE_TIMES_THRESHOLD * len(bookings), (
-        "service_times != SERVICE_TIMES_THRESHOLD par booking"
-    )
+    # (Optionnel) petits garde-fous - vérification explicite pour éviter désactivation avec -O
+    if len(time_windows) != TW_THRESHOLD * len(bookings):
+        error_msg = f"TW != TW_THRESHOLD par booking: {len(time_windows)} != {TW_THRESHOLD * len(bookings)}"
+        logger.error("[VRPTW] %s", error_msg)
+        raise ValueError(error_msg)
+    if len(service_times) != SERVICE_TIMES_THRESHOLD * len(bookings):
+        error_msg = f"service_times != SERVICE_TIMES_THRESHOLD par booking: {len(service_times)} != {SERVICE_TIMES_THRESHOLD * len(bookings)}"
+        logger.error("[VRPTW] %s", error_msg)
+        raise ValueError(error_msg)
 
     booking_factors = [float(getattr(b, "_coord_quality_factor", 1.0) or 1.0) for b in bookings]
     booking_labels = [getattr(b, "_coord_quality_label", "original") for b in bookings]
