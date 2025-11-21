@@ -25,6 +25,7 @@ h11>=0.14.0
 
 # ========== Database ==========
 psycopg[binary]>=3.1,<4
+psycopg2-binary>=2.9.0  # Compatibilité SQLAlchemy (dialecte postgresql://)
 SQLAlchemy>=2.0.0
 SQLAlchemy-Utils>=0.40.0
 
