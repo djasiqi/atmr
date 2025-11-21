@@ -112,7 +112,12 @@ class TestPreferredDriverPropagation:
 
         # Appel build_problem_data dans un contexte Flask
         with app.app_context():
-            problem = data.build_problem_data(company_id=1, settings=Settings(), for_date=None, overrides=overrides)
+            problem = data.build_problem_data(
+                company_id=1,
+                settings=Settings(),
+                for_date=None,
+                overrides=overrides,
+            )
 
         # Vérifications
         assert "preferred_driver_id" in problem
@@ -154,7 +159,12 @@ class TestPreferredDriverPropagation:
 
         # Appel build_problem_data dans un contexte Flask
         with app.app_context():
-            problem = data.build_problem_data(company_id=1, settings=Settings(), for_date=None, overrides=overrides)
+            problem = data.build_problem_data(
+                company_id=1,
+                settings=Settings(),
+                for_date=None,
+                overrides=overrides,
+            )
 
         assert "preferred_driver_id" in problem
         assert problem["preferred_driver_id"] is None
@@ -192,13 +202,23 @@ class TestPreferredDriverPropagation:
         # Test avec valeur 0
         overrides = {"preferred_driver_id": 0}
         with app.app_context():
-            problem = data.build_problem_data(company_id=1, settings=Settings(), for_date=None, overrides=overrides)
+            problem = data.build_problem_data(
+                company_id=1,
+                settings=Settings(),
+                for_date=None,
+                overrides=overrides,
+            )
         assert problem["preferred_driver_id"] is None
 
         # Test avec None
         overrides = {"preferred_driver_id": None}
         with app.app_context():
-            problem = data.build_problem_data(company_id=1, settings=Settings(), for_date=None, overrides=overrides)
+            problem = data.build_problem_data(
+                company_id=1,
+                settings=Settings(),
+                for_date=None,
+                overrides=overrides,
+            )
         assert problem["preferred_driver_id"] is None
 
     @patch("services.unified_dispatch.data.get_bookings_for_dispatch")
@@ -236,7 +256,12 @@ class TestPreferredDriverPropagation:
         overrides = {"preferred_driver_id": 999}
 
         with app.app_context():
-            problem = data.build_problem_data(company_id=1, settings=Settings(), for_date=None, overrides=overrides)
+            problem = data.build_problem_data(
+                company_id=1,
+                settings=Settings(),
+                for_date=None,
+                overrides=overrides,
+            )
 
         # Le preferred_driver_id devrait être None car le driver 999 n'existe pas
         assert problem["preferred_driver_id"] is None
@@ -295,4 +320,7 @@ class TestPreferredDriverInHeuristics:
         result = heuristics.assign(problem, settings=settings)
 
         # Le driver préféré étant au cap, d'autres drivers devraient être utilisés
-        logger.info("✅ Assignations avec driver préféré au cap: %s", len(result.assignments))
+        logger.info(
+            "✅ Assignations avec driver préféré au cap: %s",
+            len(result.assignments),
+        )
