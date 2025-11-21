@@ -7,7 +7,7 @@ import os
 from collections import defaultdict
 from typing import Any, Dict, List, Tuple, cast
 
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, scoped_session, sessionmaker
 
 from ext import db
 from models import Assignment, AssignmentStatus, Booking, BookingStatus, Driver
@@ -15,6 +15,44 @@ from services.unified_dispatch.transaction_helpers import _begin_tx, _in_tx
 from shared.time_utils import now_utc  # UTC centralisé
 
 logger = logging.getLogger(__name__)
+
+
+def _get_scoped_session(db_instance):
+    """
+    Crée une scoped session compatible avec toutes les versions de Flask-SQLAlchemy.
+
+    Args:
+        db_instance: Instance SQLAlchemy de Flask-SQLAlchemy
+
+    Returns:
+        Scoped session pour requêtes indépendantes
+    """
+    try:
+        # Essayer d'abord create_scoped_session si disponible (anciennes versions)
+        if hasattr(db_instance, "create_scoped_session"):
+            return db_instance.create_scoped_session()
+    except AttributeError:
+        pass
+
+    # Fallback : créer une scoped_session manuellement
+    try:
+        # Obtenir l'engine de différentes manières selon la version
+        engine = getattr(db_instance, "engine", None)
+        if engine is None and hasattr(db_instance, "get_engine"):
+            engine = db_instance.get_engine()  # Flask-SQLAlchemy v3+
+        elif engine is None and hasattr(db_instance, "session"):
+            # Flask-SQLAlchemy v3+ : utiliser l'engine de la session
+            engine = db_instance.session.get_bind()
+
+        if engine is None:
+            logger.warning("[Apply] Impossible de créer scoped_session, utilisation de db.session")
+            return db_instance.session
+
+        return scoped_session(sessionmaker(bind=engine))
+    except Exception as e:
+        logger.warning("[Apply] Erreur lors de la création de scoped_session: %s, utilisation de db.session", e)
+        # Dernier recours : utiliser la session principale
+        return db_instance.session
 
 _Assignment = Any
 
@@ -459,7 +497,8 @@ def _apply_assignments_inner(
             notif_booking_ids = [b_id for b_id, _ in applied_pairs]
 
             # ⚠️ Utiliser une session indépendante pour éviter les transactions closes
-            session = db.create_scoped_session()
+            # Compatibilité Flask-SQLAlchemy : utiliser get_scoped_session helper
+            session = _get_scoped_session(db)
             try:
                 notif_bookings = {
                     b.id: b for b in session.query(Booking).filter(Booking.id.in_(notif_booking_ids)).all()

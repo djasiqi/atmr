@@ -91,7 +91,51 @@ def client(app, db):
     """Client de test Flask qui ne suit pas les redirections automatiquement."""
     # ✅ FIX: Ne pas suivre les redirections pour éviter les 302 dans les tests E2E
     # Les tests doivent pouvoir vérifier les codes HTTP directement (200, 400, etc.)
-    return app.test_client(follow_redirects=False)
+    # Flask moderne ne supporte plus follow_redirects dans test_client(), on crée un wrapper
+    base = app.test_client()
+
+    class NoRedirectClient:
+        """Wrapper client qui définit follow_redirects=False par défaut."""
+
+        def __init__(self, client):
+            self._client = client
+
+        def _with_defaults(self, kwargs):
+            # Ensure follow_redirects default is False for compatibility with older tests
+            if "follow_redirects" not in kwargs:
+                kwargs["follow_redirects"] = False
+            return kwargs
+
+        def get(self, *args, **kwargs):
+            kwargs = self._with_defaults(kwargs)
+            return self._client.get(*args, **kwargs)
+
+        def post(self, *args, **kwargs):
+            kwargs = self._with_defaults(kwargs)
+            return self._client.post(*args, **kwargs)
+
+        def put(self, *args, **kwargs):
+            kwargs = self._with_defaults(kwargs)
+            return self._client.put(*args, **kwargs)
+
+        def patch(self, *args, **kwargs):
+            kwargs = self._with_defaults(kwargs)
+            return self._client.patch(*args, **kwargs)
+
+        def delete(self, *args, **kwargs):
+            kwargs = self._with_defaults(kwargs)
+            return self._client.delete(*args, **kwargs)
+
+        def open(self, *args, **kwargs):
+            # low-level entrypoint used in tests sometimes
+            kwargs = self._with_defaults(kwargs)
+            return self._client.open(*args, **kwargs)
+
+        def __getattr__(self, name):
+            # delegate everything else to original client
+            return getattr(self._client, name)
+
+    return NoRedirectClient(base)
 
 
 @pytest.fixture
