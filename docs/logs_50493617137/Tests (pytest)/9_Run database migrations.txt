@@ -1,0 +1,127 @@
+﻿2025-11-21T16:07:41.4676515Z ##[group]Run cd backend
+2025-11-21T16:07:41.4676931Z [36;1mcd backend[0m
+2025-11-21T16:07:41.4677301Z [36;1mset -o errexit -o nounset -o pipefail -x[0m
+2025-11-21T16:07:41.4678089Z [36;1mecho "🔄 Exécution des migrations de base de données..."[0m
+2025-11-21T16:07:41.4678638Z [36;1mecho "📋 Alembic heads before upgrade:"[0m
+2025-11-21T16:07:41.4679077Z [36;1mflask db heads || true[0m
+2025-11-21T16:07:41.4679656Z [36;1m# Run the upgrade (use 'heads' to handle multiple heads until merge migration is created)[0m
+2025-11-21T16:07:41.4680443Z [36;1mif ! flask db upgrade heads 2>&1 | tee /tmp/alembic_upgrade.log; then[0m
+2025-11-21T16:07:41.4681070Z [36;1m  echo "❌ Erreur lors de l'exécution des migrations"[0m
+2025-11-21T16:07:41.4681696Z [36;1m  echo "---- Diagnostics (upgrade failed) - Log d'erreur ----"[0m
+2025-11-21T16:07:41.4682538Z [36;1m  sed -n '1,200p' /tmp/alembic_upgrade.log || true[0m
+2025-11-21T16:07:41.4683118Z [36;1m  echo "---- Diagnostics (upgrade failed) - État actuel ----"[0m
+2025-11-21T16:07:41.4683709Z [36;1m  flask db current || true[0m
+2025-11-21T16:07:41.4684113Z [36;1m  flask db heads || true[0m
+2025-11-21T16:07:41.4684556Z [36;1m  flask db history | sed -n '1,200p' || true[0m
+2025-11-21T16:07:41.4685042Z [36;1m  echo "Listing migrations/versions:"[0m
+2025-11-21T16:07:41.4685522Z [36;1m  ls -la migrations/versions || true[0m
+2025-11-21T16:07:41.4686027Z [36;1m  echo "---- Contenu des fichiers de migration ----"[0m
+2025-11-21T16:07:41.4686515Z [36;1m  shopt -s nullglob[0m
+2025-11-21T16:07:41.4686903Z [36;1m  for f in migrations/versions/*.py; do[0m
+2025-11-21T16:07:41.4687358Z [36;1m    [ -e "$f" ] || continue[0m
+2025-11-21T16:07:41.4687748Z [36;1m    echo "---- $f ----"[0m
+2025-11-21T16:07:41.4688118Z [36;1m    sed -n '1,200p' "$f"[0m
+2025-11-21T16:07:41.4688485Z [36;1m  done[0m
+2025-11-21T16:07:41.4688784Z [36;1m  exit 1[0m
+2025-11-21T16:07:41.4689063Z [36;1mfi[0m
+2025-11-21T16:07:41.4689415Z [36;1mecho "✅ Migrations exécutées avec succès"[0m
+2025-11-21T16:07:41.4719910Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-11-21T16:07:41.4720226Z env:
+2025-11-21T16:07:41.4720606Z   DATABASE_URL: ***localhost:5432/atmr_test
+2025-11-21T16:07:41.4720884Z   PGHOST: localhost
+2025-11-21T16:07:41.4721080Z   PGPORT: 5432
+2025-11-21T16:07:41.4721252Z   PGUSER: test
+2025-11-21T16:07:41.4721432Z   PGPASSWORD: test
+2025-11-21T16:07:41.4721629Z   PGDATABASE: atmr_test
+2025-11-21T16:07:41.4721865Z   REDIS_URL: redis://localhost:6379/0
+2025-11-21T16:07:41.4722310Z   FLASK_CONFIG: testing
+2025-11-21T16:07:41.4722517Z   SECRET_KEY: test-secret-key
+2025-11-21T16:07:41.4722743Z   JWT_SECRET_KEY: test-jwt-secret
+2025-11-21T16:07:41.4723057Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+2025-11-21T16:07:41.4723390Z   API_LEGACY_ENABLED: false
+2025-11-21T16:07:41.4723625Z   PYTHONPATH: /home/runner/work/atmr/atmr
+2025-11-21T16:07:41.4723873Z   SOCKETIO_ASYNC_MODE: threading
+2025-11-21T16:07:41.4724095Z   SKIP_SOCKETIO: true
+2025-11-21T16:07:41.4724309Z   SKIP_ROUTES_INIT: true
+2025-11-21T16:07:41.4724563Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:07:41.4724936Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+2025-11-21T16:07:41.4725310Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:07:41.4725645Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:07:41.4725967Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:07:41.4726303Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+2025-11-21T16:07:41.4726594Z   FLASK_APP: backend.wsgi
+2025-11-21T16:07:41.4726788Z ##[endgroup]
+2025-11-21T16:07:41.4765942Z + echo '🔄 Exécution des migrations de base de données...'
+2025-11-21T16:07:41.4766386Z + echo '📋 Alembic heads before upgrade:'
+2025-11-21T16:07:41.4766631Z + flask db heads
+2025-11-21T16:07:41.4766911Z 🔄 Exécution des migrations de base de données...
+2025-11-21T16:07:41.4767223Z 📋 Alembic heads before upgrade:
+2025-11-21T16:07:41.8356596Z [4.1 Vault] Aucune authentification configurée, désactivation
+2025-11-21T16:07:41.8357572Z [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=dev/mail/password, key=value)
+2025-11-21T16:07:41.8358899Z [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=prod/mail/password, key=value)
+2025-11-21T16:07:42.2802286Z [2.9] OpenTelemetry non installé - installer avec: pip install -r requirements-otel.txt
+2025-11-21T16:07:42.2814337Z [2025-11-21 16:07:42,280] WARNING in app: [2.9] Échec instrumentation SQLAlchemy: Working outside of application context.
+2025-11-21T16:07:42.2814926Z 
+2025-11-21T16:07:42.2815112Z This typically means that you attempted to use functionality that needed
+2025-11-21T16:07:42.2815530Z the current application. To solve this, set up an application context
+2025-11-21T16:07:42.2815920Z with app.app_context(). See the documentation for more information.
+2025-11-21T16:07:42.4885428Z [2025-11-21 16:07:42,488] INFO in app: ⏭️  Initialisation des routes désactivée (SKIP_ROUTES_INIT=1)
+2025-11-21T16:07:42.7317320Z ✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:07:42.7785577Z 68116559b15d (head)
+2025-11-21T16:07:43.1173161Z + flask db upgrade heads
+2025-11-21T16:07:43.1173629Z + tee /tmp/alembic_upgrade.log
+2025-11-21T16:07:43.4650934Z [4.1 Vault] Aucune authentification configurée, désactivation
+2025-11-21T16:07:43.4651822Z [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=dev/mail/password, key=value)
+2025-11-21T16:07:43.4652508Z [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=prod/mail/password, key=value)
+2025-11-21T16:07:43.8978769Z [2.9] OpenTelemetry non installé - installer avec: pip install -r requirements-otel.txt
+2025-11-21T16:07:43.8990210Z [2025-11-21 16:07:43,897] WARNING in app: [2.9] Échec instrumentation SQLAlchemy: Working outside of application context.
+2025-11-21T16:07:43.8990688Z 
+2025-11-21T16:07:43.8990911Z This typically means that you attempted to use functionality that needed
+2025-11-21T16:07:43.8991406Z the current application. To solve this, set up an application context
+2025-11-21T16:07:43.8991832Z with app.app_context(). See the documentation for more information.
+2025-11-21T16:07:44.1114664Z [2025-11-21 16:07:44,110] INFO in app: ⏭️  Initialisation des routes désactivée (SKIP_ROUTES_INIT=1)
+2025-11-21T16:07:44.3520590Z ✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:07:44.3733539Z INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+2025-11-21T16:07:44.3734331Z INFO  [alembic.runtime.migration] Will assume transactional DDL.
+2025-11-21T16:07:44.4356733Z INFO  [alembic.runtime.migration] Running upgrade  -> 19fc92c2ba30, initial schema (upper enums + aliases)
+2025-11-21T16:07:44.6642181Z INFO  [alembic.runtime.migration] Running upgrade 19fc92c2ba30 -> 623409ab335b, dispatch_run relations
+2025-11-21T16:07:44.6837847Z INFO  [alembic.runtime.migration] Running upgrade 623409ab335b -> 6af879898b0f, Update models.py
+2025-11-21T16:07:44.6854284Z INFO  [alembic.runtime.migration] Running upgrade 6af879898b0f -> 02e0994e702b, add_invoice_management_tables
+2025-11-21T16:07:44.7377722Z INFO  [alembic.runtime.migration] Running upgrade 02e0994e702b -> 3f7695e18b7d, make_billing_settings_fields_nullable
+2025-11-21T16:07:44.7401599Z INFO  [alembic.runtime.migration] Running upgrade 3f7695e18b7d -> a452a931f0b7, planning: models skeleton
+2025-11-21T16:07:44.8003620Z INFO  [alembic.runtime.migration] Running upgrade a452a931f0b7 -> 6d50ede67619, add timezone to driver_shift
+2025-11-21T16:07:44.8367120Z INFO  [alembic.runtime.migration] Running upgrade 6d50ede67619 -> b15c01673cc4, driver HR fields + timezone normalize in planning_service
+2025-11-21T16:07:44.8438656Z INFO  [alembic.runtime.migration] Running upgrade b15c01673cc4 -> c8d4e92f1a3b, add_third_party_billing_support
+2025-11-21T16:07:44.8529947Z INFO  [alembic.runtime.migration] Running upgrade c8d4e92f1a3b -> d9f3a8b2c4e5, add_invoice_line_id_to_booking
+2025-11-21T16:07:44.8577976Z INFO  [alembic.runtime.migration] Running upgrade d9f3a8b2c4e5 -> 0b7f8736876a, add_preferential_rate_to_client
+2025-11-21T16:07:44.8598370Z INFO  [alembic.runtime.migration] Running upgrade 0b7f8736876a -> e252718b5271, Add wheelchair fields to booking table
+2025-11-21T16:07:44.8624435Z INFO  [alembic.runtime.migration] Running upgrade e252718b5271 -> 715e89e538c3, add_analytics_tables_for_dispatch_metrics
+2025-11-21T16:07:44.8864641Z INFO  [alembic.runtime.migration] Running upgrade 715e89e538c3 -> d8a4d7185c60, add_gps_coords_to_client
+2025-11-21T16:07:44.8889476Z INFO  [alembic.runtime.migration] Running upgrade d8a4d7185c60 -> f3a9c7b8d1e2, Add critical indexes for performance
+2025-11-21T16:07:44.8978962Z INFO  [alembic.runtime.migration] Running upgrade f3a9c7b8d1e2 -> d7e8f9a1b2c3, A3: Add task_failure table for DLQ monitoring.
+2025-11-21T16:07:44.9085387Z INFO  [alembic.runtime.migration] Running upgrade f3a9c7b8d1e2 -> a8f4c9e2b1d3, Add dispatch modes to company
+2025-11-21T16:07:44.9164030Z INFO  [alembic.runtime.migration] Running upgrade a8f4c9e2b1d3 -> af5e460cd09e, Fix dispatch mode enum values to uppercase
+2025-11-21T16:07:44.9181860Z INFO  [alembic.runtime.migration] Running upgrade af5e460cd09e -> c8d9e2f3a4b5, add residence_facility to client
+2025-11-21T16:07:44.9194521Z INFO  [alembic.runtime.migration] Running upgrade c8d9e2f3a4b5 -> fix_circular_fk_20251018, fix circular fk names for tests
+2025-11-21T16:07:44.9244980Z INFO  [alembic.runtime.migration] Running upgrade fix_circular_fk_20251018 -> b559b3ef7a75, add_performance_indexes
+2025-11-21T16:07:44.9294652Z INFO  [alembic.runtime.migration] Running upgrade b559b3ef7a75 -> 156c2b818038, add_ml_prediction_table
+2025-11-21T16:07:44.9425368Z INFO  [alembic.runtime.migration] Running upgrade 156c2b818038 -> 97c8d4f1e5a3, add_ab_test_result_table
+2025-11-21T16:07:44.9648471Z INFO  [alembic.runtime.migration] Running upgrade 97c8d4f1e5a3 -> abc123456789, add_autonomous_action_table
+2025-11-21T16:07:44.9809228Z INFO  [alembic.runtime.migration] Running upgrade abc123456789 -> rl_metrics_001, add_rl_suggestion_metrics_table
+2025-11-21T16:07:44.9920319Z INFO  [alembic.runtime.migration] Running upgrade rl_metrics_001 -> rl_feedback_001, add_rl_feedbacks_table
+2025-11-21T16:07:45.0030643Z INFO  [alembic.runtime.migration] Running upgrade rl_feedback_001 -> 44a28b52dc46, add helper functions to base.py and fix type errors
+2025-11-21T16:07:45.0183706Z INFO  [alembic.runtime.migration] Running upgrade 44a28b52dc46 -> rl_suggestions_001, add_rl_suggestions_table
+2025-11-21T16:07:45.0295706Z INFO  [alembic.runtime.migration] Running upgrade d7e8f9a1b2c3 -> add_decision_explanation, ✅ B2: Add decision_explanation to assignment table.
+2025-11-21T16:07:45.0319230Z INFO  [alembic.runtime.migration] Running upgrade add_decision_explanation -> d2_audit_logs, ✅ D2: Create audit_logs table for append-only audit trail.
+2025-11-21T16:07:45.0446777Z INFO  [alembic.runtime.migration] Running upgrade d2_audit_logs -> fix_audit_metadata, Fix: Renommer colonne metadata vers additional_metadata dans audit_logs.
+2025-11-21T16:07:45.0456298Z INFO  [alembic.runtime.migration] Running upgrade d7e8f9a1b2c3 -> b2c3d4e5f6a7, Add secret_rotation table for monitoring secret rotations via Vault.
+2025-11-21T16:07:45.0558641Z INFO  [alembic.runtime.migration] Running upgrade d7e8f9a1b2c3 -> d2_encrypted_fields, ✅ D2: Ajoute colonnes pour stockage chiffré (migration progressive).
+2025-11-21T16:07:45.0630369Z INFO  [alembic.runtime.migration] Running upgrade d2_encrypted_fields -> 3_4_profiling, ✅ 3.4: Add profiling_metrics table for automatic CPU/memory profiling.
+2025-11-21T16:07:45.0766342Z INFO  [alembic.runtime.migration] Running upgrade 3_4_profiling, rl_suggestions_001, fix_audit_metadata -> 8186648ac54e, Merge migrations heads
+2025-11-21T16:07:45.0783299Z INFO  [alembic.runtime.migration] Running upgrade 8186648ac54e -> 24bbcb82c891, Add VAT columns to invoices
+2025-11-21T16:07:45.0885972Z INFO  [alembic.runtime.migration] Running upgrade 24bbcb82c891 -> add_message_file_fields, add_message_file_fields
+2025-11-21T16:07:45.0913865Z INFO  [alembic.runtime.migration] Running upgrade 8186648ac54e -> a1b2c3d4e5f6, ensure_admin_value_in_user_role_enum
+2025-11-21T16:07:45.0936868Z INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7 -> f7e8d9c0b1a2, Merge multiple heads: a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7
+2025-11-21T16:07:45.0951598Z INFO  [alembic.runtime.migration] Running upgrade f7e8d9c0b1a2 -> 68116559b15d, sync_models_with_db
+2025-11-21T16:07:45.4753595Z + echo '✅ Migrations exécutées avec succès'
+2025-11-21T16:07:45.4754235Z ✅ Migrations exécutées avec succès

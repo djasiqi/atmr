@@ -1,0 +1,1661 @@
+﻿2025-11-21T16:04:31.2253775Z Current runner version: '2.329.0'
+2025-11-21T16:04:31.2277114Z ##[group]Runner Image Provisioner
+2025-11-21T16:04:31.2278262Z Hosted Compute Agent
+2025-11-21T16:04:31.2278854Z Version: 20251016.436
+2025-11-21T16:04:31.2279486Z Commit: 8ab8ac8bfd662a3739dab9fe09456aba92132568
+2025-11-21T16:04:31.2280264Z Build Date: 2025-10-15T20:44:12Z
+2025-11-21T16:04:31.2280883Z ##[endgroup]
+2025-11-21T16:04:31.2281414Z ##[group]Operating System
+2025-11-21T16:04:31.2281928Z Ubuntu
+2025-11-21T16:04:31.2282481Z 24.04.3
+2025-11-21T16:04:31.2282941Z LTS
+2025-11-21T16:04:31.2283463Z ##[endgroup]
+2025-11-21T16:04:31.2284030Z ##[group]Runner Image
+2025-11-21T16:04:31.2284732Z Image: ubuntu-24.04
+2025-11-21T16:04:31.2285254Z Version: 20251112.124.1
+2025-11-21T16:04:31.2286741Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20251112.124/images/ubuntu/Ubuntu2404-Readme.md
+2025-11-21T16:04:31.2288565Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20251112.124
+2025-11-21T16:04:31.2289708Z ##[endgroup]
+2025-11-21T16:04:31.2290771Z ##[group]GITHUB_TOKEN Permissions
+2025-11-21T16:04:31.2292622Z Actions: read
+2025-11-21T16:04:31.2293122Z Contents: read
+2025-11-21T16:04:31.2293615Z Metadata: read
+2025-11-21T16:04:31.2294231Z ##[endgroup]
+2025-11-21T16:04:31.2296203Z Secret source: Actions
+2025-11-21T16:04:31.2296885Z Prepare workflow directory
+2025-11-21T16:04:31.3143633Z Prepare all required actions
+2025-11-21T16:04:31.3181215Z Getting action download info
+2025-11-21T16:04:31.8718715Z Download action repository 'actions/checkout@v4' (SHA:34e114876b0b11c390a56381ad16ebd13914f8d5)
+2025-11-21T16:04:32.6901262Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2025-11-21T16:04:32.8451938Z Complete job name: Migrations Check
+2025-11-21T16:04:32.8911557Z ##[group]Checking docker version
+2025-11-21T16:04:32.8924495Z ##[command]/usr/bin/docker version --format '{{.Server.APIVersion}}'
+2025-11-21T16:04:32.9695802Z '1.48'
+2025-11-21T16:04:32.9709460Z Docker daemon API version: '1.48'
+2025-11-21T16:04:32.9710224Z ##[command]/usr/bin/docker version --format '{{.Client.APIVersion}}'
+2025-11-21T16:04:32.9866437Z '1.48'
+2025-11-21T16:04:32.9879432Z Docker client API version: '1.48'
+2025-11-21T16:04:32.9885442Z ##[endgroup]
+2025-11-21T16:04:32.9888866Z ##[group]Clean up resources from previous jobs
+2025-11-21T16:04:32.9894199Z ##[command]/usr/bin/docker ps --all --quiet --no-trunc --filter "label=1f263b"
+2025-11-21T16:04:33.0028180Z ##[command]/usr/bin/docker network prune --force --filter "label=1f263b"
+2025-11-21T16:04:33.0152810Z ##[endgroup]
+2025-11-21T16:04:33.0153322Z ##[group]Create local container network
+2025-11-21T16:04:33.0163613Z ##[command]/usr/bin/docker network create --label 1f263b github_network_b689cb7280d740f8af2d4e2c800fdc06
+2025-11-21T16:04:33.0645663Z 52f5ef75b2c129dff8c5d661df93b2431731bed39d2ee3bbb18a02f86f1ff780
+2025-11-21T16:04:33.0665248Z ##[endgroup]
+2025-11-21T16:04:33.0692250Z ##[group]Starting postgres service container
+2025-11-21T16:04:33.0711487Z ##[command]/usr/bin/docker pull postgres:16-alpine
+2025-11-21T16:04:33.8996995Z 16-alpine: Pulling from library/postgres
+2025-11-21T16:04:34.1105708Z 2d35ebdb57d9: Pulling fs layer
+2025-11-21T16:04:34.1106905Z b9d06b7fef7a: Pulling fs layer
+2025-11-21T16:04:34.1108277Z 1fc8985c6238: Pulling fs layer
+2025-11-21T16:04:34.1109427Z 538c669d4f94: Pulling fs layer
+2025-11-21T16:04:34.1110658Z f2db3dd76baa: Pulling fs layer
+2025-11-21T16:04:34.1111500Z 5443128c2125: Pulling fs layer
+2025-11-21T16:04:34.1112175Z ad6e868aea79: Pulling fs layer
+2025-11-21T16:04:34.1112908Z 8e5dc03d34e5: Pulling fs layer
+2025-11-21T16:04:34.1113585Z 670559ed8ba9: Pulling fs layer
+2025-11-21T16:04:34.1114284Z a23babb82b92: Pulling fs layer
+2025-11-21T16:04:34.1114977Z cab99cec2af7: Pulling fs layer
+2025-11-21T16:04:34.1115627Z 538c669d4f94: Waiting
+2025-11-21T16:04:34.1116201Z f2db3dd76baa: Waiting
+2025-11-21T16:04:34.1116791Z 5443128c2125: Waiting
+2025-11-21T16:04:34.1117428Z ad6e868aea79: Waiting
+2025-11-21T16:04:34.1118674Z 8e5dc03d34e5: Waiting
+2025-11-21T16:04:34.1119314Z a23babb82b92: Waiting
+2025-11-21T16:04:34.1119932Z 670559ed8ba9: Waiting
+2025-11-21T16:04:34.1120551Z cab99cec2af7: Waiting
+2025-11-21T16:04:34.3952044Z b9d06b7fef7a: Verifying Checksum
+2025-11-21T16:04:34.3953259Z b9d06b7fef7a: Download complete
+2025-11-21T16:04:34.4394434Z 1fc8985c6238: Verifying Checksum
+2025-11-21T16:04:34.4395710Z 1fc8985c6238: Download complete
+2025-11-21T16:04:34.5269870Z 2d35ebdb57d9: Verifying Checksum
+2025-11-21T16:04:34.5271964Z 2d35ebdb57d9: Download complete
+2025-11-21T16:04:34.6320542Z 2d35ebdb57d9: Pull complete
+2025-11-21T16:04:34.6907497Z 538c669d4f94: Verifying Checksum
+2025-11-21T16:04:34.6909333Z 538c669d4f94: Download complete
+2025-11-21T16:04:34.7188677Z f2db3dd76baa: Verifying Checksum
+2025-11-21T16:04:34.7190241Z f2db3dd76baa: Download complete
+2025-11-21T16:04:35.0190448Z ad6e868aea79: Verifying Checksum
+2025-11-21T16:04:35.0191944Z ad6e868aea79: Download complete
+2025-11-21T16:04:35.0381905Z 8e5dc03d34e5: Verifying Checksum
+2025-11-21T16:04:35.0385605Z 8e5dc03d34e5: Download complete
+2025-11-21T16:04:35.1845442Z b9d06b7fef7a: Pull complete
+2025-11-21T16:04:35.2283882Z 1fc8985c6238: Pull complete
+2025-11-21T16:04:35.2718253Z 538c669d4f94: Pull complete
+2025-11-21T16:04:35.2836113Z 670559ed8ba9: Verifying Checksum
+2025-11-21T16:04:35.2836828Z 670559ed8ba9: Download complete
+2025-11-21T16:04:35.2860431Z f2db3dd76baa: Pull complete
+2025-11-21T16:04:35.3068133Z a23babb82b92: Download complete
+2025-11-21T16:04:35.5568701Z cab99cec2af7: Download complete
+2025-11-21T16:04:36.5608906Z 5443128c2125: Download complete
+2025-11-21T16:04:38.8390574Z 5443128c2125: Pull complete
+2025-11-21T16:04:38.8547972Z ad6e868aea79: Pull complete
+2025-11-21T16:04:38.8666541Z 8e5dc03d34e5: Pull complete
+2025-11-21T16:04:38.8776811Z 670559ed8ba9: Pull complete
+2025-11-21T16:04:38.8983520Z a23babb82b92: Pull complete
+2025-11-21T16:04:38.9104263Z cab99cec2af7: Pull complete
+2025-11-21T16:04:38.9153546Z Digest: sha256:79c06d285ed9186efbbc45c73413b3c3510c3c94ffede2f25d1e523f74d07f28
+2025-11-21T16:04:38.9169143Z Status: Downloaded newer image for postgres:16-alpine
+2025-11-21T16:04:38.9181521Z docker.io/library/postgres:16-alpine
+2025-11-21T16:04:38.9241007Z ##[command]/usr/bin/docker create --name 652d07a7a3c74a0baa72ad566d89a72c_postgres16alpine_69f711 --label 1f263b --network github_network_b689cb7280d740f8af2d4e2c800fdc06 --network-alias postgres -p 5432:5432 --health-cmd "pg_isready -U test -d atmr_test" --health-interval 10s --health-timeout 5s --health-retries 5 -e "POSTGRES_USER=test" -e "POSTGRES_PASSWORD=test" -e "POSTGRES_DB=atmr_test" -e GITHUB_ACTIONS=true -e CI=true postgres:16-alpine
+2025-11-21T16:04:38.9495017Z be3579f4ce391500cbacaed6978575f99e83cf42aa925e966b5edf3f375c2f22
+2025-11-21T16:04:38.9516593Z ##[command]/usr/bin/docker start be3579f4ce391500cbacaed6978575f99e83cf42aa925e966b5edf3f375c2f22
+2025-11-21T16:04:39.1297087Z be3579f4ce391500cbacaed6978575f99e83cf42aa925e966b5edf3f375c2f22
+2025-11-21T16:04:39.1319522Z ##[command]/usr/bin/docker ps --all --filter id=be3579f4ce391500cbacaed6978575f99e83cf42aa925e966b5edf3f375c2f22 --filter status=running --no-trunc --format "{{.ID}} {{.Status}}"
+2025-11-21T16:04:39.1440739Z be3579f4ce391500cbacaed6978575f99e83cf42aa925e966b5edf3f375c2f22 Up Less than a second (health: starting)
+2025-11-21T16:04:39.1461771Z ##[command]/usr/bin/docker port be3579f4ce391500cbacaed6978575f99e83cf42aa925e966b5edf3f375c2f22
+2025-11-21T16:04:39.1597230Z 5432/tcp -> 0.0.0.0:5432
+2025-11-21T16:04:39.1597888Z 5432/tcp -> [::]:5432
+2025-11-21T16:04:39.1650314Z ##[endgroup]
+2025-11-21T16:04:39.1659277Z ##[group]Waiting for all services to be ready
+2025-11-21T16:04:39.1672054Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" be3579f4ce391500cbacaed6978575f99e83cf42aa925e966b5edf3f375c2f22
+2025-11-21T16:04:39.1802852Z starting
+2025-11-21T16:04:39.1824809Z postgres service is starting, waiting 2 seconds before checking again.
+2025-11-21T16:04:41.1819944Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" be3579f4ce391500cbacaed6978575f99e83cf42aa925e966b5edf3f375c2f22
+2025-11-21T16:04:41.1936415Z starting
+2025-11-21T16:04:41.1949733Z postgres service is starting, waiting 4 seconds before checking again.
+2025-11-21T16:04:45.4814461Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" be3579f4ce391500cbacaed6978575f99e83cf42aa925e966b5edf3f375c2f22
+2025-11-21T16:04:45.4940709Z starting
+2025-11-21T16:04:45.4954620Z postgres service is starting, waiting 7 seconds before checking again.
+2025-11-21T16:04:53.1256709Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" be3579f4ce391500cbacaed6978575f99e83cf42aa925e966b5edf3f375c2f22
+2025-11-21T16:04:53.1374108Z healthy
+2025-11-21T16:04:53.1390812Z postgres service is healthy.
+2025-11-21T16:04:53.1391541Z ##[endgroup]
+2025-11-21T16:04:53.1616494Z ##[group]Run actions/checkout@v4
+2025-11-21T16:04:53.1616995Z with:
+2025-11-21T16:04:53.1617178Z   repository: djasiqi/atmr
+2025-11-21T16:04:53.1617520Z   token: ***
+2025-11-21T16:04:53.1617860Z   ssh-strict: true
+2025-11-21T16:04:53.1618039Z   ssh-user: git
+2025-11-21T16:04:53.1618218Z   persist-credentials: true
+2025-11-21T16:04:53.1618443Z   clean: true
+2025-11-21T16:04:53.1618621Z   sparse-checkout-cone-mode: true
+2025-11-21T16:04:53.1618851Z   fetch-depth: 1
+2025-11-21T16:04:53.1619019Z   fetch-tags: false
+2025-11-21T16:04:53.1619200Z   show-progress: true
+2025-11-21T16:04:53.1619374Z   lfs: false
+2025-11-21T16:04:53.1619533Z   submodules: false
+2025-11-21T16:04:53.1619709Z   set-safe-directory: true
+2025-11-21T16:04:53.1620115Z env:
+2025-11-21T16:04:53.1620477Z   DATABASE_URL: ***localhost:5432/atmr_test
+2025-11-21T16:04:53.1620732Z   PGHOST: localhost
+2025-11-21T16:04:53.1620902Z   PGPORT: 5432
+2025-11-21T16:04:53.1621069Z   PGUSER: test
+2025-11-21T16:04:53.1621280Z   PGPASSWORD: test
+2025-11-21T16:04:53.1621461Z   PGDATABASE: atmr_test
+2025-11-21T16:04:53.1621677Z   REDIS_URL: redis://localhost:6379/0
+2025-11-21T16:04:53.1621917Z   FLASK_CONFIG: testing
+2025-11-21T16:04:53.1622114Z   SECRET_KEY: test-secret-key
+2025-11-21T16:04:53.1622336Z   JWT_SECRET_KEY: test-jwt-secret
+2025-11-21T16:04:53.1622649Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+2025-11-21T16:04:53.1622992Z   API_LEGACY_ENABLED: false
+2025-11-21T16:04:53.1623214Z   PYTHONPATH: /home/runner/work/atmr/atmr
+2025-11-21T16:04:53.1623569Z   SOCKETIO_ASYNC_MODE: threading
+2025-11-21T16:04:53.1623796Z   SKIP_SOCKETIO: true
+2025-11-21T16:04:53.1623981Z   SKIP_ROUTES_INIT: true
+2025-11-21T16:04:53.1624168Z ##[endgroup]
+2025-11-21T16:04:53.2721280Z Syncing repository: djasiqi/atmr
+2025-11-21T16:04:53.2723113Z ##[group]Getting Git version info
+2025-11-21T16:04:53.2723678Z Working directory is '/home/runner/work/atmr/atmr'
+2025-11-21T16:04:53.2724551Z [command]/usr/bin/git version
+2025-11-21T16:04:53.2786757Z git version 2.51.2
+2025-11-21T16:04:53.2813706Z ##[endgroup]
+2025-11-21T16:04:53.2828740Z Temporarily overriding HOME='/home/runner/work/_temp/1c3acbd7-b7f1-4dc5-823d-b36fe69670e1' before making global git config changes
+2025-11-21T16:04:53.2830114Z Adding repository directory to the temporary git global config as a safe directory
+2025-11-21T16:04:53.2841437Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/atmr/atmr
+2025-11-21T16:04:53.2875551Z Deleting the contents of '/home/runner/work/atmr/atmr'
+2025-11-21T16:04:53.2879251Z ##[group]Initializing the repository
+2025-11-21T16:04:53.2883692Z [command]/usr/bin/git init /home/runner/work/atmr/atmr
+2025-11-21T16:04:53.3003349Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-11-21T16:04:53.3004261Z hint: is subject to change. To configure the initial branch name to use in all
+2025-11-21T16:04:53.3004832Z hint: of your new repositories, which will suppress this warning, call:
+2025-11-21T16:04:53.3005199Z hint:
+2025-11-21T16:04:53.3005675Z hint: 	git config --global init.defaultBranch <name>
+2025-11-21T16:04:53.3005952Z hint:
+2025-11-21T16:04:53.3006329Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-11-21T16:04:53.3007191Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-11-21T16:04:53.3007862Z hint:
+2025-11-21T16:04:53.3008051Z hint: 	git branch -m <name>
+2025-11-21T16:04:53.3008263Z hint:
+2025-11-21T16:04:53.3008628Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-11-21T16:04:53.3009571Z Initialized empty Git repository in /home/runner/work/atmr/atmr/.git/
+2025-11-21T16:04:53.3019413Z [command]/usr/bin/git remote add origin https://github.com/djasiqi/atmr
+2025-11-21T16:04:53.3051725Z ##[endgroup]
+2025-11-21T16:04:53.3052318Z ##[group]Disabling automatic garbage collection
+2025-11-21T16:04:53.3056745Z [command]/usr/bin/git config --local gc.auto 0
+2025-11-21T16:04:53.3083948Z ##[endgroup]
+2025-11-21T16:04:53.3084845Z ##[group]Setting up auth
+2025-11-21T16:04:53.3091802Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-11-21T16:04:53.3121522Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-11-21T16:04:53.3452920Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-11-21T16:04:53.3481643Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-11-21T16:04:53.3699072Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2025-11-21T16:04:53.3738088Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2025-11-21T16:04:53.3957287Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-11-21T16:04:53.3990098Z ##[endgroup]
+2025-11-21T16:04:53.3990628Z ##[group]Fetching the repository
+2025-11-21T16:04:53.3997963Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +eb8ebd41331556cb02e0b60b7eef5801ca262ef1:refs/remotes/origin/main
+2025-11-21T16:04:55.2943920Z From https://github.com/djasiqi/atmr
+2025-11-21T16:04:55.2944804Z  * [new ref]         eb8ebd41331556cb02e0b60b7eef5801ca262ef1 -> origin/main
+2025-11-21T16:04:55.2978250Z ##[endgroup]
+2025-11-21T16:04:55.2978832Z ##[group]Determining the checkout info
+2025-11-21T16:04:55.2981476Z ##[endgroup]
+2025-11-21T16:04:55.2988003Z [command]/usr/bin/git sparse-checkout disable
+2025-11-21T16:04:55.3027698Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-11-21T16:04:55.3099147Z ##[group]Checking out the ref
+2025-11-21T16:04:55.3099815Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2025-11-21T16:04:55.8000567Z Switched to a new branch 'main'
+2025-11-21T16:04:55.8001467Z branch 'main' set up to track 'origin/main'.
+2025-11-21T16:04:55.8033462Z ##[endgroup]
+2025-11-21T16:04:55.8071767Z [command]/usr/bin/git log -1 --format=%H
+2025-11-21T16:04:55.8093374Z eb8ebd41331556cb02e0b60b7eef5801ca262ef1
+2025-11-21T16:04:55.8295254Z ##[group]Run actions/setup-python@v5
+2025-11-21T16:04:55.8295505Z with:
+2025-11-21T16:04:55.8295671Z   python-version: 3.11
+2025-11-21T16:04:55.8295852Z   cache: pip
+2025-11-21T16:04:55.8296065Z   cache-dependency-path: backend/requirements.txt
+2025-11-21T16:04:55.8296345Z   check-latest: false
+2025-11-21T16:04:55.8296634Z   token: ***
+2025-11-21T16:04:55.8296810Z   update-environment: true
+2025-11-21T16:04:55.8297016Z   allow-prereleases: false
+2025-11-21T16:04:55.8297212Z   freethreaded: false
+2025-11-21T16:04:55.8297382Z env:
+2025-11-21T16:04:55.8298125Z   DATABASE_URL: ***localhost:5432/atmr_test
+2025-11-21T16:04:55.8298571Z   PGHOST: localhost
+2025-11-21T16:04:55.8298749Z   PGPORT: 5432
+2025-11-21T16:04:55.8298907Z   PGUSER: test
+2025-11-21T16:04:55.8299070Z   PGPASSWORD: test
+2025-11-21T16:04:55.8299242Z   PGDATABASE: atmr_test
+2025-11-21T16:04:55.8299483Z   REDIS_URL: redis://localhost:6379/0
+2025-11-21T16:04:55.8299717Z   FLASK_CONFIG: testing
+2025-11-21T16:04:55.8299937Z   SECRET_KEY: test-secret-key
+2025-11-21T16:04:55.8300150Z   JWT_SECRET_KEY: test-jwt-secret
+2025-11-21T16:04:55.8300465Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+2025-11-21T16:04:55.8300794Z   API_LEGACY_ENABLED: false
+2025-11-21T16:04:55.8301019Z   PYTHONPATH: /home/runner/work/atmr/atmr
+2025-11-21T16:04:55.8301261Z   SOCKETIO_ASYNC_MODE: threading
+2025-11-21T16:04:55.8301470Z   SKIP_SOCKETIO: true
+2025-11-21T16:04:55.8301656Z   SKIP_ROUTES_INIT: true
+2025-11-21T16:04:55.8301845Z ##[endgroup]
+2025-11-21T16:04:55.9938045Z ##[group]Installed versions
+2025-11-21T16:04:56.0050067Z Successfully set up CPython (3.11.14)
+2025-11-21T16:04:56.0051250Z ##[endgroup]
+2025-11-21T16:04:56.0327485Z [command]/opt/hostedtoolcache/Python/3.11.14/x64/bin/pip cache dir
+2025-11-21T16:04:56.3578746Z /home/runner/.cache/pip
+2025-11-21T16:04:56.6265592Z Cache hit for: setup-python-Linux-x64-24.04-Ubuntu-python-3.11.14-pip-b0c0a87e0774d21a41b25b21b4d7a33cc9e02e518989194b9e2bfe6f9bbe6863
+2025-11-21T16:04:57.8548478Z Received 37748736 of 626365574 (6.0%), 36.0 MBs/sec
+2025-11-21T16:04:58.8628818Z Received 167772160 of 626365574 (26.8%), 79.8 MBs/sec
+2025-11-21T16:04:59.8583017Z Received 293601280 of 626365574 (46.9%), 93.2 MBs/sec
+2025-11-21T16:05:00.8586224Z Received 419430400 of 626365574 (67.0%), 99.9 MBs/sec
+2025-11-21T16:05:01.8584435Z Received 536870912 of 626365574 (85.7%), 102.3 MBs/sec
+2025-11-21T16:05:02.4881984Z Received 626365574 of 626365574 (100.0%), 106.0 MBs/sec
+2025-11-21T16:05:02.4883784Z Cache Size: ~597 MB (626365574 B)
+2025-11-21T16:05:02.4920849Z [command]/usr/bin/tar -xf /home/runner/work/_temp/93419ffa-903c-43bd-923d-b75f46e7fd7c/cache.tzst -P -C /home/runner/work/atmr/atmr --use-compress-program unzstd
+2025-11-21T16:05:03.3444665Z Cache restored successfully
+2025-11-21T16:05:03.4658760Z Cache restored from key: setup-python-Linux-x64-24.04-Ubuntu-python-3.11.14-pip-31a1d75c500bc9f900280005cb82cf73c80bb1b80a82ae5d228e8c29f703f908
+2025-11-21T16:05:03.4828775Z ##[group]Run sudo apt-get update
+2025-11-21T16:05:03.4829119Z [36;1msudo apt-get update[0m
+2025-11-21T16:05:03.4829508Z [36;1msudo apt-get install -y libcairo2-dev libffi-dev pkg-config postgresql-client[0m
+2025-11-21T16:05:03.4870202Z shell: /usr/bin/bash -e {0}
+2025-11-21T16:05:03.4870443Z env:
+2025-11-21T16:05:03.4870853Z   DATABASE_URL: ***localhost:5432/atmr_test
+2025-11-21T16:05:03.4871111Z   PGHOST: localhost
+2025-11-21T16:05:03.4871303Z   PGPORT: 5432
+2025-11-21T16:05:03.4871476Z   PGUSER: test
+2025-11-21T16:05:03.4871642Z   PGPASSWORD: test
+2025-11-21T16:05:03.4871818Z   PGDATABASE: atmr_test
+2025-11-21T16:05:03.4872038Z   REDIS_URL: redis://localhost:6379/0
+2025-11-21T16:05:03.4872304Z   FLASK_CONFIG: testing
+2025-11-21T16:05:03.4872498Z   SECRET_KEY: test-secret-key
+2025-11-21T16:05:03.4872719Z   JWT_SECRET_KEY: test-jwt-secret
+2025-11-21T16:05:03.4873043Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+2025-11-21T16:05:03.4873403Z   API_LEGACY_ENABLED: false
+2025-11-21T16:05:03.4873636Z   PYTHONPATH: /home/runner/work/atmr/atmr
+2025-11-21T16:05:03.4873888Z   SOCKETIO_ASYNC_MODE: threading
+2025-11-21T16:05:03.4874097Z   SKIP_SOCKETIO: true
+2025-11-21T16:05:03.4874283Z   SKIP_ROUTES_INIT: true
+2025-11-21T16:05:03.4874541Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:03.4874938Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+2025-11-21T16:05:03.4875316Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:03.4875665Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:03.4876014Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:03.4876546Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+2025-11-21T16:05:03.4876833Z ##[endgroup]
+2025-11-21T16:05:03.5689518Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2025-11-21T16:05:03.5995974Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2025-11-21T16:05:03.6044717Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+2025-11-21T16:05:03.6090081Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+2025-11-21T16:05:03.6109748Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+2025-11-21T16:05:03.7272129Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1619 kB]
+2025-11-21T16:05:03.7414913Z Get:19 https://packages.microsoft.com/repos/azure-cli noble InRelease [3564 B]
+2025-11-21T16:05:03.7423501Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [303 kB]
+2025-11-21T16:05:03.7441723Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Components [175 kB]
+2025-11-21T16:05:03.7460188Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 c-n-f Metadata [15.7 kB]
+2025-11-21T16:05:03.7468705Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1500 kB]
+2025-11-21T16:05:03.7561317Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [304 kB]
+2025-11-21T16:05:03.7583306Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Components [378 kB]
+2025-11-21T16:05:03.7611797Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 c-n-f Metadata [31.4 kB]
+2025-11-21T16:05:03.7617506Z Get:20 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+2025-11-21T16:05:03.7623379Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [2307 kB]
+2025-11-21T16:05:03.7765785Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [526 kB]
+2025-11-21T16:05:03.8239614Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Components [212 B]
+2025-11-21T16:05:03.8249902Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [5808 B]
+2025-11-21T16:05:03.8257901Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Components [940 B]
+2025-11-21T16:05:03.8265473Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-backports/main amd64 Components [7124 B]
+2025-11-21T16:05:03.8274504Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-backports/universe amd64 Components [11.0 kB]
+2025-11-21T16:05:03.8282544Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-backports/restricted amd64 Components [212 B]
+2025-11-21T16:05:03.8289159Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-backports/multiverse amd64 Components [212 B]
+2025-11-21T16:05:03.8409211Z Get:25 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1317 kB]
+2025-11-21T16:05:03.8480406Z Get:26 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [216 kB]
+2025-11-21T16:05:03.8504992Z Get:27 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Components [21.5 kB]
+2025-11-21T16:05:03.8513829Z Get:28 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 c-n-f Metadata [9452 B]
+2025-11-21T16:05:03.8523324Z Get:29 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [909 kB]
+2025-11-21T16:05:03.8578931Z Get:30 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [205 kB]
+2025-11-21T16:05:03.8598723Z Get:31 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Components [52.2 kB]
+2025-11-21T16:05:03.9045175Z Get:32 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 c-n-f Metadata [19.4 kB]
+2025-11-21T16:05:03.9051120Z Get:33 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [2153 kB]
+2025-11-21T16:05:03.9147398Z Get:38 https://packages.microsoft.com/repos/azure-cli noble/main amd64 Packages [1763 B]
+2025-11-21T16:05:03.9175749Z Get:34 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [490 kB]
+2025-11-21T16:05:03.9229782Z Get:35 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Components [212 B]
+2025-11-21T16:05:03.9235542Z Get:36 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [5956 B]
+2025-11-21T16:05:03.9244975Z Get:37 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse amd64 Components [212 B]
+2025-11-21T16:05:03.9809219Z Get:39 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [54.2 kB]
+2025-11-21T16:05:04.0209218Z Get:40 https://packages.microsoft.com/ubuntu/24.04/prod noble/main armhf Packages [11.2 kB]
+2025-11-21T16:05:04.0415583Z Get:41 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [72.3 kB]
+2025-11-21T16:05:12.4097807Z Fetched 13.1 MB in 1s (8823 kB/s)
+2025-11-21T16:05:13.1451196Z Reading package lists...
+2025-11-21T16:05:13.1772983Z Reading package lists...
+2025-11-21T16:05:13.3398585Z Building dependency tree...
+2025-11-21T16:05:13.3406115Z Reading state information...
+2025-11-21T16:05:13.4917154Z libffi-dev is already the newest version (3.4.6-1build1).
+2025-11-21T16:05:13.4918087Z libffi-dev set to manually installed.
+2025-11-21T16:05:13.4918763Z pkg-config is already the newest version (1.8.1-2build1).
+2025-11-21T16:05:13.4919463Z The following additional packages will be installed:
+2025-11-21T16:05:13.4920199Z   bzip2-doc libblkid-dev libbrotli-dev libbz2-dev libcairo-script-interpreter2
+2025-11-21T16:05:13.4921046Z   libfontconfig-dev libfreetype-dev libgirepository-2.0-0 libglib2.0-dev
+2025-11-21T16:05:13.4921866Z   libglib2.0-dev-bin libice-dev libmount-dev libpixman-1-dev libpng-dev
+2025-11-21T16:05:13.4922669Z   libpng-tools libpthread-stubs0-dev libselinux1-dev libsepol-dev libsm-dev
+2025-11-21T16:05:13.4923460Z   libx11-dev libxau-dev libxcb-render0-dev libxcb-shm0-dev libxcb1-dev
+2025-11-21T16:05:13.4924296Z   libxdmcp-dev libxext-dev libxrender-dev uuid-dev x11proto-core-dev
+2025-11-21T16:05:13.4924916Z   x11proto-dev xorg-sgml-doctools xtrans-dev
+2025-11-21T16:05:13.4930811Z Suggested packages:
+2025-11-21T16:05:13.4931745Z   libcairo2-doc freetype2-doc gir1.2-glib-2.0-dev libglib2.0-doc
+2025-11-21T16:05:13.4932518Z   libgdk-pixbuf2.0-bin libxml2-utils libice-doc libsm-doc libx11-doc
+2025-11-21T16:05:13.4933098Z   libxcb-doc libxext-doc
+2025-11-21T16:05:13.5223250Z The following NEW packages will be installed:
+2025-11-21T16:05:13.5224217Z   bzip2-doc libblkid-dev libbrotli-dev libbz2-dev libcairo-script-interpreter2
+2025-11-21T16:05:13.5225126Z   libcairo2-dev libfontconfig-dev libfreetype-dev libgirepository-2.0-0
+2025-11-21T16:05:13.5225981Z   libglib2.0-dev libglib2.0-dev-bin libice-dev libmount-dev libpixman-1-dev
+2025-11-21T16:05:13.5227135Z   libpng-dev libpng-tools libpthread-stubs0-dev libselinux1-dev libsepol-dev
+2025-11-21T16:05:13.5228158Z   libsm-dev libx11-dev libxau-dev libxcb-render0-dev libxcb-shm0-dev
+2025-11-21T16:05:13.5230571Z   libxcb1-dev libxdmcp-dev libxext-dev libxrender-dev postgresql-client
+2025-11-21T16:05:13.5231529Z   uuid-dev x11proto-core-dev x11proto-dev xorg-sgml-doctools xtrans-dev
+2025-11-21T16:05:13.5413708Z 0 upgraded, 34 newly installed, 0 to remove and 49 not upgraded.
+2025-11-21T16:05:13.5414277Z Need to get 6944 kB of archives.
+2025-11-21T16:05:13.5414699Z After this operation, 28.9 MB of additional disk space will be used.
+2025-11-21T16:05:13.5415095Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2025-11-21T16:05:13.6693091Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 bzip2-doc all 1.0.8-5.1build0.1 [499 kB]
+2025-11-21T16:05:14.0140150Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libbrotli-dev amd64 1.1.0-2build2 [353 kB]
+2025-11-21T16:05:14.0945507Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libbz2-dev amd64 1.0.8-5.1build0.1 [33.6 kB]
+2025-11-21T16:05:14.1500254Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libcairo-script-interpreter2 amd64 1.18.0-3build1 [60.3 kB]
+2025-11-21T16:05:14.2080845Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libpng-dev amd64 1.6.43-5build1 [264 kB]
+2025-11-21T16:05:14.2808658Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libfreetype-dev amd64 2.13.2+dfsg-1build3 [575 kB]
+2025-11-21T16:05:14.3425562Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 uuid-dev amd64 2.39.3-9ubuntu6.3 [33.5 kB]
+2025-11-21T16:05:14.3992259Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libfontconfig-dev amd64 2.15.0-1.1ubuntu2 [161 kB]
+2025-11-21T16:05:14.4594229Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libglib2.0-dev-bin amd64 2.80.0-6ubuntu3.4 [138 kB]
+2025-11-21T16:05:14.5213942Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libblkid-dev amd64 2.39.3-9ubuntu6.3 [204 kB]
+2025-11-21T16:05:14.5854212Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libsepol-dev amd64 3.5-2build1 [384 kB]
+2025-11-21T16:05:14.6615900Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libselinux1-dev amd64 3.5-2ubuntu2.1 [164 kB]
+2025-11-21T16:05:14.7230290Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libmount-dev amd64 2.39.3-9ubuntu6.3 [14.9 kB]
+2025-11-21T16:05:14.7824007Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libgirepository-2.0-0 amd64 2.80.0-6ubuntu3.4 [73.6 kB]
+2025-11-21T16:05:14.8402463Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libglib2.0-dev amd64 2.80.0-6ubuntu3.4 [1860 kB]
+2025-11-21T16:05:14.9239226Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libpixman-1-dev amd64 0.42.2-1build1 [296 kB]
+2025-11-21T16:05:14.9886063Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xorg-sgml-doctools all 1:1.11-1.1 [10.9 kB]
+2025-11-21T16:05:15.0457148Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 x11proto-dev all 2023.2-1 [602 kB]
+2025-11-21T16:05:15.1094573Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 x11proto-core-dev all 2023.2-1 [2444 B]
+2025-11-21T16:05:15.1662910Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libice-dev amd64 2:1.0.10-1build3 [51.0 kB]
+2025-11-21T16:05:15.2234878Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libsm-dev amd64 2:1.2.3-1build3 [17.8 kB]
+2025-11-21T16:05:15.2699941Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxau-dev amd64 1:1.0.9-1build6 [9570 B]
+2025-11-21T16:05:15.3164652Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxdmcp-dev amd64 1:1.1.3-0ubuntu6 [26.5 kB]
+2025-11-21T16:05:15.3631196Z Get:25 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xtrans-dev all 1.4.0-1 [68.9 kB]
+2025-11-21T16:05:15.4103871Z Get:26 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libpthread-stubs0-dev amd64 0.4-1build3 [4746 B]
+2025-11-21T16:05:15.4569258Z Get:27 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxcb1-dev amd64 1.15-1ubuntu2 [85.8 kB]
+2025-11-21T16:05:15.5154042Z Get:28 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libx11-dev amd64 2:1.8.7-1build1 [732 kB]
+2025-11-21T16:05:15.5789318Z Get:29 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxcb-render0-dev amd64 1.15-1ubuntu2 [19.6 kB]
+2025-11-21T16:05:15.6342753Z Get:30 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxcb-shm0-dev amd64 1.15-1ubuntu2 [8246 B]
+2025-11-21T16:05:15.6908949Z Get:31 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxext-dev amd64 2:1.3.4-1build2 [83.5 kB]
+2025-11-21T16:05:15.7468087Z Get:32 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxrender-dev amd64 1:0.9.10-1.1build1 [26.3 kB]
+2025-11-21T16:05:15.8040767Z Get:33 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libcairo2-dev amd64 1.18.0-3build1 [41.1 kB]
+2025-11-21T16:05:15.8753845Z Get:34 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libpng-tools amd64 1.6.43-5build1 [28.5 kB]
+2025-11-21T16:05:15.9325687Z Get:35 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 postgresql-client all 16+257build1.1 [11.6 kB]
+2025-11-21T16:05:16.2112405Z Fetched 6944 kB in 2s (2891 kB/s)
+2025-11-21T16:05:16.2343224Z Selecting previously unselected package bzip2-doc.
+2025-11-21T16:05:16.2608049Z (Reading database ... 
+2025-11-21T16:05:16.2608529Z (Reading database ... 5%
+2025-11-21T16:05:16.2608811Z (Reading database ... 10%
+2025-11-21T16:05:16.2609100Z (Reading database ... 15%
+2025-11-21T16:05:16.2609345Z (Reading database ... 20%
+2025-11-21T16:05:16.2609588Z (Reading database ... 25%
+2025-11-21T16:05:16.2609833Z (Reading database ... 30%
+2025-11-21T16:05:16.2610070Z (Reading database ... 35%
+2025-11-21T16:05:16.2610313Z (Reading database ... 40%
+2025-11-21T16:05:16.2610558Z (Reading database ... 45%
+2025-11-21T16:05:16.2610795Z (Reading database ... 50%
+2025-11-21T16:05:16.2701571Z (Reading database ... 55%
+2025-11-21T16:05:16.4300226Z (Reading database ... 60%
+2025-11-21T16:05:16.5437405Z (Reading database ... 65%
+2025-11-21T16:05:16.6213691Z (Reading database ... 70%
+2025-11-21T16:05:16.6822074Z (Reading database ... 75%
+2025-11-21T16:05:16.8759776Z (Reading database ... 80%
+2025-11-21T16:05:17.0681037Z (Reading database ... 85%
+2025-11-21T16:05:17.2589342Z (Reading database ... 90%
+2025-11-21T16:05:17.4286418Z (Reading database ... 95%
+2025-11-21T16:05:17.4286772Z (Reading database ... 100%
+2025-11-21T16:05:17.4287140Z (Reading database ... 216225 files and directories currently installed.)
+2025-11-21T16:05:17.4329786Z Preparing to unpack .../00-bzip2-doc_1.0.8-5.1build0.1_all.deb ...
+2025-11-21T16:05:17.4355076Z Unpacking bzip2-doc (1.0.8-5.1build0.1) ...
+2025-11-21T16:05:17.4628094Z Selecting previously unselected package libbrotli-dev:amd64.
+2025-11-21T16:05:17.4758976Z Preparing to unpack .../01-libbrotli-dev_1.1.0-2build2_amd64.deb ...
+2025-11-21T16:05:17.4772441Z Unpacking libbrotli-dev:amd64 (1.1.0-2build2) ...
+2025-11-21T16:05:17.5054400Z Selecting previously unselected package libbz2-dev:amd64.
+2025-11-21T16:05:17.5187725Z Preparing to unpack .../02-libbz2-dev_1.0.8-5.1build0.1_amd64.deb ...
+2025-11-21T16:05:17.5200659Z Unpacking libbz2-dev:amd64 (1.0.8-5.1build0.1) ...
+2025-11-21T16:05:17.5440662Z Selecting previously unselected package libcairo-script-interpreter2:amd64.
+2025-11-21T16:05:17.5571220Z Preparing to unpack .../03-libcairo-script-interpreter2_1.18.0-3build1_amd64.deb ...
+2025-11-21T16:05:17.5596382Z Unpacking libcairo-script-interpreter2:amd64 (1.18.0-3build1) ...
+2025-11-21T16:05:17.5821708Z Selecting previously unselected package libpng-dev:amd64.
+2025-11-21T16:05:17.5952850Z Preparing to unpack .../04-libpng-dev_1.6.43-5build1_amd64.deb ...
+2025-11-21T16:05:17.5963022Z Unpacking libpng-dev:amd64 (1.6.43-5build1) ...
+2025-11-21T16:05:17.6290400Z Selecting previously unselected package libfreetype-dev:amd64.
+2025-11-21T16:05:17.6419983Z Preparing to unpack .../05-libfreetype-dev_2.13.2+dfsg-1build3_amd64.deb ...
+2025-11-21T16:05:17.6430263Z Unpacking libfreetype-dev:amd64 (2.13.2+dfsg-1build3) ...
+2025-11-21T16:05:17.6811841Z Selecting previously unselected package uuid-dev:amd64.
+2025-11-21T16:05:17.6943429Z Preparing to unpack .../06-uuid-dev_2.39.3-9ubuntu6.3_amd64.deb ...
+2025-11-21T16:05:17.6953368Z Unpacking uuid-dev:amd64 (2.39.3-9ubuntu6.3) ...
+2025-11-21T16:05:17.7211498Z Selecting previously unselected package libfontconfig-dev:amd64.
+2025-11-21T16:05:17.7339941Z Preparing to unpack .../07-libfontconfig-dev_2.15.0-1.1ubuntu2_amd64.deb ...
+2025-11-21T16:05:17.7351539Z Unpacking libfontconfig-dev:amd64 (2.15.0-1.1ubuntu2) ...
+2025-11-21T16:05:17.7641163Z Selecting previously unselected package libglib2.0-dev-bin.
+2025-11-21T16:05:17.7772463Z Preparing to unpack .../08-libglib2.0-dev-bin_2.80.0-6ubuntu3.4_amd64.deb ...
+2025-11-21T16:05:17.7784457Z Unpacking libglib2.0-dev-bin (2.80.0-6ubuntu3.4) ...
+2025-11-21T16:05:17.8300130Z Selecting previously unselected package libblkid-dev:amd64.
+2025-11-21T16:05:17.8431743Z Preparing to unpack .../09-libblkid-dev_2.39.3-9ubuntu6.3_amd64.deb ...
+2025-11-21T16:05:17.8441649Z Unpacking libblkid-dev:amd64 (2.39.3-9ubuntu6.3) ...
+2025-11-21T16:05:17.8696230Z Selecting previously unselected package libsepol-dev:amd64.
+2025-11-21T16:05:17.8826641Z Preparing to unpack .../10-libsepol-dev_3.5-2build1_amd64.deb ...
+2025-11-21T16:05:17.8836823Z Unpacking libsepol-dev:amd64 (3.5-2build1) ...
+2025-11-21T16:05:17.9172908Z Selecting previously unselected package libselinux1-dev:amd64.
+2025-11-21T16:05:17.9303357Z Preparing to unpack .../11-libselinux1-dev_3.5-2ubuntu2.1_amd64.deb ...
+2025-11-21T16:05:17.9314743Z Unpacking libselinux1-dev:amd64 (3.5-2ubuntu2.1) ...
+2025-11-21T16:05:17.9776908Z Selecting previously unselected package libmount-dev:amd64.
+2025-11-21T16:05:17.9907732Z Preparing to unpack .../12-libmount-dev_2.39.3-9ubuntu6.3_amd64.deb ...
+2025-11-21T16:05:17.9919301Z Unpacking libmount-dev:amd64 (2.39.3-9ubuntu6.3) ...
+2025-11-21T16:05:18.0137337Z Selecting previously unselected package libgirepository-2.0-0:amd64.
+2025-11-21T16:05:18.0267923Z Preparing to unpack .../13-libgirepository-2.0-0_2.80.0-6ubuntu3.4_amd64.deb ...
+2025-11-21T16:05:18.0280121Z Unpacking libgirepository-2.0-0:amd64 (2.80.0-6ubuntu3.4) ...
+2025-11-21T16:05:18.0493614Z Selecting previously unselected package libglib2.0-dev:amd64.
+2025-11-21T16:05:18.0622095Z Preparing to unpack .../14-libglib2.0-dev_2.80.0-6ubuntu3.4_amd64.deb ...
+2025-11-21T16:05:18.0632507Z Unpacking libglib2.0-dev:amd64 (2.80.0-6ubuntu3.4) ...
+2025-11-21T16:05:18.1793926Z Selecting previously unselected package libpixman-1-dev:amd64.
+2025-11-21T16:05:18.1928746Z Preparing to unpack .../15-libpixman-1-dev_0.42.2-1build1_amd64.deb ...
+2025-11-21T16:05:18.1938791Z Unpacking libpixman-1-dev:amd64 (0.42.2-1build1) ...
+2025-11-21T16:05:18.2188785Z Selecting previously unselected package xorg-sgml-doctools.
+2025-11-21T16:05:18.2321130Z Preparing to unpack .../16-xorg-sgml-doctools_1%3a1.11-1.1_all.deb ...
+2025-11-21T16:05:18.2330841Z Unpacking xorg-sgml-doctools (1:1.11-1.1) ...
+2025-11-21T16:05:18.2631309Z Selecting previously unselected package x11proto-dev.
+2025-11-21T16:05:18.2760548Z Preparing to unpack .../17-x11proto-dev_2023.2-1_all.deb ...
+2025-11-21T16:05:18.2769093Z Unpacking x11proto-dev (2023.2-1) ...
+2025-11-21T16:05:18.3305257Z Selecting previously unselected package x11proto-core-dev.
+2025-11-21T16:05:18.3440006Z Preparing to unpack .../18-x11proto-core-dev_2023.2-1_all.deb ...
+2025-11-21T16:05:18.3450228Z Unpacking x11proto-core-dev (2023.2-1) ...
+2025-11-21T16:05:18.3660834Z Selecting previously unselected package libice-dev:amd64.
+2025-11-21T16:05:18.3795046Z Preparing to unpack .../19-libice-dev_2%3a1.0.10-1build3_amd64.deb ...
+2025-11-21T16:05:18.3805717Z Unpacking libice-dev:amd64 (2:1.0.10-1build3) ...
+2025-11-21T16:05:18.4023988Z Selecting previously unselected package libsm-dev:amd64.
+2025-11-21T16:05:18.4154881Z Preparing to unpack .../20-libsm-dev_2%3a1.2.3-1build3_amd64.deb ...
+2025-11-21T16:05:18.4162677Z Unpacking libsm-dev:amd64 (2:1.2.3-1build3) ...
+2025-11-21T16:05:18.4369875Z Selecting previously unselected package libxau-dev:amd64.
+2025-11-21T16:05:18.4499782Z Preparing to unpack .../21-libxau-dev_1%3a1.0.9-1build6_amd64.deb ...
+2025-11-21T16:05:18.4507490Z Unpacking libxau-dev:amd64 (1:1.0.9-1build6) ...
+2025-11-21T16:05:18.4716736Z Selecting previously unselected package libxdmcp-dev:amd64.
+2025-11-21T16:05:18.4845239Z Preparing to unpack .../22-libxdmcp-dev_1%3a1.1.3-0ubuntu6_amd64.deb ...
+2025-11-21T16:05:18.4854068Z Unpacking libxdmcp-dev:amd64 (1:1.1.3-0ubuntu6) ...
+2025-11-21T16:05:18.5050958Z Selecting previously unselected package xtrans-dev.
+2025-11-21T16:05:18.5181390Z Preparing to unpack .../23-xtrans-dev_1.4.0-1_all.deb ...
+2025-11-21T16:05:18.5189932Z Unpacking xtrans-dev (1.4.0-1) ...
+2025-11-21T16:05:18.5442581Z Selecting previously unselected package libpthread-stubs0-dev:amd64.
+2025-11-21T16:05:18.5570398Z Preparing to unpack .../24-libpthread-stubs0-dev_0.4-1build3_amd64.deb ...
+2025-11-21T16:05:18.5577947Z Unpacking libpthread-stubs0-dev:amd64 (0.4-1build3) ...
+2025-11-21T16:05:18.5768369Z Selecting previously unselected package libxcb1-dev:amd64.
+2025-11-21T16:05:18.5896986Z Preparing to unpack .../25-libxcb1-dev_1.15-1ubuntu2_amd64.deb ...
+2025-11-21T16:05:18.5904650Z Unpacking libxcb1-dev:amd64 (1.15-1ubuntu2) ...
+2025-11-21T16:05:18.6129174Z Selecting previously unselected package libx11-dev:amd64.
+2025-11-21T16:05:18.6259000Z Preparing to unpack .../26-libx11-dev_2%3a1.8.7-1build1_amd64.deb ...
+2025-11-21T16:05:18.6266349Z Unpacking libx11-dev:amd64 (2:1.8.7-1build1) ...
+2025-11-21T16:05:18.6580004Z Selecting previously unselected package libxcb-render0-dev:amd64.
+2025-11-21T16:05:18.6711248Z Preparing to unpack .../27-libxcb-render0-dev_1.15-1ubuntu2_amd64.deb ...
+2025-11-21T16:05:18.6720577Z Unpacking libxcb-render0-dev:amd64 (1.15-1ubuntu2) ...
+2025-11-21T16:05:18.6922404Z Selecting previously unselected package libxcb-shm0-dev:amd64.
+2025-11-21T16:05:18.7052059Z Preparing to unpack .../28-libxcb-shm0-dev_1.15-1ubuntu2_amd64.deb ...
+2025-11-21T16:05:18.7060177Z Unpacking libxcb-shm0-dev:amd64 (1.15-1ubuntu2) ...
+2025-11-21T16:05:18.7259685Z Selecting previously unselected package libxext-dev:amd64.
+2025-11-21T16:05:18.7386894Z Preparing to unpack .../29-libxext-dev_2%3a1.3.4-1build2_amd64.deb ...
+2025-11-21T16:05:18.7397328Z Unpacking libxext-dev:amd64 (2:1.3.4-1build2) ...
+2025-11-21T16:05:18.7681844Z Selecting previously unselected package libxrender-dev:amd64.
+2025-11-21T16:05:18.7809817Z Preparing to unpack .../30-libxrender-dev_1%3a0.9.10-1.1build1_amd64.deb ...
+2025-11-21T16:05:18.7818195Z Unpacking libxrender-dev:amd64 (1:0.9.10-1.1build1) ...
+2025-11-21T16:05:18.8020804Z Selecting previously unselected package libcairo2-dev:amd64.
+2025-11-21T16:05:18.8148125Z Preparing to unpack .../31-libcairo2-dev_1.18.0-3build1_amd64.deb ...
+2025-11-21T16:05:18.8157434Z Unpacking libcairo2-dev:amd64 (1.18.0-3build1) ...
+2025-11-21T16:05:18.8399859Z Selecting previously unselected package libpng-tools.
+2025-11-21T16:05:18.8526905Z Preparing to unpack .../32-libpng-tools_1.6.43-5build1_amd64.deb ...
+2025-11-21T16:05:18.8535378Z Unpacking libpng-tools (1.6.43-5build1) ...
+2025-11-21T16:05:18.8744191Z Selecting previously unselected package postgresql-client.
+2025-11-21T16:05:18.8871599Z Preparing to unpack .../33-postgresql-client_16+257build1.1_all.deb ...
+2025-11-21T16:05:18.8880665Z Unpacking postgresql-client (16+257build1.1) ...
+2025-11-21T16:05:18.9275347Z Setting up libcairo-script-interpreter2:amd64 (1.18.0-3build1) ...
+2025-11-21T16:05:18.9301580Z Setting up libglib2.0-dev-bin (2.80.0-6ubuntu3.4) ...
+2025-11-21T16:05:19.1000541Z Setting up bzip2-doc (1.0.8-5.1build0.1) ...
+2025-11-21T16:05:19.1026663Z Setting up libpixman-1-dev:amd64 (0.42.2-1build1) ...
+2025-11-21T16:05:19.1059704Z Setting up postgresql-client (16+257build1.1) ...
+2025-11-21T16:05:19.1086783Z Setting up libpng-tools (1.6.43-5build1) ...
+2025-11-21T16:05:19.1129632Z Setting up libgirepository-2.0-0:amd64 (2.80.0-6ubuntu3.4) ...
+2025-11-21T16:05:19.1161552Z Setting up libpng-dev:amd64 (1.6.43-5build1) ...
+2025-11-21T16:05:19.1191452Z Setting up libpthread-stubs0-dev:amd64 (0.4-1build3) ...
+2025-11-21T16:05:19.1228505Z Setting up xtrans-dev (1.4.0-1) ...
+2025-11-21T16:05:19.1262832Z Setting up uuid-dev:amd64 (2.39.3-9ubuntu6.3) ...
+2025-11-21T16:05:19.1310358Z Setting up libsepol-dev:amd64 (3.5-2build1) ...
+2025-11-21T16:05:19.1339015Z Setting up xorg-sgml-doctools (1:1.11-1.1) ...
+2025-11-21T16:05:19.1368231Z Setting up libbrotli-dev:amd64 (1.1.0-2build2) ...
+2025-11-21T16:05:19.1395941Z Setting up libbz2-dev:amd64 (1.0.8-5.1build0.1) ...
+2025-11-21T16:05:19.1418047Z Setting up libblkid-dev:amd64 (2.39.3-9ubuntu6.3) ...
+2025-11-21T16:05:19.1441315Z Setting up libselinux1-dev:amd64 (3.5-2ubuntu2.1) ...
+2025-11-21T16:05:19.1463794Z Setting up libfreetype-dev:amd64 (2.13.2+dfsg-1build3) ...
+2025-11-21T16:05:19.1484728Z Setting up libmount-dev:amd64 (2.39.3-9ubuntu6.3) ...
+2025-11-21T16:05:19.1507767Z Setting up libfontconfig-dev:amd64 (2.15.0-1.1ubuntu2) ...
+2025-11-21T16:05:19.1530474Z Setting up libglib2.0-dev:amd64 (2.80.0-6ubuntu3.4) ...
+2025-11-21T16:05:19.1604447Z Processing triggers for sgml-base (1.31) ...
+2025-11-21T16:05:19.1933656Z Processing triggers for install-info (7.1-3build2) ...
+2025-11-21T16:05:19.2960355Z Setting up x11proto-dev (2023.2-1) ...
+2025-11-21T16:05:19.2990949Z Setting up libxau-dev:amd64 (1:1.0.9-1build6) ...
+2025-11-21T16:05:19.3021170Z Setting up libice-dev:amd64 (2:1.0.10-1build3) ...
+2025-11-21T16:05:19.3051788Z Setting up libsm-dev:amd64 (2:1.2.3-1build3) ...
+2025-11-21T16:05:19.3084039Z Processing triggers for libc-bin (2.39-0ubuntu8.6) ...
+2025-11-21T16:05:19.5382778Z Processing triggers for man-db (2.12.0-4build2) ...
+2025-11-21T16:05:19.5406996Z Not building database; man-db/auto-update is not 'true'.
+2025-11-21T16:05:19.5421301Z Setting up libxdmcp-dev:amd64 (1:1.1.3-0ubuntu6) ...
+2025-11-21T16:05:19.5448919Z Processing triggers for libglib2.0-0t64:amd64 (2.80.0-6ubuntu3.4) ...
+2025-11-21T16:05:19.5609630Z Setting up x11proto-core-dev (2023.2-1) ...
+2025-11-21T16:05:19.5644136Z Setting up libxcb1-dev:amd64 (1.15-1ubuntu2) ...
+2025-11-21T16:05:19.5669775Z Setting up libx11-dev:amd64 (2:1.8.7-1build1) ...
+2025-11-21T16:05:19.5698623Z Setting up libxcb-shm0-dev:amd64 (1.15-1ubuntu2) ...
+2025-11-21T16:05:19.5725111Z Setting up libxcb-render0-dev:amd64 (1.15-1ubuntu2) ...
+2025-11-21T16:05:19.5749756Z Setting up libxext-dev:amd64 (2:1.3.4-1build2) ...
+2025-11-21T16:05:19.5809001Z Setting up libxrender-dev:amd64 (1:0.9.10-1.1build1) ...
+2025-11-21T16:05:19.5840876Z Setting up libcairo2-dev:amd64 (1.18.0-3build1) ...
+2025-11-21T16:05:20.3137940Z 
+2025-11-21T16:05:20.3138435Z Running kernel seems to be up-to-date.
+2025-11-21T16:05:20.3138804Z 
+2025-11-21T16:05:20.3138966Z No services need to be restarted.
+2025-11-21T16:05:20.3139253Z 
+2025-11-21T16:05:20.3139417Z No containers need to be restarted.
+2025-11-21T16:05:20.3139688Z 
+2025-11-21T16:05:20.3139875Z No user sessions are running outdated binaries.
+2025-11-21T16:05:20.3140233Z 
+2025-11-21T16:05:20.3140441Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+2025-11-21T16:05:21.1635460Z ##[group]Run echo "⏳ Attente que PostgreSQL soit prêt..."
+2025-11-21T16:05:21.1635888Z [36;1mecho "⏳ Attente que PostgreSQL soit prêt..."[0m
+2025-11-21T16:05:21.1636184Z [36;1mfor i in $(seq 1 30); do[0m
+2025-11-21T16:05:21.1636596Z [36;1m  PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1' > /dev/null 2>&1 && break[0m
+2025-11-21T16:05:21.1637017Z [36;1m  echo "  Tentative $i/30..."[0m
+2025-11-21T16:05:21.1637243Z [36;1m  sleep 1[0m
+2025-11-21T16:05:21.1637424Z [36;1mdone[0m
+2025-11-21T16:05:21.1638085Z [36;1mPGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1' || exit 1[0m
+2025-11-21T16:05:21.1638486Z [36;1mecho "✅ PostgreSQL est prêt"[0m
+2025-11-21T16:05:21.1671525Z shell: /usr/bin/bash -e {0}
+2025-11-21T16:05:21.1671750Z env:
+2025-11-21T16:05:21.1672146Z   DATABASE_URL: ***localhost:5432/atmr_test
+2025-11-21T16:05:21.1672422Z   PGHOST: localhost
+2025-11-21T16:05:21.1672604Z   PGPORT: 5432
+2025-11-21T16:05:21.1672827Z   PGUSER: test
+2025-11-21T16:05:21.1672991Z   PGPASSWORD: test
+2025-11-21T16:05:21.1673174Z   PGDATABASE: atmr_test
+2025-11-21T16:05:21.1673393Z   REDIS_URL: redis://localhost:6379/0
+2025-11-21T16:05:21.1673630Z   FLASK_CONFIG: testing
+2025-11-21T16:05:21.1673854Z   SECRET_KEY: test-secret-key
+2025-11-21T16:05:21.1674082Z   JWT_SECRET_KEY: test-jwt-secret
+2025-11-21T16:05:21.1674393Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+2025-11-21T16:05:21.1674758Z   API_LEGACY_ENABLED: false
+2025-11-21T16:05:21.1674986Z   PYTHONPATH: /home/runner/work/atmr/atmr
+2025-11-21T16:05:21.1675251Z   SOCKETIO_ASYNC_MODE: threading
+2025-11-21T16:05:21.1675475Z   SKIP_SOCKETIO: true
+2025-11-21T16:05:21.1675664Z   SKIP_ROUTES_INIT: true
+2025-11-21T16:05:21.1675926Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:21.1676310Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+2025-11-21T16:05:21.1676870Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:21.1677224Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:21.1677804Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:21.1678258Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+2025-11-21T16:05:21.1678555Z ##[endgroup]
+2025-11-21T16:05:21.1728914Z ⏳ Attente que PostgreSQL soit prêt...
+2025-11-21T16:05:21.3483832Z  ?column? 
+2025-11-21T16:05:21.3493395Z ----------
+2025-11-21T16:05:21.3493713Z         1
+2025-11-21T16:05:21.3494014Z (1 row)
+2025-11-21T16:05:21.3494193Z 
+2025-11-21T16:05:21.3494610Z ✅ PostgreSQL est prêt
+2025-11-21T16:05:21.3539255Z ##[group]Run cd backend
+2025-11-21T16:05:21.3539527Z [36;1mcd backend[0m
+2025-11-21T16:05:21.3539769Z [36;1mpython -m pip install --upgrade pip[0m
+2025-11-21T16:05:21.3540194Z [36;1mpip install flask flask-sqlalchemy alembic flask-migrate psycopg2-binary[0m
+2025-11-21T16:05:21.3540619Z [36;1mif [ -f requirements.txt ]; then[0m
+2025-11-21T16:05:21.3540894Z [36;1m  pip install -r requirements.txt[0m
+2025-11-21T16:05:21.3541136Z [36;1mfi[0m
+2025-11-21T16:05:21.3573815Z shell: /usr/bin/bash -e {0}
+2025-11-21T16:05:21.3574041Z env:
+2025-11-21T16:05:21.3574487Z   DATABASE_URL: ***localhost:5432/atmr_test
+2025-11-21T16:05:21.3574746Z   PGHOST: localhost
+2025-11-21T16:05:21.3574922Z   PGPORT: 5432
+2025-11-21T16:05:21.3575098Z   PGUSER: test
+2025-11-21T16:05:21.3575263Z   PGPASSWORD: test
+2025-11-21T16:05:21.3575439Z   PGDATABASE: atmr_test
+2025-11-21T16:05:21.3575660Z   REDIS_URL: redis://localhost:6379/0
+2025-11-21T16:05:21.3575900Z   FLASK_CONFIG: testing
+2025-11-21T16:05:21.3576124Z   SECRET_KEY: test-secret-key
+2025-11-21T16:05:21.3576350Z   JWT_SECRET_KEY: test-jwt-secret
+2025-11-21T16:05:21.3576664Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+2025-11-21T16:05:21.3577000Z   API_LEGACY_ENABLED: false
+2025-11-21T16:05:21.3577235Z   PYTHONPATH: /home/runner/work/atmr/atmr
+2025-11-21T16:05:21.3577484Z   SOCKETIO_ASYNC_MODE: threading
+2025-11-21T16:05:21.3577941Z   SKIP_SOCKETIO: true
+2025-11-21T16:05:21.3578133Z   SKIP_ROUTES_INIT: true
+2025-11-21T16:05:21.3578417Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:21.3578808Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+2025-11-21T16:05:21.3579193Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:21.3579531Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:21.3579887Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:21.3580233Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+2025-11-21T16:05:21.3580521Z ##[endgroup]
+2025-11-21T16:05:21.8961877Z Requirement already satisfied: pip in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (25.3)
+2025-11-21T16:05:22.4641368Z Collecting flask
+2025-11-21T16:05:22.4656123Z   Using cached flask-3.1.2-py3-none-any.whl.metadata (3.2 kB)
+2025-11-21T16:05:22.4854651Z Collecting flask-sqlalchemy
+2025-11-21T16:05:22.4868979Z   Using cached flask_sqlalchemy-3.1.1-py3-none-any.whl.metadata (3.4 kB)
+2025-11-21T16:05:22.5139584Z Collecting alembic
+2025-11-21T16:05:22.5153709Z   Using cached alembic-1.17.2-py3-none-any.whl.metadata (7.2 kB)
+2025-11-21T16:05:22.5350562Z Collecting flask-migrate
+2025-11-21T16:05:22.5364956Z   Using cached Flask_Migrate-4.1.0-py3-none-any.whl.metadata (3.3 kB)
+2025-11-21T16:05:22.6326650Z Collecting psycopg2-binary
+2025-11-21T16:05:22.7160807Z   Downloading psycopg2_binary-2.9.11-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (4.9 kB)
+2025-11-21T16:05:22.7346508Z Collecting blinker>=1.9.0 (from flask)
+2025-11-21T16:05:22.7360539Z   Using cached blinker-1.9.0-py3-none-any.whl.metadata (1.6 kB)
+2025-11-21T16:05:22.7574889Z Collecting click>=8.1.3 (from flask)
+2025-11-21T16:05:22.7588884Z   Using cached click-8.3.1-py3-none-any.whl.metadata (2.6 kB)
+2025-11-21T16:05:22.7741832Z Collecting itsdangerous>=2.2.0 (from flask)
+2025-11-21T16:05:22.7755528Z   Using cached itsdangerous-2.2.0-py3-none-any.whl.metadata (1.9 kB)
+2025-11-21T16:05:22.7945180Z Collecting jinja2>=3.1.2 (from flask)
+2025-11-21T16:05:22.7959215Z   Using cached jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+2025-11-21T16:05:22.8509890Z Collecting markupsafe>=2.1.1 (from flask)
+2025-11-21T16:05:22.8524852Z   Using cached markupsafe-3.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+2025-11-21T16:05:22.8772634Z Collecting werkzeug>=3.1.0 (from flask)
+2025-11-21T16:05:22.8786523Z   Using cached werkzeug-3.1.3-py3-none-any.whl.metadata (3.7 kB)
+2025-11-21T16:05:23.1365572Z Collecting sqlalchemy>=2.0.16 (from flask-sqlalchemy)
+2025-11-21T16:05:23.1381905Z   Using cached sqlalchemy-2.0.44-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (9.5 kB)
+2025-11-21T16:05:23.1778389Z Collecting Mako (from alembic)
+2025-11-21T16:05:23.1792339Z   Using cached mako-1.3.10-py3-none-any.whl.metadata (2.9 kB)
+2025-11-21T16:05:23.1999752Z Collecting typing-extensions>=4.12 (from alembic)
+2025-11-21T16:05:23.2013997Z   Using cached typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+2025-11-21T16:05:23.3536145Z Collecting greenlet>=1 (from sqlalchemy>=2.0.16->flask-sqlalchemy)
+2025-11-21T16:05:23.3555064Z   Using cached greenlet-3.2.4-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (4.1 kB)
+2025-11-21T16:05:23.3672887Z Using cached flask-3.1.2-py3-none-any.whl (103 kB)
+2025-11-21T16:05:23.3686895Z Using cached flask_sqlalchemy-3.1.1-py3-none-any.whl (25 kB)
+2025-11-21T16:05:23.3700650Z Using cached alembic-1.17.2-py3-none-any.whl (248 kB)
+2025-11-21T16:05:23.3715840Z Using cached Flask_Migrate-4.1.0-py3-none-any.whl (21 kB)
+2025-11-21T16:05:23.3845097Z Downloading psycopg2_binary-2.9.11-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (4.2 MB)
+2025-11-21T16:05:23.6524845Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.2/4.2 MB 17.5 MB/s  0:00:00
+2025-11-21T16:05:23.6539652Z Using cached blinker-1.9.0-py3-none-any.whl (8.5 kB)
+2025-11-21T16:05:23.6553118Z Using cached click-8.3.1-py3-none-any.whl (108 kB)
+2025-11-21T16:05:23.6567172Z Using cached itsdangerous-2.2.0-py3-none-any.whl (16 kB)
+2025-11-21T16:05:23.6580682Z Using cached jinja2-3.1.6-py3-none-any.whl (134 kB)
+2025-11-21T16:05:23.6594968Z Using cached markupsafe-3.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+2025-11-21T16:05:23.6608687Z Using cached sqlalchemy-2.0.44-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.3 MB)
+2025-11-21T16:05:23.6647333Z Using cached greenlet-3.2.4-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (587 kB)
+2025-11-21T16:05:23.6664903Z Using cached typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+2025-11-21T16:05:23.6678608Z Using cached werkzeug-3.1.3-py3-none-any.whl (224 kB)
+2025-11-21T16:05:23.6693272Z Using cached mako-1.3.10-py3-none-any.whl (78 kB)
+2025-11-21T16:05:23.7126406Z Installing collected packages: typing-extensions, psycopg2-binary, markupsafe, itsdangerous, greenlet, click, blinker, werkzeug, sqlalchemy, Mako, jinja2, flask, alembic, flask-sqlalchemy, flask-migrate
+2025-11-21T16:05:25.3485940Z 
+2025-11-21T16:05:25.3500800Z Successfully installed Mako-1.3.10 alembic-1.17.2 blinker-1.9.0 click-8.3.1 flask-3.1.2 flask-migrate-4.1.0 flask-sqlalchemy-3.1.1 greenlet-3.2.4 itsdangerous-2.2.0 jinja2-3.1.6 markupsafe-3.0.3 psycopg2-binary-2.9.11 sqlalchemy-2.0.44 typing-extensions-4.15.0 werkzeug-3.1.3
+2025-11-21T16:05:25.7750751Z Requirement already satisfied: Flask>=2.0.0 in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from -r requirements.txt (line 4)) (3.1.2)
+2025-11-21T16:05:25.7755207Z Requirement already satisfied: Flask-SQLAlchemy>=2.5.0 in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from -r requirements.txt (line 5)) (3.1.1)
+2025-11-21T16:05:25.7760268Z Requirement already satisfied: Flask-Migrate>=3.0.0 in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from -r requirements.txt (line 6)) (4.1.0)
+2025-11-21T16:05:25.8690344Z Collecting Flask-SocketIO>=5.5.0 (from -r requirements.txt (line 7))
+2025-11-21T16:05:25.8705834Z   Using cached Flask_SocketIO-5.5.1-py3-none-any.whl.metadata (2.6 kB)
+2025-11-21T16:05:25.8915068Z Collecting Flask-Cors>=3.0.0 (from -r requirements.txt (line 8))
+2025-11-21T16:05:25.8929972Z   Using cached flask_cors-6.0.1-py3-none-any.whl.metadata (5.3 kB)
+2025-11-21T16:05:25.9109728Z Collecting Flask-Talisman>=1.1.0 (from -r requirements.txt (line 9))
+2025-11-21T16:05:25.9123777Z   Using cached flask_talisman-1.1.0-py2.py3-none-any.whl.metadata (18 kB)
+2025-11-21T16:05:25.9340112Z Collecting Flask-JWT-Extended>=4.4.0 (from -r requirements.txt (line 10))
+2025-11-21T16:05:25.9354427Z   Using cached Flask_JWT_Extended-4.7.1-py2.py3-none-any.whl.metadata (3.8 kB)
+2025-11-21T16:05:25.9518694Z Collecting flask-restx>=1.3.0 (from -r requirements.txt (line 11))
+2025-11-21T16:05:25.9531989Z   Using cached flask_restx-1.3.2-py2.py3-none-any.whl.metadata (9.3 kB)
+2025-11-21T16:05:25.9747414Z Collecting flask-marshmallow>=1.3.0 (from -r requirements.txt (line 12))
+2025-11-21T16:05:25.9761197Z   Using cached flask_marshmallow-1.3.0-py3-none-any.whl.metadata (5.2 kB)
+2025-11-21T16:05:26.0143975Z Collecting Flask-Limiter>=3.0.0 (from -r requirements.txt (line 13))
+2025-11-21T16:05:26.0157957Z   Using cached flask_limiter-4.0.0-py3-none-any.whl.metadata (6.2 kB)
+2025-11-21T16:05:26.0320310Z Collecting Flask-Mail>=0.10.0 (from -r requirements.txt (line 14))
+2025-11-21T16:05:26.0333705Z   Using cached flask_mail-0.10.0-py3-none-any.whl.metadata (2.1 kB)
+2025-11-21T16:05:26.0477963Z Collecting Flask-Bcrypt>=1.0.0 (from -r requirements.txt (line 15))
+2025-11-21T16:05:26.0491278Z   Using cached Flask_Bcrypt-1.0.1-py3-none-any.whl.metadata (2.6 kB)
+2025-11-21T16:05:26.0698813Z Collecting gunicorn>=21.0.0 (from -r requirements.txt (line 18))
+2025-11-21T16:05:26.0712193Z   Using cached gunicorn-23.0.0-py3-none-any.whl.metadata (4.4 kB)
+2025-11-21T16:05:26.0946118Z Collecting eventlet>=0.39.0 (from -r requirements.txt (line 19))
+2025-11-21T16:05:26.0959455Z   Using cached eventlet-0.40.3-py3-none-any.whl.metadata (5.4 kB)
+2025-11-21T16:05:26.1166542Z Collecting waitress>=3.0.0 (from -r requirements.txt (line 20))
+2025-11-21T16:05:26.1180029Z   Using cached waitress-3.0.2-py3-none-any.whl.metadata (5.8 kB)
+2025-11-21T16:05:26.1201219Z Requirement already satisfied: greenlet>=3.0.0 in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from -r requirements.txt (line 21)) (3.2.4)
+2025-11-21T16:05:26.1351487Z Collecting simple-websocket>=1.1.0 (from -r requirements.txt (line 22))
+2025-11-21T16:05:26.1364910Z   Using cached simple_websocket-1.1.0-py3-none-any.whl.metadata (1.5 kB)
+2025-11-21T16:05:26.1531711Z Collecting wsproto>=1.2.0 (from -r requirements.txt (line 23))
+2025-11-21T16:05:26.2298697Z   Downloading wsproto-1.3.2-py3-none-any.whl.metadata (5.2 kB)
+2025-11-21T16:05:26.2477164Z Collecting h11>=0.14.0 (from -r requirements.txt (line 24))
+2025-11-21T16:05:26.2490748Z   Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+2025-11-21T16:05:26.2734239Z Collecting psycopg<4,>=3.1 (from psycopg[binary]<4,>=3.1->-r requirements.txt (line 27))
+2025-11-21T16:05:26.2746418Z   Using cached psycopg-3.2.12-py3-none-any.whl.metadata (4.5 kB)
+2025-11-21T16:05:26.2801242Z Requirement already satisfied: psycopg2-binary>=2.9.0 in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from -r requirements.txt (line 28)) (2.9.11)
+2025-11-21T16:05:26.2804882Z Requirement already satisfied: SQLAlchemy>=2.0.0 in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from -r requirements.txt (line 29)) (2.0.44)
+2025-11-21T16:05:26.3065037Z Collecting SQLAlchemy-Utils>=0.40.0 (from -r requirements.txt (line 30))
+2025-11-21T16:05:26.3078184Z   Using cached sqlalchemy_utils-0.42.0-py3-none-any.whl.metadata (4.6 kB)
+2025-11-21T16:05:26.3506513Z Collecting celery>=5.0.0 (from -r requirements.txt (line 33))
+2025-11-21T16:05:26.3520263Z   Using cached celery-5.5.3-py3-none-any.whl.metadata (22 kB)
+2025-11-21T16:05:26.3842111Z Collecting flower>=2.0.0 (from -r requirements.txt (line 34))
+2025-11-21T16:05:26.3855441Z   Using cached flower-2.0.1-py2.py3-none-any.whl.metadata (4.5 kB)
+2025-11-21T16:05:26.4179977Z Collecting redis>=4.0.0 (from -r requirements.txt (line 37))
+2025-11-21T16:05:26.4193212Z   Using cached redis-7.1.0-py3-none-any.whl.metadata (12 kB)
+2025-11-21T16:05:26.4524882Z Collecting ortools>=9.0.0 (from -r requirements.txt (line 40))
+2025-11-21T16:05:26.4539130Z   Using cached ortools-9.14.6206-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (3.3 kB)
+2025-11-21T16:05:26.4743664Z Collecting geopy>=2.4.0 (from -r requirements.txt (line 41))
+2025-11-21T16:05:26.4756621Z   Using cached geopy-2.4.1-py3-none-any.whl.metadata (6.8 kB)
+2025-11-21T16:05:26.4970529Z Collecting googlemaps>=4.10.0 (from -r requirements.txt (line 42))
+2025-11-21T16:05:26.4971590Z   Using cached googlemaps-4.10.0-py3-none-any.whl
+2025-11-21T16:05:26.5261762Z Collecting holidays>=0.68 (from -r requirements.txt (line 43))
+2025-11-21T16:05:26.5275099Z   Using cached holidays-0.85-py3-none-any.whl.metadata (50 kB)
+2025-11-21T16:05:26.6123805Z Collecting scikit-learn>=1.0.0 (from -r requirements.txt (line 46))
+2025-11-21T16:05:26.6137961Z   Using cached scikit_learn-1.7.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (11 kB)
+2025-11-21T16:05:26.7927529Z Collecting numpy>=1.20.0 (from -r requirements.txt (line 47))
+2025-11-21T16:05:26.7942956Z   Using cached numpy-2.3.5-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
+2025-11-21T16:05:26.9293421Z Collecting pandas>=1.5.0 (from -r requirements.txt (line 48))
+2025-11-21T16:05:26.9308929Z   Using cached pandas-2.3.3-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (91 kB)
+2025-11-21T16:05:27.0075677Z Collecting xgboost>=2.0.0 (from -r requirements.txt (line 49))
+2025-11-21T16:05:27.0184937Z   Downloading xgboost-3.1.2-py3-none-manylinux_2_28_x86_64.whl.metadata (2.1 kB)
+2025-11-21T16:05:27.0446384Z Collecting lightgbm>=4.0.0 (from -r requirements.txt (line 50))
+2025-11-21T16:05:27.0460761Z   Using cached lightgbm-4.6.0-py3-none-manylinux_2_28_x86_64.whl.metadata (17 kB)
+2025-11-21T16:05:27.0955836Z Collecting statsmodels>=0.14.0 (from -r requirements.txt (line 51))
+2025-11-21T16:05:27.0970771Z   Using cached statsmodels-0.14.5-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (9.5 kB)
+2025-11-21T16:05:27.1401585Z Collecting marshmallow>=3.0.0 (from -r requirements.txt (line 54))
+2025-11-21T16:05:27.1415620Z   Using cached marshmallow-4.1.0-py3-none-any.whl.metadata (7.4 kB)
+2025-11-21T16:05:27.1646642Z Collecting marshmallow-sqlalchemy>=1.0.0 (from -r requirements.txt (line 55))
+2025-11-21T16:05:27.1660741Z   Using cached marshmallow_sqlalchemy-1.4.2-py3-none-any.whl.metadata (6.8 kB)
+2025-11-21T16:05:27.2231515Z Collecting sentry-sdk>=2.0.0 (from -r requirements.txt (line 58))
+2025-11-21T16:05:27.2245712Z   Using cached sentry_sdk-2.45.0-py2.py3-none-any.whl.metadata (10 kB)
+2025-11-21T16:05:27.2621857Z Collecting opentelemetry-api>=1.24.0 (from -r requirements.txt (line 61))
+2025-11-21T16:05:27.2635993Z   Using cached opentelemetry_api-1.38.0-py3-none-any.whl.metadata (1.5 kB)
+2025-11-21T16:05:27.2867908Z Collecting opentelemetry-sdk>=1.24.0 (from -r requirements.txt (line 62))
+2025-11-21T16:05:27.2881920Z   Using cached opentelemetry_sdk-1.38.0-py3-none-any.whl.metadata (1.5 kB)
+2025-11-21T16:05:27.3095439Z Collecting opentelemetry-exporter-otlp-proto-grpc>=1.24.0 (from -r requirements.txt (line 63))
+2025-11-21T16:05:27.3109379Z   Using cached opentelemetry_exporter_otlp_proto_grpc-1.38.0-py3-none-any.whl.metadata (2.4 kB)
+2025-11-21T16:05:27.3349436Z Collecting opentelemetry-instrumentation-requests>=0.45b0 (from -r requirements.txt (line 64))
+2025-11-21T16:05:27.3363478Z   Using cached opentelemetry_instrumentation_requests-0.59b0-py3-none-any.whl.metadata (2.6 kB)
+2025-11-21T16:05:27.3546768Z Collecting prometheus-client>=0.20.0 (from -r requirements.txt (line 67))
+2025-11-21T16:05:27.3560805Z   Using cached prometheus_client-0.23.1-py3-none-any.whl.metadata (1.9 kB)
+2025-11-21T16:05:27.5585502Z Collecting cryptography>=41.0.0 (from -r requirements.txt (line 70))
+2025-11-21T16:05:27.5601475Z   Using cached cryptography-46.0.3-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (5.7 kB)
+2025-11-21T16:05:27.6103904Z Collecting bcrypt>=4.0.0 (from -r requirements.txt (line 71))
+2025-11-21T16:05:27.6118599Z   Using cached bcrypt-5.0.0-cp39-abi3-manylinux_2_34_x86_64.whl.metadata (10 kB)
+2025-11-21T16:05:27.6352561Z Collecting hvac>=1.2.0 (from -r requirements.txt (line 72))
+2025-11-21T16:05:27.6366187Z   Using cached hvac-2.4.0-py3-none-any.whl.metadata (3.3 kB)
+2025-11-21T16:05:27.6564893Z Collecting python-dotenv>=0.19.0 (from -r requirements.txt (line 75))
+2025-11-21T16:05:27.6578578Z   Using cached python_dotenv-1.2.1-py3-none-any.whl.metadata (25 kB)
+2025-11-21T16:05:27.7733483Z Collecting pydantic>=1.8.0 (from -r requirements.txt (line 76))
+2025-11-21T16:05:27.7748004Z   Using cached pydantic-2.12.4-py3-none-any.whl.metadata (89 kB)
+2025-11-21T16:05:27.8024097Z Collecting python-socketio>=5.12.0 (from -r requirements.txt (line 77))
+2025-11-21T16:05:27.8038162Z   Using cached python_socketio-5.14.3-py3-none-any.whl.metadata (3.2 kB)
+2025-11-21T16:05:27.8327315Z Collecting python-engineio>=4.11.0 (from -r requirements.txt (line 78))
+2025-11-21T16:05:27.8341352Z   Using cached python_engineio-4.12.3-py3-none-any.whl.metadata (2.2 kB)
+2025-11-21T16:05:27.8629742Z Collecting requests>=2.32.0 (from -r requirements.txt (line 79))
+2025-11-21T16:05:27.8643685Z   Using cached requests-2.32.5-py3-none-any.whl.metadata (4.9 kB)
+2025-11-21T16:05:27.8667983Z Requirement already satisfied: typing_extensions>=4.0.0 in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from -r requirements.txt (line 80)) (4.15.0)
+2025-11-21T16:05:27.8851664Z Collecting packaging>=24.0 (from -r requirements.txt (line 81))
+2025-11-21T16:05:27.8865225Z   Using cached packaging-25.0-py3-none-any.whl.metadata (3.3 kB)
+2025-11-21T16:05:27.9049370Z Collecting attrs>=24.2.0 (from -r requirements.txt (line 82))
+2025-11-21T16:05:27.9062973Z   Using cached attrs-25.4.0-py3-none-any.whl.metadata (10 kB)
+2025-11-21T16:05:27.9240441Z Collecting aniso8601>=10.0.0 (from -r requirements.txt (line 83))
+2025-11-21T16:05:27.9253507Z   Using cached aniso8601-10.0.1-py2.py3-none-any.whl.metadata (23 kB)
+2025-11-21T16:05:27.9636076Z Collecting pytz>=2024.1 (from -r requirements.txt (line 84))
+2025-11-21T16:05:27.9649734Z   Using cached pytz-2025.2-py2.py3-none-any.whl.metadata (22 kB)
+2025-11-21T16:05:27.9829692Z Collecting tzdata>=2025.1 (from -r requirements.txt (line 85))
+2025-11-21T16:05:27.9842866Z   Using cached tzdata-2025.2-py2.py3-none-any.whl.metadata (1.4 kB)
+2025-11-21T16:05:28.0021492Z Collecting tzlocal>=5.3.0 (from -r requirements.txt (line 86))
+2025-11-21T16:05:28.0035106Z   Using cached tzlocal-5.3.1-py3-none-any.whl.metadata (7.6 kB)
+2025-11-21T16:05:28.0217207Z Collecting immutabledict>=4.0.0 (from -r requirements.txt (line 87))
+2025-11-21T16:05:28.0231411Z   Using cached immutabledict-4.2.2-py3-none-any.whl.metadata (3.5 kB)
+2025-11-21T16:05:28.2191328Z Collecting Pillow>=10.0.0 (from -r requirements.txt (line 88))
+2025-11-21T16:05:28.2207953Z   Using cached pillow-12.0.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (8.8 kB)
+2025-11-21T16:05:28.2424770Z Collecting python-dateutil>=2.8.0 (from -r requirements.txt (line 89))
+2025-11-21T16:05:28.2439066Z   Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+2025-11-21T16:05:28.2457845Z Requirement already satisfied: Jinja2>=3.0.0 in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from -r requirements.txt (line 90)) (3.1.6)
+2025-11-21T16:05:28.2462331Z Requirement already satisfied: MarkupSafe>=2.0.0 in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from -r requirements.txt (line 91)) (3.0.3)
+2025-11-21T16:05:28.2466909Z Requirement already satisfied: itsdangerous>=2.0.0 in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from -r requirements.txt (line 92)) (2.2.0)
+2025-11-21T16:05:28.2471453Z Requirement already satisfied: click>=8.0.0 in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from -r requirements.txt (line 93)) (8.3.1)
+2025-11-21T16:05:28.2475407Z Requirement already satisfied: blinker>=1.0.0 in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from -r requirements.txt (line 94)) (1.9.0)
+2025-11-21T16:05:28.2612349Z Collecting qrbill>=1.0.0 (from -r requirements.txt (line 97))
+2025-11-21T16:05:28.2625800Z   Using cached qrbill-1.2.0-py3-none-any.whl.metadata (4.4 kB)
+2025-11-21T16:05:28.2801862Z Collecting qrcode>=8.0 (from -r requirements.txt (line 98))
+2025-11-21T16:05:28.2815535Z   Using cached qrcode-8.2-py3-none-any.whl.metadata (17 kB)
+2025-11-21T16:05:28.3051371Z Collecting segno>=1.6.0 (from -r requirements.txt (line 99))
+2025-11-21T16:05:28.3064868Z   Using cached segno-1.6.6-py3-none-any.whl.metadata (7.7 kB)
+2025-11-21T16:05:28.3205116Z Collecting fpdf>=1.7.0 (from -r requirements.txt (line 100))
+2025-11-21T16:05:28.3206555Z   Using cached fpdf-1.7.2-py2.py3-none-any.whl
+2025-11-21T16:05:28.4307030Z Collecting reportlab>=4.3.0 (from -r requirements.txt (line 101))
+2025-11-21T16:05:28.4321618Z   Using cached reportlab-4.4.5-py3-none-any.whl.metadata (1.7 kB)
+2025-11-21T16:05:28.4484867Z Collecting svglib>=1.5.0 (from -r requirements.txt (line 102))
+2025-11-21T16:05:28.4498443Z   Using cached svglib-1.6.0-py3-none-any.whl.metadata (11 kB)
+2025-11-21T16:05:28.4685925Z Collecting svgwrite>=1.4.0 (from -r requirements.txt (line 103))
+2025-11-21T16:05:28.4699720Z   Using cached svgwrite-1.4.3-py3-none-any.whl.metadata (8.8 kB)
+2025-11-21T16:05:28.4857463Z Collecting tinycss2>=1.4.0 (from -r requirements.txt (line 104))
+2025-11-21T16:05:28.4871267Z   Using cached tinycss2-1.5.0-py3-none-any.whl.metadata (3.0 kB)
+2025-11-21T16:05:28.5030271Z Collecting cssselect2>=0.7.0 (from -r requirements.txt (line 105))
+2025-11-21T16:05:28.5043596Z   Using cached cssselect2-0.8.0-py3-none-any.whl.metadata (2.9 kB)
+2025-11-21T16:05:28.5182462Z Collecting webencodings>=0.5.0 (from -r requirements.txt (line 106))
+2025-11-21T16:05:28.5195558Z   Using cached webencodings-0.5.1-py2.py3-none-any.whl.metadata (2.1 kB)
+2025-11-21T16:05:28.5591387Z Collecting pytest>=8.0.0 (from -r requirements.txt (line 109))
+2025-11-21T16:05:28.5605149Z   Using cached pytest-9.0.1-py3-none-any.whl.metadata (7.6 kB)
+2025-11-21T16:05:28.5787529Z Collecting pytest-flask>=1.3.0 (from -r requirements.txt (line 110))
+2025-11-21T16:05:28.5801396Z   Using cached pytest_flask-1.3.0-py3-none-any.whl.metadata (14 kB)
+2025-11-21T16:05:28.6206820Z Collecting rich>=13.0.0 (from -r requirements.txt (line 111))
+2025-11-21T16:05:28.6220790Z   Using cached rich-14.2.0-py3-none-any.whl.metadata (18 kB)
+2025-11-21T16:05:28.7761079Z Collecting stripe>=11.0.0 (from -r requirements.txt (line 114))
+2025-11-21T16:05:28.7774862Z   Using cached stripe-14.0.0-py3-none-any.whl.metadata (18 kB)
+2025-11-21T16:05:28.7954688Z Collecting python-stdnum>=1.20 (from -r requirements.txt (line 115))
+2025-11-21T16:05:28.7968251Z   Using cached python_stdnum-2.1-py3-none-any.whl.metadata (18 kB)
+2025-11-21T16:05:28.7995188Z Requirement already satisfied: Werkzeug>=3.0.0 in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from -r requirements.txt (line 118)) (3.1.3)
+2025-11-21T16:05:28.9944513Z Collecting psycopg-binary==3.2.12 (from psycopg[binary]<4,>=3.1->-r requirements.txt (line 27))
+2025-11-21T16:05:28.9960393Z   Using cached psycopg_binary-3.2.12-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.9 kB)
+2025-11-21T16:05:29.0033034Z Requirement already satisfied: alembic>=1.9.0 in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from Flask-Migrate>=3.0.0->-r requirements.txt (line 6)) (1.17.2)
+2025-11-21T16:05:29.0290493Z Collecting PyJWT<3.0,>=2.0 (from Flask-JWT-Extended>=4.4.0->-r requirements.txt (line 10))
+2025-11-21T16:05:29.0305038Z   Using cached PyJWT-2.10.1-py3-none-any.whl.metadata (4.0 kB)
+2025-11-21T16:05:29.0631159Z Collecting jsonschema (from flask-restx>=1.3.0->-r requirements.txt (line 11))
+2025-11-21T16:05:29.0645292Z   Using cached jsonschema-4.25.1-py3-none-any.whl.metadata (7.6 kB)
+2025-11-21T16:05:29.0985479Z Collecting referencing (from flask-restx>=1.3.0->-r requirements.txt (line 11))
+2025-11-21T16:05:29.0999051Z   Using cached referencing-0.37.0-py3-none-any.whl.metadata (2.8 kB)
+2025-11-21T16:05:29.1260963Z Collecting importlib-resources (from flask-restx>=1.3.0->-r requirements.txt (line 11))
+2025-11-21T16:05:29.1273839Z   Using cached importlib_resources-6.5.2-py3-none-any.whl.metadata (3.9 kB)
+2025-11-21T16:05:29.1593293Z Collecting limits>=3.13 (from Flask-Limiter>=3.0.0->-r requirements.txt (line 13))
+2025-11-21T16:05:29.1606335Z   Using cached limits-5.6.0-py3-none-any.whl.metadata (10 kB)
+2025-11-21T16:05:29.1766160Z Collecting ordered-set<5,>4 (from Flask-Limiter>=3.0.0->-r requirements.txt (line 13))
+2025-11-21T16:05:29.1779602Z   Using cached ordered_set-4.1.0-py3-none-any.whl.metadata (5.3 kB)
+2025-11-21T16:05:29.2139807Z Collecting markdown-it-py>=2.2.0 (from rich>=13.0.0->-r requirements.txt (line 111))
+2025-11-21T16:05:29.2153525Z   Using cached markdown_it_py-4.0.0-py3-none-any.whl.metadata (7.3 kB)
+2025-11-21T16:05:29.2413161Z Collecting pygments<3.0.0,>=2.13.0 (from rich>=13.0.0->-r requirements.txt (line 111))
+2025-11-21T16:05:29.2426278Z   Using cached pygments-2.19.2-py3-none-any.whl.metadata (2.5 kB)
+2025-11-21T16:05:29.2770330Z Collecting dnspython>=1.15.0 (from eventlet>=0.39.0->-r requirements.txt (line 19))
+2025-11-21T16:05:29.2783724Z   Using cached dnspython-2.8.0-py3-none-any.whl.metadata (5.7 kB)
+2025-11-21T16:05:29.3228200Z Collecting billiard<5.0,>=4.2.1 (from celery>=5.0.0->-r requirements.txt (line 33))
+2025-11-21T16:05:29.3245989Z   Using cached billiard-4.2.3-py3-none-any.whl.metadata (4.8 kB)
+2025-11-21T16:05:29.3606713Z Collecting kombu<5.6,>=5.5.2 (from celery>=5.0.0->-r requirements.txt (line 33))
+2025-11-21T16:05:29.3620718Z   Using cached kombu-5.5.4-py3-none-any.whl.metadata (3.5 kB)
+2025-11-21T16:05:29.3824810Z Collecting vine<6.0,>=5.1.0 (from celery>=5.0.0->-r requirements.txt (line 33))
+2025-11-21T16:05:29.3837956Z   Using cached vine-5.1.0-py3-none-any.whl.metadata (2.7 kB)
+2025-11-21T16:05:29.3979546Z Collecting click-didyoumean>=0.3.0 (from celery>=5.0.0->-r requirements.txt (line 33))
+2025-11-21T16:05:29.3992557Z   Using cached click_didyoumean-0.3.1-py3-none-any.whl.metadata (3.9 kB)
+2025-11-21T16:05:29.4135755Z Collecting click-repl>=0.2.0 (from celery>=5.0.0->-r requirements.txt (line 33))
+2025-11-21T16:05:29.4148998Z   Using cached click_repl-0.3.0-py3-none-any.whl.metadata (3.6 kB)
+2025-11-21T16:05:29.4294810Z Collecting click-plugins>=1.1.1 (from celery>=5.0.0->-r requirements.txt (line 33))
+2025-11-21T16:05:29.4308198Z   Using cached click_plugins-1.1.1.2-py2.py3-none-any.whl.metadata (6.5 kB)
+2025-11-21T16:05:29.4595407Z Collecting amqp<6.0.0,>=5.1.1 (from kombu<5.6,>=5.5.2->celery>=5.0.0->-r requirements.txt (line 33))
+2025-11-21T16:05:29.4608740Z   Using cached amqp-5.3.1-py3-none-any.whl.metadata (8.9 kB)
+2025-11-21T16:05:29.5173327Z Collecting tornado<7.0.0,>=5.0.0 (from flower>=2.0.0->-r requirements.txt (line 34))
+2025-11-21T16:05:29.5187844Z   Using cached tornado-6.5.2-cp39-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (2.8 kB)
+2025-11-21T16:05:29.5426031Z Collecting humanize (from flower>=2.0.0->-r requirements.txt (line 34))
+2025-11-21T16:05:29.5439582Z   Using cached humanize-4.14.0-py3-none-any.whl.metadata (7.8 kB)
+2025-11-21T16:05:29.5670893Z Collecting absl-py>=2.0.0 (from ortools>=9.0.0->-r requirements.txt (line 40))
+2025-11-21T16:05:29.5684076Z   Using cached absl_py-2.3.1-py3-none-any.whl.metadata (3.3 kB)
+2025-11-21T16:05:29.7286999Z Collecting protobuf<6.32,>=6.31.1 (from ortools>=9.0.0->-r requirements.txt (line 40))
+2025-11-21T16:05:29.7301657Z   Using cached protobuf-6.31.1-cp39-abi3-manylinux2014_x86_64.whl.metadata (593 bytes)
+2025-11-21T16:05:29.7518546Z Collecting geographiclib<3,>=1.52 (from geopy>=2.4.0->-r requirements.txt (line 41))
+2025-11-21T16:05:29.7532271Z   Using cached geographiclib-2.1-py3-none-any.whl.metadata (1.6 kB)
+2025-11-21T16:05:29.8487190Z Collecting charset_normalizer<4,>=2 (from requests>=2.32.0->-r requirements.txt (line 79))
+2025-11-21T16:05:29.8501367Z   Using cached charset_normalizer-3.4.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (37 kB)
+2025-11-21T16:05:29.8704241Z Collecting idna<4,>=2.5 (from requests>=2.32.0->-r requirements.txt (line 79))
+2025-11-21T16:05:29.8717233Z   Using cached idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+2025-11-21T16:05:29.9024721Z Collecting urllib3<3,>=1.21.1 (from requests>=2.32.0->-r requirements.txt (line 79))
+2025-11-21T16:05:29.9039148Z   Using cached urllib3-2.5.0-py3-none-any.whl.metadata (6.5 kB)
+2025-11-21T16:05:29.9289304Z Collecting certifi>=2017.4.17 (from requests>=2.32.0->-r requirements.txt (line 79))
+2025-11-21T16:05:29.9303091Z   Using cached certifi-2025.11.12-py3-none-any.whl.metadata (2.5 kB)
+2025-11-21T16:05:30.1373682Z Collecting scipy>=1.8.0 (from scikit-learn>=1.0.0->-r requirements.txt (line 46))
+2025-11-21T16:05:30.1390527Z   Using cached scipy-1.16.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (62 kB)
+2025-11-21T16:05:30.1759483Z Collecting joblib>=1.2.0 (from scikit-learn>=1.0.0->-r requirements.txt (line 46))
+2025-11-21T16:05:30.1778332Z   Using cached joblib-1.5.2-py3-none-any.whl.metadata (5.6 kB)
+2025-11-21T16:05:30.1933298Z Collecting threadpoolctl>=3.1.0 (from scikit-learn>=1.0.0->-r requirements.txt (line 46))
+2025-11-21T16:05:30.1947119Z   Using cached threadpoolctl-3.6.0-py3-none-any.whl.metadata (13 kB)
+2025-11-21T16:05:30.2358988Z Collecting nvidia-nccl-cu12 (from xgboost>=2.0.0->-r requirements.txt (line 49))
+2025-11-21T16:05:30.2372955Z   Using cached nvidia_nccl_cu12-2.28.9-py3-none-manylinux_2_18_x86_64.whl.metadata (2.0 kB)
+2025-11-21T16:05:30.2960335Z Collecting patsy>=0.5.6 (from statsmodels>=0.14.0->-r requirements.txt (line 51))
+2025-11-21T16:05:30.2973975Z   Using cached patsy-1.0.2-py2.py3-none-any.whl.metadata (3.6 kB)
+2025-11-21T16:05:30.3601833Z Collecting importlib-metadata<8.8.0,>=6.0 (from opentelemetry-api>=1.24.0->-r requirements.txt (line 61))
+2025-11-21T16:05:30.3615703Z   Using cached importlib_metadata-8.7.0-py3-none-any.whl.metadata (4.8 kB)
+2025-11-21T16:05:30.3876006Z Collecting zipp>=3.20 (from importlib-metadata<8.8.0,>=6.0->opentelemetry-api>=1.24.0->-r requirements.txt (line 61))
+2025-11-21T16:05:30.3889976Z   Using cached zipp-3.23.0-py3-none-any.whl.metadata (3.6 kB)
+2025-11-21T16:05:30.4166430Z Collecting opentelemetry-semantic-conventions==0.59b0 (from opentelemetry-sdk>=1.24.0->-r requirements.txt (line 62))
+2025-11-21T16:05:30.4180527Z   Using cached opentelemetry_semantic_conventions-0.59b0-py3-none-any.whl.metadata (2.4 kB)
+2025-11-21T16:05:30.4454427Z Collecting googleapis-common-protos~=1.57 (from opentelemetry-exporter-otlp-proto-grpc>=1.24.0->-r requirements.txt (line 63))
+2025-11-21T16:05:30.4468261Z   Using cached googleapis_common_protos-1.72.0-py3-none-any.whl.metadata (9.4 kB)
+2025-11-21T16:05:30.9913407Z Collecting grpcio<2.0.0,>=1.63.2 (from opentelemetry-exporter-otlp-proto-grpc>=1.24.0->-r requirements.txt (line 63))
+2025-11-21T16:05:30.9929233Z   Using cached grpcio-1.76.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (3.7 kB)
+2025-11-21T16:05:31.0220035Z Collecting opentelemetry-exporter-otlp-proto-common==1.38.0 (from opentelemetry-exporter-otlp-proto-grpc>=1.24.0->-r requirements.txt (line 63))
+2025-11-21T16:05:31.0241876Z   Using cached opentelemetry_exporter_otlp_proto_common-1.38.0-py3-none-any.whl.metadata (1.8 kB)
+2025-11-21T16:05:31.0486436Z Collecting opentelemetry-proto==1.38.0 (from opentelemetry-exporter-otlp-proto-grpc>=1.24.0->-r requirements.txt (line 63))
+2025-11-21T16:05:31.0500211Z   Using cached opentelemetry_proto-1.38.0-py3-none-any.whl.metadata (2.3 kB)
+2025-11-21T16:05:31.1420418Z Collecting opentelemetry-instrumentation==0.59b0 (from opentelemetry-instrumentation-requests>=0.45b0->-r requirements.txt (line 64))
+2025-11-21T16:05:31.1433938Z   Using cached opentelemetry_instrumentation-0.59b0-py3-none-any.whl.metadata (7.1 kB)
+2025-11-21T16:05:31.1653239Z Collecting opentelemetry-util-http==0.59b0 (from opentelemetry-instrumentation-requests>=0.45b0->-r requirements.txt (line 64))
+2025-11-21T16:05:31.1667959Z   Using cached opentelemetry_util_http-0.59b0-py3-none-any.whl.metadata (2.6 kB)
+2025-11-21T16:05:31.3053264Z Collecting wrapt<2.0.0,>=1.0.0 (from opentelemetry-instrumentation==0.59b0->opentelemetry-instrumentation-requests>=0.45b0->-r requirements.txt (line 64))
+2025-11-21T16:05:31.3068149Z   Using cached wrapt-1.17.3-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (6.4 kB)
+2025-11-21T16:05:31.4162264Z Collecting cffi>=2.0.0 (from cryptography>=41.0.0->-r requirements.txt (line 70))
+2025-11-21T16:05:31.4176622Z   Using cached cffi-2.0.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.6 kB)
+2025-11-21T16:05:31.4511860Z Collecting annotated-types>=0.6.0 (from pydantic>=1.8.0->-r requirements.txt (line 76))
+2025-11-21T16:05:31.4525380Z   Using cached annotated_types-0.7.0-py3-none-any.whl.metadata (15 kB)
+2025-11-21T16:05:32.1638723Z Collecting pydantic-core==2.41.5 (from pydantic>=1.8.0->-r requirements.txt (line 76))
+2025-11-21T16:05:32.1655356Z   Using cached pydantic_core-2.41.5-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (7.3 kB)
+2025-11-21T16:05:32.1831580Z Collecting typing-inspection>=0.4.2 (from pydantic>=1.8.0->-r requirements.txt (line 76))
+2025-11-21T16:05:32.1846267Z   Using cached typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+2025-11-21T16:05:32.2080387Z Collecting bidict>=0.21.0 (from python-socketio>=5.12.0->-r requirements.txt (line 77))
+2025-11-21T16:05:32.2093824Z   Using cached bidict-0.23.1-py3-none-any.whl.metadata (8.7 kB)
+2025-11-21T16:05:32.2495813Z Collecting six>=1.5 (from python-dateutil>=2.8.0->-r requirements.txt (line 89))
+2025-11-21T16:05:32.2509883Z   Using cached six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+2025-11-21T16:05:32.2747328Z Collecting iso3166 (from qrbill>=1.0.0->-r requirements.txt (line 97))
+2025-11-21T16:05:32.2761503Z   Using cached iso3166-2.1.1-py3-none-any.whl.metadata (6.6 kB)
+2025-11-21T16:05:32.4680514Z Collecting lxml>=6.0.0 (from svglib>=1.5.0->-r requirements.txt (line 102))
+2025-11-21T16:05:32.4696274Z   Using cached lxml-6.0.2-cp311-cp311-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl.metadata (3.6 kB)
+2025-11-21T16:05:32.4878017Z Collecting rlpycairo>=0.4.0 (from svglib>=1.5.0->-r requirements.txt (line 102))
+2025-11-21T16:05:32.4892110Z   Using cached rlpycairo-0.4.0-py3-none-any.whl.metadata (4.9 kB)
+2025-11-21T16:05:32.5180330Z Collecting iniconfig>=1.0.1 (from pytest>=8.0.0->-r requirements.txt (line 109))
+2025-11-21T16:05:32.5194160Z   Using cached iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+2025-11-21T16:05:32.5397262Z Collecting pluggy<2,>=1.5 (from pytest>=8.0.0->-r requirements.txt (line 109))
+2025-11-21T16:05:32.5411489Z   Using cached pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+2025-11-21T16:05:32.5748626Z Requirement already satisfied: Mako in /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages (from alembic>=1.9.0->Flask-Migrate>=3.0.0->-r requirements.txt (line 6)) (1.3.10)
+2025-11-21T16:05:32.6004377Z Collecting pycparser (from cffi>=2.0.0->cryptography>=41.0.0->-r requirements.txt (line 70))
+2025-11-21T16:05:32.6018325Z   Using cached pycparser-2.23-py3-none-any.whl.metadata (993 bytes)
+2025-11-21T16:05:32.6416724Z Collecting prompt-toolkit>=3.0.36 (from click-repl>=0.2.0->celery>=5.0.0->-r requirements.txt (line 33))
+2025-11-21T16:05:32.6431691Z   Using cached prompt_toolkit-3.0.52-py3-none-any.whl.metadata (6.4 kB)
+2025-11-21T16:05:32.6730083Z Collecting deprecated>=1.2 (from limits>=3.13->Flask-Limiter>=3.0.0->-r requirements.txt (line 13))
+2025-11-21T16:05:32.6743714Z   Using cached deprecated-1.3.1-py2.py3-none-any.whl.metadata (5.9 kB)
+2025-11-21T16:05:32.7093168Z Collecting mdurl~=0.1 (from markdown-it-py>=2.2.0->rich>=13.0.0->-r requirements.txt (line 111))
+2025-11-21T16:05:32.7106607Z   Using cached mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+2025-11-21T16:05:32.7536807Z Collecting wcwidth (from prompt-toolkit>=3.0.36->click-repl>=0.2.0->celery>=5.0.0->-r requirements.txt (line 33))
+2025-11-21T16:05:32.7550859Z   Using cached wcwidth-0.2.14-py2.py3-none-any.whl.metadata (15 kB)
+2025-11-21T16:05:32.7822601Z Collecting pycairo>=1.20.0 (from rlpycairo>=0.4.0->svglib>=1.5.0->-r requirements.txt (line 102))
+2025-11-21T16:05:32.7823540Z   Using cached pycairo-1.29.0-cp311-cp311-linux_x86_64.whl
+2025-11-21T16:05:32.8017832Z Collecting freetype-py>=2.3 (from rlpycairo>=0.4.0->svglib>=1.5.0->-r requirements.txt (line 102))
+2025-11-21T16:05:32.8032527Z   Using cached freetype_py-2.5.1-py3-none-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl.metadata (6.3 kB)
+2025-11-21T16:05:32.8790496Z Collecting jsonschema-specifications>=2023.03.6 (from jsonschema->flask-restx>=1.3.0->-r requirements.txt (line 11))
+2025-11-21T16:05:32.8804280Z   Using cached jsonschema_specifications-2025.9.1-py3-none-any.whl.metadata (2.9 kB)
+2025-11-21T16:05:33.1418552Z Collecting rpds-py>=0.7.1 (from jsonschema->flask-restx>=1.3.0->-r requirements.txt (line 11))
+2025-11-21T16:05:33.1434882Z   Using cached rpds_py-0.29.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.1 kB)
+2025-11-21T16:05:33.1872264Z Using cached psycopg-3.2.12-py3-none-any.whl (206 kB)
+2025-11-21T16:05:33.1887476Z Using cached psycopg_binary-3.2.12-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (4.4 MB)
+2025-11-21T16:05:33.1933228Z Using cached Flask_SocketIO-5.5.1-py3-none-any.whl (18 kB)
+2025-11-21T16:05:33.1946442Z Using cached flask_cors-6.0.1-py3-none-any.whl (13 kB)
+2025-11-21T16:05:33.1959940Z Using cached flask_talisman-1.1.0-py2.py3-none-any.whl (18 kB)
+2025-11-21T16:05:33.1972984Z Using cached Flask_JWT_Extended-4.7.1-py2.py3-none-any.whl (22 kB)
+2025-11-21T16:05:33.1985662Z Using cached PyJWT-2.10.1-py3-none-any.whl (22 kB)
+2025-11-21T16:05:33.1998896Z Using cached flask_restx-1.3.2-py2.py3-none-any.whl (2.8 MB)
+2025-11-21T16:05:33.2031749Z Using cached flask_marshmallow-1.3.0-py3-none-any.whl (12 kB)
+2025-11-21T16:05:33.2044727Z Using cached flask_limiter-4.0.0-py3-none-any.whl (29 kB)
+2025-11-21T16:05:33.2058006Z Using cached rich-14.2.0-py3-none-any.whl (243 kB)
+2025-11-21T16:05:33.2072838Z Using cached ordered_set-4.1.0-py3-none-any.whl (7.6 kB)
+2025-11-21T16:05:33.2085907Z Using cached pygments-2.19.2-py3-none-any.whl (1.2 MB)
+2025-11-21T16:05:33.2109515Z Using cached flask_mail-0.10.0-py3-none-any.whl (8.5 kB)
+2025-11-21T16:05:33.2122655Z Using cached Flask_Bcrypt-1.0.1-py3-none-any.whl (6.0 kB)
+2025-11-21T16:05:33.2135688Z Using cached gunicorn-23.0.0-py3-none-any.whl (85 kB)
+2025-11-21T16:05:33.2149286Z Using cached eventlet-0.40.3-py3-none-any.whl (364 kB)
+2025-11-21T16:05:33.2164956Z Using cached waitress-3.0.2-py3-none-any.whl (56 kB)
+2025-11-21T16:05:33.2179434Z Using cached simple_websocket-1.1.0-py3-none-any.whl (13 kB)
+2025-11-21T16:05:33.2285042Z Downloading wsproto-1.3.2-py3-none-any.whl (24 kB)
+2025-11-21T16:05:33.2393675Z Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+2025-11-21T16:05:33.2406849Z Using cached sqlalchemy_utils-0.42.0-py3-none-any.whl (91 kB)
+2025-11-21T16:05:33.2420533Z Using cached celery-5.5.3-py3-none-any.whl (438 kB)
+2025-11-21T16:05:33.2436440Z Using cached billiard-4.2.3-py3-none-any.whl (87 kB)
+2025-11-21T16:05:33.2449914Z Using cached kombu-5.5.4-py3-none-any.whl (210 kB)
+2025-11-21T16:05:33.2464078Z Using cached vine-5.1.0-py3-none-any.whl (9.6 kB)
+2025-11-21T16:05:33.2477163Z Using cached amqp-5.3.1-py3-none-any.whl (50 kB)
+2025-11-21T16:05:33.2490560Z Using cached flower-2.0.1-py2.py3-none-any.whl (383 kB)
+2025-11-21T16:05:33.2506777Z Using cached tornado-6.5.2-cp39-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (443 kB)
+2025-11-21T16:05:33.2522468Z Using cached redis-7.1.0-py3-none-any.whl (354 kB)
+2025-11-21T16:05:33.2538165Z Using cached ortools-9.14.6206-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (27.7 MB)
+2025-11-21T16:05:33.2745741Z Using cached protobuf-6.31.1-cp39-abi3-manylinux2014_x86_64.whl (321 kB)
+2025-11-21T16:05:33.2760774Z Using cached geopy-2.4.1-py3-none-any.whl (125 kB)
+2025-11-21T16:05:33.2774516Z Using cached geographiclib-2.1-py3-none-any.whl (40 kB)
+2025-11-21T16:05:33.2788105Z Using cached requests-2.32.5-py3-none-any.whl (64 kB)
+2025-11-21T16:05:33.2802167Z Using cached charset_normalizer-3.4.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (151 kB)
+2025-11-21T16:05:33.2815513Z Using cached idna-3.11-py3-none-any.whl (71 kB)
+2025-11-21T16:05:33.2829059Z Using cached urllib3-2.5.0-py3-none-any.whl (129 kB)
+2025-11-21T16:05:33.2842844Z Using cached holidays-0.85-py3-none-any.whl (1.3 MB)
+2025-11-21T16:05:33.2866219Z Using cached scikit_learn-1.7.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (9.7 MB)
+2025-11-21T16:05:33.2946828Z Using cached numpy-2.3.5-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.9 MB)
+2025-11-21T16:05:33.3078339Z Using cached pandas-2.3.3-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (12.8 MB)
+2025-11-21T16:05:33.3292955Z Downloading xgboost-3.1.2-py3-none-manylinux_2_28_x86_64.whl (115.9 MB)
+2025-11-21T16:05:33.8569081Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 115.9/115.9 MB 229.6 MB/s  0:00:00
+2025-11-21T16:05:33.8584459Z Using cached lightgbm-4.6.0-py3-none-manylinux_2_28_x86_64.whl (3.6 MB)
+2025-11-21T16:05:33.8625291Z Using cached statsmodels-0.14.5-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (10.5 MB)
+2025-11-21T16:05:33.8714780Z Using cached marshmallow-4.1.0-py3-none-any.whl (48 kB)
+2025-11-21T16:05:33.8729169Z Using cached marshmallow_sqlalchemy-1.4.2-py3-none-any.whl (16 kB)
+2025-11-21T16:05:33.8742489Z Using cached sentry_sdk-2.45.0-py2.py3-none-any.whl (404 kB)
+2025-11-21T16:05:33.8758595Z Using cached opentelemetry_api-1.38.0-py3-none-any.whl (65 kB)
+2025-11-21T16:05:33.8772219Z Using cached importlib_metadata-8.7.0-py3-none-any.whl (27 kB)
+2025-11-21T16:05:33.8785619Z Using cached opentelemetry_sdk-1.38.0-py3-none-any.whl (132 kB)
+2025-11-21T16:05:33.8799866Z Using cached opentelemetry_semantic_conventions-0.59b0-py3-none-any.whl (207 kB)
+2025-11-21T16:05:33.8815273Z Using cached opentelemetry_exporter_otlp_proto_grpc-1.38.0-py3-none-any.whl (19 kB)
+2025-11-21T16:05:33.8828707Z Using cached opentelemetry_exporter_otlp_proto_common-1.38.0-py3-none-any.whl (18 kB)
+2025-11-21T16:05:33.8841837Z Using cached opentelemetry_proto-1.38.0-py3-none-any.whl (72 kB)
+2025-11-21T16:05:33.8855494Z Using cached googleapis_common_protos-1.72.0-py3-none-any.whl (297 kB)
+2025-11-21T16:05:33.8871099Z Using cached grpcio-1.76.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (6.6 MB)
+2025-11-21T16:05:33.8933526Z Using cached opentelemetry_instrumentation_requests-0.59b0-py3-none-any.whl (12 kB)
+2025-11-21T16:05:33.8947410Z Using cached opentelemetry_instrumentation-0.59b0-py3-none-any.whl (33 kB)
+2025-11-21T16:05:33.8961602Z Using cached opentelemetry_util_http-0.59b0-py3-none-any.whl (7.6 kB)
+2025-11-21T16:05:33.8975533Z Using cached wrapt-1.17.3-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (82 kB)
+2025-11-21T16:05:33.8989691Z Using cached prometheus_client-0.23.1-py3-none-any.whl (61 kB)
+2025-11-21T16:05:33.9003839Z Using cached cryptography-46.0.3-cp311-abi3-manylinux_2_34_x86_64.whl (4.5 MB)
+2025-11-21T16:05:33.9048531Z Using cached bcrypt-5.0.0-cp39-abi3-manylinux_2_34_x86_64.whl (278 kB)
+2025-11-21T16:05:33.9064131Z Using cached hvac-2.4.0-py3-none-any.whl (155 kB)
+2025-11-21T16:05:33.9078879Z Using cached python_dotenv-1.2.1-py3-none-any.whl (21 kB)
+2025-11-21T16:05:33.9092567Z Using cached pydantic-2.12.4-py3-none-any.whl (463 kB)
+2025-11-21T16:05:33.9109849Z Using cached pydantic_core-2.41.5-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+2025-11-21T16:05:33.9137941Z Using cached python_socketio-5.14.3-py3-none-any.whl (79 kB)
+2025-11-21T16:05:33.9151960Z Using cached python_engineio-4.12.3-py3-none-any.whl (59 kB)
+2025-11-21T16:05:33.9165795Z Using cached packaging-25.0-py3-none-any.whl (66 kB)
+2025-11-21T16:05:33.9180464Z Using cached attrs-25.4.0-py3-none-any.whl (67 kB)
+2025-11-21T16:05:33.9194420Z Using cached aniso8601-10.0.1-py2.py3-none-any.whl (52 kB)
+2025-11-21T16:05:33.9208599Z Using cached pytz-2025.2-py2.py3-none-any.whl (509 kB)
+2025-11-21T16:05:33.9225564Z Using cached tzdata-2025.2-py2.py3-none-any.whl (347 kB)
+2025-11-21T16:05:33.9242067Z Using cached tzlocal-5.3.1-py3-none-any.whl (18 kB)
+2025-11-21T16:05:33.9255672Z Using cached immutabledict-4.2.2-py3-none-any.whl (4.7 kB)
+2025-11-21T16:05:33.9269522Z Using cached pillow-12.0.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (7.0 MB)
+2025-11-21T16:05:33.9331616Z Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+2025-11-21T16:05:33.9346364Z Using cached qrbill-1.2.0-py3-none-any.whl (13 kB)
+2025-11-21T16:05:33.9360094Z Using cached qrcode-8.2-py3-none-any.whl (45 kB)
+2025-11-21T16:05:33.9373699Z Using cached segno-1.6.6-py3-none-any.whl (76 kB)
+2025-11-21T16:05:33.9387826Z Using cached reportlab-4.4.5-py3-none-any.whl (2.0 MB)
+2025-11-21T16:05:33.9414891Z Using cached svglib-1.6.0-py3-none-any.whl (39 kB)
+2025-11-21T16:05:33.9428617Z Using cached svgwrite-1.4.3-py3-none-any.whl (67 kB)
+2025-11-21T16:05:33.9442487Z Using cached tinycss2-1.5.0-py3-none-any.whl (28 kB)
+2025-11-21T16:05:33.9456101Z Using cached cssselect2-0.8.0-py3-none-any.whl (15 kB)
+2025-11-21T16:05:33.9469813Z Using cached webencodings-0.5.1-py2.py3-none-any.whl (11 kB)
+2025-11-21T16:05:33.9483929Z Using cached pytest-9.0.1-py3-none-any.whl (373 kB)
+2025-11-21T16:05:33.9500206Z Using cached pluggy-1.6.0-py3-none-any.whl (20 kB)
+2025-11-21T16:05:33.9513821Z Using cached pytest_flask-1.3.0-py3-none-any.whl (13 kB)
+2025-11-21T16:05:33.9527339Z Using cached stripe-14.0.0-py3-none-any.whl (2.0 MB)
+2025-11-21T16:05:33.9555145Z Using cached python_stdnum-2.1-py3-none-any.whl (1.1 MB)
+2025-11-21T16:05:33.9576334Z Using cached absl_py-2.3.1-py3-none-any.whl (135 kB)
+2025-11-21T16:05:33.9591045Z Using cached annotated_types-0.7.0-py3-none-any.whl (13 kB)
+2025-11-21T16:05:33.9604515Z Using cached bidict-0.23.1-py3-none-any.whl (32 kB)
+2025-11-21T16:05:33.9618261Z Using cached certifi-2025.11.12-py3-none-any.whl (159 kB)
+2025-11-21T16:05:33.9633293Z Using cached cffi-2.0.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (215 kB)
+2025-11-21T16:05:33.9648178Z Using cached click_didyoumean-0.3.1-py3-none-any.whl (3.6 kB)
+2025-11-21T16:05:33.9661682Z Using cached click_plugins-1.1.1.2-py2.py3-none-any.whl (11 kB)
+2025-11-21T16:05:33.9675207Z Using cached click_repl-0.3.0-py3-none-any.whl (10 kB)
+2025-11-21T16:05:33.9688858Z Using cached dnspython-2.8.0-py3-none-any.whl (331 kB)
+2025-11-21T16:05:33.9704786Z Using cached iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+2025-11-21T16:05:33.9718515Z Using cached joblib-1.5.2-py3-none-any.whl (308 kB)
+2025-11-21T16:05:33.9734120Z Using cached limits-5.6.0-py3-none-any.whl (60 kB)
+2025-11-21T16:05:33.9748067Z Using cached deprecated-1.3.1-py2.py3-none-any.whl (11 kB)
+2025-11-21T16:05:33.9762197Z Using cached lxml-6.0.2-cp311-cp311-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl (5.2 MB)
+2025-11-21T16:05:33.9812245Z Using cached markdown_it_py-4.0.0-py3-none-any.whl (87 kB)
+2025-11-21T16:05:33.9826283Z Using cached mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+2025-11-21T16:05:33.9839991Z Using cached patsy-1.0.2-py2.py3-none-any.whl (233 kB)
+2025-11-21T16:05:33.9855124Z Using cached prompt_toolkit-3.0.52-py3-none-any.whl (391 kB)
+2025-11-21T16:05:33.9871166Z Using cached rlpycairo-0.4.0-py3-none-any.whl (7.6 kB)
+2025-11-21T16:05:33.9885314Z Using cached freetype_py-2.5.1-py3-none-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl (1.0 MB)
+2025-11-21T16:05:33.9906012Z Using cached scipy-1.16.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (35.9 MB)
+2025-11-21T16:05:34.0167962Z Using cached six-1.17.0-py2.py3-none-any.whl (11 kB)
+2025-11-21T16:05:34.0181774Z Using cached threadpoolctl-3.6.0-py3-none-any.whl (18 kB)
+2025-11-21T16:05:34.0195550Z Using cached typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+2025-11-21T16:05:34.0209247Z Using cached zipp-3.23.0-py3-none-any.whl (10 kB)
+2025-11-21T16:05:34.0223033Z Using cached humanize-4.14.0-py3-none-any.whl (132 kB)
+2025-11-21T16:05:34.0237248Z Using cached importlib_resources-6.5.2-py3-none-any.whl (37 kB)
+2025-11-21T16:05:34.0251304Z Using cached iso3166-2.1.1-py3-none-any.whl (9.8 kB)
+2025-11-21T16:05:34.0264807Z Using cached jsonschema-4.25.1-py3-none-any.whl (90 kB)
+2025-11-21T16:05:34.0279087Z Using cached jsonschema_specifications-2025.9.1-py3-none-any.whl (18 kB)
+2025-11-21T16:05:34.0293065Z Using cached referencing-0.37.0-py3-none-any.whl (26 kB)
+2025-11-21T16:05:34.0307017Z Using cached rpds_py-0.29.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (392 kB)
+2025-11-21T16:05:34.0323719Z Using cached nvidia_nccl_cu12-2.28.9-py3-none-manylinux_2_18_x86_64.whl (296.8 MB)
+2025-11-21T16:05:34.2394642Z Using cached pycparser-2.23-py3-none-any.whl (118 kB)
+2025-11-21T16:05:34.2410203Z Using cached wcwidth-0.2.14-py2.py3-none-any.whl (37 kB)
+2025-11-21T16:05:35.0017055Z Installing collected packages: webencodings, pytz, fpdf, Flask-Talisman, aniso8601, zipp, wrapt, wcwidth, waitress, vine, urllib3, tzlocal, tzdata, typing-inspection, tornado, tinycss2, threadpoolctl, svgwrite, six, segno, rpds-py, redis, qrcode, python-stdnum, python-dotenv, PyJWT, pygments, pydantic-core, pycparser, pycairo, psycopg-binary, psycopg, protobuf, prometheus-client, pluggy, Pillow, packaging, ordered-set, opentelemetry-util-http, nvidia-nccl-cu12, numpy, mdurl, marshmallow, lxml, joblib, iso3166, iniconfig, importlib-resources, immutabledict, idna, humanize, h11, grpcio, geographiclib, freetype-py, dnspython, click-plugins, click-didyoumean, charset_normalizer, certifi, billiard, bidict, bcrypt, attrs, annotated-types, absl-py, wsproto, SQLAlchemy-Utils, sentry-sdk, scipy, rlpycairo, requests, reportlab, referencing, qrbill, python-dateutil, pytest, pydantic, prompt-toolkit, patsy, opentelemetry-proto, marshmallow-sqlalchemy, markdown-it-py, importlib-metadata, gunicorn, googleapis-common-protos, geopy, eventlet, deprecated, cssselect2, cffi, amqp, xgboost, svglib, stripe, simple-websocket, scikit-learn, rich, pytest-flask, pandas, opentelemetry-exporter-otlp-proto-common, opentelemetry-api, limits, lightgbm, kombu, jsonschema-specifications, hvac, holidays, googlemaps, flask-marshmallow, Flask-Mail, Flask-JWT-Extended, Flask-Cors, Flask-Bcrypt, cryptography, click-repl, statsmodels, python-engineio, ortools, opentelemetry-semantic-conventions, jsonschema, Flask-Limiter, celery, python-socketio, opentelemetry-sdk, opentelemetry-instrumentation, flower, flask-restx, opentelemetry-instrumentation-requests, opentelemetry-exporter-otlp-proto-grpc, Flask-SocketIO
+2025-11-21T16:06:03.5384472Z 
+2025-11-21T16:06:03.5456440Z Successfully installed Flask-Bcrypt-1.0.1 Flask-Cors-6.0.1 Flask-JWT-Extended-4.7.1 Flask-Limiter-4.0.0 Flask-Mail-0.10.0 Flask-SocketIO-5.5.1 Flask-Talisman-1.1.0 Pillow-12.0.0 PyJWT-2.10.1 SQLAlchemy-Utils-0.42.0 absl-py-2.3.1 amqp-5.3.1 aniso8601-10.0.1 annotated-types-0.7.0 attrs-25.4.0 bcrypt-5.0.0 bidict-0.23.1 billiard-4.2.3 celery-5.5.3 certifi-2025.11.12 cffi-2.0.0 charset_normalizer-3.4.4 click-didyoumean-0.3.1 click-plugins-1.1.1.2 click-repl-0.3.0 cryptography-46.0.3 cssselect2-0.8.0 deprecated-1.3.1 dnspython-2.8.0 eventlet-0.40.3 flask-marshmallow-1.3.0 flask-restx-1.3.2 flower-2.0.1 fpdf-1.7.2 freetype-py-2.5.1 geographiclib-2.1 geopy-2.4.1 googleapis-common-protos-1.72.0 googlemaps-4.10.0 grpcio-1.76.0 gunicorn-23.0.0 h11-0.16.0 holidays-0.85 humanize-4.14.0 hvac-2.4.0 idna-3.11 immutabledict-4.2.2 importlib-metadata-8.7.0 importlib-resources-6.5.2 iniconfig-2.3.0 iso3166-2.1.1 joblib-1.5.2 jsonschema-4.25.1 jsonschema-specifications-2025.9.1 kombu-5.5.4 lightgbm-4.6.0 limits-5.6.0 lxml-6.0.2 markdown-it-py-4.0.0 marshmallow-4.1.0 marshmallow-sqlalchemy-1.4.2 mdurl-0.1.2 numpy-2.3.5 nvidia-nccl-cu12-2.28.9 opentelemetry-api-1.38.0 opentelemetry-exporter-otlp-proto-common-1.38.0 opentelemetry-exporter-otlp-proto-grpc-1.38.0 opentelemetry-instrumentation-0.59b0 opentelemetry-instrumentation-requests-0.59b0 opentelemetry-proto-1.38.0 opentelemetry-sdk-1.38.0 opentelemetry-semantic-conventions-0.59b0 opentelemetry-util-http-0.59b0 ordered-set-4.1.0 ortools-9.14.6206 packaging-25.0 pandas-2.3.3 patsy-1.0.2 pluggy-1.6.0 prometheus-client-0.23.1 prompt-toolkit-3.0.52 protobuf-6.31.1 psycopg-3.2.12 psycopg-binary-3.2.12 pycairo-1.29.0 pycparser-2.23 pydantic-2.12.4 pydantic-core-2.41.5 pygments-2.19.2 pytest-9.0.1 pytest-flask-1.3.0 python-dateutil-2.9.0.post0 python-dotenv-1.2.1 python-engineio-4.12.3 python-socketio-5.14.3 python-stdnum-2.1 pytz-2025.2 qrbill-1.2.0 qrcode-8.2 redis-7.1.0 referencing-0.37.0 reportlab-4.4.5 requests-2.32.5 rich-14.2.0 rlpycairo-0.4.0 rpds-py-0.29.0 scikit-learn-1.7.2 scipy-1.16.3 segno-1.6.6 sentry-sdk-2.45.0 simple-websocket-1.1.0 six-1.17.0 statsmodels-0.14.5 stripe-14.0.0 svglib-1.6.0 svgwrite-1.4.3 threadpoolctl-3.6.0 tinycss2-1.5.0 tornado-6.5.2 typing-inspection-0.4.2 tzdata-2025.2 tzlocal-5.3.1 urllib3-2.5.0 vine-5.1.0 waitress-3.0.2 wcwidth-0.2.14 webencodings-0.5.1 wrapt-1.17.3 wsproto-1.3.2 xgboost-3.1.2 zipp-3.23.0
+2025-11-21T16:06:04.3968394Z ##[group]Run cd backend
+2025-11-21T16:06:04.3968658Z [36;1mcd backend[0m
+2025-11-21T16:06:04.3968877Z [36;1mecho "📋 Liste des heads Alembic:"[0m
+2025-11-21T16:06:04.3969148Z [36;1mflask db heads || true[0m
+2025-11-21T16:06:04.3969372Z [36;1mecho ""[0m
+2025-11-21T16:06:04.4003022Z shell: /usr/bin/bash -e {0}
+2025-11-21T16:06:04.4003253Z env:
+2025-11-21T16:06:04.4003807Z   DATABASE_URL: ***localhost:5432/atmr_test
+2025-11-21T16:06:04.4004080Z   PGHOST: localhost
+2025-11-21T16:06:04.4004265Z   PGPORT: 5432
+2025-11-21T16:06:04.4004433Z   PGUSER: test
+2025-11-21T16:06:04.4004601Z   PGPASSWORD: test
+2025-11-21T16:06:04.4004781Z   PGDATABASE: atmr_test
+2025-11-21T16:06:04.4005005Z   REDIS_URL: redis://localhost:6379/0
+2025-11-21T16:06:04.4005256Z   FLASK_CONFIG: testing
+2025-11-21T16:06:04.4005450Z   SECRET_KEY: test-secret-key
+2025-11-21T16:06:04.4005676Z   JWT_SECRET_KEY: test-jwt-secret
+2025-11-21T16:06:04.4006045Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+2025-11-21T16:06:04.4006398Z   API_LEGACY_ENABLED: false
+2025-11-21T16:06:04.4006631Z   PYTHONPATH: /home/runner/work/atmr/atmr
+2025-11-21T16:06:04.4006891Z   SOCKETIO_ASYNC_MODE: threading
+2025-11-21T16:06:04.4007108Z   SKIP_SOCKETIO: true
+2025-11-21T16:06:04.4007300Z   SKIP_ROUTES_INIT: true
+2025-11-21T16:06:04.4007683Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:04.4008088Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+2025-11-21T16:06:04.4008485Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:04.4008838Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:04.4009200Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:04.4009557Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+2025-11-21T16:06:04.4009862Z   FLASK_APP: backend.wsgi
+2025-11-21T16:06:04.4010064Z ##[endgroup]
+2025-11-21T16:06:04.4060737Z 📋 Liste des heads Alembic:
+2025-11-21T16:06:04.9108620Z [4.1 Vault] Aucune authentification configurée, désactivation
+2025-11-21T16:06:04.9109605Z [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=dev/mail/password, key=value)
+2025-11-21T16:06:04.9110673Z [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=prod/mail/password, key=value)
+2025-11-21T16:06:05.6091916Z [2.9] OpenTelemetry non installé - installer avec: pip install -r requirements-otel.txt
+2025-11-21T16:06:05.6093443Z [2025-11-21 16:06:05,609] WARNING in app: [2.9] Échec instrumentation SQLAlchemy: Working outside of application context.
+2025-11-21T16:06:05.6094032Z 
+2025-11-21T16:06:05.6094321Z This typically means that you attempted to use functionality that needed
+2025-11-21T16:06:05.6095004Z the current application. To solve this, set up an application context
+2025-11-21T16:06:05.6095643Z with app.app_context(). See the documentation for more information.
+2025-11-21T16:06:06.0054114Z [2025-11-21 16:06:06,005] INFO in app: ⏭️  Initialisation des routes désactivée (SKIP_ROUTES_INIT=1)
+2025-11-21T16:06:06.2998229Z ✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:06:06.3781748Z 68116559b15d (head)
+2025-11-21T16:06:06.6481409Z 
+2025-11-21T16:06:06.6531050Z ##[group]Run cd backend
+2025-11-21T16:06:06.6531504Z [36;1mcd backend[0m
+2025-11-21T16:06:06.6531906Z [36;1mset -o errexit -o nounset -o pipefail -x[0m
+2025-11-21T16:06:06.6532601Z [36;1mecho "🔄 Exécution des migrations de base de données..."[0m
+2025-11-21T16:06:06.6533218Z [36;1mecho "📋 Alembic heads before upgrade:"[0m
+2025-11-21T16:06:06.6533706Z [36;1mflask db heads || true[0m
+2025-11-21T16:06:06.6534380Z [36;1m# Run the upgrade (use 'heads' to handle multiple heads until merge migration is created)[0m
+2025-11-21T16:06:06.6535325Z [36;1mif ! flask db upgrade heads 2>&1 | tee /tmp/alembic_upgrade.log; then[0m
+2025-11-21T16:06:06.6535997Z [36;1m  echo "❌ Erreur lors de l'exécution des migrations"[0m
+2025-11-21T16:06:06.6536681Z [36;1m  echo "---- Diagnostics (upgrade failed) - Log d'erreur ----"[0m
+2025-11-21T16:06:06.6537311Z [36;1m  sed -n '1,200p' /tmp/alembic_upgrade.log || true[0m
+2025-11-21T16:06:06.6538236Z [36;1m  echo "---- Diagnostics (upgrade failed) - État actuel ----"[0m
+2025-11-21T16:06:06.6538811Z [36;1m  flask db current || true[0m
+2025-11-21T16:06:06.6539215Z [36;1m  flask db heads || true[0m
+2025-11-21T16:06:06.6539681Z [36;1m  flask db history | sed -n '1,200p' || true[0m
+2025-11-21T16:06:06.6540199Z [36;1m  echo "Listing migrations/versions:"[0m
+2025-11-21T16:06:06.6540692Z [36;1m  ls -la migrations/versions || true[0m
+2025-11-21T16:06:06.6541218Z [36;1m  echo "---- Contenu des fichiers de migration ----"[0m
+2025-11-21T16:06:06.6541739Z [36;1m  shopt -s nullglob[0m
+2025-11-21T16:06:06.6542163Z [36;1m  for f in migrations/versions/*.py; do[0m
+2025-11-21T16:06:06.6542632Z [36;1m    [ -e "$f" ] || continue[0m
+2025-11-21T16:06:06.6543101Z [36;1m    echo "---- $f ----"[0m
+2025-11-21T16:06:06.6543506Z [36;1m    sed -n '1,200p' "$f"[0m
+2025-11-21T16:06:06.6543882Z [36;1m  done[0m
+2025-11-21T16:06:06.6544175Z [36;1m  exit 1[0m
+2025-11-21T16:06:06.6544467Z [36;1mfi[0m
+2025-11-21T16:06:06.6544837Z [36;1mecho "✅ Migrations exécutées avec succès"[0m
+2025-11-21T16:06:06.6579736Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-11-21T16:06:06.6580046Z env:
+2025-11-21T16:06:06.6580441Z   DATABASE_URL: ***localhost:5432/atmr_test
+2025-11-21T16:06:06.6580696Z   PGHOST: localhost
+2025-11-21T16:06:06.6580883Z   PGPORT: 5432
+2025-11-21T16:06:06.6581047Z   PGUSER: test
+2025-11-21T16:06:06.6581205Z   PGPASSWORD: test
+2025-11-21T16:06:06.6581384Z   PGDATABASE: atmr_test
+2025-11-21T16:06:06.6581603Z   REDIS_URL: redis://localhost:6379/0
+2025-11-21T16:06:06.6581849Z   FLASK_CONFIG: testing
+2025-11-21T16:06:06.6582048Z   SECRET_KEY: test-secret-key
+2025-11-21T16:06:06.6582273Z   JWT_SECRET_KEY: test-jwt-secret
+2025-11-21T16:06:06.6582592Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+2025-11-21T16:06:06.6582925Z   API_LEGACY_ENABLED: false
+2025-11-21T16:06:06.6583151Z   PYTHONPATH: /home/runner/work/atmr/atmr
+2025-11-21T16:06:06.6583412Z   SOCKETIO_ASYNC_MODE: threading
+2025-11-21T16:06:06.6583634Z   SKIP_SOCKETIO: true
+2025-11-21T16:06:06.6583824Z   SKIP_ROUTES_INIT: true
+2025-11-21T16:06:06.6584085Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:06.6584649Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+2025-11-21T16:06:06.6585026Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:06.6585394Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:06.6585744Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:06.6586085Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+2025-11-21T16:06:06.6586381Z   FLASK_APP: backend.wsgi
+2025-11-21T16:06:06.6586579Z ##[endgroup]
+2025-11-21T16:06:06.6640253Z + echo '🔄 Exécution des migrations de base de données...'
+2025-11-21T16:06:06.6640974Z 🔄 Exécution des migrations de base de données...
+2025-11-21T16:06:06.6641584Z + echo '📋 Alembic heads before upgrade:'
+2025-11-21T16:06:06.6641997Z + flask db heads
+2025-11-21T16:06:06.6642682Z 📋 Alembic heads before upgrade:
+2025-11-21T16:06:07.0508438Z [4.1 Vault] Aucune authentification configurée, désactivation
+2025-11-21T16:06:07.0509687Z [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=dev/mail/password, key=value)
+2025-11-21T16:06:07.0510866Z [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=prod/mail/password, key=value)
+2025-11-21T16:06:07.5396968Z [2.9] OpenTelemetry non installé - installer avec: pip install -r requirements-otel.txt
+2025-11-21T16:06:07.5400626Z [2025-11-21 16:06:07,539] WARNING in app: [2.9] Échec instrumentation SQLAlchemy: Working outside of application context.
+2025-11-21T16:06:07.5401369Z 
+2025-11-21T16:06:07.5401712Z This typically means that you attempted to use functionality that needed
+2025-11-21T16:06:07.5402552Z the current application. To solve this, set up an application context
+2025-11-21T16:06:07.5403355Z with app.app_context(). See the documentation for more information.
+2025-11-21T16:06:07.7624838Z [2025-11-21 16:06:07,762] INFO in app: ⏭️  Initialisation des routes désactivée (SKIP_ROUTES_INIT=1)
+2025-11-21T16:06:08.0116569Z ✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:06:08.0641935Z 68116559b15d (head)
+2025-11-21T16:06:08.3391778Z + flask db upgrade heads
+2025-11-21T16:06:08.3392400Z + tee /tmp/alembic_upgrade.log
+2025-11-21T16:06:08.7345333Z [4.1 Vault] Aucune authentification configurée, désactivation
+2025-11-21T16:06:08.7346591Z [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=dev/mail/password, key=value)
+2025-11-21T16:06:08.7348081Z [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=prod/mail/password, key=value)
+2025-11-21T16:06:09.2103803Z [2.9] OpenTelemetry non installé - installer avec: pip install -r requirements-otel.txt
+2025-11-21T16:06:09.2106339Z [2025-11-21 16:06:09,210] WARNING in app: [2.9] Échec instrumentation SQLAlchemy: Working outside of application context.
+2025-11-21T16:06:09.2106863Z 
+2025-11-21T16:06:09.2107111Z This typically means that you attempted to use functionality that needed
+2025-11-21T16:06:09.2107993Z the current application. To solve this, set up an application context
+2025-11-21T16:06:09.2108545Z with app.app_context(). See the documentation for more information.
+2025-11-21T16:06:09.4282332Z [2025-11-21 16:06:09,427] INFO in app: ⏭️  Initialisation des routes désactivée (SKIP_ROUTES_INIT=1)
+2025-11-21T16:06:09.6905769Z ✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:06:09.7081285Z INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+2025-11-21T16:06:09.7082320Z INFO  [alembic.runtime.migration] Will assume transactional DDL.
+2025-11-21T16:06:09.7820840Z INFO  [alembic.runtime.migration] Running upgrade  -> 19fc92c2ba30, initial schema (upper enums + aliases)
+2025-11-21T16:06:10.0495680Z INFO  [alembic.runtime.migration] Running upgrade 19fc92c2ba30 -> 623409ab335b, dispatch_run relations
+2025-11-21T16:06:10.0725661Z INFO  [alembic.runtime.migration] Running upgrade 623409ab335b -> 6af879898b0f, Update models.py
+2025-11-21T16:06:10.0741142Z INFO  [alembic.runtime.migration] Running upgrade 6af879898b0f -> 02e0994e702b, add_invoice_management_tables
+2025-11-21T16:06:10.1386233Z INFO  [alembic.runtime.migration] Running upgrade 02e0994e702b -> 3f7695e18b7d, make_billing_settings_fields_nullable
+2025-11-21T16:06:10.1413423Z INFO  [alembic.runtime.migration] Running upgrade 3f7695e18b7d -> a452a931f0b7, planning: models skeleton
+2025-11-21T16:06:10.2153881Z INFO  [alembic.runtime.migration] Running upgrade a452a931f0b7 -> 6d50ede67619, add timezone to driver_shift
+2025-11-21T16:06:10.2528941Z INFO  [alembic.runtime.migration] Running upgrade 6d50ede67619 -> b15c01673cc4, driver HR fields + timezone normalize in planning_service
+2025-11-21T16:06:10.2597886Z INFO  [alembic.runtime.migration] Running upgrade b15c01673cc4 -> c8d4e92f1a3b, add_third_party_billing_support
+2025-11-21T16:06:10.2661118Z INFO  [alembic.runtime.migration] Running upgrade c8d4e92f1a3b -> d9f3a8b2c4e5, add_invoice_line_id_to_booking
+2025-11-21T16:06:10.2710845Z INFO  [alembic.runtime.migration] Running upgrade d9f3a8b2c4e5 -> 0b7f8736876a, add_preferential_rate_to_client
+2025-11-21T16:06:10.2727913Z INFO  [alembic.runtime.migration] Running upgrade 0b7f8736876a -> e252718b5271, Add wheelchair fields to booking table
+2025-11-21T16:06:10.2755184Z INFO  [alembic.runtime.migration] Running upgrade e252718b5271 -> 715e89e538c3, add_analytics_tables_for_dispatch_metrics
+2025-11-21T16:06:10.3089267Z INFO  [alembic.runtime.migration] Running upgrade 715e89e538c3 -> d8a4d7185c60, add_gps_coords_to_client
+2025-11-21T16:06:10.3117990Z INFO  [alembic.runtime.migration] Running upgrade d8a4d7185c60 -> f3a9c7b8d1e2, Add critical indexes for performance
+2025-11-21T16:06:10.3221990Z INFO  [alembic.runtime.migration] Running upgrade f3a9c7b8d1e2 -> d7e8f9a1b2c3, A3: Add task_failure table for DLQ monitoring.
+2025-11-21T16:06:10.3351616Z INFO  [alembic.runtime.migration] Running upgrade f3a9c7b8d1e2 -> a8f4c9e2b1d3, Add dispatch modes to company
+2025-11-21T16:06:10.3424042Z INFO  [alembic.runtime.migration] Running upgrade a8f4c9e2b1d3 -> af5e460cd09e, Fix dispatch mode enum values to uppercase
+2025-11-21T16:06:10.3442162Z INFO  [alembic.runtime.migration] Running upgrade af5e460cd09e -> c8d9e2f3a4b5, add residence_facility to client
+2025-11-21T16:06:10.3453737Z INFO  [alembic.runtime.migration] Running upgrade c8d9e2f3a4b5 -> fix_circular_fk_20251018, fix circular fk names for tests
+2025-11-21T16:06:10.3509714Z INFO  [alembic.runtime.migration] Running upgrade fix_circular_fk_20251018 -> b559b3ef7a75, add_performance_indexes
+2025-11-21T16:06:10.3570461Z INFO  [alembic.runtime.migration] Running upgrade b559b3ef7a75 -> 156c2b818038, add_ml_prediction_table
+2025-11-21T16:06:10.3723793Z INFO  [alembic.runtime.migration] Running upgrade 156c2b818038 -> 97c8d4f1e5a3, add_ab_test_result_table
+2025-11-21T16:06:10.3844474Z INFO  [alembic.runtime.migration] Running upgrade 97c8d4f1e5a3 -> abc123456789, add_autonomous_action_table
+2025-11-21T16:06:10.4039964Z INFO  [alembic.runtime.migration] Running upgrade abc123456789 -> rl_metrics_001, add_rl_suggestion_metrics_table
+2025-11-21T16:06:10.4186487Z INFO  [alembic.runtime.migration] Running upgrade rl_metrics_001 -> rl_feedback_001, add_rl_feedbacks_table
+2025-11-21T16:06:10.4313948Z INFO  [alembic.runtime.migration] Running upgrade rl_feedback_001 -> 44a28b52dc46, add helper functions to base.py and fix type errors
+2025-11-21T16:06:10.4483960Z INFO  [alembic.runtime.migration] Running upgrade 44a28b52dc46 -> rl_suggestions_001, add_rl_suggestions_table
+2025-11-21T16:06:10.4621703Z INFO  [alembic.runtime.migration] Running upgrade d7e8f9a1b2c3 -> add_decision_explanation, ✅ B2: Add decision_explanation to assignment table.
+2025-11-21T16:06:10.4649825Z INFO  [alembic.runtime.migration] Running upgrade add_decision_explanation -> d2_audit_logs, ✅ D2: Create audit_logs table for append-only audit trail.
+2025-11-21T16:06:10.4805929Z INFO  [alembic.runtime.migration] Running upgrade d2_audit_logs -> fix_audit_metadata, Fix: Renommer colonne metadata vers additional_metadata dans audit_logs.
+2025-11-21T16:06:10.4816060Z INFO  [alembic.runtime.migration] Running upgrade d7e8f9a1b2c3 -> b2c3d4e5f6a7, Add secret_rotation table for monitoring secret rotations via Vault.
+2025-11-21T16:06:10.4945189Z INFO  [alembic.runtime.migration] Running upgrade d7e8f9a1b2c3 -> d2_encrypted_fields, ✅ D2: Ajoute colonnes pour stockage chiffré (migration progressive).
+2025-11-21T16:06:10.5023675Z INFO  [alembic.runtime.migration] Running upgrade d2_encrypted_fields -> 3_4_profiling, ✅ 3.4: Add profiling_metrics table for automatic CPU/memory profiling.
+2025-11-21T16:06:10.5094323Z INFO  [alembic.runtime.migration] Running upgrade 3_4_profiling, rl_suggestions_001, fix_audit_metadata -> 8186648ac54e, Merge migrations heads
+2025-11-21T16:06:10.5112202Z INFO  [alembic.runtime.migration] Running upgrade 8186648ac54e -> 24bbcb82c891, Add VAT columns to invoices
+2025-11-21T16:06:10.5230878Z INFO  [alembic.runtime.migration] Running upgrade 24bbcb82c891 -> add_message_file_fields, add_message_file_fields
+2025-11-21T16:06:10.5258582Z INFO  [alembic.runtime.migration] Running upgrade 8186648ac54e -> a1b2c3d4e5f6, ensure_admin_value_in_user_role_enum
+2025-11-21T16:06:10.5272713Z INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7 -> f7e8d9c0b1a2, Merge multiple heads: a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7
+2025-11-21T16:06:10.5286387Z INFO  [alembic.runtime.migration] Running upgrade f7e8d9c0b1a2 -> 68116559b15d, sync_models_with_db
+2025-11-21T16:06:10.8531342Z + echo '✅ Migrations exécutées avec succès'
+2025-11-21T16:06:10.8531828Z ✅ Migrations exécutées avec succès
+2025-11-21T16:06:10.8559046Z ##[group]Run cd backend
+2025-11-21T16:06:10.8559330Z [36;1mcd backend[0m
+2025-11-21T16:06:10.8559608Z [36;1mset -o errexit -o nounset -o pipefail -x[0m
+2025-11-21T16:06:10.8559882Z [36;1m[0m
+2025-11-21T16:06:10.8560063Z [36;1m# Obtenir la révision actuelle[0m
+2025-11-21T16:06:10.8560400Z [36;1mCURRENT_OUTPUT=$(flask db current 2>/dev/null || echo "")[0m
+2025-11-21T16:06:10.8560868Z [36;1mCURRENT_REV=$(echo "$CURRENT_OUTPUT" | grep -oE '[a-f0-9]{12,40}' | head -1 || echo "")[0m
+2025-11-21T16:06:10.8561237Z [36;1m[0m
+2025-11-21T16:06:10.8561432Z [36;1mif [ -z "$CURRENT_REV" ]; then[0m
+2025-11-21T16:06:10.8561797Z [36;1m  echo "⚠️ Aucune révision actuelle trouvée, skip downgrade test"[0m
+2025-11-21T16:06:10.8562119Z [36;1m  exit 0[0m
+2025-11-21T16:06:10.8562284Z [36;1mfi[0m
+2025-11-21T16:06:10.8562437Z [36;1m[0m
+2025-11-21T16:06:10.8562626Z [36;1mecho "📋 Révision actuelle: $CURRENT_REV"[0m
+2025-11-21T16:06:10.8562878Z [36;1m[0m
+2025-11-21T16:06:10.8563146Z [36;1m# Obtenir l'historique et extraire toutes les révisions[0m
+2025-11-21T16:06:10.8563579Z [36;1m# flask db history liste de la plus ancienne (en bas) à la plus récente (en haut)[0m
+2025-11-21T16:06:10.8564014Z [36;1m# Format typique: "revision_id (head) -> description"[0m
+2025-11-21T16:06:10.8564386Z [36;1mHISTORY_OUTPUT=$(flask db history 2>/dev/null || echo "")[0m
+2025-11-21T16:06:10.8564679Z [36;1m[0m
+2025-11-21T16:06:10.8564851Z [36;1mif [ -z "$HISTORY_OUTPUT" ]; then[0m
+2025-11-21T16:06:10.8565185Z [36;1m  echo "⚠️ Impossible d'obtenir l'historique, skip downgrade test"[0m
+2025-11-21T16:06:10.8565512Z [36;1m  exit 0[0m
+2025-11-21T16:06:10.8565680Z [36;1mfi[0m
+2025-11-21T16:06:10.8565839Z [36;1m[0m
+2025-11-21T16:06:10.8566084Z [36;1m# Extraire toutes les révisions de l'historique (dans l'ordre)[0m
+2025-11-21T16:06:10.8566483Z [36;1m# Utiliser awk pour extraire la révision précédant CURRENT_REV[0m
+2025-11-21T16:06:10.8566906Z [36;1mPREV_REV=$(echo "$HISTORY_OUTPUT" | awk -v current="$CURRENT_REV" '[0m
+2025-11-21T16:06:10.8567228Z [36;1m  {[0m
+2025-11-21T16:06:10.8567426Z [36;1m    # Extraire la révision de chaque ligne[0m
+2025-11-21T16:06:10.8567970Z [36;1m    match($0, /[a-f0-9]{12,40}/, rev)[0m
+2025-11-21T16:06:10.8568239Z [36;1m    if (rev[0] != "" && rev[0] == current) {[0m
+2025-11-21T16:06:10.8568586Z [36;1m      # On a trouvé CURRENT_REV, la révision précédente était stockée[0m
+2025-11-21T16:06:10.8568906Z [36;1m      if (prev_rev != "") {[0m
+2025-11-21T16:06:10.8569132Z [36;1m        print prev_rev[0m
+2025-11-21T16:06:10.8569514Z [36;1m        exit[0m
+2025-11-21T16:06:10.8569688Z [36;1m      }[0m
+2025-11-21T16:06:10.8569844Z [36;1m    }[0m
+2025-11-21T16:06:10.8570012Z [36;1m    if (rev[0] != "") {[0m
+2025-11-21T16:06:10.8570227Z [36;1m      prev_rev = rev[0][0m
+2025-11-21T16:06:10.8570423Z [36;1m    }[0m
+2025-11-21T16:06:10.8570578Z [36;1m  }[0m
+2025-11-21T16:06:10.8570745Z [36;1m' | head -1 || echo "")[0m
+2025-11-21T16:06:10.8570946Z [36;1m[0m
+2025-11-21T16:06:10.8571172Z [36;1mif [ -z "$PREV_REV" ] || [ "$PREV_REV" = "$CURRENT_REV" ]; then[0m
+2025-11-21T16:06:10.8571599Z [36;1m  echo "⚠️ Pas de révision précédente trouvée ou identique à la révision actuelle"[0m
+2025-11-21T16:06:10.8572039Z [36;1m  echo "   Cela peut arriver si on est à la première migration"[0m
+2025-11-21T16:06:10.8572358Z [36;1m  echo "   Skip downgrade test"[0m
+2025-11-21T16:06:10.8572606Z [36;1m  exit 0[0m
+2025-11-21T16:06:10.8572770Z [36;1mfi[0m
+2025-11-21T16:06:10.8572937Z [36;1m[0m
+2025-11-21T16:06:10.8573165Z [36;1mecho "🔄 Downgrading from $CURRENT_REV to $PREV_REV"[0m
+2025-11-21T16:06:10.8573496Z [36;1mif flask db downgrade "$PREV_REV"; then[0m
+2025-11-21T16:06:10.8573760Z [36;1m  echo "✅ Downgrade réussi"[0m
+2025-11-21T16:06:10.8573975Z [36;1melse[0m
+2025-11-21T16:06:10.8574217Z [36;1m  echo "⚠️ Échec du downgrade, mais on continue avec l'upgrade"[0m
+2025-11-21T16:06:10.8574518Z [36;1mfi[0m
+2025-11-21T16:06:10.8574664Z [36;1m[0m
+2025-11-21T16:06:10.8575006Z [36;1m# Re-upgrade après downgrade test[0m
+2025-11-21T16:06:10.8575283Z [36;1mecho "🔄 Re-upgrading to head..."[0m
+2025-11-21T16:06:10.8575528Z [36;1mflask db upgrade heads || exit 1[0m
+2025-11-21T16:06:10.8575777Z [36;1mecho "✅ Rollback test réussi"[0m
+2025-11-21T16:06:10.8609268Z shell: /usr/bin/bash -e {0}
+2025-11-21T16:06:10.8609519Z env:
+2025-11-21T16:06:10.8609917Z   DATABASE_URL: ***localhost:5432/atmr_test
+2025-11-21T16:06:10.8610178Z   PGHOST: localhost
+2025-11-21T16:06:10.8610366Z   PGPORT: 5432
+2025-11-21T16:06:10.8610533Z   PGUSER: test
+2025-11-21T16:06:10.8610709Z   PGPASSWORD: test
+2025-11-21T16:06:10.8610889Z   PGDATABASE: atmr_test
+2025-11-21T16:06:10.8611108Z   REDIS_URL: redis://localhost:6379/0
+2025-11-21T16:06:10.8611352Z   FLASK_CONFIG: testing
+2025-11-21T16:06:10.8611563Z   SECRET_KEY: test-secret-key
+2025-11-21T16:06:10.8611786Z   JWT_SECRET_KEY: test-jwt-secret
+2025-11-21T16:06:10.8612114Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+2025-11-21T16:06:10.8612464Z   API_LEGACY_ENABLED: false
+2025-11-21T16:06:10.8612697Z   PYTHONPATH: /home/runner/work/atmr/atmr
+2025-11-21T16:06:10.8612948Z   SOCKETIO_ASYNC_MODE: threading
+2025-11-21T16:06:10.8613157Z   SKIP_SOCKETIO: true
+2025-11-21T16:06:10.8613344Z   SKIP_ROUTES_INIT: true
+2025-11-21T16:06:10.8613606Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:10.8613994Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+2025-11-21T16:06:10.8614379Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:10.8614726Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:10.8615063Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:10.8615409Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+2025-11-21T16:06:10.8615705Z   FLASK_APP: backend.wsgi
+2025-11-21T16:06:10.8615901Z ##[endgroup]
+2025-11-21T16:06:10.8670471Z ++ flask db current
+2025-11-21T16:06:12.5409744Z + CURRENT_OUTPUT='✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:06:12.5410518Z 68116559b15d (head)'
+2025-11-21T16:06:12.5414809Z ++ echo '✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:06:12.5415772Z 68116559b15d (head)'
+2025-11-21T16:06:12.5416537Z ++ grep -oE '[a-f0-9]{12,40}'
+2025-11-21T16:06:12.5416990Z ++ head -1
+2025-11-21T16:06:12.5436506Z + CURRENT_REV=68116559b15d
+2025-11-21T16:06:12.5436893Z + '[' -z 68116559b15d ']'
+2025-11-21T16:06:12.5437420Z + echo '📋 Révision actuelle: 68116559b15d'
+2025-11-21T16:06:12.5438230Z 📋 Révision actuelle: 68116559b15d
+2025-11-21T16:06:12.5439838Z ++ flask db history
+2025-11-21T16:06:14.1802844Z + HISTORY_OUTPUT='✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:06:14.1803771Z f7e8d9c0b1a2 -> 68116559b15d (head), sync_models_with_db
+2025-11-21T16:06:14.1805131Z a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7 -> f7e8d9c0b1a2 (mergepoint), Merge multiple heads: a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7
+2025-11-21T16:06:14.1806583Z 8186648ac54e -> a1b2c3d4e5f6, ensure_admin_value_in_user_role_enum
+2025-11-21T16:06:14.1807113Z 24bbcb82c891 -> add_message_file_fields, add_message_file_fields
+2025-11-21T16:06:14.1807948Z 8186648ac54e -> 24bbcb82c891, Add VAT columns to invoices
+2025-11-21T16:06:14.1808642Z 3_4_profiling, rl_suggestions_001, fix_audit_metadata -> 8186648ac54e (branchpoint) (mergepoint), Merge migrations heads
+2025-11-21T16:06:14.1809633Z d2_encrypted_fields -> 3_4_profiling, ✅ 3.4: Add profiling_metrics table for automatic CPU/memory profiling.
+2025-11-21T16:06:14.1811065Z d7e8f9a1b2c3 -> d2_encrypted_fields, ✅ D2: Ajoute colonnes pour stockage chiffré (migration progressive).
+2025-11-21T16:06:14.1812393Z d7e8f9a1b2c3 -> b2c3d4e5f6a7, Add secret_rotation table for monitoring secret rotations via Vault.
+2025-11-21T16:06:14.1813720Z d2_audit_logs -> fix_audit_metadata, Fix: Renommer colonne metadata vers additional_metadata dans audit_logs.
+2025-11-21T16:06:14.1815278Z add_decision_explanation -> d2_audit_logs, ✅ D2: Create audit_logs table for append-only audit trail.
+2025-11-21T16:06:14.1816580Z d7e8f9a1b2c3 -> add_decision_explanation, ✅ B2: Add decision_explanation to assignment table.
+2025-11-21T16:06:14.1817408Z 44a28b52dc46 -> rl_suggestions_001, add_rl_suggestions_table
+2025-11-21T16:06:14.1818497Z rl_feedback_001 -> 44a28b52dc46, add helper functions to base.py and fix type errors
+2025-11-21T16:06:14.1819257Z rl_metrics_001 -> rl_feedback_001, add_rl_feedbacks_table
+2025-11-21T16:06:14.1819888Z abc123456789 -> rl_metrics_001, add_rl_suggestion_metrics_table
+2025-11-21T16:06:14.1820521Z 97c8d4f1e5a3 -> abc123456789, add_autonomous_action_table
+2025-11-21T16:06:14.1821090Z 156c2b818038 -> 97c8d4f1e5a3, add_ab_test_result_table
+2025-11-21T16:06:14.1821631Z b559b3ef7a75 -> 156c2b818038, add_ml_prediction_table
+2025-11-21T16:06:14.1822234Z fix_circular_fk_20251018 -> b559b3ef7a75, add_performance_indexes
+2025-11-21T16:06:14.1822956Z c8d9e2f3a4b5 -> fix_circular_fk_20251018, fix circular fk names for tests
+2025-11-21T16:06:14.1823680Z af5e460cd09e -> c8d9e2f3a4b5, add residence_facility to client
+2025-11-21T16:06:14.1824387Z a8f4c9e2b1d3 -> af5e460cd09e, Fix dispatch mode enum values to uppercase
+2025-11-21T16:06:14.1825050Z f3a9c7b8d1e2 -> a8f4c9e2b1d3, Add dispatch modes to company
+2025-11-21T16:06:14.1825834Z f3a9c7b8d1e2 -> d7e8f9a1b2c3 (branchpoint), A3: Add task_failure table for DLQ monitoring.
+2025-11-21T16:06:14.1826741Z d8a4d7185c60 -> f3a9c7b8d1e2 (branchpoint), Add critical indexes for performance
+2025-11-21T16:06:14.1827417Z 715e89e538c3 -> d8a4d7185c60, add_gps_coords_to_client
+2025-11-21T16:06:14.1829611Z e252718b5271 -> 715e89e538c3, add_analytics_tables_for_dispatch_metrics
+2025-11-21T16:06:14.1830346Z 0b7f8736876a -> e252718b5271, Add wheelchair fields to booking table
+2025-11-21T16:06:14.1831027Z d9f3a8b2c4e5 -> 0b7f8736876a, add_preferential_rate_to_client
+2025-11-21T16:06:14.1831653Z c8d4e92f1a3b -> d9f3a8b2c4e5, add_invoice_line_id_to_booking
+2025-11-21T16:06:14.1832274Z b15c01673cc4 -> c8d4e92f1a3b, add_third_party_billing_support
+2025-11-21T16:06:14.1833018Z 6d50ede67619 -> b15c01673cc4, driver HR fields + timezone normalize in planning_service
+2025-11-21T16:06:14.1833774Z a452a931f0b7 -> 6d50ede67619, add timezone to driver_shift
+2025-11-21T16:06:14.1834328Z 3f7695e18b7d -> a452a931f0b7, planning: models skeleton
+2025-11-21T16:06:14.1834951Z 02e0994e702b -> 3f7695e18b7d, make_billing_settings_fields_nullable
+2025-11-21T16:06:14.1835598Z 6af879898b0f -> 02e0994e702b, add_invoice_management_tables
+2025-11-21T16:06:14.1836138Z 623409ab335b -> 6af879898b0f, Update models.py
+2025-11-21T16:06:14.1836913Z 19fc92c2ba30 -> 623409ab335b, dispatch_run relations
+2025-11-21T16:06:14.1837518Z <base> -> 19fc92c2ba30, initial schema (upper enums + aliases)'
+2025-11-21T16:06:14.1838541Z + '[' -z '✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:06:14.1839122Z f7e8d9c0b1a2 -> 68116559b15d (head), sync_models_with_db
+2025-11-21T16:06:14.1840269Z a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7 -> f7e8d9c0b1a2 (mergepoint), Merge multiple heads: a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7
+2025-11-21T16:06:14.1841486Z 8186648ac54e -> a1b2c3d4e5f6, ensure_admin_value_in_user_role_enum
+2025-11-21T16:06:14.1842173Z 24bbcb82c891 -> add_message_file_fields, add_message_file_fields
+2025-11-21T16:06:14.1842791Z 8186648ac54e -> 24bbcb82c891, Add VAT columns to invoices
+2025-11-21T16:06:14.1843543Z 3_4_profiling, rl_suggestions_001, fix_audit_metadata -> 8186648ac54e (branchpoint) (mergepoint), Merge migrations heads
+2025-11-21T16:06:14.1844337Z d2_encrypted_fields -> 3_4_profiling, ✅ 3.4: Add profiling_metrics table for automatic CPU/memory profiling.
+2025-11-21T16:06:14.1845082Z d7e8f9a1b2c3 -> d2_encrypted_fields, ✅ D2: Ajoute colonnes pour stockage chiffré (migration progressive).
+2025-11-21T16:06:14.1845701Z d7e8f9a1b2c3 -> b2c3d4e5f6a7, Add secret_rotation table for monitoring secret rotations via Vault.
+2025-11-21T16:06:14.1846909Z d2_audit_logs -> fix_audit_metadata, Fix: Renommer colonne metadata vers additional_metadata dans audit_logs.
+2025-11-21T16:06:14.1848416Z add_decision_explanation -> d2_audit_logs, ✅ D2: Create audit_logs table for append-only audit trail.
+2025-11-21T16:06:14.1849559Z d7e8f9a1b2c3 -> add_decision_explanation, ✅ B2: Add decision_explanation to assignment table.
+2025-11-21T16:06:14.1850361Z 44a28b52dc46 -> rl_suggestions_001, add_rl_suggestions_table
+2025-11-21T16:06:14.1851255Z rl_feedback_001 -> 44a28b52dc46, add helper functions to base.py and fix type errors
+2025-11-21T16:06:14.1851802Z rl_metrics_001 -> rl_feedback_001, add_rl_feedbacks_table
+2025-11-21T16:06:14.1852162Z abc123456789 -> rl_metrics_001, add_rl_suggestion_metrics_table
+2025-11-21T16:06:14.1852510Z 97c8d4f1e5a3 -> abc123456789, add_autonomous_action_table
+2025-11-21T16:06:14.1852830Z 156c2b818038 -> 97c8d4f1e5a3, add_ab_test_result_table
+2025-11-21T16:06:14.1853136Z b559b3ef7a75 -> 156c2b818038, add_ml_prediction_table
+2025-11-21T16:06:14.1853497Z fix_circular_fk_20251018 -> b559b3ef7a75, add_performance_indexes
+2025-11-21T16:06:14.1853909Z c8d9e2f3a4b5 -> fix_circular_fk_20251018, fix circular fk names for tests
+2025-11-21T16:06:14.1854317Z af5e460cd09e -> c8d9e2f3a4b5, add residence_facility to client
+2025-11-21T16:06:14.1854718Z a8f4c9e2b1d3 -> af5e460cd09e, Fix dispatch mode enum values to uppercase
+2025-11-21T16:06:14.1855110Z f3a9c7b8d1e2 -> a8f4c9e2b1d3, Add dispatch modes to company
+2025-11-21T16:06:14.1855547Z f3a9c7b8d1e2 -> d7e8f9a1b2c3 (branchpoint), A3: Add task_failure table for DLQ monitoring.
+2025-11-21T16:06:14.1856047Z d8a4d7185c60 -> f3a9c7b8d1e2 (branchpoint), Add critical indexes for performance
+2025-11-21T16:06:14.1856452Z 715e89e538c3 -> d8a4d7185c60, add_gps_coords_to_client
+2025-11-21T16:06:14.1856813Z e252718b5271 -> 715e89e538c3, add_analytics_tables_for_dispatch_metrics
+2025-11-21T16:06:14.1857214Z 0b7f8736876a -> e252718b5271, Add wheelchair fields to booking table
+2025-11-21T16:06:14.1857780Z d9f3a8b2c4e5 -> 0b7f8736876a, add_preferential_rate_to_client
+2025-11-21T16:06:14.1858154Z c8d4e92f1a3b -> d9f3a8b2c4e5, add_invoice_line_id_to_booking
+2025-11-21T16:06:14.1858507Z b15c01673cc4 -> c8d4e92f1a3b, add_third_party_billing_support
+2025-11-21T16:06:14.1858932Z 6d50ede67619 -> b15c01673cc4, driver HR fields + timezone normalize in planning_service
+2025-11-21T16:06:14.1859356Z a452a931f0b7 -> 6d50ede67619, add timezone to driver_shift
+2025-11-21T16:06:14.1859687Z 3f7695e18b7d -> a452a931f0b7, planning: models skeleton
+2025-11-21T16:06:14.1860038Z 02e0994e702b -> 3f7695e18b7d, make_billing_settings_fields_nullable
+2025-11-21T16:06:14.1860569Z 6af879898b0f -> 02e0994e702b, add_invoice_management_tables
+2025-11-21T16:06:14.1860881Z 623409ab335b -> 6af879898b0f, Update models.py
+2025-11-21T16:06:14.1861171Z 19fc92c2ba30 -> 623409ab335b, dispatch_run relations
+2025-11-21T16:06:14.1861508Z <base> -> 19fc92c2ba30, initial schema (upper enums + aliases)' ']'
+2025-11-21T16:06:14.1861958Z ++ echo '✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:06:14.1862305Z f7e8d9c0b1a2 -> 68116559b15d (head), sync_models_with_db
+2025-11-21T16:06:14.1862941Z a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7 -> f7e8d9c0b1a2 (mergepoint), Merge multiple heads: a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7
+2025-11-21T16:06:14.1863596Z 8186648ac54e -> a1b2c3d4e5f6, ensure_admin_value_in_user_role_enum
+2025-11-21T16:06:14.1863981Z 24bbcb82c891 -> add_message_file_fields, add_message_file_fields
+2025-11-21T16:06:14.1864336Z 8186648ac54e -> 24bbcb82c891, Add VAT columns to invoices
+2025-11-21T16:06:14.1864843Z 3_4_profiling, rl_suggestions_001, fix_audit_metadata -> 8186648ac54e (branchpoint) (mergepoint), Merge migrations heads
+2025-11-21T16:06:14.1865585Z d2_encrypted_fields -> 3_4_profiling, ✅ 3.4: Add profiling_metrics table for automatic CPU/memory profiling.
+2025-11-21T16:06:14.1866295Z d7e8f9a1b2c3 -> d2_encrypted_fields, ✅ D2: Ajoute colonnes pour stockage chiffré (migration progressive).
+2025-11-21T16:06:14.1867013Z d7e8f9a1b2c3 -> b2c3d4e5f6a7, Add secret_rotation table for monitoring secret rotations via Vault.
+2025-11-21T16:06:14.1867833Z d2_audit_logs -> fix_audit_metadata, Fix: Renommer colonne metadata vers additional_metadata dans audit_logs.
+2025-11-21T16:06:14.1868594Z add_decision_explanation -> d2_audit_logs, ✅ D2: Create audit_logs table for append-only audit trail.
+2025-11-21T16:06:14.1869229Z d7e8f9a1b2c3 -> add_decision_explanation, ✅ B2: Add decision_explanation to assignment table.
+2025-11-21T16:06:14.1869685Z 44a28b52dc46 -> rl_suggestions_001, add_rl_suggestions_table
+2025-11-21T16:06:14.1870096Z rl_feedback_001 -> 44a28b52dc46, add helper functions to base.py and fix type errors
+2025-11-21T16:06:14.1870520Z rl_metrics_001 -> rl_feedback_001, add_rl_feedbacks_table
+2025-11-21T16:06:14.1870865Z abc123456789 -> rl_metrics_001, add_rl_suggestion_metrics_table
+2025-11-21T16:06:14.1871210Z 97c8d4f1e5a3 -> abc123456789, add_autonomous_action_table
+2025-11-21T16:06:14.1871522Z 156c2b818038 -> 97c8d4f1e5a3, add_ab_test_result_table
+2025-11-21T16:06:14.1871836Z b559b3ef7a75 -> 156c2b818038, add_ml_prediction_table
+2025-11-21T16:06:14.1872173Z fix_circular_fk_20251018 -> b559b3ef7a75, add_performance_indexes
+2025-11-21T16:06:14.1872565Z c8d9e2f3a4b5 -> fix_circular_fk_20251018, fix circular fk names for tests
+2025-11-21T16:06:14.1872968Z af5e460cd09e -> c8d9e2f3a4b5, add residence_facility to client
+2025-11-21T16:06:14.1873365Z a8f4c9e2b1d3 -> af5e460cd09e, Fix dispatch mode enum values to uppercase
+2025-11-21T16:06:14.1873751Z f3a9c7b8d1e2 -> a8f4c9e2b1d3, Add dispatch modes to company
+2025-11-21T16:06:14.1874181Z f3a9c7b8d1e2 -> d7e8f9a1b2c3 (branchpoint), A3: Add task_failure table for DLQ monitoring.
+2025-11-21T16:06:14.1874696Z d8a4d7185c60 -> f3a9c7b8d1e2 (branchpoint), Add critical indexes for performance
+2025-11-21T16:06:14.1875097Z 715e89e538c3 -> d8a4d7185c60, add_gps_coords_to_client
+2025-11-21T16:06:14.1875455Z e252718b5271 -> 715e89e538c3, add_analytics_tables_for_dispatch_metrics
+2025-11-21T16:06:14.1875863Z 0b7f8736876a -> e252718b5271, Add wheelchair fields to booking table
+2025-11-21T16:06:14.1876240Z d9f3a8b2c4e5 -> 0b7f8736876a, add_preferential_rate_to_client
+2025-11-21T16:06:14.1876595Z c8d4e92f1a3b -> d9f3a8b2c4e5, add_invoice_line_id_to_booking
+2025-11-21T16:06:14.1876939Z b15c01673cc4 -> c8d4e92f1a3b, add_third_party_billing_support
+2025-11-21T16:06:14.1877366Z 6d50ede67619 -> b15c01673cc4, driver HR fields + timezone normalize in planning_service
+2025-11-21T16:06:14.1877986Z a452a931f0b7 -> 6d50ede67619, add timezone to driver_shift
+2025-11-21T16:06:14.1878311Z 3f7695e18b7d -> a452a931f0b7, planning: models skeleton
+2025-11-21T16:06:14.1878799Z 02e0994e702b -> 3f7695e18b7d, make_billing_settings_fields_nullable
+2025-11-21T16:06:14.1879163Z 6af879898b0f -> 02e0994e702b, add_invoice_management_tables
+2025-11-21T16:06:14.1879474Z 623409ab335b -> 6af879898b0f, Update models.py
+2025-11-21T16:06:14.1879760Z 19fc92c2ba30 -> 623409ab335b, dispatch_run relations
+2025-11-21T16:06:14.1880095Z <base> -> 19fc92c2ba30, initial schema (upper enums + aliases)'
+2025-11-21T16:06:14.1880405Z ++ awk -v current=68116559b15d '
+2025-11-21T16:06:14.1880605Z   {
+2025-11-21T16:06:14.1880833Z     # Extraire la révision de chaque ligne
+2025-11-21T16:06:14.1881085Z     match($0, /[a-f0-9]{12,40}/, rev)
+2025-11-21T16:06:14.1881319Z     if (rev[0] != "" && rev[0] == current) {
+2025-11-21T16:06:14.1881698Z       # On a trouvé CURRENT_REV, la révision précédente était stockée
+2025-11-21T16:06:14.1882022Z       if (prev_rev != "") {
+2025-11-21T16:06:14.1882233Z         print prev_rev
+2025-11-21T16:06:14.1882413Z         exit
+2025-11-21T16:06:14.1882564Z       }
+2025-11-21T16:06:14.1882722Z     }
+2025-11-21T16:06:14.1882874Z     if (rev[0] != "") {
+2025-11-21T16:06:14.1883054Z       prev_rev = rev[0]
+2025-11-21T16:06:14.1883221Z     }
+2025-11-21T16:06:14.1883362Z   }
+2025-11-21T16:06:14.1883506Z '
+2025-11-21T16:06:14.1883643Z ++ head -1
+2025-11-21T16:06:14.1883819Z + PREV_REV=
+2025-11-21T16:06:14.1883976Z + '[' -z '' ']'
+2025-11-21T16:06:14.1884480Z + echo '⚠️ Pas de révision précédente trouvée ou identique à la révision actuelle'
+2025-11-21T16:06:14.1884952Z + echo '   Cela peut arriver si on est à la première migration'
+2025-11-21T16:06:14.1885254Z + echo '   Skip downgrade test'
+2025-11-21T16:06:14.1885456Z + exit 0
+2025-11-21T16:06:14.1885782Z ⚠️ Pas de révision précédente trouvée ou identique à la révision actuelle
+2025-11-21T16:06:14.1886199Z    Cela peut arriver si on est à la première migration
+2025-11-21T16:06:14.1886470Z    Skip downgrade test
+2025-11-21T16:06:14.1908116Z ##[group]Run cd backend
+2025-11-21T16:06:14.1908413Z [36;1mcd backend[0m
+2025-11-21T16:06:14.1908705Z [36;1m# Vérifier aucune migration auto-détectée non commitée[0m
+2025-11-21T16:06:14.1909114Z [36;1m# Générer une migration de test pour détecter les changements[0m
+2025-11-21T16:06:14.1909570Z [36;1mTEST_MIGRATION_FILE="migrations/versions/$(date +%s)_test_pending_check.py"[0m
+2025-11-21T16:06:14.1910087Z [36;1mflask db revision --autogenerate -m "test_pending_check" > /dev/null 2>&1 || true[0m
+2025-11-21T16:06:14.1910452Z [36;1m[0m
+2025-11-21T16:06:14.1910703Z [36;1m# Trouver le fichier de migration de test créé (le plus récent)[0m
+2025-11-21T16:06:14.1911235Z [36;1mLATEST_MIGRATION=$(ls -t migrations/versions/*test_pending_check.py 2>/dev/null | head -1 || echo "")[0m
+2025-11-21T16:06:14.1911671Z [36;1m[0m
+2025-11-21T16:06:14.1911907Z [36;1mif [ -n "$LATEST_MIGRATION" ] && [ -f "$LATEST_MIGRATION" ]; then[0m
+2025-11-21T16:06:14.1912396Z [36;1m  # Vérifier si la migration contient des changements (pas seulement un fichier vide)[0m
+2025-11-21T16:06:14.1912922Z [36;1m  if grep -q "def upgrade" "$LATEST_MIGRATION" && grep -q "op\." "$LATEST_MIGRATION"; then[0m
+2025-11-21T16:06:14.1913361Z [36;1m    echo "⚠️ Warning: Pending migrations detected!"[0m
+2025-11-21T16:06:14.1913720Z [36;1m    echo "La migration suivante a été générée automatiquement:"[0m
+2025-11-21T16:06:14.1914038Z [36;1m    cat "$LATEST_MIGRATION"[0m
+2025-11-21T16:06:14.1914268Z [36;1m    rm -f "$LATEST_MIGRATION"[0m
+2025-11-21T16:06:14.1914496Z [36;1m    exit 1[0m
+2025-11-21T16:06:14.1914669Z [36;1m  else[0m
+2025-11-21T16:06:14.1914884Z [36;1m    # Migration vide, pas de changements détectés[0m
+2025-11-21T16:06:14.1915218Z [36;1m    rm -f "$LATEST_MIGRATION"[0m
+2025-11-21T16:06:14.1915487Z [36;1m    echo "✅ Aucune migration en attente détectée"[0m
+2025-11-21T16:06:14.1915741Z [36;1m  fi[0m
+2025-11-21T16:06:14.1915897Z [36;1melse[0m
+2025-11-21T16:06:14.1916113Z [36;1m  echo "✅ Aucune migration en attente détectée"[0m
+2025-11-21T16:06:14.1916370Z [36;1mfi[0m
+2025-11-21T16:06:14.1949055Z shell: /usr/bin/bash -e {0}
+2025-11-21T16:06:14.1949274Z env:
+2025-11-21T16:06:14.1949653Z   DATABASE_URL: ***localhost:5432/atmr_test
+2025-11-21T16:06:14.1949910Z   PGHOST: localhost
+2025-11-21T16:06:14.1950088Z   PGPORT: 5432
+2025-11-21T16:06:14.1950254Z   PGUSER: test
+2025-11-21T16:06:14.1950417Z   PGPASSWORD: test
+2025-11-21T16:06:14.1950592Z   PGDATABASE: atmr_test
+2025-11-21T16:06:14.1950808Z   REDIS_URL: redis://localhost:6379/0
+2025-11-21T16:06:14.1951049Z   FLASK_CONFIG: testing
+2025-11-21T16:06:14.1951241Z   SECRET_KEY: test-secret-key
+2025-11-21T16:06:14.1951460Z   JWT_SECRET_KEY: test-jwt-secret
+2025-11-21T16:06:14.1951775Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+2025-11-21T16:06:14.1952114Z   API_LEGACY_ENABLED: false
+2025-11-21T16:06:14.1952341Z   PYTHONPATH: /home/runner/work/atmr/atmr
+2025-11-21T16:06:14.1952591Z   SOCKETIO_ASYNC_MODE: threading
+2025-11-21T16:06:14.1952819Z   SKIP_SOCKETIO: true
+2025-11-21T16:06:14.1953002Z   SKIP_ROUTES_INIT: true
+2025-11-21T16:06:14.1953270Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:14.1953656Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+2025-11-21T16:06:14.1954031Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:14.1954372Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:14.1954717Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:14.1955061Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+2025-11-21T16:06:14.1955348Z   FLASK_APP: backend.wsgi
+2025-11-21T16:06:14.1955543Z ##[endgroup]
+2025-11-21T16:06:16.7059554Z ✅ Aucune migration en attente détectée
+2025-11-21T16:06:16.7106030Z Post job cleanup.
+2025-11-21T16:06:16.8851454Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/atmr/atmr --files-from manifest.txt --use-compress-program zstdmt
+2025-11-21T16:06:19.1213077Z Sent 0 of 746550289 (0.0%), 0.0 MBs/sec
+2025-11-21T16:06:20.1220713Z Sent 402653184 of 746550289 (53.9%), 191.9 MBs/sec
+2025-11-21T16:06:21.1232291Z Sent 679441425 of 746550289 (91.0%), 215.8 MBs/sec
+2025-11-21T16:06:21.2135613Z Sent 746550289 of 746550289 (100.0%), 230.2 MBs/sec
+2025-11-21T16:06:21.6764891Z Cache saved with the key: setup-python-Linux-x64-24.04-Ubuntu-python-3.11.14-pip-b0c0a87e0774d21a41b25b21b4d7a33cc9e02e518989194b9e2bfe6f9bbe6863
+2025-11-21T16:06:21.6883918Z Post job cleanup.
+2025-11-21T16:06:21.7811072Z [command]/usr/bin/git version
+2025-11-21T16:06:21.7847277Z git version 2.51.2
+2025-11-21T16:06:21.7888778Z Temporarily overriding HOME='/home/runner/work/_temp/6f817f91-c1cf-445c-b771-702218036a9a' before making global git config changes
+2025-11-21T16:06:21.7890098Z Adding repository directory to the temporary git global config as a safe directory
+2025-11-21T16:06:21.7894480Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/atmr/atmr
+2025-11-21T16:06:21.7928893Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-11-21T16:06:21.7960581Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-11-21T16:06:21.8189402Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-11-21T16:06:21.8208995Z http.https://github.com/.extraheader
+2025-11-21T16:06:21.8221163Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2025-11-21T16:06:21.8250755Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-11-21T16:06:21.8470445Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2025-11-21T16:06:21.8500382Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2025-11-21T16:06:21.8804987Z Print service container logs: 652d07a7a3c74a0baa72ad566d89a72c_postgres16alpine_69f711
+2025-11-21T16:06:21.8809520Z ##[command]/usr/bin/docker logs --details be3579f4ce391500cbacaed6978575f99e83cf42aa925e966b5edf3f375c2f22
+2025-11-21T16:06:21.8931924Z  sh: locale: not found
+2025-11-21T16:06:21.8932484Z  2025-11-21 16:04:39.565 UTC [35] WARNING:  no usable system locales were found
+2025-11-21T16:06:21.8933226Z  initdb: warning: enabling "trust" authentication for local connections
+2025-11-21T16:06:21.8934335Z  initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+2025-11-21T16:06:21.8935474Z  The files belonging to this database system will be owned by user "postgres".
+2025-11-21T16:06:21.8936553Z  2025-11-21 16:04:40.345 UTC [1] LOG:  starting PostgreSQL 16.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
+2025-11-21T16:06:21.8937775Z  2025-11-21 16:04:40.345 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2025-11-21T16:06:21.8938531Z  2025-11-21 16:04:40.345 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2025-11-21T16:06:21.8939402Z  2025-11-21 16:04:40.346 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2025-11-21T16:06:21.8940352Z  2025-11-21 16:04:40.349 UTC [57] LOG:  database system was shut down at 2025-11-21 16:04:40 UTC
+2025-11-21T16:06:21.8941217Z  2025-11-21 16:04:40.353 UTC [1] LOG:  database system is ready to accept connections
+2025-11-21T16:06:21.8941913Z  This user must also own the server process.
+2025-11-21T16:06:21.8942387Z  
+2025-11-21T16:06:21.8942865Z  The database cluster will be initialized with locale "en_US.utf8".
+2025-11-21T16:06:21.8943620Z  The default database encoding has accordingly been set to "UTF8".
+2025-11-21T16:06:21.8944308Z  The default text search configuration will be set to "english".
+2025-11-21T16:06:21.8944814Z  
+2025-11-21T16:06:21.8945103Z  Data page checksums are disabled.
+2025-11-21T16:06:21.8945556Z  
+2025-11-21T16:06:21.8946008Z  fixing permissions on existing directory /var/lib/postgresql/data ... ok
+2025-11-21T16:06:21.8946646Z  creating subdirectories ... ok
+2025-11-21T16:06:21.8947141Z  selecting dynamic shared memory implementation ... posix
+2025-11-21T16:06:21.8947828Z  selecting default max_connections ... 100
+2025-11-21T16:06:21.8948304Z  selecting default shared_buffers ... 128MB
+2025-11-21T16:06:21.8948758Z  selecting default time zone ... UTC
+2025-11-21T16:06:21.8949181Z  creating configuration files ... ok
+2025-11-21T16:06:21.8949607Z  running bootstrap script ... ok
+2025-11-21T16:06:21.8950073Z  performing post-bootstrap initialization ... ok
+2025-11-21T16:06:21.8950551Z  syncing data to disk ... ok
+2025-11-21T16:06:21.8950894Z  
+2025-11-21T16:06:21.8951138Z  
+2025-11-21T16:06:21.8951485Z  Success. You can now start the database server using:
+2025-11-21T16:06:21.8951953Z  
+2025-11-21T16:06:21.8952292Z      pg_ctl -D /var/lib/postgresql/data -l logfile start
+2025-11-21T16:06:21.8952783Z  
+2025-11-21T16:06:21.8953986Z  waiting for server to start....2025-11-21 16:04:40.076 UTC [41] LOG:  starting PostgreSQL 16.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
+2025-11-21T16:06:21.8954963Z  2025-11-21 16:04:40.077 UTC [41] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2025-11-21T16:06:21.8955502Z  2025-11-21 16:04:40.080 UTC [44] LOG:  database system was shut down at 2025-11-21 16:04:39 UTC
+2025-11-21T16:06:21.8955958Z  2025-11-21 16:04:40.084 UTC [41] LOG:  database system is ready to accept connections
+2025-11-21T16:06:21.8956290Z   done
+2025-11-21T16:06:21.8956446Z  server started
+2025-11-21T16:06:21.8956620Z  CREATE DATABASE
+2025-11-21T16:06:21.8956790Z  
+2025-11-21T16:06:21.8956934Z  
+2025-11-21T16:06:21.8957230Z  /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+2025-11-21T16:06:21.8957809Z  
+2025-11-21T16:06:21.8958417Z  waiting for server to shut down...2025-11-21 16:04:40.225 UTC [41] LOG:  received fast shutdown request
+2025-11-21T16:06:21.8959054Z  .2025-11-21 16:04:40.225 UTC [41] LOG:  aborting any active transactions
+2025-11-21T16:06:21.8959572Z  2025-11-21 16:04:40.228 UTC [41] LOG:  background worker "logical replication launcher" (PID 47) exited with exit code 1
+2025-11-21T16:06:21.8960042Z  2025-11-21 16:04:40.229 UTC [42] LOG:  shutting down
+2025-11-21T16:06:21.8960384Z  2025-11-21 16:04:40.230 UTC [42] LOG:  checkpoint starting: shutdown immediate
+2025-11-21T16:06:21.8961327Z  2025-11-21 16:04:40.246 UTC [42] LOG:  checkpoint complete: wrote 926 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.013 s, sync=0.003 s, total=0.018 s; sync files=301, longest=0.001 s, average=0.001 s; distance=4272 kB, estimate=4272 kB; lsn=0/191E920, redo lsn=0/191E920
+2025-11-21T16:06:21.8962230Z  2025-11-21 16:04:40.253 UTC [41] LOG:  database system is shut down
+2025-11-21T16:06:21.8962523Z   done
+2025-11-21T16:06:21.8962686Z  server stopped
+2025-11-21T16:06:21.8962868Z  
+2025-11-21T16:06:21.8963089Z  PostgreSQL init process complete; ready for start up.
+2025-11-21T16:06:21.8963365Z  
+2025-11-21T16:06:21.8968934Z Stop and remove container: 652d07a7a3c74a0baa72ad566d89a72c_postgres16alpine_69f711
+2025-11-21T16:06:21.8973271Z ##[command]/usr/bin/docker rm --force be3579f4ce391500cbacaed6978575f99e83cf42aa925e966b5edf3f375c2f22
+2025-11-21T16:06:23.6242148Z be3579f4ce391500cbacaed6978575f99e83cf42aa925e966b5edf3f375c2f22
+2025-11-21T16:06:23.6269454Z Remove container network: github_network_b689cb7280d740f8af2d4e2c800fdc06
+2025-11-21T16:06:23.6273879Z ##[command]/usr/bin/docker network rm github_network_b689cb7280d740f8af2d4e2c800fdc06
+2025-11-21T16:06:23.7553339Z github_network_b689cb7280d740f8af2d4e2c800fdc06
+2025-11-21T16:06:23.7609172Z Cleaning up orphan processes

@@ -1,5 +1,57 @@
 """
 Fixtures pytest pour les tests backend ATMR.
+
+📚 BONNES PRATIQUES D'ISOLATION DES TESTS
+=========================================
+
+1. **Isolation via Savepoints** :
+   - Chaque test utilise un savepoint (nested transaction) via la fixture `db`
+   - Le rollback automatique en fin de test garantit l'isolation entre les tests
+   - Les objets commités dans les fixtures sont visibles dans le savepoint du test
+
+2. **Fixtures persistées** :
+   - Les fixtures qui créent des objets DB DOIVENT appeler `db.session.commit()`
+   - Utiliser le helper `persisted_fixture()` pour créer des fixtures génériques
+   - Recharger les objets depuis la DB après commit pour garantir la persistance
+
+3. **Rollback défensif de engine.run()** :
+   - `engine.run()` fait un rollback défensif qui peut expirer les objets non commités
+   - TOUJOURS commit les objets avant d'appeler `engine.run()`
+   - Utiliser `ensure_committed()` si nécessaire pour forcer un commit explicite
+
+4. **Gestion des savepoints multiples** :
+   - Utiliser `nested_savepoint()` pour créer des savepoints imbriqués si nécessaire
+   - Chaque savepoint peut être rollback indépendamment
+   - Le rollback du savepoint parent rollback tous les savepoints enfants
+
+5. **Rechargement après rollback** :
+   - Après un rollback, utiliser `db.session.expire_all()` puis recharger depuis la DB
+   - Ne pas réutiliser les objets expirés sans les recharger
+   - Utiliser `query.filter_by().first()` plutôt que `query.get()` pour forcer un nouveau query
+
+📝 EXEMPLES D'UTILISATION :
+---------------------------
+
+```python
+# Fixture générique persistée
+@pytest.fixture
+def my_entity(db):
+    return persisted_fixture(db, MyEntityFactory(), MyEntity)
+
+# Utilisation avec ensure_committed
+def test_something(db, my_entity):
+    with ensure_committed(db):
+        result = engine.run(company_id=my_entity.id)
+
+# Savepoint multiple
+def test_nested_transaction(db):
+    with nested_savepoint(db):
+        # Créer des objets
+        obj = MyEntityFactory()
+        db.session.add(obj)
+        db.session.commit()
+        # Rollback automatique à la fin du context manager
+```
 """
 
 import os
@@ -252,6 +304,8 @@ def admin_headers(client, sample_admin_user):
 @pytest.fixture
 def authenticated_client(client, sample_user):
     """Client Flask authentifié avec token JWT."""
+    from datetime import timedelta
+
     from flask_jwt_extended import create_access_token
 
     claims = {
@@ -261,7 +315,13 @@ def authenticated_client(client, sample_user):
         "aud": "atmr-api",
     }
     with client.application.app_context():
-        token = create_access_token(identity=str(sample_user.public_id), additional_claims=claims)
+        # ✅ FIX: Utiliser un token avec expiration longue (24h) pour éviter les problèmes en tests
+        # Utiliser public_id comme identity (comme dans bookings.py:588)
+        token = create_access_token(
+            identity=str(sample_user.public_id),
+            additional_claims=claims,
+            expires_delta=timedelta(hours=24),  # Token valide 24h pour les tests
+        )
 
     # Créer une classe wrapper qui ajoute automatiquement les headers
     class AuthenticatedClient(object):
@@ -949,3 +1009,160 @@ def pii_config():
     # Configurer les clés de chiffrement si nécessaire
     os.environ.setdefault("APP_ENCRYPTION_KEY_B64", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY")
     return True
+
+
+# ✅ FIX 6.2: Helpers pour gérer les transactions dans les tests
+# Réduit les couplages dangereux entre fixtures et engine.run()
+from contextlib import contextmanager
+from typing import Any, Iterator, Type, TypeVar
+
+T = TypeVar("T")
+
+
+def persisted_fixture(
+    db_session: Any,
+    factory_instance: Any,
+    model_class: Type[T],
+    *,
+    reload: bool = True,
+    assert_exists: bool = True,
+) -> T:
+    """Helper générique pour créer des fixtures persistées.
+
+    Crée un objet via une factory, le commit dans la DB, et le recharge pour garantir
+    la persistance. Utile pour créer des fixtures qui doivent être visibles après
+    le rollback défensif de `engine.run()`.
+
+    📝 UTILISATION :
+    ```python
+    @pytest.fixture
+    def my_entity(db):
+        return persisted_fixture(db, MyEntityFactory(), MyEntity)
+
+    @pytest.fixture
+    def my_entity_with_params(db, company):
+        factory = MyEntityFactory(company=company)
+        return persisted_fixture(db, factory, MyEntity)
+    ```
+
+    Args:
+        db_session: Session SQLAlchemy (généralement la fixture `db`)
+        factory_instance: Instance de factory (ex: `CompanyFactory()`)
+        model_class: Classe du modèle SQLAlchemy (ex: `Company`)
+        reload: Si True, expire et recharge l'objet depuis la DB
+        assert_exists: Si True, vérifie que l'objet existe après reload
+
+    Returns:
+        Instance du modèle persisté et rechargé depuis la DB
+    """
+    # Ajouter l'objet à la session
+    db_session.add(factory_instance)
+    db_session.flush()  # Force l'assignation de l'ID
+
+    # Commit pour garantir la persistance
+    db_session.commit()
+
+    if reload:
+        # Expirer et recharger pour s'assurer que l'objet est bien en DB
+        db_session.expire(factory_instance)
+        reloaded = db_session.query(model_class).get(factory_instance.id)
+
+        if assert_exists:
+            assert reloaded is not None, (
+                f"{model_class.__name__} must be persisted before use (id={factory_instance.id})"
+            )
+
+        return reloaded if reloaded is not None else factory_instance
+
+    return factory_instance
+
+
+@contextmanager
+def ensure_committed(db_session: Any) -> Iterator[None]:
+    """Context manager pour garantir que les objets sont commités avant utilisation.
+
+    ⚠️ PROBLÈME RÉSOLU :
+    - `engine.run()` fait un rollback défensif qui peut expirer les objets non commités
+    - Ce helper garantit que tous les objets en attente sont commités avant utilisation
+
+    📝 UTILISATION :
+    ```python
+    def test_dispatch(db, company, drivers, bookings):
+        # Les fixtures garantissent déjà le commit, mais on peut forcer un commit explicite
+        with ensure_committed(db):
+            # Tous les objets sont garantis commités ici
+            result = engine.run(company_id=company.id, ...)
+    ```
+
+    🔄 ISOLATION :
+    - Utilise le savepoint du test (nested transaction)
+    - Le rollback automatique en fin de test garantit l'isolation
+    - Les objets commités restent visibles dans le savepoint
+
+    Args:
+        db_session: Session SQLAlchemy (généralement la fixture `db`)
+
+    Yields:
+        None (context manager)
+    """
+    # Flush pour s'assurer que tous les objets en attente sont visibles
+    db_session.flush()
+    # Commit pour garantir la persistance (dans le savepoint du test)
+    db_session.commit()
+    try:
+        yield
+    finally:
+        # Optionnel: on pourrait faire un flush ici si nécessaire
+        # Mais le rollback automatique en fin de test gère le nettoyage
+        pass
+
+
+@contextmanager
+def nested_savepoint(db_session: Any) -> Iterator[None]:
+    """Context manager pour créer un savepoint imbriqué (nested transaction).
+
+    Permet de créer des savepoints multiples pour isoler des parties de code
+    dans un test. Le rollback du savepoint parent rollback automatiquement
+    tous les savepoints enfants.
+
+    📝 UTILISATION :
+    ```python
+    def test_nested_transaction(db):
+        # Créer des objets dans le savepoint principal
+        obj1 = MyEntityFactory()
+        db.session.add(obj1)
+        db.session.commit()
+
+        # Créer un savepoint imbriqué
+        with nested_savepoint(db):
+            obj2 = MyEntityFactory()
+            db.session.add(obj2)
+            db.session.commit()
+            # obj2 sera rollback à la fin du context manager
+
+        # obj1 existe toujours, obj2 a été rollback
+        assert obj1.id is not None
+    ```
+
+    ⚠️ ATTENTION :
+    - Les savepoints imbriqués sont rollback automatiquement si le savepoint parent est rollback
+    - Ne pas utiliser pour isoler des tests (utiliser la fixture `db` à la place)
+    - Utile pour tester des scénarios de rollback partiel dans un même test
+
+    Args:
+        db_session: Session SQLAlchemy (généralement la fixture `db`)
+
+    Yields:
+        None (context manager)
+    """
+    # Créer un savepoint imbriqué
+    savepoint = db_session.begin_nested()
+    try:
+        yield
+    except Exception:
+        # Rollback le savepoint en cas d'exception
+        savepoint.rollback()
+        raise
+    finally:
+        # Rollback automatique du savepoint à la fin
+        savepoint.rollback()

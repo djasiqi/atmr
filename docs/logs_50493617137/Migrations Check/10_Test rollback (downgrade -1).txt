@@ -1,0 +1,249 @@
+﻿2025-11-21T16:06:10.8559038Z ##[group]Run cd backend
+2025-11-21T16:06:10.8559327Z [36;1mcd backend[0m
+2025-11-21T16:06:10.8559606Z [36;1mset -o errexit -o nounset -o pipefail -x[0m
+2025-11-21T16:06:10.8559874Z [36;1m[0m
+2025-11-21T16:06:10.8560060Z [36;1m# Obtenir la révision actuelle[0m
+2025-11-21T16:06:10.8560398Z [36;1mCURRENT_OUTPUT=$(flask db current 2>/dev/null || echo "")[0m
+2025-11-21T16:06:10.8560865Z [36;1mCURRENT_REV=$(echo "$CURRENT_OUTPUT" | grep -oE '[a-f0-9]{12,40}' | head -1 || echo "")[0m
+2025-11-21T16:06:10.8561235Z [36;1m[0m
+2025-11-21T16:06:10.8561430Z [36;1mif [ -z "$CURRENT_REV" ]; then[0m
+2025-11-21T16:06:10.8561794Z [36;1m  echo "⚠️ Aucune révision actuelle trouvée, skip downgrade test"[0m
+2025-11-21T16:06:10.8562116Z [36;1m  exit 0[0m
+2025-11-21T16:06:10.8562281Z [36;1mfi[0m
+2025-11-21T16:06:10.8562435Z [36;1m[0m
+2025-11-21T16:06:10.8562622Z [36;1mecho "📋 Révision actuelle: $CURRENT_REV"[0m
+2025-11-21T16:06:10.8562876Z [36;1m[0m
+2025-11-21T16:06:10.8563112Z [36;1m# Obtenir l'historique et extraire toutes les révisions[0m
+2025-11-21T16:06:10.8563576Z [36;1m# flask db history liste de la plus ancienne (en bas) à la plus récente (en haut)[0m
+2025-11-21T16:06:10.8564012Z [36;1m# Format typique: "revision_id (head) -> description"[0m
+2025-11-21T16:06:10.8564384Z [36;1mHISTORY_OUTPUT=$(flask db history 2>/dev/null || echo "")[0m
+2025-11-21T16:06:10.8564677Z [36;1m[0m
+2025-11-21T16:06:10.8564849Z [36;1mif [ -z "$HISTORY_OUTPUT" ]; then[0m
+2025-11-21T16:06:10.8565183Z [36;1m  echo "⚠️ Impossible d'obtenir l'historique, skip downgrade test"[0m
+2025-11-21T16:06:10.8565509Z [36;1m  exit 0[0m
+2025-11-21T16:06:10.8565679Z [36;1mfi[0m
+2025-11-21T16:06:10.8565837Z [36;1m[0m
+2025-11-21T16:06:10.8566081Z [36;1m# Extraire toutes les révisions de l'historique (dans l'ordre)[0m
+2025-11-21T16:06:10.8566476Z [36;1m# Utiliser awk pour extraire la révision précédant CURRENT_REV[0m
+2025-11-21T16:06:10.8566895Z [36;1mPREV_REV=$(echo "$HISTORY_OUTPUT" | awk -v current="$CURRENT_REV" '[0m
+2025-11-21T16:06:10.8567226Z [36;1m  {[0m
+2025-11-21T16:06:10.8567424Z [36;1m    # Extraire la révision de chaque ligne[0m
+2025-11-21T16:06:10.8567967Z [36;1m    match($0, /[a-f0-9]{12,40}/, rev)[0m
+2025-11-21T16:06:10.8568237Z [36;1m    if (rev[0] != "" && rev[0] == current) {[0m
+2025-11-21T16:06:10.8568583Z [36;1m      # On a trouvé CURRENT_REV, la révision précédente était stockée[0m
+2025-11-21T16:06:10.8568904Z [36;1m      if (prev_rev != "") {[0m
+2025-11-21T16:06:10.8569129Z [36;1m        print prev_rev[0m
+2025-11-21T16:06:10.8569512Z [36;1m        exit[0m
+2025-11-21T16:06:10.8569686Z [36;1m      }[0m
+2025-11-21T16:06:10.8569842Z [36;1m    }[0m
+2025-11-21T16:06:10.8570010Z [36;1m    if (rev[0] != "") {[0m
+2025-11-21T16:06:10.8570225Z [36;1m      prev_rev = rev[0][0m
+2025-11-21T16:06:10.8570421Z [36;1m    }[0m
+2025-11-21T16:06:10.8570576Z [36;1m  }[0m
+2025-11-21T16:06:10.8570743Z [36;1m' | head -1 || echo "")[0m
+2025-11-21T16:06:10.8570936Z [36;1m[0m
+2025-11-21T16:06:10.8571170Z [36;1mif [ -z "$PREV_REV" ] || [ "$PREV_REV" = "$CURRENT_REV" ]; then[0m
+2025-11-21T16:06:10.8571595Z [36;1m  echo "⚠️ Pas de révision précédente trouvée ou identique à la révision actuelle"[0m
+2025-11-21T16:06:10.8572036Z [36;1m  echo "   Cela peut arriver si on est à la première migration"[0m
+2025-11-21T16:06:10.8572355Z [36;1m  echo "   Skip downgrade test"[0m
+2025-11-21T16:06:10.8572604Z [36;1m  exit 0[0m
+2025-11-21T16:06:10.8572768Z [36;1mfi[0m
+2025-11-21T16:06:10.8572935Z [36;1m[0m
+2025-11-21T16:06:10.8573162Z [36;1mecho "🔄 Downgrading from $CURRENT_REV to $PREV_REV"[0m
+2025-11-21T16:06:10.8573493Z [36;1mif flask db downgrade "$PREV_REV"; then[0m
+2025-11-21T16:06:10.8573752Z [36;1m  echo "✅ Downgrade réussi"[0m
+2025-11-21T16:06:10.8573973Z [36;1melse[0m
+2025-11-21T16:06:10.8574214Z [36;1m  echo "⚠️ Échec du downgrade, mais on continue avec l'upgrade"[0m
+2025-11-21T16:06:10.8574516Z [36;1mfi[0m
+2025-11-21T16:06:10.8574662Z [36;1m[0m
+2025-11-21T16:06:10.8574839Z [36;1m# Re-upgrade après downgrade test[0m
+2025-11-21T16:06:10.8575278Z [36;1mecho "🔄 Re-upgrading to head..."[0m
+2025-11-21T16:06:10.8575526Z [36;1mflask db upgrade heads || exit 1[0m
+2025-11-21T16:06:10.8575775Z [36;1mecho "✅ Rollback test réussi"[0m
+2025-11-21T16:06:10.8609261Z shell: /usr/bin/bash -e {0}
+2025-11-21T16:06:10.8609517Z env:
+2025-11-21T16:06:10.8609910Z   DATABASE_URL: ***localhost:5432/atmr_test
+2025-11-21T16:06:10.8610176Z   PGHOST: localhost
+2025-11-21T16:06:10.8610364Z   PGPORT: 5432
+2025-11-21T16:06:10.8610531Z   PGUSER: test
+2025-11-21T16:06:10.8610707Z   PGPASSWORD: test
+2025-11-21T16:06:10.8610887Z   PGDATABASE: atmr_test
+2025-11-21T16:06:10.8611106Z   REDIS_URL: redis://localhost:6379/0
+2025-11-21T16:06:10.8611350Z   FLASK_CONFIG: testing
+2025-11-21T16:06:10.8611560Z   SECRET_KEY: test-secret-key
+2025-11-21T16:06:10.8611784Z   JWT_SECRET_KEY: test-jwt-secret
+2025-11-21T16:06:10.8612104Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+2025-11-21T16:06:10.8612461Z   API_LEGACY_ENABLED: false
+2025-11-21T16:06:10.8612694Z   PYTHONPATH: /home/runner/work/atmr/atmr
+2025-11-21T16:06:10.8612946Z   SOCKETIO_ASYNC_MODE: threading
+2025-11-21T16:06:10.8613154Z   SKIP_SOCKETIO: true
+2025-11-21T16:06:10.8613342Z   SKIP_ROUTES_INIT: true
+2025-11-21T16:06:10.8613603Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:10.8613992Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+2025-11-21T16:06:10.8614376Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:10.8614724Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:10.8615061Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:10.8615407Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+2025-11-21T16:06:10.8615703Z   FLASK_APP: backend.wsgi
+2025-11-21T16:06:10.8615899Z ##[endgroup]
+2025-11-21T16:06:10.8670458Z ++ flask db current
+2025-11-21T16:06:12.5409662Z + CURRENT_OUTPUT='✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:06:12.5410510Z 68116559b15d (head)'
+2025-11-21T16:06:12.5414794Z ++ echo '✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:06:12.5415766Z 68116559b15d (head)'
+2025-11-21T16:06:12.5416531Z ++ grep -oE '[a-f0-9]{12,40}'
+2025-11-21T16:06:12.5416984Z ++ head -1
+2025-11-21T16:06:12.5436491Z + CURRENT_REV=68116559b15d
+2025-11-21T16:06:12.5436889Z + '[' -z 68116559b15d ']'
+2025-11-21T16:06:12.5437415Z + echo '📋 Révision actuelle: 68116559b15d'
+2025-11-21T16:06:12.5438222Z 📋 Révision actuelle: 68116559b15d
+2025-11-21T16:06:12.5439829Z ++ flask db history
+2025-11-21T16:06:14.1802795Z + HISTORY_OUTPUT='✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:06:14.1803751Z f7e8d9c0b1a2 -> 68116559b15d (head), sync_models_with_db
+2025-11-21T16:06:14.1805120Z a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7 -> f7e8d9c0b1a2 (mergepoint), Merge multiple heads: a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7
+2025-11-21T16:06:14.1806539Z 8186648ac54e -> a1b2c3d4e5f6, ensure_admin_value_in_user_role_enum
+2025-11-21T16:06:14.1807110Z 24bbcb82c891 -> add_message_file_fields, add_message_file_fields
+2025-11-21T16:06:14.1807943Z 8186648ac54e -> 24bbcb82c891, Add VAT columns to invoices
+2025-11-21T16:06:14.1808638Z 3_4_profiling, rl_suggestions_001, fix_audit_metadata -> 8186648ac54e (branchpoint) (mergepoint), Merge migrations heads
+2025-11-21T16:06:14.1809628Z d2_encrypted_fields -> 3_4_profiling, ✅ 3.4: Add profiling_metrics table for automatic CPU/memory profiling.
+2025-11-21T16:06:14.1811057Z d7e8f9a1b2c3 -> d2_encrypted_fields, ✅ D2: Ajoute colonnes pour stockage chiffré (migration progressive).
+2025-11-21T16:06:14.1812385Z d7e8f9a1b2c3 -> b2c3d4e5f6a7, Add secret_rotation table for monitoring secret rotations via Vault.
+2025-11-21T16:06:14.1813714Z d2_audit_logs -> fix_audit_metadata, Fix: Renommer colonne metadata vers additional_metadata dans audit_logs.
+2025-11-21T16:06:14.1814848Z add_decision_explanation -> d2_audit_logs, ✅ D2: Create audit_logs table for append-only audit trail.
+2025-11-21T16:06:14.1816572Z d7e8f9a1b2c3 -> add_decision_explanation, ✅ B2: Add decision_explanation to assignment table.
+2025-11-21T16:06:14.1817403Z 44a28b52dc46 -> rl_suggestions_001, add_rl_suggestions_table
+2025-11-21T16:06:14.1818490Z rl_feedback_001 -> 44a28b52dc46, add helper functions to base.py and fix type errors
+2025-11-21T16:06:14.1819250Z rl_metrics_001 -> rl_feedback_001, add_rl_feedbacks_table
+2025-11-21T16:06:14.1819874Z abc123456789 -> rl_metrics_001, add_rl_suggestion_metrics_table
+2025-11-21T16:06:14.1820515Z 97c8d4f1e5a3 -> abc123456789, add_autonomous_action_table
+2025-11-21T16:06:14.1821085Z 156c2b818038 -> 97c8d4f1e5a3, add_ab_test_result_table
+2025-11-21T16:06:14.1821626Z b559b3ef7a75 -> 156c2b818038, add_ml_prediction_table
+2025-11-21T16:06:14.1822228Z fix_circular_fk_20251018 -> b559b3ef7a75, add_performance_indexes
+2025-11-21T16:06:14.1822950Z c8d9e2f3a4b5 -> fix_circular_fk_20251018, fix circular fk names for tests
+2025-11-21T16:06:14.1823661Z af5e460cd09e -> c8d9e2f3a4b5, add residence_facility to client
+2025-11-21T16:06:14.1824376Z a8f4c9e2b1d3 -> af5e460cd09e, Fix dispatch mode enum values to uppercase
+2025-11-21T16:06:14.1825046Z f3a9c7b8d1e2 -> a8f4c9e2b1d3, Add dispatch modes to company
+2025-11-21T16:06:14.1825829Z f3a9c7b8d1e2 -> d7e8f9a1b2c3 (branchpoint), A3: Add task_failure table for DLQ monitoring.
+2025-11-21T16:06:14.1826736Z d8a4d7185c60 -> f3a9c7b8d1e2 (branchpoint), Add critical indexes for performance
+2025-11-21T16:06:14.1827412Z 715e89e538c3 -> d8a4d7185c60, add_gps_coords_to_client
+2025-11-21T16:06:14.1829599Z e252718b5271 -> 715e89e538c3, add_analytics_tables_for_dispatch_metrics
+2025-11-21T16:06:14.1830341Z 0b7f8736876a -> e252718b5271, Add wheelchair fields to booking table
+2025-11-21T16:06:14.1831016Z d9f3a8b2c4e5 -> 0b7f8736876a, add_preferential_rate_to_client
+2025-11-21T16:06:14.1831650Z c8d4e92f1a3b -> d9f3a8b2c4e5, add_invoice_line_id_to_booking
+2025-11-21T16:06:14.1832259Z b15c01673cc4 -> c8d4e92f1a3b, add_third_party_billing_support
+2025-11-21T16:06:14.1833013Z 6d50ede67619 -> b15c01673cc4, driver HR fields + timezone normalize in planning_service
+2025-11-21T16:06:14.1833770Z a452a931f0b7 -> 6d50ede67619, add timezone to driver_shift
+2025-11-21T16:06:14.1834324Z 3f7695e18b7d -> a452a931f0b7, planning: models skeleton
+2025-11-21T16:06:14.1834947Z 02e0994e702b -> 3f7695e18b7d, make_billing_settings_fields_nullable
+2025-11-21T16:06:14.1835588Z 6af879898b0f -> 02e0994e702b, add_invoice_management_tables
+2025-11-21T16:06:14.1836134Z 623409ab335b -> 6af879898b0f, Update models.py
+2025-11-21T16:06:14.1836907Z 19fc92c2ba30 -> 623409ab335b, dispatch_run relations
+2025-11-21T16:06:14.1837513Z <base> -> 19fc92c2ba30, initial schema (upper enums + aliases)'
+2025-11-21T16:06:14.1838535Z + '[' -z '✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:06:14.1839118Z f7e8d9c0b1a2 -> 68116559b15d (head), sync_models_with_db
+2025-11-21T16:06:14.1840249Z a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7 -> f7e8d9c0b1a2 (mergepoint), Merge multiple heads: a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7
+2025-11-21T16:06:14.1841482Z 8186648ac54e -> a1b2c3d4e5f6, ensure_admin_value_in_user_role_enum
+2025-11-21T16:06:14.1842169Z 24bbcb82c891 -> add_message_file_fields, add_message_file_fields
+2025-11-21T16:06:14.1842787Z 8186648ac54e -> 24bbcb82c891, Add VAT columns to invoices
+2025-11-21T16:06:14.1843540Z 3_4_profiling, rl_suggestions_001, fix_audit_metadata -> 8186648ac54e (branchpoint) (mergepoint), Merge migrations heads
+2025-11-21T16:06:14.1844334Z d2_encrypted_fields -> 3_4_profiling, ✅ 3.4: Add profiling_metrics table for automatic CPU/memory profiling.
+2025-11-21T16:06:14.1845073Z d7e8f9a1b2c3 -> d2_encrypted_fields, ✅ D2: Ajoute colonnes pour stockage chiffré (migration progressive).
+2025-11-21T16:06:14.1845698Z d7e8f9a1b2c3 -> b2c3d4e5f6a7, Add secret_rotation table for monitoring secret rotations via Vault.
+2025-11-21T16:06:14.1846695Z d2_audit_logs -> fix_audit_metadata, Fix: Renommer colonne metadata vers additional_metadata dans audit_logs.
+2025-11-21T16:06:14.1848406Z add_decision_explanation -> d2_audit_logs, ✅ D2: Create audit_logs table for append-only audit trail.
+2025-11-21T16:06:14.1849554Z d7e8f9a1b2c3 -> add_decision_explanation, ✅ B2: Add decision_explanation to assignment table.
+2025-11-21T16:06:14.1850355Z 44a28b52dc46 -> rl_suggestions_001, add_rl_suggestions_table
+2025-11-21T16:06:14.1851246Z rl_feedback_001 -> 44a28b52dc46, add helper functions to base.py and fix type errors
+2025-11-21T16:06:14.1851799Z rl_metrics_001 -> rl_feedback_001, add_rl_feedbacks_table
+2025-11-21T16:06:14.1852160Z abc123456789 -> rl_metrics_001, add_rl_suggestion_metrics_table
+2025-11-21T16:06:14.1852508Z 97c8d4f1e5a3 -> abc123456789, add_autonomous_action_table
+2025-11-21T16:06:14.1852829Z 156c2b818038 -> 97c8d4f1e5a3, add_ab_test_result_table
+2025-11-21T16:06:14.1853134Z b559b3ef7a75 -> 156c2b818038, add_ml_prediction_table
+2025-11-21T16:06:14.1853487Z fix_circular_fk_20251018 -> b559b3ef7a75, add_performance_indexes
+2025-11-21T16:06:14.1853907Z c8d9e2f3a4b5 -> fix_circular_fk_20251018, fix circular fk names for tests
+2025-11-21T16:06:14.1854316Z af5e460cd09e -> c8d9e2f3a4b5, add residence_facility to client
+2025-11-21T16:06:14.1854716Z a8f4c9e2b1d3 -> af5e460cd09e, Fix dispatch mode enum values to uppercase
+2025-11-21T16:06:14.1855108Z f3a9c7b8d1e2 -> a8f4c9e2b1d3, Add dispatch modes to company
+2025-11-21T16:06:14.1855544Z f3a9c7b8d1e2 -> d7e8f9a1b2c3 (branchpoint), A3: Add task_failure table for DLQ monitoring.
+2025-11-21T16:06:14.1856045Z d8a4d7185c60 -> f3a9c7b8d1e2 (branchpoint), Add critical indexes for performance
+2025-11-21T16:06:14.1856450Z 715e89e538c3 -> d8a4d7185c60, add_gps_coords_to_client
+2025-11-21T16:06:14.1856811Z e252718b5271 -> 715e89e538c3, add_analytics_tables_for_dispatch_metrics
+2025-11-21T16:06:14.1857212Z 0b7f8736876a -> e252718b5271, Add wheelchair fields to booking table
+2025-11-21T16:06:14.1857776Z d9f3a8b2c4e5 -> 0b7f8736876a, add_preferential_rate_to_client
+2025-11-21T16:06:14.1858146Z c8d4e92f1a3b -> d9f3a8b2c4e5, add_invoice_line_id_to_booking
+2025-11-21T16:06:14.1858505Z b15c01673cc4 -> c8d4e92f1a3b, add_third_party_billing_support
+2025-11-21T16:06:14.1858925Z 6d50ede67619 -> b15c01673cc4, driver HR fields + timezone normalize in planning_service
+2025-11-21T16:06:14.1859354Z a452a931f0b7 -> 6d50ede67619, add timezone to driver_shift
+2025-11-21T16:06:14.1859685Z 3f7695e18b7d -> a452a931f0b7, planning: models skeleton
+2025-11-21T16:06:14.1860036Z 02e0994e702b -> 3f7695e18b7d, make_billing_settings_fields_nullable
+2025-11-21T16:06:14.1860566Z 6af879898b0f -> 02e0994e702b, add_invoice_management_tables
+2025-11-21T16:06:14.1860878Z 623409ab335b -> 6af879898b0f, Update models.py
+2025-11-21T16:06:14.1861169Z 19fc92c2ba30 -> 623409ab335b, dispatch_run relations
+2025-11-21T16:06:14.1861506Z <base> -> 19fc92c2ba30, initial schema (upper enums + aliases)' ']'
+2025-11-21T16:06:14.1861955Z ++ echo '✅ [WSGI] Application Flask créée (config=testing)
+2025-11-21T16:06:14.1862296Z f7e8d9c0b1a2 -> 68116559b15d (head), sync_models_with_db
+2025-11-21T16:06:14.1862938Z a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7 -> f7e8d9c0b1a2 (mergepoint), Merge multiple heads: a1b2c3d4e5f6, add_message_file_fields, b2c3d4e5f6a7
+2025-11-21T16:06:14.1863593Z 8186648ac54e -> a1b2c3d4e5f6, ensure_admin_value_in_user_role_enum
+2025-11-21T16:06:14.1863978Z 24bbcb82c891 -> add_message_file_fields, add_message_file_fields
+2025-11-21T16:06:14.1864333Z 8186648ac54e -> 24bbcb82c891, Add VAT columns to invoices
+2025-11-21T16:06:14.1864834Z 3_4_profiling, rl_suggestions_001, fix_audit_metadata -> 8186648ac54e (branchpoint) (mergepoint), Merge migrations heads
+2025-11-21T16:06:14.1865582Z d2_encrypted_fields -> 3_4_profiling, ✅ 3.4: Add profiling_metrics table for automatic CPU/memory profiling.
+2025-11-21T16:06:14.1866292Z d7e8f9a1b2c3 -> d2_encrypted_fields, ✅ D2: Ajoute colonnes pour stockage chiffré (migration progressive).
+2025-11-21T16:06:14.1866893Z d7e8f9a1b2c3 -> b2c3d4e5f6a7, Add secret_rotation table for monitoring secret rotations via Vault.
+2025-11-21T16:06:14.1867822Z d2_audit_logs -> fix_audit_metadata, Fix: Renommer colonne metadata vers additional_metadata dans audit_logs.
+2025-11-21T16:06:14.1868592Z add_decision_explanation -> d2_audit_logs, ✅ D2: Create audit_logs table for append-only audit trail.
+2025-11-21T16:06:14.1869226Z d7e8f9a1b2c3 -> add_decision_explanation, ✅ B2: Add decision_explanation to assignment table.
+2025-11-21T16:06:14.1869683Z 44a28b52dc46 -> rl_suggestions_001, add_rl_suggestions_table
+2025-11-21T16:06:14.1870094Z rl_feedback_001 -> 44a28b52dc46, add helper functions to base.py and fix type errors
+2025-11-21T16:06:14.1870518Z rl_metrics_001 -> rl_feedback_001, add_rl_feedbacks_table
+2025-11-21T16:06:14.1870863Z abc123456789 -> rl_metrics_001, add_rl_suggestion_metrics_table
+2025-11-21T16:06:14.1871208Z 97c8d4f1e5a3 -> abc123456789, add_autonomous_action_table
+2025-11-21T16:06:14.1871521Z 156c2b818038 -> 97c8d4f1e5a3, add_ab_test_result_table
+2025-11-21T16:06:14.1871827Z b559b3ef7a75 -> 156c2b818038, add_ml_prediction_table
+2025-11-21T16:06:14.1872171Z fix_circular_fk_20251018 -> b559b3ef7a75, add_performance_indexes
+2025-11-21T16:06:14.1872563Z c8d9e2f3a4b5 -> fix_circular_fk_20251018, fix circular fk names for tests
+2025-11-21T16:06:14.1872966Z af5e460cd09e -> c8d9e2f3a4b5, add residence_facility to client
+2025-11-21T16:06:14.1873363Z a8f4c9e2b1d3 -> af5e460cd09e, Fix dispatch mode enum values to uppercase
+2025-11-21T16:06:14.1873749Z f3a9c7b8d1e2 -> a8f4c9e2b1d3, Add dispatch modes to company
+2025-11-21T16:06:14.1874179Z f3a9c7b8d1e2 -> d7e8f9a1b2c3 (branchpoint), A3: Add task_failure table for DLQ monitoring.
+2025-11-21T16:06:14.1874694Z d8a4d7185c60 -> f3a9c7b8d1e2 (branchpoint), Add critical indexes for performance
+2025-11-21T16:06:14.1875095Z 715e89e538c3 -> d8a4d7185c60, add_gps_coords_to_client
+2025-11-21T16:06:14.1875453Z e252718b5271 -> 715e89e538c3, add_analytics_tables_for_dispatch_metrics
+2025-11-21T16:06:14.1875857Z 0b7f8736876a -> e252718b5271, Add wheelchair fields to booking table
+2025-11-21T16:06:14.1876238Z d9f3a8b2c4e5 -> 0b7f8736876a, add_preferential_rate_to_client
+2025-11-21T16:06:14.1876593Z c8d4e92f1a3b -> d9f3a8b2c4e5, add_invoice_line_id_to_booking
+2025-11-21T16:06:14.1876937Z b15c01673cc4 -> c8d4e92f1a3b, add_third_party_billing_support
+2025-11-21T16:06:14.1877363Z 6d50ede67619 -> b15c01673cc4, driver HR fields + timezone normalize in planning_service
+2025-11-21T16:06:14.1877983Z a452a931f0b7 -> 6d50ede67619, add timezone to driver_shift
+2025-11-21T16:06:14.1878309Z 3f7695e18b7d -> a452a931f0b7, planning: models skeleton
+2025-11-21T16:06:14.1878797Z 02e0994e702b -> 3f7695e18b7d, make_billing_settings_fields_nullable
+2025-11-21T16:06:14.1879161Z 6af879898b0f -> 02e0994e702b, add_invoice_management_tables
+2025-11-21T16:06:14.1879472Z 623409ab335b -> 6af879898b0f, Update models.py
+2025-11-21T16:06:14.1879758Z 19fc92c2ba30 -> 623409ab335b, dispatch_run relations
+2025-11-21T16:06:14.1880093Z <base> -> 19fc92c2ba30, initial schema (upper enums + aliases)'
+2025-11-21T16:06:14.1880399Z ++ awk -v current=68116559b15d '
+2025-11-21T16:06:14.1880603Z   {
+2025-11-21T16:06:14.1880830Z     # Extraire la révision de chaque ligne
+2025-11-21T16:06:14.1881083Z     match($0, /[a-f0-9]{12,40}/, rev)
+2025-11-21T16:06:14.1881317Z     if (rev[0] != "" && rev[0] == current) {
+2025-11-21T16:06:14.1881695Z       # On a trouvé CURRENT_REV, la révision précédente était stockée
+2025-11-21T16:06:14.1882020Z       if (prev_rev != "") {
+2025-11-21T16:06:14.1882231Z         print prev_rev
+2025-11-21T16:06:14.1882411Z         exit
+2025-11-21T16:06:14.1882562Z       }
+2025-11-21T16:06:14.1882720Z     }
+2025-11-21T16:06:14.1882872Z     if (rev[0] != "") {
+2025-11-21T16:06:14.1883053Z       prev_rev = rev[0]
+2025-11-21T16:06:14.1883219Z     }
+2025-11-21T16:06:14.1883360Z   }
+2025-11-21T16:06:14.1883499Z '
+2025-11-21T16:06:14.1883641Z ++ head -1
+2025-11-21T16:06:14.1883817Z + PREV_REV=
+2025-11-21T16:06:14.1883974Z + '[' -z '' ']'
+2025-11-21T16:06:14.1884356Z + echo '⚠️ Pas de révision précédente trouvée ou identique à la révision actuelle'
+2025-11-21T16:06:14.1884949Z + echo '   Cela peut arriver si on est à la première migration'
+2025-11-21T16:06:14.1885252Z + echo '   Skip downgrade test'
+2025-11-21T16:06:14.1885454Z + exit 0
+2025-11-21T16:06:14.1885779Z ⚠️ Pas de révision précédente trouvée ou identique à la révision actuelle
+2025-11-21T16:06:14.1886196Z    Cela peut arriver si on est à la première migration
+2025-11-21T16:06:14.1886462Z    Skip downgrade test

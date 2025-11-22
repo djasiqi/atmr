@@ -5,6 +5,9 @@
 
 Remplace les patterns try/except/finally répétés dans tout le code par
 des context managers réutilisables et testables.
+
+📚 Documentation complète : Voir `backend/docs/SESSION_MANAGEMENT.md` pour le guide complet
+   de gestion des sessions SQLAlchemy (code métier + tests).
 """
 
 from __future__ import annotations
@@ -16,6 +19,33 @@ from typing import TYPE_CHECKING, Any, Callable
 from sqlalchemy.exc import SQLAlchemyError
 
 from ext import db
+
+# Import optionnel des métriques (peut ne pas être disponible)
+try:
+    from services.db_session_metrics import (
+        track_context_manager_usage,
+        track_session_error,
+        track_transaction,
+    )
+
+    METRICS_AVAILABLE = True
+except ImportError:
+    METRICS_AVAILABLE = False
+    from contextlib import nullcontext
+
+    def track_context_manager_usage(manager_type: str) -> None:
+        """No-op si métriques non disponibles."""
+        pass
+
+    def track_session_error(error_type: str) -> None:
+        """No-op si métriques non disponibles."""
+        pass
+
+    def track_transaction(operation: str) -> Any:
+        """No-op context manager si métriques non disponibles."""
+        _ = operation  # Paramètre non utilisé mais requis pour signature
+        return nullcontext()
+
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -62,6 +92,10 @@ def db_transaction(
         RuntimeError: Si DB est en read-only et tentative d'écriture
 
     """
+    # ✅ P2.1: Track l'utilisation du context manager
+    if METRICS_AVAILABLE:
+        track_context_manager_usage("db_transaction")
+
     # ✅ D3: Vérifier DB read-only avant d'autoriser les écritures
     try:
         from chaos.injectors import get_chaos_injector
@@ -90,12 +124,17 @@ def db_transaction(
             except ImportError:
                 pass
 
-            db.session.commit()
+            # ✅ P2.1: Track le commit
+            with track_transaction("commit"):
+                db.session.commit()
             logger.debug("Transaction committed successfully")
 
     except SQLAlchemyError as e:
         if auto_rollback:
-            db.session.rollback()
+            # ✅ P2.1: Track le rollback et l'erreur
+            with track_transaction("rollback"):
+                db.session.rollback()
+            track_session_error("SQLAlchemyError")
             logger.warning("Transaction rolled back due to error: %s", e)
 
         if reraise:
@@ -105,7 +144,10 @@ def db_transaction(
 
     except Exception as e:
         if auto_rollback:
-            db.session.rollback()
+            # ✅ P2.1: Track le rollback et l'erreur
+            with track_transaction("rollback"):
+                db.session.rollback()
+            track_session_error(type(e).__name__)
         logger.error("Unexpected error, transaction rolled back: %s", e)
 
         if reraise:
@@ -121,6 +163,8 @@ def db_read_only() -> Generator[Any, None, None]:
     """Context manager pour les opérations de lecture seule.
     Ne commit jamais, rollback en cas d'erreur.
 
+    ✅ P2.1: Track l'utilisation du context manager
+
     Usage:
         with db_read_only() as session:
             invoices = session.query(Invoice).filter_by(company_id=1).all()
@@ -129,12 +173,20 @@ def db_read_only() -> Generator[Any, None, None]:
         db.session: La session SQLAlchemy active
 
     """
+    # ✅ P2.1: Track l'utilisation du context manager
+    if METRICS_AVAILABLE:
+        track_context_manager_usage("db_read_only")
+
     try:
         yield db.session
         # Pas de commit pour les lectures
 
     except Exception as e:
-        db.session.rollback()
+        # ✅ P2.1: Track le rollback et l'erreur
+        with track_transaction("rollback"):
+            db.session.rollback()
+        if METRICS_AVAILABLE:
+            track_session_error(type(e).__name__)
         logger.warning("Read operation error, session rolled back: %s", e)
         raise
 
@@ -147,6 +199,8 @@ def db_batch_operation(
     batch_size: int = 100, auto_commit_batch: bool = True
 ) -> Generator[tuple[Any, Callable[[], None]], None, None]:
     """Context manager pour les opérations par lot (batch) avec commits intermédiaires.
+
+    ✅ P2.1: Track l'utilisation du context manager
 
     Args:
         batch_size: Nombre d'opérations avant un commit intermédiaire
@@ -165,17 +219,27 @@ def db_batch_operation(
         tuple: (session, commit_batch_function)
 
     """
+    # ✅ P2.1: Track l'utilisation du context manager
+    if METRICS_AVAILABLE:
+        track_context_manager_usage("db_batch_operation")
+
     counter = [0]  # Liste pour pouvoir modifier dans la closure
 
     def commit_batch():
         """Commit le batch actuel et reset le compteur."""
         nonlocal counter
         try:
-            db.session.commit()
+            # ✅ P2.1: Track le commit
+            with track_transaction("commit"):
+                db.session.commit()
             counter[0] = 0
             logger.debug("Batch committed (batch_size=%d)", batch_size)
         except SQLAlchemyError as e:
-            db.session.rollback()
+            # ✅ P2.1: Track le rollback et l'erreur
+            with track_transaction("rollback"):
+                db.session.rollback()
+            if METRICS_AVAILABLE:
+                track_session_error("SQLAlchemyError")
             logger.error("Batch commit failed: %s", e)
             raise
 
@@ -187,7 +251,11 @@ def db_batch_operation(
             commit_batch()
 
     except Exception as e:
-        db.session.rollback()
+        # ✅ P2.1: Track le rollback et l'erreur
+        with track_transaction("rollback"):
+            db.session.rollback()
+        if METRICS_AVAILABLE:
+            track_session_error(type(e).__name__)
         logger.error("Batch operation failed: %s", e)
         raise
 

@@ -1,0 +1,11 @@
+﻿2025-11-21T16:04:35.0917234Z ##[group]Run mkdir -p artifacts
+2025-11-21T16:04:35.0917571Z [36;1mmkdir -p artifacts[0m
+2025-11-21T16:04:35.0968441Z shell: /usr/bin/bash -e {0}
+2025-11-21T16:04:35.0968731Z env:
+2025-11-21T16:04:35.0969018Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:04:35.0969429Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+2025-11-21T16:04:35.0969827Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:04:35.0970164Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:04:35.0970505Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:04:35.0970840Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+2025-11-21T16:04:35.0971133Z ##[endgroup]

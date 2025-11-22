@@ -78,7 +78,27 @@ class RLDispatchOptimizer:
         if self.model_path.exists():
             self._load_model()
         else:
-            logger.warning(
+            # ✅ FIX: Réduire le niveau de log en mode testing (normal en tests, modèle RL non disponible)
+            import os
+
+            is_testing = False
+            try:
+                # Essayer d'abord via variable d'environnement (plus sûr, fonctionne partout)
+                is_testing = os.getenv("FLASK_CONFIG") == "testing"
+                # Si current_app est disponible, utiliser sa config (plus précis)
+                try:
+                    from flask import current_app
+
+                    is_testing = is_testing or current_app.config.get("TESTING", False)
+                except RuntimeError:
+                    # current_app pas disponible (hors contexte Flask), utiliser seulement env var
+                    pass
+            except Exception:
+                # En cas d'erreur, utiliser warning par défaut
+                pass
+
+            log_level = logger.debug if is_testing else logger.warning
+            log_level(
                 "[RLOptimizer] Modèle non trouvé: %s. Optimisation RL désactivée.",
                 model_path,
             )

@@ -357,7 +357,17 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
                 # ✅ Commit explicite pour persister la transaction
                 db.session.commit()
                 logger.debug("[Queue] DispatchRun id=%s committed successfully", dispatch_run_id)
-            except IntegrityError:
+            except IntegrityError as e:
+                # ✅ P2.2: Track métrique IntegrityError (race condition)
+                from services.unified_dispatch.error_metrics import track_integrity_error
+
+                error_code = getattr(e.orig, "pgcode", None) if hasattr(e, "orig") else None
+                track_integrity_error(
+                    error_code=str(error_code) if error_code else "unknown",
+                    company_id=company_id,
+                    dispatch_run_id=None,
+                )
+
                 # Race condition : un autre thread a créé le DispatchRun entre temps
                 db.session.rollback()
                 existing_run = DispatchRun.query.filter_by(company_id=company_id, day=day_date).first()

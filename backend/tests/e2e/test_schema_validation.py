@@ -16,19 +16,69 @@ from models import UserRole
 class TestSchemaValidationE2E:
     """Tests E2E pour validation des schemas sur les endpoints validés."""
 
+    def test_no_redirects_in_auth_endpoints(self, client):
+        """✅ Test de non-régression : Vérifier qu'aucune redirection 302 n'est générée en mode testing."""
+        # Tester login avec payload invalide (devrait retourner 400, pas 302)
+        response = client.post("/api/v1/auth/login", json={"password": "test"})
+        assert response.status_code != 302, (
+            f"Pas de redirections en mode testing pour /api/v1/auth/login, reçu: {response.status_code} "
+            f"(Location: {response.headers.get('Location', 'N/A')})"
+        )
+        # Vérifier que c'est soit 400 (validation) soit 404/500 (erreur) mais pas 302
+        assert response.status_code in [400, 404, 500], (
+            f"Status code inattendu pour login invalide: {response.status_code}"
+        )
+
+        # Tester register avec payload invalide (devrait retourner 400, pas 302)
+        response = client.post("/api/v1/auth/register", json={"email": "invalid"})
+        assert response.status_code != 302, (
+            f"Pas de redirections en mode testing pour /api/v1/auth/register, reçu: {response.status_code} "
+            f"(Location: {response.headers.get('Location', 'N/A')})"
+        )
+        # Vérifier que c'est soit 400 (validation) soit 404/500 (erreur) mais pas 302
+        assert response.status_code in [400, 404, 500], (
+            f"Status code inattendu pour register invalide: {response.status_code}"
+        )
+
     # ========== AUTH ENDPOINTS ==========
 
     def test_login_valid_schema(self, client, sample_user):
         """Test POST /api/v1/auth/login avec payload valide."""
         response = client.post("/api/v1/auth/login", json={"email": sample_user.email, "password": "password123"})
-        assert response.status_code in [200, 400, 404, 429, 500]
+
+        # ✅ FIX: Vérifier que le client n'est pas redirigé (302 inattendu)
+        if response.status_code == 302:
+            # Vérifier que c'est une redirection vers /login (erreur) ou / (succès)
+            location = response.headers.get("Location", "")
+            if location.endswith("/login"):
+                # Redirection vers login = erreur d'authentification (devrait être 401)
+                pytest.fail(f"Redirection 302 vers /login inattendue (devrait être 401 ou 400). Location: {location}")
+            elif location.endswith("/"):
+                # Redirection après login = OK, mais devrait être 200 avec token
+                pytest.fail(
+                    f"Redirection 302 après login inattendue (devrait être 200 avec token). Location: {location}"
+                )
+            else:
+                pytest.fail(f"Redirection 302 inattendue vers {location}")
+
+        assert response.status_code in [200, 400, 404, 429, 500], (
+            f"Status code inattendu: {response.status_code}. Response: {response.get_data(as_text=True)[:200]}"
+        )
         data = response.get_json() or {}
         assert ("token" in data) or ("message" in data) or ("errors" in data) or ("error" in data)
 
     def test_login_invalid_schema(self, client):
         """Test POST /api/v1/auth/login avec payload invalide (email manquant)."""
         response = client.post("/api/v1/auth/login", json={"password": "password123"})
-        assert response.status_code in [400, 404, 500]
+
+        # ✅ FIX: Vérifier que le client n'est pas redirigé (302 inattendu)
+        if response.status_code == 302:
+            location = response.headers.get("Location", "")
+            pytest.fail(f"Redirection 302 inattendue pour payload invalide (devrait être 400). Location: {location}")
+
+        assert response.status_code in [400, 404, 500], (
+            f"Status code inattendu: {response.status_code}. Response: {response.get_data(as_text=True)[:200]}"
+        )
         data = response.get_json() or {}
         assert ("message" in data) or ("errors" in data) or ("error" in data) or (response.status_code == 404)
 
@@ -47,7 +97,15 @@ class TestSchemaValidationE2E:
                 "address": "Rue de Test 1, 1000 Lausanne",
             },
         )
-        assert response.status_code in [200, 201, 400, 404, 500]
+
+        # ✅ FIX: Vérifier que le client n'est pas redirigé (302 inattendu)
+        if response.status_code == 302:
+            location = response.headers.get("Location", "")
+            pytest.fail(f"Redirection 302 inattendue pour register (devrait être 200/201 ou 400). Location: {location}")
+
+        assert response.status_code in [200, 201, 400, 404, 500], (
+            f"Status code inattendu: {response.status_code}. Response: {response.get_data(as_text=True)[:200]}"
+        )
         data = response.get_json() or {}
         assert (
             ("token" in data)

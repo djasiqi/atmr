@@ -1,0 +1,13 @@
+﻿2025-11-21T16:04:59.0213822Z ##[group]Run cd backend
+2025-11-21T16:04:59.0214093Z [36;1mcd backend[0m
+2025-11-21T16:04:59.0214422Z [36;1mpip-audit --requirement requirements.txt --vulnerability-service osv[0m
+2025-11-21T16:04:59.0248133Z shell: /usr/bin/bash -e {0}
+2025-11-21T16:04:59.0248356Z env:
+2025-11-21T16:04:59.0248599Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:04:59.0249003Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+2025-11-21T16:04:59.0249570Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:04:59.0249909Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:04:59.0250239Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:04:59.0250756Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+2025-11-21T16:04:59.0251038Z ##[endgroup]
+2025-11-21T16:05:49.7295154Z No known vulnerabilities found
