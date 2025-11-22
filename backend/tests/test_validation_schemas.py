@@ -2004,7 +2004,7 @@ class TestAnalyticsInsightsQuerySchema:
         """✅ Test validation avec valeur par défaut (lookback_days=30)."""
         data = {}
         result = validate_request(AnalyticsInsightsQuerySchema(), data, strict=False)
-        assert result["lookback_days"] == 30
+        assert result["lookback_days"] == 30  # noqa: E501
 
     def test_valid_query_with_lookback_days(self):
         """✅ Test validation avec lookback_days spécifié."""
@@ -2077,7 +2077,8 @@ class TestAnalyticsInsightsQuerySchema:
         assert "errors" in exc_info.value.messages
         assert "lookback_days" in exc_info.value.messages["errors"]
 
-        # Float non entier (invalide pour Int, mais Marshmallow peut convertir 30.0 en 30)
+        # Float non entier (invalide pour Int)
+        # mais Marshmallow peut convertir 30.0 en 30
         # Testons avec une valeur qui ne peut pas être convertie en int
         # Marshmallow peut accepter 30.0 et le convertir
         # donc testons avec une vraie valeur invalide
