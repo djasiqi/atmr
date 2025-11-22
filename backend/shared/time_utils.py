@@ -61,7 +61,9 @@ def minutes_from_now_local(dt: Union[str, datetime, None]) -> int:
     return max(0, int(delta.total_seconds() // 60))
 
 
-def minutes_between_local(a: Union[str, datetime, None], b: Union[str, datetime, None]) -> int:
+def minutes_between_local(
+    a: Union[str, datetime, None], b: Union[str, datetime, None]
+) -> int:
     """Minutes (>=0) entre a et b (tous naïfs)."""
     if not a or not b:
         return 0
@@ -88,7 +90,9 @@ def sort_key_local(dt: Union[str, datetime, None]) -> datetime:
     return parsed
 
 
-def split_date_time_local(dt: Union[str, datetime, None]) -> Tuple[str | None, str | None]:
+def split_date_time_local(
+    dt: Union[str, datetime, None],
+) -> Tuple[str | None, str | None]:
     """Retourne ('YYYY-MM-DD', 'HH:MM') sans conversions - pour l'affichage."""
     d = parse_local_naive(dt)
     if not d:
@@ -186,7 +190,9 @@ def minutes_from_now(dt: Union[str, datetime, None]) -> int:
     return max(0, int(delta.total_seconds() // 60))
 
 
-def minutes_between(a: Union[str, datetime, None], b: Union[str, datetime, None]) -> int:
+def minutes_between(
+    a: Union[str, datetime, None], b: Union[str, datetime, None]
+) -> int:
     """Minutes (>=0) entre a et b (tous deux normalisés UTC)."""
     aa, bb = to_utc(a), to_utc(b)
     if aa is None or bb is None:

@@ -26,7 +26,9 @@ class TestShadowModeManagerCreation:
         MockDQNAgent.return_value = mock_agent
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            manager = ShadowModeManager(model_path="dummy_model.pth", log_dir=tmpdir, enable_logging=False)
+            manager = ShadowModeManager(
+                model_path="dummy_model.pth", log_dir=tmpdir, enable_logging=False
+            )
 
             assert manager is not None
             assert manager.predictions_count == 0
@@ -39,7 +41,9 @@ class TestShadowModeManagerCreation:
         with tempfile.TemporaryDirectory() as tmpdir:
             log_dir = Path(tmpdir, "shadow_logs")
 
-            ShadowModeManager(model_path="dummy_model.pth", log_dir=log_dir, enable_logging=True)
+            ShadowModeManager(
+                model_path="dummy_model.pth", log_dir=log_dir, enable_logging=True
+            )
 
             assert Path(log_dir).exists()
             assert Path(log_dir).is_dir()
@@ -58,7 +62,9 @@ class TestShadowModePredictions:
         MockDQNAgent.return_value = mock_agent
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            manager = ShadowModeManager(model_path="dummy.pth", log_dir=tmpdir, enable_logging=False)
+            manager = ShadowModeManager(
+                model_path="dummy.pth", log_dir=tmpdir, enable_logging=False
+            )
             manager.agent = mock_agent
 
             # Mock booking et drivers
@@ -73,7 +79,9 @@ class TestShadowModePredictions:
 
             # Prédire
             prediction = manager.predict_driver_assignment(
-                booking=mock_booking, available_drivers=[mock_driver1, mock_driver2], current_assignments={}
+                booking=mock_booking,
+                available_drivers=[mock_driver1, mock_driver2],
+                current_assignments={},
             )
 
             assert prediction is not None
@@ -88,11 +96,15 @@ class TestShadowModePredictions:
         """Test prédiction d'action 'wait'."""
         mock_agent = MagicMock()
         mock_agent.select_action.return_value = 2  # Index > len(drivers)
-        mock_agent.get_q_values.return_value = np.array([50.0, 30.0, 100.0])  # Wait est le meilleur
+        mock_agent.get_q_values.return_value = np.array(
+            [50.0, 30.0, 100.0]
+        )  # Wait est le meilleur
         MockDQNAgent.return_value = mock_agent
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            manager = ShadowModeManager(model_path="dummy.pth", log_dir=tmpdir, enable_logging=False)
+            manager = ShadowModeManager(
+                model_path="dummy.pth", log_dir=tmpdir, enable_logging=False
+            )
             manager.agent = mock_agent
 
             mock_booking = MagicMock()
@@ -120,9 +132,15 @@ class TestShadowModeComparisons:
     def test_compare_agreement(self, MockDQNAgent):
         """Test comparaison avec accord."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            manager = ShadowModeManager(model_path="dummy.pth", log_dir=tmpdir, enable_logging=False)
+            manager = ShadowModeManager(
+                model_path="dummy.pth", log_dir=tmpdir, enable_logging=False
+            )
 
-            prediction = {"booking_id": 123, "predicted_driver_id": 1, "confidence": 0.85}
+            prediction = {
+                "booking_id": 123,
+                "predicted_driver_id": 1,
+                "confidence": 0.85,
+            }
 
             comparison = manager.compare_with_actual_decision(
                 prediction=prediction,
@@ -141,9 +159,15 @@ class TestShadowModeComparisons:
     def test_compare_disagreement(self, MockDQNAgent):
         """Test comparaison avec désaccord."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            manager = ShadowModeManager(model_path="dummy.pth", log_dir=tmpdir, enable_logging=False)
+            manager = ShadowModeManager(
+                model_path="dummy.pth", log_dir=tmpdir, enable_logging=False
+            )
 
-            prediction = {"booking_id": 123, "predicted_driver_id": 1, "confidence": 0.75}
+            prediction = {
+                "booking_id": 123,
+                "predicted_driver_id": 1,
+                "confidence": 0.75,
+            }
 
             comparison = manager.compare_with_actual_decision(
                 prediction=prediction,
@@ -163,7 +187,9 @@ class TestShadowModeStats:
     def test_get_stats(self, MockDQNAgent):
         """Test récupération des stats."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            manager = ShadowModeManager(model_path="dummy.pth", log_dir=tmpdir, enable_logging=False)
+            manager = ShadowModeManager(
+                model_path="dummy.pth", log_dir=tmpdir, enable_logging=False
+            )
 
             # Simulations
             manager.predictions_count = 100
@@ -181,7 +207,9 @@ class TestShadowModeStats:
     def test_agreement_rate_zero_comparisons(self, MockDQNAgent):
         """Test agreement rate quand aucune comparaison."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            manager = ShadowModeManager(model_path="dummy.pth", log_dir=tmpdir, enable_logging=False)
+            manager = ShadowModeManager(
+                model_path="dummy.pth", log_dir=tmpdir, enable_logging=False
+            )
 
             stats = manager.get_stats()
             assert stats["agreement_rate"] == 0.0
@@ -213,7 +241,9 @@ class TestShadowModeLogging:
             mock_driver.id = 5
 
             manager.predict_driver_assignment(
-                booking=mock_booking, available_drivers=[mock_driver], current_assignments={}
+                booking=mock_booking,
+                available_drivers=[mock_driver],
+                current_assignments={},
             )
 
             # Vérifier que le fichier de log existe
@@ -235,12 +265,20 @@ class TestShadowModeLogging:
     def test_logging_comparisons(self, MockDQNAgent):
         """Test que les comparaisons sont loggées."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            manager = ShadowModeManager(model_path="dummy.pth", log_dir=tmpdir, enable_logging=True)
+            manager = ShadowModeManager(
+                model_path="dummy.pth", log_dir=tmpdir, enable_logging=True
+            )
 
-            prediction = {"booking_id": 999, "predicted_driver_id": 3, "confidence": 0.92}
+            prediction = {
+                "booking_id": 999,
+                "predicted_driver_id": 3,
+                "confidence": 0.92,
+            }
 
             manager.compare_with_actual_decision(
-                prediction=prediction, actual_driver_id=3, outcome_metrics={"distance_km": 2.5}
+                prediction=prediction,
+                actual_driver_id=3,
+                outcome_metrics={"distance_km": 2.5},
             )
 
             # Vérifier le fichier
@@ -263,7 +301,9 @@ class TestShadowModeDailyReport:
     def test_generate_daily_report_empty(self, MockDQNAgent):
         """Test génération rapport sans données."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            manager = ShadowModeManager(model_path="dummy.pth", log_dir=tmpdir, enable_logging=False)
+            manager = ShadowModeManager(
+                model_path="dummy.pth", log_dir=tmpdir, enable_logging=False
+            )
 
             report = manager.generate_daily_report()
 
@@ -277,7 +317,9 @@ class TestShadowModeDailyReport:
     def test_daily_report_saves_to_file(self, MockDQNAgent):
         """Test que le rapport est sauvegardé."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            manager = ShadowModeManager(model_path="dummy.pth", log_dir=tmpdir, enable_logging=False)
+            manager = ShadowModeManager(
+                model_path="dummy.pth", log_dir=tmpdir, enable_logging=False
+            )
 
             report = manager.generate_daily_report()
 

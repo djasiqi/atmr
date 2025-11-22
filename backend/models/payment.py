@@ -38,9 +38,17 @@ class Payment(db.Model):
     amount: Mapped[float] = mapped_column(Float, nullable=False)
 
     date = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
-    method = Column(SAEnum("credit_card", "paypal", "bank_transfer", "cash", name="payment_method"), nullable=False)
+    method = Column(
+        SAEnum("credit_card", "paypal", "bank_transfer", "cash", name="payment_method"),
+        nullable=False,
+    )
     status = Column(
         SAEnum(PaymentStatus, name="payment_status"),
         nullable=False,
@@ -48,9 +56,18 @@ class Payment(db.Model):
         server_default=PaymentStatus.PENDING.value,
     )
 
-    user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
-    client_id = Column(Integer, ForeignKey("client.id", ondelete="CASCADE"), nullable=False, index=True)
-    booking_id = Column(Integer, ForeignKey("booking.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(
+        Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    client_id = Column(
+        Integer, ForeignKey("client.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    booking_id = Column(
+        Integer,
+        ForeignKey("booking.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Relations
     client = relationship("Client", back_populates="payments", passive_deletes=True)
@@ -64,7 +81,11 @@ class Payment(db.Model):
             "id": self.id,
             "amount": amt,
             "method": str(self.method),
-            "status": (self.status.value if isinstance(self.status, PaymentStatus) else str(self.status)),
+            "status": (
+                self.status.value
+                if isinstance(self.status, PaymentStatus)
+                else str(self.status)
+            ),
             "date": _iso(self.date),
             "updated_at": _iso(self.updated_at),
             "client_id": self.client_id,

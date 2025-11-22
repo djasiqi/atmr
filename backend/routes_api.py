@@ -36,7 +36,9 @@ from routes.secret_rotation_monitoring import secret_rotation_ns
 from routes.shadow_mode_routes import shadow_mode_bp  # Shadow Mode RL
 from routes.utils import utils_ns
 
-authorizations = {"BearerAuth": {"type": "apiKey", "in": "header", "name": "Authorization"}}
+authorizations = {
+    "BearerAuth": {"type": "apiKey", "in": "header", "name": "Authorization"}
+}
 
 # ✅ 3.2: Configuration versioning API
 API_PREFIX = os.getenv("API_PREFIX", "/api").rstrip("/") or "/api"
@@ -67,7 +69,9 @@ api_v1 = Api(
 # ✅ 3.2: API v2 - Pour nouvelles routes (vide pour l'instant)
 # Note: doc=False pour éviter conflit de route /specs avec api_v1
 # Réactiver avec doc=f"{API_DOCS}/v2" quand des routes seront ajoutées
-_doc_v2: Any = False  # Désactivé temporairement jusqu'à ce que des routes soient ajoutées
+_doc_v2: Any = (
+    False  # Désactivé temporairement jusqu'à ce que des routes soient ajoutées
+)
 api_v2 = Api(
     title="ATMR Transport API v2",
     version="2.0",
@@ -205,7 +209,9 @@ if _keep_legacy_api:
     api_legacy.add_namespace(company_dispatch_ns, path="/company_dispatch")
     api_legacy.add_namespace(dispatch_health_ns, path="/company_dispatch_health")
     api_legacy.add_namespace(company_mobile_auth_ns, path="/company_mobile/auth")
-    api_legacy.add_namespace(company_mobile_dispatch_ns, path="/company_mobile/dispatch")
+    api_legacy.add_namespace(
+        company_mobile_dispatch_ns, path="/company_mobile/dispatch"
+    )
     api_legacy.add_namespace(prometheus_metrics_ns, path="/prometheus")
     api_legacy.add_namespace(analytics_ns, path="/analytics")
     api_legacy.add_namespace(settings_ns, path="/company-settings")
@@ -238,7 +244,10 @@ def init_namespaces(app):
     # ✅ 3.2: Initialiser API legacy si activée (compatibilité)
     if api_legacy:
         api_legacy.init_app(app)
-        app.logger.info("[api] ⚠️  API legacy initialisée: %s (dépréciée - utiliser /v1 ou /v2)", API_PREFIX)
+        app.logger.info(
+            "[api] ⚠️  API legacy initialisée: %s (dépréciée - utiliser /v1 ou /v2)",
+            API_PREFIX,
+        )
     else:
         app.logger.info("[api] ℹ️  API legacy désactivée (API_LEGACY_ENABLED=false)")
 

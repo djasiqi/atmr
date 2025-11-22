@@ -85,7 +85,9 @@ class PIIMaskingService:
         domain_parts = domain.split(".")
 
         masked_local = local[0] + "***" if len(local) > 0 else "***"
-        masked_domain_name = domain_parts[0][0] + "***" if len(domain_parts[0]) > 0 else "***"
+        masked_domain_name = (
+            domain_parts[0][0] + "***" if len(domain_parts[0]) > 0 else "***"
+        )
         masked_domain = masked_domain_name + "." + ".".join(domain_parts[1:])
 
         return f"{masked_local}@{masked_domain}"
@@ -193,12 +195,21 @@ class PIIMaskingService:
             sanitized = CARD_PATTERN.sub("[CARD_REDACTED]", sanitized)
             sanitized = PHONE_CH_PATTERN.sub("[PHONE_REDACTED]", sanitized)
             # ✅ SECURITY CWE-778: Masquer coordonnées GPS précises (RGPD Art. 32)
-            sanitized = GPS_PATTERN.sub(lambda m: PIIMaskingService.mask_gps_coords(m.group(1), m.group(2)), sanitized)
+            sanitized = GPS_PATTERN.sub(
+                lambda m: PIIMaskingService.mask_gps_coords(m.group(1), m.group(2)),
+                sanitized,
+            )
 
             # 3. Patterns génériques (fallback)
-            sanitized = EMAIL_PATTERN.sub(lambda m: PIIMaskingService.mask_email(m.group(0)), sanitized)
-            sanitized = PHONE_PATTERN.sub(lambda m: PIIMaskingService.mask_phone(m.group(0)), sanitized)
-            return IBAN_PATTERN.sub(lambda m: PIIMaskingService.mask_iban(m.group(0)), sanitized)
+            sanitized = EMAIL_PATTERN.sub(
+                lambda m: PIIMaskingService.mask_email(m.group(0)), sanitized
+            )
+            sanitized = PHONE_PATTERN.sub(
+                lambda m: PIIMaskingService.mask_phone(m.group(0)), sanitized
+            )
+            return IBAN_PATTERN.sub(
+                lambda m: PIIMaskingService.mask_iban(m.group(0)), sanitized
+            )
 
         return data
 
@@ -241,6 +252,8 @@ class PIIFilter(logging.Filter):
 
         # Masquer dans args
         if hasattr(record, "args") and record.args:
-            record.args = tuple(PIIMaskingService.mask_log_data(arg) for arg in record.args)
+            record.args = tuple(
+                PIIMaskingService.mask_log_data(arg) for arg in record.args
+            )
 
         return True

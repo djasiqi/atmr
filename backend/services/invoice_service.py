@@ -45,7 +45,10 @@ class InvoiceService:
         """Annule une facture en libérant les réservations associées."""
         current_status = cast(InvoiceStatus, invoice.status)
 
-        if not force and current_status not in {InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED}:
+        if not force and current_status not in {
+            InvoiceStatus.DRAFT,
+            InvoiceStatus.CANCELLED,
+        }:
             msg = "Seules les factures au statut 'draft' peuvent être annulées."
             raise ValueError(msg)
 
@@ -69,7 +72,9 @@ class InvoiceService:
             db.session.commit()
         except Exception as exc:
             db.session.rollback()
-            app_logger.error("Erreur lors de l'annulation de la facture %s: %s", invoice.id, exc)
+            app_logger.error(
+                "Erreur lors de l'annulation de la facture %s: %s", invoice.id, exc
+            )
             raise
 
     def duplicate_invoice(self, invoice: Invoice) -> Dict[str, Any]:
@@ -80,11 +85,15 @@ class InvoiceService:
         """
         current_status = cast(InvoiceStatus, invoice.status)
         if current_status == InvoiceStatus.DRAFT:
-            raise ValueError("La facture est déjà un brouillon et peut être modifiée directement.")
+            raise ValueError(
+                "La facture est déjà un brouillon et peut être modifiée directement."
+            )
 
         reservation_lines = [line for line in invoice.lines if line.reservation_id]
         if not reservation_lines:
-            raise ValueError("Aucune course liée à cette facture ne peut être dupliquée.")
+            raise ValueError(
+                "Aucune course liée à cette facture ne peut être dupliquée."
+            )
 
         bill_to_client_id: Optional[int] = invoice.bill_to_client_id
         billing_type = "third_party" if bill_to_client_id else "direct"
@@ -174,14 +183,19 @@ class InvoiceService:
 
             # Si bill_to_client_id est fourni, vérifier que c'est une institution
             if bill_to_client_id:
-                bill_to_client = Client.query.filter_by(id=bill_to_client_id, company_id=company_id).first()
+                bill_to_client = Client.query.filter_by(
+                    id=bill_to_client_id, company_id=company_id
+                ).first()
 
                 if not bill_to_client:
                     msg = "Client payeur non trouvé"
                     raise ValueError(msg)
 
                 if not bill_to_client.is_institution:
-                    app_logger.warning("Le client %s n'est pas marqué comme institution", bill_to_client_id)
+                    app_logger.warning(
+                        "Le client %s n'est pas marqué comme institution",
+                        bill_to_client_id,
+                    )
 
             # Récupérer les réservations
             target_statuses = ["COMPLETED", "RETURN_COMPLETED"]
@@ -207,18 +221,24 @@ class InvoiceService:
                     raise ValueError(msg)
             else:
                 # Mode automatique : récupérer toutes les réservations de la période
-                reservations = self._get_reservations_for_period(company_id, client_id, period_year, period_month)
+                reservations = self._get_reservations_for_period(
+                    company_id, client_id, period_year, period_month
+                )
 
             if not reservations:
                 msg = "Aucune réservation trouvée pour cette période"
                 raise ValueError(msg)
 
             # Générer le numéro de facture
-            invoice_number = self._generate_invoice_number(company_id, period_year, period_month)
+            invoice_number = self._generate_invoice_number(
+                company_id, period_year, period_month
+            )
 
             # Préparer la TVA
             # La TVA est applicable uniquement si vat_applicable est True ET vat_rate est défini
-            vat_applicable_setting = bool(getattr(billing_settings, "vat_applicable", False))
+            vat_applicable_setting = bool(
+                getattr(billing_settings, "vat_applicable", False)
+            )
             vat_rate_setting = getattr(billing_settings, "vat_rate", None)
 
             # Log pour diagnostic
@@ -238,7 +258,11 @@ class InvoiceService:
                     test_rate = Decimal(str(vat_rate_setting))
                     vat_rate_valid = test_rate > Decimal("0")
                 except (InvalidOperation, ValueError, TypeError):
-                    app_logger.warning("Taux TVA invalide pour company %s: %s", company_id, vat_rate_setting)
+                    app_logger.warning(
+                        "Taux TVA invalide pour company %s: %s",
+                        company_id,
+                        vat_rate_setting,
+                    )
                     vat_rate_valid = False
 
             vat_applicable = vat_applicable_setting and vat_rate_valid
@@ -246,10 +270,18 @@ class InvoiceService:
 
             if vat_applicable and vat_rate_valid:
                 try:
-                    default_vat_rate = Decimal(str(vat_rate_setting)).quantize(Decimal("0.01"))
-                    app_logger.info("TVA activée pour company %s avec taux %s%%", company_id, default_vat_rate)
+                    default_vat_rate = Decimal(str(vat_rate_setting)).quantize(
+                        Decimal("0.01")
+                    )
+                    app_logger.info(
+                        "TVA activée pour company %s avec taux %s%%",
+                        company_id,
+                        default_vat_rate,
+                    )
                 except (InvalidOperation, ValueError, TypeError) as e:
-                    app_logger.error("Erreur conversion taux TVA pour company %s: %s", company_id, e)
+                    app_logger.error(
+                        "Erreur conversion taux TVA pour company %s: %s", company_id, e
+                    )
                     default_vat_rate = Decimal("0")
                     vat_applicable = False
             else:
@@ -272,7 +304,9 @@ class InvoiceService:
             client = Client.query.get(client_id)
             patient_name = ""
             if client and client.user:
-                patient_name = f"{client.user.first_name} {client.user.last_name}".strip()
+                patient_name = (
+                    f"{client.user.first_name} {client.user.last_name}".strip()
+                )
             if not patient_name:
                 patient_name = f"Client #{client_id}"
 
@@ -286,7 +320,9 @@ class InvoiceService:
             invoice.invoice_number = invoice_number
             invoice.currency = "CHF"
             invoice.issued_at = datetime.now(UTC)
-            invoice.due_date = datetime.now(UTC) + timedelta(days=billing_settings.payment_terms_days or 30)
+            invoice.due_date = datetime.now(UTC) + timedelta(
+                days=billing_settings.payment_terms_days or 30
+            )
             invoice.status = InvoiceStatus.DRAFT
 
             db.session.add(invoice)
@@ -298,9 +334,14 @@ class InvoiceService:
                 override = overrides_map.get(reservation.id)
                 if override and "amount" in override and override["amount"] is not None:
                     try:
-                        base_amount = Decimal(str(override["amount"])).quantize(two_places, rounding=ROUND_HALF_UP)
+                        base_amount = Decimal(str(override["amount"])).quantize(
+                            two_places, rounding=ROUND_HALF_UP
+                        )
                     except (InvalidOperation, ValueError, TypeError):
-                        app_logger.warning("Montant override invalide pour réservation %s", reservation.id)
+                        app_logger.warning(
+                            "Montant override invalide pour réservation %s",
+                            reservation.id,
+                        )
 
                 # Déterminer le taux de TVA pour cette ligne
                 line_vat_rate = Decimal("0")
@@ -308,26 +349,33 @@ class InvoiceService:
                     # Si override avec taux TVA, utiliser celui-ci
                     if override and override.get("vat_rate") is not None:
                         try:
-                            override_vat_rate = Decimal(str(override["vat_rate"])).quantize(Decimal("0.01"))
+                            override_vat_rate = Decimal(
+                                str(override["vat_rate"])
+                            ).quantize(Decimal("0.01"))
                             # Si le taux override est > 0, l'utiliser
                             if override_vat_rate > Decimal("0"):
                                 line_vat_rate = override_vat_rate
                         except (InvalidOperation, ValueError, TypeError):
-                            app_logger.warning("TVA override invalide pour réservation %s", reservation.id)
+                            app_logger.warning(
+                                "TVA override invalide pour réservation %s",
+                                reservation.id,
+                            )
                             line_vat_rate = default_vat_rate
                     else:
                         # Sinon utiliser le taux par défaut
                         line_vat_rate = default_vat_rate
                 # Si vat_applicable est False, line_vat_rate reste à 0
 
-                vat_amount = (base_amount * line_vat_rate / Decimal("100")).quantize(two_places, rounding=ROUND_HALF_UP)
-                total_with_vat = (base_amount + vat_amount).quantize(two_places, rounding=ROUND_HALF_UP)
+                vat_amount = (base_amount * line_vat_rate / Decimal("100")).quantize(
+                    two_places, rounding=ROUND_HALF_UP
+                )
+                total_with_vat = (base_amount + vat_amount).quantize(
+                    two_places, rounding=ROUND_HALF_UP
+                )
 
                 # Si facturation tierce, inclure le nom du patient dans la description
                 if bill_to_client_id:
-                    description = (
-                        f"Trajet pour {patient_name}: {reservation.pickup_location} → {reservation.dropoff_location}"
-                    )
+                    description = f"Trajet pour {patient_name}: {reservation.pickup_location} → {reservation.dropoff_location}"
                 else:
                     description = f"Trajet {reservation.pickup_location} → {reservation.dropoff_location}"
 
@@ -354,7 +402,10 @@ class InvoiceService:
                 vat_total += vat_amount
                 rate_key = f"{line_vat_rate.normalize()}"
                 if rate_key not in vat_breakdown:
-                    vat_breakdown[rate_key] = {"base": Decimal("0.00"), "vat": Decimal("0.00")}
+                    vat_breakdown[rate_key] = {
+                        "base": Decimal("0.00"),
+                        "vat": Decimal("0.00"),
+                    }
                 vat_breakdown[rate_key]["base"] += base_amount
                 vat_breakdown[rate_key]["vat"] += vat_amount
 
@@ -397,7 +448,9 @@ class InvoiceService:
                     bill_to_client_id,
                 )
             else:
-                app_logger.info("Facture générée: %s pour client %s", invoice_number, client_id)
+                app_logger.info(
+                    "Facture générée: %s pour client %s", invoice_number, client_id
+                )
 
             return invoice
 
@@ -449,8 +502,12 @@ class InvoiceService:
                 if bill_to_client_id is None:
                     filter_conditions.append(Invoice.bill_to_client_id.is_(None))
                 else:
-                    filter_conditions.append(Invoice.bill_to_client_id == bill_to_client_id)
-                existing_invoice = Invoice.query.filter(and_(*filter_conditions)).first()
+                    filter_conditions.append(
+                        Invoice.bill_to_client_id == bill_to_client_id
+                    )
+                existing_invoice = Invoice.query.filter(
+                    and_(*filter_conditions)
+                ).first()
 
                 if existing_invoice:
                     app_logger.warning(
@@ -460,7 +517,12 @@ class InvoiceService:
                         period_year,
                         bill_to_client_id,
                     )
-                    errors.append({"client_id": client_id, "error": "Facture déjà existante pour cette période"})
+                    errors.append(
+                        {
+                            "client_id": client_id,
+                            "error": "Facture déjà existante pour cette période",
+                        }
+                    )
                     continue
 
                 # Récupérer les IDs de réservations pour ce client si fourni
@@ -480,12 +542,16 @@ class InvoiceService:
                 invoices.append(invoice)
 
             except ValueError as e:
-                app_logger.warning("Impossible de créer facture pour client %s: %s", client_id, e)
+                app_logger.warning(
+                    "Impossible de créer facture pour client %s: %s", client_id, e
+                )
                 errors.append({"client_id": client_id, "error": str(e)})
                 continue
             except Exception as e:
                 app_logger.error("Erreur inattendue pour client %s: %s", client_id, e)
-                errors.append({"client_id": client_id, "error": f"Erreur interne: {e!s}"})
+                errors.append(
+                    {"client_id": client_id, "error": f"Erreur interne: {e!s}"}
+                )
                 continue
 
         app_logger.info(
@@ -495,7 +561,12 @@ class InvoiceService:
             bill_to_client_id,
         )
 
-        return {"invoices": invoices, "errors": errors, "success_count": len(invoices), "error_count": len(errors)}
+        return {
+            "invoices": invoices,
+            "errors": errors,
+            "success_count": len(invoices),
+            "error_count": len(errors),
+        }
 
     def generate_reminder(self, invoice_id, level):
         """Génère un rappel pour une facture."""
@@ -557,7 +628,9 @@ class InvoiceService:
 
             db.session.commit()
 
-            app_logger.info("Rappel niveau %s généré pour facture %s", level, invoice.invoice_number)
+            app_logger.info(
+                "Rappel niveau %s généré pour facture %s", level, invoice.invoice_number
+            )
             return reminder
 
         except Exception as e:
@@ -576,7 +649,9 @@ class InvoiceService:
             db.session.commit()
         return settings
 
-    def _get_reservations_for_period(self, company_id, client_id, period_year, period_month):
+    def _get_reservations_for_period(
+        self, company_id, client_id, period_year, period_month
+    ):
         """Récupère les réservations d'un client pour une période donnée."""
         start_date = datetime(period_year, period_month, 1)
         end_date = (
@@ -601,7 +676,9 @@ class InvoiceService:
         billing_settings = self._get_billing_settings(company_id)
 
         # Récupérer ou créer la séquence pour ce mois
-        sequence = InvoiceSequence.query.filter_by(company_id=company_id, year=period_year, month=period_month).first()
+        sequence = InvoiceSequence.query.filter_by(
+            company_id=company_id, year=period_year, month=period_month
+        ).first()
 
         if not sequence:
             sequence = InvoiceSequence()
@@ -630,7 +707,9 @@ class InvoiceService:
         try:
             overdue_invoices = Invoice.query.filter(
                 and_(
-                    Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID]),
+                    Invoice.status.in_(
+                        [InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID]
+                    ),
                     Invoice.balance_due > BALANCE_DUE_ZERO,
                     Invoice.due_date < datetime.now(UTC),
                 )
@@ -641,7 +720,10 @@ class InvoiceService:
                 if invoice.late_fee_amount == LATE_FEE_AMOUNT_ZERO:
                     billing_settings = self._get_billing_settings(invoice.company_id)
 
-                    if billing_settings.overdue_fee and billing_settings.overdue_fee > OVERDUE_FEE_ZERO:
+                    if (
+                        billing_settings.overdue_fee
+                        and billing_settings.overdue_fee > OVERDUE_FEE_ZERO
+                    ):
                         # Ajouter les frais de retard
                         late_fee_line = InvoiceLine()
                         late_fee_line.invoice_id = invoice.id
@@ -661,30 +743,40 @@ class InvoiceService:
                 invoice.status = InvoiceStatus.OVERDUE
 
             db.session.commit()
-            app_logger.info("%s factures marquées comme en retard", len(overdue_invoices))
+            app_logger.info(
+                "%s factures marquées comme en retard", len(overdue_invoices)
+            )
 
         except Exception as e:
             db.session.rollback()
-            app_logger.error("Erreur lors de la vérification des factures en retard: %s", str(e))
+            app_logger.error(
+                "Erreur lors de la vérification des factures en retard: %s", str(e)
+            )
             raise
 
     def process_automatic_reminders(self):
         """Traite les rappels automatiques."""
         try:
-            companies_with_auto_reminders = CompanyBillingSettings.query.filter_by(auto_reminders_enabled=True).all()
+            companies_with_auto_reminders = CompanyBillingSettings.query.filter_by(
+                auto_reminders_enabled=True
+            ).all()
 
             for settings in companies_with_auto_reminders:
                 self._process_company_reminders(settings.company_id)
 
         except Exception as e:
-            app_logger.error("Erreur lors du traitement des rappels automatiques: %s", str(e))
+            app_logger.error(
+                "Erreur lors du traitement des rappels automatiques: %s", str(e)
+            )
             raise
 
     def _process_company_reminders(self, company_id):
         """Traite les rappels automatiques pour une entreprise."""
         try:
             billing_settings = self._get_billing_settings(company_id)
-            schedule_days: dict[str, int] = dict(billing_settings.reminder_schedule_days or {})
+            schedule_days: dict[str, int] = dict(
+                billing_settings.reminder_schedule_days or {}
+            )
 
             # Factures éligibles pour le 1er rappel
             if "1" in schedule_days:
@@ -693,7 +785,9 @@ class InvoiceService:
 
                 invoices_for_reminder1 = (
                     Invoice.query.filter_by(
-                        company_id=company_id, status=InvoiceStatus.OVERDUE, reminder_level=REMINDER_LEVEL_ZERO
+                        company_id=company_id,
+                        status=InvoiceStatus.OVERDUE,
+                        reminder_level=REMINDER_LEVEL_ZERO,
                     )
                     .filter(Invoice.due_date <= cutoff_date)
                     .all()
@@ -709,7 +803,9 @@ class InvoiceService:
 
                 invoices_for_reminder2 = (
                     Invoice.query.filter_by(
-                        company_id=company_id, status=InvoiceStatus.OVERDUE, reminder_level=REMINDER_LEVEL_ONE
+                        company_id=company_id,
+                        status=InvoiceStatus.OVERDUE,
+                        reminder_level=REMINDER_LEVEL_ONE,
                     )
                     .filter(Invoice.last_reminder_at <= cutoff_date)
                     .all()
@@ -725,7 +821,9 @@ class InvoiceService:
 
                 invoices_for_reminder3 = (
                     Invoice.query.filter_by(
-                        company_id=company_id, status=InvoiceStatus.OVERDUE, reminder_level=REMINDER_LEVEL_THRESHOLD
+                        company_id=company_id,
+                        status=InvoiceStatus.OVERDUE,
+                        reminder_level=REMINDER_LEVEL_THRESHOLD,
                     )
                     .filter(Invoice.last_reminder_at <= cutoff_date)
                     .all()
@@ -735,5 +833,9 @@ class InvoiceService:
                     self.generate_reminder(invoice.id, 3)
 
         except Exception as e:
-            app_logger.error("Erreur lors du traitement des rappels pour l'entreprise %s: %s", company_id, str(e))
+            app_logger.error(
+                "Erreur lors du traitement des rappels pour l'entreprise %s: %s",
+                company_id,
+                str(e),
+            )
             raise

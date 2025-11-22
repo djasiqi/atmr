@@ -49,7 +49,9 @@ class ProblemState:
 
         state = cls(
             busy_until={did: previous_busy.get(did, 0) for did in driver_ids},
-            scheduled_times={did: list(previous_times.get(did, [])) for did in driver_ids},
+            scheduled_times={
+                did: list(previous_times.get(did, [])) for did in driver_ids
+            },
             proposed_load={did: previous_load.get(did, 0) for did in driver_ids},
         )
 
@@ -72,7 +74,9 @@ class ProblemState:
         """
         return {
             "busy_until": dict(self.busy_until),
-            "driver_scheduled_times": {k: list(v) for k, v in self.scheduled_times.items()},
+            "driver_scheduled_times": {
+                k: list(v) for k, v in self.scheduled_times.items()
+            },
             "proposed_load": dict(self.proposed_load),
         }
 
@@ -98,7 +102,9 @@ class ProblemState:
         """
         return time_min < self.busy_until.get(driver_id, 0)
 
-    def has_time_conflict(self, driver_id: int, time_min: int, min_gap_minutes: int = 30) -> bool:
+    def has_time_conflict(
+        self, driver_id: int, time_min: int, min_gap_minutes: int = 30
+    ) -> bool:
         """Vérifie si l'ajout d'une course à time_min crée un conflit avec les courses existantes.
 
         Args:
@@ -126,7 +132,9 @@ class ProblemState:
 
         return False
 
-    def assign_booking(self, driver_id: int, start_time_min: int, end_time_min: int) -> None:
+    def assign_booking(
+        self, driver_id: int, start_time_min: int, end_time_min: int
+    ) -> None:
         """Enregistre l'assignation d'une course à un chauffeur.
 
         Met à jour :
@@ -141,7 +149,9 @@ class ProblemState:
 
         """
         # Mettre à jour busy_until
-        self.busy_until[driver_id] = max(self.busy_until.get(driver_id, 0), end_time_min)
+        self.busy_until[driver_id] = max(
+            self.busy_until.get(driver_id, 0), end_time_min
+        )
 
         # Ajouter le scheduled_time
         if driver_id not in self.scheduled_times:
@@ -160,7 +170,9 @@ class ProblemState:
             self.proposed_load[driver_id],
         )
 
-    def get_driver_load(self, driver_id: int, fairness_counts: Dict[int, int] | None = None) -> int:
+    def get_driver_load(
+        self, driver_id: int, fairness_counts: Dict[int, int] | None = None
+    ) -> int:
         """Retourne la charge totale d'un chauffeur (proposée + déjà assignée).
 
         Args:
@@ -201,7 +213,10 @@ class ProblemState:
         # Vérifier le plafond de courses
         total_load = self.get_driver_load(driver_id, fairness_counts)
         if total_load >= max_bookings_per_driver:
-            return False, f"max_capacity_reached ({total_load}/{max_bookings_per_driver})"
+            return (
+                False,
+                f"max_capacity_reached ({total_load}/{max_bookings_per_driver})",
+            )
 
         # Vérifier si le chauffeur est déjà occupé
         if self.is_driver_busy_at(driver_id, start_time_min):
@@ -258,7 +273,9 @@ class ProblemState:
 
 
 # Fonctions helper pour la compatibilité avec le code existant
-def extract_state_from_problem(problem: Dict[str, Any], drivers: List[Any]) -> ProblemState:
+def extract_state_from_problem(
+    problem: Dict[str, Any], drivers: List[Any]
+) -> ProblemState:
     """Fonction helper pour extraire un ProblemState depuis un dict problem.
     Alias de ProblemState.from_problem() pour compatibilité.
     """

@@ -105,7 +105,9 @@ class TestPIIMasking:
         assert isinstance(sanitized, dict)
         # Vérifier que l'email est masqué
         assert "user@example.com" not in str(sanitized)
-        assert "***" in str(sanitized["user_email"]) or "@" not in str(sanitized["user_email"])
+        assert "***" in str(sanitized["user_email"]) or "@" not in str(
+            sanitized["user_email"]
+        )
         print("  ✅ Sanitization email fonctionnelle")
 
     def test_sanitize_log_data_phone(self):
@@ -122,7 +124,9 @@ class TestPIIMasking:
         assert isinstance(sanitized, dict)
         # Vérifier que le téléphone est masqué
         assert "+33123456789" not in str(sanitized)
-        assert "[PHONE_REDACTED]" in str(sanitized["user_phone"]) or "***" in str(sanitized["user_phone"])
+        assert "[PHONE_REDACTED]" in str(sanitized["user_phone"]) or "***" in str(
+            sanitized["user_phone"]
+        )
         print("  ✅ Sanitization téléphone fonctionnelle")
 
     def test_sanitize_log_data_gps(self):

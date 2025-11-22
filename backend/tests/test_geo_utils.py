@@ -64,8 +64,12 @@ class TestHaversineTime:
 
     def test_haversine_seconds(self):
         """Calcul temps en secondes."""
-        temps_min = haversine_minutes(48.8566, 2.3522, 48.9566, 2.3522, avg_speed_kmh=40.0)
-        temps_sec = haversine_seconds(48.8566, 2.3522, 48.9566, 2.3522, avg_speed_kmh=40.0)
+        temps_min = haversine_minutes(
+            48.8566, 2.3522, 48.9566, 2.3522, avg_speed_kmh=40.0
+        )
+        temps_sec = haversine_seconds(
+            48.8566, 2.3522, 48.9566, 2.3522, avg_speed_kmh=40.0
+        )
         assert abs(temps_sec - temps_min * 60) < 1
 
     def test_haversine_minutes_invalid_speed(self):

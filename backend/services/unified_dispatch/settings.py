@@ -27,7 +27,11 @@ class HeuristicWeights:
 
     def normalized(self) -> HeuristicWeights:
         total = (
-            self.proximity + self.driver_load_balance + self.priority + self.return_urgency + self.regular_driver_bonus
+            self.proximity
+            + self.driver_load_balance
+            + self.priority
+            + self.return_urgency
+            + self.regular_driver_bonus
         )
         if total == 0:
             return self
@@ -126,9 +130,7 @@ class EmergencyPolicy:
     allow_emergency_drivers: bool = True  # autoriser les chauffeurs d'urgence
     emergency_threshold_min: int = 30  # seuil d'urgence (minutes)
     emergency_priority: float = 0.8  # priorité des urgences
-    emergency_penalty: float = (
-        900.0  # pénalité d'utilisation (0-1000), plus élevé = utilisé en dernier recours seulement
-    )
+    emergency_penalty: float = 900.0  # pénalité d'utilisation (0-1000), plus élevé = utilisé en dernier recours seulement
 
 
 @dataclass
@@ -143,7 +145,9 @@ class MatrixSettings:
     osrm_max_retries: int = 2  # Nombre maximum de tentatives en cas d'échec
     osrm_max_sources_per_call: int = 60  # Nombre maximum de sources par requête OSRM
     osrm_rate_limit_per_sec: int = 8  # Limite de débit pour les requêtes OSRM
-    osrm_retry_backoff_ms: int = 250  # Délai d'attente entre les tentatives (millisecondes)
+    osrm_retry_backoff_ms: int = (
+        250  # Délai d'attente entre les tentatives (millisecondes)
+    )
 
 
 @dataclass
@@ -239,7 +243,9 @@ class FeatureFlags:
     enable_clustering: bool = False  # Clustering géographique
     enable_parallel_heuristics: bool = False  # Parallélisation heuristiques
     # A1: Prévention des conflits temporels
-    enable_strict_temporal_conflict_check: bool = True  # Validation stricte des conflits temporels
+    enable_strict_temporal_conflict_check: bool = (
+        True  # Validation stricte des conflits temporels
+    )
 
 
 # ------------------------------------------------------------
@@ -260,11 +266,19 @@ class Settings:
     matrix: MatrixSettings = field(default_factory=MatrixSettings)
     logging: LoggingSettings = field(default_factory=LoggingSettings)
     features: FeatureFlags = field(default_factory=FeatureFlags)
-    autorun: AutorunSettings = field(default_factory=AutorunSettings)  # Added autorun settings
+    autorun: AutorunSettings = field(
+        default_factory=AutorunSettings
+    )  # Added autorun settings
     rl: RLSettings = field(default_factory=RLSettings)  # Phase 2: RL settings
-    clustering: ClusteringSettings = field(default_factory=ClusteringSettings)  # Phase 3: Clustering settings
-    multi_objective: MultiObjectiveSettings = field(default_factory=MultiObjectiveSettings)  # Phase 5.1: Multi-objectif
-    safety: SafetySettings = field(default_factory=SafetySettings)  # Phase A1: Safety & temporal conflict prevention
+    clustering: ClusteringSettings = field(
+        default_factory=ClusteringSettings
+    )  # Phase 3: Clustering settings
+    multi_objective: MultiObjectiveSettings = field(
+        default_factory=MultiObjectiveSettings
+    )  # Phase 5.1: Multi-objectif
+    safety: SafetySettings = field(
+        default_factory=SafetySettings
+    )  # Phase A1: Safety & temporal conflict prevention
 
     # Divers
     default_timezone: str = "Europe/Zurich"
@@ -346,7 +360,11 @@ def _validate_merge_result(
             path = f"{section}.{key}"
             if path in applied_paths:
                 # Vérifier que la valeur finale dans new_settings correspond à la valeur demandée
-                if section in overrides and isinstance(overrides[section], dict) and key in overrides[section]:
+                if (
+                    section in overrides
+                    and isinstance(overrides[section], dict)
+                    and key in overrides[section]
+                ):
                     requested_value = overrides[section][key]
                     # Récupérer la valeur finale depuis new_settings
                     section_obj = getattr(new_settings, section, None)
@@ -354,9 +372,7 @@ def _validate_merge_result(
                         final_value = getattr(section_obj, key, None)
                         if final_value is not None and final_value != requested_value:
                             # Valeur différente de celle demandée → erreur
-                            error_msg = (
-                                f"Paramètre {path} appliqué avec valeur différente: {requested_value} → {final_value}"
-                            )
+                            error_msg = f"Paramètre {path} appliqué avec valeur différente: {requested_value} → {final_value}"
                             validation_result["errors"].append(error_msg)
                             validation_result["critical_errors"].append(path)
                             logger.warning("[Settings] %s", error_msg)
@@ -366,7 +382,11 @@ def _validate_merge_result(
                         validation_result["applied"].append(path)
                 else:
                     validation_result["applied"].append(path)
-            elif section in overrides and isinstance(overrides[section], dict) and key in overrides[section]:
+            elif (
+                section in overrides
+                and isinstance(overrides[section], dict)
+                and key in overrides[section]
+            ):
                 # Paramètre demandé mais non appliqué → erreur
                 error_msg = f"Paramètre critique non appliqué: {path}"
                 validation_result["errors"].append(error_msg)
@@ -399,7 +419,10 @@ def _validate_merge_result(
             ]:
                 # Clé connue mais ignorée (normal pour certains paramètres)
                 validation_result["ignored"].append(requested_path)
-                logger.debug("[Settings] Clé connue ignorée (non dans Settings): %s", requested_path)
+                logger.debug(
+                    "[Settings] Clé connue ignorée (non dans Settings): %s",
+                    requested_path,
+                )
             else:
                 # Clé vraiment inconnue
                 validation_result["ignored"].append(requested_path)
@@ -452,11 +475,15 @@ def merge_overrides(
             if path == "emergency" and key == "emergency_per_stop_penalty":
                 final_key = "emergency_penalty"
                 current_path = f"{path}.{final_key}" if path else final_key
-                logger.debug("[Settings] Mapping frontend→backend: emergency_per_stop_penalty → emergency_penalty")
+                logger.debug(
+                    "[Settings] Mapping frontend→backend: emergency_per_stop_penalty → emergency_penalty"
+                )
 
             if not hasattr(obj, final_key):
                 # clé inconnue → on ignore (c'est normal pour preferred_driver_id, mode, etc.)
-                logger.debug("[Settings] Clé inconnue ignorée dans overrides: %s", current_path)
+                logger.debug(
+                    "[Settings] Clé inconnue ignorée dans overrides: %s", current_path
+                )
                 continue
             cur = getattr(obj, final_key)
             if is_dataclass(cur) and isinstance(v, dict):
@@ -467,9 +494,16 @@ def merge_overrides(
                     old_value = cur
                     setattr(obj, final_key, v)
                     modified_keys.append((current_path, old_value, v))
-                    logger.debug("[Settings] Override appliqué: %s = %r (était: %r)", current_path, v, old_value)
+                    logger.debug(
+                        "[Settings] Override appliqué: %s = %r (était: %r)",
+                        current_path,
+                        v,
+                        old_value,
+                    )
                 except Exception as e:
-                    logger.warning("[Settings] Échec assignation %s = %r: %s", current_path, v, e)
+                    logger.warning(
+                        "[Settings] Échec assignation %s = %r: %s", current_path, v, e
+                    )
                     continue
         return obj
 
@@ -493,14 +527,22 @@ def merge_overrides(
     if validation_result["applied"]:
         logger.info("[Settings] Paramètres appliqués: %s", validation_result["applied"])
     if validation_result["ignored"]:
-        logger.debug("[Settings] Paramètres ignorés (normaux): %s", validation_result["ignored"])
+        logger.debug(
+            "[Settings] Paramètres ignorés (normaux): %s", validation_result["ignored"]
+        )
     if validation_result["errors"]:
-        logger.warning("[Settings] Erreurs de validation: %s", validation_result["errors"])
+        logger.warning(
+            "[Settings] Erreurs de validation: %s", validation_result["errors"]
+        )
         # Lever une exception si des paramètres critiques n'ont pas été appliqués
         # (optionnel, peut être désactivé via variable d'env)
-        strict_validation = os.getenv("UD_SETTINGS_STRICT_VALIDATION", "false").lower() == "true"
+        strict_validation = (
+            os.getenv("UD_SETTINGS_STRICT_VALIDATION", "false").lower() == "true"
+        )
         if strict_validation:
-            raise ValueError(f"Paramètres critiques non appliqués: {validation_result['errors']}")
+            raise ValueError(
+                f"Paramètres critiques non appliqués: {validation_result['errors']}"
+            )
 
     if return_validation:
         return new_settings, validation_result
@@ -545,15 +587,23 @@ def for_company(company) -> Settings:
 
     # Surcharges globales depuis l'environnement
     s.matrix.osrm_url = _get_env_or_default("UD_OSRM_URL", s.matrix.osrm_url)
-    s.matrix.cache_ttl_sec = _get_env_or_default("UD_MATRIX_CACHE_TTL_SEC", s.matrix.cache_ttl_sec)
-    s.solver.time_limit_sec = _get_env_or_default("UD_SOLVER_TIME_LIMIT_SEC", s.solver.time_limit_sec)
+    s.matrix.cache_ttl_sec = _get_env_or_default(
+        "UD_MATRIX_CACHE_TTL_SEC", s.matrix.cache_ttl_sec
+    )
+    s.solver.time_limit_sec = _get_env_or_default(
+        "UD_SOLVER_TIME_LIMIT_SEC", s.solver.time_limit_sec
+    )
     s.autorun.autorun_interval_sec = _get_env_or_default(
         "DISPATCH_AUTORUN_INTERVAL_SEC", s.autorun.autorun_interval_sec
     )
-    s.autorun.autorun_enabled = _get_env_or_default("DISPATCH_AUTORUN_ENABLED", s.autorun.autorun_enabled)
+    s.autorun.autorun_enabled = _get_env_or_default(
+        "DISPATCH_AUTORUN_ENABLED", s.autorun.autorun_enabled
+    )
 
     # Safety settings
-    s.safety.min_gap_minutes = _get_env_or_default("UD_SAFETY_MIN_GAP_MINUTES", s.safety.min_gap_minutes)
+    s.safety.min_gap_minutes = _get_env_or_default(
+        "UD_SAFETY_MIN_GAP_MINUTES", s.safety.min_gap_minutes
+    )
 
     return s
 

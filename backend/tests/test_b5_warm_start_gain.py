@@ -64,7 +64,11 @@ class TestWarmStartGainTracking:
         recent = tracker.gains_history[-100:]
         gains_pct = sorted([r["gain_pct"] for r in recent])
         n = len(gains_pct)
-        median = gains_pct[n // 2] if n % 2 == 1 else (gains_pct[n // 2 - 1] + gains_pct[n // 2]) / 2
+        median = (
+            gains_pct[n // 2]
+            if n % 2 == 1
+            else (gains_pct[n // 2 - 1] + gains_pct[n // 2]) / 2
+        )
 
         tracker.median_gain_pct = median
 
@@ -99,7 +103,9 @@ class TestWarmStartGainTracking:
         def solve_func(p, s):
             return None
 
-        result = measure_warm_start_gain(problem_small, heuristic_assignments, solve_func)
+        result = measure_warm_start_gain(
+            problem_small, heuristic_assignments, solve_func
+        )
 
         assert result.get("skipped") is True
         assert "size=" in result.get("reason", "")
@@ -107,7 +113,9 @@ class TestWarmStartGainTracking:
         # Simuler problème trop grand (300 bookings)
         problem_large = {"bookings": list(range(300)), "num_vehicles": 10}
 
-        result = measure_warm_start_gain(problem_large, heuristic_assignments, solve_func)
+        result = measure_warm_start_gain(
+            problem_large, heuristic_assignments, solve_func
+        )
 
         assert result.get("skipped") is True
 
@@ -150,7 +158,11 @@ class TestWarmStartGainTracking:
         recent = tracker.gains_history[-100:]
         gains_pct = sorted([r["gain_pct"] for r in recent])
         n = len(gains_pct)
-        tracker.median_gain_pct = gains_pct[n // 2] if n % 2 == 1 else (gains_pct[n // 2 - 1] + gains_pct[n // 2]) / 2
+        tracker.median_gain_pct = (
+            gains_pct[n // 2]
+            if n % 2 == 1
+            else (gains_pct[n // 2 - 1] + gains_pct[n // 2]) / 2
+        )
 
         # Médian devrait être >30% (autour de 44%)
         assert tracker.median_gain_pct > 30.0

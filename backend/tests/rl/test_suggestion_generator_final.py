@@ -23,7 +23,9 @@ class TestRLSuggestionGeneratorFinal:
         generator = RLSuggestionGenerator()
         generator.agent = None
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -31,7 +33,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test génération suggestions avec données vides"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -39,7 +43,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test génération suggestions avec exception"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -67,7 +73,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: bookings None"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -75,7 +83,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: état vide"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -83,7 +93,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: état None"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -119,7 +131,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: données suggestion vides"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -127,7 +141,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: données suggestion None"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -135,7 +151,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: données heuristiques vides"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -143,7 +161,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: coordonnées invalides"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -151,7 +171,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: mêmes coordonnées"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -159,7 +181,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: métriques de performance"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -167,7 +191,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: utilisation mémoire"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -175,7 +201,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: accès concurrent"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -183,7 +211,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: gestion d'erreurs"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -191,7 +221,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: cas limites multiples"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -199,7 +231,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: scénarios multiples"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -207,7 +241,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: toutes les lignes"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -215,7 +251,9 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: couverture finale"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -223,6 +261,8 @@ class TestRLSuggestionGeneratorFinal:
         """Test cas limite: ultra final"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)

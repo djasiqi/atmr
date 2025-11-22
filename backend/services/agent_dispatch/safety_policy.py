@@ -30,7 +30,9 @@ class SafetyPolicy:
         super().__init__()
         self.company_id = company_id
 
-    def check_action(self, action_type: str, context: Dict[str, Any]) -> Tuple[bool, str]:
+    def check_action(
+        self, action_type: str, context: Dict[str, Any]
+    ) -> Tuple[bool, str]:
         """Vérifie si une action peut être effectuée.
 
         Args:
@@ -57,7 +59,9 @@ class SafetyPolicy:
         if action_type in ["assign", "reassign"] and booking_id:
             driver_id = context.get("driver_id")
             if driver_id:
-                can_proceed, reason = self._check_reassignment_limits(booking_id, int(driver_id))
+                can_proceed, reason = self._check_reassignment_limits(
+                    booking_id, int(driver_id)
+                )
                 if not can_proceed:
                     return False, reason
 
@@ -74,7 +78,9 @@ class SafetyPolicy:
 
         """
         # Limites globales (augmentées pour mode fully_auto)
-        max_per_hour = 200  # Augmenté de 50 à 200 pour permettre plus d'actions automatiques
+        max_per_hour = (
+            200  # Augmenté de 50 à 200 pour permettre plus d'actions automatiques
+        )
         max_per_day = 2000  # Augmenté de 500 à 2000 pour mode fully_auto
 
         # Limites par type (augmentées pour mode fully_auto)
@@ -107,14 +113,18 @@ class SafetyPolicy:
             type_limit_day = limits.get("per_day")
 
             if type_limit_hour:
-                type_count_hour = AutonomousAction.count_actions_last_hour(self.company_id, action_type)
+                type_count_hour = AutonomousAction.count_actions_last_hour(
+                    self.company_id, action_type
+                )
                 if type_count_hour >= type_limit_hour:
                     return False, (
                         f"Limite horaire pour '{action_type}' atteinte: {type_count_hour}/{type_limit_hour} actions/h."
                     )
 
             if type_limit_day:
-                type_count_day = AutonomousAction.count_actions_today(self.company_id, action_type)
+                type_count_day = AutonomousAction.count_actions_today(
+                    self.company_id, action_type
+                )
                 if type_count_day >= type_limit_day:
                     return False, (
                         f"Limite journalière pour '{action_type}' atteinte: "
@@ -145,10 +155,14 @@ class SafetyPolicy:
 
                 # Vérifier si client VIP (marqué is_vip ou client hospitalier)
                 # Note: À adapter selon votre modèle Client
-                is_vip = getattr(client, "is_vip", False) or getattr(client, "is_hospital", False)
+                is_vip = getattr(client, "is_vip", False) or getattr(
+                    client, "is_hospital", False
+                )
 
                 if is_vip:
-                    return False, (f"Client VIP (ID: {client.id}) - Approbation manuelle requise")
+                    return False, (
+                        f"Client VIP (ID: {client.id}) - Approbation manuelle requise"
+                    )
 
                 return True, "OK"
             except Exception as e:
@@ -200,6 +214,8 @@ class SafetyPolicy:
 
                 return True, "OK"
             except Exception as e:
-                logger.warning("[SafetyPolicy] Error checking reassignment limits: %s", e)
+                logger.warning(
+                    "[SafetyPolicy] Error checking reassignment limits: %s", e
+                )
                 # En cas d'erreur, autoriser (sécurité par défaut)
                 return True, "OK"

@@ -18,7 +18,9 @@ class TestDispatchEnvSimplified:
         env.reset()
 
         # Action hors limites mais dans les limites du tableau
-        obs, reward, terminated, truncated, info = env.step(15)  # Dans les limites du tableau
+        obs, reward, terminated, truncated, info = env.step(
+            15
+        )  # Dans les limites du tableau
 
         assert isinstance(obs, np.ndarray)
         assert isinstance(reward, float)
@@ -54,7 +56,9 @@ class TestDispatchEnvSimplified:
 
     def test_step_episode_termination_bonus(self):
         """Test step avec terminaison d'épisode et bonus"""
-        env = DispatchEnv(num_drivers=3, max_bookings=5, simulation_hours=0.01)  # Très court
+        env = DispatchEnv(
+            num_drivers=3, max_bookings=5, simulation_hours=0.01
+        )  # Très court
         env.reset()
 
         # Avancer le temps pour déclencher la terminaison
@@ -230,7 +234,9 @@ class TestDispatchEnvSimplified:
         env.reset()
 
         # Mock pour provoquer une exception dans une méthode interne
-        with patch.object(env, "_get_valid_actions_mask", side_effect=Exception("Test error")):
+        with patch.object(
+            env, "_get_valid_actions_mask", side_effect=Exception("Test error")
+        ):
             obs, reward, terminated, truncated, info = env.step(0)
 
             assert isinstance(obs, np.ndarray)
@@ -244,7 +250,9 @@ class TestDispatchEnvSimplified:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
 
         # Mock pour provoquer une exception dans une méthode interne
-        with patch.object(env, "_get_valid_actions_mask", side_effect=Exception("Test error")):
+        with patch.object(
+            env, "_get_valid_actions_mask", side_effect=Exception("Test error")
+        ):
             state, info = env.reset()
 
             assert isinstance(state, np.ndarray)
@@ -256,7 +264,9 @@ class TestDispatchEnvSimplified:
         env.reset()
 
         # Mock pour provoquer une exception
-        with patch.object(env, "_get_valid_actions_mask", side_effect=Exception("Test error")):
+        with patch.object(
+            env, "_get_valid_actions_mask", side_effect=Exception("Test error")
+        ):
             valid_actions = env.get_valid_actions()
 
             assert isinstance(valid_actions, list)
@@ -321,7 +331,12 @@ class TestDispatchEnvSimplified:
 
     def test_step_reward_profile_variations(self):
         """Test step avec différents profils de récompense"""
-        for profile in ["DEFAULT", "PUNCTUALITY_FOCUSED", "EQUITY_FOCUSED", "EFFICIENCY_FOCUSED"]:
+        for profile in [
+            "DEFAULT",
+            "PUNCTUALITY_FOCUSED",
+            "EQUITY_FOCUSED",
+            "EFFICIENCY_FOCUSED",
+        ]:
             env = DispatchEnv(num_drivers=3, max_bookings=5, reward_profile=profile)
             env.reset()
 

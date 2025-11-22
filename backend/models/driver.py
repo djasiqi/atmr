@@ -59,13 +59,29 @@ class Driver(db.Model):
     __table_args__ = (
         Index("ix_driver_company_active", "company_id", "is_active", "is_available"),
         Index("ix_driver_geo", "company_id", "latitude", "longitude"),
-        CheckConstraint("(latitude IS NULL OR (latitude BETWEEN -90 AND 90))", name="chk_driver_lat"),
-        CheckConstraint("(longitude IS NULL OR (longitude BETWEEN -180 AND 180))", name="chk_driver_lon"),
+        CheckConstraint(
+            "(latitude IS NULL OR (latitude BETWEEN -90 AND 90))", name="chk_driver_lat"
+        ),
+        CheckConstraint(
+            "(longitude IS NULL OR (longitude BETWEEN -180 AND 180))",
+            name="chk_driver_lon",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("user.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    company_id = Column(
+        Integer,
+        ForeignKey("company.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Véhicule
     vehicle_assigned: Mapped[str] = mapped_column(String(100), nullable=True)
@@ -75,12 +91,16 @@ class Driver(db.Model):
     # États
     is_active = Column(Boolean, nullable=False, server_default="true")
     is_available = Column(Boolean, nullable=False, server_default="true")
-    driver_type = Column(SAEnum(DriverType, name="driver_type"), nullable=False, server_default="REGULAR")
+    driver_type = Column(
+        SAEnum(DriverType, name="driver_type"), nullable=False, server_default="REGULAR"
+    )
 
     # Localisation
     latitude: Mapped[float] = mapped_column(Float, nullable=True)
     longitude: Mapped[float] = mapped_column(Float, nullable=True)
-    last_position_update: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_position_update: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Média & notifications
     driver_photo: Mapped[str] = mapped_column(String(500), nullable=True)
@@ -101,7 +121,10 @@ class Driver(db.Model):
     user = relationship("User", back_populates="driver", passive_deletes=True)
     company = relationship("Company", back_populates="drivers", passive_deletes=True)
     vacations = relationship(
-        "DriverVacation", back_populates="driver", cascade="all, delete-orphan", passive_deletes=True
+        "DriverVacation",
+        back_populates="driver",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     bookings = relationship("Booking", back_populates="driver", passive_deletes=True)
 
@@ -152,12 +175,18 @@ class Driver(db.Model):
                 "email": email,
                 "is_active": _as_bool(getattr(self, "is_active", False)),
                 "is_available": _as_bool(getattr(self, "is_available", False)),
-                "driver_type": getattr(getattr(self, "driver_type", None), "value", getattr(self, "driver_type", None)),
+                "driver_type": getattr(
+                    getattr(self, "driver_type", None),
+                    "value",
+                    getattr(self, "driver_type", None),
+                ),
                 "vehicle_assigned": getattr(self, "vehicle_assigned", None),
                 "brand": getattr(self, "brand", None),
                 "latitude": getattr(self, "latitude", None),
                 "longitude": getattr(self, "longitude", None),
-                "last_position_update": (last_pos.isoformat() if last_pos is not None else None),
+                "last_position_update": (
+                    last_pos.isoformat() if last_pos is not None else None
+                ),
                 "driver_photo": getattr(self, "driver_photo", None),
                 "photo": getattr(self, "driver_photo", None),
                 "push_token": getattr(self, "push_token", None),
@@ -167,16 +196,22 @@ class Driver(db.Model):
                 "employment_start_date": emp_start.isoformat() if emp_start else None,
                 "employment_end_date": emp_end.isoformat() if emp_end else None,
                 "license_categories": getattr(self, "license_categories", []),
-                "license_valid_until": license_valid.isoformat() if license_valid else None,
+                "license_valid_until": license_valid.isoformat()
+                if license_valid
+                else None,
                 "trainings": getattr(self, "trainings", []),
-                "medical_valid_until": medical_valid.isoformat() if medical_valid else None,
+                "medical_valid_until": medical_valid.isoformat()
+                if medical_valid
+                else None,
             }
         except Exception as e:
             # Log l'erreur mais retourne un profil minimal pour éviter une erreur 500
             import logging
 
             logger = logging.getLogger("driver_model")
-            logger.exception("Erreur lors de la sérialisation du driver %s: %s", self.id, e)
+            logger.exception(
+                "Erreur lors de la sérialisation du driver %s: %s", self.id, e
+            )
             # Retourner un profil minimal en cas d'erreur
             return {
                 "id": self.id,
@@ -220,25 +255,40 @@ class Driver(db.Model):
 class DriverShift(db.Model):
     __tablename__ = "driver_shift"
     __table_args__ = (
-        Index("ix_shift_company_driver_start", "company_id", "driver_id", "start_local"),
+        Index(
+            "ix_shift_company_driver_start", "company_id", "driver_id", "start_local"
+        ),
         CheckConstraint("end_local > start_local", name="ck_shift_time_order"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
-    driver_id = Column(Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True)
+    company_id = Column(
+        Integer,
+        ForeignKey("company.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    driver_id = Column(
+        Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     start_local = Column(DateTime(timezone=False), nullable=False, index=True)
     end_local = Column(DateTime(timezone=False), nullable=False, index=True)
 
     timezone = Column(String(64), nullable=False, server_default="Europe/Zurich")
     type = Column(
-        SAEnum(ShiftType, name="shift_type", values_callable=lambda x: [e.value for e in x]),
+        SAEnum(
+            ShiftType, name="shift_type", values_callable=lambda x: [e.value for e in x]
+        ),
         nullable=False,
         server_default=ShiftType.REGULAR.value,
     )
     status = Column(
-        SAEnum(ShiftStatus, name="shift_status", values_callable=lambda x: [e.value for e in x]),
+        SAEnum(
+            ShiftStatus,
+            name="shift_status",
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         server_default=ShiftStatus.PLANNED.value,
     )
@@ -248,14 +298,25 @@ class DriverShift(db.Model):
     client_ref: Mapped[str] = mapped_column(String(120), nullable=True)
 
     pay_code: Mapped[str] = mapped_column(String(50), nullable=True)
-    vehicle_id = Column(Integer, ForeignKey("vehicle.id", ondelete="SET NULL"), nullable=True, index=True)
+    vehicle_id = Column(
+        Integer,
+        ForeignKey("vehicle.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     notes_internal: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     notes_employee: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_by_user_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
-    updated_by_user_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_by_user_id = Column(
+        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_by_user_id = Column(
+        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
 
@@ -274,14 +335,25 @@ class DriverUnavailability(db.Model):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
-    driver_id = Column(Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True)
+    company_id = Column(
+        Integer,
+        ForeignKey("company.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    driver_id = Column(
+        Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     start_local = Column(DateTime(timezone=False), nullable=False, index=True)
     end_local = Column(DateTime(timezone=False), nullable=False, index=True)
 
     reason = Column(
-        SAEnum(UnavailabilityReason, name="unavailability_reason", values_callable=lambda x: [e.value for e in x]),
+        SAEnum(
+            UnavailabilityReason,
+            name="unavailability_reason",
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         server_default=UnavailabilityReason.OTHER.value,
     )
@@ -295,13 +367,22 @@ class DriverWeeklyTemplate(db.Model):
     __tablename__ = "driver_weekly_template"
     __table_args__ = (
         Index("ix_tpl_company_driver_weekday", "company_id", "driver_id", "weekday"),
-        CheckConstraint("weekday >= 0 AND weekday <= WEEKDAY_THRESHOLD", name="ck_tpl_weekday_range"),
+        CheckConstraint(
+            "weekday >= 0 AND weekday <= WEEKDAY_THRESHOLD", name="ck_tpl_weekday_range"
+        ),
         CheckConstraint("end_time > start_time", name="ck_tpl_time_order"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
-    driver_id = Column(Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True)
+    company_id = Column(
+        Integer,
+        ForeignKey("company.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    driver_id = Column(
+        Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     weekday: Mapped[int] = mapped_column(Integer, nullable=False)
     start_time = Column(Time, nullable=False)
@@ -316,15 +397,24 @@ class DriverWeeklyTemplate(db.Model):
 
 class DriverBreak(db.Model):
     __tablename__ = "driver_break"
-    __table_args__ = (CheckConstraint("end_local > start_local", name="ck_break_time_order"),)
+    __table_args__ = (
+        CheckConstraint("end_local > start_local", name="ck_break_time_order"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    shift_id = Column(Integer, ForeignKey("driver_shift.id", ondelete="CASCADE"), nullable=False, index=True)
+    shift_id = Column(
+        Integer,
+        ForeignKey("driver_shift.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     start_local = Column(DateTime(timezone=False), nullable=False, index=True)
     end_local = Column(DateTime(timezone=False), nullable=False, index=True)
     type = Column(
-        SAEnum(BreakType, name="break_type", values_callable=lambda x: [e.value for e in x]),
+        SAEnum(
+            BreakType, name="break_type", values_callable=lambda x: [e.value for e in x]
+        ),
         nullable=False,
         server_default=BreakType.MANDATORY.value,
     )
@@ -335,15 +425,24 @@ class DriverBreak(db.Model):
 class DriverPreference(db.Model):
     __tablename__ = "driver_preference"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
-    driver_id = Column(Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True)
+    company_id = Column(
+        Integer,
+        ForeignKey("company.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    driver_id = Column(
+        Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     mornings_pref = Column(Boolean, nullable=False, server_default="false")
     evenings_pref = Column(Boolean, nullable=False, server_default="false")
     forbidden_windows = Column(JSON, nullable=False, server_default=text("'[]'"))
     weekend_rotation_weight = Column(Integer, nullable=False, server_default="0")
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     company = relationship("Company")
@@ -352,7 +451,9 @@ class DriverPreference(db.Model):
 
 class CompanyPlanningSettings(db.Model):
     __tablename__ = "company_planning_settings"
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), primary_key=True)
+    company_id = Column(
+        Integer, ForeignKey("company.id", ondelete="CASCADE"), primary_key=True
+    )
     settings = Column(JSON, nullable=False, server_default=text("'{}'"))
 
     company = relationship("Company")
@@ -365,26 +466,48 @@ class DriverWorkingConfig(db.Model):
     __table_args__ = (
         CheckConstraint("earliest_start BETWEEN 0 AND 1440", name="chk_dwc_earliest"),
         CheckConstraint("latest_start BETWEEN 0 AND 1440", name="chk_dwc_latest"),
-        CheckConstraint("total_working_minutes BETWEEN 0 AND 1440", name="chk_dwc_total"),
+        CheckConstraint(
+            "total_working_minutes BETWEEN 0 AND 1440", name="chk_dwc_total"
+        ),
         CheckConstraint("break_duration BETWEEN 0 AND 1440", name="chk_dwc_break_dur"),
-        CheckConstraint("break_earliest BETWEEN 0 AND 1440", name="chk_dwc_break_earliest"),
+        CheckConstraint(
+            "break_earliest BETWEEN 0 AND 1440", name="chk_dwc_break_earliest"
+        ),
         CheckConstraint("break_latest BETWEEN 0 AND 1440", name="chk_dwc_break_latest"),
         CheckConstraint("earliest_start < latest_start", name="chk_dwc_start_window"),
         CheckConstraint("break_earliest < break_latest", name="chk_dwc_break_window"),
-        CheckConstraint("break_duration <= total_working_minutes", name="chk_dwc_break_vs_total"),
+        CheckConstraint(
+            "break_duration <= total_working_minutes", name="chk_dwc_break_vs_total"
+        ),
         UniqueConstraint("driver_id", name="uq_dwc_driver"),
         Index("ix_dwc_driver", "driver_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    driver_id = Column(Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    driver_id = Column(
+        Integer,
+        ForeignKey("driver.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
 
-    earliest_start: Mapped[int] = mapped_column(Integer, nullable=False, server_default="360")
-    latest_start: Mapped[int] = mapped_column(Integer, nullable=False, server_default="600")
+    earliest_start: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="360"
+    )
+    latest_start: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="600"
+    )
     total_working_minutes = Column(Integer, nullable=False, server_default="510")
-    break_duration: Mapped[int] = mapped_column(Integer, nullable=False, server_default="60")
-    break_earliest: Mapped[int] = mapped_column(Integer, nullable=False, server_default="600")
-    break_latest: Mapped[int] = mapped_column(Integer, nullable=False, server_default="900")
+    break_duration: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="60"
+    )
+    break_earliest: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="600"
+    )
+    break_latest: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="900"
+    )
 
     @property
     def serialize(self):
@@ -460,15 +583,25 @@ class DriverVacation(db.Model):
         CheckConstraint("start_date <= end_date", name="chk_vacation_dates_order"),
         Index("ix_vacation_driver_start", "driver_id", "start_date"),
         Index("ix_vacation_driver_end", "driver_id", "end_date"),
-        UniqueConstraint("driver_id", "start_date", "end_date", "vacation_type", name="uq_vacation_exact_period"),
+        UniqueConstraint(
+            "driver_id",
+            "start_date",
+            "end_date",
+            "vacation_type",
+            name="uq_vacation_exact_period",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    driver_id = Column(Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True)
+    driver_id = Column(
+        Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     vacation_type = Column(
-        SAEnum(VacationType, name="vacation_type"), nullable=False, server_default=VacationType.VACANCES.value
+        SAEnum(VacationType, name="vacation_type"),
+        nullable=False,
+        server_default=VacationType.VACANCES.value,
     )
 
     driver = relationship("Driver", back_populates="vacations", passive_deletes=True)

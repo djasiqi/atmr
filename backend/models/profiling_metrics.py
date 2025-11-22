@@ -31,7 +31,10 @@ class ProfilingMetrics(db.Model):
 
     # Date/heure du profiling
     profiling_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
     )
 
     # Durée du profiling (secondes)
@@ -88,14 +91,19 @@ class ProfilingMetrics(db.Model):
 
     # Métadonnées
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
     )
 
     def to_dict(self) -> dict[str, Any]:
         """Convertit en dictionnaire pour export."""
         return {
             "id": self.id,
-            "profiling_date": self.profiling_date.isoformat() if self.profiling_date else None,
+            "profiling_date": self.profiling_date.isoformat()
+            if self.profiling_date
+            else None,
             "duration_seconds": self.duration_seconds,
             "request_count": self.request_count,
             "top_functions": self.top_functions or [],

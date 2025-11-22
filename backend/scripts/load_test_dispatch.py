@@ -20,7 +20,9 @@ from ext import db  # noqa: E402
 from models import Company  # noqa: E402
 
 
-def trigger_dispatch_async(company_id: int, base_url: str = "http://localhost:5000") -> dict:
+def trigger_dispatch_async(
+    company_id: int, base_url: str = "http://localhost:5000"
+) -> dict:
     """Déclenche un dispatch de manière asynchrone."""
     try:
         response = requests.post(
@@ -67,7 +69,9 @@ def get_metrics_summary(base_url: str = "http://localhost:5000") -> dict:
         return {"error": str(e)}
 
 
-def run_load_test(concurrent_dispatches: int = 5, base_url: str = "http://localhost:5000") -> dict:
+def run_load_test(
+    concurrent_dispatches: int = 5, base_url: str = "http://localhost:5000"
+) -> dict:
     """Exécute un test de charge avec plusieurs dispatches simultanés."""
     results = {
         "concurrent_dispatches": concurrent_dispatches,
@@ -92,8 +96,13 @@ def run_load_test(concurrent_dispatches: int = 5, base_url: str = "http://localh
     # Déclencher plusieurs dispatches en parallèle
     print(f"Déclenchement de {concurrent_dispatches} dispatches en parallèle...")
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrent_dispatches) as executor:
-        futures = [executor.submit(trigger_dispatch_async, company.id, base_url) for _ in range(concurrent_dispatches)]
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=concurrent_dispatches
+    ) as executor:
+        futures = [
+            executor.submit(trigger_dispatch_async, company.id, base_url)
+            for _ in range(concurrent_dispatches)
+        ]
 
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
@@ -151,7 +160,9 @@ def generate_load_test_report() -> str:
         print("-" * 80)
         before_runs = results["metrics_before"].get("dispatch_runs_total", 0)
         after_runs = results["metrics_after"].get("dispatch_runs_total", 0)
-        print(f"  dispatch_runs_total: {before_runs} → {after_runs} (+{after_runs - before_runs})")
+        print(
+            f"  dispatch_runs_total: {before_runs} → {after_runs} (+{after_runs - before_runs})"
+        )
 
     if results["errors"]:
         print()

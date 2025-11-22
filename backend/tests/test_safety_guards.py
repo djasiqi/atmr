@@ -46,7 +46,9 @@ class TestSafetyThresholds:
         if SafetyThresholds is None:
             pytest.skip("SafetyThresholds non disponible")
 
-        thresholds = SafetyThresholds(max_delay_minutes=45.0, invalid_action_rate=0.05, min_completion_rate=0.95)
+        thresholds = SafetyThresholds(
+            max_delay_minutes=45.0, invalid_action_rate=0.05, min_completion_rate=0.95
+        )
 
         assert thresholds.max_delay_minutes == 45.0
         assert thresholds.invalid_action_rate == 0.05
@@ -114,18 +116,26 @@ class TestSafetyGuards:
             "episode_length": 30,  # Dangereux: < 50
         }
 
-    def test_check_safe_dispatch(self, safety_guards, safe_dispatch_result, rl_metadata_safe):
+    def test_check_safe_dispatch(
+        self, safety_guards, safe_dispatch_result, rl_metadata_safe
+    ):
         """Test la vérification d'un dispatch sûr."""
-        is_safe, result = safety_guards.check_dispatch_result(safe_dispatch_result, rl_metadata_safe)
+        is_safe, result = safety_guards.check_dispatch_result(
+            safe_dispatch_result, rl_metadata_safe
+        )
 
         assert is_safe is True
         assert result["is_safe"] is True
         assert result["violation_count"] == 0
         assert "timestamp" in result
 
-    def test_check_unsafe_dispatch(self, safety_guards, unsafe_dispatch_result, rl_metadata_unsafe):
+    def test_check_unsafe_dispatch(
+        self, safety_guards, unsafe_dispatch_result, rl_metadata_unsafe
+    ):
         """Test la vérification d'un dispatch dangereux."""
-        is_safe, result = safety_guards.check_dispatch_result(unsafe_dispatch_result, rl_metadata_unsafe)
+        is_safe, result = safety_guards.check_dispatch_result(
+            unsafe_dispatch_result, rl_metadata_unsafe
+        )
 
         assert is_safe is False
         assert result["is_safe"] is False
@@ -142,14 +152,20 @@ class TestSafetyGuards:
 
     def test_check_without_rl_metadata(self, safety_guards, safe_dispatch_result):
         """Test la vérification sans métadonnées RL."""
-        is_safe, result = safety_guards.check_dispatch_result(safe_dispatch_result, None)
+        is_safe, result = safety_guards.check_dispatch_result(
+            safe_dispatch_result, None
+        )
 
         assert is_safe is True
         assert result["is_safe"] is True
 
     def test_extract_metrics(self, safety_guards):
         """Test l'extraction des métriques."""
-        dispatch_result = {"max_delay_minutes": 20.0, "completion_rate": 0.92, "driver_loads": [4, 5, 3]}
+        dispatch_result = {
+            "max_delay_minutes": 20.0,
+            "completion_rate": 0.92,
+            "driver_loads": [4, 5, 3],
+        }
 
         rl_metadata = {"confidence": 0.80, "uncertainty": 0.20, "decision_time_ms": 40}
 
@@ -188,7 +204,9 @@ class TestSafetyGuards:
         assert checks["driver_load_ok"] is True
         assert checks["rl_confidence_ok"] is True
 
-    def test_violation_recording(self, safety_guards, unsafe_dispatch_result, rl_metadata_unsafe):
+    def test_violation_recording(
+        self, safety_guards, unsafe_dispatch_result, rl_metadata_unsafe
+    ):
         """Test l'enregistrement des violations."""
         # Vérifier que l'historique est vide au début
         assert len(safety_guards.violation_history) == 0
@@ -214,7 +232,13 @@ class TestSafetyGuards:
         assert severity == "LOW"
 
         # Test avec plusieurs violations
-        many_violations = {"check1": False, "check2": False, "check3": False, "check4": False, "check5": False}
+        many_violations = {
+            "check1": False,
+            "check2": False,
+            "check3": False,
+            "check4": False,
+            "check5": False,
+        }
         severity = safety_guards._calculate_severity(many_violations, {})
         assert severity == "CRITICAL"
 
@@ -292,7 +316,9 @@ class TestSafetyGuardsIntegration:
         # Vérifier que le logging a été configuré
         mock_logging.getLogger.assert_called()
 
-    def test_performance_under_load(self, safety_guards, safe_dispatch_result, rl_metadata_safe):
+    def test_performance_under_load(
+        self, safety_guards, safe_dispatch_result, rl_metadata_safe
+    ):
         """Test les performances sous charge."""
         import time
 
@@ -363,7 +389,11 @@ def run_safety_guards_tests():
     print("\n📊 Résultats des tests Safety Guards:")
     print("  Tests exécutés: {total_tests}")
     print("  Tests réussis: {passed_tests}")
-    print("  Taux de succès: {passed_tests/total_tests*100" if total_tests > 0 else "  Taux de succès: 0%")
+    print(
+        "  Taux de succès: {passed_tests/total_tests*100"
+        if total_tests > 0
+        else "  Taux de succès: 0%"
+    )
 
     return passed_tests, total_tests
 

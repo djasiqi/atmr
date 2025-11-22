@@ -52,7 +52,9 @@ class TestImprovedDQNAgentExtended:
         agent.epsilon = 0
 
         # Mock l'import dans select_action
-        with patch("builtins.__import__", side_effect=ImportError("RLLogger not available")):
+        with patch(
+            "builtins.__import__", side_effect=ImportError("RLLogger not available")
+        ):
             state = np.random.rand(agent.state_dim)
             action = agent.select_action(state)
 
@@ -144,7 +146,9 @@ class TestImprovedDQNAgentExtended:
 
     def test_store_transition_basic(self):
         """Test méthode store_transition"""
-        agent = ImprovedDQNAgent(state_dim=62, action_dim=51, use_n_step=False, use_prioritized_replay=False)
+        agent = ImprovedDQNAgent(
+            state_dim=62, action_dim=51, use_n_step=False, use_prioritized_replay=False
+        )
 
         state = np.random.rand(agent.state_dim)
         action = 1
@@ -176,7 +180,9 @@ class TestImprovedDQNAgentExtended:
 
     def test_store_transition_with_per(self):
         """Test méthode store_transition avec PER"""
-        agent = ImprovedDQNAgent(state_dim=62, action_dim=51, use_prioritized_replay=True)
+        agent = ImprovedDQNAgent(
+            state_dim=62, action_dim=51, use_prioritized_replay=True
+        )
 
         state = np.random.rand(agent.state_dim)
         action = 1
@@ -289,7 +295,9 @@ class TestImprovedDQNAgentExtended:
 
     def test_learn_with_per_buffer(self):
         """Test méthode learn avec buffer PER"""
-        agent = ImprovedDQNAgent(state_dim=62, action_dim=51, use_prioritized_replay=True)
+        agent = ImprovedDQNAgent(
+            state_dim=62, action_dim=51, use_prioritized_replay=True
+        )
 
         # Ajouter quelques transitions
         for _ in range(100):

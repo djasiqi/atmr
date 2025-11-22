@@ -198,14 +198,19 @@ def ml_health() -> tuple[dict[str, Any], int]:
 
         # Déterminer le status
         is_healthy = (
-            status["config"]["ML_ENABLED"] and stats["ml_requests"] > 0 and stats["ml_success_rate"] >= MIN_SUCCESS_RATE
+            status["config"]["ML_ENABLED"]
+            and stats["ml_requests"] > 0
+            and stats["ml_success_rate"] >= MIN_SUCCESS_RATE
         )
 
         health_status = "healthy" if is_healthy else "degraded"
 
         # Alertes
         alerts = []
-        if stats["ml_success_rate"] < MIN_SUCCESS_RATE and stats["ml_requests"] > MIN_REQUESTS_FOR_ALERT:
+        if (
+            stats["ml_success_rate"] < MIN_SUCCESS_RATE
+            and stats["ml_requests"] > MIN_REQUESTS_FOR_ALERT
+        ):
             alerts.append(f"Taux de succès bas: {stats['ml_success_rate']:.2%}")
 
         if stats["ml_failures"] > MAX_FAILURES_THRESHOLD:

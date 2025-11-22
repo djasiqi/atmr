@@ -20,11 +20,15 @@ class TestPersistedFixture:
         company = persisted_fixture(db, CompanyFactory(), Company)
 
         # Vérifier que la company a un ID (a été flushée)
-        assert company.id is not None, "Company doit avoir un ID après persisted_fixture"
+        assert company.id is not None, (
+            "Company doit avoir un ID après persisted_fixture"
+        )
 
         # Vérifier que la company est visible dans la DB
         reloaded = db.session.query(Company).get(company.id)
-        assert reloaded is not None, "Company doit être visible dans la DB après persisted_fixture"
+        assert reloaded is not None, (
+            "Company doit être visible dans la DB après persisted_fixture"
+        )
         assert reloaded.id == company.id, "Company rechargée doit avoir le même ID"
 
     def test_persisted_fixture_with_reload_false(self, db):
@@ -65,7 +69,9 @@ class TestPersistedFixture:
         company = persisted_fixture(db, CompanyFactory(), Company)
 
         # Créer un driver avec la company
-        driver = persisted_fixture(db, DriverFactory(company=company, is_active=True), Driver)
+        driver = persisted_fixture(
+            db, DriverFactory(company=company, is_active=True), Driver
+        )
 
         # Vérifier que le driver a un ID
         assert driver.id is not None, "Driver doit avoir un ID"
@@ -78,7 +84,9 @@ class TestPersistedFixture:
     def test_persisted_fixture_uses_db_session_correctly(self, db):
         """Test que persisted_fixture utilise db.session correctement (Flask-SQLAlchemy)."""
         # Vérifier que db est bien une instance Flask-SQLAlchemy
-        assert hasattr(db, "session"), "db doit être une instance Flask-SQLAlchemy avec .session"
+        assert hasattr(db, "session"), (
+            "db doit être une instance Flask-SQLAlchemy avec .session"
+        )
 
         # Créer une company
         company = persisted_fixture(db, CompanyFactory(), Company)

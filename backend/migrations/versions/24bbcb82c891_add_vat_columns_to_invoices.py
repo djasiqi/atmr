@@ -35,10 +35,14 @@ def upgrade():
             )
         )
         batch_op.add_column(sa.Column("vat_label", sa.String(length=50), nullable=True))
-        batch_op.add_column(sa.Column("vat_number", sa.String(length=50), nullable=True))
+        batch_op.add_column(
+            sa.Column("vat_number", sa.String(length=50), nullable=True)
+        )
 
     with op.batch_alter_table("invoice_lines", schema=None) as batch_op:
-        batch_op.add_column(sa.Column("vat_rate", sa.Numeric(precision=5, scale=2), nullable=True))
+        batch_op.add_column(
+            sa.Column("vat_rate", sa.Numeric(precision=5, scale=2), nullable=True)
+        )
         batch_op.add_column(
             sa.Column(
                 "vat_amount",

@@ -48,7 +48,9 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def setup_opentelemetry(service_name: str = "atmr-backend", service_version: str = "1.0") -> None:
+def setup_opentelemetry(
+    service_name: str = "atmr-backend", service_version: str = "1.0"
+) -> None:
     """✅ 2.9: Configure OpenTelemetry avec instrumentation complète.
 
     Instrumente:
@@ -62,7 +64,9 @@ def setup_opentelemetry(service_name: str = "atmr-backend", service_version: str
         service_version: Version du service
     """
     if not OPENTELEMETRY_AVAILABLE or Resource is None:
-        logger.warning("[2.9] OpenTelemetry non installé - installer avec: pip install -r requirements-otel.txt")
+        logger.warning(
+            "[2.9] OpenTelemetry non installé - installer avec: pip install -r requirements-otel.txt"
+        )
         return
     # Créer resource avec métadonnées service
     if Resource is None or TracerProvider is None:
@@ -98,7 +102,11 @@ def setup_opentelemetry(service_name: str = "atmr-backend", service_version: str
         trace.set_tracer_provider(provider)
 
         # ✅ 2.9: Propagation W3C Trace Context (pour corrélation E2E)
-        if CompositeHTTPPropagator is None or TraceContextTextMapPropagator is None or set_global_textmap is None:
+        if (
+            CompositeHTTPPropagator is None
+            or TraceContextTextMapPropagator is None
+            or set_global_textmap is None
+        ):
             return
         propagator = CompositeHTTPPropagator([TraceContextTextMapPropagator()])
         set_global_textmap(propagator)

@@ -47,7 +47,9 @@ def get_metrics_snapshot(base_url: str = "http://localhost:5000") -> dict:
         return {}
 
 
-def trigger_dispatch(company_id: int, base_url: str = "http://localhost:5000", token: str | None = None) -> dict:
+def trigger_dispatch(
+    company_id: int, base_url: str = "http://localhost:5000", token: str | None = None
+) -> dict:
     """Déclenche un dispatch via l'API."""
     headers = {}
     if token:
@@ -72,7 +74,9 @@ def trigger_dispatch(company_id: int, base_url: str = "http://localhost:5000", t
         return {"error": str(e)}
 
 
-def validate_metrics_increment(metrics_before: dict, metrics_after: dict, expected_metrics: list[str]) -> dict:
+def validate_metrics_increment(
+    metrics_before: dict, metrics_after: dict, expected_metrics: list[str]
+) -> dict:
     """Valide que les métriques attendues ont été incrémentées."""
     results = {
         "validated": [],
@@ -181,12 +185,16 @@ def test_dispatch_metrics() -> str:
         "dispatch_duration_seconds",
     ]
 
-    validation = validate_metrics_increment(metrics_before, metrics_after, expected_metrics)
+    validation = validate_metrics_increment(
+        metrics_before, metrics_after, expected_metrics
+    )
 
     if validation["validated"]:
         print("✅ Métriques validées:")
         for item in validation["validated"]:
-            print(f"   - {item['metric']}: {item['before']} → {item['after']} (+{item['increment']})")
+            print(
+                f"   - {item['metric']}: {item['before']} → {item['after']} (+{item['increment']})"
+            )
 
     if validation["missing"]:
         print("⚠️ Métriques manquantes:")

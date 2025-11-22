@@ -19,22 +19,35 @@ payments_ns = Namespace("payments", description="Opérations liées aux paiement
 # Modèle Swagger pour la mise à jour du statut d'un paiement (admin uniquement)
 payment_status_model = payments_ns.model(
     "PaymentStatus",
-    {"status": fields.String(required=True, description="Nouveau statut", enum=["pending", "completed", "failed"])},
+    {
+        "status": fields.String(
+            required=True,
+            description="Nouveau statut",
+            enum=["pending", "completed", "failed"],
+        )
+    },
 )
 
 # Modèle Swagger pour la création d'un paiement
 payment_create_model = payments_ns.model(
     "PaymentCreate",
     {
-        "amount": fields.Float(required=True, description="Montant du paiement", minimum=0.01),
+        "amount": fields.Float(
+            required=True, description="Montant du paiement", minimum=0.01
+        ),
         "method": fields.String(
             required=True,
             description="Méthode de paiement (ex: credit_card, paypal, etc.)",
             min_length=1,
             max_length=50,
         ),
-        "booking_id": fields.Integer(description="ID de la réservation associée (optionnel)"),
-        "reference": fields.String(description="Référence du paiement (optionnel, max 100 caractères)", max_length=100),
+        "booking_id": fields.Integer(
+            description="ID de la réservation associée (optionnel)"
+        ),
+        "reference": fields.String(
+            description="Référence du paiement (optionnel, max 100 caractères)",
+            max_length=100,
+        ),
     },
 )
 
@@ -67,7 +80,9 @@ class ClientPayments(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
 
-            app_logger.error("❌ ERREUR get_my_payments: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR get_my_payments: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -101,16 +116,22 @@ class PaymentResource(Resource):
             return {
                 "id": payment.id,
                 "amount": payment.amount,
-                "date": payment.date.isoformat() if getattr(payment, "date", None) else None,
+                "date": payment.date.isoformat()
+                if getattr(payment, "date", None)
+                else None,
                 "method": payment.method,
-                "status": payment.status.name if hasattr(payment.status, "name") else payment.status,
+                "status": payment.status.name
+                if hasattr(payment.status, "name")
+                else payment.status,
                 "booking_id": payment.booking_id,
             }, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
 
-            app_logger.error("❌ ERREUR get_payment_details: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR get_payment_details: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
     @jwt_required()
@@ -145,10 +166,14 @@ class PaymentResource(Resource):
             }
             payment.status = status_map[validated_data["status"]]
             db.session.commit()
-            return {"message": f"Payment status updated to {validated_data['status']}"}, 200
+            return {
+                "message": f"Payment status updated to {validated_data['status']}"
+            }, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR update_payment_status: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR update_payment_status: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -171,7 +196,9 @@ class CreatePayment(Resource):
             if not client:
                 return {"error": "Unauthorized: Client not found"}, 403
 
-            booking = Booking.query.filter_by(id=booking_id, client_id=client.id).one_or_none()
+            booking = Booking.query.filter_by(
+                id=booking_id, client_id=client.id
+            ).one_or_none()
             if not booking:
                 return {"error": "Booking not found"}, 404
 
@@ -203,8 +230,13 @@ class CreatePayment(Resource):
 
             db.session.add(payment)
             db.session.commit()
-            return {"message": "Payment created successfully", "payment_id": payment.id}, 201
+            return {
+                "message": "Payment created successfully",
+                "payment_id": payment.id,
+            }, 201
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR create_payment: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR create_payment: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500

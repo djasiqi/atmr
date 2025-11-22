@@ -289,7 +289,9 @@ def run_dueling_tests():
 
     # Tests d'intégration
     integration_class = TestDuelingIntegration()
-    integration_methods = [method for method in dir(integration_class) if method.startswith("test_")]
+    integration_methods = [
+        method for method in dir(integration_class) if method.startswith("test_")
+    ]
 
     for method_name in integration_methods:
         try:

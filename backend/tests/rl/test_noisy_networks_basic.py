@@ -191,7 +191,9 @@ class TestNoisyQNetwork:
 
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés."""
-        network = NoisyQNetwork(state_size=0.100, action_size=50, hidden_sizes=[256, 256, 128], std_init=0.3)
+        network = NoisyQNetwork(
+            state_size=0.100, action_size=50, hidden_sizes=[256, 256, 128], std_init=0.3
+        )
 
         assert network.state_size == 100
         assert network.action_size == 50
@@ -385,7 +387,9 @@ class TestNoisyDuelingQNetwork:
 
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés."""
-        network = NoisyDuelingQNetwork(state_size=0.100, action_size=50, hidden_sizes=[256, 256, 128], std_init=0.3)
+        network = NoisyDuelingQNetwork(
+            state_size=0.100, action_size=50, hidden_sizes=[256, 256, 128], std_init=0.3
+        )
 
         assert network.state_size == 100
         assert network.action_size == 50

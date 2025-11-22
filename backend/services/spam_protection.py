@@ -11,7 +11,9 @@ from ext import redis_client
 logger = logging.getLogger(__name__)
 
 # Configuration anti-spam
-SPAM_RATE_LIMIT_SECONDS = float(os.getenv("SPAM_RATE_LIMIT_SECONDS", "1.0"))  # 1 message par seconde
+SPAM_RATE_LIMIT_SECONDS = float(
+    os.getenv("SPAM_RATE_LIMIT_SECONDS", "1.0")
+)  # 1 message par seconde
 SPAM_REDIS_KEY_PREFIX = "user_msg_ts:"
 SPAM_REDIS_TTL = int(os.getenv("SPAM_REDIS_TTL", "2"))  # TTL de 2 secondes
 
@@ -53,7 +55,10 @@ def can_send_message(user_id: int) -> tuple[bool, Optional[str]]:
                         elapsed,
                         SPAM_RATE_LIMIT_SECONDS,
                     )
-                    return False, f"Trop de messages. Attendez {wait_time:.1f} seconde(s)."
+                    return (
+                        False,
+                        f"Trop de messages. Attendez {wait_time:.1f} seconde(s).",
+                    )
 
             except (ValueError, TypeError):
                 # Valeur invalide dans Redis, on continue

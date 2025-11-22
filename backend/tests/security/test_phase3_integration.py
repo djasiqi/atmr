@@ -79,7 +79,9 @@ class TestLogoutEndpointIntegration:
 
     @patch("security.token_blacklist.redis_client")
     @patch("security.token_blacklist.get_jwt")
-    def test_logout_endpoint_integration(self, mock_get_jwt, mock_redis, client, sample_user_token):
+    def test_logout_endpoint_integration(
+        self, mock_get_jwt, mock_redis, client, sample_user_token
+    ):
         """Test endpoint logout complet."""
         # Mock Redis
         mock_redis_client = MagicMock()
@@ -145,7 +147,9 @@ class TestAdminIPWhitelistIntegration:
 
     @patch("security.ip_whitelist.request")
     @patch("security.ip_whitelist.os.getenv")
-    def test_admin_ip_whitelist_integration(self, mock_getenv, mock_request, client, admin_user_token):
+    def test_admin_ip_whitelist_integration(
+        self, mock_getenv, mock_request, client, admin_user_token
+    ):
         """Test IP whitelist sur endpoint admin."""
         # Mock request avec IP autorisée
         mock_request.environ = {"REMOTE_ADDR": "192.168.1.100"}
@@ -164,7 +168,9 @@ class TestAdminIPWhitelistIntegration:
 
     @patch("security.ip_whitelist.request")
     @patch("security.ip_whitelist.os.getenv")
-    def test_admin_ip_whitelist_blocked(self, mock_getenv, mock_request, client, admin_user_token):
+    def test_admin_ip_whitelist_blocked(
+        self, mock_getenv, mock_request, client, admin_user_token
+    ):
         """Test IP whitelist bloque accès non autorisé."""
         # Mock request avec IP non autorisée
         mock_request.environ = {"REMOTE_ADDR": "10.0.0.1"}
@@ -195,12 +201,17 @@ class TestRotationSecretsCeleryTask:
     @patch("tasks.vault_rotation_tasks.rotate_encryption_key")
     @patch("tasks.vault_rotation_tasks.rotate_jwt_secret")
     @patch("tasks.vault_rotation_tasks.rotate_flask_secret_key")
-    def test_rotation_secrets_celery_task(self, mock_rotate_flask, mock_rotate_jwt, mock_rotate_encryption):
+    def test_rotation_secrets_celery_task(
+        self, mock_rotate_flask, mock_rotate_jwt, mock_rotate_encryption
+    ):
         """Test exécution tâche Celery rotation."""
         # Mock toutes les rotations réussies
         mock_rotate_flask.return_value = {"status": "success", "environment": "dev"}
         mock_rotate_jwt.return_value = {"status": "success", "environment": "dev"}
-        mock_rotate_encryption.return_value = {"status": "success", "environment": "dev"}
+        mock_rotate_encryption.return_value = {
+            "status": "success",
+            "environment": "dev",
+        }
 
         # Mock task
         mock_task = Mock()
@@ -228,7 +239,10 @@ class TestRotationSecretsCeleryTask:
         # Mock rotations avec échec
         mock_rotate_flask.return_value = {"status": "success"}
         mock_rotate_jwt.return_value = {"status": "error", "error": "Vault unavailable"}
-        mock_rotate_encryption.return_value = {"status": "error", "error": "Network error"}
+        mock_rotate_encryption.return_value = {
+            "status": "error",
+            "error": "Network error",
+        }
 
         # Mock task
         mock_task = Mock()
@@ -251,7 +265,9 @@ class TestTokenBlacklistWithJWT:
         """Test callback JWT vérifie la blacklist."""
         # Mock Redis avec token blacklisté
         mock_redis_client = MagicMock()
-        mock_redis_client.exists = MagicMock(return_value=1)  # Token existe (blacklisté)
+        mock_redis_client.exists = MagicMock(
+            return_value=1
+        )  # Token existe (blacklisté)
         mock_redis.return_value = mock_redis_client
 
         # Vérifier que le callback est configuré

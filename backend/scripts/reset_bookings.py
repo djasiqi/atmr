@@ -22,10 +22,14 @@ def reset_bookings():
     with app.app_context():
         try:
             # 1. Compter les bookings avec driver_id
-            bookings_with_driver = Booking.query.filter(Booking.driver_id.isnot(None)).count()
+            bookings_with_driver = Booking.query.filter(
+                Booking.driver_id.isnot(None)
+            ).count()
 
             # Compter les bookings en PENDING
-            bookings_pending = Booking.query.filter(Booking.status == BookingStatus.PENDING).count()
+            bookings_pending = Booking.query.filter(
+                Booking.status == BookingStatus.PENDING
+            ).count()
 
             print(f"📊 Bookings avec driver_id: {bookings_with_driver}")
             print(f"📊 Bookings en PENDING: {bookings_pending}")
@@ -37,28 +41,43 @@ def reset_bookings():
             # 3. Réinitialiser driver_id et status des bookings
             # On réinitialise seulement ceux qui ont un driver_id
             bookings_reset = Booking.query.filter(Booking.driver_id.isnot(None)).update(
-                {Booking.driver_id: None, Booking.status: BookingStatus.ACCEPTED}, synchronize_session=False
+                {Booking.driver_id: None, Booking.status: BookingStatus.ACCEPTED},
+                synchronize_session=False,
             )
 
-            print(f"🔄 Réinitialisé {bookings_reset} bookings avec driver_id (driver_id = None, status = ACCEPTED)")
+            print(
+                f"🔄 Réinitialisé {bookings_reset} bookings avec driver_id (driver_id = None, status = ACCEPTED)"
+            )
 
             # 4. Mettre à jour tous les bookings en PENDING vers ACCEPTED
-            bookings_pending_to_accepted = Booking.query.filter(Booking.status == BookingStatus.PENDING).update(
+            bookings_pending_to_accepted = Booking.query.filter(
+                Booking.status == BookingStatus.PENDING
+            ).update(
                 {Booking.status: BookingStatus.ACCEPTED}, synchronize_session=False
             )
 
-            print(f"🔄 Mis à jour {bookings_pending_to_accepted} bookings de PENDING vers ACCEPTED")
+            print(
+                f"🔄 Mis à jour {bookings_pending_to_accepted} bookings de PENDING vers ACCEPTED"
+            )
 
             # 5. Commit
             db.session.commit()
             print("✅ Commit effectué avec succès")
 
             # 6. Vérification
-            remaining_with_driver = Booking.query.filter(Booking.driver_id.isnot(None)).count()
-            remaining_pending = Booking.query.filter(Booking.status == BookingStatus.PENDING).count()
+            remaining_with_driver = Booking.query.filter(
+                Booking.driver_id.isnot(None)
+            ).count()
+            remaining_pending = Booking.query.filter(
+                Booking.status == BookingStatus.PENDING
+            ).count()
             print("✅ Vérification:")
-            print(f"   - Bookings avec driver_id restants: {remaining_with_driver} (devrait être 0)")
-            print(f"   - Bookings en PENDING restants: {remaining_pending} (devrait être 0)")
+            print(
+                f"   - Bookings avec driver_id restants: {remaining_with_driver} (devrait être 0)"
+            )
+            print(
+                f"   - Bookings en PENDING restants: {remaining_pending} (devrait être 0)"
+            )
 
         except Exception as e:
             db.session.rollback()

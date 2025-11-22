@@ -25,7 +25,9 @@ class TestRollbackRobustness:
 
         Ce test vérifie que le rollback restaure correctement un seul champ modifié.
         """
-        booking = BookingFactory(company=company, driver_id=None, status=BookingStatus.ACCEPTED)
+        booking = BookingFactory(
+            company=company, driver_id=None, status=BookingStatus.ACCEPTED
+        )
         db.session.commit()
 
         # Capturer les valeurs originales
@@ -191,7 +193,9 @@ class TestRollbackRobustness:
 
         # Vérifier que booking1 n'est PAS restauré (déjà commité)
         booking1_reloaded = db.session.query(Booking).get(booking1.id)
-        assert booking1_reloaded.driver_id == driver.id, "booking1 should NOT be restored (already committed)"
+        assert booking1_reloaded.driver_id == driver.id, (
+            "booking1 should NOT be restored (already committed)"
+        )
 
     def test_rollback_restores_after_engine_run_rollback_defensive(self, db, company):
         """✅ Test : Rollback restaure après rollback défensif de engine.run().
@@ -224,10 +228,16 @@ class TestRollbackRobustness:
         )
 
         # Vérifier que engine.run() a quand même créé un DispatchRun
-        dispatch_run_id = result.get("dispatch_run_id") or result.get("meta", {}).get("dispatch_run_id")
-        assert dispatch_run_id is not None, "DispatchRun should be created despite rollback defensive"
+        dispatch_run_id = result.get("dispatch_run_id") or result.get("meta", {}).get(
+            "dispatch_run_id"
+        )
+        assert dispatch_run_id is not None, (
+            "DispatchRun should be created despite rollback defensive"
+        )
 
-    def test_rollback_restores_assignment_after_dispatch_failure(self, db, company, drivers):
+    def test_rollback_restores_assignment_after_dispatch_failure(
+        self, db, company, drivers
+    ):
         """✅ Test : Rollback restaure les assignments après échec de dispatch.
 
         Ce test vérifie que les assignments créés mais non commités sont
@@ -264,5 +274,9 @@ class TestRollbackRobustness:
         )
 
         # Vérifier que l'assignment n'existe pas (n'a jamais été commité)
-        assignment_reloaded = db.session.query(Assignment).filter_by(booking_id=booking.id).first()
-        assert assignment_reloaded is None, "Assignment should not exist (never committed)"
+        assignment_reloaded = (
+            db.session.query(Assignment).filter_by(booking_id=booking.id).first()
+        )
+        assert assignment_reloaded is None, (
+            "Assignment should not exist (never committed)"
+        )

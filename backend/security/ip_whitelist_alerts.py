@@ -66,7 +66,9 @@ def should_alert_for_ip(client_ip: str) -> bool:
         return True
 
     except Exception as e:
-        logger.warning("[IP Whitelist Alerts] Erreur vérification rate limit Redis: %s", e)
+        logger.warning(
+            "[IP Whitelist Alerts] Erreur vérification rate limit Redis: %s", e
+        )
         # En cas d'erreur Redis, autoriser l'alerte (fail-open)
         return True
 
@@ -183,4 +185,6 @@ def send_ip_whitelist_alert(
 
     except Exception as e:
         # Ne pas faire échouer la requête si l'alerte échoue
-        logger.exception("[IP Whitelist Alerts] ❌ Erreur lors de l'envoi d'alerte: %s", e)
+        logger.exception(
+            "[IP Whitelist Alerts] ❌ Erreur lors de l'envoi d'alerte: %s", e
+        )

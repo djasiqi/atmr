@@ -57,7 +57,9 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return R * c
 
 
-def haversine_distance_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+def haversine_distance_meters(
+    lat1: float, lon1: float, lat2: float, lon2: float
+) -> float:
     """Calcule la distance Haversine en mètres.
 
     Args:
@@ -91,7 +93,9 @@ def haversine_tuple(coord1: Tuple[float, float], coord2: Tuple[float, float]) ->
     return haversine_distance(coord1[0], coord1[1], coord2[0], coord2[1])
 
 
-def haversine_minutes(lat1: float, lon1: float, lat2: float, lon2: float, avg_speed_kmh: float = 40) -> float:
+def haversine_minutes(
+    lat1: float, lon1: float, lat2: float, lon2: float, avg_speed_kmh: float = 40
+) -> float:
     """Calcule le temps de trajet estimé en minutes basé sur la distance Haversine.
 
     Args:
@@ -116,7 +120,9 @@ def haversine_minutes(lat1: float, lon1: float, lat2: float, lon2: float, avg_sp
     return (distance_km / avg_speed_kmh) * 60
 
 
-def haversine_seconds(lat1: float, lon1: float, lat2: float, lon2: float, avg_speed_kmh: float = 40) -> int:
+def haversine_seconds(
+    lat1: float, lon1: float, lat2: float, lon2: float, avg_speed_kmh: float = 40
+) -> int:
     """Calcule le temps de trajet estimé en secondes basé sur la distance Haversine.
 
     Args:

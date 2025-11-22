@@ -15,9 +15,18 @@ class ABTestResult(db.Model):
     __tablename__ = "ab_test_result"
 
     id = db.Column(Integer, primary_key=True)
-    booking_id = db.Column(Integer, db.ForeignKey("booking.id"), nullable=False, index=True)
-    driver_id = db.Column(Integer, db.ForeignKey("driver.id"), nullable=False, index=True)
-    test_timestamp = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    booking_id = db.Column(
+        Integer, db.ForeignKey("booking.id"), nullable=False, index=True
+    )
+    driver_id = db.Column(
+        Integer, db.ForeignKey("driver.id"), nullable=False, index=True
+    )
+    test_timestamp = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
 
     # Prédiction ML
     ml_delay_minutes = db.Column(Float, nullable=False)
@@ -41,7 +50,9 @@ class ABTestResult(db.Model):
     heuristic_error = db.Column(Float, nullable=True)
     ml_winner = db.Column(db.Boolean, nullable=True)
 
-    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(
+        db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
     updated_at = db.Column(
         db.DateTime,
         nullable=False,
@@ -62,12 +73,18 @@ class ABTestResult(db.Model):
             "id": self.id,
             "booking_id": self.booking_id,
             "driver_id": self.driver_id,
-            "test_timestamp": self.test_timestamp.isoformat() if self.test_timestamp else None,
+            "test_timestamp": self.test_timestamp.isoformat()
+            if self.test_timestamp
+            else None,
             "ml_delay_minutes": round(self.ml_delay_minutes, 2),
-            "ml_confidence": round(self.ml_confidence, 3) if self.ml_confidence else None,
+            "ml_confidence": round(self.ml_confidence, 3)
+            if self.ml_confidence
+            else None,
             "ml_risk_level": self.ml_risk_level,
             "ml_prediction_time_ms": round(self.ml_prediction_time_ms, 1),
-            "ml_weather_factor": round(self.ml_weather_factor, 2) if self.ml_weather_factor else None,
+            "ml_weather_factor": round(self.ml_weather_factor, 2)
+            if self.ml_weather_factor
+            else None,
             "heuristic_delay_minutes": round(self.heuristic_delay_minutes, 2),
             "heuristic_prediction_time_ms": round(self.heuristic_prediction_time_ms, 1),
             "difference_minutes": round(self.difference_minutes, 2),
@@ -77,7 +94,9 @@ class ABTestResult(db.Model):
             if self.actual_delay_minutes is not None
             else None,
             "ml_error": round(self.ml_error, 2) if self.ml_error is not None else None,
-            "heuristic_error": round(self.heuristic_error, 2) if self.heuristic_error is not None else None,
+            "heuristic_error": round(self.heuristic_error, 2)
+            if self.heuristic_error is not None
+            else None,
             "ml_winner": self.ml_winner,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),

@@ -59,7 +59,9 @@ class TestQualityScoreVersioning:
         from models import Company, DispatchRun, DispatchStatus, User, UserRole
 
         # ✅ FIX: Créer un user d'abord, puis la company avec user_id
-        user = User(username="testuser_quality", email="test@quality.com", role=UserRole.COMPANY)
+        user = User(
+            username="testuser_quality", email="test@quality.com", role=UserRole.COMPANY
+        )
         user.set_password("password123", force_change=False)
         db_session.add(user)
         db_session.flush()
@@ -70,7 +72,10 @@ class TestQualityScoreVersioning:
         db_session.flush()
 
         run = DispatchRun(
-            company_id=company.id, day=datetime.now(UTC).date(), status=DispatchStatus.COMPLETED, config={}
+            company_id=company.id,
+            day=datetime.now(UTC).date(),
+            status=DispatchStatus.COMPLETED,
+            config={},
         )
         db_session.add(run)
         db_session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
@@ -79,7 +84,11 @@ class TestQualityScoreVersioning:
 
         # Calculer les métriques (avec assignations vides)
         metrics = collector._calculate_metrics(
-            dispatch_run_id=run.id, run_date=datetime.now(UTC).date(), assignments=[], all_bookings=[], run_metadata={}
+            dispatch_run_id=run.id,
+            run_date=datetime.now(UTC).date(),
+            assignments=[],
+            all_bookings=[],
+            run_metadata={},
         )
 
         assert hasattr(metrics, "quality_formula_version")
@@ -88,7 +97,9 @@ class TestQualityScoreVersioning:
         assert len(metrics.quality_weights_hash) == 8
 
         logger.info(
-            "✅ Test: Metrics inclut version=%s hash=%s", metrics.quality_formula_version, metrics.quality_weights_hash
+            "✅ Test: Metrics inclut version=%s hash=%s",
+            metrics.quality_formula_version,
+            metrics.quality_weights_hash,
         )
 
     def test_dominant_factors_calculated(self, app_context, db_session):
@@ -99,7 +110,11 @@ class TestQualityScoreVersioning:
         from models import Company, DispatchRun, DispatchStatus, User, UserRole
 
         # ✅ FIX: Créer un user d'abord, puis la company avec user_id
-        user = User(username="testuser_quality2", email="test2@quality.com", role=UserRole.COMPANY)
+        user = User(
+            username="testuser_quality2",
+            email="test2@quality.com",
+            role=UserRole.COMPANY,
+        )
         user.set_password("password123", force_change=False)
         db_session.add(user)
         db_session.flush()
@@ -109,7 +124,10 @@ class TestQualityScoreVersioning:
         db_session.flush()
 
         run = DispatchRun(
-            company_id=company.id, day=datetime.now(UTC).date(), status=DispatchStatus.COMPLETED, config={}
+            company_id=company.id,
+            day=datetime.now(UTC).date(),
+            status=DispatchStatus.COMPLETED,
+            config={},
         )
         db_session.add(run)
         db_session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
@@ -118,7 +136,11 @@ class TestQualityScoreVersioning:
 
         # Calculer avec des valeurs quelconques
         _, dominants = collector._calculate_quality_score(
-            assignment_rate=85.0, on_time_rate=90.0, pooling_rate=20.0, fairness=0.8, avg_delay=5.0
+            assignment_rate=85.0,
+            on_time_rate=90.0,
+            pooling_rate=20.0,
+            fairness=0.8,
+            avg_delay=5.0,
         )
 
         assert isinstance(dominants, dict)
@@ -126,7 +148,9 @@ class TestQualityScoreVersioning:
 
         # Vérifier que les facteurs sont triés
         values = list(dominants.values())
-        assert values == sorted(values, reverse=True), "Facteurs doivent être triés décroissant"
+        assert values == sorted(values, reverse=True), (
+            "Facteurs doivent être triés décroissant"
+        )
 
         logger.info("✅ Test: Dominant factors calculés = %s", dominants)
 
@@ -198,7 +222,11 @@ class TestAutoApplyGuard:
 
         assert hash_v1 != hash_v2, "Hash devrait changer si weights différents"
 
-        logger.info("✅ Test: Comparabilité entre versions (hash v1=%s vs v2=%s)", hash_v1, hash_v2)
+        logger.info(
+            "✅ Test: Comparabilité entre versions (hash v1=%s vs v2=%s)",
+            hash_v1,
+            hash_v2,
+        )
 
 
 if __name__ == "__main__":

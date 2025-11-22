@@ -41,7 +41,11 @@ class AutonomousDispatchManager:
         self.mode = self.company.dispatch_mode
         self.config = self.company.get_autonomous_config()
 
-        logger.debug("[AutonomousManager] Initialized for company %s with mode: %s", company_id, self.mode.value)
+        logger.debug(
+            "[AutonomousManager] Initialized for company %s with mode: %s",
+            company_id,
+            self.mode.value,
+        )
 
     def should_run_autorun(self) -> bool:
         """Détermine si le dispatch automatique périodique doit s'exécuter.
@@ -102,7 +106,11 @@ class AutonomousDispatchManager:
             result = rules.get("customer_notifications", True)
         elif suggestion.action == "adjust_time":
             # Ajustements de temps : uniquement si en dessous du seuil de sécurité
-            delay = suggestion.additional_data.get("delay_minutes", 0) if suggestion.additional_data else 0
+            delay = (
+                suggestion.additional_data.get("delay_minutes", 0)
+                if suggestion.additional_data
+                else 0
+            )
             threshold = self.config["safety_limits"]["require_approval_delay_minutes"]
 
             # Si retard > seuil : validation manuelle requise
@@ -120,7 +128,9 @@ class AutonomousDispatchManager:
 
         return result
 
-    def should_trigger_reoptimization(self, trigger_type: str, context: Dict[str, Any]) -> bool:
+    def should_trigger_reoptimization(
+        self, trigger_type: str, context: Dict[str, Any]
+    ) -> bool:
         """Détermine si une ré-optimisation automatique doit être déclenchée.
 
         Args:
@@ -201,7 +211,9 @@ class AutonomousDispatchManager:
         if action_type in action_limits:
             type_limit_hour = action_limits[action_type].get("per_hour")
             if type_limit_hour:
-                type_count_hour = AutonomousAction.count_actions_last_hour(self.company_id, action_type)
+                type_count_hour = AutonomousAction.count_actions_last_hour(
+                    self.company_id, action_type
+                )
 
                 if type_count_hour >= type_limit_hour:
                     return False, (
@@ -210,7 +222,9 @@ class AutonomousDispatchManager:
 
             type_limit_day = action_limits[action_type].get("per_day")
             if type_limit_day:
-                type_count_day = AutonomousAction.count_actions_today(self.company_id, action_type)
+                type_count_day = AutonomousAction.count_actions_today(
+                    self.company_id, action_type
+                )
 
                 if type_count_day >= type_limit_day:
                     return False, (
@@ -221,7 +235,9 @@ class AutonomousDispatchManager:
         # Toutes les vérifications passées
         return True, "OK"
 
-    def process_opportunities(self, opportunities: List[Any], dry_run: bool = False) -> Dict[str, Any]:
+    def process_opportunities(
+        self, opportunities: List[Any], dry_run: bool = False
+    ) -> Dict[str, Any]:
         """Traite une liste d'opportunités d'optimisation.
         Applique automatiquement celles qui sont autorisées selon le mode et la config
         Args:
@@ -275,7 +291,9 @@ class AutonomousDispatchManager:
                         from db import db as database
 
                         start_time = time.time()
-                        result = apply_suggestion(suggestion, self.company_id, dry_run=False)
+                        result = apply_suggestion(
+                            suggestion, self.company_id, dry_run=False
+                        )
                         execution_time_ms = (time.time() - start_time) * 1000
 
                         if result.get("success"):
@@ -308,7 +326,9 @@ class AutonomousDispatchManager:
                             if suggestion.booking_id is not None:
                                 booking = Booking.query.get(int(suggestion.booking_id))
                                 if booking is not None:
-                                    action_record.booking_id = int(suggestion.booking_id)
+                                    action_record.booking_id = int(
+                                        suggestion.booking_id
+                                    )
                             # Vérifier que le driver existe avant d'assigner driver_id
                             if suggestion.driver_id is not None:
                                 driver = Driver.query.get(int(suggestion.driver_id))
@@ -326,14 +346,21 @@ class AutonomousDispatchManager:
                             )
                             action_record.success = True
                             action_record.execution_time_ms = execution_time_ms
-                            action_record.confidence_score = getattr(suggestion, "confidence", None)
-                            action_record.expected_improvement_minutes = getattr(suggestion, "expected_gain", None)
+                            action_record.confidence_score = getattr(
+                                suggestion, "confidence", None
+                            )
+                            action_record.expected_improvement_minutes = getattr(
+                                suggestion, "expected_gain", None
+                            )
                             action_record.trigger_source = "autonomous_manager"
                             database.session.add(action_record)
                             try:
                                 database.session.flush()
                             except Exception as e:
-                                logger.warning("[AutonomousManager] Failed to log action (non-critical): %s", e)
+                                logger.warning(
+                                    "[AutonomousManager] Failed to log action (non-critical): %s",
+                                    e,
+                                )
                                 database.session.rollback()
 
                         else:
@@ -354,7 +381,9 @@ class AutonomousDispatchManager:
                             if suggestion.booking_id is not None:
                                 booking = Booking.query.get(int(suggestion.booking_id))
                                 if booking is not None:
-                                    action_record.booking_id = int(suggestion.booking_id)
+                                    action_record.booking_id = int(
+                                        suggestion.booking_id
+                                    )
                             # Vérifier que le driver existe avant d'assigner driver_id
                             if suggestion.driver_id is not None:
                                 driver = Driver.query.get(int(suggestion.driver_id))
@@ -377,7 +406,10 @@ class AutonomousDispatchManager:
                             try:
                                 database.session.flush()
                             except Exception as e:
-                                logger.warning("[AutonomousManager] Failed to log failed action (non-critical): %s", e)
+                                logger.warning(
+                                    "[AutonomousManager] Failed to log failed action (non-critical): %s",
+                                    e,
+                                )
                                 database.session.rollback()
                     else:
                         stats["auto_applied"] += 1

@@ -178,7 +178,10 @@ class TestParallelScoring:
         # Même nombre d'assignations (déterministe)
         assert len(result1.assignments) == len(result2.assignments)
 
-        logger.info("✅ Test: Consistance parallèle vs séquentiel (%d assignments)", len(result1.assignments))
+        logger.info(
+            "✅ Test: Consistance parallèle vs séquentiel (%d assignments)",
+            len(result1.assignments),
+        )
 
     def test_speedup_measurement(self):
         """Test: Mesurer speedup effectif."""
@@ -214,7 +217,11 @@ class TestParallelScoring:
 
         assert elapsed < sequential_time_estimate / expected_speedup
 
-        logger.info("✅ Test: Speedup mesuré (%.2fs pour 250 bookings, ~%.1fx)", elapsed, expected_speedup)
+        logger.info(
+            "✅ Test: Speedup mesuré (%.2fs pour 250 bookings, ~%.1fx)",
+            elapsed,
+            expected_speedup,
+        )
 
 
 if __name__ == "__main__":

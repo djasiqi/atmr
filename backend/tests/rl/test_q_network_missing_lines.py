@@ -15,7 +15,10 @@ class TestImprovedQNetworkMissingLines:
     def test_init_with_default_params(self):
         """Test lignes 17-21: __init__ avec paramètres par défaut."""
         network = ImprovedQNetwork(
-            state_dim=10, action_dim=5, hidden_sizes=(64, 32, 16, 8), dropout_rates=(0.1, 0.1, 0.05)
+            state_dim=10,
+            action_dim=5,
+            hidden_sizes=(64, 32, 16, 8),
+            dropout_rates=(0.1, 0.1, 0.05),
         )
 
         assert network.state_dim == 10
@@ -33,7 +36,9 @@ class TestImprovedQNetworkMissingLines:
         assert q_values.shape == (1, 5)
 
         # Test avec des valeurs extrêmes
-        extreme_state = torch.tensor([[1.0, -1.0, 0.0, 2.0, -2.0, 0.5, -0.5, 1.5, -1.5, 0.0]])
+        extreme_state = torch.tensor(
+            [[1.0, -1.0, 0.0, 2.0, -2.0, 0.5, -0.5, 1.5, -1.5, 0.0]]
+        )
         extreme_q_values = network(extreme_state)
         assert extreme_q_values.shape == (1, 5)
 
@@ -102,7 +107,9 @@ class TestDuelingQNetworkMissingLines:
         assert q_values.shape == (1, 5)
 
         # Test avec des valeurs extrêmes
-        extreme_state = torch.tensor([[1.0, -1.0, 0.0, 2.0, -2.0, 0.5, -0.5, 1.5, -1.5, 0.0]])
+        extreme_state = torch.tensor(
+            [[1.0, -1.0, 0.0, 2.0, -2.0, 0.5, -0.5, 1.5, -1.5, 0.0]]
+        )
         extreme_q_values = network(extreme_state)
         assert extreme_q_values.shape == (1, 5)
 
@@ -179,11 +186,19 @@ class TestDuelingQNetworkMissingLines:
     def test_forward_with_different_architectures(self):
         """Test lignes 461-463: forward avec différentes architectures."""
         network1 = DuelingQNetwork(
-            state_dim=10, action_dim=5, shared_hidden_sizes=(64, 32), value_hidden_size=32, advantage_hidden_size=32
+            state_dim=10,
+            action_dim=5,
+            shared_hidden_sizes=(64, 32),
+            value_hidden_size=32,
+            advantage_hidden_size=32,
         )
 
         network2 = DuelingQNetwork(
-            state_dim=10, action_dim=5, shared_hidden_sizes=(128, 64), value_hidden_size=64, advantage_hidden_size=64
+            state_dim=10,
+            action_dim=5,
+            shared_hidden_sizes=(128, 64),
+            value_hidden_size=64,
+            advantage_hidden_size=64,
         )
 
         state = torch.randn(1, 10)

@@ -32,7 +32,9 @@ class TestHandlerElasticsearch:
         mock_post.return_value = mock_response
 
         # Créer handler
-        handler = CentralizedLogHandler(endpoint="http://elasticsearch:9200/_bulk", log_type="elasticsearch")
+        handler = CentralizedLogHandler(
+            endpoint="http://elasticsearch:9200/_bulk", log_type="elasticsearch"
+        )
 
         # Créer un log record
         record = logging.LogRecord(
@@ -70,7 +72,9 @@ class TestHandlerElasticsearch:
         mock_post.return_value = mock_response
 
         # Créer handler
-        handler = CentralizedLogHandler(endpoint="http://elasticsearch:9200/_bulk", log_type="elasticsearch")
+        handler = CentralizedLogHandler(
+            endpoint="http://elasticsearch:9200/_bulk", log_type="elasticsearch"
+        )
 
         # Créer un log record
         record = logging.LogRecord(
@@ -196,7 +200,9 @@ class TestHandlerGeneric:
         mock_post.return_value = mock_response
 
         # Créer handler
-        handler = CentralizedLogHandler(endpoint="http://log-aggregator:8080/logs", log_type="generic")
+        handler = CentralizedLogHandler(
+            endpoint="http://log-aggregator:8080/logs", log_type="generic"
+        )
 
         # Créer un log record
         record = logging.LogRecord(
@@ -345,7 +351,9 @@ class TestHandlerErrorHandling:
         mock_post.side_effect = requests.RequestException("Connection error")
 
         # Créer handler
-        handler = CentralizedLogHandler(endpoint="http://elasticsearch:9200/_bulk", log_type="elasticsearch")
+        handler = CentralizedLogHandler(
+            endpoint="http://elasticsearch:9200/_bulk", log_type="elasticsearch"
+        )
 
         # Créer un log record
         record = logging.LogRecord(
@@ -375,7 +383,11 @@ class TestHandlerErrorHandling:
         mock_post.side_effect = requests.Timeout("Request timeout")
 
         # Créer handler
-        handler = CentralizedLogHandler(endpoint="http://elasticsearch:9200/_bulk", log_type="elasticsearch", timeout=5)
+        handler = CentralizedLogHandler(
+            endpoint="http://elasticsearch:9200/_bulk",
+            log_type="elasticsearch",
+            timeout=5,
+        )
 
         # Créer un log record
         record = logging.LogRecord(

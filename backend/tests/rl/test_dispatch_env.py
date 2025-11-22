@@ -417,7 +417,9 @@ def test_realistic_scenario():
     print("🧪 TEST SCÉNARIO RÉALISTE")
     print("=" * 60)
 
-    env = DispatchEnv(num_drivers=8, max_bookings=15, simulation_hours=2, render_mode="human")
+    env = DispatchEnv(
+        num_drivers=8, max_bookings=15, simulation_hours=2, render_mode="human"
+    )
 
     _obs, info = env.reset(seed=0.123)
     print("\n✅ Environnement initialisé")

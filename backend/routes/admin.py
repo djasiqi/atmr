@@ -53,20 +53,43 @@ class AdminStats(Resource):
             total_invoices = Invoice.query.count()
 
             now = datetime.now(UTC)
-            start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            start_of_month = now.replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            )
             if now.month == MONTH_THRESHOLD:
-                end_of_month = now.replace(year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+                end_of_month = now.replace(
+                    year=now.year + 1,
+                    month=1,
+                    day=1,
+                    hour=0,
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                )
             else:
-                end_of_month = now.replace(month=now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+                end_of_month = now.replace(
+                    month=now.month + 1,
+                    day=1,
+                    hour=0,
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                )
 
             # Comparaisons typées pour Pylance
             cond_status: BinaryExpression[bool] = cast(
                 "BinaryExpression[bool]", Booking.status == BookingStatus.COMPLETED
             )
-            cond_ge: BinaryExpression[bool] = cast("BinaryExpression[bool]", Booking.scheduled_time >= start_of_month)
-            cond_lt: BinaryExpression[bool] = cast("BinaryExpression[bool]", Booking.scheduled_time < end_of_month)
+            cond_ge: BinaryExpression[bool] = cast(
+                "BinaryExpression[bool]", Booking.scheduled_time >= start_of_month
+            )
+            cond_lt: BinaryExpression[bool] = cast(
+                "BinaryExpression[bool]", Booking.scheduled_time < end_of_month
+            )
 
-            stmt = select(func.coalesce(func.sum(Booking.amount), 0)).where(and_(cond_status, cond_ge, cond_lt))
+            stmt = select(func.coalesce(func.sum(Booking.amount), 0)).where(
+                and_(cond_status, cond_ge, cond_lt)
+            )
 
             total_revenue = db.session.execute(stmt).scalar_one()
 
@@ -94,12 +117,16 @@ class RecentBookings(Resource):
         """Récupère les 5 réservations récentes."""
         try:
             recent_bookings = (
-                Booking.query.options(joinedload(Booking.client).joinedload(Client.user))
+                Booking.query.options(
+                    joinedload(Booking.client).joinedload(Client.user)
+                )
                 .order_by(Booking.scheduled_time.desc())
                 .limit(5)
                 .all()
             )
-            app_logger.info(f"✅ {len(recent_bookings)} réservations récentes trouvées.")
+            app_logger.info(
+                f"✅ {len(recent_bookings)} réservations récentes trouvées."
+            )
             return [cast("Any", b).serialize for b in recent_bookings], 200
 
         except Exception as e:
@@ -191,7 +218,9 @@ class ManageUser(Resource):
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
-def _setup_driver_role(user: User, company_id: int | None) -> tuple[bool, dict[str, str] | None, int | None]:
+def _setup_driver_role(
+    user: User, company_id: int | None
+) -> tuple[bool, dict[str, str] | None, int | None]:
     """Helper pour configurer le rôle DRIVER. Retourne (success, error_response, status_code)."""
     if not company_id:
         db.session.rollback()
@@ -219,11 +248,20 @@ def _setup_driver_role(user: User, company_id: int | None) -> tuple[bool, dict[s
 user_role_update_model = admin_ns.model(
     "UserRoleUpdate",
     {
-        "role": fields.String(required=True, enum=["admin", "client", "driver", "company"], description="Nouveau rôle"),
-        "company_id": fields.Integer(
-            description="ID entreprise (requis pour rôle driver, optionnel pour company)", minimum=1
+        "role": fields.String(
+            required=True,
+            enum=["admin", "client", "driver", "company"],
+            description="Nouveau rôle",
         ),
-        "company_name": fields.String(description="Nom entreprise (si création company)", min_length=1, max_length=200),
+        "company_id": fields.Integer(
+            description="ID entreprise (requis pour rôle driver, optionnel pour company)",
+            minimum=1,
+        ),
+        "company_name": fields.String(
+            description="Nom entreprise (si création company)",
+            min_length=1,
+            max_length=200,
+        ),
     },
 )
 
@@ -231,7 +269,9 @@ user_role_update_model = admin_ns.model(
 autonomous_action_review_model = admin_ns.model(
     "AutonomousActionReview",
     {
-        "notes": fields.String(description="Notes de l'admin (max 1000 caractères)", max_length=1000),
+        "notes": fields.String(
+            description="Notes de l'admin (max 1000 caractères)", max_length=1000
+        ),
     },
 )
 
@@ -279,12 +319,16 @@ class UpdateUserRole(Resource):
             try:
                 new_role_enum = UserRole[key]
             except KeyError:
-                new_role_enum = next((r for r in UserRole if str(r.value).upper() == key), None)
+                new_role_enum = next(
+                    (r for r in UserRole if str(r.value).upper() == key), None
+                )
 
             if new_role_enum is None:
                 return {"error": "Invalid role"}, 400
 
-            old_role_value = user.role.value if isinstance(user.role, UserRole) else str(user.role)
+            old_role_value = (
+                user.role.value if isinstance(user.role, UserRole) else str(user.role)
+            )
             old_role_value = str(old_role_value or "").upper()
 
             # ---------- 3) Affecter le nouveau rôle ----------
@@ -294,7 +338,9 @@ class UpdateUserRole(Resource):
             role_upper = str(new_role_enum.value).upper()
 
             if role_upper == "DRIVER":
-                success, error, status = _setup_driver_role(user, validated_data.get("company_id"))
+                success, error, status = _setup_driver_role(
+                    user, validated_data.get("company_id")
+                )
                 if not success:
                     return error, status
 
@@ -351,11 +397,15 @@ class UpdateUserRole(Resource):
                     action_type="permission_changed",
                     action_category="security",
                     user_id=current_user.id if current_user else None,
-                    user_type=current_user.role.value if current_user and current_user.role else "admin",
+                    user_type=current_user.role.value
+                    if current_user and current_user.role
+                    else "admin",
                     result_status="success",
                     action_details={
                         "modified_user_id": user.id,
-                        "modified_user_email": mask_email(str(user.email)) if user.email is not None else None,
+                        "modified_user_email": mask_email(str(user.email))
+                        if user.email is not None
+                        else None,
                         "old_role": old_role_value,
                         "new_role": str(new_role_enum.value),
                     },
@@ -363,11 +413,15 @@ class UpdateUserRole(Resource):
                     user_agent=request.headers.get("User-Agent"),
                 )
                 # ✅ Priorité 7: Métriques Prometheus pour changement de permissions
-                security_sensitive_actions_total.labels(action_type="permission_changed").inc()
+                security_sensitive_actions_total.labels(
+                    action_type="permission_changed"
+                ).inc()
                 security_permission_changes_total.inc()
             except Exception as audit_error:
                 # Ne pas bloquer la modification si l'audit logging échoue
-                app_logger.warning("Échec audit logging permission_changed: %s", audit_error)
+                app_logger.warning(
+                    "Échec audit logging permission_changed: %s", audit_error
+                )
 
             return {
                 "message": f"✅ Rôle de {user.username} mis à jour en {new_role_enum.value}",
@@ -393,7 +447,9 @@ class ResetUserPassword(Resource):
                 admin_ns.abort(404, "User not found")
                 return None  # abort() lève, mais ce return rassure l'analyste statique
             u = cast("Any", user)
-            new_password = "".join(random.choices(string.ascii_letters + string.digits, k=12))
+            new_password = "".join(
+                random.choices(string.ascii_letters + string.digits, k=12)
+            )
             # Validation explicite du mot de passe avant set_password (sécurité)
             from routes.utils import validate_password_or_raise
 
@@ -450,7 +506,9 @@ class AutonomousActionsList(Resource):
             )
 
             try:
-                validated_params = validate_query_params(AutonomousActionsListQuerySchema(), request.args, strict=False)
+                validated_params = validate_query_params(
+                    AutonomousActionsListQuerySchema(), request.args, strict=False
+                )
             except ValidationError as e:
                 return handle_validation_error(e)
 
@@ -480,7 +538,9 @@ class AutonomousActionsList(Resource):
             if reviewed is not None:
                 # Convertir string en bool (déjà validé par le schéma)
                 reviewed_bool = reviewed.lower() in ["true", "1", "yes"]
-                query = query.filter(AutonomousAction.reviewed_by_admin == reviewed_bool)
+                query = query.filter(
+                    AutonomousAction.reviewed_by_admin == reviewed_bool
+                )
 
             start_date = validated_params.get("start_date")
             if start_date:
@@ -546,7 +606,9 @@ class AutonomousActionsStats(Resource):
                 start_time = now - timedelta(days=1)
 
             # Base query
-            query = AutonomousAction.query.filter(AutonomousAction.created_at >= start_time)
+            query = AutonomousAction.query.filter(
+                AutonomousAction.created_at >= start_time
+            )
 
             if company_id:
                 query = query.filter(AutonomousAction.company_id == company_id)
@@ -555,19 +617,27 @@ class AutonomousActionsStats(Resource):
             total_actions = query.count()
             successful_actions = query.filter(AutonomousAction.success == True).count()  # noqa: E712
             failed_actions = query.filter(AutonomousAction.success == False).count()  # noqa: E712
-            reviewed_actions = query.filter(AutonomousAction.reviewed_by_admin == True).count()  # noqa: E712
+            reviewed_actions = query.filter(
+                AutonomousAction.reviewed_by_admin == True
+            ).count()  # noqa: E712
 
             # Stats par type d'action
             action_type_stats = db.session.query(
                 AutonomousAction.action_type,
                 func.count(AutonomousAction.id).label("count"),
-                func.sum(func.cast(AutonomousAction.success, db.Integer)).label("success_count"),
+                func.sum(func.cast(AutonomousAction.success, db.Integer)).label(
+                    "success_count"
+                ),
             ).filter(AutonomousAction.created_at >= start_time)
 
             if company_id:
-                action_type_stats = action_type_stats.filter(AutonomousAction.company_id == company_id)
+                action_type_stats = action_type_stats.filter(
+                    AutonomousAction.company_id == company_id
+                )
 
-            action_type_stats = action_type_stats.group_by(AutonomousAction.action_type).all()
+            action_type_stats = action_type_stats.group_by(
+                AutonomousAction.action_type
+            ).all()
 
             # Stats par entreprise (si pas filtré)
             company_stats = []
@@ -576,7 +646,9 @@ class AutonomousActionsStats(Resource):
                     db.session.query(
                         AutonomousAction.company_id,
                         func.count(AutonomousAction.id).label("count"),
-                        func.sum(func.cast(AutonomousAction.success, db.Integer)).label("success_count"),
+                        func.sum(func.cast(AutonomousAction.success, db.Integer)).label(
+                            "success_count"
+                        ),
                     )
                     .filter(AutonomousAction.created_at >= start_time)
                     .group_by(AutonomousAction.company_id)
@@ -594,12 +666,17 @@ class AutonomousActionsStats(Resource):
                 ]
 
             # Temps d'exécution moyen
-            avg_execution_time = db.session.query(func.avg(AutonomousAction.execution_time_ms)).filter(
-                AutonomousAction.created_at >= start_time, AutonomousAction.execution_time_ms.isnot(None)
+            avg_execution_time = db.session.query(
+                func.avg(AutonomousAction.execution_time_ms)
+            ).filter(
+                AutonomousAction.created_at >= start_time,
+                AutonomousAction.execution_time_ms.isnot(None),
             )
 
             if company_id:
-                avg_execution_time = avg_execution_time.filter(AutonomousAction.company_id == company_id)
+                avg_execution_time = avg_execution_time.filter(
+                    AutonomousAction.company_id == company_id
+                )
 
             avg_time = avg_execution_time.scalar() or 0
 
@@ -621,7 +698,9 @@ class AutonomousActionsStats(Resource):
                         "total": stat[1],
                         "successful": stat[2] or 0,
                         "failed": stat[1] - (stat[2] or 0),
-                        "success_rate": round((stat[2] or 0) / stat[1] * 100, 2) if stat[1] > 0 else 0,
+                        "success_rate": round((stat[2] or 0) / stat[1] * 100, 2)
+                        if stat[1] > 0
+                        else 0,
                     }
                     for stat in action_type_stats
                 ],
@@ -629,7 +708,9 @@ class AutonomousActionsStats(Resource):
             }, 200
 
         except Exception as e:
-            app_logger.error(f"❌ ERREUR autonomous_actions_stats: {e!s}", exc_info=True)
+            app_logger.error(
+                f"❌ ERREUR autonomous_actions_stats: {e!s}", exc_info=True
+            )
             return {"message": "Erreur lors du calcul des statistiques"}, 500
 
 
@@ -685,7 +766,9 @@ class AutonomousActionReview(Resource):
             )
 
             try:
-                validated_data = validate_request(AutonomousActionReviewSchema(), data, strict=False)
+                validated_data = validate_request(
+                    AutonomousActionReviewSchema(), data, strict=False
+                )
             except ValidationError as e:
                 return handle_validation_error(e)
 
@@ -697,9 +780,14 @@ class AutonomousActionReview(Resource):
 
             db.session.commit()
 
-            app_logger.info(f"✅ Action {action_id} reviewée par admin {get_jwt_identity()}")
+            app_logger.info(
+                f"✅ Action {action_id} reviewée par admin {get_jwt_identity()}"
+            )
 
-            return {"message": "Action marquée comme reviewée", "action": action.to_dict()}, 200
+            return {
+                "message": "Action marquée comme reviewée",
+                "action": action.to_dict(),
+            }, 200
 
         except Exception:
             db.session.rollback()

@@ -30,7 +30,9 @@ def upgrade():
         sa.Column("action", sa.String(length=20), nullable=False),
         sa.Column("feedback_reason", sa.Text(), nullable=True),
         sa.Column("user_id", sa.Integer(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+        ),
         sa.Column("suggestion_generated_at", sa.DateTime(), nullable=True),
         sa.Column("actual_outcome", sa.JSON(), nullable=True),
         sa.Column("was_successful", sa.Boolean(), nullable=True),

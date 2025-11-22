@@ -14,23 +14,31 @@ if TYPE_CHECKING:
 
 
 # ---------- Helper d'émission compatible v4/v5 ----------
-def _emit_room(event: str, payload: Dict[str, Any], room: str, *, namespace: str = "/") -> None:
+def _emit_room(
+    event: str, payload: Dict[str, Any], room: str, *, namespace: str = "/"
+) -> None:
     """Émet un event vers une room en essayant d'abord `to=`, puis fallback `room=`."""
     try:
-        socketio.emit(event, payload, to=room, namespace=namespace)  # Flask-SocketIO >= 5
+        socketio.emit(
+            event, payload, to=room, namespace=namespace
+        )  # Flask-SocketIO >= 5
     except TypeError:
         try:
             sio_any = cast("Any", socketio)  # <-- cast pour calmer Pylance
             sio_any.emit(event, payload, room=room, namespace=namespace)  # compat v4
             # (alternativement: socketio.emit(..., room=..., namespace=...)
         except Exception as e:
-            app_logger.error("[notify] emit (compat) failed event=%s room=%s err=%s", event, room, e)
+            app_logger.error(
+                "[notify] emit (compat) failed event=%s room=%s err=%s", event, room, e
+            )
     except Exception as e:
         app_logger.error("[notify] emit failed event=%s room=%s err=%s", event, room, e)
 
 
 # ---------- 1) Notification PUSH Expo ----------
-def send_push_message(token: str, title: str, body: str, *, timeout: int = 5) -> Dict[str, Any]:
+def send_push_message(
+    token: str, title: str, body: str, *, timeout: int = 5
+) -> Dict[str, Any]:
     message = {
         "to": token,
         "sound": "default",
@@ -38,7 +46,9 @@ def send_push_message(token: str, title: str, body: str, *, timeout: int = 5) ->
         "body": body,
     }
     try:
-        resp = requests.post("https://exp.host/--/api/v2/push/send", json=message, timeout=timeout)
+        resp = requests.post(
+            "https://exp.host/--/api/v2/push/send", json=message, timeout=timeout
+        )
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
@@ -51,7 +61,9 @@ def notify_driver_new_booking(driver_id: int, booking: Booking) -> None:
     room = f"driver_{driver_id}"
     try:
         payload: Dict[str, Any] = (
-            booking.to_dict() if hasattr(booking, "to_dict") else {"id": getattr(booking, "id", None)}
+            booking.to_dict()
+            if hasattr(booking, "to_dict")
+            else {"id": getattr(booking, "id", None)}
         )
         _emit_room("new_booking", payload, room)
     except Exception as e:
@@ -63,7 +75,9 @@ def notify_booking_update(driver_id: int, booking: Booking) -> None:
     room = f"driver_{driver_id}"
     try:
         payload: Dict[str, Any] = (
-            booking.to_dict() if hasattr(booking, "to_dict") else {"id": getattr(booking, "id", None)}
+            booking.to_dict()
+            if hasattr(booking, "to_dict")
+            else {"id": getattr(booking, "id", None)}
         )
         _emit_room("booking_updated", payload, room)
     except Exception as e:
@@ -87,9 +101,13 @@ def notify_booking_assigned(booking: Booking) -> None:
         payload = {
             "booking_id": getattr(booking, "id", None),
             "driver_id": getattr(booking, "driver_id", None),
-            "status": str(getattr(booking, "status", "")) if hasattr(booking, "status") else None,
+            "status": str(getattr(booking, "status", ""))
+            if hasattr(booking, "status")
+            else None,
         }
-        emit_company_event(int(getattr(booking, "company_id", 0) or 0), "booking_assigned", payload)
+        emit_company_event(
+            int(getattr(booking, "company_id", 0) or 0), "booking_assigned", payload
+        )
     except Exception as e:
         app_logger.error("[notify_booking_assigned] emit failed: %s", e)
 
@@ -117,7 +135,10 @@ def notify_dispatch_run_completed(
                         dispatch_run_id,
                     )
             except Exception as e:
-                app_logger.warning("[notify_dispatch_run_completed] Failed to get day_str from DispatchRun: %s", e)
+                app_logger.warning(
+                    "[notify_dispatch_run_completed] Failed to get day_str from DispatchRun: %s",
+                    e,
+                )
 
         payload: Dict[str, Any] = {
             "dispatch_run_id": dispatch_run_id,
@@ -125,7 +146,9 @@ def notify_dispatch_run_completed(
             "date": date_str,
         }
         # ✅ Utiliser json.dumps pour éviter les erreurs de formatage si payload contient des %
-        app_logger.info("[notify_dispatch_run_completed] Emitting payload: %s", json.dumps(payload))
+        app_logger.info(
+            "[notify_dispatch_run_completed] Emitting payload: %s", json.dumps(payload)
+        )
 
         emit_company_event(company_id, "dispatch_run_completed", payload)
         if date_str:
@@ -144,7 +167,9 @@ def notify_dispatch_run_completed(
         )
 
 
-def notify_dispatcher_optimization_opportunity(opportunity_data: Dict[str, Any]) -> None:
+def notify_dispatcher_optimization_opportunity(
+    opportunity_data: Dict[str, Any],
+) -> None:
     """Notifie le dispatcher d'une opportunité d'optimisation détectée.
 
     Args:
@@ -164,7 +189,9 @@ def notify_dispatcher_optimization_opportunity(opportunity_data: Dict[str, Any])
     try:
         company_id = opportunity_data.get("company_id")
         if not company_id:
-            app_logger.warning("[notify_dispatcher_optimization_opportunity] No company_id in data")
+            app_logger.warning(
+                "[notify_dispatcher_optimization_opportunity] No company_id in data"
+            )
             return
 
         payload: Dict[str, Any] = {
@@ -187,4 +214,6 @@ def notify_dispatcher_optimization_opportunity(opportunity_data: Dict[str, Any])
 
         emit_company_event(company_id, "optimization_opportunity", payload)
     except Exception as e:
-        app_logger.error("[notify_dispatcher_optimization_opportunity] emit failed: %s", e)
+        app_logger.error(
+            "[notify_dispatcher_optimization_opportunity] emit failed: %s", e
+        )

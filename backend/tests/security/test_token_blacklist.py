@@ -170,7 +170,9 @@ class TestIsTokenBlacklisted:
         result = is_token_blacklisted(jti="test-jti-123")
 
         assert result is True
-        mock_redis_client.exists.assert_called_once_with(f"{BLACKLIST_PREFIX}test-jti-123")
+        mock_redis_client.exists.assert_called_once_with(
+            f"{BLACKLIST_PREFIX}test-jti-123"
+        )
 
     @patch("security.token_blacklist.redis_client")
     def test_is_token_blacklisted_false(self, mock_redis):
@@ -211,7 +213,9 @@ class TestIsTokenBlacklisted:
         result = is_token_blacklisted(jwt_token="test-token")
 
         assert result is True
-        mock_redis_client.exists.assert_called_once_with(f"{BLACKLIST_PREFIX}test-jti-456")
+        mock_redis_client.exists.assert_called_once_with(
+            f"{BLACKLIST_PREFIX}test-jti-456"
+        )
 
     @patch("security.token_blacklist.redis_client")
     @patch("security.token_blacklist.decode_token")
@@ -231,7 +235,9 @@ class TestIsTokenBlacklisted:
         result = is_token_blacklisted(jwt_token=token)
 
         assert result is True
-        mock_redis_client.exists.assert_called_once_with(f"{BLACKLIST_PREFIX}{token_hash}")
+        mock_redis_client.exists.assert_called_once_with(
+            f"{BLACKLIST_PREFIX}{token_hash}"
+        )
 
     @patch("security.token_blacklist.redis_client")
     def test_is_token_blacklisted_no_token_no_jti(self, mock_redis):

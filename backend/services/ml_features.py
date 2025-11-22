@@ -52,7 +52,9 @@ def extract_base_features(booking: Any, driver: Any) -> dict[str, float]:
         dropoff_lon = float(dropoff_lon_val) if dropoff_lon_val is not None else 0
 
         if all([pickup_lat, pickup_lon, dropoff_lat, dropoff_lon]):
-            distance_km = haversine_distance(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+            distance_km = haversine_distance(
+                pickup_lat, pickup_lon, dropoff_lat, dropoff_lon
+            )
         else:
             distance_meters_val = getattr(booking, "distance_meters", None)
             distance_km = distance_meters_val / 1000 if distance_meters_val else 0
@@ -61,7 +63,9 @@ def extract_base_features(booking: Any, driver: Any) -> dict[str, float]:
 
     # Duration (estimation)
     duration_seconds_val = getattr(booking, "duration_seconds", None)
-    duration_seconds = float(duration_seconds_val) if duration_seconds_val else distance_km * 7 * 60
+    duration_seconds = (
+        float(duration_seconds_val) if duration_seconds_val else distance_km * 7 * 60
+    )
 
     # Booking characteristics
     medical_facility_val = getattr(booking, "medical_facility", None)
@@ -74,7 +78,9 @@ def extract_base_features(booking: Any, driver: Any) -> dict[str, float]:
     booking_priority = 0.8 if (is_medical or is_urgent) else 0.5
 
     # Driver features
-    driver_total_bookings = float(len(getattr(driver, "assignments", [])) if hasattr(driver, "assignments") else 0)
+    driver_total_bookings = float(
+        len(getattr(driver, "assignments", [])) if hasattr(driver, "assignments") else 0
+    )
 
     # Traffic density (estimation basée sur l'heure)
     if time_of_day in [7, 8, 17, 18]:
@@ -96,7 +102,11 @@ def extract_base_features(booking: Any, driver: Any) -> dict[str, float]:
         pickup_lat = float(pickup_lat_val) if pickup_lat_val is not None else 0
         pickup_lon = float(pickup_lon_val) if pickup_lon_val is not None else 0
 
-        weather_factor = get_weather_factor(pickup_lat, pickup_lon) if pickup_lat and pickup_lon else 0.5
+        weather_factor = (
+            get_weather_factor(pickup_lat, pickup_lon)
+            if pickup_lat and pickup_lon
+            else 0.5
+        )
     except Exception as e:
         logger.warning("[MLFeatures] Weather API failed, using neutral: %s", e)
         weather_factor = 0.5
@@ -122,11 +132,21 @@ def create_interaction_features(features: dict[str, float]) -> dict[str, float]:
     interactions = {}
 
     # Interactions critiques (53.7% importance)
-    interactions["distance_x_traffic"] = features["distance_km"] * features["traffic_density"]
-    interactions["distance_x_weather"] = features["distance_km"] * features["weather_factor"]
-    interactions["traffic_x_weather"] = features["traffic_density"] * features["weather_factor"]
-    interactions["medical_x_distance"] = features["is_medical"] * features["distance_km"]
-    interactions["urgent_x_traffic"] = features["is_urgent"] * features["traffic_density"]
+    interactions["distance_x_traffic"] = (
+        features["distance_km"] * features["traffic_density"]
+    )
+    interactions["distance_x_weather"] = (
+        features["distance_km"] * features["weather_factor"]
+    )
+    interactions["traffic_x_weather"] = (
+        features["traffic_density"] * features["weather_factor"]
+    )
+    interactions["medical_x_distance"] = (
+        features["is_medical"] * features["distance_km"]
+    )
+    interactions["urgent_x_traffic"] = (
+        features["is_urgent"] * features["traffic_density"]
+    )
 
     return interactions
 
@@ -271,7 +291,9 @@ def engineer_features(booking: Any, driver: Any) -> dict[str, float]:
     }
 
 
-def normalize_features(features: dict[str, float], scaler_params: dict[str, Any]) -> dict[str, float]:
+def normalize_features(
+    features: dict[str, float], scaler_params: dict[str, Any]
+) -> dict[str, float]:
     """Normalise les features avec StandardScaler (paramètres pré-calculés).
 
     Args:
@@ -284,7 +306,11 @@ def normalize_features(features: dict[str, float], scaler_params: dict[str, Any]
     """
     normalized = features.copy()
 
-    if "columns" in scaler_params and "mean" in scaler_params and "scale" in scaler_params:
+    if (
+        "columns" in scaler_params
+        and "mean" in scaler_params
+        and "scale" in scaler_params
+    ):
         columns = scaler_params["columns"]
         means = scaler_params["mean"]
         scales = scaler_params["scale"]
@@ -297,7 +323,9 @@ def normalize_features(features: dict[str, float], scaler_params: dict[str, Any]
     return normalized
 
 
-def features_to_dataframe(features: dict[str, float], feature_order: list[str]) -> pd.DataFrame:
+def features_to_dataframe(
+    features: dict[str, float], feature_order: list[str]
+) -> pd.DataFrame:
     """Convertit dict de features en DataFrame avec bon ordre de colonnes.
 
     Args:

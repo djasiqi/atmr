@@ -55,7 +55,9 @@ def bookings(db, company):
 class TestRollbackTransactionnel:
     """Tests pour vérifier le rollback transactionnel complet."""
 
-    def test_rollback_complet_en_cas_derreur_partielle(self, db, company, driver, bookings):
+    def test_rollback_complet_en_cas_derreur_partielle(
+        self, db, company, driver, bookings
+    ):
         """Test : Échec partiel → rollback complet."""
         # Préparer des assignations
         assignments = [
@@ -148,7 +150,9 @@ class TestRollbackTransactionnel:
         assert booking2.driver_id == driver.id
 
         # Vérifier que les assignments sont créés
-        assignments_db = Assignment.query.filter(Assignment.booking_id.in_([b.id for b in bookings])).all()
+        assignments_db = Assignment.query.filter(
+            Assignment.booking_id.in_([b.id for b in bookings])
+        ).all()
         assert len(assignments_db) == 3
 
         # Vérifier le résultat

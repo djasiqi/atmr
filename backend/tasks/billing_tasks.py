@@ -24,7 +24,13 @@ app_logger = logging.getLogger("billing_tasks")
 celery_app = Celery("billing")
 
 
-@celery_app.task(bind=True, acks_late=True, task_time_limit=0.300, max_retries=2, autoretry_for=(Exception,))
+@celery_app.task(
+    bind=True,
+    acks_late=True,
+    task_time_limit=0.300,
+    max_retries=2,
+    autoretry_for=(Exception,),
+)
 def check_overdues_and_trigger_reminders():
     """Tâche quotidienne pour vérifier les factures en retard et déclencher les rappels automatiques."""
     try:
@@ -42,11 +48,19 @@ def check_overdues_and_trigger_reminders():
         app_logger.info("Vérification des factures en retard terminée avec succès")
 
     except Exception as e:
-        app_logger.error("Erreur lors de la vérification des factures en retard: %s", str(e))
+        app_logger.error(
+            "Erreur lors de la vérification des factures en retard: %s", str(e)
+        )
         raise
 
 
-@celery_app.task(bind=True, acks_late=True, task_time_limit=0.600, max_retries=2, autoretry_for=(Exception,))
+@celery_app.task(
+    bind=True,
+    acks_late=True,
+    task_time_limit=0.600,
+    max_retries=2,
+    autoretry_for=(Exception,),
+)
 def send_reminder_notifications():
     """Tâche pour envoyer les notifications de rappel par email."""
     try:
@@ -76,16 +90,28 @@ def send_reminder_notifications():
                 reminder.sent_at = datetime.now(UTC)
                 db.session.commit()
 
-                app_logger.info("Notification de rappel envoyée pour la facture %s", reminder.invoice.invoice_number)
+                app_logger.info(
+                    "Notification de rappel envoyée pour la facture %s",
+                    reminder.invoice.invoice_number,
+                )
 
             except Exception as e:
-                app_logger.error("Erreur lors de l'envoi de la notification pour le rappel %s: %s", reminder.id, str(e))
+                app_logger.error(
+                    "Erreur lors de l'envoi de la notification pour le rappel %s: %s",
+                    reminder.id,
+                    str(e),
+                )
                 db.session.rollback()
 
-        app_logger.info("Envoi des notifications terminé: %s rappels traités", len(reminders_to_send))
+        app_logger.info(
+            "Envoi des notifications terminé: %s rappels traités",
+            len(reminders_to_send),
+        )
 
     except Exception as e:
-        app_logger.error("Erreur lors de l'envoi des notifications de rappel: %s", str(e))
+        app_logger.error(
+            "Erreur lors de l'envoi des notifications de rappel: %s", str(e)
+        )
         raise
 
 
@@ -116,9 +142,7 @@ def generate_monthly_invoices():
         companies_with_clients = (
             db.session.query(Company)
             .join(Client)
-            .filter(
-                Client.is_active
-            )
+            .filter(Client.is_active)
             .distinct()
             .all()
         )
@@ -130,9 +154,7 @@ def generate_monthly_invoices():
                 # Récupérer les clients actifs de cette entreprise
                 active_clients = (
                     db.session.query(Client)
-                    .filter(
-                        Client.company_id == company.id, Client.is_active
-                    )
+                    .filter(Client.company_id == company.id, Client.is_active)
                     .all()
                 )
 
@@ -162,29 +184,51 @@ def generate_monthly_invoices():
 
                         if reservations:
                             # Générer la facture
-                            invoice = invoice_service.generate_invoice(company.id, client.id, period_year, period_month)
+                            invoice = invoice_service.generate_invoice(
+                                company.id, client.id, period_year, period_month
+                            )
                             invoices_generated += 1
 
-                            app_logger.info("Facture générée: %s pour client %s", invoice.invoice_number, client.id)
+                            app_logger.info(
+                                "Facture générée: %s pour client %s",
+                                invoice.invoice_number,
+                                client.id,
+                            )
 
                     except Exception as e:
                         app_logger.error(
-                            "Erreur lors de la génération de facture pour client %s: %s", client.id, str(e)
+                            "Erreur lors de la génération de facture pour client %s: %s",
+                            client.id,
+                            str(e),
                         )
                         continue
 
             except Exception as e:
-                app_logger.error("Erreur lors du traitement de l'entreprise %s: %s", company.id, str(e))
+                app_logger.error(
+                    "Erreur lors du traitement de l'entreprise %s: %s",
+                    company.id,
+                    str(e),
+                )
                 continue
 
-        app_logger.info("Génération mensuelle terminée: %s factures générées", invoices_generated)
+        app_logger.info(
+            "Génération mensuelle terminée: %s factures générées", invoices_generated
+        )
 
     except Exception as e:
-        app_logger.error("Erreur lors de la génération mensuelle des factures: %s", str(e))
+        app_logger.error(
+            "Erreur lors de la génération mensuelle des factures: %s", str(e)
+        )
         raise
 
 
-@celery_app.task(bind=True, acks_late=True, task_time_limit=0.600, max_retries=1, autoretry_for=(Exception,))
+@celery_app.task(
+    bind=True,
+    acks_late=True,
+    task_time_limit=0.600,
+    max_retries=1,
+    autoretry_for=(Exception,),
+)
 def cleanup_old_invoices():
     """Tâche de nettoyage pour archiver les anciennes factures."""
     try:
@@ -208,21 +252,35 @@ def cleanup_old_invoices():
             try:
                 # Marquer comme archivé (ajouter un champ archived_at si nécessaire)
                 # Pour l'instant, on peut juste logger
-                app_logger.info("Facture %s éligible pour archivage", invoice.invoice_number)
+                app_logger.info(
+                    "Facture %s éligible pour archivage", invoice.invoice_number
+                )
                 archived_count += 1
 
             except Exception as e:
-                app_logger.error("Erreur lors de l'archivage de la facture %s: %s", invoice.id, str(e))
+                app_logger.error(
+                    "Erreur lors de l'archivage de la facture %s: %s",
+                    invoice.id,
+                    str(e),
+                )
                 continue
 
-        app_logger.info("Nettoyage terminé: %s factures éligibles pour archivage", archived_count)
+        app_logger.info(
+            "Nettoyage terminé: %s factures éligibles pour archivage", archived_count
+        )
 
     except Exception as e:
         app_logger.error("Erreur lors du nettoyage des factures: %s", str(e))
         raise
 
 
-@celery_app.task(bind=True, acks_late=True, task_time_limit=0.300, max_retries=2, autoretry_for=(Exception,))
+@celery_app.task(
+    bind=True,
+    acks_late=True,
+    task_time_limit=0.300,
+    max_retries=2,
+    autoretry_for=(Exception,),
+)
 def send_invoice_summary():
     """Tâche pour envoyer un résumé mensuel des factures aux entreprises."""
     try:
@@ -260,11 +318,15 @@ def send_invoice_summary():
 
                 # Calculer les totaux (exclure les factures annulées)
                 total_issued = sum(
-                    invoice.total_amount for invoice in invoices if invoice.status != InvoiceStatus.CANCELLED
+                    invoice.total_amount
+                    for invoice in invoices
+                    if invoice.status != InvoiceStatus.CANCELLED
                 )
                 total_paid = sum(invoice.amount_paid for invoice in invoices)
                 total_balance = sum(invoice.balance_due for invoice in invoices)
-                overdue_count = len([inv for inv in invoices if inv.status == InvoiceStatus.OVERDUE])
+                overdue_count = len(
+                    [inv for inv in invoices if inv.status == InvoiceStatus.OVERDUE]
+                )
 
                 # Envoyer le résumé
                 notification_service.send_monthly_invoice_summary(
@@ -283,7 +345,11 @@ def send_invoice_summary():
                 app_logger.info("Résumé mensuel envoyé à l'entreprise %s", company.id)
 
             except Exception as e:
-                app_logger.error("Erreur lors de l'envoi du résumé pour l'entreprise %s: %s", company.id, str(e))
+                app_logger.error(
+                    "Erreur lors de l'envoi du résumé pour l'entreprise %s: %s",
+                    company.id,
+                    str(e),
+                )
                 continue
 
         app_logger.info("Envoi des résumés mensuels terminé")

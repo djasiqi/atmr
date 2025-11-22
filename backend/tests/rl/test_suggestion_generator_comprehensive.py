@@ -48,7 +48,9 @@ class TestRLSuggestionGenerator:
         """Test _lazy_import_rl avec échec"""
         generator = RLSuggestionGenerator()
 
-        with patch("services.rl.suggestion_generator.ImprovedDQNAgent", side_effect=ImportError):
+        with patch(
+            "services.rl.suggestion_generator.ImprovedDQNAgent", side_effect=ImportError
+        ):
             result = generator._lazy_import_rl()
 
             assert result is False
@@ -63,7 +65,10 @@ class TestRLSuggestionGenerator:
             patch("pathlib.Path.exists", return_value=True),
             patch("torch.load") as mock_load,
         ):
-            mock_load.return_value = {"q_network_state_dict": {}, "optimizer_state_dict": {}}
+            mock_load.return_value = {
+                "q_network_state_dict": {},
+                "optimizer_state_dict": {},
+            }
 
             result = generator._load_model()
 
@@ -103,18 +108,44 @@ class TestRLSuggestionGenerator:
             {"id": 2, "booking_id": 2, "driver_id": 2, "status": "assigned"},
         ]
         drivers = [
-            {"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True},
-            {"id": 2, "name": "Driver 2", "lat": 48.8606, "lon": 2.3376, "available": True},
+            {
+                "id": 1,
+                "name": "Driver 1",
+                "lat": 48.8566,
+                "lon": 2.3522,
+                "available": True,
+            },
+            {
+                "id": 2,
+                "name": "Driver 2",
+                "lat": 48.8606,
+                "lon": 2.3376,
+                "available": True,
+            },
         ]
         bookings = [
-            {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376},
-            {"id": 2, "pickup_lat": 48.8606, "pickup_lon": 2.3376, "dropoff_lat": 48.8566, "dropoff_lon": 2.3522},
+            {
+                "id": 1,
+                "pickup_lat": 48.8566,
+                "pickup_lon": 2.3522,
+                "dropoff_lat": 48.8606,
+                "dropoff_lon": 2.3376,
+            },
+            {
+                "id": 2,
+                "pickup_lat": 48.8606,
+                "pickup_lon": 2.3376,
+                "dropoff_lat": 48.8566,
+                "dropoff_lon": 2.3522,
+            },
         ]
 
         with (
             patch.object(generator, "_load_model", return_value=True),
             patch.object(generator, "_get_suggestion_confidence", return_value=0.8),
-            patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}),
+            patch.object(
+                generator, "_format_suggestion", return_value={"suggestion": "test"}
+            ),
         ):
             suggestions = generator.generate_suggestions(
                 company_id=1,
@@ -134,14 +165,32 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         assignments = [{"id": 1, "booking_id": 1, "driver_id": 1, "status": "assigned"}]
-        drivers = [{"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True}]
+        drivers = [
+            {
+                "id": 1,
+                "name": "Driver 1",
+                "lat": 48.8566,
+                "lon": 2.3522,
+                "available": True,
+            }
+        ]
         bookings = [
-            {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}
+            {
+                "id": 1,
+                "pickup_lat": 48.8566,
+                "pickup_lon": 2.3522,
+                "dropoff_lat": 48.8606,
+                "dropoff_lon": 2.3376,
+            }
         ]
 
         with (
             patch.object(generator, "_load_model", return_value=False),
-            patch.object(generator, "_get_heuristic_suggestions", return_value=[{"suggestion": "heuristic"}]),
+            patch.object(
+                generator,
+                "_get_heuristic_suggestions",
+                return_value=[{"suggestion": "heuristic"}],
+            ),
         ):
             suggestions = generator.generate_suggestions(
                 company_id=1,
@@ -213,12 +262,28 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         assignments = [{"id": 1, "booking_id": 1, "driver_id": 1, "status": "assigned"}]
-        drivers = [{"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True}]
+        drivers = [
+            {
+                "id": 1,
+                "name": "Driver 1",
+                "lat": 48.8566,
+                "lon": 2.3522,
+                "available": True,
+            }
+        ]
         bookings = [
-            {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}
+            {
+                "id": 1,
+                "pickup_lat": 48.8566,
+                "pickup_lon": 2.3522,
+                "dropoff_lat": 48.8606,
+                "dropoff_lon": 2.3376,
+            }
         ]
 
-        suggestions = generator._get_heuristic_suggestions(assignments, drivers, bookings)
+        suggestions = generator._get_heuristic_suggestions(
+            assignments, drivers, bookings
+        )
 
         assert isinstance(suggestions, list)
 
@@ -277,12 +342,28 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         assignments = [{"id": 1, "booking_id": 1, "driver_id": 1, "status": "assigned"}]
-        drivers = [{"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True}]
+        drivers = [
+            {
+                "id": 1,
+                "name": "Driver 1",
+                "lat": 48.8566,
+                "lon": 2.3522,
+                "available": True,
+            }
+        ]
         bookings = [
-            {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}
+            {
+                "id": 1,
+                "pickup_lat": 48.8566,
+                "pickup_lon": 2.3522,
+                "dropoff_lat": 48.8606,
+                "dropoff_lon": 2.3376,
+            }
         ]
 
-        with patch.object(generator, "_load_model", side_effect=Exception("Model error")):
+        with patch.object(
+            generator, "_load_model", side_effect=Exception("Model error")
+        ):
             suggestions = generator.generate_suggestions(
                 company_id=1,
                 assignments=assignments,
@@ -306,20 +387,58 @@ class TestRLSuggestionGenerator:
             {"id": 3, "booking_id": 3, "driver_id": 3, "status": "assigned"},
         ]
         drivers = [
-            {"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True},
-            {"id": 2, "name": "Driver 2", "lat": 48.8606, "lon": 2.3376, "available": True},
-            {"id": 3, "name": "Driver 3", "lat": 48.8646, "lon": 2.3226, "available": True},
+            {
+                "id": 1,
+                "name": "Driver 1",
+                "lat": 48.8566,
+                "lon": 2.3522,
+                "available": True,
+            },
+            {
+                "id": 2,
+                "name": "Driver 2",
+                "lat": 48.8606,
+                "lon": 2.3376,
+                "available": True,
+            },
+            {
+                "id": 3,
+                "name": "Driver 3",
+                "lat": 48.8646,
+                "lon": 2.3226,
+                "available": True,
+            },
         ]
         bookings = [
-            {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376},
-            {"id": 2, "pickup_lat": 48.8606, "pickup_lon": 2.3376, "dropoff_lat": 48.8646, "dropoff_lon": 2.3226},
-            {"id": 3, "pickup_lat": 48.8646, "pickup_lon": 2.3226, "dropoff_lat": 48.8566, "dropoff_lon": 2.3522},
+            {
+                "id": 1,
+                "pickup_lat": 48.8566,
+                "pickup_lon": 2.3522,
+                "dropoff_lat": 48.8606,
+                "dropoff_lon": 2.3376,
+            },
+            {
+                "id": 2,
+                "pickup_lat": 48.8606,
+                "pickup_lon": 2.3376,
+                "dropoff_lat": 48.8646,
+                "dropoff_lon": 2.3226,
+            },
+            {
+                "id": 3,
+                "pickup_lat": 48.8646,
+                "pickup_lon": 2.3226,
+                "dropoff_lat": 48.8566,
+                "dropoff_lon": 2.3522,
+            },
         ]
 
         with (
             patch.object(generator, "_load_model", return_value=True),
             patch.object(generator, "_get_suggestion_confidence", return_value=0.8),
-            patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}),
+            patch.object(
+                generator, "_format_suggestion", return_value={"suggestion": "test"}
+            ),
         ):
             suggestions = generator.generate_suggestions(
                 company_id=1,
@@ -339,15 +458,33 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator(min_confidence=0.9)
 
         assignments = [{"id": 1, "booking_id": 1, "driver_id": 1, "status": "assigned"}]
-        drivers = [{"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True}]
+        drivers = [
+            {
+                "id": 1,
+                "name": "Driver 1",
+                "lat": 48.8566,
+                "lon": 2.3522,
+                "available": True,
+            }
+        ]
         bookings = [
-            {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}
+            {
+                "id": 1,
+                "pickup_lat": 48.8566,
+                "pickup_lon": 2.3522,
+                "dropoff_lat": 48.8606,
+                "dropoff_lon": 2.3376,
+            }
         ]
 
         with (
             patch.object(generator, "_load_model", return_value=True),
-            patch.object(generator, "_get_suggestion_confidence", return_value=0.8),  # < 0.9
-            patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}),
+            patch.object(
+                generator, "_get_suggestion_confidence", return_value=0.8
+            ),  # < 0.9
+            patch.object(
+                generator, "_format_suggestion", return_value={"suggestion": "test"}
+            ),
         ):
             suggestions = generator.generate_suggestions(
                 company_id=1,
@@ -418,15 +555,31 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         assignments = [{"id": 1, "booking_id": 1, "driver_id": 1, "status": "assigned"}]
-        drivers = [{"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True}]
+        drivers = [
+            {
+                "id": 1,
+                "name": "Driver 1",
+                "lat": 48.8566,
+                "lon": 2.3522,
+                "available": True,
+            }
+        ]
         bookings = [
-            {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}
+            {
+                "id": 1,
+                "pickup_lat": 48.8566,
+                "pickup_lon": 2.3522,
+                "dropoff_lat": 48.8606,
+                "dropoff_lon": 2.3376,
+            }
         ]
 
         with (
             patch.object(generator, "_load_model", return_value=True),
             patch.object(generator, "_get_suggestion_confidence", return_value=0.8),
-            patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}),
+            patch.object(
+                generator, "_format_suggestion", return_value={"suggestion": "test"}
+            ),
         ):
             suggestions = generator.generate_suggestions(
                 company_id=1,
@@ -445,15 +598,31 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         assignments = [{"id": 1, "booking_id": 1, "driver_id": 1, "status": "assigned"}]
-        drivers = [{"id": 1, "name": "Driver 1", "lat": 48.8566, "lon": 2.3522, "available": True}]
+        drivers = [
+            {
+                "id": 1,
+                "name": "Driver 1",
+                "lat": 48.8566,
+                "lon": 2.3522,
+                "available": True,
+            }
+        ]
         bookings = [
-            {"id": 1, "pickup_lat": 48.8566, "pickup_lon": 2.3522, "dropoff_lat": 48.8606, "dropoff_lon": 2.3376}
+            {
+                "id": 1,
+                "pickup_lat": 48.8566,
+                "pickup_lon": 2.3522,
+                "dropoff_lat": 48.8606,
+                "dropoff_lon": 2.3376,
+            }
         ]
 
         with (
             patch.object(generator, "_load_model", return_value=True),
             patch.object(generator, "_get_suggestion_confidence", return_value=0.8),
-            patch.object(generator, "_format_suggestion", return_value={"suggestion": "test"}),
+            patch.object(
+                generator, "_format_suggestion", return_value={"suggestion": "test"}
+            ),
         ):
             suggestions = generator.generate_suggestions(
                 company_id=1,

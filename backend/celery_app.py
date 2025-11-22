@@ -239,7 +239,10 @@ def get_flask_app():
         os.environ["SKIP_ROUTES_INIT"] = "true"
         try:
             _flask_app["app"] = create_app(config_name)
-            logger.info("Flask app created for Celery with config: %s (routes init skipped)", config_name)
+            logger.info(
+                "Flask app created for Celery with config: %s (routes init skipped)",
+                config_name,
+            )
         finally:
             # Restaurer la valeur originale
             os.environ["SKIP_ROUTES_INIT"] = original_skip
@@ -284,7 +287,9 @@ def _register_dlq_handlers():
     from celery.signals import task_failure, task_retry, task_success
 
     @task_failure.connect
-    def task_failed_handler(sender=None, task_id=None, exception=None, traceback=None, _einfo=None, **kwargs):  # pyright: ignore[reportUnusedFunction]
+    def task_failed_handler(
+        sender=None, task_id=None, exception=None, traceback=None, _einfo=None, **kwargs
+    ):  # pyright: ignore[reportUnusedFunction]
         """Gère les tâches échouées après max_retries."""
         task_name = getattr(sender, "name", None) if sender else "unknown"
         retries = kwargs.get("request", {}).get("retries", 0)
@@ -339,7 +344,9 @@ def _register_dlq_handlers():
                     kwargs=kwargs.get("kwargs") or {},
                 )
             except Exception as db_err:
-                logger.exception("[Celery DLQ] Failed to store task failure in DB: %s", db_err)
+                logger.exception(
+                    "[Celery DLQ] Failed to store task failure in DB: %s", db_err
+                )
 
     @task_retry.connect
     def task_retry_handler(_sender=None, task_id=None, reason=None, **kwargs):  # pyright: ignore[reportUnusedFunction]
@@ -378,7 +385,11 @@ def _store_task_failure_in_db(
             existing.exception = exception[:5000]
             existing.traceback = traceback[:10000] if traceback else None
             db.session.commit()
-            logger.info("[Celery DLQ] Updated task failure: task_id=%s (count=%d)", task_id, existing.failure_count)
+            logger.info(
+                "[Celery DLQ] Updated task failure: task_id=%s (count=%d)",
+                task_id,
+                existing.failure_count,
+            )
         else:
             # Créer nouveau record
             failure_data = {
@@ -397,7 +408,11 @@ def _store_task_failure_in_db(
             db.session.add(failure)
             db.session.commit()
 
-            logger.info("[Celery DLQ] Stored new task failure: task_id=%s, task_name=%s", task_id, task_name)
+            logger.info(
+                "[Celery DLQ] Stored new task failure: task_id=%s, task_name=%s",
+                task_id,
+                task_name,
+            )
 
     except Exception as e:
         logger.exception("[Celery DLQ] Failed to store failure in DB: %s", e)

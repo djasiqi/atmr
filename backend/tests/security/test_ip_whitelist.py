@@ -86,7 +86,9 @@ class TestIPWhitelistAllowed:
         mock_request.path = "/api/admin/stats"
 
         # Mock environnement développement
-        mock_getenv.side_effect = lambda key, default=None: ("development" if key == "FLASK_ENV" else None)
+        mock_getenv.side_effect = lambda key, default=None: (
+            "development" if key == "FLASK_ENV" else None
+        )
 
         # Décorateur (localhost autorisé par défaut)
         @ip_whitelist_required()
@@ -166,7 +168,9 @@ class TestIPWhitelistAllowed:
         """Test X-Forwarded-For avec plusieurs IPs (prend la première)."""
         # Mock request avec plusieurs IPs dans X-Forwarded-For
         mock_request.environ = {"REMOTE_ADDR": "10.0.0.1"}
-        mock_request.headers = {"X-Forwarded-For": "192.168.1.100, 10.0.0.2, 172.16.0.1"}
+        mock_request.headers = {
+            "X-Forwarded-For": "192.168.1.100, 10.0.0.2, 172.16.0.1"
+        }
         mock_request.method = "GET"
         mock_request.path = "/api/admin/stats"
 
@@ -277,7 +281,9 @@ class TestIPWhitelistConfiguration:
         mock_request.path = "/api/admin/stats"
 
         # Mock pas de whitelist
-        mock_getenv.side_effect = lambda key, default=None: ("development" if key == "FLASK_ENV" else None)
+        mock_getenv.side_effect = lambda key, default=None: (
+            "development" if key == "FLASK_ENV" else None
+        )
 
         # Décorateur sans configuration
         @ip_whitelist_required()
@@ -298,7 +304,9 @@ class TestIPWhitelistConfiguration:
         mock_request.path = "/api/admin/stats"
 
         # Mock production sans whitelist
-        mock_getenv.side_effect = lambda key, default=None: ("production" if key == "FLASK_ENV" else None)
+        mock_getenv.side_effect = lambda key, default=None: (
+            "production" if key == "FLASK_ENV" else None
+        )
 
         # Décorateur sans configuration
         @ip_whitelist_required()

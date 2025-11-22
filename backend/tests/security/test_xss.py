@@ -198,7 +198,9 @@ class TestXSSInJSONBody:
             "last_name": payload,
             "address": payload,
         }
-        response = client.post("/api/companies/me/clients", json=data, headers=auth_headers)
+        response = client.post(
+            "/api/companies/me/clients", json=data, headers=auth_headers
+        )
         # Doit accepter le payload comme texte
         assert response.status_code in (201, 400, 401, 403)
         response_text = response.get_data(as_text=True).lower()
@@ -218,7 +220,9 @@ class TestXSSInJSONBody:
             "brand": "Test",
             "license_plate": "TEST123",
         }
-        response = client.post("/api/companies/me/drivers/create", json=data, headers=auth_headers)
+        response = client.post(
+            "/api/companies/me/drivers/create", json=data, headers=auth_headers
+        )
         # Doit accepter le payload comme texte ou rejeter par validation
         assert response.status_code in (201, 400, 401, 403, 409)
         response_text = response.get_data(as_text=True).lower()
@@ -257,7 +261,11 @@ class TestXSSResponseSanitization:
         # Tester avec un payload XSS dans un champ invalide
         payload = "<script>alert('XSS')</script>"
         data = {"for_date": payload, "async": True}
-        response = client.post("/api/company_dispatch/run", json=data, headers={"Authorization": "Bearer invalid"})
+        response = client.post(
+            "/api/company_dispatch/run",
+            json=data,
+            headers={"Authorization": "Bearer invalid"},
+        )
         # Doit retourner une erreur 400 ou 401
         assert response.status_code in (400, 401, 403)
         response_text = response.get_data(as_text=True).lower()

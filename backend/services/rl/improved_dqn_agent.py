@@ -73,7 +73,9 @@ class ImprovedDQNAgent:
         use_dueling: bool = False,  # Dueling DQN
     ):
         self.state_dim = int(state_dim)
-        self.action_dim = int(action_dim)  # Ensure action_dim is always an int for randrange()
+        self.action_dim = int(
+            action_dim
+        )  # Ensure action_dim is always an int for randrange()
         self.learning_rate = learning_rate
         self.gamma = gamma
         self.epsilon = epsilon_start
@@ -114,7 +116,9 @@ class ImprovedDQNAgent:
             msg = "PyTorch optim is required but not available"
             raise ImportError(msg)
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=learning_rate)
-        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=5000, gamma=0.9)
+        self.scheduler = optim.lr_scheduler.StepLR(
+            self.optimizer, step_size=5000, gamma=0.9
+        )
 
         # Replay buffer (N-step ou standard)
         if use_n_step:
@@ -122,11 +126,15 @@ class ImprovedDQNAgent:
                 msg = "N-step buffers are required but not available"
                 raise ImportError(msg)
             if use_prioritized_replay:
-                self.memory = NStepPrioritizedBuffer(buffer_size, n_step, n_step_gamma, alpha, beta_start, beta_end)
+                self.memory = NStepPrioritizedBuffer(
+                    buffer_size, n_step, n_step_gamma, alpha, beta_start, beta_end
+                )
             else:
                 self.memory = NStepBuffer(buffer_size, n_step, n_step_gamma)
         elif use_prioritized_replay:
-            self.memory = PrioritizedReplayBuffer(buffer_size, alpha, beta_start, beta_end)
+            self.memory = PrioritizedReplayBuffer(
+                buffer_size, alpha, beta_start, beta_end
+            )
         else:
             self.memory = deque(maxlen=int(buffer_size))
 
@@ -139,14 +147,18 @@ class ImprovedDQNAgent:
         print("✅ Agent DQN amélioré créé:")
         print("   State dim: {state_dim}")
         print("   Action dim: {action_dim}")
-        print(f"   Paramètres Q-Network: {sum(p.numel() for p in self.q_network.parameters()):,}")
+        print(
+            f"   Paramètres Q-Network: {sum(p.numel() for p in self.q_network.parameters()):,}"
+        )
         print("   Double DQN: {use_double_dqn}")
         print("   Prioritized Replay: {use_prioritized_replay}")
         print("   N-step Learning: {use_n_step} (n={n_step})")
         print("   Dueling DQN: {use_dueling}")
 
     def select_action(
-        self, state: np.ndarray[Any, np.dtype[np.float32]], valid_actions: list[int] | None = None
+        self,
+        state: np.ndarray[Any, np.dtype[np.float32]],
+        valid_actions: list[int] | None = None,
     ) -> int:
         """Sélectionne une action avec epsilon-greedy et masquage optionnel.
 
@@ -196,7 +208,9 @@ class ImprovedDQNAgent:
             # Fallback de sécurité : action 0 (wait)
             action = 0
             is_exploration = True
-            logging.warning("[ImprovedDQNAgent] valid_actions vide, fallback vers action 0")
+            logging.warning(
+                "[ImprovedDQNAgent] valid_actions vide, fallback vers action 0"
+            )
         elif random.random() < self.epsilon:
             # Exploration : choisir une action valide aléatoire
             action = random.choice(valid_actions)
@@ -276,13 +290,21 @@ class ImprovedDQNAgent:
                 state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
                 with torch.no_grad():
                     q_value = self.q_network(state_tensor)[0][action]
-                    next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0).to(self.device)
+                    next_state_tensor = (
+                        torch.FloatTensor(next_state).unsqueeze(0).to(self.device)
+                    )
                     next_q_value = self.target_network(next_state_tensor).max()
-                    td_error = abs(reward + self.gamma * next_q_value * (1 - done) - q_value.item())
+                    td_error = abs(
+                        reward + self.gamma * next_q_value * (1 - done) - q_value.item()
+                    )
 
-                self.memory.add_transition(state, action, reward, next_state, done, info)
+                self.memory.add_transition(
+                    state, action, reward, next_state, done, info
+                )
             else:
-                self.memory.add_transition(state, action, reward, next_state, done, info)
+                self.memory.add_transition(
+                    state, action, reward, next_state, done, info
+                )
         # Mode standard (1-step)
         elif self.use_prioritized_replay:
             # Priorité initiale basée sur l'erreur TD
@@ -292,9 +314,13 @@ class ImprovedDQNAgent:
             state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             with torch.no_grad():
                 q_value = self.q_network(state_tensor)[0][action]
-                next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0).to(self.device)
+                next_state_tensor = (
+                    torch.FloatTensor(next_state).unsqueeze(0).to(self.device)
+                )
                 next_q_value = self.target_network(next_state_tensor).max()
-                td_error = abs(reward + self.gamma * next_q_value * (1 - done) - q_value.item())
+                td_error = abs(
+                    reward + self.gamma * next_q_value * (1 - done) - q_value.item()
+                )
                 priority = td_error + 1e-6  # Éviter les priorités nulles
 
             if isinstance(self.memory, PrioritizedReplayBuffer):
@@ -311,7 +337,10 @@ class ImprovedDQNAgent:
         if self.use_n_step:
             # Buffer N-step
             sample_result = self.memory.sample(self.batch_size)
-            if isinstance(sample_result, tuple) and len(sample_result) == TUPLE_SIZE_TWO:
+            if (
+                isinstance(sample_result, tuple)
+                and len(sample_result) == TUPLE_SIZE_TWO
+            ):
                 batch, weights = sample_result
             else:
                 return 0.0
@@ -324,14 +353,20 @@ class ImprovedDQNAgent:
                 raise ImportError(msg)
             states = torch.FloatTensor([t["state"] for t in batch]).to(self.device)
             actions = torch.LongTensor([t["action"] for t in batch]).to(self.device)
-            n_step_rewards = torch.FloatTensor([t["n_step_return"] for t in batch]).to(self.device)
-            next_states = torch.FloatTensor([t["next_state"] for t in batch]).to(self.device)
+            n_step_rewards = torch.FloatTensor([t["n_step_return"] for t in batch]).to(
+                self.device
+            )
+            next_states = torch.FloatTensor([t["next_state"] for t in batch]).to(
+                self.device
+            )
             dones = torch.BoolTensor([t["done"] for t in batch]).to(self.device)
             weights = torch.FloatTensor(weights).to(self.device)
             # Variables pour compatibilité
             rewards = n_step_rewards  # Utiliser n_step_rewards comme rewards
 
-        elif self.use_prioritized_replay and isinstance(self.memory, PrioritizedReplayBuffer):
+        elif self.use_prioritized_replay and isinstance(
+            self.memory, PrioritizedReplayBuffer
+        ):
             # Buffer PER standard
             batch, indices, weights = self.memory.sample(self.batch_size)
             states, actions, rewards, next_states, dones = zip(*batch, strict=False)
@@ -377,7 +412,9 @@ class ImprovedDQNAgent:
                 # Double DQN: utiliser le réseau principal pour sélectionner
                 # l'action
                 next_actions = self.q_network(next_states).argmax(1)
-                next_q_values = self.target_network(next_states).gather(1, next_actions.unsqueeze(1))
+                next_q_values = self.target_network(next_states).gather(
+                    1, next_actions.unsqueeze(1)
+                )
             else:
                 # DQN standard
                 next_q_values = self.target_network(next_states).max(1)[0].unsqueeze(1)
@@ -389,14 +426,19 @@ class ImprovedDQNAgent:
                 )
             else:
                 # Mode standard (1-step)
-                target_q_values = rewards.unsqueeze(1) + (self.gamma * next_q_values * ~dones.unsqueeze(1))
+                target_q_values = rewards.unsqueeze(1) + (
+                    self.gamma * next_q_values * ~dones.unsqueeze(1)
+                )
 
         # Calcul de la loss
         if F is None:
             msg = "PyTorch F is required but not available"
             raise ImportError(msg)
         td_errors = current_q_values - target_q_values
-        loss = (weights.unsqueeze(1) * F.mse_loss(current_q_values, target_q_values, reduction="none")).mean()
+        loss = (
+            weights.unsqueeze(1)
+            * F.mse_loss(current_q_values, target_q_values, reduction="none")
+        ).mean()
 
         # Mise à jour des priorités
         if self.use_prioritized_replay:
@@ -406,7 +448,10 @@ class ImprovedDQNAgent:
                 # Buffer N-step priorisé
                 indices = list(range(len(batch)))
                 self.memory.update_priorities(indices, priorities)
-            elif isinstance(self.memory, PrioritizedReplayBuffer) and "per_indices" in locals():
+            elif (
+                isinstance(self.memory, PrioritizedReplayBuffer)
+                and "per_indices" in locals()
+            ):
                 # Buffer PER standard - utiliser per_indices stocké plus haut
                 self.memory.update_priorities(per_indices, priorities)  # type: ignore
 
@@ -434,7 +479,9 @@ class ImprovedDQNAgent:
         for target_param, local_param in zip(
             self.target_network.parameters(), self.q_network.parameters(), strict=False
         ):
-            target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
+            target_param.data.copy_(
+                self.tau * local_param.data + (1.0 - self.tau) * target_param.data
+            )
 
     def decay_epsilon(self) -> None:
         """Réduit epsilon progressivement."""

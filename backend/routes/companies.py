@@ -58,7 +58,10 @@ SVG_THRESHOLD = 2
 
 # Configuration du logger
 app_logger = logging.getLogger("companies")
-companies_ns = Namespace("companies", description="Opérations liées aux entreprises et à la gestion des réservations")
+companies_ns = Namespace(
+    "companies",
+    description="Opérations liées aux entreprises et à la gestion des réservations",
+)
 
 MAX_LOGO_MB = 2  # taille max
 MAX_LOGO_BYTES = MAX_LOGO_MB * 1024 * 1024
@@ -197,25 +200,45 @@ client_create_model = companies_ns.model(
     "ClientCreate",
     {
         "client_type": fields.String(
-            required=True, enum=["SELF_SERVICE", "PRIVATE", "CORPORATE"], description="Type de client"
+            required=True,
+            enum=["SELF_SERVICE", "PRIVATE", "CORPORATE"],
+            description="Type de client",
         ),
         "email": fields.String(description="Email (requis pour SELF_SERVICE)"),
         "first_name": fields.String(
-            required=True, description="Prénom (requis pour PRIVATE/CORPORATE)", min_length=1, max_length=100
+            required=True,
+            description="Prénom (requis pour PRIVATE/CORPORATE)",
+            min_length=1,
+            max_length=100,
         ),
         "last_name": fields.String(
-            required=True, description="Nom (requis pour PRIVATE/CORPORATE)", min_length=1, max_length=100
+            required=True,
+            description="Nom (requis pour PRIVATE/CORPORATE)",
+            min_length=1,
+            max_length=100,
         ),
         "phone": fields.String(description="Téléphone", max_length=20),
         "address": fields.String(
-            required=True, description="Adresse (requis pour PRIVATE/CORPORATE)", min_length=1, max_length=500
+            required=True,
+            description="Adresse (requis pour PRIVATE/CORPORATE)",
+            min_length=1,
+            max_length=500,
         ),
-        "birth_date": fields.String(description="Date de naissance (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"),
-        "is_institution": fields.Boolean(description="Indique si c'est une institution", default=False),
-        "institution_name": fields.String(description="Nom de l'institution (si is_institution=true)", max_length=200),
+        "birth_date": fields.String(
+            description="Date de naissance (YYYY-MM-DD)",
+            pattern="^\\d{4}-\\d{2}-\\d{2}$",
+        ),
+        "is_institution": fields.Boolean(
+            description="Indique si c'est une institution", default=False
+        ),
+        "institution_name": fields.String(
+            description="Nom de l'institution (si is_institution=true)", max_length=200
+        ),
         "contact_email": fields.String(description="Email de contact/facturation"),
         "contact_phone": fields.String(description="Téléphone de contact/facturation"),
-        "billing_address": fields.String(description="Adresse de facturation", max_length=500),
+        "billing_address": fields.String(
+            description="Adresse de facturation", max_length=500
+        ),
         "notes": fields.String(description="Notes"),
     },
 )
@@ -225,13 +248,19 @@ manual_booking_model = companies_ns.model(
     "ManualBooking",
     {
         # SEUL client_id, pickup, dropoff et scheduled_time sont requis
-        "client_id": fields.Integer(required=True, description="L'ID du client sélectionné"),
+        "client_id": fields.Integer(
+            required=True, description="L'ID du client sélectionné"
+        ),
         "pickup_location": fields.String(required=True),
         "dropoff_location": fields.String(required=True),
         "scheduled_time": fields.String(required=True, description="ISO 8601"),
         # Tous les autres champs sont optionnels
-        "customer_first_name": fields.String(description="Prénom (normalement non utilisé)"),
-        "customer_last_name": fields.String(description="Nom (normalement non utilisé)"),
+        "customer_first_name": fields.String(
+            description="Prénom (normalement non utilisé)"
+        ),
+        "customer_last_name": fields.String(
+            description="Nom (normalement non utilisé)"
+        ),
         "customer_email": fields.String,
         "customer_phone": fields.String,
         "is_round_trip": fields.Boolean(default=False),
@@ -246,7 +275,9 @@ manual_booking_model = companies_ns.model(
         "wheelchair_need": fields.Boolean,
         # 💳 Facturation (override possible depuis le front)
         "billed_to_type": fields.String(description="patient | clinic | insurance"),
-        "billed_to_company_id": fields.Integer(description="ID société payeuse si clinic/insurance"),
+        "billed_to_company_id": fields.Integer(
+            description="ID société payeuse si clinic/insurance"
+        ),
         "billed_to_contact": fields.String(description="Email/nom facturation"),
         # 🏥 Nouveaux champs médicaux structurés
         "establishment_id": fields.Integer(description="ID de l'établissement médical"),
@@ -257,22 +288,36 @@ manual_booking_model = companies_ns.model(
         "dropoff_lat": fields.Float(description="Latitude de la destination"),
         "dropoff_lon": fields.Float(description="Longitude de la destination"),
         # 🔄 Récurrence
-        "is_recurring": fields.Boolean(default=False, description="Réservation récurrente"),
-        "recurrence_type": fields.String(description="Type de récurrence: daily | weekly | custom"),
-        "recurrence_days": fields.List(fields.Integer, description="Jours de la semaine (0=Lundi, 6=Dimanche)"),
-        "recurrence_end_date": fields.String(description="Date de fin de récurrence (YYYY-MM-DD)"),
-        "occurrences": fields.Integer(description="Nombre d'occurrences de la récurrence"),
+        "is_recurring": fields.Boolean(
+            default=False, description="Réservation récurrente"
+        ),
+        "recurrence_type": fields.String(
+            description="Type de récurrence: daily | weekly | custom"
+        ),
+        "recurrence_days": fields.List(
+            fields.Integer, description="Jours de la semaine (0=Lundi, 6=Dimanche)"
+        ),
+        "recurrence_end_date": fields.String(
+            description="Date de fin de récurrence (YYYY-MM-DD)"
+        ),
+        "occurrences": fields.Integer(
+            description="Nombre d'occurrences de la récurrence"
+        ),
     },
 )
 
 
-def get_company_from_token() -> tuple[Company | None, dict[str, str] | None, int | None]:
+def get_company_from_token() -> tuple[
+    Company | None, dict[str, str] | None, int | None
+]:
     """Récupère (ou crée au besoin) l'entreprise associée à l'utilisateur courant."""
     user_public_id = get_jwt_identity()
     app_logger.debug("🔍 JWT Identity récupérée: %s", user_public_id)
 
     user_opt: User | None = (
-        User.query.options(joinedload(User.company)).filter_by(public_id=user_public_id).one_or_none()
+        User.query.options(joinedload(User.company))
+        .filter_by(public_id=user_public_id)
+        .one_or_none()
     )
     if user_opt is None:
         app_logger.error("❌ User not found for public_id: %s", user_public_id)
@@ -311,15 +356,23 @@ def get_company_from_token() -> tuple[Company | None, dict[str, str] | None, int
 
             # Recharger l'utilisateur avec la relation mise à jour
             user_refetched: User | None = (
-                User.query.options(joinedload(User.company)).filter_by(public_id=user_public_id).one_or_none()
+                User.query.options(joinedload(User.company))
+                .filter_by(public_id=user_public_id)
+                .one_or_none()
             )
             if user_refetched is None:
                 app_logger.error("❌ User disappeared after company creation")
-                return None, {"error": "Failed to load user after company creation"}, 500
+                return (
+                    None,
+                    {"error": "Failed to load user after company creation"},
+                    500,
+                )
             user = cast("User", user_refetched)
 
         except Exception as e:
-            app_logger.exception("❌ Erreur lors de la création automatique de Company : %s", e)
+            app_logger.exception(
+                "❌ Erreur lors de la création automatique de Company : %s", e
+            )
             return None, {"error": "Failed to create default company"}, 500
 
     company_obj: Company | None = cast("Company | None", getattr(user, "company", None))
@@ -346,7 +399,9 @@ def _maybe_trigger_dispatch(company_id: int, action: str = "update") -> None:
     try:
         from services.unified_dispatch import queue as _queue
     except Exception as e:
-        app_logger.warning("⚠️ Impossible d'importer services.unified_dispatch.queue: %s", e)
+        app_logger.warning(
+            "⚠️ Impossible d'importer services.unified_dispatch.queue: %s", e
+        )
         return
 
     # 1) API moderne: trigger_on_booking_change(company_id, action=...)
@@ -362,7 +417,9 @@ def _maybe_trigger_dispatch(company_id: int, action: str = "update") -> None:
         trigger2(company_id, reason=f"booking_{action}", mode="auto")
         return
 
-    app_logger.warning("⚠️ Aucun trigger compatible trouvé dans services.unified_dispatch.queue")
+    app_logger.warning(
+        "⚠️ Aucun trigger compatible trouvé dans services.unified_dispatch.queue"
+    )
 
 
 def _driver_trigger(company: Company, action: str) -> None:
@@ -373,7 +430,9 @@ def _driver_trigger(company: Company, action: str) -> None:
     try:
         from services.unified_dispatch import queue as _queue
     except Exception as e:
-        app_logger.warning("⚠️ Impossible d'importer services.unified_dispatch.queue: %s", e)
+        app_logger.warning(
+            "⚠️ Impossible d'importer services.unified_dispatch.queue: %s", e
+        )
         return
 
     # Récupère l'id sans typer statiquement (évite Column[int] -> int pour
@@ -400,7 +459,9 @@ def _driver_trigger(company: Company, action: str) -> None:
         trigger2(company_id, reason=f"driver_{action}", mode="auto")
         return
 
-    app_logger.warning("⚠️ Aucun trigger compatible trouvé dans services.unified_dispatch.queue")
+    app_logger.warning(
+        "⚠️ Aucun trigger compatible trouvé dans services.unified_dispatch.queue"
+    )
 
 
 @companies_ns.route("/me")
@@ -442,7 +503,9 @@ class CompanyMe(Resource):
         address = validated_data.get("address")
         if address:
             # Si les coordonnées ne sont pas fournies dans le payload, géocoder l'adresse
-            if not validated_data.get("latitude") or not validated_data.get("longitude"):
+            if not validated_data.get("latitude") or not validated_data.get(
+                "longitude"
+            ):
                 try:
                     from services.maps import geocode_address
 
@@ -457,7 +520,9 @@ class CompanyMe(Resource):
                             validated_data["longitude"],
                         )
                 except Exception as e:
-                    app_logger.warning("[Company] Failed to geocode company address: %s", e)
+                    app_logger.warning(
+                        "[Company] Failed to geocode company address: %s", e
+                    )
             # Si les coordonnées sont déjà fournies (depuis AddressAutocomplete), les utiliser directement
             elif validated_data.get("latitude") and validated_data.get("longitude"):
                 app_logger.info(
@@ -545,9 +610,14 @@ class CompanyReservations(Resource):
                 # Vérifier que la plage de dates n'est pas trop large
                 days_diff = (end_local - start_local).days
                 if days_diff > max_days_range:
-                    return {"error": f"Plage de dates trop large. Maximum {max_days_range} jours autorisés"}, 400
+                    return {
+                        "error": f"Plage de dates trop large. Maximum {max_days_range} jours autorisés"
+                    }, 400
                 # Appliquer le filtre de date
-                query = query.filter(Booking.scheduled_time >= start_local, Booking.scheduled_time < end_local)
+                query = query.filter(
+                    Booking.scheduled_time >= start_local,
+                    Booking.scheduled_time < end_local,
+                )
             except ValueError:
                 return {"error": "Format de date invalide. Utilisez YYYY-MM-DD"}, 400
         # Si day_str est vide → pas de filtre de date = TOUTES les réservations
@@ -561,12 +631,15 @@ class CompanyReservations(Resource):
         # Ajouter des options de chargement pour éviter les requêtes N+1
         # Tri par défaut : plus récentes en premier
         reservations_q = query.options(
-            joinedload(Booking.client).joinedload(Client.user), joinedload(Booking.driver)
+            joinedload(Booking.client).joinedload(Client.user),
+            joinedload(Booking.driver),
         ).order_by(Booking.scheduled_time.desc())
 
         # Appliquer la pagination
         total = reservations_q.count()
-        reservations = reservations_q.offset((page - 1) * per_page).limit(per_page).all()
+        reservations = (
+            reservations_q.offset((page - 1) * per_page).limit(per_page).all()
+        )
 
         # Retourner les données dans le format attendu par le frontend
         if flat:
@@ -622,7 +695,10 @@ class AcceptReservation(Resource):
         try:
             db.session.commit()
             _maybe_trigger_dispatch(company_id, "update")
-            return {"message": "...", "reservation": cast("Any", booking).serialize}, 200
+            return {
+                "message": "...",
+                "reservation": cast("Any", booking).serialize,
+            }, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
@@ -668,7 +744,10 @@ class RejectReservation(Resource):
 
         try:
             db.session.commit()
-            return {"message": "Reservation rejected successfully", "reservation": booking.serialize}, 200
+            return {
+                "message": "Reservation rejected successfully",
+                "reservation": booking.serialize,
+            }, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
@@ -701,18 +780,27 @@ class AssignDriver(Resource):
         if company_id is None:
             return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
-        booking = Booking.query.filter_by(id=reservation_id, company_id=company_id).one_or_none()
+        booking = Booking.query.filter_by(
+            id=reservation_id, company_id=company_id
+        ).one_or_none()
 
         if not booking:
-            app_logger.warning("❌ Booking ID %s introuvable ou non lié à la société ID %s", reservation_id, company_id)
+            app_logger.warning(
+                "❌ Booking ID %s introuvable ou non lié à la société ID %s",
+                reservation_id,
+                company_id,
+            )
             return {"error": "Reservation not found"}, 400
 
-        app_logger.info("🔍 Booking trouvé : id=%s, statut=%s", booking.id, booking.status)
+        app_logger.info(
+            "🔍 Booking trouvé : id=%s, statut=%s", booking.id, booking.status
+        )
 
         # Autoriser seulement les statuts ACCEPTED et ASSIGNED
         if booking.status not in [BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]:
             app_logger.warning(
-                "❌ Statut invalide pour assignation : %s. Doit être ACCEPTED ou ASSIGNED.", booking.status
+                "❌ Statut invalide pour assignation : %s. Doit être ACCEPTED ou ASSIGNED.",
+                booking.status,
             )
             return {"error": "Reservation cannot be assigned in current state"}, 400
 
@@ -725,7 +813,9 @@ class AssignDriver(Resource):
         except (TypeError, ValueError):
             return {"error": "driver_id doit être un entier."}, 400
 
-        driver = Driver.query.filter_by(id=driver_id, company_id=company_id).one_or_none()
+        driver = Driver.query.filter_by(
+            id=driver_id, company_id=company_id
+        ).one_or_none()
         if not driver:
             return {"error": "Driver not found for this company"}, 404
 
@@ -745,7 +835,9 @@ class AssignDriver(Resource):
                 # Certains stubs typent to_geneva_local -> Optional[datetime]
                 dt_local_any = to_geneva_local(st)
                 day_local = st.date() if dt_local_any is None else dt_local_any.date()
-            dispatch_run = DispatchRun.query.filter_by(company_id=company_id, day=day_local).first()
+            dispatch_run = DispatchRun.query.filter_by(
+                company_id=company_id, day=day_local
+            ).first()
             if not dispatch_run:
                 # 🛠️ Constructeur SQLAlchemy dynamique → cast(Any, ...) pour Pylance
                 dispatch_run = DispatchRun()
@@ -774,7 +866,10 @@ class AssignDriver(Resource):
         db.session.commit()
         notify_driver_new_booking(driver.id, booking)
         _maybe_trigger_dispatch(company_id, "update")
-        return {"message": "Driver assigned successfully", "reservation": booking.serialize}, 200
+        return {
+            "message": "Driver assigned successfully",
+            "reservation": booking.serialize,
+        }, 200
 
 
 # ======================================================
@@ -800,7 +895,9 @@ class CompleteReservation(Resource):
         if company_id is None:
             return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
-        booking = Booking.query.filter_by(id=reservation_id, company_id=company_id).one_or_none()
+        booking = Booking.query.filter_by(
+            id=reservation_id, company_id=company_id
+        ).one_or_none()
         if not booking or booking.status != BookingStatus.IN_PROGRESS:
             return {"error": "Réservation introuvable ou pas en cours"}, 400
 
@@ -814,9 +911,14 @@ class CompleteReservation(Resource):
 
         try:
             db.session.commit()
-            notify_booking_update(booking.driver_id, booking)  # Si tu as une notification
+            notify_booking_update(
+                booking.driver_id, booking
+            )  # Si tu as une notification
 
-            return {"message": "Réservation complétée avec succès", "reservation": booking.serialize}, 200
+            return {
+                "message": "Réservation complétée avec succès",
+                "reservation": booking.serialize,
+            }, 200
         except Exception as e:
             # sentry_sdk.capture_exception(e)  # Si tu as Sentry
             db.session.rollback()
@@ -848,9 +950,14 @@ class CompanyDriversList(Resource):
             return {"error": "Entreprise introuvable (ID invalide)."}, 500
         # ✅ Eager load user + vacations pour éviter N+1
         drivers = (
-            Driver.query.options(joinedload(Driver.user), joinedload(Driver.vacations)).filter_by(company_id=cid).all()
+            Driver.query.options(joinedload(Driver.user), joinedload(Driver.vacations))
+            .filter_by(company_id=cid)
+            .all()
         )
-        return {"drivers": [cast("Any", d).serialize for d in drivers], "total": len(drivers)}, 200
+        return {
+            "drivers": [cast("Any", d).serialize for d in drivers],
+            "total": len(drivers),
+        }, 200
 
 
 # Route dupliquée supprimée - utiliser /me/drivers à la place
@@ -896,7 +1003,10 @@ class DriverItem(Resource):
             db.session.commit()
             if company:
                 _driver_trigger(company, "availability")
-            return {"message": "Driver updated successfully", "driver": driver.serialize}, 200
+            return {
+                "message": "Driver updated successfully",
+                "driver": driver.serialize,
+            }, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
@@ -977,9 +1087,15 @@ class ListInvoices(Resource):
             return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
         invoices = (
-            Invoice.query.options(joinedload(Invoice.lines)).join(Booking).filter(Booking.company_id == cid).all()
+            Invoice.query.options(joinedload(Invoice.lines))
+            .join(Booking)
+            .filter(Booking.company_id == cid)
+            .all()
         )
-        return {"invoices": [invoice.serialize for invoice in invoices], "total": len(invoices)}, 200
+        return {
+            "invoices": [invoice.serialize for invoice in invoices],
+            "total": len(invoices),
+        }, 200
 
 
 # ======================================================
@@ -996,7 +1112,9 @@ class DispatchStatusResource(Resource):
         company, err, code = get_company_from_token()
         if err:
             return err, code
-        return {"dispatch_enabled": bool(getattr(company, "dispatch_enabled", False))}, 200
+        return {
+            "dispatch_enabled": bool(getattr(company, "dispatch_enabled", False))
+        }, 200
 
 
 # ======================================================
@@ -1017,7 +1135,9 @@ class CompanyDispatchActivate(Resource):
         enabled = bool(body.get("enabled", True))
 
         if not hasattr(company, "dispatch_enabled"):
-            return {"error": "Le champ 'dispatch_enabled' n'existe pas sur Company"}, 400
+            return {
+                "error": "Le champ 'dispatch_enabled' n'existe pas sur Company"
+            }, 400
 
         if company:
             company.dispatch_enabled = enabled
@@ -1033,7 +1153,9 @@ class CompanyDispatchActivate(Resource):
             if cid is not None:
                 queue.trigger(cid, reason="activate_dispatch", mode="auto")
 
-        return {"dispatch_enabled": bool(getattr(company, "dispatch_enabled", False))}, 200
+        return {
+            "dispatch_enabled": bool(getattr(company, "dispatch_enabled", False))
+        }, 200
 
 
 # ======================================================
@@ -1098,7 +1220,9 @@ class AssignedReservations(Resource):
             # 🧭 Pylance : typer explicitement la colonne status pour autoriser .in_(...)
 
             assigned_reservations = (
-                Booking.query.options(joinedload(Booking.driver).joinedload(Driver.user))
+                Booking.query.options(
+                    joinedload(Booking.driver).joinedload(Driver.user)
+                )
                 .filter(Booking.company_id == cid)
                 .filter(
                     Booking.status.in_(
@@ -1110,10 +1234,14 @@ class AssignedReservations(Resource):
                 )
                 .all()
             )
-            reservations_list = [cast("Any", booking).serialize for booking in assigned_reservations]
+            reservations_list = [
+                cast("Any", booking).serialize for booking in assigned_reservations
+            ]
             return {"reservations": reservations_list}, 200
         except Exception as e:
-            app_logger.error("❌ Erreur lors de la récupération des réservations dispatchées : %s", e)
+            app_logger.error(
+                "❌ Erreur lors de la récupération des réservations dispatchées : %s", e
+            )
             return {"error": "Erreur serveur."}, 500
 
 
@@ -1142,7 +1270,9 @@ class DriverVacationsResource(Resource):
         from schemas.validation_utils import handle_validation_error, validate_request
 
         try:
-            validated_data = validate_request(DriverVacationCreateSchema(), data, strict=False)
+            validated_data = validate_request(
+                DriverVacationCreateSchema(), data, strict=False
+            )
         except ValidationError as e:
             return handle_validation_error(e)
 
@@ -1198,7 +1328,9 @@ class DriverVacationsResource(Resource):
 class CreateManualReservation(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    @limiter.limit("100 per hour")  # ✅ 2.8: Rate limiting création réservation manuelle
+    @limiter.limit(
+        "100 per hour"
+    )  # ✅ 2.8: Rate limiting création réservation manuelle
     @companies_ns.expect(manual_booking_model, validate=True)
     def post(self):  # noqa: PLR0911
         company, err, code = get_company_from_token()
@@ -1222,7 +1354,9 @@ class CreateManualReservation(Resource):
         from schemas.validation_utils import handle_validation_error, validate_request
 
         try:
-            validated_data = validate_request(ManualBookingCreateSchema(), data, strict=False)
+            validated_data = validate_request(
+                ManualBookingCreateSchema(), data, strict=False
+            )
         except ValidationError as e:
             return handle_validation_error(e)
 
@@ -1239,24 +1373,32 @@ class CreateManualReservation(Resource):
             return default
 
         _bt_raw = _norm_str(
-            validated_data.get("billed_to_type") or getattr(client, "default_billed_to_type", "patient"), "patient"
+            validated_data.get("billed_to_type")
+            or getattr(client, "default_billed_to_type", "patient"),
+            "patient",
         )
         billed_to_type = (_bt_raw or "patient").lower()
         billed_to_company_id = validated_data.get("billed_to_company_id") or getattr(
             client, "default_billed_to_company_id", None
         )
         billed_to_contact = _norm_str(
-            validated_data.get("billed_to_contact") or getattr(client, "default_billed_to_contact", None), None
+            validated_data.get("billed_to_contact")
+            or getattr(client, "default_billed_to_contact", None),
+            None,
         )
 
         # Validation de billed_to_type
         if billed_to_type not in ("patient", "clinic", "insurance"):
-            return {"error": "billed_to_type invalide (valeurs possibles: patient | clinic | insurance)"}, 400
+            return {
+                "error": "billed_to_type invalide (valeurs possibles: patient | clinic | insurance)"
+            }, 400
 
         # Validation de billed_to_company_id
         if billed_to_type in ("clinic", "insurance"):
             if billed_to_company_id in (None, ""):
-                return {"error": "billed_to_company_id est requis quand billed_to_type != 'patient'."}, 400
+                return {
+                    "error": "billed_to_company_id est requis quand billed_to_type != 'patient'."
+                }, 400
             # cast en int si string numérique
             try:
                 billed_to_company_id = int(billed_to_company_id)
@@ -1270,7 +1412,9 @@ class CreateManualReservation(Resource):
 
         # ---------- 1) Parse des dates + Récurrence ---------- (utilise données validées)
         try:
-            scheduled = parse_local_naive(validated_data["scheduled_time"])  # Naive Europe/Zurich
+            scheduled = parse_local_naive(
+                validated_data["scheduled_time"]
+            )  # Naive Europe/Zurich
         except Exception as e:
             return {"error": f"scheduled_time invalide: {e}"}, 400
 
@@ -1279,7 +1423,9 @@ class CreateManualReservation(Resource):
         return_dt = None
         return_time_confirmed = True  # Par défaut, l'heure est confirmée
         return_date_str = validated_data.get("return_date")  # Format: YYYY-MM-DD
-        return_time_str = validated_data.get("return_time")  # Format: HH:mm ou YYYY-MM-DDTHH:mm:00 (optionnel)
+        return_time_str = validated_data.get(
+            "return_time"
+        )  # Format: HH:mm ou YYYY-MM-DDTHH:mm:00 (optionnel)
 
         if is_rt and return_date_str:
             try:
@@ -1292,11 +1438,17 @@ class CreateManualReservation(Resource):
                         # extraire seulement la partie heure après le dernier "T"
                         time_parts = return_time_str.split("T")
                         if len(time_parts) > 1:
-                            time_only = time_parts[-1]  # Prendre la dernière partie après le dernier T
+                            time_only = time_parts[
+                                -1
+                            ]  # Prendre la dernière partie après le dernier T
                             # Extraire seulement HH:mm (supprimer les secondes si présentes)
                             time_only = time_only.split(":")[:2]
                             time_only = ":".join(time_only)
-                            app_logger.debug("📅 Extrait heure '%s' du datetime '%s'", time_only, return_time_str)
+                            app_logger.debug(
+                                "📅 Extrait heure '%s' du datetime '%s'",
+                                time_only,
+                                return_time_str,
+                            )
 
                     combined = f"{return_date_str}T{time_only}"
                     # S'assurer que combined est au format complet avec secondes
@@ -1312,7 +1464,8 @@ class CreateManualReservation(Resource):
                     return_dt = parse_local_naive(combined)
                     return_time_confirmed = False
                     app_logger.info(
-                        "📅 Retour avec date %s mais heure à confirmer (time_confirmed=False)", return_date_str
+                        "📅 Retour avec date %s mais heure à confirmer (time_confirmed=False)",
+                        return_date_str,
                     )
             except Exception as e:
                 return {"error": f"return_date/return_time invalide: {e}"}, 400
@@ -1326,7 +1479,9 @@ class CreateManualReservation(Resource):
 
             recurrence_type = validated_data.get("recurrence_type", "weekly")
             occurrences = int(validated_data.get("occurrences", 1))
-            recurrence_days = validated_data.get("recurrence_days", [])  # Pour type "custom"
+            recurrence_days = validated_data.get(
+                "recurrence_days", []
+            )  # Pour type "custom"
             recurrence_end_date_str = validated_data.get("recurrence_end_date")
 
             app_logger.info("🔄 Récurrence détectée")
@@ -1368,8 +1523,12 @@ class CreateManualReservation(Resource):
             elif recurrence_type == "custom" and recurrence_days and base_date:
                 # Jours personnalisés (ex: lundi, mercredi, vendredi)
                 # Pour ce mode, "occurrences" signifie X fois CHAQUE jour
-                app_logger.info("🗓️ Mode jours personnalisés - Jours demandés: %s", recurrence_days)
-                app_logger.info("🔢 Créera %s occurrences pour CHAQUE jour sélectionné", occurrences)
+                app_logger.info(
+                    "🗓️ Mode jours personnalisés - Jours demandés: %s", recurrence_days
+                )
+                app_logger.info(
+                    "🔢 Créera %s occurrences pour CHAQUE jour sélectionné", occurrences
+                )
 
                 # Pour chaque jour sélectionné, créer N occurrences
                 for target_weekday in recurrence_days:
@@ -1385,10 +1544,14 @@ class CreateManualReservation(Resource):
                         if current_date and current_date.weekday() == target_weekday:
                             if recurrence_end_date_str:
                                 try:
-                                    end_date = parse_local_naive(recurrence_end_date_str)
+                                    end_date = parse_local_naive(
+                                        recurrence_end_date_str
+                                    )
                                     if end_date and current_date > end_date:
                                         app_logger.info(
-                                            "  ⛔ Date de fin atteinte pour jour %s: %s", target_weekday, end_date
+                                            "  ⛔ Date de fin atteinte pour jour %s: %s",
+                                            target_weekday,
+                                            end_date,
                                         )
                                         break
                                 except Exception:
@@ -1396,11 +1559,15 @@ class CreateManualReservation(Resource):
 
                             # Ajouter cette date si ce n'est pas déjà la date
                             # de base
-                            if current_date != base_date or (base_date and target_weekday == base_date.weekday()):
+                            if current_date != base_date or (
+                                base_date and target_weekday == base_date.weekday()
+                            ):
                                 if current_date not in recurrence_dates:
                                     recurrence_dates.append(current_date)
                                     app_logger.info(
-                                        "  ✅ Date ajoutée: %s (%s)", current_date.strftime("%d/%m/%Y"), target_weekday
+                                        "  ✅ Date ajoutée: %s (%s)",
+                                        current_date.strftime("%d/%m/%Y"),
+                                        target_weekday,
                                     )
                                 count += 1
 
@@ -1445,7 +1612,9 @@ class CreateManualReservation(Resource):
                         return (float(data[0]["lat"]), float(data[0]["lon"]))
                     return None
                 except Exception as e:
-                    app_logger.warning("Nominatim geocoding failed for '%s': %s", address, e)
+                    app_logger.warning(
+                        "Nominatim geocoding failed for '%s': %s", address, e
+                    )
                     return None
 
             # Géocoder les adresses avec Nominatim si les coordonnées ne sont
@@ -1453,33 +1622,63 @@ class CreateManualReservation(Resource):
             pickup_coords = None
             dropoff_coords = None
 
-            if not validated_data.get("pickup_lat") or not validated_data.get("pickup_lon"):
-                app_logger.info("🔍 Géocodage pickup nécessaire: %s", validated_data["pickup_location"])
-                pickup_coords = geocode_with_nominatim(validated_data["pickup_location"])
+            if not validated_data.get("pickup_lat") or not validated_data.get(
+                "pickup_lon"
+            ):
+                app_logger.info(
+                    "🔍 Géocodage pickup nécessaire: %s",
+                    validated_data["pickup_location"],
+                )
+                pickup_coords = geocode_with_nominatim(
+                    validated_data["pickup_location"]
+                )
                 if pickup_coords:
                     app_logger.info("✅ Pickup géocodé: %s", pickup_coords)
                 else:
-                    app_logger.warning("❌ Échec géocodage pickup: %s", validated_data["pickup_location"])
+                    app_logger.warning(
+                        "❌ Échec géocodage pickup: %s",
+                        validated_data["pickup_location"],
+                    )
 
-            if not validated_data.get("dropoff_lat") or not validated_data.get("dropoff_lon"):
-                app_logger.info("🔍 Géocodage dropoff nécessaire: %s", validated_data["dropoff_location"])
-                dropoff_coords = geocode_with_nominatim(validated_data["dropoff_location"])
+            if not validated_data.get("dropoff_lat") or not validated_data.get(
+                "dropoff_lon"
+            ):
+                app_logger.info(
+                    "🔍 Géocodage dropoff nécessaire: %s",
+                    validated_data["dropoff_location"],
+                )
+                dropoff_coords = geocode_with_nominatim(
+                    validated_data["dropoff_location"]
+                )
                 if dropoff_coords:
                     app_logger.info("✅ Dropoff géocodé: %s", dropoff_coords)
                 else:
-                    app_logger.warning("❌ Échec géocodage dropoff: %s", validated_data["dropoff_location"])
+                    app_logger.warning(
+                        "❌ Échec géocodage dropoff: %s",
+                        validated_data["dropoff_location"],
+                    )
 
             # Récupérer les coordonnées finales (frontend OU géocodées) - utilise données validées
 
             if validated_data.get("pickup_lat") and validated_data.get("pickup_lon"):
-                final_pickup_coords = (float(validated_data["pickup_lat"]), float(validated_data["pickup_lon"]))
-                app_logger.info("📍 Pickup coords depuis frontend: %s", final_pickup_coords)
+                final_pickup_coords = (
+                    float(validated_data["pickup_lat"]),
+                    float(validated_data["pickup_lon"]),
+                )
+                app_logger.info(
+                    "📍 Pickup coords depuis frontend: %s", final_pickup_coords
+                )
             elif pickup_coords:
                 final_pickup_coords = pickup_coords
 
             if validated_data.get("dropoff_lat") and validated_data.get("dropoff_lon"):
-                final_dropoff_coords = (float(validated_data["dropoff_lat"]), float(validated_data["dropoff_lon"]))
-                app_logger.info("📍 Dropoff coords depuis frontend: %s", final_dropoff_coords)
+                final_dropoff_coords = (
+                    float(validated_data["dropoff_lat"]),
+                    float(validated_data["dropoff_lon"]),
+                )
+                app_logger.info(
+                    "📍 Dropoff coords depuis frontend: %s", final_dropoff_coords
+                )
             elif dropoff_coords:
                 final_dropoff_coords = dropoff_coords
 
@@ -1509,32 +1708,45 @@ class CreateManualReservation(Resource):
                         base_dur_s = int(r0.get("duration", 0))
                         dist_m = int(r0.get("distance", 0))
                     else:
-                        raise ValueError(f"OSRM bad response: {route_data.get('message', 'Unknown error')}")
+                        raise ValueError(
+                            f"OSRM bad response: {route_data.get('message', 'Unknown error')}"
+                        )
                 except Exception as osrm_error:
                     # ⚡ Fallback immédiat si OSRM timeout/erreur
                     app_logger.warning(
-                        "⚠️ OSRM timeout/erreur (timeout=2s), utilisation fallback haversine: %s", osrm_error
+                        "⚠️ OSRM timeout/erreur (timeout=2s), utilisation fallback haversine: %s",
+                        osrm_error,
                     )
                     base_dur_s = None
                     dist_m = None
 
                 # 🚦 Facteur rush hour : ajuster selon l'heure de la réservation (seulement si OSRM a réussi)
                 if base_dur_s is not None:
-                    scheduled_hour = scheduled.hour if scheduled else datetime.now(UTC).hour
+                    scheduled_hour = (
+                        scheduled.hour if scheduled else datetime.now(UTC).hour
+                    )
                     rush_hour_factor = 1
 
                     # Heures de pointe du matin (7h-9h) : +30%
                     if MORNING_RUSH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD:
                         rush_hour_factor = 1.3
-                        app_logger.info("🚦 Rush hour matinal détecté (%sh) : +30%", scheduled_hour)
+                        app_logger.info(
+                            "🚦 Rush hour matinal détecté (%sh) : +30%", scheduled_hour
+                        )
                     # Heures de pointe du soir (17h-19h) : +30%
-                    elif EVENING_RUSH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD:
+                    elif (
+                        EVENING_RUSH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD
+                    ):
                         rush_hour_factor = 1.3
-                        app_logger.info("🚦 Rush hour soir détecté (%sh) : +30%", scheduled_hour)
+                        app_logger.info(
+                            "🚦 Rush hour soir détecté (%sh) : +30%", scheduled_hour
+                        )
                     # Midi (12h-13h) : +15%
                     elif LUNCH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD:
                         rush_hour_factor = 1.15
-                        app_logger.info("🚦 Heure de midi détectée (%sh) : +15%", scheduled_hour)
+                        app_logger.info(
+                            "🚦 Heure de midi détectée (%sh) : +15%", scheduled_hour
+                        )
 
                     # Appliquer le facteur
                     dur_s = int(base_dur_s * rush_hour_factor)
@@ -1577,15 +1789,24 @@ class CreateManualReservation(Resource):
             # 🏥 Utiliser le nom de l'institution si c'est une institution, sinon le nom de la personne
             if client.is_institution and client.institution_name:
                 display_name = client.institution_name
-                app_logger.info("🏥 Institution détectée: %s (contact: %s)", display_name, full_name)
+                app_logger.info(
+                    "🏥 Institution détectée: %s (contact: %s)", display_name, full_name
+                )
             else:
                 display_name = full_name or (getattr(user, "username", "") or "Client")
 
             # 💰 Utiliser le tarif préférentiel du client si disponible, sinon le montant fourni (utilise données validées)
             amount_to_use = float(validated_data.get("amount") or 0)
-            if client.preferential_rate and client.preferential_rate > PREFERENTIAL_RATE_ZERO:
+            if (
+                client.preferential_rate
+                and client.preferential_rate > PREFERENTIAL_RATE_ZERO
+            ):
                 amount_to_use = float(client.preferential_rate)
-                app_logger.info("💰 Tarif préférentiel appliqué pour %s: %s CHF", display_name, amount_to_use)
+                app_logger.info(
+                    "💰 Tarif préférentiel appliqué pour %s: %s CHF",
+                    display_name,
+                    amount_to_use,
+                )
 
             # Listes pour stocker toutes les réservations créées
             created_outbounds = []
@@ -1606,7 +1827,9 @@ class CreateManualReservation(Resource):
                         # Pas d'heure de retour : laisser scheduled_time à None
                         # (à confirmer plus tard)
                         occurrence_return_dt = None
-                        app_logger.info("📅 Retour sans horaire précis : scheduled_time = None (à confirmer plus tard)")
+                        app_logger.info(
+                            "📅 Retour sans horaire précis : scheduled_time = None (à confirmer plus tard)"
+                        )
 
                 # Créer la réservation aller
                 outbound = Booking()
@@ -1626,10 +1849,18 @@ class CreateManualReservation(Resource):
                 outbound.distance_meters = dist_m
 
                 # 📍 Coordonnées GPS (depuis frontend OU géocodées par Nominatim)
-                outbound.pickup_lat = final_pickup_coords[0] if final_pickup_coords else None
-                outbound.pickup_lon = final_pickup_coords[1] if final_pickup_coords else None
-                outbound.dropoff_lat = final_dropoff_coords[0] if final_dropoff_coords else None
-                outbound.dropoff_lon = final_dropoff_coords[1] if final_dropoff_coords else None
+                outbound.pickup_lat = (
+                    final_pickup_coords[0] if final_pickup_coords else None
+                )
+                outbound.pickup_lon = (
+                    final_pickup_coords[1] if final_pickup_coords else None
+                )
+                outbound.dropoff_lat = (
+                    final_dropoff_coords[0] if final_dropoff_coords else None
+                )
+                outbound.dropoff_lon = (
+                    final_dropoff_coords[1] if final_dropoff_coords else None
+                )
 
                 # 💳 Facturation (résolue plus haut)
                 outbound.billed_to_type = billed_to_type
@@ -1641,7 +1872,9 @@ class CreateManualReservation(Resource):
                 outbound.doctor_name = validated_data.get("doctor_name")
                 outbound.hospital_service = validated_data.get("hospital_service")
                 outbound.notes_medical = validated_data.get("notes_medical")
-                outbound.wheelchair_client_has = validated_data.get("wheelchair_client_has", False)
+                outbound.wheelchair_client_has = validated_data.get(
+                    "wheelchair_client_has", False
+                )
                 outbound.wheelchair_need = validated_data.get("wheelchair_need", False)
                 db.session.add(outbound)
                 db.session.flush()  # pour récupérer outbound.id
@@ -1654,10 +1887,14 @@ class CreateManualReservation(Resource):
                     return_booking.parent_booking_id = outbound.id
                     return_booking.customer_name = outbound.customer_name
                     return_booking.client_id = client.id
-                    return_booking.scheduled_time = occurrence_return_dt  # peut être None si non planifié
+                    return_booking.scheduled_time = (
+                        occurrence_return_dt  # peut être None si non planifié
+                    )
                     return_booking.status = BookingStatus.ACCEPTED
                     return_booking.is_return = True
-                    return_booking.time_confirmed = return_time_confirmed  # False si heure à confirmer
+                    return_booking.time_confirmed = (
+                        return_time_confirmed  # False si heure à confirmer
+                    )
                     return_booking.pickup_location = outbound.dropoff_location
                     return_booking.dropoff_location = outbound.pickup_location
                     return_booking.amount = amount_to_use  # 💰 Même tarif que l'aller
@@ -1680,19 +1917,29 @@ class CreateManualReservation(Resource):
                     return_booking.billed_to_contact = billed_to_contact
 
                     # 🏥 Informations médicales (mêmes que l'aller) - utilise données validées
-                    return_booking.medical_facility = validated_data.get("medical_facility")
+                    return_booking.medical_facility = validated_data.get(
+                        "medical_facility"
+                    )
                     return_booking.doctor_name = validated_data.get("doctor_name")
-                    return_booking.hospital_service = validated_data.get("hospital_service")
+                    return_booking.hospital_service = validated_data.get(
+                        "hospital_service"
+                    )
                     return_booking.notes_medical = validated_data.get("notes_medical")
-                    return_booking.wheelchair_client_has = validated_data.get("wheelchair_client_has", False)
-                    return_booking.wheelchair_need = validated_data.get("wheelchair_need", False)
+                    return_booking.wheelchair_client_has = validated_data.get(
+                        "wheelchair_client_has", False
+                    )
+                    return_booking.wheelchair_need = validated_data.get(
+                        "wheelchair_need", False
+                    )
                     db.session.add(return_booking)
                     created_returns.append(return_booking)
 
             # ---------- 4) Commit unique ----------
             db.session.commit()
 
-            app_logger.info("✅ %s réservation(s) créée(s) avec succès", len(created_outbounds))
+            app_logger.info(
+                "✅ %s réservation(s) créée(s) avec succès", len(created_outbounds)
+            )
 
         except Exception as e:
             db.session.rollback()
@@ -1707,11 +1954,15 @@ class CreateManualReservation(Resource):
         resp = {
             "message": f"{len(created_outbounds)} réservation(s) créée(s) avec succès.",
             "reservations": [b.serialize for b in created_outbounds],
-            "reservation": created_outbounds[0].serialize if created_outbounds else None,
+            "reservation": created_outbounds[0].serialize
+            if created_outbounds
+            else None,
         }
         if created_returns:
             resp["return_bookings"] = [b.serialize for b in created_returns]
-            resp["return_booking"] = created_returns[0].serialize if created_returns else None
+            resp["return_booking"] = (
+                created_returns[0].serialize if created_returns else None
+            )
         return resp, 201
 
 
@@ -1736,7 +1987,11 @@ class ClientReservations(Resource):
         if cid is None:
             return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
-        client = Client.query.options(joinedload(Client.user)).filter_by(id=client_id, company_id=cid).first()
+        client = (
+            Client.query.options(joinedload(Client.user))
+            .filter_by(id=client_id, company_id=cid)
+            .first()
+        )
         if not client:
             return {"error": "Client introuvable."}, 404
 
@@ -1752,7 +2007,9 @@ class ClientReservations(Resource):
         }
 
         bookings = (
-            Booking.query.filter_by(client_id=client.id, company_id=cid).order_by(Booking.scheduled_time.desc()).all()
+            Booking.query.filter_by(client_id=client.id, company_id=cid)
+            .order_by(Booking.scheduled_time.desc())
+            .all()
         )
 
         total_pending_amount = 0
@@ -1771,7 +2028,9 @@ class ClientReservations(Resource):
         # 🧾 Invoices: filtrer par client au lieu de user_id
         if client_id is not None:
             invoices = (
-                Invoice.query.filter_by(client_id=client_id, company_id=cid).order_by(Invoice.created_at.desc()).all()
+                Invoice.query.filter_by(client_id=client_id, company_id=cid)
+                .order_by(Invoice.created_at.desc())
+                .all()
             )
         else:
             invoices = []
@@ -1841,7 +2100,9 @@ class TriggerReturnBooking(Resource):
             action = "modifié"
         else:
             booking.is_round_trip = True
-            existing = Booking.query.filter_by(parent_booking_id=booking.id, is_return=True, company_id=cid).first()
+            existing = Booking.query.filter_by(
+                parent_booking_id=booking.id, is_return=True, company_id=cid
+            ).first()
 
             if existing:
                 existing.scheduled_time = return_time
@@ -1856,7 +2117,9 @@ class TriggerReturnBooking(Resource):
                 return_booking.dropoff_location = booking.pickup_location
                 return_booking.scheduled_time = return_time
                 return_booking.amount = booking.amount  # Même tarif que l'aller
-                return_booking.status = BookingStatus.ACCEPTED  # ✅ le moteur choisira le chauffeur
+                return_booking.status = (
+                    BookingStatus.ACCEPTED
+                )  # ✅ le moteur choisira le chauffeur
                 return_booking.booking_type = "manual"
                 return_booking.is_return = True
                 return_booking.parent_booking_id = booking.id
@@ -1878,18 +2141,41 @@ class TriggerReturnBooking(Resource):
 
 
 parser = reqparse.RequestParser()
-parser.add_argument("client_type", choices=[ct.name for ct in ClientType], required=True, help="Type de client requis")
+parser.add_argument(
+    "client_type",
+    choices=[ct.name for ct in ClientType],
+    required=True,
+    help="Type de client requis",
+)
 parser.add_argument("email")
 parser.add_argument("first_name")
 parser.add_argument("last_name")
 parser.add_argument("address")
 parser.add_argument("phone")
-parser.add_argument("birth_date", type=str, required=False, help="Date de naissance au format YYYY-MM-DD")
-parser.add_argument("is_institution", type=inputs.boolean, required=False, help="Indique si c'est une institution")
-parser.add_argument("institution_name", type=str, required=False, help="Nom de l'institution")
-parser.add_argument("contact_email", type=str, required=False, help="Email de contact/facturation")
-parser.add_argument("contact_phone", type=str, required=False, help="Téléphone de contact/facturation")
-parser.add_argument("billing_address", type=str, required=False, help="Adresse de facturation")
+parser.add_argument(
+    "birth_date",
+    type=str,
+    required=False,
+    help="Date de naissance au format YYYY-MM-DD",
+)
+parser.add_argument(
+    "is_institution",
+    type=inputs.boolean,
+    required=False,
+    help="Indique si c'est une institution",
+)
+parser.add_argument(
+    "institution_name", type=str, required=False, help="Nom de l'institution"
+)
+parser.add_argument(
+    "contact_email", type=str, required=False, help="Email de contact/facturation"
+)
+parser.add_argument(
+    "contact_phone", type=str, required=False, help="Téléphone de contact/facturation"
+)
+parser.add_argument(
+    "billing_address", type=str, required=False, help="Adresse de facturation"
+)
 
 
 # ======================================================
@@ -1900,8 +2186,16 @@ class CompanyClients(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @limiter.limit("300 per hour")  # ✅ 2.8: Rate limiting liste clients
-    @companies_ns.param("search", "Terme à chercher dans le prénom ou le nom", type="string")
-    @companies_ns.param("page", "Numéro de page (défaut: 1, min: 1)", type="integer", default=1, minimum=1)
+    @companies_ns.param(
+        "search", "Terme à chercher dans le prénom ou le nom", type="string"
+    )
+    @companies_ns.param(
+        "page",
+        "Numéro de page (défaut: 1, min: 1)",
+        type="integer",
+        default=1,
+        minimum=1,
+    )
     @companies_ns.param(
         "per_page",
         "Résultats par page (défaut: 100, min: 1, max: 1000)",
@@ -1942,7 +2236,10 @@ class CompanyClients(Resource):
             pattern = f"%{q}%"
             # on filtre sur User.first_name et User.last_name
             query = query.filter(
-                or_(Client.user.has(User.first_name.ilike(pattern)), Client.user.has(User.last_name.ilike(pattern)))
+                or_(
+                    Client.user.has(User.first_name.ilike(pattern)),
+                    Client.user.has(User.last_name.ilike(pattern)),
+                )
             )
 
         # Paginer
@@ -1955,7 +2252,9 @@ class CompanyClients(Resource):
         try:
             from routes.bookings import _build_pagination_links
 
-            headers = _build_pagination_links(page, per_page, total, "companies_company_clients")
+            headers = _build_pagination_links(
+                page, per_page, total, "companies_company_clients"
+            )
         except Exception:
             # Si la génération des liens échoue, continuer sans headers
             headers = {}
@@ -2000,7 +2299,9 @@ class CompanyClients(Resource):
         # Utilise données validées
         ct_str = validated_data["client_type"].upper()
         if ct_str not in ClientType.__members__:
-            return {"error": "client_type invalide. Valeurs possibles: SELF_SERVICE, PRIVATE, CORPORATE"}, 400
+            return {
+                "error": "client_type invalide. Valeurs possibles: SELF_SERVICE, PRIVATE, CORPORATE"
+            }, 400
         ctype = ClientType[ct_str]
 
         # Normalisation email
@@ -2012,9 +2313,15 @@ class CompanyClients(Resource):
         if ctype == ClientType.SELF_SERVICE and not email:
             return {"error": "email requis pour self-service"}, 400
         if ctype != ClientType.SELF_SERVICE:
-            missing = [f for f in ("first_name", "last_name", "address") if not validated_data.get(f)]
+            missing = [
+                f
+                for f in ("first_name", "last_name", "address")
+                if not validated_data.get(f)
+            ]
             if missing:
-                return {"error": f"Champs manquants pour facturation : {', '.join(missing)}"}, 400
+                return {
+                    "error": f"Champs manquants pour facturation : {', '.join(missing)}"
+                }, 400
 
         # Date de naissance (déjà validée par Marshmallow comme Date)
         birth_date = validated_data.get("birth_date")
@@ -2079,11 +2386,15 @@ class CompanyClients(Resource):
         client.user_id = user.id
         client.company_id = cid
         client.client_type = ctype
-        client.billing_address = validated_data.get("billing_address") or validated_data.get("address")
+        client.billing_address = validated_data.get(
+            "billing_address"
+        ) or validated_data.get("address")
         client.billing_lat = validated_data.get("billing_lat")
         client.billing_lon = validated_data.get("billing_lon")
         client.contact_email = validated_data.get("contact_email") or email
-        client.contact_phone = validated_data.get("contact_phone") or validated_data.get("phone")
+        client.contact_phone = validated_data.get(
+            "contact_phone"
+        ) or validated_data.get("phone")
         client.is_institution = is_inst
         client.institution_name = inst_name
         # Adresse de domicile
@@ -2117,13 +2428,17 @@ class CompanyClients(Resource):
                 action_type="user_created",
                 action_category="security",
                 user_id=current_user.id if current_user else None,
-                user_type=current_user.role.value if current_user and current_user.role else "unknown",
+                user_type=current_user.role.value
+                if current_user and current_user.role
+                else "unknown",
                 result_status="success",
                 action_details={
                     "created_user_id": user.id,
                     "created_user_email": mask_email(email) if email else None,
                     "created_user_role": "client",
-                    "client_type": ctype.value if hasattr(ctype, "value") else str(ctype),
+                    "client_type": ctype.value
+                    if hasattr(ctype, "value")
+                    else str(ctype),
                 },
                 company_id=cid,
                 ip_address=request.remote_addr,
@@ -2231,9 +2546,13 @@ class CompanyClientDetail(Resource):
                 birth_date_value = data["birth_date"]
                 if birth_date_value:
                     try:
-                        client.user.birth_date = datetime.strptime(str(birth_date_value), "%Y-%m-%d").date()
+                        client.user.birth_date = datetime.strptime(
+                            str(birth_date_value), "%Y-%m-%d"
+                        ).date()
                     except (ValueError, TypeError):
-                        return {"error": "Format de date de naissance invalide. Utiliser YYYY-MM-DD."}, 400
+                        return {
+                            "error": "Format de date de naissance invalide. Utiliser YYYY-MM-DD."
+                        }, 400
                 else:
                     client.user.birth_date = None
 
@@ -2270,12 +2589,18 @@ class CompanyClientDetail(Resource):
             if hard_delete:
                 # Vérifier si le client a des factures, réservations ou autres dépendances
                 invoice_count = Invoice.query.filter(
-                    or_(Invoice.client_id == client_id, Invoice.bill_to_client_id == client_id)
+                    or_(
+                        Invoice.client_id == client_id,
+                        Invoice.bill_to_client_id == client_id,
+                    )
                 ).count()
 
                 booking_count = Booking.query.filter_by(client_id=client_id).count()
 
-                if invoice_count > INVOICE_COUNT_ZERO or booking_count > INVOICE_COUNT_ZERO:
+                if (
+                    invoice_count > INVOICE_COUNT_ZERO
+                    or booking_count > INVOICE_COUNT_ZERO
+                ):
                     return {
                         "error": "Impossible de supprimer définitivement ce client",
                         "reason": f"Le client a {invoice_count} facture(s) et {booking_count} réservation(s)",
@@ -2349,7 +2674,9 @@ class DriverCompletedTrips(Resource):
         for trip in trips:
             duration = 0
             # Assure-toi que les champs existent avant calcul
-            if getattr(trip, "boarded_at", None) and getattr(trip, "completed_at", None):
+            if getattr(trip, "boarded_at", None) and getattr(
+                trip, "completed_at", None
+            ):
                 delta = trip.completed_at - trip.boarded_at
                 duration = max(int(delta.total_seconds() // 60), 0)
             trip_list.append(
@@ -2357,7 +2684,9 @@ class DriverCompletedTrips(Resource):
                     "id": trip.id,
                     "pickup_location": trip.pickup_location,
                     "dropoff_location": trip.dropoff_location,
-                    "completed_at": trip.completed_at.isoformat() if trip.completed_at else None,
+                    "completed_at": trip.completed_at.isoformat()
+                    if trip.completed_at
+                    else None,
                     "duration_in_minutes": duration,
                     "status": str(trip.status),
                     # Optionnel: "client_name": trip.customer_name ou trip.client.user.full_name
@@ -2400,13 +2729,19 @@ class ToggleDriverType(Resource):
 
         try:
             db.session.commit()
-            app_logger.info("✅ Type du chauffeur %s changé en %s", driver.id, driver.driver_type.value)
+            app_logger.info(
+                "✅ Type du chauffeur %s changé en %s",
+                driver.id,
+                driver.driver_type.value,
+            )
             if company:
                 _driver_trigger(company, "availability")
             return driver.serialize, 200
         except Exception as e:
             db.session.rollback()
-            app_logger.error("❌ Erreur lors du changement de type du chauffeur %s: %s", driver.id, e)
+            app_logger.error(
+                "❌ Erreur lors du changement de type du chauffeur %s: %s", driver.id, e
+            )
             return {"error": "Erreur interne"}, 500
 
 
@@ -2424,7 +2759,9 @@ class CreateDriver(Resource):
         company, error_response, status_code = get_company_from_token()
         if error_response:
             # Utiliser abort au lieu de return pour réduire le nombre de returns
-            companies_ns.abort(status_code or 400, error_response.get("error", "Unauthorized"))
+            companies_ns.abort(
+                status_code or 400, error_response.get("error", "Unauthorized")
+            )
 
         # 🔒 company.id → int sûr (évite Column[int]/Optional)
         cid_obj = getattr(company, "id", None)
@@ -2456,12 +2793,16 @@ class CreateDriver(Resource):
         # Note: Le type checker considère cette vérification inatteignable, mais elle reste utile
         # pour la robustesse si abort() ne lève pas d'exception dans un contexte non-Flask
         if validated_data is None:  # type: ignore[comparison-overlap]
-            app_logger.error("[Companies] validated_data is None after validation (should not happen)")
+            app_logger.error(
+                "[Companies] validated_data is None after validation (should not happen)"
+            )
             companies_ns.abort(500, "Erreur interne de validation")
 
         # Vérifier si l'email ou le username existe déjà
         existing_email = User.query.filter_by(email=validated_data["email"]).first()
-        existing_username = User.query.filter_by(username=validated_data["username"]).first()
+        existing_username = User.query.filter_by(
+            username=validated_data["username"]
+        ).first()
         if existing_email or existing_username:
             errors = []
             if existing_email:
@@ -2520,7 +2861,9 @@ class CreateDriver(Resource):
                     action_type="user_created",
                     action_category="security",
                     user_id=current_user.id if current_user else None,
-                    user_type=current_user.role.value if current_user and current_user.role else "unknown",
+                    user_type=current_user.role.value
+                    if current_user and current_user.role
+                    else "unknown",
                     result_status="success",
                     action_details={
                         "created_user_id": new_user.id,
@@ -2534,18 +2877,28 @@ class CreateDriver(Resource):
                     user_agent=request.headers.get("User-Agent"),
                 )
                 # ✅ Priorité 7: Métrique Prometheus pour action sensible
-                security_sensitive_actions_total.labels(action_type="user_created").inc()
+                security_sensitive_actions_total.labels(
+                    action_type="user_created"
+                ).inc()
             except Exception as audit_error:
                 # Ne pas bloquer la création si l'audit logging échoue
-                app_logger.warning("Échec audit logging user_created (driver): %s", audit_error)
+                app_logger.warning(
+                    "Échec audit logging user_created (driver): %s", audit_error
+                )
 
-            app_logger.info("✅ Nouveau chauffeur %s créé pour l'entreprise %s", getattr(new_driver, "id", "?"), cid)
+            app_logger.info(
+                "✅ Nouveau chauffeur %s créé pour l'entreprise %s",
+                getattr(new_driver, "id", "?"),
+                cid,
+            )
             return new_driver.serialize, 201
 
         except Exception as e:
             db.session.rollback()
             app_logger.error("❌ ERREUR create_driver: %s", str(e))
-            companies_ns.abort(500, "Une erreur interne est survenue lors de la création du chauffeur.")
+            companies_ns.abort(
+                500, "Une erreur interne est survenue lors de la création du chauffeur."
+            )
 
 
 # ======================================================
@@ -2578,7 +2931,11 @@ class SingleReservation(Resource):
             return {"error": "Réservation non trouvée."}, 404
 
         # ✅ Autoriser la modification pour PENDING, ACCEPTED et ASSIGNED (pour les entreprises)
-        allowed_statuses = [BookingStatus.PENDING, BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]
+        allowed_statuses = [
+            BookingStatus.PENDING,
+            BookingStatus.ACCEPTED,
+            BookingStatus.ASSIGNED,
+        ]
         if booking.status not in allowed_statuses:
             return {
                 "error": f"Impossible de modifier une réservation avec le statut '{booking.status.value}'. Seules les réservations en attente, acceptées ou assignées peuvent être modifiées."
@@ -2663,10 +3020,17 @@ class SingleReservation(Resource):
             )
             # Déclencher un re-dispatch si nécessaire
             _maybe_trigger_dispatch(cid, "update")
-            return {"message": "Réservation mise à jour avec succès", "reservation": booking.serialize}, 200
+            return {
+                "message": "Réservation mise à jour avec succès",
+                "reservation": booking.serialize,
+            }, 200
         except Exception as e:
             db.session.rollback()
-            app_logger.error("❌ Erreur lors de la mise à jour de la réservation #%s: %s", reservation_id, e)
+            app_logger.error(
+                "❌ Erreur lors de la mise à jour de la réservation #%s: %s",
+                reservation_id,
+                e,
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
     @jwt_required()
@@ -2686,7 +3050,9 @@ class SingleReservation(Resource):
         if cid is None:
             return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
-        booking = Booking.query.filter_by(id=reservation_id, company_id=cid).one_or_none()
+        booking = Booking.query.filter_by(
+            id=reservation_id, company_id=cid
+        ).one_or_none()
 
         if not booking:
             return {"error": "Réservation non trouvée."}, 404
@@ -2719,7 +3085,11 @@ class SingleReservation(Resource):
                 db.session.delete(booking)
                 db.session.commit()
                 _maybe_trigger_dispatch(cid, "cancel")
-                app_logger.info("🗑️ Suppression - Course #%s (statut: %s)", reservation_id, booking.status.value)
+                app_logger.info(
+                    "🗑️ Suppression - Course #%s (statut: %s)",
+                    reservation_id,
+                    booking.status.value,
+                )
                 return {"message": "La réservation a été supprimée avec succès."}, 200
 
             # 🚫 Règle 2: ASSIGNED → Logique intelligente selon timing
@@ -2731,8 +3101,13 @@ class SingleReservation(Resource):
                     db.session.delete(booking)
                     db.session.commit()
                     _maybe_trigger_dispatch(cid, "cancel")
-                    app_logger.info("🗑️ Suppression physique - Course #%s passée (< -24h)", reservation_id)
-                    return {"message": "La réservation a été supprimée avec succès."}, 200
+                    app_logger.info(
+                        "🗑️ Suppression physique - Course #%s passée (< -24h)",
+                        reservation_id,
+                    )
+                    return {
+                        "message": "La réservation a été supprimée avec succès."
+                    }, 200
 
                 # 🚫 Cas B: Course future (> +24h) OU récente (-24h à maintenant) → ANNULATION
                 booking.status = BookingStatus.CANCELED
@@ -2742,7 +3117,9 @@ class SingleReservation(Resource):
                 db.session.commit()
                 _maybe_trigger_dispatch(cid, "cancel")
                 app_logger.info(
-                    "🚫 Annulation - Course #%s (dans %.1fh, chauffeur libéré)", reservation_id, time_diff_hours
+                    "🚫 Annulation - Course #%s (dans %.1fh, chauffeur libéré)",
+                    reservation_id,
+                    time_diff_hours,
                 )
                 return {"message": "La réservation a été annulée avec succès."}, 200
 
@@ -2753,7 +3130,8 @@ class SingleReservation(Resource):
                 BookingStatus.CANCELED: "La course est déjà annulée.",
             }
             msg = status_messages.get(
-                booking.status, f"Impossible de supprimer/annuler une course avec le statut '{booking.status.value}'."
+                booking.status,
+                f"Impossible de supprimer/annuler une course avec le statut '{booking.status.value}'.",
             )
             return {"error": msg}, 403
 
@@ -2793,7 +3171,11 @@ class UpdateReservation(Resource):
             return {"error": "Réservation introuvable."}, 404
 
         # ✅ Autoriser la modification pour PENDING, ACCEPTED et ASSIGNED (pour les entreprises)
-        allowed_statuses = [BookingStatus.PENDING, BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]
+        allowed_statuses = [
+            BookingStatus.PENDING,
+            BookingStatus.ACCEPTED,
+            BookingStatus.ASSIGNED,
+        ]
         if booking.status not in allowed_statuses:
             return {
                 "error": f"Impossible de modifier une réservation avec le statut '{booking.status.value}'. Seules les réservations en attente, acceptées ou assignées peuvent être modifiées."
@@ -2878,10 +3260,17 @@ class UpdateReservation(Resource):
             )
             # Déclencher un re-dispatch si nécessaire
             _maybe_trigger_dispatch(cid, "update")
-            return {"message": "Réservation mise à jour avec succès", "reservation": booking.serialize}, 200
+            return {
+                "message": "Réservation mise à jour avec succès",
+                "reservation": booking.serialize,
+            }, 200
         except Exception as e:
             db.session.rollback()
-            app_logger.error("❌ Erreur lors de la mise à jour de la réservation #%s: %s", booking_id, e)
+            app_logger.error(
+                "❌ Erreur lors de la mise à jour de la réservation #%s: %s",
+                booking_id,
+                e,
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -2916,14 +3305,21 @@ class ScheduleReservation(Resource):
             return {"error": "Réservation introuvable."}, 404
 
         # On autorise la planification pour PENDING/ACCEPTED/ASSIGNED
-        if booking.status not in [BookingStatus.PENDING, BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]:
+        if booking.status not in [
+            BookingStatus.PENDING,
+            BookingStatus.ACCEPTED,
+            BookingStatus.ASSIGNED,
+        ]:
             return {"error": f"Statut '{booking.status.value}' non modifiable."}, 400
 
         # 🔒 SÉCURITÉ : Vérifier que la course aller est complétée avant de planifier un retour
         if booking.is_return and booking.parent_booking_id:
             outbound = Booking.query.filter_by(id=booking.parent_booking_id).first()
             if outbound:
-                completed_statuses = [BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED]
+                completed_statuses = [
+                    BookingStatus.COMPLETED,
+                    BookingStatus.RETURN_COMPLETED,
+                ]
                 if outbound.status not in completed_statuses:
                     return {
                         "error": "Impossible de planifier un retour.",
@@ -2946,13 +3342,18 @@ class ScheduleReservation(Resource):
             booking.status = BookingStatus.ACCEPTED
 
         db.session.commit()
-        db.session.refresh(booking)  # ✅ Rafraîchir l'objet pour obtenir les valeurs à jour
+        db.session.refresh(
+            booking
+        )  # ✅ Rafraîchir l'objet pour obtenir les valeurs à jour
 
         # Déclenche la réoptimisation si activé
         if bool(getattr(company, "dispatch_enabled", True)):
             _maybe_trigger_dispatch(cid, "update")
 
-        return {"message": "Heure planifiée mise à jour.", "reservation": booking.serialize}, 200
+        return {
+            "message": "Heure planifiée mise à jour.",
+            "reservation": booking.serialize,
+        }, 200
 
 
 # ======================================================
@@ -2991,7 +3392,10 @@ class DispatchNowReservation(Resource):
         if booking.is_return and booking.parent_booking_id:
             outbound = Booking.query.filter_by(id=booking.parent_booking_id).first()
             if outbound:
-                completed_statuses = [BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED]
+                completed_statuses = [
+                    BookingStatus.COMPLETED,
+                    BookingStatus.RETURN_COMPLETED,
+                ]
                 if outbound.status not in completed_statuses:
                     return {
                         "error": "Impossible de déclencher un retour d'urgence.",
@@ -3012,7 +3416,9 @@ class DispatchNowReservation(Resource):
             booking.status = BookingStatus.ACCEPTED
 
         db.session.commit()
-        db.session.refresh(booking)  # ✅ Rafraîchir l'objet pour obtenir les valeurs à jour
+        db.session.refresh(
+            booking
+        )  # ✅ Rafraîchir l'objet pour obtenir les valeurs à jour
 
         # ⚡ Assignation automatique immédiate pour retours urgents
         # (au lieu de déclencher un dispatch complet qui prendrait du temps)
@@ -3043,13 +3449,21 @@ class DispatchNowReservation(Resource):
 
                 # Filtrer les bookings pour ne garder que celle-ci
                 # (mais garder les autres pour le contexte de calcul des conflits)
-                urgent_booking = next((b for b in problem["bookings"] if int(b.id) == booking_id), None)
+                urgent_booking = next(
+                    (b for b in problem["bookings"] if int(b.id) == booking_id), None
+                )
 
                 if not urgent_booking:
-                    app_logger.warning("⚠️ [Dispatch-Now] Booking #%s introuvable dans build_problem_data", booking_id)
+                    app_logger.warning(
+                        "⚠️ [Dispatch-Now] Booking #%s introuvable dans build_problem_data",
+                        booking_id,
+                    )
                     # Fallback : déclencher le dispatch classique
                     _maybe_trigger_dispatch(cid, "update")
-                    return {"message": "Dispatch urgent déclenché.", "reservation": booking.serialize}, 200
+                    return {
+                        "message": "Dispatch urgent déclenché.",
+                        "reservation": booking.serialize,
+                    }, 200
 
                 if problem["bookings"] and problem["drivers"]:
                     # Utiliser assign_urgent pour trouver le meilleur chauffeur
@@ -3069,7 +3483,11 @@ class DispatchNowReservation(Resource):
                         )
 
                         if apply_result.get("applied"):
-                            applied = apply_result["applied"][0] if apply_result["applied"] else None
+                            applied = (
+                                apply_result["applied"][0]
+                                if apply_result["applied"]
+                                else None
+                            )
                             if applied:
                                 driver_id = applied.get("driver_id")
                                 if driver_id:
@@ -3080,7 +3498,9 @@ class DispatchNowReservation(Resource):
                                         booking_id,
                                     )
                                 else:
-                                    app_logger.warning("⚠️ [Dispatch-Now] Assignation appliquée mais driver_id manquant")
+                                    app_logger.warning(
+                                        "⚠️ [Dispatch-Now] Assignation appliquée mais driver_id manquant"
+                                    )
                         else:
                             app_logger.warning(
                                 "⚠️ [Dispatch-Now] Aucune assignation appliquée (conflicts: %s)",
@@ -3088,7 +3508,8 @@ class DispatchNowReservation(Resource):
                             )
                     else:
                         app_logger.warning(
-                            "⚠️ [Dispatch-Now] Aucun chauffeur disponible pour la réservation #%s", booking_id
+                            "⚠️ [Dispatch-Now] Aucun chauffeur disponible pour la réservation #%s",
+                            booking_id,
                         )
                 else:
                     app_logger.warning(
@@ -3099,7 +3520,9 @@ class DispatchNowReservation(Resource):
                     # Fallback : déclencher le dispatch classique
                     _maybe_trigger_dispatch(cid, "update")
             except Exception as e:
-                app_logger.exception("❌ [Dispatch-Now] Erreur lors de l'assignation automatique: %s", e)
+                app_logger.exception(
+                    "❌ [Dispatch-Now] Erreur lors de l'assignation automatique: %s", e
+                )
                 # Fallback : déclencher le dispatch classique en cas d'erreur
                 _maybe_trigger_dispatch(cid, "update")
         else:
@@ -3322,7 +3745,10 @@ class MyVehicle(Resource):
             else:
                 v.is_active = False
             db.session.commit()
-            return {"message": "Véhicule supprimé" + (" définitivement" if hard else " (inactif)")}, 200
+            return {
+                "message": "Véhicule supprimé"
+                + (" définitivement" if hard else " (inactif)")
+            }, 200
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
@@ -3380,7 +3806,9 @@ class CompanyLogo(Resource):
         file.stream.seek(0)
 
         # Dossier uploads + sous-dossier logos
-        upload_root = current_app.config.get("UPLOADS_DIR", str(Path(current_app.root_path) / "uploads"))
+        upload_root = current_app.config.get(
+            "UPLOADS_DIR", str(Path(current_app.root_path) / "uploads")
+        )
         logos_dir = Path(upload_root) / "company_logos"
         logos_dir.mkdir(parents=True, exist_ok=True)
 
@@ -3416,7 +3844,9 @@ class CompanyLogo(Resource):
         logo_url = getattr(company, "logo_url", None)
         if logo_url:
             # On mappe l'URL publique vers le chemin disque
-            upload_root = current_app.config.get("UPLOADS_DIR", str(Path(current_app.root_path) / "uploads"))
+            upload_root = current_app.config.get(
+                "UPLOADS_DIR", str(Path(current_app.root_path) / "uploads")
+            )
             if logo_url.startswith("/uploads/"):
                 rel_path = logo_url[len("/uploads/") :]
                 abs_path = Path(upload_root) / rel_path

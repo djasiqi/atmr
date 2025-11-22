@@ -72,7 +72,9 @@ if PROMETHEUS_AVAILABLE and Counter is not None and Gauge is not None:
         OSRM_CACHE_HIT_RATE.set(0.0)
     except Exception as e:
         # Ignorer les erreurs d'initialisation (peut échouer si Prometheus non configuré)
-        logger.debug("[OSRM Cache Metrics] Failed to initialize metrics with 0.0: %s", e)
+        logger.debug(
+            "[OSRM Cache Metrics] Failed to initialize metrics with 0.0: %s", e
+        )
 else:
     OSRM_CACHE_HITS_TOTAL = None
     OSRM_CACHE_MISSES_TOTAL = None
@@ -95,7 +97,9 @@ class OSrmCacheMetricsCounter:
         self._misses = 0
         self._bypass_count = 0  # A5: Cache bypass si Redis HS
         self._top_misses: Dict[str, int] = defaultdict(int)
-        self._lock_instance = RLock()  # RLock pour éviter deadlock dans _update_hit_rate_gauge()
+        self._lock_instance = (
+            RLock()
+        )  # RLock pour éviter deadlock dans _update_hit_rate_gauge()
 
     @classmethod
     def get_instance(cls) -> "OSrmCacheMetricsCounter":
@@ -120,7 +124,9 @@ class OSrmCacheMetricsCounter:
             # Mettre à jour hit-rate gauge
             self._update_hit_rate_gauge()
 
-    def record_miss(self, cache_key: str | None = None, cache_type: str = "unknown") -> None:
+    def record_miss(
+        self, cache_key: str | None = None, cache_type: str = "unknown"
+    ) -> None:
         """Enregistre un miss (optionnel: clé pour tracking top misses).
 
         Args:
@@ -173,7 +179,9 @@ class OSrmCacheMetricsCounter:
     def get_top_misses(self, n: int = 10) -> Dict[str, int]:
         """Retourne les N top misses."""
         with self._lock_instance:
-            sorted_misses = sorted(self._top_misses.items(), key=lambda x: x[1], reverse=True)
+            sorted_misses = sorted(
+                self._top_misses.items(), key=lambda x: x[1], reverse=True
+            )
             return dict(sorted_misses[:n])
 
     def to_dict(self) -> Dict[str, Any]:
@@ -192,7 +200,9 @@ class OSrmCacheMetricsCounter:
 # ==================== Cache Key Generation ====================
 
 
-def generate_cache_key_v1(profile: str, points: list[tuple[float, float]], date_str: str, slot_15min: int) -> str:
+def generate_cache_key_v1(
+    profile: str, points: list[tuple[float, float]], date_str: str, slot_15min: int
+) -> str:
     """Génère une clé de cache stable et reproductible.
 
     Format: ud:osrm:matrix:v1:{profile}:{YYYYMMDD}:{slot15}:{sha256(points)}
@@ -247,7 +257,9 @@ def increment_cache_hit(cache_type: str = "unknown") -> None:
     OSrmCacheMetricsCounter.get_instance().record_hit(cache_type=cache_type)
 
 
-def increment_cache_miss(cache_key: str | None = None, cache_type: str = "unknown") -> None:
+def increment_cache_miss(
+    cache_key: str | None = None, cache_type: str = "unknown"
+) -> None:
     """Incrémente le compteur de misses.
 
     Args:
@@ -315,7 +327,11 @@ def check_cache_alert() -> CacheAlert | None:
         )
 
         return CacheAlert(
-            severity=severity, message=message, hit_rate=hit_rate, threshold=HIT_RATE_THRESHOLD, should_page=should_page
+            severity=severity,
+            message=message,
+            hit_rate=hit_rate,
+            threshold=HIT_RATE_THRESHOLD,
+            should_page=should_page,
         )
 
     return None

@@ -49,7 +49,9 @@ class RLKPIMonitor:
         # Vérifier quality_score
         min_quality_score = getattr(self.settings.rl, "min_quality_score", 70.0)
         if quality_score < min_quality_score:
-            violations.append(f"quality_score={quality_score:.1f} < {min_quality_score}")
+            violations.append(
+                f"quality_score={quality_score:.1f} < {min_quality_score}"
+            )
 
         # Vérifier on_time_rate
         min_on_time_rate = getattr(self.settings.rl, "min_on_time_rate", 85.0)
@@ -62,18 +64,29 @@ class RLKPIMonitor:
             violations.append(f"avg_delay={avg_delay_min:.1f}min > {max_avg_delay}min")
 
         if violations:
-            logger.warning("[RLKPIMonitor] Company %d: KPI violations: %s", company_id, ", ".join(violations))
+            logger.warning(
+                "[RLKPIMonitor] Company %d: KPI violations: %s",
+                company_id,
+                ", ".join(violations),
+            )
             self._increment_failures(company_id)
 
             # Vérifier si backout nécessaire
             if self._should_backout(company_id):
                 reason = f"Consecutive failures: {', '.join(violations)}"
-                logger.error("[RLKPIMonitor] Company %d: BACKOUT TRIGGERED - %s", company_id, reason)
+                logger.error(
+                    "[RLKPIMonitor] Company %d: BACKOUT TRIGGERED - %s",
+                    company_id,
+                    reason,
+                )
                 return True, reason
         else:
             # Reset failure count on success
             self._reset_failures(company_id)
-            logger.debug("[RLKPIMonitor] Company %d: All KPIs OK, failure count reset", company_id)
+            logger.debug(
+                "[RLKPIMonitor] Company %d: All KPIs OK, failure count reset",
+                company_id,
+            )
 
         return False, ""
 
@@ -104,7 +117,11 @@ class RLKPIMonitor:
             redis_client.incr(key)
             redis_client.expire(key, 86400)  # TTL 24h
         except Exception as e:
-            logger.error("[RLKPIMonitor] Failed to increment failures for company %d: %s", company_id, e)
+            logger.error(
+                "[RLKPIMonitor] Failed to increment failures for company %d: %s",
+                company_id,
+                e,
+            )
 
     def _should_backout(self, company_id: int) -> bool:
         """Vérifie si backout nécessaire."""
@@ -121,7 +138,11 @@ class RLKPIMonitor:
 
             return failure_count >= threshold
         except Exception as e:
-            logger.error("[RLKPIMonitor] Failed to check backout for company %d: %s", company_id, e)
+            logger.error(
+                "[RLKPIMonitor] Failed to check backout for company %d: %s",
+                company_id,
+                e,
+            )
             return False
 
     def _reset_failures(self, company_id: int) -> None:
@@ -133,4 +154,8 @@ class RLKPIMonitor:
         try:
             redis_client.delete(key)
         except Exception as e:
-            logger.error("[RLKPIMonitor] Failed to reset failures for company %d: %s", company_id, e)
+            logger.error(
+                "[RLKPIMonitor] Failed to reset failures for company %d: %s",
+                company_id,
+                e,
+            )

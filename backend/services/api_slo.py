@@ -116,7 +116,9 @@ API_SLOS: Dict[str, APISLOTarget] = {
 }
 
 
-def get_slo_target(endpoint: str, method: Optional[str] = None) -> Optional[APISLOTarget]:
+def get_slo_target(
+    endpoint: str, method: Optional[str] = None
+) -> Optional[APISLOTarget]:
     """Récupère la définition SLO pour un endpoint.
 
     Args:
@@ -136,7 +138,9 @@ def get_slo_target(endpoint: str, method: Optional[str] = None) -> Optional[APIS
 
     # Chercher une correspondance par préfixe (ex: "/api/bookings/:id" -> "/api/bookings")
     for slo_endpoint, slo in API_SLOS.items():
-        if endpoint.startswith(slo_endpoint) and (not slo.method or slo.method == method):
+        if endpoint.startswith(slo_endpoint) and (
+            not slo.method or slo.method == method
+        ):
             return slo
 
     return None

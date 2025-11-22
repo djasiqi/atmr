@@ -33,10 +33,16 @@ class AnalyticsDashboard(Resource):
         default="30d",
     )
     @analytics_ns.param(
-        "start_date", "Date de début (YYYY-MM-DD, optionnel)", type="string", pattern="^\\d{4}-\\d{2}-\\d{2}$"
+        "start_date",
+        "Date de début (YYYY-MM-DD, optionnel)",
+        type="string",
+        pattern="^\\d{4}-\\d{2}-\\d{2}$",
     )
     @analytics_ns.param(
-        "end_date", "Date de fin (YYYY-MM-DD, optionnel)", type="string", pattern="^\\d{4}-\\d{2}-\\d{2}$"
+        "end_date",
+        "Date de fin (YYYY-MM-DD, optionnel)",
+        type="string",
+        pattern="^\\d{4}-\\d{2}-\\d{2}$",
     )
     def get(self):
         """Récupère les analytics pour le dashboard.
@@ -52,10 +58,16 @@ class AnalyticsDashboard(Resource):
             # Récupérer la company depuis le token JWT
             logger.debug("[Analytics] Calling get_company_from_token()")
             company, err, code = get_company_from_token()
-            logger.debug("[Analytics] Company: %s, err: %s, code: %s", company, err, code)
+            logger.debug(
+                "[Analytics] Company: %s, err: %s, code: %s", company, err, code
+            )
 
             if err or company is None:
-                msg = (err or {}).get("error") if isinstance(err, dict) else "Company not found"
+                msg = (
+                    (err or {}).get("error")
+                    if isinstance(err, dict)
+                    else "Company not found"
+                )
                 logger.warning("[Analytics] Company not found: %s", msg)
                 return {"success": False, "error": msg}, code or 404
 
@@ -70,7 +82,9 @@ class AnalyticsDashboard(Resource):
 
             args_dict = dict(request.args)
             try:
-                validated_args = validate_request(AnalyticsDashboardQuerySchema(), args_dict, strict=False)
+                validated_args = validate_request(
+                    AnalyticsDashboardQuerySchema(), args_dict, strict=False
+                )
                 period = validated_args.get("period", "30d")
                 start_str = validated_args.get("start_date")
                 end_str = validated_args.get("end_date")
@@ -82,7 +96,10 @@ class AnalyticsDashboard(Resource):
                     start_date = date.fromisoformat(start_str)
                     end_date = date.fromisoformat(end_str)
                 except ValueError:
-                    return {"success": False, "error": "Invalid date format. Use YYYY-MM-DD"}, 400
+                    return {
+                        "success": False,
+                        "error": "Invalid date format. Use YYYY-MM-DD",
+                    }, 400
             else:
                 # Inclure jusqu'à demain pour capturer les dispatches futurs
                 end_date = date.today() + timedelta(days=1)
@@ -96,7 +113,10 @@ class AnalyticsDashboard(Resource):
                     start_date = end_date - timedelta(days=30)
 
             logger.info(
-                "[Analytics] Fetching analytics for company %s, period %s to %s", company.id, start_date, end_date
+                "[Analytics] Fetching analytics for company %s, period %s to %s",
+                company.id,
+                start_date,
+                end_date,
             )
             analytics = get_period_analytics(company.id, start_date, end_date)
 
@@ -104,7 +124,10 @@ class AnalyticsDashboard(Resource):
             insights = generate_insights(company.id, analytics)
             analytics["insights"] = insights
 
-            logger.info("[Analytics] Returning analytics data: %s days", len(analytics.get("trends", [])))
+            logger.info(
+                "[Analytics] Returning analytics data: %s days",
+                len(analytics.get("trends", [])),
+            )
             return {"success": True, "data": analytics}
 
         except Exception as e:
@@ -133,7 +156,11 @@ class AnalyticsInsights(Resource):
         try:
             company, err, code = get_company_from_token()
             if err or company is None:
-                msg = (err or {}).get("error") if isinstance(err, dict) else "Company not found"
+                msg = (
+                    (err or {}).get("error")
+                    if isinstance(err, dict)
+                    else "Company not found"
+                )
                 return {"success": False, "error": msg}, code or 404
 
             # ✅ 2.4: Validation Marshmallow pour query params
@@ -147,7 +174,9 @@ class AnalyticsInsights(Resource):
 
             args_dict = dict(request.args)
             try:
-                validated_args = validate_request(AnalyticsInsightsQuerySchema(), args_dict, strict=False)
+                validated_args = validate_request(
+                    AnalyticsInsightsQuerySchema(), args_dict, strict=False
+                )
                 lookback_days = validated_args.get("lookback_days", 30)
             except ValidationError as e:
                 return handle_validation_error(e)
@@ -157,7 +186,10 @@ class AnalyticsInsights(Resource):
             return {"success": True, "data": patterns}
 
         except Exception as e:
-            return {"success": False, "error": f"Failed to generate insights: {e!s}"}, 500
+            return {
+                "success": False,
+                "error": f"Failed to generate insights: {e!s}",
+            }, 500
 
 
 @analytics_ns.route("/weekly-summary")
@@ -179,7 +211,11 @@ class WeeklySummary(Resource):
         try:
             company, err, code = get_company_from_token()
             if err or company is None:
-                msg = (err or {}).get("error") if isinstance(err, dict) else "Company not found"
+                msg = (
+                    (err or {}).get("error")
+                    if isinstance(err, dict)
+                    else "Company not found"
+                )
                 return {"success": False, "error": msg}, code or 404
 
             # ✅ 2.4: Validation Marshmallow pour query params
@@ -193,7 +229,9 @@ class WeeklySummary(Resource):
 
             args_dict = dict(request.args)
             try:
-                validated_args = validate_request(AnalyticsWeeklySummaryQuerySchema(), args_dict, strict=False)
+                validated_args = validate_request(
+                    AnalyticsWeeklySummaryQuerySchema(), args_dict, strict=False
+                )
                 week_start_str = validated_args.get("week_start")
             except ValidationError as e:
                 return handle_validation_error(e)
@@ -202,7 +240,10 @@ class WeeklySummary(Resource):
                 try:
                     week_start = date.fromisoformat(week_start_str)
                 except ValueError:
-                    return {"success": False, "error": "Invalid date format. Use YYYY-MM-DD"}, 400
+                    return {
+                        "success": False,
+                        "error": "Invalid date format. Use YYYY-MM-DD",
+                    }, 400
             else:
                 today = date.today()
                 week_start = today - timedelta(days=today.weekday())
@@ -212,7 +253,10 @@ class WeeklySummary(Resource):
             return {"success": True, "data": summary}
 
         except Exception as e:
-            return {"success": False, "error": f"Failed to fetch weekly summary: {e!s}"}, 500
+            return {
+                "success": False,
+                "error": f"Failed to fetch weekly summary: {e!s}",
+            }, 500
 
 
 @analytics_ns.route("/export")
@@ -227,10 +271,18 @@ class ExportAnalytics(Resource):
         pattern="^\\d{4}-\\d{2}-\\d{2}$",
     )
     @analytics_ns.param(
-        "end_date", "Date de fin (YYYY-MM-DD, requis)", type="string", required=True, pattern="^\\d{4}-\\d{2}-\\d{2}$"
+        "end_date",
+        "Date de fin (YYYY-MM-DD, requis)",
+        type="string",
+        required=True,
+        pattern="^\\d{4}-\\d{2}-\\d{2}$",
     )
     @analytics_ns.param(
-        "format", "Format d'export (csv|json, défaut: csv)", type="string", enum=["csv", "json"], default="csv"
+        "format",
+        "Format d'export (csv|json, défaut: csv)",
+        type="string",
+        enum=["csv", "json"],
+        default="csv",
     )
     def get(self):
         """Exporte les analytics dans un format donné.
@@ -243,7 +295,11 @@ class ExportAnalytics(Resource):
         try:
             company, err, code = get_company_from_token()
             if err or company is None:
-                msg = (err or {}).get("error") if isinstance(err, dict) else "Company not found"
+                msg = (
+                    (err or {}).get("error")
+                    if isinstance(err, dict)
+                    else "Company not found"
+                )
                 return {"success": False, "error": msg}, code or 404
 
             # ✅ 2.4: Validation Marshmallow pour query params
@@ -257,7 +313,9 @@ class ExportAnalytics(Resource):
 
             args_dict = dict(request.args)
             try:
-                validated_args = validate_request(AnalyticsExportQuerySchema(), args_dict)
+                validated_args = validate_request(
+                    AnalyticsExportQuerySchema(), args_dict
+                )
                 start_str = validated_args["start_date"]
                 end_str = validated_args["end_date"]
                 export_format = validated_args.get("format", "csv")
@@ -268,7 +326,10 @@ class ExportAnalytics(Resource):
                 start_date = date.fromisoformat(start_str)
                 end_date = date.fromisoformat(end_str)
             except ValueError:
-                return {"success": False, "error": "Invalid date format. Use YYYY-MM-DD"}, 400
+                return {
+                    "success": False,
+                    "error": "Invalid date format. Use YYYY-MM-DD",
+                }, 400
 
             analytics = get_period_analytics(company.id, start_date, end_date)
 
@@ -276,7 +337,15 @@ class ExportAnalytics(Resource):
                 output = io.StringIO()
                 writer = csv.writer(output)
 
-                writer.writerow(["Date", "Bookings", "On-Time Rate (%)", "Avg Delay (min)", "Quality Score"])
+                writer.writerow(
+                    [
+                        "Date",
+                        "Bookings",
+                        "On-Time Rate (%)",
+                        "Avg Delay (min)",
+                        "Quality Score",
+                    ]
+                )
 
                 for trend in analytics.get("trends", []):
                     writer.writerow(
@@ -290,11 +359,16 @@ class ExportAnalytics(Resource):
                     )
 
                 response = make_response(output.getvalue())
-                response.headers["Content-Disposition"] = f"attachment; filename=analytics_{start_date}_{end_date}.csv"
+                response.headers["Content-Disposition"] = (
+                    f"attachment; filename=analytics_{start_date}_{end_date}.csv"
+                )
                 response.headers["Content-Type"] = "text/csv"
 
                 return response
             return {"success": True, "data": analytics}
 
         except Exception as e:
-            return {"success": False, "error": f"Failed to export analytics: {e!s}"}, 500
+            return {
+                "success": False,
+                "error": f"Failed to export analytics: {e!s}",
+            }, 500

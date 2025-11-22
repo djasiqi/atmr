@@ -53,7 +53,11 @@ def iter_test_users() -> Iterable[User]:
 
 
 def iter_users_by_created_date(target_date: date) -> Iterable[User]:
-    return User.query.filter(func.date(User.created_at) == target_date).order_by(User.created_at.asc()).all()
+    return (
+        User.query.filter(func.date(User.created_at) == target_date)
+        .order_by(User.created_at.asc())
+        .all()
+    )
 
 
 def resolve_company_by_name(name: str) -> Optional[Company]:
@@ -93,7 +97,9 @@ def summarize(users: list[User]) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Inspecte/Supprime les comptes de test.")
+    parser = argparse.ArgumentParser(
+        description="Inspecte/Supprime les comptes de test."
+    )
     parser.add_argument(
         "--delete",
         action="store_true",
@@ -126,27 +132,43 @@ def main() -> None:
             if not keep_company:
                 print(f"❌ Entreprise '{args.keep_company}' introuvable dans la base.")
             else:
-                outside_clients_count = Client.query.filter(client_filter_outside(keep_company.id)).count()
-                print(f"{outside_clients_count} client(s) hors '{keep_company.name}' identifiés")
-                drivers_outside_count = Driver.query.filter(Driver.company_id != keep_company.id).count()
-                print(f"{drivers_outside_count} chauffeur(s) hors '{keep_company.name}' identifiés")
+                outside_clients_count = Client.query.filter(
+                    client_filter_outside(keep_company.id)
+                ).count()
+                print(
+                    f"{outside_clients_count} client(s) hors '{keep_company.name}' identifiés"
+                )
+                drivers_outside_count = Driver.query.filter(
+                    Driver.company_id != keep_company.id
+                ).count()
+                print(
+                    f"{drivers_outside_count} chauffeur(s) hors '{keep_company.name}' identifiés"
+                )
 
         if args.created_on:
             try:
                 created_on_date = datetime.strptime(args.created_on, "%Y-%m-%d").date()
                 users_created_on = list(iter_users_by_created_date(created_on_date))
-                print(f"{len(users_created_on)} utilisateur(s) créé(s) le {created_on_date.isoformat()}")
+                print(
+                    f"{len(users_created_on)} utilisateur(s) créé(s) le {created_on_date.isoformat()}"
+                )
             except ValueError:
-                print(f"❌ Date invalide pour --created-on : {args.created_on} (attendu AAAA-MM-JJ)")
+                print(
+                    f"❌ Date invalide pour --created-on : {args.created_on} (attendu AAAA-MM-JJ)"
+                )
                 users_created_on = []
                 created_on_date = None
 
         for user in users:
             role = user.role.value if isinstance(user.role, UserRole) else user.role
-            print(f" - #{user.id} {user.username} <{user.email}> ({role}) créé le {user.created_at}")
+            print(
+                f" - #{user.id} {user.username} <{user.email}> ({role}) créé le {user.created_at}"
+            )
 
         if not args.delete:
-            print("\nMode dry-run : aucune suppression effectuée. Ajoutez --delete pour nettoyer.")
+            print(
+                "\nMode dry-run : aucune suppression effectuée. Ajoutez --delete pour nettoyer."
+            )
             return
 
         total_deleted_records = 0
@@ -155,12 +177,16 @@ def main() -> None:
 
         if keep_company and outside_clients_count:
             clients_to_delete = (
-                Client.query.options(selectinload(Client.user)).filter(client_filter_outside(keep_company.id)).all()
+                Client.query.options(selectinload(Client.user))
+                .filter(client_filter_outside(keep_company.id))
+                .all()
             )
             deleted_users_for_clients = 0
             for client in clients_to_delete:
                 user = client.user
-                role_enum = normalize_user_role(getattr(user, "role", None)) if user else None
+                role_enum = (
+                    normalize_user_role(getattr(user, "role", None)) if user else None
+                )
                 if user and role_enum == UserRole.CLIENT:
                     db.session.delete(user)
                     deleted_users_for_clients += 1
@@ -175,7 +201,10 @@ def main() -> None:
         if users:
             user_ids = [user.id for user in users]
             company_ids: List[int] = [
-                company_id for (company_id,) in db.session.query(Company.id).filter(Company.user_id.in_(user_ids)).all()
+                company_id
+                for (company_id,) in db.session.query(Company.id)
+                .filter(Company.user_id.in_(user_ids))
+                .all()
             ]
 
             if company_ids:
@@ -185,7 +214,9 @@ def main() -> None:
                     .delete(synchronize_session=False)
                 )
                 if deleted_autonomous:
-                    print(f"Suppression des actions autonomes associées: {deleted_autonomous}")
+                    print(
+                        f"Suppression des actions autonomes associées: {deleted_autonomous}"
+                    )
 
                 deleted_billing = (
                     db.session.query(CompanyBillingSettings)
@@ -193,7 +224,9 @@ def main() -> None:
                     .delete(synchronize_session=False)
                 )
                 if deleted_billing:
-                    print(f"Suppression des paramètres de facturation: {deleted_billing}")
+                    print(
+                        f"Suppression des paramètres de facturation: {deleted_billing}"
+                    )
 
                 deleted_sequences = (
                     db.session.query(InvoiceSequence)
@@ -201,7 +234,9 @@ def main() -> None:
                     .delete(synchronize_session=False)
                 )
                 if deleted_sequences:
-                    print(f"Suppression des séquences de facturation: {deleted_sequences}")
+                    print(
+                        f"Suppression des séquences de facturation: {deleted_sequences}"
+                    )
 
                 deleted_invoices = (
                     db.session.query(Invoice)
@@ -219,7 +254,9 @@ def main() -> None:
 
         if keep_company and drivers_outside_count:
             drivers_to_delete = (
-                Driver.query.options(selectinload(Driver.user)).filter(Driver.company_id != keep_company.id).all()
+                Driver.query.options(selectinload(Driver.user))
+                .filter(Driver.company_id != keep_company.id)
+                .all()
             )
             driver_ids = [driver.id for driver in drivers_to_delete]
             if driver_ids:
@@ -234,7 +271,9 @@ def main() -> None:
             deleted_users_for_drivers = 0
             for driver in drivers_to_delete:
                 user = driver.user
-                role_enum = normalize_user_role(getattr(user, "role", None)) if user else None
+                role_enum = (
+                    normalize_user_role(getattr(user, "role", None)) if user else None
+                )
                 if user and role_enum == UserRole.DRIVER:
                     db.session.delete(user)
                     deleted_users_for_drivers += 1
@@ -248,7 +287,9 @@ def main() -> None:
             )
 
         if created_on_date and users_created_on:
-            users_filter = [user for user in users_created_on if user.id not in pending_user_ids]
+            users_filter = [
+                user for user in users_created_on if user.id not in pending_user_ids
+            ]
 
             client_ids_for_users: set[int] = set()
             driver_ids_for_users: set[int] = set()
@@ -296,7 +337,9 @@ def main() -> None:
                     .delete(synchronize_session=False)
                 )
                 if deleted_driver_ab:
-                    print(f"Suppression des résultats A/B (drivers): {deleted_driver_ab}")
+                    print(
+                        f"Suppression des résultats A/B (drivers): {deleted_driver_ab}"
+                    )
 
             if booking_ids:
                 deleted_booking_ab = (
@@ -305,7 +348,9 @@ def main() -> None:
                     .delete(synchronize_session=False)
                 )
                 if deleted_booking_ab:
-                    print(f"Suppression des résultats A/B (bookings): {deleted_booking_ab}")
+                    print(
+                        f"Suppression des résultats A/B (bookings): {deleted_booking_ab}"
+                    )
 
             if company_ids_for_users:
                 deleted_autonomous_created = (
@@ -320,7 +365,9 @@ def main() -> None:
 
                 deleted_billing_created = (
                     db.session.query(CompanyBillingSettings)
-                    .filter(CompanyBillingSettings.company_id.in_(company_ids_for_users))
+                    .filter(
+                        CompanyBillingSettings.company_id.in_(company_ids_for_users)
+                    )
                     .delete(synchronize_session=False)
                 )
                 if deleted_billing_created:
@@ -354,7 +401,9 @@ def main() -> None:
             total_deleted_records += len(users_filter)
             total_deleted_users += len(users_filter)
             pending_user_ids.update(user.id for user in users_filter)
-            print(f"Suppression des utilisateurs créés le {created_on_date.isoformat()}: {len(users_filter)}")
+            print(
+                f"Suppression des utilisateurs créés le {created_on_date.isoformat()}: {len(users_filter)}"
+            )
 
         if total_deleted_records == 0:
             print("Aucun enregistrement à supprimer.")

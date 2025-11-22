@@ -154,7 +154,9 @@ class RLSuggestionGenerator:
         """
         if self.agent is None:
             # Fallback: suggestions basiques
-            return self._generate_basic_suggestions(assignments, drivers, min_confidence, max_suggestions)
+            return self._generate_basic_suggestions(
+                assignments, drivers, min_confidence, max_suggestions
+            )
 
         return self._generate_rl_suggestions(
             company_id, assignments, drivers, for_date, min_confidence, max_suggestions
@@ -278,14 +280,18 @@ class RLSuggestionGenerator:
         except Exception as e:
             logger.error("[RL] Erreur génération suggestions DQN: %s", e)
             # Fallback vers suggestions basiques
-            return self._generate_basic_suggestions(assignments, drivers, min_confidence, max_suggestions)
+            return self._generate_basic_suggestions(
+                assignments, drivers, min_confidence, max_suggestions
+            )
 
         # Trier par confiance décroissante
         suggestions.sort(key=lambda x: x["confidence"], reverse=True)
 
         return suggestions[:max_suggestions]
 
-    def _build_state(self, assignment: Any, drivers: List[Any]) -> np.ndarray[Any, np.dtype[np.float32]]:
+    def _build_state(
+        self, assignment: Any, drivers: List[Any]
+    ) -> np.ndarray[Any, np.dtype[np.float32]]:
         """Construit l'état pour le modèle DQN avec VRAIES features.
 
         Format (adapté à l'environnement d'entraînement):
@@ -324,7 +330,9 @@ class RLSuggestionGenerator:
         dropoff_lon = getattr(booking, "dropoff_lon", None)
 
         if pickup_lat and pickup_lon and dropoff_lat and dropoff_lon:
-            distance_km = haversine_distance(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+            distance_km = haversine_distance(
+                pickup_lat, pickup_lon, dropoff_lat, dropoff_lon
+            )
             normalized_distance = min(distance_km / 50, 1)
         else:
             normalized_distance = 0.5  # Fallback si pas de coordonnées
@@ -340,7 +348,14 @@ class RLSuggestionGenerator:
         else:
             normalized_time_until = 0.5  # Fallback
 
-        state.extend([normalized_time, normalized_distance, is_emergency_val, normalized_time_until])
+        state.extend(
+            [
+                normalized_time,
+                normalized_distance,
+                is_emergency_val,
+                normalized_time_until,
+            ]
+        )
 
         # ✅ Drivers features (5 x 3 = 15 VRAIES features)
         for i in range(5):
@@ -351,11 +366,17 @@ class RLSuggestionGenerator:
                 is_available_val = 1 if getattr(driver, "is_available", False) else 0
 
                 # 2. Distance driver-pickup normalisée (km, max 30km)
-                driver_lat = getattr(driver, "current_lat", getattr(driver, "latitude", None))
-                driver_lon = getattr(driver, "current_lon", getattr(driver, "longitude", None))
+                driver_lat = getattr(
+                    driver, "current_lat", getattr(driver, "latitude", None)
+                )
+                driver_lon = getattr(
+                    driver, "current_lon", getattr(driver, "longitude", None)
+                )
 
                 if driver_lat and driver_lon and pickup_lat and pickup_lon:
-                    driver_distance_km = haversine_distance(driver_lat, driver_lon, pickup_lat, pickup_lon)
+                    driver_distance_km = haversine_distance(
+                        driver_lat, driver_lon, pickup_lat, pickup_lon
+                    )
                     normalized_driver_distance = min(driver_distance_km / 30, 1)
                 else:
                     # Fallback si pas de GPS : distance moyenne
@@ -383,7 +404,9 @@ class RLSuggestionGenerator:
                     logger.warning("[RL] Error counting driver load: %s", e)
                     normalized_load = 0  # Fallback
 
-                state.extend([is_available_val, normalized_driver_distance, normalized_load])
+                state.extend(
+                    [is_available_val, normalized_driver_distance, normalized_load]
+                )
             else:
                 # Padding pour drivers manquants
                 state.extend([0, 0, 0])
@@ -414,7 +437,11 @@ class RLSuggestionGenerator:
         return float(confidence)
 
     def _generate_basic_suggestions(
-        self, assignments: List[Any], drivers: List[Any], min_confidence: float, max_suggestions: int
+        self,
+        assignments: List[Any],
+        drivers: List[Any],
+        min_confidence: float,
+        max_suggestions: int,
     ) -> List[Dict[str, Any]]:
         """Génère des suggestions basiques sans modèle RL.
         Utilisé en fallback ou quand le modèle n'est pas disponible.
@@ -452,7 +479,9 @@ class RLSuggestionGenerator:
 
                 # Vérifier type
                 d_type = getattr(d, "driver_type", None)
-                d_type_value = d_type.value if d_type and hasattr(d_type, "value") else "REGULAR"
+                d_type_value = (
+                    d_type.value if d_type and hasattr(d_type, "value") else "REGULAR"
+                )
 
                 # Prendre seulement les REGULAR (pas les EMERGENCY pour
                 # suggestions)
@@ -503,7 +532,9 @@ class RLSuggestionGenerator:
 
         return suggestions[:max_suggestions]
 
-    def _calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    def _calculate_distance(
+        self, lat1: float, lon1: float, lat2: float, lon2: float
+    ) -> float:
         """Calcule la distance haversine entre deux coordonnées GPS.
 
         Args:
@@ -527,7 +558,12 @@ class RLSuggestionGenerator:
             dlat = np.radians(lat2 - lat1)
             dlon = np.radians(lon2 - lon1)
 
-            a = np.sin(dlat / 2) ** 2 + np.cos(np.radians(lat1)) * np.cos(np.radians(lat2)) * np.sin(dlon / 2) ** 2
+            a = (
+                np.sin(dlat / 2) ** 2
+                + np.cos(np.radians(lat1))
+                * np.cos(np.radians(lat2))
+                * np.sin(dlon / 2) ** 2
+            )
             c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
 
             return R * c

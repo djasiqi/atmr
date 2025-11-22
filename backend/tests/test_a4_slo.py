@@ -99,7 +99,10 @@ class TestSLO:
 
         assert result["breached"] is True
         assert result["success_breach"] is True
-        assert len([b for b in result["breaches"] if b["dimension"] == "success_rate"]) == 1
+        assert (
+            len([b for b in result["breaches"] if b["dimension"] == "success_rate"])
+            == 1
+        )
 
         logger.info("✅ Test: SLO breach success rate détectée")
 
@@ -116,7 +119,10 @@ class TestSLO:
 
         assert result["breached"] is True
         assert result["quality_breach"] is True
-        assert len([b for b in result["breaches"] if b["dimension"] == "quality_score"]) == 1
+        assert (
+            len([b for b in result["breaches"] if b["dimension"] == "quality_score"])
+            == 1
+        )
 
         logger.info("✅ Test: SLO breach quality score détectée")
 
@@ -160,7 +166,9 @@ class TestSLO:
     def test_slo_tracker_window_expiry(self):
         """Test: SLO tracker oublie les breaches anciennes."""
 
-        tracker = SLOBreachTracker(window_minutes=1, breach_threshold=3)  # Fenêtre 1 min
+        tracker = SLOBreachTracker(
+            window_minutes=1, breach_threshold=3
+        )  # Fenêtre 1 min
         current_time = time.time()
 
         # Enregistrer 3 breaches, mais 2 sont trop anciennes (> 1 min)

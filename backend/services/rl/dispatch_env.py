@@ -85,7 +85,10 @@ class DispatchEnv(gym.Env):
         - Terminated: Fin de la journée de travail
     """
 
-    metadata: ClassVar[Dict[str, Any]] = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
+    metadata: ClassVar[Dict[str, Any]] = {
+        "render_modes": ["human", "rgb_array"],
+        "render_fps": 4,
+    }
 
     def __init__(
         self,
@@ -180,7 +183,10 @@ class DispatchEnv(gym.Env):
 
             reward_config = RewardShapingConfig.get_profile(reward_profile)
             self.reward_shaping = AdvancedRewardShaping(**reward_config)
-            logging.info("[DispatchEnv] Reward shaping initialisé avec profil: %s", reward_profile)
+            logging.info(
+                "[DispatchEnv] Reward shaping initialisé avec profil: %s",
+                reward_profile,
+            )
         except Exception as e:
             logging.warning("[DispatchEnv] Erreur initialisation reward shaping: %s", e)
             self.reward_shaping = None
@@ -242,7 +248,9 @@ class DispatchEnv(gym.Env):
         self.bookings = []
         self._generate_new_bookings(self.np_random.randint(3, 8))
 
-        self.set_active_counts(self.num_drivers, min(len(self.bookings), self.max_bookings))
+        self.set_active_counts(
+            self.num_drivers, min(len(self.bookings), self.max_bookings)
+        )
 
         # Réinitialiser le temps et les stats
         self.current_time = 0  # Démarrage à 8h00
@@ -262,7 +270,9 @@ class DispatchEnv(gym.Env):
 
     def _invalid_action_penalty(
         self,
-    ) -> Tuple[np.ndarray[Any, np.dtype[np.float32]], float, bool, bool, Dict[str, Any]]:
+    ) -> Tuple[
+        np.ndarray[Any, np.dtype[np.float32]], float, bool, bool, Dict[str, Any]
+    ]:
         """Retourne une pénalité pour action invalide.
 
         Returns:
@@ -284,7 +294,9 @@ class DispatchEnv(gym.Env):
 
     def _error_response(
         self, error_msg: str
-    ) -> Tuple[np.ndarray[Any, np.dtype[np.float32]], float, bool, bool, Dict[str, Any]]:
+    ) -> Tuple[
+        np.ndarray[Any, np.dtype[np.float32]], float, bool, bool, Dict[str, Any]
+    ]:
         """Réponse standardisée en cas d'erreur.
 
         Args:
@@ -305,7 +317,11 @@ class DispatchEnv(gym.Env):
         info["error"] = error_msg
         return observation, reward, terminated, truncated, info
 
-    def step(self, action: int) -> Tuple[np.ndarray[Any, np.dtype[np.float32]], float, bool, bool, Dict[str, Any]]:
+    def step(
+        self, action: int
+    ) -> Tuple[
+        np.ndarray[Any, np.dtype[np.float32]], float, bool, bool, Dict[str, Any]
+    ]:
         """Exécute une action dans l'environnement.
 
         Args:
@@ -330,7 +346,9 @@ class DispatchEnv(gym.Env):
             if action == ACTION_ZERO:
                 # === V3: PÉNALISER FORTEMENT L'INACTION ===
                 # Règle business : Toutes courses doivent être assignées rapidement
-                num_unassigned = len([b for b in self.bookings if not b.get("assigned", False)])
+                num_unassigned = len(
+                    [b for b in self.bookings if not b.get("assigned", False)]
+                )
                 # ⭐ V3: Pénalité proportionnelle aux bookings non assignés
                 reward = -10 * num_unassigned
                 # Incrémenter idle time pour tous les chauffeurs disponibles
@@ -354,14 +372,18 @@ class DispatchEnv(gym.Env):
                     booking_idx = action_idx % self.max_bookings
 
                     # Vérifications de sécurité pour éviter les index out of range
-                    if driver_idx >= len(self.drivers) or booking_idx >= len(self.bookings):
+                    if driver_idx >= len(self.drivers) or booking_idx >= len(
+                        self.bookings
+                    ):
                         # Action invalide - index out of range
                         reward = -100
                         info = self._get_info()
                         info["invalid_action"] = True
                         info["index_out_of_range"] = True
                         logging.warning(
-                            "[DispatchEnv] Index out of range: driver_idx=%s, booking_idx=%s", driver_idx, booking_idx
+                            "[DispatchEnv] Index out of range: driver_idx=%s, booking_idx=%s",
+                            driver_idx,
+                            booking_idx,
                         )
                     else:
                         driver = self.drivers[driver_idx]
@@ -373,7 +395,9 @@ class DispatchEnv(gym.Env):
                             info = self._get_info()
                             info["invalid_action"] = True
                             info["booking_already_assigned"] = True
-                            logging.warning("[DispatchEnv] Booking %s already assigned", booking_idx)
+                            logging.warning(
+                                "[DispatchEnv] Booking %s already assigned", booking_idx
+                            )
                         else:
                             # Assigner le booking
                             reward = self._assign_booking(driver, booking)
@@ -405,7 +429,9 @@ class DispatchEnv(gym.Env):
             if terminated:
                 reward += self._calculate_episode_bonus()
 
-            self.episode_stats["total_reward"] = float(self.episode_stats.get("total_reward", 0.0)) + reward
+            self.episode_stats["total_reward"] = (
+                float(self.episode_stats.get("total_reward", 0.0)) + reward
+            )
             info = self._get_info()
 
             return observation, reward, terminated, truncated, info
@@ -454,7 +480,9 @@ class DispatchEnv(gym.Env):
 
         return mask
 
-    def _check_time_window_constraint(self, driver: Dict[str, Any], booking: Dict[str, Any]) -> bool:
+    def _check_time_window_constraint(
+        self, driver: Dict[str, Any], booking: Dict[str, Any]
+    ) -> bool:
         """Vérifie les contraintes de fenêtre temporelle VRPTW.
 
         Args:
@@ -472,7 +500,9 @@ class DispatchEnv(gym.Env):
 
             # Calculer temps de trajet
             travel_time = self._calculate_travel_time(driver, booking)
-            pickup_time = self.current_time + travel_time  # ✅ FIX: Renommer arrival_time en pickup_time pour clarté
+            pickup_time = (
+                self.current_time + travel_time
+            )  # ✅ FIX: Renommer arrival_time en pickup_time pour clarté
 
             # ✅ FIX: Vérifier fenêtre temporelle complète (start <= pickup_time <= end)
             window_start = booking.get("time_window_start", 0)
@@ -487,7 +517,9 @@ class DispatchEnv(gym.Env):
             logging.warning("[DispatchEnv] Erreur vérification contraintes: %s", e)
             return False
 
-    def _calculate_travel_time(self, driver: Dict[str, Any], booking: Dict[str, Any]) -> float:
+    def _calculate_travel_time(
+        self, driver: Dict[str, Any], booking: Dict[str, Any]
+    ) -> float:
         """Calcule le temps de trajet entre chauffeur et booking.
 
         Args:
@@ -607,7 +639,9 @@ class DispatchEnv(gym.Env):
         )
 
         # Temps de trajet estimé (30 km/h en ville avec trafic)
-        avg_speed = 30 * (1 - self._get_traffic_density() * 0.5)  # Ralentissement trafic
+        avg_speed = 30 * (
+            1 - self._get_traffic_density() * 0.5
+        )  # Ralentissement trafic
         travel_time = (distance / avg_speed) * 60  # minutes
 
         # Vérifier si on sera en retard
@@ -621,7 +655,9 @@ class DispatchEnv(gym.Env):
 
         # Mettre à jour le chauffeur
         driver["load"] += 1
-        driver["available"] = driver["load"] < MAX_PARALLEL_BOOKINGS  # Max 3 courses en parallèle
+        driver["available"] = (
+            driver["load"] < MAX_PARALLEL_BOOKINGS
+        )  # Max 3 courses en parallèle
         driver["total_distance"] += distance
         driver["completed_bookings"] += 1
         driver["idle_time"] = 0  # Reset idle time
@@ -631,7 +667,10 @@ class DispatchEnv(gym.Env):
         # destination
         if "dropoff_lat" in booking and "dropoff_lon" in booking:
             dropoff_distance = self._calculate_distance(
-                booking["pickup_lat"], booking["pickup_lon"], booking["dropoff_lat"], booking["dropoff_lon"]
+                booking["pickup_lat"],
+                booking["pickup_lon"],
+                booking["dropoff_lat"],
+                booking["dropoff_lon"],
             )
             driver["total_distance"] += dropoff_distance
 
@@ -651,7 +690,9 @@ class DispatchEnv(gym.Env):
         # Utiliser le système de reward shaping sophistiqué
         info = {
             "is_late": is_late,
-            "lateness_minutes": time_to_pickup - booking["time_window_end"] if is_late else 0,
+            "lateness_minutes": time_to_pickup - booking["time_window_end"]
+            if is_late
+            else 0,
             "is_outbound": booking.get("is_outbound", True),
             "distance_km": distance,
             "driver_loads": [d["load"] for d in self.drivers],
@@ -692,15 +733,21 @@ class DispatchEnv(gym.Env):
                 # Temps de fenêtre en fonction de la priorité
                 priority = self.np_random.randint(1, 6)
                 time_window = (
-                    self.np_random.randint(10, 30) if priority >= PRIORITY_THRESHOLD else self.np_random.randint(20, 60)
+                    self.np_random.randint(10, 30)
+                    if priority >= PRIORITY_THRESHOLD
+                    else self.np_random.randint(20, 60)
                 )
 
                 booking = {
                     "id": len(self.bookings),
-                    "pickup_lat": self.center_lat + self.np_random.uniform(-self.area_radius, self.area_radius),
-                    "pickup_lon": self.center_lon + self.np_random.uniform(-self.area_radius, self.area_radius),
-                    "dropoff_lat": self.center_lat + self.np_random.uniform(-self.area_radius, self.area_radius),
-                    "dropoff_lon": self.center_lon + self.np_random.uniform(-self.area_radius, self.area_radius),
+                    "pickup_lat": self.center_lat
+                    + self.np_random.uniform(-self.area_radius, self.area_radius),
+                    "pickup_lon": self.center_lon
+                    + self.np_random.uniform(-self.area_radius, self.area_radius),
+                    "dropoff_lat": self.center_lat
+                    + self.np_random.uniform(-self.area_radius, self.area_radius),
+                    "dropoff_lon": self.center_lon
+                    + self.np_random.uniform(-self.area_radius, self.area_radius),
                     "priority": priority,
                     "time_window_end": self.current_time + time_window,
                     "time_remaining": time_window,
@@ -748,9 +795,13 @@ class DispatchEnv(gym.Env):
 
             # Petite pénalité pour idle time accumulé
             if driver["idle_time"] > IDLE_TIME_THRESHOLD:  # > 100 minutes idle
-                self.episode_stats["total_reward"] = float(self.episode_stats.get("total_reward", 0.0)) - 5.0
+                self.episode_stats["total_reward"] = (
+                    float(self.episode_stats.get("total_reward", 0.0)) - 5.0
+                )
 
-    def _calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    def _calculate_distance(
+        self, lat1: float, lon1: float, lat2: float, lon2: float
+    ) -> float:
         """Calcule la distance haversine entre deux points (en km).
 
         Args:
@@ -766,7 +817,12 @@ class DispatchEnv(gym.Env):
         dlat = np.radians(lat2 - lat1)
         dlon = np.radians(lon2 - lon1)
 
-        a = np.sin(dlat / 2) ** 2 + np.cos(np.radians(lat1)) * np.cos(np.radians(lat2)) * np.sin(dlon / 2) ** 2
+        a = (
+            np.sin(dlat / 2) ** 2
+            + np.cos(np.radians(lat1))
+            * np.cos(np.radians(lat2))
+            * np.sin(dlon / 2) ** 2
+        )
         c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
 
         return R * c
@@ -782,10 +838,14 @@ class DispatchEnv(gym.Env):
         current_lat, current_lon = driver["lat"], driver["lon"]
 
         # Distance vers le bureau
-        bureau_distance = self._calculate_distance(current_lat, current_lon, self.bureau_lat, self.bureau_lon)
+        bureau_distance = self._calculate_distance(
+            current_lat, current_lon, self.bureau_lat, self.bureau_lon
+        )
 
         # Distance vers la maison
-        home_distance = self._calculate_distance(current_lat, current_lon, driver["home_lat"], driver["home_lon"])
+        home_distance = self._calculate_distance(
+            current_lat, current_lon, driver["home_lat"], driver["home_lon"]
+        )
 
         # ⭐ LOGIQUE RÉALISTE: Retour au bureau si véhicule de société, maison si personnel
         # Pour simplifier: 70% retour bureau, 30% retour maison
@@ -866,12 +926,18 @@ class DispatchEnv(gym.Env):
 
         """
         # Calculer workload moyen
-        avg_load = sum(d["load"] for d in self.drivers) / len(self.drivers) if self.drivers else 0
+        avg_load = (
+            sum(d["load"] for d in self.drivers) / len(self.drivers)
+            if self.drivers
+            else 0
+        )
 
         return {
             "current_time": self.current_time,
             "hour_of_day": 8 + (self.current_time / 60),
-            "active_bookings": len([b for b in self.bookings if not b.get("assigned", False)]),
+            "active_bookings": len(
+                [b for b in self.bookings if not b.get("assigned", False)]
+            ),
             "available_drivers": len([d for d in self.drivers if d["available"]]),
             "traffic_density": self._get_traffic_density(),
             "avg_workload": avg_load,
@@ -885,8 +951,12 @@ class DispatchEnv(gym.Env):
             minute = self.current_time % 60
             print("\n{'='*60}")
             print(f"⏰ Time: {hour:02d}:{minute:02d}")
-            print(f"🚗 Drivers: {len([d for d in self.drivers if d['available']])} / {len(self.drivers)} available")
-            print(f"📋 Bookings: {len([b for b in self.bookings if not b['assigned']])} pending")
+            print(
+                f"🚗 Drivers: {len([d for d in self.drivers if d['available']])} / {len(self.drivers)} available"
+            )
+            print(
+                f"📋 Bookings: {len([b for b in self.bookings if not b['assigned']])} pending"
+            )
             print(
                 f"🚦 Traffic: {'🟢' if self._get_traffic_density() < TRAFFIC_LOW_THRESHOLD else '🟡' if self._get_traffic_density() < TRAFFIC_MEDIUM_THRESHOLD else '🔴'} {self._get_traffic_density():.2f}"
             )

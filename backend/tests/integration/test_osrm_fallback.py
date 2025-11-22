@@ -27,7 +27,9 @@ class TestOSRMFallback:
         coords = [(46.2044, 6.1432), (46.2100, 6.1500), (46.2200, 6.1600)]
 
         # Avec le fixture mock_osrm_client, la fonction devrait retourner une matrice
-        result = build_distance_matrix_osrm(coords=coords, base_url="http://localhost:5000")
+        result = build_distance_matrix_osrm(
+            coords=coords, base_url="http://localhost:5000"
+        )
 
         # Vérifier que le résultat est une matrice carrée
         assert isinstance(result, list)
@@ -53,13 +55,18 @@ class TestOSRMFallback:
 
             # Appeler avec un timeout très court et max_retries=0 pour forcer l'échec
             result = build_distance_matrix_osrm(
-                coords=coords, base_url="http://localhost:5000", timeout=1, max_retries=0
+                coords=coords,
+                base_url="http://localhost:5000",
+                timeout=1,
+                max_retries=0,
             )
 
             # Vérifier que le résultat est une matrice (fallback haversine)
             assert isinstance(result, list)
             assert len(result) == len(coords)
-            assert all(isinstance(row, list) and len(row) == len(coords) for row in result)
+            assert all(
+                isinstance(row, list) and len(row) == len(coords) for row in result
+            )
 
             # Vérifier que la diagonale est à 0
             for i in range(len(coords)):
@@ -80,7 +87,9 @@ class TestOSRMFallback:
         dest = (46.2100, 6.1500)
 
         # Avec le fixture mock_osrm_client, la fonction devrait retourner des données de route
-        result = route_info(origin=origin, destination=dest, base_url="http://localhost:5000")
+        result = route_info(
+            origin=origin, destination=dest, base_url="http://localhost:5000"
+        )
 
         # Vérifier que le résultat contient les champs attendus
         assert isinstance(result, dict)
@@ -108,7 +117,12 @@ class TestOSRMFallback:
             mock_route.side_effect = Exception("OSRM service unavailable")
 
             # Appeler avec un timeout très court pour forcer l'échec
-            result = route_info(origin=origin, destination=dest, base_url="http://localhost:5000", timeout=1)
+            result = route_info(
+                origin=origin,
+                destination=dest,
+                base_url="http://localhost:5000",
+                timeout=1,
+            )
 
             # Vérifier que le résultat contient les champs attendus (fallback)
             assert isinstance(result, dict)
@@ -121,7 +135,9 @@ class TestOSRMFallback:
             km = _haversine_km(origin, dest)
             expected_duration = _fallback_eta_seconds(origin, dest)
             # Les valeurs peuvent différer légèrement, mais doivent être proches
-            assert abs(result["duration"] - expected_duration) < 100  # tolérance de 100s
+            assert (
+                abs(result["duration"] - expected_duration) < 100
+            )  # tolérance de 100s
             assert abs(result["distance"] - km * 1000) < 1000  # tolérance de 1000m
 
         print("  ✅ Fallback haversine fonctionne pour route_info")
@@ -175,7 +191,9 @@ class TestOSRMFallbackIntegration:
         all_coords = driver_coords + booking_coords
 
         # Construire la matrice
-        matrix = build_distance_matrix_osrm(coords=all_coords, base_url="http://localhost:5000")
+        matrix = build_distance_matrix_osrm(
+            coords=all_coords, base_url="http://localhost:5000"
+        )
 
         # Vérifier que la matrice est correcte
         assert len(matrix) == len(all_coords)

@@ -58,7 +58,9 @@ except ImportError:
     from sklearn.preprocessing import StandardScaler
 
     SKLEARN_AVAILABLE = False
-    logger.warning("[MLPredictor] scikit-learn not available. Install with: pip install scikit-learn")
+    logger.warning(
+        "[MLPredictor] scikit-learn not available. Install with: pip install scikit-learn"
+    )
 
 
 @dataclass
@@ -105,7 +107,9 @@ class DelayMLPredictor(object):
         else:
             logger.warning("[MLPredictor] Model not found at %s", self.model_path)
 
-    def extract_features(self, booking: Any, driver: Any, current_time: datetime | None = None) -> Dict[str, float]:
+    def extract_features(
+        self, booking: Any, driver: Any, current_time: datetime | None = None
+    ) -> Dict[str, float]:
         """Extrait les features pour la prédiction.
         Features utilisées:
         - time_of_day: Heure de la journée (0-23)
@@ -328,7 +332,11 @@ class DelayMLPredictor(object):
         X_array = np.array(X)
         y_array = np.array(y)
 
-        logger.info("[MLPredictor] Training on %s samples with %s features", len(X), len(self.feature_names))
+        logger.info(
+            "[MLPredictor] Training on %s samples with %s features",
+            len(X),
+            len(self.feature_names),
+        )
 
         # Standardiser les features
         self.scaler = StandardScaler()
@@ -336,7 +344,12 @@ class DelayMLPredictor(object):
 
         # Entraîner le modèle
         self.model = RandomForestRegressor(
-            n_estimators=0.100, max_depth=10, min_samples_split=5, min_samples_leaf=2, random_state=42, n_jobs=-1
+            n_estimators=0.100,
+            max_depth=10,
+            min_samples_split=5,
+            min_samples_leaf=2,
+            random_state=42,
+            n_jobs=-1,
         )
 
         self.model.fit(X_scaled, y_array)
@@ -351,7 +364,9 @@ class DelayMLPredictor(object):
             "r2score": float(train_score),
             "feature_importance": {
                 name: float(importance)
-                for name, importance in zip(self.feature_names, self.model.feature_importances_, strict=False)
+                for name, importance in zip(
+                    self.feature_names, self.model.feature_importances_, strict=False
+                )
             },
         }
 
@@ -363,7 +378,9 @@ class DelayMLPredictor(object):
 
         return metrics
 
-    def predict_delay(self, booking: Any, driver: Any, current_time: datetime | None = None) -> DelayPrediction:
+    def predict_delay(
+        self, booking: Any, driver: Any, current_time: datetime | None = None
+    ) -> DelayPrediction:
         """Prédit le retard pour une assignation avec le modèle entraîné.
 
         Returns:
@@ -382,7 +399,9 @@ class DelayMLPredictor(object):
             if all([pickup_lat, pickup_lon, dropoff_lat, dropoff_lon]):
                 from shared.geo_utils import haversine_distance
 
-                distance_km = haversine_distance(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+                distance_km = haversine_distance(
+                    pickup_lat, pickup_lon, dropoff_lat, dropoff_lon
+                )
                 predicted_delay = distance_km * 0.5  # Simple heuristique
             else:
                 predicted_delay = 3
@@ -421,7 +440,9 @@ class DelayMLPredictor(object):
             predicted_delay = float(self.model.predict(feature_df)[0])
 
             # 5. Calculer la confiance (basée sur variance des arbres)
-            tree_predictions = [tree.predict(feature_df)[0] for tree in self.model.estimators_]
+            tree_predictions = [
+                tree.predict(feature_df)[0] for tree in self.model.estimators_
+            ]
             std = float(np.std(tree_predictions))
             confidence = max(0, min(1, 1 - (std / 10)))
 
@@ -440,14 +461,22 @@ class DelayMLPredictor(object):
             for i, name in enumerate(self.feature_names):
                 if i < len(feature_importances):
                     impact = float(features.get(name, 0) * feature_importances[i])
-                    if abs(impact) > MIN_IMPACT_THRESHOLD:  # Seulement facteurs significatifs
+                    if (
+                        abs(impact) > MIN_IMPACT_THRESHOLD
+                    ):  # Seulement facteurs significatifs
                         top_factors[name] = impact
 
             # Garder top 5
-            sorted_factors = sorted(top_factors.items(), key=lambda x: abs(x[1]), reverse=True)[:5]
+            sorted_factors = sorted(
+                top_factors.items(), key=lambda x: abs(x[1]), reverse=True
+            )[:5]
             contributing_factors = dict(sorted_factors)
 
-            logger.info("[MLPredictor] Prediction for booking %s: %.2fmin", getattr(booking, "id", 0), predicted_delay)
+            logger.info(
+                "[MLPredictor] Prediction for booking %s: %.2fmin",
+                getattr(booking, "id", 0),
+                predicted_delay,
+            )
 
             return DelayPrediction(
                 booking_id=getattr(booking, "id", 0),
@@ -488,7 +517,9 @@ class DelayMLPredictor(object):
             # Utilisation de joblib (recommandé pour scikit-learn) au lieu de pickle direct
             # joblib utilise pickle en interne mais avec des optimisations pour numpy/scipy
             # nosec B301: Modèles internes uniquement, provenant de sources de confiance
-            joblib.dump(model_data, f)  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+            joblib.dump(
+                model_data, f
+            )  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
 
         logger.info("[MLPredictor] Model saved to %s", self.model_path)
 
@@ -503,7 +534,9 @@ class DelayMLPredictor(object):
                 # Utilisation de joblib (recommandé pour scikit-learn) au lieu de pickle direct
                 # joblib utilise pickle en interne mais avec des optimisations pour numpy/scipy
                 # nosec B301: Modèles internes uniquement, provenant de sources de confiance
-                model_data = joblib.load(f)  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                model_data = joblib.load(
+                    f
+                )  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
 
             self.model = model_data["model"]
             self.feature_names = model_data["feature_names"]
@@ -542,7 +575,10 @@ def get_ml_predictor() -> DelayMLPredictor:
 
 
 def predict_with_feature_flag(
-    booking: Any, driver: Any, current_time: datetime | None = None, request_id: str | None = None
+    booking: Any,
+    driver: Any,
+    current_time: datetime | None = None,
+    request_id: str | None = None,
 ) -> DelayPrediction:
     """Prédiction avec feature flag et logging exhaustif.
 
@@ -570,7 +606,9 @@ def predict_with_feature_flag(
             predictor = get_ml_predictor()
 
             if not predictor.is_trained:
-                logger.warning("[ML] Model not trained for booking %s, using fallback", booking_id)
+                logger.warning(
+                    "[ML] Model not trained for booking %s, using fallback", booking_id
+                )
                 FeatureFlags.record_ml_failure()
                 prediction = predictor.predict_delay(booking, driver, current_time)
             else:
@@ -599,7 +637,10 @@ def predict_with_feature_flag(
                 FeatureFlags.record_ml_success()
         else:
             # Utiliser fallback
-            logger.info("[ML] Using fallback for booking %s (ML disabled or outside traffic percentage)", booking_id)
+            logger.info(
+                "[ML] Using fallback for booking %s (ML disabled or outside traffic percentage)",
+                booking_id,
+            )
 
             predictor = get_ml_predictor()
             prediction = predictor.predict_delay(booking, driver, current_time)
@@ -623,13 +664,17 @@ def predict_with_feature_flag(
             if all([pickup_lat, pickup_lon, dropoff_lat, dropoff_lon]):
                 from shared.geo_utils import haversine_distance
 
-                distance_km = haversine_distance(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+                distance_km = haversine_distance(
+                    pickup_lat, pickup_lon, dropoff_lat, dropoff_lon
+                )
                 predicted_delay = distance_km * 0.5
             else:
                 predicted_delay = 5
 
             prediction = DelayPrediction(
-                booking_id=int(booking_id) if isinstance(booking_id, (int, str)) and str(booking_id).isdigit() else 0,
+                booking_id=int(booking_id)
+                if isinstance(booking_id, (int, str)) and str(booking_id).isdigit()
+                else 0,
                 predicted_delay_minutes=predicted_delay,
                 confidence=0.2,
                 risk_level="medium",

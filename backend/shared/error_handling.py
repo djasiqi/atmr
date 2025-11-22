@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
-def safe_execute(default_return: Any = None, log_error: bool = True) -> Callable[[Callable[..., T]], Callable[..., T]]:
+def safe_execute(
+    default_return: Any = None, log_error: bool = True
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Décorateur pour exécuter une fonction de manière sécurisée.
 
     Capture toutes les exceptions et retourne une valeur par défaut au lieu
@@ -52,7 +54,9 @@ def safe_execute(default_return: Any = None, log_error: bool = True) -> Callable
                 return func(*args, **kwargs)
             except Exception as e:
                 if log_error:
-                    logger.exception("[safe_execute] Erreur dans %s: %s", func.__name__, e)
+                    logger.exception(
+                        "[safe_execute] Erreur dans %s: %s", func.__name__, e
+                    )
                 return default_return
 
         return wrapper

@@ -19,10 +19,22 @@ depends_on = None
 def upgrade():
     # Ajouter les colonnes wheelchair_client_has et wheelchair_need à la table booking
     op.add_column(
-        "booking", sa.Column("wheelchair_client_has", sa.Boolean(), nullable=False, server_default=sa.text("false"))
+        "booking",
+        sa.Column(
+            "wheelchair_client_has",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.text("false"),
+        ),
     )
     op.add_column(
-        "booking", sa.Column("wheelchair_need", sa.Boolean(), nullable=False, server_default=sa.text("false"))
+        "booking",
+        sa.Column(
+            "wheelchair_need",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.text("false"),
+        ),
     )
 
 

@@ -62,7 +62,9 @@ class TestSimpleCoverage:
             generator = RLSuggestionGenerator()
 
             past_date = datetime.now() - timedelta(days=1)
-            suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date=past_date)
+            suggestions = generator.generate_suggestions(
+                company_id=1, assignments=[], drivers=[], for_date=past_date
+            )
 
             assert suggestions == []
 
@@ -99,7 +101,10 @@ class TestSimpleCoverage:
         from services.rl.rl_logger import RLLogger
 
         logger = RLLogger(
-            redis_key_prefix="custom", max_redis_logs=0.500, enable_db_logging=False, enable_redis_logging=False
+            redis_key_prefix="custom",
+            max_redis_logs=0.500,
+            enable_db_logging=False,
+            enable_redis_logging=False,
         )
 
         assert logger.redis_key_prefix == "custom"

@@ -55,7 +55,9 @@ class TestMLMonitoringService:
             )
 
             # Mettre à jour retard réel
-            MLMonitoringService.update_actual_delay(booking_id=sample_booking.id, actual_delay=9.2)
+            MLMonitoringService.update_actual_delay(
+                booking_id=sample_booking.id, actual_delay=9.2
+            )
 
             # Vérifier
             db.session.refresh(prediction)
@@ -142,7 +144,9 @@ class TestMLMonitoringAPI:
 
     def test_get_metrics(self, client, auth_headers):
         """Test endpoint GET /api/ml-monitoring/metrics."""
-        response = client.get("/api/ml-monitoring/metrics?hours=24", headers=auth_headers)
+        response = client.get(
+            "/api/ml-monitoring/metrics?hours=24", headers=auth_headers
+        )
 
         assert response.status_code == 200
         data = response.get_json()

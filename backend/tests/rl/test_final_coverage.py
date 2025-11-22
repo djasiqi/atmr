@@ -286,9 +286,19 @@ class TestFinalCoverage:
 
         manager = ShadowModeManager()
 
-        human_decision = {"driver_id": 1, "booking_id": 1, "eta_minutes": 15, "delay_minutes": 5}
+        human_decision = {
+            "driver_id": 1,
+            "booking_id": 1,
+            "eta_minutes": 15,
+            "delay_minutes": 5,
+        }
 
-        rl_decision = {"driver_id": 2, "booking_id": 1, "eta_minutes": 12, "delay_minutes": 2}
+        rl_decision = {
+            "driver_id": 2,
+            "booking_id": 1,
+            "eta_minutes": 12,
+            "delay_minutes": 2,
+        }
 
         context = {"timestamp": "2023-0.1-01T10:00:00", "company_id": 1}
         manager.log_decision_comparison("1", "1", human_decision, rl_decision, context)
@@ -422,7 +432,16 @@ class TestFinalCoverage:
 
         # Mock les méthodes de logging pour éviter les erreurs DB/Redis
         with patch.object(logger, "_log_to_redis"), patch.object(logger, "_log_to_db"):
-            logger.log_decision(state, action, q_values, reward, latency_ms, model_version, constraints, metadata)
+            logger.log_decision(
+                state,
+                action,
+                q_values,
+                reward,
+                latency_ms,
+                model_version,
+                constraints,
+                metadata,
+            )
 
             # Vérifier que les méthodes ont été appelées
             logger._log_to_redis.assert_called_once()
@@ -441,7 +460,9 @@ class TestFinalCoverage:
 
             # Mock _generate_basic_suggestions pour retourner des suggestions
             mock_suggestions = [{"driver_id": 1, "booking_id": 1, "confidence": 0.8}]
-            with patch.object(generator, "_generate_basic_suggestions", return_value=mock_suggestions):
+            with patch.object(
+                generator, "_generate_basic_suggestions", return_value=mock_suggestions
+            ):
                 suggestions = generator.generate_suggestions(
                     company_id=1,
                     assignments=[],

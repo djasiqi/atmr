@@ -23,7 +23,10 @@ class TestDispatchEnvAdditionalEdgeCases:
             {"id": 2, "available": False, "load": 1},
             {"id": 3, "available": False, "load": 3},
         ]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30}, {"id": 2, "priority": 1, "time_window": 15}]
+        env.bookings = [
+            {"id": 1, "priority": 3, "time_window": 30},
+            {"id": 2, "priority": 1, "time_window": 15},
+        ]
 
         valid_mask = env._get_valid_actions_mask()
 
@@ -37,7 +40,10 @@ class TestDispatchEnvAdditionalEdgeCases:
         env.reset()
 
         # Simuler des bookings déjà assignés
-        env.drivers = [{"id": 1, "available": True, "load": 2}, {"id": 2, "available": True, "load": 1}]
+        env.drivers = [
+            {"id": 1, "available": True, "load": 2},
+            {"id": 2, "available": True, "load": 1},
+        ]
         env.bookings = [
             {"id": 1, "priority": 3, "time_window": 30, "assigned": True},
             {"id": 2, "priority": 1, "time_window": 15, "assigned": True},
@@ -55,7 +61,10 @@ class TestDispatchEnvAdditionalEdgeCases:
         env.reset()
 
         # Simuler des bookings avec fenêtre temporelle expirée
-        env.drivers = [{"id": 1, "available": True, "load": 2}, {"id": 2, "available": True, "load": 1}]
+        env.drivers = [
+            {"id": 1, "available": True, "load": 2},
+            {"id": 2, "available": True, "load": 1},
+        ]
         env.bookings = [
             {"id": 1, "priority": 3, "time_window": 0},  # Expiré
             {"id": 2, "priority": 1, "time_window": 15},
@@ -76,7 +85,10 @@ class TestDispatchEnvAdditionalEdgeCases:
             {"id": 1, "available": True, "load": 10},  # Capacité max
             {"id": 2, "available": True, "load": 10},  # Capacité max
         ]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30}, {"id": 2, "priority": 1, "time_window": 15}]
+        env.bookings = [
+            {"id": 1, "priority": 3, "time_window": 30},
+            {"id": 2, "priority": 1, "time_window": 15},
+        ]
 
         valid_mask = env._get_valid_actions_mask()
 
@@ -337,7 +349,10 @@ class TestDispatchEnvAdditionalEdgeCases:
         env.reset()
 
         # Simuler des bookings expirés
-        env.bookings = [{"id": 1, "time_window": 0, "assigned": False}, {"id": 2, "time_window": 5, "assigned": False}]
+        env.bookings = [
+            {"id": 1, "time_window": 0, "assigned": False},
+            {"id": 2, "time_window": 5, "assigned": False},
+        ]
 
         penalty = env._check_expired_bookings()
 
@@ -407,7 +422,9 @@ class TestDispatchEnvAdditionalEdgeCases:
         env.reset()
 
         with patch("services.rl.dispatch_env.logging") as mock_logging:
-            distance = env._calculate_distance(float("nan"), float("nan"), float("nan"), float("nan"))
+            distance = env._calculate_distance(
+                float("nan"), float("nan"), float("nan"), float("nan")
+            )
 
             assert isinstance(distance, float)
             assert distance == 0.0

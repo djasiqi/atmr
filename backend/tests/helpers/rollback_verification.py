@@ -75,7 +75,9 @@ def verify_rollback_restores_values(
     elif reload_strategy == "get":
         reloaded = db_session.query(model_class).get(object_id)
     else:
-        raise ValueError(f"Invalid reload_strategy: {reload_strategy}. Use 'query' or 'get'")
+        raise ValueError(
+            f"Invalid reload_strategy: {reload_strategy}. Use 'query' or 'get'"
+        )
 
     if reloaded is None:
         error_msg = (
@@ -89,7 +91,9 @@ def verify_rollback_restores_values(
     for field, expected_value in original_values.items():
         actual_value = getattr(reloaded, field, None)
         if actual_value != expected_value:
-            mismatches.append(f"{field}: expected={expected_value!r}, actual={actual_value!r}")
+            mismatches.append(
+                f"{field}: expected={expected_value!r}, actual={actual_value!r}"
+            )
 
     if mismatches:
         error_msg = (
@@ -107,7 +111,9 @@ def verify_rollback_restores_values(
     return True
 
 
-def capture_original_values(obj: Any, fields: List[str] | None = None) -> Dict[str, Any]:
+def capture_original_values(
+    obj: Any, fields: List[str] | None = None
+) -> Dict[str, Any]:
     """Capture les valeurs originales d'un objet avant modification.
 
     Args:
@@ -130,7 +136,11 @@ def capture_original_values(obj: Any, fields: List[str] | None = None) -> Dict[s
     """
     if fields is None:
         # Capturer tous les attributs non privés
-        fields = [attr for attr in dir(obj) if not attr.startswith("_") and not callable(getattr(obj, attr, None))]
+        fields = [
+            attr
+            for attr in dir(obj)
+            if not attr.startswith("_") and not callable(getattr(obj, attr, None))
+        ]
 
     original_values: Dict[str, Any] = {}
     for field in fields:
@@ -193,7 +203,9 @@ def verify_multiple_rollbacks(
             errors.append(str(e))
 
     if not all_correct:
-        error_msg = "Multiple rollback verifications failed:\n" + "\n".join(f"  - {error}" for error in errors)
+        error_msg = "Multiple rollback verifications failed:\n" + "\n".join(
+            f"  - {error}" for error in errors
+        )
         raise AssertionError(error_msg)
 
     return True

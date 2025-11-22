@@ -59,7 +59,9 @@ class TestShouldAlertForIP:
         result = should_alert_for_ip("192.168.1.100")
 
         assert result is True
-        mock_redis_client.exists.assert_called_once_with(f"{REDIS_ALERT_KEY_PREFIX}192.168.1.100")
+        mock_redis_client.exists.assert_called_once_with(
+            f"{REDIS_ALERT_KEY_PREFIX}192.168.1.100"
+        )
         mock_redis_client.setex.assert_called_once()
         args, _ = mock_redis_client.setex.call_args
         assert args[0] == f"{REDIS_ALERT_KEY_PREFIX}192.168.1.100"
@@ -73,7 +75,9 @@ class TestShouldAlertForIP:
         result = should_alert_for_ip("192.168.1.100")
 
         assert result is False
-        mock_redis_client.exists.assert_called_once_with(f"{REDIS_ALERT_KEY_PREFIX}192.168.1.100")
+        mock_redis_client.exists.assert_called_once_with(
+            f"{REDIS_ALERT_KEY_PREFIX}192.168.1.100"
+        )
         mock_redis_client.setex.assert_not_called()
 
     def test_should_alert_for_ip_redis_unavailable_fallback_memory(self):
@@ -89,7 +93,9 @@ class TestShouldAlertForIP:
 
             # Alerte après expiration: autorisée
             with patch("security.ip_whitelist_alerts.datetime") as mock_datetime:
-                mock_datetime.now.return_value = datetime.now(UTC) + timedelta(minutes=ALERT_RATE_LIMIT_MINUTES + 1)
+                mock_datetime.now.return_value = datetime.now(UTC) + timedelta(
+                    minutes=ALERT_RATE_LIMIT_MINUTES + 1
+                )
                 # Réinitialiser le cache mémoire
                 if hasattr(should_alert_for_ip, "_memory_cache"):
                     should_alert_for_ip._memory_cache = {}  # type: ignore[attr-defined]
@@ -112,7 +118,9 @@ class TestSendIPWhitelistAlert:
 
     @patch("security.ip_whitelist_alerts.sentry_sdk.capture_message")
     @patch("security.ip_whitelist_alerts.should_alert_for_ip")
-    def test_send_alert_audit_log_called(self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request):
+    def test_send_alert_audit_log_called(
+        self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request
+    ):
         """Test que AuditLogger est appelé lors d'une alerte."""
         mock_should_alert.return_value = True
 
@@ -193,7 +201,9 @@ class TestSendIPWhitelistAlert:
 
     @patch("security.ip_whitelist_alerts.sentry_sdk.capture_message")
     @patch("security.ip_whitelist_alerts.should_alert_for_ip")
-    def test_send_alert_with_headers(self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request):
+    def test_send_alert_with_headers(
+        self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request
+    ):
         """Test que les headers de sécurité sont collectés."""
         mock_should_alert.return_value = True
         mock_request.headers = {
@@ -221,7 +231,9 @@ class TestSendIPWhitelistAlert:
 
     @patch("security.ip_whitelist_alerts.sentry_sdk.capture_message")
     @patch("security.ip_whitelist_alerts.should_alert_for_ip")
-    def test_send_alert_without_user_id(self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request):
+    def test_send_alert_without_user_id(
+        self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request
+    ):
         """Test alerte sans user_id (utilisateur non authentifié)."""
         mock_should_alert.return_value = True
 
@@ -263,7 +275,9 @@ class TestIPWhitelistAlertIntegration:
 
     @patch("security.ip_whitelist_alerts.sentry_sdk.capture_message")
     @patch("security.ip_whitelist_alerts.should_alert_for_ip")
-    def test_full_alert_flow(self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request):
+    def test_full_alert_flow(
+        self, mock_should_alert, mock_sentry_capture, mock_audit_logger, mock_request
+    ):
         """Test du flux complet d'alerte."""
         mock_should_alert.return_value = True
 

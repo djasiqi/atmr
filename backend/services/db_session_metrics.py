@@ -53,7 +53,9 @@ if PROMETHEUS_AVAILABLE and Counter is not None and Histogram is not None:
     DB_CONTEXT_MANAGER_USAGE = Counter(
         "db_context_manager_usage_total",
         "Utilisation des context managers DB",
-        ["manager_type"],  # manager_type: "db_transaction", "db_read_only", "db_batch_operation"
+        [
+            "manager_type"
+        ],  # manager_type: "db_transaction", "db_read_only", "db_batch_operation"
     )
 
     DB_DIRECT_SESSION_USAGE = Counter(
@@ -74,7 +76,9 @@ if PROMETHEUS_AVAILABLE and Counter is not None and Histogram is not None:
         DB_DIRECT_SESSION_USAGE.labels(operation="rollback").inc(0)
     except Exception as e:
         # Ignorer les erreurs d'initialisation (peut échouer si Prometheus non configuré)
-        logger.debug("[DB Session Metrics] Failed to initialize metrics with 0.0: %s", e)
+        logger.debug(
+            "[DB Session Metrics] Failed to initialize metrics with 0.0: %s", e
+        )
 else:
     DB_TRANSACTION_TOTAL = None
     DB_TRANSACTION_DURATION = None

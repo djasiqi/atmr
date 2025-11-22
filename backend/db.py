@@ -27,8 +27,13 @@ def une_fonction_qui_cree_une_reservation(data: Dict[str, Any]):
         # Payload typé (Pylance-friendly) puis cast au moment de l'appel
         payload: Dict[str, Any] = {
             "customer_name": str(data.get("customer_name") or "John Doe"),
-            "pickup_location": str(data.get("pickup_location") or "1 Rue de la Paix, 75002 Paris"),
-            "dropoff_location": str(data.get("dropoff_location") or "10 Avenue des Champs-Élysées, 75008 Paris"),
+            "pickup_location": str(
+                data.get("pickup_location") or "1 Rue de la Paix, 75002 Paris"
+            ),
+            "dropoff_location": str(
+                data.get("dropoff_location")
+                or "10 Avenue des Champs-Élysées, 75008 Paris"
+            ),
             "amount": float(data.get("amount") or 50.0),
             "user_id": user_id,
             "client_id": client_id,
@@ -55,9 +60,14 @@ def une_fonction_qui_cree_une_reservation(data: Dict[str, Any]):
 
         db.session.add(nouvelle_reservation)
         db.session.commit()
-        app_logger.info("Nouvelle réservation {nouvelle_reservation.id} créée avec succès.")
+        app_logger.info(
+            "Nouvelle réservation {nouvelle_reservation.id} créée avec succès."
+        )
 
-        return {"message": "Réservation créée", "booking_id": nouvelle_reservation.id}, 201
+        return {
+            "message": "Réservation créée",
+            "booking_id": nouvelle_reservation.id,
+        }, 201
 
     except Exception:
         db.session.rollback()

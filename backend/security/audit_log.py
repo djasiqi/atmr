@@ -41,17 +41,25 @@ class AuditLog(db.Model):
 
     # Utilisateur/Système
     user_id = db.Column(Integer, nullable=True)  # NULL pour actions système
-    user_type = db.Column(String(50), nullable=False)  # 'admin', 'operator', 'system', etc.
+    user_type = db.Column(
+        String(50), nullable=False
+    )  # 'admin', 'operator', 'system', etc.
 
     # Action effectuée
-    action_type = db.Column(String(100), nullable=False)  # 'dispatch', 'booking_update', 'driver_assign', etc.
-    action_category = db.Column(String(50), nullable=False)  # 'dispatch', 'security', 'data_access', etc.
+    action_type = db.Column(
+        String(100), nullable=False
+    )  # 'dispatch', 'booking_update', 'driver_assign', etc.
+    action_category = db.Column(
+        String(50), nullable=False
+    )  # 'dispatch', 'security', 'data_access', etc.
 
     # Détails de l'action (JSON)
     action_details = db.Column(Text, nullable=False)  # JSON string
 
     # Résultat
-    result_status = db.Column(String(50), nullable=False)  # 'success', 'failure', 'partial'
+    result_status = db.Column(
+        String(50), nullable=False
+    )  # 'success', 'failure', 'partial'
     result_message = db.Column(Text, nullable=True)
 
     # Contexte

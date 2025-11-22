@@ -90,7 +90,9 @@ class TestEndToEndAuditLogging:
 
         # Note: Les actions malveillantes peuvent être loggées dans l'audit log
         # Vérifier que les logs d'audit sont créés (si applicable)
-        _initial_count = AuditLog.query.count()  # Vérifié visuellement, mais non utilisé dans assert
+        _initial_count = (
+            AuditLog.query.count()
+        )  # Vérifié visuellement, mais non utilisé dans assert
 
         for payload in malicious_payloads:
             # Tenter des actions avec payloads malveillants
@@ -118,7 +120,10 @@ class TestEndToEndAuditLogging:
         initial_failures = security_login_failures_total._value.get()
 
         for _ in range(3):
-            response = client.post("/api/auth/login", json={"email": "test@example.com", "password": "wrong"})
+            response = client.post(
+                "/api/auth/login",
+                json={"email": "test@example.com", "password": "wrong"},
+            )
             assert response.status_code in (401, 404)
 
         # Les métriques doivent être incrémentées
@@ -140,7 +145,9 @@ class TestSecurityDefenseInDepth:
     def test_multiple_layers_protect_against_injection(self, client, auth_headers):
         """Test que plusieurs couches de protection fonctionnent ensemble."""
         # Test avec un payload qui essaie de contourner plusieurs protections
-        payload = "1' UNION SELECT * FROM users WHERE '1'='1'--<script>alert('XSS')</script>"
+        payload = (
+            "1' UNION SELECT * FROM users WHERE '1'='1'--<script>alert('XSS')</script>"
+        )
 
         # Tester dans différents vecteurs
         vectors = [
@@ -150,11 +157,17 @@ class TestSecurityDefenseInDepth:
 
         for endpoint_template, method in vectors:
             if method == "GET":
-                response = client.get(f"{endpoint_template}{payload}", headers=auth_headers)
+                response = client.get(
+                    f"{endpoint_template}{payload}", headers=auth_headers
+                )
             else:
                 response = client.post(
                     endpoint_template,
-                    json={"customer_name": payload, "pickup_location": "Test", "dropoff_location": "Test"},
+                    json={
+                        "customer_name": payload,
+                        "pickup_location": "Test",
+                        "dropoff_location": "Test",
+                    },
                     headers=auth_headers,
                 )
             # Toutes les protections doivent fonctionner

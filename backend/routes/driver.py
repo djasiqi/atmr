@@ -48,15 +48,25 @@ driver_profile_model = driver_ns.model(
         "first_name": fields.String(description="Prénom", min_length=1, max_length=100),
         "last_name": fields.String(description="Nom", min_length=1, max_length=100),
         "phone": fields.String(description="Téléphone", max_length=20),
-        "status": fields.String(description="Statut", enum=["disponible", "hors service"]),
+        "status": fields.String(
+            description="Statut", enum=["disponible", "hors service"]
+        ),
         # HR fields
-        "contract_type": fields.String(description="Type de contrat (max 50 caractères)", max_length=50),
-        "weekly_hours": fields.Integer(description="Heures contrat / semaine (0-168)", minimum=0, maximum=168),
-        "hourly_rate_cents": fields.Integer(description="Taux horaire (centimes, >= 0)", minimum=0),
+        "contract_type": fields.String(
+            description="Type de contrat (max 50 caractères)", max_length=50
+        ),
+        "weekly_hours": fields.Integer(
+            description="Heures contrat / semaine (0-168)", minimum=0, maximum=168
+        ),
+        "hourly_rate_cents": fields.Integer(
+            description="Taux horaire (centimes, >= 0)", minimum=0
+        ),
         "employment_start_date": fields.String(
             description="Date de début (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"
         ),
-        "employment_end_date": fields.String(description="Date de fin (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"),
+        "employment_end_date": fields.String(
+            description="Date de fin (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"
+        ),
         "license_categories": fields.List(
             fields.String(description="Catégorie de permis", max_length=10),
             description="Ex: ['B','C1'] (max 10 catégories)",
@@ -65,16 +75,19 @@ driver_profile_model = driver_ns.model(
             description="Validité permis (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"
         ),
         "trainings": fields.List(
-            fields.Raw(description="Formation: {name, valid_until}"), description="Formations (max 50)"
+            fields.Raw(description="Formation: {name, valid_until}"),
+            description="Formations (max 50)",
         ),
         "medical_valid_until": fields.String(
-            description="Validité médicale (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"
+            description="Validité médicale (YYYY-MM-DD)",
+            pattern="^\\d{4}-\\d{2}-\\d{2}$",
         ),
     },
 )
 
 photo_model = driver_ns.model(
-    "DriverPhoto", {"photo": fields.String(required=True, description="Photo en Base64 ou URL")}
+    "DriverPhoto",
+    {"photo": fields.String(required=True, description="Photo en Base64 ou URL")},
 )
 
 location_model = driver_ns.model(
@@ -93,13 +106,19 @@ booking_status_model = driver_ns.model(
     "BookingStatusUpdate",
     {
         "status": fields.String(
-            required=True, description="Nouveau statut (en_route, in_progress, completed, return_completed)"
+            required=True,
+            description="Nouveau statut (en_route, in_progress, completed, return_completed)",
         )
     },
 )
 
 availability_model = driver_ns.model(
-    "DriverAvailability", {"is_available": fields.Boolean(required=True, description="Disponibilité du chauffeur")}
+    "DriverAvailability",
+    {
+        "is_available": fields.Boolean(
+            required=True, description="Disponibilité du chauffeur"
+        )
+    },
 )
 
 # ---------------------------
@@ -122,7 +141,9 @@ def get_driver_from_token() -> tuple[Driver | None, dict[str, Any] | None, int |
     app_logger.info(f"User details: id={user.id}, role={user.role}")
 
     if user.role != UserRole.driver:
-        app_logger.error(f"User {getattr(user, 'username', user.id)} n'a pas le rôle 'driver'")
+        app_logger.error(
+            f"User {getattr(user, 'username', user.id)} n'a pas le rôle 'driver'"
+        )
         return None, {"error": "Driver not found"}, 404
 
     driver = Driver.query.filter_by(user_id=user.id).one_or_none()
@@ -130,7 +151,9 @@ def get_driver_from_token() -> tuple[Driver | None, dict[str, Any] | None, int |
         app_logger.error("Driver not found for user ID: {user.id}")
         return None, {"error": "Driver not found"}, 404
 
-    app_logger.info(f"Driver found: {driver.id} for user {getattr(user, 'username', user.id)}")
+    app_logger.info(
+        f"Driver found: {driver.id} for user {getattr(user, 'username', user.id)}"
+    )
     return driver, None, None
 
 
@@ -146,7 +169,9 @@ def notify_booking_update(driver_id: int, booking: Booking) -> None:
     room = f"driver_{driver_id}"
     # ✅ FIX: Émettre "new_booking" au lieu de "booking_updated" pour cohérence avec le mobile
     socketio.emit("new_booking", booking.to_dict(), to=room)
-    app_logger.info(f"📤 new_booking (update) émis vers {room} pour booking_id={booking.id}")
+    app_logger.info(
+        f"📤 new_booking (update) émis vers {room} pour booking_id={booking.id}"
+    )
 
 
 def notify_booking_cancelled(driver_id: int, booking_id: int) -> None:
@@ -172,9 +197,14 @@ class DriverProfile(Resource):
             driver = cast("Driver", driver)
             return {"profile": driver.serialize}, 200
         except Exception as e:
-            app_logger.error(f"❌ ERREUR get_driver_profile: {type(e).__name__} - {e!s}", exc_info=True)
+            app_logger.error(
+                f"❌ ERREUR get_driver_profile: {type(e).__name__} - {e!s}",
+                exc_info=True,
+            )
             sentry_sdk.capture_exception(e)
-            return {"error": "Une erreur interne est survenue lors de la récupération du profil."}, 500
+            return {
+                "error": "Une erreur interne est survenue lors de la récupération du profil."
+            }, 500
 
     @jwt_required()
     @role_required(UserRole.driver)
@@ -195,7 +225,9 @@ class DriverProfile(Resource):
         from schemas.validation_utils import handle_validation_error, validate_request
 
         try:
-            validated_data = validate_request(DriverProfileUpdateSchema(), data, strict=False)
+            validated_data = validate_request(
+                DriverProfileUpdateSchema(), data, strict=False
+            )
         except ValidationError as e:
             return handle_validation_error(e)
 
@@ -240,17 +272,25 @@ class DriverProfile(Resource):
 
             # Listes
             if validated_data.get("license_categories"):
-                driver.license_categories = [str(cat) for cat in validated_data["license_categories"]]
+                driver.license_categories = [
+                    str(cat) for cat in validated_data["license_categories"]
+                ]
             if validated_data.get("trainings"):
                 driver.trainings = validated_data["trainings"]
 
             db.session.commit()
             app_logger.info(f"Profil du driver {driver.id} mis à jour avec succès")
-            return {"profile": driver.serialize, "message": "Profil mis à jour avec succès"}, 200
+            return {
+                "profile": driver.serialize,
+                "message": "Profil mis à jour avec succès",
+            }, 200
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR update_driver_profile: {type(e).__name__} - {e!s}", exc_info=True)
+            app_logger.error(
+                f"❌ ERREUR update_driver_profile: {type(e).__name__} - {e!s}",
+                exc_info=True,
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -279,11 +319,17 @@ class DriverPhoto(Resource):
         try:
             db.session.commit()
             app_logger.info(f"Photo du driver {driver.id} mise à jour avec succès")
-            return {"profile": driver.serialize, "message": "Photo mise à jour avec succès"}, 200
+            return {
+                "profile": driver.serialize,
+                "message": "Photo mise à jour avec succès",
+            }, 200
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR update_driver_photo: {type(e).__name__} - {e!s}", exc_info=True)
+            app_logger.error(
+                f"❌ ERREUR update_driver_photo: {type(e).__name__} - {e!s}",
+                exc_info=True,
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -298,8 +344,14 @@ class DriverUpcomingBookings(Resource):
         driver = cast("Driver", driver)
 
         # 🔍 LOG : Vérifier quel chauffeur charge ses missions
-        driver_name = f"{driver.user.first_name} {driver.user.last_name}" if driver.user else f"#{driver.id}"
-        app_logger.info(f"📱 [Driver Bookings] Driver {driver_name} (ID: {driver.id}) loading bookings")
+        driver_name = (
+            f"{driver.user.first_name} {driver.user.last_name}"
+            if driver.user
+            else f"#{driver.id}"
+        )
+        app_logger.info(
+            f"📱 [Driver Bookings] Driver {driver_name} (ID: {driver.id}) loading bookings"
+        )
 
         from datetime import date
 
@@ -314,11 +366,16 @@ class DriverUpcomingBookings(Resource):
         today_start = datetime.fromisoformat(str(today_start))
         today_end = datetime.fromisoformat(str(today_end))
 
-        status_pred = Booking.status.in_([BookingStatus.ASSIGNED, BookingStatus.EN_ROUTE, BookingStatus.IN_PROGRESS])
+        status_pred = Booking.status.in_(
+            [BookingStatus.ASSIGNED, BookingStatus.EN_ROUTE, BookingStatus.IN_PROGRESS]
+        )
 
         bookings = (
             Booking.query.filter_by(driver_id=driver.id)
-            .filter(Booking.scheduled_time >= today_start, Booking.scheduled_time < today_end)
+            .filter(
+                Booking.scheduled_time >= today_start,
+                Booking.scheduled_time < today_end,
+            )
             .filter(status_pred)
             .order_by(Booking.scheduled_time.asc())
             .all()
@@ -355,11 +412,16 @@ class DriverBookingsETA(Resource):
         # Récupérer les courses d'aujourd'hui (non terminées)
         today_start, today_end = day_local_bounds(date.today().strftime("%Y-%m-%d"))
 
-        status_pred = Booking.status.in_([BookingStatus.ASSIGNED, BookingStatus.EN_ROUTE, BookingStatus.IN_PROGRESS])
+        status_pred = Booking.status.in_(
+            [BookingStatus.ASSIGNED, BookingStatus.EN_ROUTE, BookingStatus.IN_PROGRESS]
+        )
 
         bookings = (
             Booking.query.filter_by(driver_id=driver.id)
-            .filter(Booking.scheduled_time >= today_start, Booking.scheduled_time < today_end)
+            .filter(
+                Booking.scheduled_time >= today_start,
+                Booking.scheduled_time < today_end,
+            )
             .filter(status_pred)
             .order_by(Booking.scheduled_time.asc())
             .all()
@@ -374,7 +436,11 @@ class DriverBookingsETA(Resource):
             return {
                 "has_gps": False,
                 "bookings": [
-                    {"id": b.id, "duration_seconds": b.duration_seconds, "distance_meters": b.distance_meters}
+                    {
+                        "id": b.id,
+                        "duration_seconds": b.duration_seconds,
+                        "distance_meters": b.distance_meters,
+                    }
                     for b in bookings
                 ],
             }, 200
@@ -401,12 +467,18 @@ class DriverBookingsETA(Resource):
 
                     # Si on a aussi les coordonnées de destination, recalculer
                     # la durée totale
-                    if dropoff_lat and dropoff_lon and booking.status != BookingStatus.IN_PROGRESS:
+                    if (
+                        dropoff_lat
+                        and dropoff_lon
+                        and booking.status != BookingStatus.IN_PROGRESS
+                    ):
                         dropoff_pos = (float(dropoff_lat), float(dropoff_lon))
                         pickup_to_dropoff = calc_eta(pickup_pos, dropoff_pos)
                         total_duration = pickup_to_dropoff
                 except Exception as e:
-                    app_logger.warning(f"ETA calculation failed for booking {booking.id}: {e}")
+                    app_logger.warning(
+                        f"ETA calculation failed for booking {booking.id}: {e}"
+                    )
 
             results.append(
                 {
@@ -414,13 +486,19 @@ class DriverBookingsETA(Resource):
                     "eta_to_pickup_seconds": eta_to_pickup,
                     "duration_seconds": total_duration,
                     "distance_meters": booking.distance_meters,
-                    "estimated_arrival": (current_time + timedelta(seconds=eta_to_pickup)).isoformat()
+                    "estimated_arrival": (
+                        current_time + timedelta(seconds=eta_to_pickup)
+                    ).isoformat()
                     if eta_to_pickup
                     else None,
                 }
             )
 
-        return {"has_gps": True, "driver_position": {"lat": driver_lat, "lon": driver_lon}, "bookings": results}, 200
+        return {
+            "has_gps": True,
+            "driver_position": {"lat": driver_lat, "lon": driver_lon},
+            "bookings": results,
+        }, 200
 
 
 @driver_ns.route("/me/location")
@@ -456,7 +534,8 @@ class DriverLocation(Resource):
                     lon = float(p["longitude"])
 
                     if result is None and (
-                        (not (-LAT_THRESHOLD <= lat <= LAT_THRESHOLD)) or not (-LON_THRESHOLD <= lon <= LON_THRESHOLD)
+                        (not (-LAT_THRESHOLD <= lat <= LAT_THRESHOLD))
+                        or not (-LON_THRESHOLD <= lon <= LON_THRESHOLD)
                     ):
                         result = {"error": "Coordinates out of valid range"}
                         status_code = 400
@@ -475,7 +554,11 @@ class DriverLocation(Resource):
 
                         # 1) Snap sur chaussée la plus proche
                         try:
-                            r = requests.get(f"{OSRM}/nearest/v1/driving/{lon},{lat}", params={"number": 1}, timeout=2)
+                            r = requests.get(
+                                f"{OSRM}/nearest/v1/driving/{lon},{lat}",
+                                params={"number": 1},
+                                timeout=2,
+                            )
                             if r.ok:
                                 loc = r.json()["waypoints"][0]["location"]
                                 lon, lat = float(loc[0]), float(loc[1])
@@ -483,7 +566,13 @@ class DriverLocation(Resource):
                         except Exception:
                             pass
 
-                        point = {"ts": ts, "lat": lat, "lon": lon, "speed": speed, "heading": heading}
+                        point = {
+                            "ts": ts,
+                            "lat": lat,
+                            "lon": lon,
+                            "speed": speed,
+                            "heading": heading,
+                        }
 
                         # 2) Ring buffer pour /match
                         try:
@@ -498,10 +587,15 @@ class DriverLocation(Resource):
                         # 3) Lissage map-matching si on a assez de points
                         try:
                             redis_match: Any = redis_client
-                            pts_raw = redis_match.lrange(f"driver:{driver.id}:ring", 0, MATCH_WINDOW - 1)
+                            pts_raw = redis_match.lrange(
+                                f"driver:{driver.id}:ring", 0, MATCH_WINDOW - 1
+                            )
                             pts = [json.loads(x) for x in pts_raw] if pts_raw else []
                             if len(pts) >= MIN_POINTS_FOR_MATCHING:
-                                coords = ";".join(f"{pp['lon']:.6f},{pp['lat']:.6f}" for pp in reversed(pts))
+                                coords = ";".join(
+                                    f"{pp['lon']:.6f},{pp['lat']:.6f}"
+                                    for pp in reversed(pts)
+                                )
                                 r2 = requests.get(
                                     f"{OSRM}/match/v1/driving/{coords}",
                                     params={"tidy": "true", "overview": "false"},
@@ -510,7 +604,10 @@ class DriverLocation(Resource):
                                 if r2.ok and r2.json().get("matchings"):
                                     tp = r2.json()["tracepoints"][-1]
                                     if tp and tp.get("location"):
-                                        lon, lat = float(tp["location"][0]), float(tp["location"][1])
+                                        lon, lat = (
+                                            float(tp["location"][0]),
+                                            float(tp["location"][1]),
+                                        )
                                         source = "osrm_match"
                         except Exception:
                             pass
@@ -565,14 +662,20 @@ class DriverLocation(Resource):
                         except Exception:
                             pass
 
-                        result = {"ok": True, "source": source, "message": "Location updated"}
+                        result = {
+                            "ok": True,
+                            "source": source,
+                            "message": "Location updated",
+                        }
                 except (ValueError, TypeError):
                     result = {"error": "Invalid coordinate format"}
                     status_code = 400
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ Unexpected error in location update: %s", e, exc_info=True)
+            app_logger.error(
+                "❌ Unexpected error in location update: %s", e, exc_info=True
+            )
             app_logger.error("❌ Request data: %s", request.get_data())
             result = {"error": f"Internal error: {e!s}"}
             status_code = 500
@@ -591,19 +694,27 @@ class BookingDetails(Resource):
                 return error_response, status_code
             driver = cast("Driver", driver)
 
-            booking = Booking.query.filter_by(id=booking_id, driver_id=driver.id).one_or_none()
+            booking = Booking.query.filter_by(
+                id=booking_id, driver_id=driver.id
+            ).one_or_none()
             if not booking:
                 return {"error": "Booking not found"}, 404
 
             return {
                 "id": booking.id,
-                "customer_name": booking.customer_name or getattr(booking, "customer_full_name", None),
-                "client_name": booking.customer_name or getattr(booking, "customer_full_name", None),
+                "customer_name": booking.customer_name
+                or getattr(booking, "customer_full_name", None),
+                "client_name": booking.customer_name
+                or getattr(booking, "customer_full_name", None),
                 "pickup_location": booking.pickup_location,
                 "dropoff_location": booking.dropoff_location,
-                "scheduled_time": booking.scheduled_time.isoformat() if booking.scheduled_time else None,
+                "scheduled_time": booking.scheduled_time.isoformat()
+                if booking.scheduled_time
+                else None,
                 "amount": booking.amount,
-                "status": booking.status.value if hasattr(booking.status, "value") else str(booking.status),
+                "status": booking.status.value
+                if hasattr(booking.status, "value")
+                else str(booking.status),
                 # 🏥 Informations médicales
                 "medical_facility": booking.medical_facility,
                 "doctor_name": booking.doctor_name,
@@ -614,7 +725,10 @@ class BookingDetails(Resource):
             }, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR get_booking_details: {type(e).__name__} - {e!s}", exc_info=True)
+            app_logger.error(
+                f"❌ ERREUR get_booking_details: {type(e).__name__} - {e!s}",
+                exc_info=True,
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -677,7 +791,9 @@ class UpdateBookingStatus(Resource):
             try:
                 driver, error_response, status_code = get_driver_from_token()
                 if error_response:
-                    app_logger.error("Driver not found for token: %s", get_jwt_identity())
+                    app_logger.error(
+                        "Driver not found for token: %s", get_jwt_identity()
+                    )
                     result = error_response
                 else:
                     driver = cast("Driver", driver)
@@ -687,7 +803,10 @@ class UpdateBookingStatus(Resource):
                         app_logger.error("Booking with id %s not found", booking_id)
                         result = {"error": "Booking not found"}
                         status_code = 404
-                    elif booking.driver_id is None and booking.status == BookingStatus.PENDING:
+                    elif (
+                        booking.driver_id is None
+                        and booking.status == BookingStatus.PENDING
+                    ):
                         booking.driver_id = driver.id
                     elif booking.driver_id != driver.id:
                         result = {"error": "Unauthorized access to this booking"}
@@ -697,7 +816,12 @@ class UpdateBookingStatus(Resource):
                         status_code = 400
                     else:
                         new_status_str = data.get("status")
-                        valid_statuses = ["en_route", "in_progress", "completed", "return_completed"]
+                        valid_statuses = [
+                            "en_route",
+                            "in_progress",
+                            "completed",
+                            "return_completed",
+                        ]
                         if new_status_str not in valid_statuses:
                             result = {"error": "Invalid status"}
                             status_code = 400
@@ -707,7 +831,9 @@ class UpdateBookingStatus(Resource):
                                 if booking.status == BookingStatus.EN_ROUTE:
                                     result = {"message": "Booking already en route"}
                                 elif booking.status != BookingStatus.ASSIGNED:
-                                    result = {"error": "Booking must be ASSIGNED before going en_route"}
+                                    result = {
+                                        "error": "Booking must be ASSIGNED before going en_route"
+                                    }
                                     status_code = 400
                                 else:
                                     booking.status = BookingStatus.EN_ROUTE
@@ -717,7 +843,9 @@ class UpdateBookingStatus(Resource):
                                 if booking.status == BookingStatus.IN_PROGRESS:
                                     result = {"message": "Booking already in progress"}
                                 elif booking.status != BookingStatus.EN_ROUTE:
-                                    result = {"error": "Booking must be en_route before starting"}
+                                    result = {
+                                        "error": "Booking must be en_route before starting"
+                                    }
                                     status_code = 400
                                 else:
                                     booking.status = BookingStatus.IN_PROGRESS
@@ -727,9 +855,13 @@ class UpdateBookingStatus(Resource):
                             elif new_status_str == "completed":
                                 if booking.is_return:
                                     if booking.status == BookingStatus.RETURN_COMPLETED:
-                                        result = {"message": "Return trip already completed"}
+                                        result = {
+                                            "message": "Return trip already completed"
+                                        }
                                     elif booking.status != BookingStatus.IN_PROGRESS:
-                                        result = {"error": "Booking must be in_progress before completing return"}
+                                        result = {
+                                            "error": "Booking must be in_progress before completing return"
+                                        }
                                         status_code = 400
                                     else:
                                         booking.status = BookingStatus.RETURN_COMPLETED
@@ -737,7 +869,9 @@ class UpdateBookingStatus(Resource):
                                 elif booking.status == BookingStatus.COMPLETED:
                                     result = {"message": "Booking already completed"}
                                 elif booking.status != BookingStatus.IN_PROGRESS:
-                                    result = {"error": "Booking must be in_progress before completing"}
+                                    result = {
+                                        "error": "Booking must be in_progress before completing"
+                                    }
                                     status_code = 400
                                 else:
                                     booking.status = BookingStatus.COMPLETED
@@ -746,9 +880,13 @@ class UpdateBookingStatus(Resource):
                             # TERMINER RETOUR explicite
                             elif new_status_str == "return_completed":
                                 if booking.status == BookingStatus.RETURN_COMPLETED:
-                                    result = {"message": "Return trip already completed"}
+                                    result = {
+                                        "message": "Return trip already completed"
+                                    }
                                 elif booking.status != BookingStatus.IN_PROGRESS:
-                                    result = {"error": "Booking must be in_progress before completing return"}
+                                    result = {
+                                        "error": "Booking must be in_progress before completing return"
+                                    }
                                     status_code = 400
                                 elif booking.is_return:
                                     booking.status = BookingStatus.RETURN_COMPLETED
@@ -761,11 +899,18 @@ class UpdateBookingStatus(Resource):
                                 db.session.commit()
                                 driver_id = driver.id
                                 notify_booking_update(driver_id, booking)
-                                result = {"message": f"Booking status updated to {new_status_str}"}
+                                result = {
+                                    "message": f"Booking status updated to {new_status_str}"
+                                }
 
             except Exception as e:
                 sentry_sdk.capture_exception(e)
-                app_logger.error("❌ ERREUR update_booking_status: %s - %s", type(e).__name__, str(e), exc_info=True)
+                app_logger.error(
+                    "❌ ERREUR update_booking_status: %s - %s",
+                    type(e).__name__,
+                    str(e),
+                    exc_info=True,
+                )
                 result = {"error": "Une erreur interne est survenue."}
                 status_code = 500
 
@@ -784,7 +929,9 @@ class RejectBooking(Resource):
             if not driver:
                 return {"error": "Unauthorized: Driver not found"}, 403
 
-            booking = Booking.query.filter_by(id=booking_id, driver_id=driver.id).one_or_none()
+            booking = Booking.query.filter_by(
+                id=booking_id, driver_id=driver.id
+            ).one_or_none()
             if not booking:
                 return {"error": "Booking not found"}, 404
             if booking.status != BookingStatus.ASSIGNED:
@@ -799,7 +946,9 @@ class RejectBooking(Resource):
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR reject_booking: {type(e).__name__} - {e!s}", exc_info=True)
+            app_logger.error(
+                f"❌ ERREUR reject_booking: {type(e).__name__} - {e!s}", exc_info=True
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -828,7 +977,10 @@ class UpdateAvailability(Resource):
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            app_logger.error(f"❌ ERREUR update_availability: {type(e).__name__} - {e!s}", exc_info=True)
+            app_logger.error(
+                f"❌ ERREUR update_availability: {type(e).__name__} - {e!s}",
+                exc_info=True,
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -858,7 +1010,9 @@ class ReportBookingIssue(Resource):
             return error_response, status_code
         driver = cast("Driver", driver)
 
-        booking = Booking.query.filter_by(id=booking_id, driver_id=driver.id).one_or_none()
+        booking = Booking.query.filter_by(
+            id=booking_id, driver_id=driver.id
+        ).one_or_none()
         if not booking:
             return {"error": "Booking not found"}, 404
 
@@ -892,7 +1046,11 @@ class SavePushToken(Resource):
             payload: dict[str, Any] = tcast("dict[str, Any]", payload_raw)
 
             # token (expo/fcm) requis
-            token_any: Any = payload.get("token") or payload.get("expo_token") or payload.get("push_token")
+            token_any: Any = (
+                payload.get("token")
+                or payload.get("expo_token")
+                or payload.get("push_token")
+            )
             if not isinstance(token_any, str) or len(token_any) < MIN_TOKEN_LENGTH:
                 result = {"error": "Token FCM/Expo invalide ou manquant."}
                 status_code = 400
@@ -907,15 +1065,21 @@ class SavePushToken(Resource):
                         # Convertir en float d'abord pour gérer les nombres
                         # décimaux, puis en int
                         driver_id = int(float(raw_id))
-                        app_logger.info(f"[push-token] driver_id extrait du payload: {driver_id}")
+                        app_logger.info(
+                            f"[push-token] driver_id extrait du payload: {driver_id}"
+                        )
                     except (ValueError, TypeError) as e:
-                        app_logger.warning(f"[push-token] Impossible de convertir driver_id={raw_id}: {e}")
+                        app_logger.warning(
+                            f"[push-token] Impossible de convertir driver_id={raw_id}: {e}"
+                        )
                         result = {"error": f"Format de driverId invalide: {raw_id}"}
                         status_code = 400
 
                 # 2) sinon on déduit depuis le JWT (user -> driver)
                 if result is None and driver_id is None:
-                    app_logger.info("[push-token] driver_id absent du payload, déduction depuis JWT")
+                    app_logger.info(
+                        "[push-token] driver_id absent du payload, déduction depuis JWT"
+                    )
                     user_pid = get_jwt_identity()
                     if not user_pid:
                         result = {"error": "Token JWT invalide ou expiré."}
@@ -928,26 +1092,39 @@ class SavePushToken(Resource):
                         else:
                             drv = Driver.query.filter_by(user_id=user.id).one_or_none()
                             if not drv:
-                                result = {"error": "Chauffeur introuvable pour cet utilisateur."}
+                                result = {
+                                    "error": "Chauffeur introuvable pour cet utilisateur."
+                                }
                                 status_code = 404
                             else:
                                 driver_id = int(drv.id)
-                                app_logger.info(f"[push-token] driver_id déduit du JWT: {driver_id}")
+                                app_logger.info(
+                                    f"[push-token] driver_id déduit du JWT: {driver_id}"
+                                )
 
                 # 3) Validation finale et enregistrement
                 if result is None:
                     driver = Driver.query.get(driver_id)
                     if not driver:
-                        app_logger.error(f"[push-token] Driver introuvable pour driver_id={driver_id}")
-                        result = {"error": f"Chauffeur introuvable pour l'ID {driver_id}."}
+                        app_logger.error(
+                            f"[push-token] Driver introuvable pour driver_id={driver_id}"
+                        )
+                        result = {
+                            "error": f"Chauffeur introuvable pour l'ID {driver_id}."
+                        }
                         status_code = 404
                     else:
                         # Enregistrement du token
                         driver.push_token = token
                         db.session.commit()
 
-                        app_logger.info(f"[push-token] ✅ Token enregistré avec succès pour driver_id={driver_id}")
-                        result = {"message": "✅ Push token enregistré avec succès.", "driver_id": driver_id}
+                        app_logger.info(
+                            f"[push-token] ✅ Token enregistré avec succès pour driver_id={driver_id}"
+                        )
+                        result = {
+                            "message": "✅ Push token enregistré avec succès.",
+                            "driver_id": driver_id,
+                        }
 
         except Exception as e:
             db.session.rollback()
@@ -984,13 +1161,22 @@ class CompletedTrips(Resource):
     @jwt_required()
     def get(self, driver_id: int):
         # Chaque clause est castée en ColumnElement[bool] pour Pylance
-        drv_clause: ColumnElement[bool] = tcast("ColumnElement[bool]", Booking.driver_id == driver_id)
+        drv_clause: ColumnElement[bool] = tcast(
+            "ColumnElement[bool]", Booking.driver_id == driver_id
+        )
 
-        st_completed: ColumnElement[bool] = tcast("ColumnElement[bool]", Booking.status == BookingStatus.COMPLETED)
+        st_completed: ColumnElement[bool] = tcast(
+            "ColumnElement[bool]", Booking.status == BookingStatus.COMPLETED
+        )
         st_return_completed: ColumnElement[bool] = tcast(
             "ColumnElement[bool]", Booking.status == BookingStatus.RETURN_COMPLETED
         )
         status_clause = or_(st_completed, st_return_completed)
 
-        trips = Booking.query.filter(drv_clause).filter(status_clause).order_by(Booking.scheduled_time.desc()).all()
+        trips = (
+            Booking.query.filter(drv_clause)
+            .filter(status_clause)
+            .order_by(Booking.scheduled_time.desc())
+            .all()
+        )
         return [trip.serialize for trip in trips], 200

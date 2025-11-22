@@ -122,7 +122,9 @@ def sanitize_email(email: str | None) -> str | None:
     return email_str
 
 
-def sanitize_url(url: str | None, allowed_schemes: list[str] | None = None) -> str | None:
+def sanitize_url(
+    url: str | None, allowed_schemes: list[str] | None = None
+) -> str | None:
     """Valide et sanitize une URL.
 
     Args:
@@ -175,10 +177,16 @@ def strip_control_characters(text: str | None) -> str | None:
 
     text_str = str(text)
     # Garder \n, \r, \t, supprimer les autres caractères de contrôle
-    return "".join(char for char in text_str if ord(char) >= MIN_CONTROL_CHAR_CODE or char in "\n\r\t")
+    return "".join(
+        char
+        for char in text_str
+        if ord(char) >= MIN_CONTROL_CHAR_CODE or char in "\n\r\t"
+    )
 
 
-def sanitize_integer(value: Any, min_val: int | None = None, max_val: int | None = None) -> int | None:
+def sanitize_integer(
+    value: Any, min_val: int | None = None, max_val: int | None = None
+) -> int | None:
     """Valide et convertit une valeur en entier avec limites.
 
     Args:
@@ -206,7 +214,9 @@ def sanitize_integer(value: Any, min_val: int | None = None, max_val: int | None
     return int_val
 
 
-def sanitize_float(value: Any, min_val: float | None = None, max_val: float | None = None) -> float | None:
+def sanitize_float(
+    value: Any, min_val: float | None = None, max_val: float | None = None
+) -> float | None:
     """Valide et convertit une valeur en float avec limites.
 
     Args:

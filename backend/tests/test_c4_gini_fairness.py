@@ -32,12 +32,18 @@ class TestGiniFairness:
         values = [5, 5, 5, 5]
 
         collector = DispatchMetricsCollector(
-            dispatch_run_id=1, company_id=test_company.id, date="2025-01-27", all_bookings=[], run_metadata={}
+            dispatch_run_id=1,
+            company_id=test_company.id,
+            date="2025-01-27",
+            all_bookings=[],
+            run_metadata={},
         )
 
         gini = collector._calculate_gini_index(values)
 
-        assert gini == 0.0, f"Gini devrait être 0 pour distribution parfaite, got {gini}"
+        assert gini == 0.0, (
+            f"Gini devrait être 0 pour distribution parfaite, got {gini}"
+        )
 
         logger.info("✅ Test: Gini = 0 pour distribution parfaitement équitable")
 
@@ -48,7 +54,11 @@ class TestGiniFairness:
         values = [10, 0, 0, 0]
 
         collector = DispatchMetricsCollector(
-            dispatch_run_id=1, company_id=test_company.id, date="2025-01-27", all_bookings=[], run_metadata={}
+            dispatch_run_id=1,
+            company_id=test_company.id,
+            date="2025-01-27",
+            all_bookings=[],
+            run_metadata={},
         )
 
         gini = collector._calculate_gini_index(values)
@@ -62,7 +72,11 @@ class TestGiniFairness:
         """Test: Gini toujours dans [0, 1]."""
 
         collector = DispatchMetricsCollector(
-            dispatch_run_id=1, company_id=test_company.id, date="2025-01-27", all_bookings=[], run_metadata={}
+            dispatch_run_id=1,
+            company_id=test_company.id,
+            date="2025-01-27",
+            all_bookings=[],
+            run_metadata={},
         )
 
         # Tester différentes distributions

@@ -20,7 +20,13 @@ class NoisyLinear(nn.Module):
     tout en maintenant une exploration efficace.
     """
 
-    def __init__(self, in_features: int, out_features: int, std_init: float = 0.5, device: torch.device | None = None):
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        std_init: float = 0.5,
+        device: torch.device | None = None,
+    ):
         """Initialise la couche NoisyLinear.
 
         Args:
@@ -150,7 +156,11 @@ class NoisyQNetwork(nn.Module):
 
         # Couches cachées
         for i in range(len(self.hidden_sizes) - 1):
-            layers.append(NoisyLinear(self.hidden_sizes[i], self.hidden_sizes[i + 1], std_init, device))
+            layers.append(
+                NoisyLinear(
+                    self.hidden_sizes[i], self.hidden_sizes[i + 1], std_init, device
+                )
+            )
 
         # Couche de sortie
         layers.append(NoisyLinear(self.hidden_sizes[-1], action_size, std_init, device))
@@ -203,7 +213,9 @@ class NoisyQNetwork(nn.Module):
         for layer in self.layers:
             if isinstance(layer, NoisyLinear):
                 # Compter les paramètres de bruit
-                noise_stats["total_noise_params"] += layer.weight_sigma.numel() + layer.bias_sigma.numel()
+                noise_stats["total_noise_params"] += (
+                    layer.weight_sigma.numel() + layer.bias_sigma.numel()
+                )
 
                 # Collecter les valeurs de bruit
                 weight_noise = (layer.weight_sigma * layer.weight_epsilon).abs()
@@ -259,17 +271,25 @@ class NoisyDuelingQNetwork(nn.Module):
         self.shared_layers = nn.ModuleList()
 
         # Première couche partagée
-        self.shared_layers.append(NoisyLinear(state_size, self.hidden_sizes[0], std_init, device))
+        self.shared_layers.append(
+            NoisyLinear(state_size, self.hidden_sizes[0], std_init, device)
+        )
 
         # Couches cachées partagées
         for i in range(len(self.hidden_sizes) - 1):
-            self.shared_layers.append(NoisyLinear(self.hidden_sizes[i], self.hidden_sizes[i + 1], std_init, device))
+            self.shared_layers.append(
+                NoisyLinear(
+                    self.hidden_sizes[i], self.hidden_sizes[i + 1], std_init, device
+                )
+            )
 
         # Branche Value (V)
         self.value_layer = NoisyLinear(self.hidden_sizes[-1], 1, std_init, device)
 
         # Branche Advantage (A)
-        self.advantage_layer = NoisyLinear(self.hidden_sizes[-1], action_size, std_init, device)
+        self.advantage_layer = NoisyLinear(
+            self.hidden_sizes[-1], action_size, std_init, device
+        )
 
     def forward(self, state: torch.Tensor) -> torch.Tensor:
         """Forward pass du réseau Dueling Q avec bruit.
@@ -324,7 +344,9 @@ class NoisyDuelingQNetwork(nn.Module):
         # Couches partagées
         for layer in self.shared_layers:
             if isinstance(layer, NoisyLinear):
-                noise_stats["total_noise_params"] += layer.weight_sigma.numel() + layer.bias_sigma.numel()
+                noise_stats["total_noise_params"] += (
+                    layer.weight_sigma.numel() + layer.bias_sigma.numel()
+                )
 
                 weight_noise = (layer.weight_sigma * layer.weight_epsilon).abs()
                 bias_noise = (layer.bias_sigma * layer.bias_epsilon).abs()
@@ -334,7 +356,9 @@ class NoisyDuelingQNetwork(nn.Module):
 
         # Couches Value et Advantage
         for layer in [self.value_layer, self.advantage_layer]:
-            noise_stats["total_noise_params"] += layer.weight_sigma.numel() + layer.bias_sigma.numel()
+            noise_stats["total_noise_params"] += (
+                layer.weight_sigma.numel() + layer.bias_sigma.numel()
+            )
 
             weight_noise = (layer.weight_sigma * layer.weight_epsilon).abs()
             bias_noise = (layer.bias_sigma * layer.bias_epsilon).abs()
@@ -384,13 +408,18 @@ def create_noisy_network(
     if network_type.lower() == "q":
         return NoisyQNetwork(state_size, action_size, hidden_sizes, std_init, device)
     if network_type.lower() == "dueling":
-        return NoisyDuelingQNetwork(state_size, action_size, hidden_sizes, std_init, device)
+        return NoisyDuelingQNetwork(
+            state_size, action_size, hidden_sizes, std_init, device
+        )
     msg = f"Type de réseau non supporté: {network_type}"
     raise ValueError(msg)
 
 
 def compare_noisy_vs_standard(
-    noisy_network: nn.Module, standard_network: nn.Module, state: torch.Tensor, num_samples: int = 10
+    noisy_network: nn.Module,
+    standard_network: nn.Module,
+    state: torch.Tensor,
+    num_samples: int = 10,
 ) -> dict[str, float]:
     """Compare les performances entre un réseau avec bruit et un réseau standard.
 

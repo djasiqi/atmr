@@ -53,13 +53,25 @@ def upgrade():
     )
 
     # Index pour performance
-    op.create_index("ix_ab_test_result_booking_id", "ab_test_result", ["booking_id"], unique=False)
-    op.create_index("ix_ab_test_result_driver_id", "ab_test_result", ["driver_id"], unique=False)
-    op.create_index("ix_ab_test_result_test_timestamp", "ab_test_result", ["test_timestamp"], unique=False)
+    op.create_index(
+        "ix_ab_test_result_booking_id", "ab_test_result", ["booking_id"], unique=False
+    )
+    op.create_index(
+        "ix_ab_test_result_driver_id", "ab_test_result", ["driver_id"], unique=False
+    )
+    op.create_index(
+        "ix_ab_test_result_test_timestamp",
+        "ab_test_result",
+        ["test_timestamp"],
+        unique=False,
+    )
 
     # Index composite pour analyses temporelles
     op.create_index(
-        "ix_ab_test_result_timestamp_winner", "ab_test_result", ["test_timestamp", "ml_winner"], unique=False
+        "ix_ab_test_result_timestamp_winner",
+        "ab_test_result",
+        ["test_timestamp", "ml_winner"],
+        unique=False,
     )
 
 

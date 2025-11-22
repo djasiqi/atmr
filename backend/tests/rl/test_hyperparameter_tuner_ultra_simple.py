@@ -77,8 +77,27 @@ class TestHyperparameterTuner:
 
         # Mock trial avec valeurs spécifiques - assez pour tous les appels
         mock_trial = Mock()
-        mock_trial.suggest_float.side_effect = [0.001, 0.95, 0.9, 0.1, 0.995, 0.6, 0.4, 0.8, 0.005, 3, 0.99] * 10
-        mock_trial.suggest_categorical.side_effect = [128, 100000, True, True, True, True] * 10
+        mock_trial.suggest_float.side_effect = [
+            0.001,
+            0.95,
+            0.9,
+            0.1,
+            0.995,
+            0.6,
+            0.4,
+            0.8,
+            0.005,
+            3,
+            0.99,
+        ] * 10
+        mock_trial.suggest_categorical.side_effect = [
+            128,
+            100000,
+            True,
+            True,
+            True,
+            True,
+        ] * 10
         mock_trial.suggest_int.side_effect = [5, 15, 3] * 10
 
         config = tuner._suggest_hyperparameters(mock_trial)
@@ -100,13 +119,34 @@ class TestHyperparameterTuner:
 
         # Mock trial
         mock_trial = Mock()
-        mock_trial.suggest_float.side_effect = [0.001, 0.95, 0.9, 0.1, 0.995, 0.6, 0.4, 0.8, 0.005, 3, 0.99] * 10
-        mock_trial.suggest_categorical.side_effect = [128, 100000, True, True, True, True] * 10
+        mock_trial.suggest_float.side_effect = [
+            0.001,
+            0.95,
+            0.9,
+            0.1,
+            0.995,
+            0.6,
+            0.4,
+            0.8,
+            0.005,
+            3,
+            0.99,
+        ] * 10
+        mock_trial.suggest_categorical.side_effect = [
+            128,
+            100000,
+            True,
+            True,
+            True,
+            True,
+        ] * 10
         mock_trial.suggest_int.side_effect = [3, 10, 3] * 10
 
         with (
             patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
-            patch("services.rl.hyperparameter_tuner.ImprovedDQNAgent") as mock_agent_class,
+            patch(
+                "services.rl.hyperparameter_tuner.ImprovedDQNAgent"
+            ) as mock_agent_class,
         ):
             # Mock environment
             mock_env = Mock()
@@ -137,14 +177,35 @@ class TestHyperparameterTuner:
 
         # Mock trial avec pruning
         mock_trial = Mock()
-        mock_trial.suggest_float.side_effect = [0.001, 0.95, 0.9, 0.1, 0.995, 0.6, 0.4, 0.8, 0.005, 3, 0.99] * 10
-        mock_trial.suggest_categorical.side_effect = [128, 100000, True, True, True, True] * 10
+        mock_trial.suggest_float.side_effect = [
+            0.001,
+            0.95,
+            0.9,
+            0.1,
+            0.995,
+            0.6,
+            0.4,
+            0.8,
+            0.005,
+            3,
+            0.99,
+        ] * 10
+        mock_trial.suggest_categorical.side_effect = [
+            128,
+            100000,
+            True,
+            True,
+            True,
+            True,
+        ] * 10
         mock_trial.suggest_int.side_effect = [3, 10, 3] * 10
         mock_trial.should_prune.return_value = True
 
         with (
             patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
-            patch("services.rl.hyperparameter_tuner.ImprovedDQNAgent") as mock_agent_class,
+            patch(
+                "services.rl.hyperparameter_tuner.ImprovedDQNAgent"
+            ) as mock_agent_class,
         ):
             # Mock environment
             mock_env = Mock()
@@ -237,7 +298,10 @@ class TestHyperparameterTuner:
             trial.number = i
             trial.params = {"learning_rate": 0.001}
 
-        with patch("pathlib.Path.mkdir") as mock_mkdir, patch("builtins.open", create=True) as mock_file:
+        with (
+            patch("pathlib.Path.mkdir") as mock_mkdir,
+            patch("builtins.open", create=True) as mock_file,
+        ):
             tuner.save_best_params(mock_study, "test_params.json")
 
             # Vérifier que le répertoire est créé
@@ -269,7 +333,10 @@ class TestHyperparameterTuner:
             trial.system_attrs = {}
             sorted_trials.append(trial)
 
-        with patch("pathlib.Path.mkdir") as mock_mkdir, patch("builtins.open", create=True) as mock_file:
+        with (
+            patch("pathlib.Path.mkdir") as mock_mkdir,
+            patch("builtins.open", create=True) as mock_file,
+        ):
             tuner._log_metrics_and_comparisons(mock_study, sorted_trials)
 
             # Vérifier que le répertoire est créé
@@ -286,7 +353,11 @@ class TestHyperparameterTuner:
         trials = []
         for i in range(3):
             trial = Mock()
-            trial.params = {"learning_rate": 0.001 + i * 0.0001, "gamma": 0.95, "batch_size": 128}
+            trial.params = {
+                "learning_rate": 0.001 + i * 0.0001,
+                "gamma": 0.95,
+                "batch_size": 128,
+            }
             trials.append(trial)
 
         result = tuner._analyze_triplet_gagnant(trials)
@@ -350,7 +421,10 @@ class TestHyperparameterTuner:
         mock_study.best_trial = Mock()
         mock_study.best_trial.number = 0
 
-        with patch("pathlib.Path.mkdir"), patch("builtins.open", create=True) as mock_file:
+        with (
+            patch("pathlib.Path.mkdir"),
+            patch("builtins.open", create=True) as mock_file,
+        ):
             tuner.save_best_params(mock_study, "empty_trials.json")
 
             # Vérifier que le fichier est ouvert

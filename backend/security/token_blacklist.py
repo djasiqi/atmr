@@ -43,7 +43,9 @@ def add_to_blacklist(jwt_token: str, ttl_seconds: int | None = None) -> bool:
 
             # Si le token est déjà expiré, ne pas l'ajouter
             if ttl <= 0:
-                logger.debug("[Token Blacklist] Token déjà expiré, pas besoin de blacklist")
+                logger.debug(
+                    "[Token Blacklist] Token déjà expiré, pas besoin de blacklist"
+                )
                 return False
 
             # Utiliser le TTL fourni ou celui du token
@@ -70,7 +72,9 @@ def add_to_blacklist(jwt_token: str, ttl_seconds: int | None = None) -> bool:
         return True
 
     except Exception as e:
-        logger.exception("[Token Blacklist] Erreur lors de l'ajout à la blacklist: %s", e)
+        logger.exception(
+            "[Token Blacklist] Erreur lors de l'ajout à la blacklist: %s", e
+        )
         return False
 
 
@@ -127,7 +131,9 @@ def revoke_token() -> bool:
         jti = jwt_data.get("jti")
 
         if not jti:
-            logger.warning("[Token Blacklist] Pas de jti dans le token, impossible de révoquer")
+            logger.warning(
+                "[Token Blacklist] Pas de jti dans le token, impossible de révoquer"
+            )
             return False
 
         # Ajouter à la blacklist
@@ -142,7 +148,9 @@ def revoke_token() -> bool:
 
             if ttl > 0:
                 redis_client.setex(key, ttl, "1")
-                logger.info("[Token Blacklist] Token révoqué (jti: %s, TTL: %d s)", jti, ttl)
+                logger.info(
+                    "[Token Blacklist] Token révoqué (jti: %s, TTL: %d s)", jti, ttl
+                )
                 return True
 
         return False

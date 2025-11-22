@@ -97,7 +97,9 @@ class TestNStepBuffer(unittest.TestCase):
 
         first_transition = batch[0]
         expected_return = 1.0 + 0.9 * 2.0
-        self.assertAlmostEqual(first_transition["n_step_return"], expected_return, places=5)
+        self.assertAlmostEqual(
+            first_transition["n_step_return"], expected_return, places=5
+        )
 
     def test_episode_termination(self):
         """Test le traitement des épisodes terminés."""
@@ -159,7 +161,9 @@ class TestNStepBuffer(unittest.TestCase):
         assert "completion_rate" in stats
 
         assert stats["total_added"] == 5
-        assert stats["completion_rate"] == stats["total_completed"] / stats["total_added"]
+        assert (
+            stats["completion_rate"] == stats["total_completed"] / stats["total_added"]
+        )
 
     def test_clear_buffer(self):
         """Test le vidage du buffer."""
@@ -188,7 +192,12 @@ class TestNStepPrioritizedBuffer(unittest.TestCase):
     def setUp(self):
         """Configuration des tests."""
         self.buffer = NStepPrioritizedBuffer(
-            capacity=0.1000, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_end=1.0
+            capacity=0.1000,
+            n_step=3,
+            gamma=0.99,
+            alpha=0.6,
+            beta_start=0.4,
+            beta_end=1.0,
         )
 
     def test_prioritized_initialization(self):
@@ -208,7 +217,9 @@ class TestNStepPrioritizedBuffer(unittest.TestCase):
         done = False
         td_error = 0.8
 
-        self.buffer.add_transition(state, action, reward, next_state, done, None, td_error)
+        self.buffer.add_transition(
+            state, action, reward, next_state, done, None, td_error
+        )
 
         # Vérifier que la priorité est mise à jour
         assert self.buffer.max_priority > 1.0
@@ -224,7 +235,9 @@ class TestNStepPrioritizedBuffer(unittest.TestCase):
             done = i == 4
             td_error = 0.5 + i * 0.1  # Priorités croissantes
 
-            self.buffer.add_transition(state, action, reward, next_state, done, None, td_error)
+            self.buffer.add_transition(
+                state, action, reward, next_state, done, None, td_error
+            )
 
         # Échantillonner plusieurs fois et vérifier la distribution
         batch, weights = self.buffer.sample(3)
@@ -268,7 +281,12 @@ class TestNStepIntegration(unittest.TestCase):
         """Test l'agent DQN avec N-step learning."""
         # Créer un agent avec N-step
         agent = ImprovedDQNAgent(
-            state_dim=10, action_dim=5, use_n_step=True, n_step=3, n_step_gamma=0.99, use_prioritized_replay=True
+            state_dim=10,
+            action_dim=5,
+            use_n_step=True,
+            n_step=3,
+            n_step_gamma=0.99,
+            use_prioritized_replay=True,
         )
 
         # Vérifier que le buffer est de type N-step
@@ -280,7 +298,9 @@ class TestNStepIntegration(unittest.TestCase):
     def test_agent_without_n_step(self):
         """Test l'agent DQN sans N-step (mode standard)."""
         # Créer un agent sans N-step
-        agent = ImprovedDQNAgent(state_dim=10, action_dim=5, use_n_step=False, use_prioritized_replay=True)
+        agent = ImprovedDQNAgent(
+            state_dim=10, action_dim=5, use_n_step=False, use_prioritized_replay=True
+        )
 
         # Vérifier que le buffer est de type PER standard
         from services.rl.replay_buffer import PrioritizedReplayBuffer
@@ -309,7 +329,9 @@ class TestNStepIntegration(unittest.TestCase):
     @unittest.skipIf(torch is None, "PyTorch not available")
     def test_learn_with_n_step(self):
         """Test l'apprentissage avec N-step."""
-        agent = ImprovedDQNAgent(state_dim=10, action_dim=5, use_n_step=True, n_step=3, batch_size=32)
+        agent = ImprovedDQNAgent(
+            state_dim=10, action_dim=5, use_n_step=True, n_step=3, batch_size=32
+        )
 
         # Remplir le buffer avec suffisamment de transitions
         for i in range(100):
@@ -393,7 +415,12 @@ def run_n_step_tests():
     test_suite = unittest.TestSuite()
 
     # Ajouter les tests
-    test_classes = [TestNStepBuffer, TestNStepPrioritizedBuffer, TestNStepIntegration, TestNStepPerformance]
+    test_classes = [
+        TestNStepBuffer,
+        TestNStepPrioritizedBuffer,
+        TestNStepIntegration,
+        TestNStepPerformance,
+    ]
 
     for test_class in test_classes:
         tests = unittest.TestLoader().loadTestsFromTestCase(test_class)

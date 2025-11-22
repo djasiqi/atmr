@@ -38,7 +38,9 @@ class TestWebSocketACK:
         reset_ack_manager()
         manager = get_ack_manager()
 
-        message_id = manager.emit_with_ack(event="test_event", payload={"data": "test"}, room="test_room")
+        message_id = manager.emit_with_ack(
+            event="test_event", payload={"data": "test"}, room="test_room"
+        )
 
         assert message_id in manager.pending_messages
         assert len(manager.pending_messages) == 1
@@ -52,7 +54,9 @@ class TestWebSocketACK:
         manager = get_ack_manager()
 
         # Émettre un message
-        message_id = manager.emit_with_ack(event="test_event", payload={"data": "test"}, room="test_room")
+        message_id = manager.emit_with_ack(
+            event="test_event", payload={"data": "test"}, room="test_room"
+        )
 
         assert len(manager.pending_messages) == 1
 
@@ -71,7 +75,9 @@ class TestWebSocketACK:
         reset_ack_manager()
         manager = get_ack_manager()
 
-        message_id = manager.emit_with_ack(event="test_event", payload={"data": "test"}, room="test_room")
+        message_id = manager.emit_with_ack(
+            event="test_event", payload={"data": "test"}, room="test_room"
+        )
 
         pending = manager.pending_messages[message_id]
 
@@ -92,7 +98,9 @@ class TestWebSocketACK:
         reset_ack_manager()
         manager = get_ack_manager()
 
-        message_id = manager.emit_with_ack(event="test_event", payload={"data": "test"}, room="test_room")
+        message_id = manager.emit_with_ack(
+            event="test_event", payload={"data": "test"}, room="test_room"
+        )
 
         # Forcer max retries
         for _ in range(MAX_RETRIES + 5):
@@ -111,18 +119,26 @@ class TestWebSocketACK:
         manager = get_ack_manager()
 
         # Émettre sans message_id → génération auto
-        msg_id1 = manager.emit_with_ack(event="test_event", payload={"data": "test1"}, room="test_room")
+        msg_id1 = manager.emit_with_ack(
+            event="test_event", payload={"data": "test1"}, room="test_room"
+        )
 
         # Même payload → même message_id
-        msg_id2 = manager.emit_with_ack(event="test_event", payload={"data": "test1"}, room="test_room")
+        msg_id2 = manager.emit_with_ack(
+            event="test_event", payload={"data": "test1"}, room="test_room"
+        )
 
         # Payload différent → message_id différent
-        msg_id3 = manager.emit_with_ack(event="test_event", payload={"data": "test2"}, room="test_room")
+        msg_id3 = manager.emit_with_ack(
+            event="test_event", payload={"data": "test2"}, room="test_room"
+        )
 
         assert msg_id1 == msg_id2  # Même message_id pour même payload
         assert msg_id1 != msg_id3  # Message_id différent pour payload différent
 
-        logger.info("✅ Test: Génération message_id (%s, %s, %s)", msg_id1, msg_id2, msg_id3)
+        logger.info(
+            "✅ Test: Génération message_id (%s, %s, %s)", msg_id1, msg_id2, msg_id3
+        )
 
     def test_delivery_time_99_5_percent(self):
         """Test: 99.5% des messages confirmés < 5s."""
@@ -133,7 +149,9 @@ class TestWebSocketACK:
         # Simuler 100 messages
         message_ids = []
         for i in range(100):
-            msg_id = manager.emit_with_ack(event="test_event", payload={"data": f"test{i}"}, room="test_room")
+            msg_id = manager.emit_with_ack(
+                event="test_event", payload={"data": f"test{i}"}, room="test_room"
+            )
             message_ids.append(msg_id)
 
         # Simuler ACKs immédiats (< 5s)
@@ -151,7 +169,9 @@ class TestWebSocketACK:
         under_5s = sum(1 for t in delivery_times if t < 5.0)
         success_rate = under_5s / len(delivery_times)
 
-        assert success_rate >= 0.995, f"Seulement {success_rate * 100:.1f}% confirmés < 5s"
+        assert success_rate >= 0.995, (
+            f"Seulement {success_rate * 100:.1f}% confirmés < 5s"
+        )
 
         logger.info(
             "✅ Test: 99.5%% confirmés < 5s (%.1f%%, min=%.3fs, max=%.3fs)",
@@ -171,7 +191,10 @@ class TestWebSocketACK:
 
         for i in range(3):
             manager.emit_with_ack(
-                event="test_event", payload={"data": f"test{i}"}, room="test_room", message_id=message_id
+                event="test_event",
+                payload={"data": f"test{i}"},
+                room="test_room",
+                message_id=message_id,
             )
 
         # Devrait avoir seulement 1 pending (le dernier écrase les précédents)
@@ -191,7 +214,9 @@ class TestWebSocketACK:
         messages_sent = []
         for i in range(50):
             msg_id = manager.emit_with_ack(
-                event="dispatch:assignment:created", payload={"booking_id": i, "driver_id": 100 + i}, room="company_1"
+                event="dispatch:assignment:created",
+                payload={"booking_id": i, "driver_id": 100 + i},
+                room="company_1",
             )
             messages_sent.append(msg_id)
 
@@ -207,7 +232,9 @@ class TestWebSocketACK:
         # Vérifier livraison
         delivery_rate = len(acks_received) / len(messages_sent) if messages_sent else 0
 
-        assert delivery_rate >= 0.95, f"Seulement {delivery_rate * 100:.1f}% de livraison"
+        assert delivery_rate >= 0.95, (
+            f"Seulement {delivery_rate * 100:.1f}% de livraison"
+        )
 
         logger.info(
             "✅ Test: End-to-end ACK (%.1f%% livraison, %d/%d messages)",

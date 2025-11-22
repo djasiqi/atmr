@@ -23,14 +23,28 @@ def upgrade():
     op.add_column("user", sa.Column("address_encrypted", sa.Text(), nullable=True))
 
     # Client table : colonnes chiffrées
-    op.add_column("client", sa.Column("contact_phone_encrypted", sa.Text(), nullable=True))
+    op.add_column(
+        "client", sa.Column("contact_phone_encrypted", sa.Text(), nullable=True)
+    )
     op.add_column("client", sa.Column("gp_name_encrypted", sa.Text(), nullable=True))
     op.add_column("client", sa.Column("gp_phone_encrypted", sa.Text(), nullable=True))
-    op.add_column("client", sa.Column("billing_address_encrypted", sa.Text(), nullable=True))
+    op.add_column(
+        "client", sa.Column("billing_address_encrypted", sa.Text(), nullable=True)
+    )
 
     # Colonne pour indiquer si les données sont migrées
-    op.add_column("user", sa.Column("encryption_migrated", sa.Boolean(), server_default="false", nullable=False))
-    op.add_column("client", sa.Column("encryption_migrated", sa.Boolean(), server_default="false", nullable=False))
+    op.add_column(
+        "user",
+        sa.Column(
+            "encryption_migrated", sa.Boolean(), server_default="false", nullable=False
+        ),
+    )
+    op.add_column(
+        "client",
+        sa.Column(
+            "encryption_migrated", sa.Boolean(), server_default="false", nullable=False
+        ),
+    )
 
 
 def downgrade():

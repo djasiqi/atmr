@@ -27,7 +27,9 @@ billing_settings_model = settings_ns.model(
         "reminder2_fee": fields.Float(description="Frais 2e rappel"),
         "reminder3_fee": fields.Float(description="Frais 3e rappel"),
         "reminder_schedule_days": fields.Raw(description="Planning des rappels"),
-        "auto_reminders_enabled": fields.Boolean(description="Rappels automatiques activés"),
+        "auto_reminders_enabled": fields.Boolean(
+            description="Rappels automatiques activés"
+        ),
         "email_sender": fields.String(description="Email expéditeur"),
         "invoice_number_format": fields.String(description="Format de numérotation"),
         "invoice_prefix": fields.String(description="Préfixe des factures"),
@@ -109,10 +111,14 @@ class OperationalSettings(Resource):
             if "latitude" in data:
                 company.latitude = float(data["latitude"]) if data["latitude"] else None
             if "longitude" in data:
-                company.longitude = float(data["longitude"]) if data["longitude"] else None
+                company.longitude = (
+                    float(data["longitude"]) if data["longitude"] else None
+                )
 
             db.session.commit()
-            logger.info("[Settings] Operational settings updated for company %s", company.id)
+            logger.info(
+                "[Settings] Operational settings updated for company %s", company.id
+            )
 
             return {
                 "success": True,
@@ -181,10 +187,16 @@ class BillingSettings(Resource):
         if not company:
             return {"success": False, "error": "Company not found"}, 404
 
-        logger.info("[Settings] Billing settings update request for company %s: %s", company.id, data)
+        logger.info(
+            "[Settings] Billing settings update request for company %s: %s",
+            company.id,
+            data,
+        )
 
         try:
-            billing = CompanyBillingSettings.query.filter_by(company_id=company.id).first()
+            billing = CompanyBillingSettings.query.filter_by(
+                company_id=company.id
+            ).first()
 
             if not billing:
                 billing = CompanyBillingSettings()
@@ -235,7 +247,9 @@ class BillingSettings(Resource):
                     # Conversion spéciale pour reminder_schedule_days (doit être un dict)
                     if field == "reminder_schedule_days" and isinstance(value, dict):
                         # S'assurer que les clés sont des strings
-                        normalized = {str(k): int(v) for k, v in value.items() if v is not None}
+                        normalized = {
+                            str(k): int(v) for k, v in value.items() if v is not None
+                        }
                         setattr(billing, field, normalized)
                     else:
                         setattr(billing, field, value)
@@ -256,13 +270,21 @@ class BillingSettings(Resource):
                         float_value = float(rate_value)
                         MAX_VAT_RATE = 100.0  # Taux TVA maximum (100%)
                         if float_value <= 0 or float_value > MAX_VAT_RATE:
-                            logger.warning("Taux TVA hors limites (0-%s): %s", MAX_VAT_RATE, rate_value)
+                            logger.warning(
+                                "Taux TVA hors limites (0-%s): %s",
+                                MAX_VAT_RATE,
+                                rate_value,
+                            )
                             billing.vat_rate = None
                         else:
-                            billing.vat_rate = Decimal(str(rate_value)).quantize(Decimal("0.01"))
+                            billing.vat_rate = Decimal(str(rate_value)).quantize(
+                                Decimal("0.01")
+                            )
                             logger.info("Taux TVA mis à jour: %s%%", billing.vat_rate)
                     except (InvalidOperation, ValueError, TypeError) as e:
-                        logger.warning("Taux TVA invalide: %s (erreur: %s)", rate_value, e)
+                        logger.warning(
+                            "Taux TVA invalide: %s (erreur: %s)", rate_value, e
+                        )
                         billing.vat_rate = None
 
             if "vat_label" in data:
@@ -272,9 +294,15 @@ class BillingSettings(Resource):
                 billing.vat_number = data.get("vat_number") or None
 
             db.session.commit()
-            logger.info("[Settings] Billing settings updated for company %s", company.id)
+            logger.info(
+                "[Settings] Billing settings updated for company %s", company.id
+            )
 
-            return {"success": True, "message": "Paramètres de facturation mis à jour", "data": billing.to_dict()}, 200
+            return {
+                "success": True,
+                "message": "Paramètres de facturation mis à jour",
+                "data": billing.to_dict(),
+            }, 200
         except Exception as e:
             db.session.rollback()
             logger.exception("[Settings] Error updating billing settings: %s", e)
@@ -294,7 +322,9 @@ class PlanningSettings(Resource):
         if not company:
             return {"success": False, "error": "Company not found"}, 404
 
-        planning = CompanyPlanningSettings.query.filter_by(company_id=company.id).first()
+        planning = CompanyPlanningSettings.query.filter_by(
+            company_id=company.id
+        ).first()
 
         if not planning:
             planning = CompanyPlanningSettings()
@@ -319,7 +349,9 @@ class PlanningSettings(Resource):
             return {"success": False, "error": "Company not found"}, 404
 
         try:
-            planning = CompanyPlanningSettings.query.filter_by(company_id=company.id).first()
+            planning = CompanyPlanningSettings.query.filter_by(
+                company_id=company.id
+            ).first()
 
             if not planning:
                 planning = CompanyPlanningSettings()
@@ -330,9 +362,15 @@ class PlanningSettings(Resource):
                 planning.settings = data.get("settings", {})
 
             db.session.commit()
-            logger.info("[Settings] Planning settings updated for company %s", company.id)
+            logger.info(
+                "[Settings] Planning settings updated for company %s", company.id
+            )
 
-            return {"success": True, "message": "Paramètres de planning mis à jour", "data": planning.settings}, 200
+            return {
+                "success": True,
+                "message": "Paramètres de planning mis à jour",
+                "data": planning.settings,
+            }, 200
         except Exception as e:
             db.session.rollback()
             logger.error("[Settings] Error updating planning settings: %s", e)

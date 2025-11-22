@@ -70,10 +70,19 @@ class TestSolverDataclasses:
 
     def test_solver_result_structure(self):
         """Test structure SolverResult."""
-        assignments = [SolverAssignment(booking_id=1, driver_id=2, estimated_pickup_min=10, estimated_dropoff_min=20)]
+        assignments = [
+            SolverAssignment(
+                booking_id=1,
+                driver_id=2,
+                estimated_pickup_min=10,
+                estimated_dropoff_min=20,
+            )
+        ]
 
         result = SolverResult(
-            assignments=assignments, unassigned_booking_ids=[3, 4], debug={"solver_time_ms": 150, "status": "optimal"}
+            assignments=assignments,
+            unassigned_booking_ids=[3, 4],
+            debug={"solver_time_ms": 150, "status": "optimal"},
         )
 
         assert len(result.assignments) == 1
@@ -141,7 +150,9 @@ class TestSolverEmptyProblems:
 
         assert isinstance(result, SolverResult)
         assert len(result.assignments) == 0, "Aucun assignment sans drivers"
-        assert booking.id in result.unassigned_booking_ids, "Booking devrait être non assigné"
+        assert booking.id in result.unassigned_booking_ids, (
+            "Booking devrait être non assigné"
+        )
 
     def test_solve_no_bookings(self, db):
         """Test solver sans courses à assigner."""
@@ -255,8 +266,16 @@ class TestSolverBasicScenarios:
             "service_times": [5, 5],
             "time_windows": [(30, 120), (60, 180)],
             "driver_windows": [(0, 480), (0, 480)],
-            "capacities": {"passengers": [4, 4], "wheelchairs": [1, 1], "stretchers": [0, 0]},
-            "demands": {"passengers": [1, 1], "wheelchairs": [0, 0], "stretchers": [0, 0]},
+            "capacities": {
+                "passengers": [4, 4],
+                "wheelchairs": [1, 1],
+                "stretchers": [0, 0],
+            },
+            "demands": {
+                "passengers": [1, 1],
+                "wheelchairs": [0, 0],
+                "stretchers": [0, 0],
+            },
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
@@ -290,7 +309,10 @@ class TestSolverConstraints:
             "starts": [0],
             "ends": [0],
             "service_times": [5],
-            "time_windows": [(120, 125), (180, 185)],  # ✅ FIX: Pickup (120-125) + Dropoff (180-185)
+            "time_windows": [
+                (120, 125),
+                (180, 185),
+            ],  # ✅ FIX: Pickup (120-125) + Dropoff (180-185)
             "driver_windows": [(0, 480)],
             "capacities": {"passengers": [4], "wheelchairs": [1], "stretchers": [0]},
             "demands": {"passengers": [1], "wheelchairs": [0], "stretchers": [0]},
@@ -306,7 +328,9 @@ class TestSolverConstraints:
         # Si assigné, devrait respecter la fenêtre
         if result.assignments:
             assignment = result.assignments[0]
-            assert 120 <= assignment.estimated_pickup_min <= 125, "Devrait respecter time window"
+            assert 120 <= assignment.estimated_pickup_min <= 125, (
+                "Devrait respecter time window"
+            )
 
     def test_solve_respects_capacity(self, db):
         """Test que le solver respecte les capacités."""
@@ -335,8 +359,16 @@ class TestSolverConstraints:
             "service_times": [5, 5],
             "time_windows": [(60, 120), (70, 130)],
             "driver_windows": [(0, 480)],
-            "capacities": {"passengers": [1], "wheelchairs": [0], "stretchers": [0]},  # Capacité = 1
-            "demands": {"passengers": [1, 1], "wheelchairs": [0, 0], "stretchers": [0, 0]},  # Demande = 2
+            "capacities": {
+                "passengers": [1],
+                "wheelchairs": [0],
+                "stretchers": [0],
+            },  # Capacité = 1
+            "demands": {
+                "passengers": [1, 1],
+                "wheelchairs": [0, 0],
+                "stretchers": [0, 0],
+            },  # Demande = 2
             "horizon": 480,
             "base_time": datetime.utcnow(),
             "company": company,
@@ -432,5 +464,7 @@ class TestSolverDebugInfo:
         result = solve(problem, settings)
 
         # Problème infaisable → booking non assigné
-        assert booking.id in result.unassigned_booking_ids, "Booking impossible devrait être non assigné"
+        assert booking.id in result.unassigned_booking_ids, (
+            "Booking impossible devrait être non assigné"
+        )
         assert len(result.assignments) == 0, "Aucun assignment pour problème infaisable"

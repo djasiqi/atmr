@@ -103,7 +103,12 @@ def _acquire_day_lock(company_id: int, day_str: str) -> bool:
         result = redis_client.set(key, "1", nx=True, ex=300)  # TTL 5 minutes
         return result is True
     except Exception as e:
-        logger.warning("[Engine] Failed to acquire Redis lock for company=%s day=%s: %s", company_id, day_str, e)
+        logger.warning(
+            "[Engine] Failed to acquire Redis lock for company=%s day=%s: %s",
+            company_id,
+            day_str,
+            e,
+        )
         return False
 
 
@@ -115,7 +120,12 @@ def _release_day_lock(company_id: int, day_str: str) -> None:
     try:
         redis_client.delete(key)
     except Exception as e:
-        logger.warning("[Engine] Failed to release Redis lock for company=%s day=%s: %s", company_id, day_str, e)
+        logger.warning(
+            "[Engine] Failed to release Redis lock for company=%s day=%s: %s",
+            company_id,
+            day_str,
+            e,
+        )
 
 
 def _analyze_unassigned_reasons(
@@ -148,7 +158,9 @@ def _analyze_unassigned_reasons(
         # Vérifier la capacité
         if hasattr(booking, "capacity_required") and booking.capacity_required:
             suitable_drivers = [
-                d for d in available_drivers if hasattr(d, "capacity") and d.capacity >= booking.capacity_required
+                d
+                for d in available_drivers
+                if hasattr(d, "capacity") and d.capacity >= booking.capacity_required
             ]
             if not suitable_drivers:
                 booking_reasons.append("capacity_exceeded")
@@ -176,7 +188,8 @@ def _analyze_unassigned_reasons(
                 if hasattr(driver, "current_lat") and hasattr(driver, "current_lon"):
                     # Calculer la distance (simplifié)
                     distance = (
-                        (booking.pickup_lat - driver.current_lat) ** 2 + (booking.pickup_lon - driver.current_lon) ** 2
+                        (booking.pickup_lat - driver.current_lat) ** 2
+                        + (booking.pickup_lon - driver.current_lon) ** 2
                     ) ** 0.5
                     if distance < DISTANCE_THRESHOLD_KM:  # ~1km
                         nearby_drivers.append(driver)
@@ -187,7 +200,9 @@ def _analyze_unassigned_reasons(
         # Vérifier les contraintes d'urgence
         if hasattr(booking, "is_emergency") and booking.is_emergency:
             emergency_drivers = [
-                d for d in available_drivers if hasattr(d, "can_handle_emergency") and d.can_handle_emergency
+                d
+                for d in available_drivers
+                if hasattr(d, "can_handle_emergency") and d.can_handle_emergency
             ]
             if not emergency_drivers:
                 booking_reasons.append("no_emergency_drivers")
@@ -322,7 +337,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 )
 
             # Logger avec stack trace en mode DEBUG
-            logger.error(error_msg, extra={"company_id": company_id, "caller": caller_info})
+            logger.error(
+                error_msg, extra={"company_id": company_id, "caller": caller_info}
+            )
             logger.debug(
                 "[Engine] Stack trace pour CompanyNotFoundError:\n%s",
                 "".join(traceback.format_stack()[:-1]),  # Exclure la ligne actuelle
@@ -362,7 +379,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     "error": f"Company {company_id} introuvable en DB",
                     "dispatch_run_id": None,
                     "caller": caller_info,  # ✅ Ajout du contexte du caller
-                    "stack_trace": traceback.format_stack()[:-1] if logger.isEnabledFor(logging.DEBUG) else None,
+                    "stack_trace": traceback.format_stack()[:-1]
+                    if logger.isEnabledFor(logging.DEBUG)
+                    else None,
                 },
             ).to_dict()
         # 1) Configuration
@@ -373,13 +392,17 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         if is_fast_mode:
             # ⚡ Mode rapide : forcer heuristic_only et désactiver optimisations lourdes
             mode = "heuristic_only"
-            logger.info("[Engine] ⚡ Mode RAPIDE détecté : heuristic_only, optimisations désactivées")
+            logger.info(
+                "[Engine] ⚡ Mode RAPIDE détecté : heuristic_only, optimisations désactivées"
+            )
             # Désactiver solver et RL pour garantir < 1 minute
             if not hasattr(s, "features"):
                 s.features = ud_settings.FeaturesSettings()
             s.features.enable_solver = False
             s.features.enable_rl_optimizer = False
-            s.features.enable_parallel_heuristics = True  # Activer parallélisme pour vitesse
+            s.features.enable_parallel_heuristics = (
+                True  # Activer parallélisme pour vitesse
+            )
             # Limiter le solver à 10s max si jamais appelé (sécurité)
             s.solver.time_limit_sec = 10
 
@@ -397,13 +420,19 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 
             # Capturer les valeurs avant merge pour comparaison
             fairness_weight_before = (
-                getattr(getattr(s, "fairness", None), "fairness_weight", None) if hasattr(s, "fairness") else None
+                getattr(getattr(s, "fairness", None), "fairness_weight", None)
+                if hasattr(s, "fairness")
+                else None
             )
             driver_load_before = (
-                getattr(getattr(s, "heuristic", None), "driver_load_balance", None) if hasattr(s, "heuristic") else None
+                getattr(getattr(s, "heuristic", None), "driver_load_balance", None)
+                if hasattr(s, "heuristic")
+                else None
             )
             proximity_before = (
-                getattr(getattr(s, "heuristic", None), "proximity", None) if hasattr(s, "heuristic") else None
+                getattr(getattr(s, "heuristic", None), "proximity", None)
+                if hasattr(s, "heuristic")
+                else None
             )
 
             try:
@@ -414,7 +443,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     driver_load_after = s.heuristic.driver_load_balance
                     proximity_after = s.heuristic.proximity
                     heuristic_override = (
-                        overrides.get("heuristic", {}) if isinstance(overrides.get("heuristic"), dict) else {}
+                        overrides.get("heuristic", {})
+                        if isinstance(overrides.get("heuristic"), dict)
+                        else {}
                     )
                     logger.info(
                         "[Engine] ✅ After merge - heuristic.driver_load_balance: %s → %s (demandé: %s)",
@@ -431,7 +462,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 if hasattr(s, "fairness"):
                     fairness_weight_after = s.fairness.fairness_weight
                     fairness_override = (
-                        overrides.get("fairness", {}) if isinstance(overrides.get("fairness"), dict) else {}
+                        overrides.get("fairness", {})
+                        if isinstance(overrides.get("fairness"), dict)
+                        else {}
                     )
                     logger.info(
                         "[Engine] ✅ After merge - fairness.fairness_weight: %s → %s (demandé: %s)",
@@ -445,7 +478,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         if allow_emergency is not None:
             with suppress(Exception):
                 s.emergency.allow_emergency_drivers = bool(allow_emergency)
-        allow_emg = bool(getattr(getattr(s, "emergency", None), "allow_emergency_drivers", True))
+        allow_emg = bool(
+            getattr(getattr(s, "emergency", None), "allow_emergency_drivers", True)
+        )
 
         logger.info(
             "[Engine] Dispatch start company=%s mode=%s for_date=%s regular_first=%s allow_emergency=%s fast_mode=%s",
@@ -459,7 +494,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 
         # 1.b Verrou d'idempotence par (entreprise, jour)
         if not _acquire_day_lock(company_id, day_str):
-            logger.warning("[Engine] Run skipped (locked) company=%s day=%s", company_id, day_str)
+            logger.warning(
+                "[Engine] Run skipped (locked) company=%s day=%s", company_id, day_str
+            )
             # ✅ FIX: DispatchRun n'est pas créé si locked, donc dispatch_run_id est None
             # ✅ Standardisation: Utiliser DispatchResult
             result = DispatchResult(
@@ -468,8 +505,18 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 unassigned=[],
                 bookings=[],
                 drivers=[],
-                meta={"reason": "locked", "for_date": for_date, "day": day_str, "dispatch_run_id": None},
-                debug={"reason": "locked", "for_date": for_date, "day": day_str, "dispatch_run_id": None},
+                meta={
+                    "reason": "locked",
+                    "for_date": for_date,
+                    "day": day_str,
+                    "dispatch_run_id": None,
+                },
+                debug={
+                    "reason": "locked",
+                    "for_date": for_date,
+                    "day": day_str,
+                    "dispatch_run_id": None,
+                },
             )
 
         # 2) Créer / réutiliser le DispatchRun (unique: company_id+day)
@@ -517,19 +564,28 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                         day_str,
                     )
             else:
-                logger.warning("[Engine] DispatchRun id=%s not found, will create new", existing_dispatch_run_id)
+                logger.warning(
+                    "[Engine] DispatchRun id=%s not found, will create new",
+                    existing_dispatch_run_id,
+                )
                 dispatch_run = None
         else:
             # Comportement par défaut : chercher par company_id+day
-            dispatch_run = DispatchRun.query.filter_by(company_id=company_id, day=day_date).first()
+            dispatch_run = DispatchRun.query.filter_by(
+                company_id=company_id, day=day_date
+            ).first()
 
         # ✅ Définir le contexte logging pour dispatch_run_id
-        dispatch_run_id_val = _safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None
+        dispatch_run_id_val = (
+            _safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None
+        )
         if dispatch_run_id_val:
             try:
                 from shared.dispatch_logging import set_dispatch_context
 
-                set_dispatch_context(dispatch_run_id=dispatch_run_id_val, company_id=company_id)
+                set_dispatch_context(
+                    dispatch_run_id=dispatch_run_id_val, company_id=company_id
+                )
             except ImportError:
                 pass  # Module optionnel
 
@@ -537,7 +593,10 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             # TX courte de création ; en cas de race → IntegrityError
             # ✅ FIX: Vérifier que la company existe avant de créer DispatchRun
             if company is None:
-                logger.error("[Engine] Cannot create DispatchRun: company_id=%s does not exist", company_id)
+                logger.error(
+                    "[Engine] Cannot create DispatchRun: company_id=%s does not exist",
+                    company_id,
+                )
                 return {  # ✅ FIX: Retourner immédiatement si company n'existe pas
                     "assignments": [],
                     "unassigned": [],
@@ -564,11 +623,16 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                         logger.error("[Engine] %s", error_msg)
                         raise ValueError(error_msg)
                 logger.info(
-                    "[Engine] Created DispatchRun id=%s for company=%s day=%s", dispatch_run.id, company_id, day_str
+                    "[Engine] Created DispatchRun id=%s for company=%s day=%s",
+                    dispatch_run.id,
+                    company_id,
+                    day_str,
                 )
             except IntegrityError as e:
                 # ✅ P2.2: Track métrique IntegrityError (race condition)
-                error_code = getattr(e.orig, "pgcode", None) if hasattr(e, "orig") else None
+                error_code = (
+                    getattr(e.orig, "pgcode", None) if hasattr(e, "orig") else None
+                )
                 track_integrity_error(
                     error_code=str(error_code) if error_code else "unknown",
                     company_id=company_id,
@@ -578,7 +642,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 # Un autre thread l'a créé entre-temps → récupère l'existant
                 # puis MAJ sous TX courte
                 db.session.rollback()
-                dispatch_run = DispatchRun.query.filter_by(company_id=company_id, day=day_date).first()
+                dispatch_run = DispatchRun.query.filter_by(
+                    company_id=company_id, day=day_date
+                ).first()
                 if dispatch_run is None:
                     raise
                 with _begin_tx():
@@ -604,7 +670,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         # transactions
         try:
             db.session.commit()
-            logger.info("[Engine] DispatchRun id=%s committed successfully", dispatch_run.id)
+            logger.info(
+                "[Engine] DispatchRun id=%s committed successfully", dispatch_run.id
+            )
         except Exception:
             logger.exception("[Engine] Failed to commit DispatchRun")
             db.session.rollback()
@@ -613,7 +681,8 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         # 3.5) Initialiser le collecteur de métriques de performance
         if dispatch_run:  # Initialiser seulement si dispatch_run existe
             perf_collector = performance_metrics.DispatchMetricsCollector(
-                company_id=company_id, dispatch_run_id=dispatch_run.id if dispatch_run else None
+                company_id=company_id,
+                dispatch_run_id=dispatch_run.id if dispatch_run else None,
             )
 
             # Réinitialiser les compteurs
@@ -625,7 +694,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             # Démarrer le timer pour la collecte de données
             perf_collector.start_timer("data_collection")
         else:
-            logger.warning("[Engine] perf_collector not initialized: dispatch_run is None")
+            logger.warning(
+                "[Engine] perf_collector not initialized: dispatch_run is None"
+            )
 
         # 3.6) Initialiser AB Router et KPI Monitor pour rollout progressif RL
         ab_router = ABRouter(s)
@@ -665,16 +736,18 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     ]
                     if booking_ids_for_date:
                         # ⚡ Supprimer les Assignment ET réinitialiser les Booking
-                        deleted_count = Assignment.query.filter(Assignment.booking_id.in_(booking_ids_for_date)).delete(
-                            synchronize_session=False
-                        )
+                        deleted_count = Assignment.query.filter(
+                            Assignment.booking_id.in_(booking_ids_for_date)
+                        ).delete(synchronize_session=False)
 
                         # ⚡ CRITIQUE : Réinitialiser driver_id des Booking pour que fairness_counts soit à zéro
                         # On ne change pas le status, seulement le driver_id pour que count_assigned_bookings_for_day
                         # ne compte plus ces bookings comme assignés
                         bookings_reset = Booking.query.filter(
                             Booking.id.in_(booking_ids_for_date),
-                            Booking.driver_id.isnot(None),  # Seulement ceux qui ont un driver_id
+                            Booking.driver_id.isnot(
+                                None
+                            ),  # Seulement ceux qui ont un driver_id
                         ).update({Booking.driver_id: None}, synchronize_session=False)
 
                         logger.info(
@@ -685,12 +758,15 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                             len(booking_ids_for_date),
                         )
                     else:
-                        logger.info("[Engine] ⚠️ Aucun booking trouvé pour reset (date=%s)", for_date or day_str)
+                        logger.info(
+                            "[Engine] ⚠️ Aucun booking trouvé pour reset (date=%s)",
+                            for_date or day_str,
+                        )
                 else:
                     # Supprimer seulement les assignations du run actuel (comportement par défaut)
-                    deleted_count = Assignment.query.filter_by(dispatch_run_id=dispatch_run.id).delete(
-                        synchronize_session=False
-                    )
+                    deleted_count = Assignment.query.filter_by(
+                        dispatch_run_id=dispatch_run.id
+                    ).delete(synchronize_session=False)
                     logger.debug(
                         "[Engine] Reset assignations du run_id=%s uniquement (supprimé: %d)",
                         dispatch_run.id,
@@ -702,7 +778,8 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             logger.info("[Engine] ✅ Commit des suppressions d'assignations effectué")
         except Exception:
             logger.exception(
-                "[Engine] Failed to reset previous assignments for run_id=%s", getattr(dispatch_run, "id", None)
+                "[Engine] Failed to reset previous assignments for run_id=%s",
+                getattr(dispatch_run, "id", None),
             )
             db.session.rollback()
         # on continue quand même ; le pipeline peut recréer des assignments
@@ -726,7 +803,12 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 n_d = len(problem.get("drivers", []))
                 data_span.set_attribute("bookings_count", n_b)
                 data_span.set_attribute("drivers_count", n_d)
-                logger.info("[Engine] Problem built: bookings=%d drivers=%d for_date=%s", n_b, n_d, for_date or day_str)
+                logger.info(
+                    "[Engine] Problem built: bookings=%d drivers=%d for_date=%s",
+                    n_b,
+                    n_d,
+                    for_date or day_str,
+                )
 
             # Propager le dispatch_run_id dans le problem pour qu'il arrive
             # jusqu'au solver
@@ -740,16 +822,24 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             if perf_collector:
                 perf_collector.end_timer("data_collection")
         except Exception:
-            logger.exception("[Engine] build_problem_data failed (company=%s)", company_id)
+            logger.exception(
+                "[Engine] build_problem_data failed (company=%s)", company_id
+            )
             if dispatch_run:
                 # ✅ TX courte pour marquer le run en échec, même si la session a été salie
                 try:
                     with _begin_tx():
                         dispatch_run.status = DispatchStatus.FAILED
                 except Exception:
-                    logger.exception("[Engine] Failed to mark DispatchRun FAILED after build_problem_data error")
+                    logger.exception(
+                        "[Engine] Failed to mark DispatchRun FAILED after build_problem_data error"
+                    )
                 # ✅ FIX: Calculer dispatch_run_id avant retour
-                drid_on_error = _safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None
+                drid_on_error = (
+                    _safe_int(getattr(dispatch_run, "id", None))
+                    if dispatch_run
+                    else None
+                )
                 # ✅ Standardisation: Utiliser DispatchResult
                 result = DispatchResult(
                     dispatch_run_id=drid_on_error,
@@ -786,10 +876,14 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     with _begin_tx():
                         dispatch_run.mark_completed({"reason": "no_data"})
                 except Exception:
-                    logger.exception("[Engine] Failed to complete DispatchRun (no_data)")
+                    logger.exception(
+                        "[Engine] Failed to complete DispatchRun (no_data)"
+                    )
             # ✅ Retourner immédiatement si pas de données
             # ✅ FIX: Calculer dispatch_run_id avant retour
-            drid_no_data = _safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None
+            drid_no_data = (
+                _safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None
+            )
             # ✅ Standardisation: Utiliser DispatchResult
             return DispatchResult(
                 dispatch_run_id=drid_no_data,
@@ -797,8 +891,16 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 unassigned=[],
                 bookings=[],
                 drivers=[],
-                meta={"reason": "no_data", "for_date": for_date or day_str, "dispatch_run_id": drid_no_data},
-                debug={"reason": "no_data", "for_date": for_date or day_str, "dispatch_run_id": drid_no_data},
+                meta={
+                    "reason": "no_data",
+                    "for_date": for_date or day_str,
+                    "dispatch_run_id": drid_no_data,
+                },
+                debug={
+                    "reason": "no_data",
+                    "for_date": for_date or day_str,
+                    "dispatch_run_id": drid_no_data,
+                },
             ).to_dict()
 
         # 5.5) Clustering géographique (si activé et > threshold)
@@ -807,12 +909,16 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         n_drivers = len(problem.get("drivers", []))
 
         # Utiliser le threshold depuis settings
-        clustering_threshold = getattr(s.clustering, "bookings_threshold", CLUSTERING_BOOKINGS_THRESHOLD)
+        clustering_threshold = getattr(
+            s.clustering, "bookings_threshold", CLUSTERING_BOOKINGS_THRESHOLD
+        )
 
         if use_clustering and n_bookings > clustering_threshold:
             try:
                 logger.info(
-                    "[Clustering] Activating geographic clustering: %d bookings, %d drivers", n_bookings, n_drivers
+                    "[Clustering] Activating geographic clustering: %d bookings, %d drivers",
+                    n_bookings,
+                    n_drivers,
                 )
 
                 # Utiliser les paramètres depuis settings
@@ -821,11 +927,16 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 
                 clustering = GeographicClustering(max_bookings_per_zone=max_bookings)
                 zones = clustering.create_zones(
-                    bookings=problem["bookings"], drivers=problem["drivers"], cross_zone_tolerance=cross_tolerance
+                    bookings=problem["bookings"],
+                    drivers=problem["drivers"],
+                    cross_zone_tolerance=cross_tolerance,
                 )
 
                 if len(zones) > 1:
-                    logger.info("[Clustering] Created %d zones, dispatching independently", len(zones))
+                    logger.info(
+                        "[Clustering] Created %d zones, dispatching independently",
+                        len(zones),
+                    )
 
                     # Dispatch par zone avec pipeline complet
                     zone_results = {}
@@ -854,7 +965,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                         zone_assignments = []
                         zone_unassigned_ids = []
 
-                        if mode in ("auto", "heuristic_only") and getattr(s.features, "enable_heuristics", True):
+                        if mode in ("auto", "heuristic_only") and getattr(
+                            s.features, "enable_heuristics", True
+                        ):
                             try:
                                 zone_h_res = heuristics.assign(zone_problem, settings=s)
                                 zone_assignments.extend(zone_h_res.assignments)
@@ -866,7 +979,11 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                                     len(zone_unassigned_ids),
                                 )
                             except Exception as e:
-                                logger.warning("[Clustering] Zone %d heuristic failed: %s", zone.zone_id, e)
+                                logger.warning(
+                                    "[Clustering] Zone %d heuristic failed: %s",
+                                    zone.zone_id,
+                                    e,
+                                )
 
                         # Dispatch avec solveur pour les restants
                         if (
@@ -875,7 +992,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                             and getattr(s.features, "enable_solver", True)
                         ):
                             try:
-                                zone_s_problem = _filter_problem(zone_problem, zone_unassigned_ids, s)
+                                zone_s_problem = _filter_problem(
+                                    zone_problem, zone_unassigned_ids, s
+                                )
                                 zone_s_res = solver.solve(zone_s_problem, settings=s)
                                 zone_assignments.extend(zone_s_res.assignments)
                                 zone_unassigned_ids = zone_s_res.unassigned_booking_ids
@@ -886,12 +1005,18 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                                     len(zone_unassigned_ids),
                                 )
                             except Exception as e:
-                                logger.warning("[Clustering] Zone %d solver failed: %s", zone.zone_id, e)
+                                logger.warning(
+                                    "[Clustering] Zone %d solver failed: %s",
+                                    zone.zone_id,
+                                    e,
+                                )
 
                         # Fallback pour les restants
                         if zone_unassigned_ids:
                             try:
-                                zone_fb = heuristics.closest_feasible(zone_problem, zone_unassigned_ids, settings=s)
+                                zone_fb = heuristics.closest_feasible(
+                                    zone_problem, zone_unassigned_ids, settings=s
+                                )
                                 zone_assignments.extend(zone_fb.assignments)
                                 logger.info(
                                     "[Clustering] Zone %d fallback: +%d assigned",
@@ -899,7 +1024,11 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                                     len(zone_fb.assignments),
                                 )
                             except Exception as e:
-                                logger.warning("[Clustering] Zone %d fallback failed: %s", zone.zone_id, e)
+                                logger.warning(
+                                    "[Clustering] Zone %d fallback failed: %s",
+                                    zone.zone_id,
+                                    e,
+                                )
 
                         zone_results[zone.zone_id] = {
                             "assignments": zone_assignments,
@@ -922,10 +1051,14 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     used_solver = True
                     used_fallback = True
 
-                    logger.info("[Clustering] Using clustering results as final assignments")
+                    logger.info(
+                        "[Clustering] Using clustering results as final assignments"
+                    )
 
             except Exception as e:
-                logger.warning("[Clustering] Failed, falling back to normal pipeline: %s", e)
+                logger.warning(
+                    "[Clustering] Failed, falling back to normal pipeline: %s", e
+                )
                 # Continue avec le pipeline normal en cas d'échec
 
         # 5) Séparation réguliers/urgences
@@ -936,12 +1069,21 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         except Exception:
             for d in problem.get("drivers", []):
                 d_type = getattr(d, "driver_type", None)
-                (emgs if (d_type == DriverType.EMERGENCY or str(d_type).endswith("EMERGENCY")) else regs).append(d)
+                (
+                    emgs
+                    if (
+                        d_type == DriverType.EMERGENCY
+                        or str(d_type).endswith("EMERGENCY")
+                    )
+                    else regs
+                ).append(d)
 
         # 6) Pipeline commun
         # Ne pas réinitialiser si le clustering a été utilisé
         clustering_used = (
-            use_clustering and n_bookings > CLUSTERING_BOOKINGS_THRESHOLD and len(zones) > 1
+            use_clustering
+            and n_bookings > CLUSTERING_BOOKINGS_THRESHOLD
+            and len(zones) > 1
             if "zones" in locals()
             else False
         )
@@ -1002,7 +1144,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         # exécuté)
         fb = None
         if regular_first and regs and company is not None:
-            logger.info("[Engine] === Pass 1: Regular drivers only (%d drivers) ===", len(regs))
+            logger.info(
+                "[Engine] === Pass 1: Regular drivers only (%d drivers) ===", len(regs)
+            )
             prob_regs = data.build_vrptw_problem(
                 company,
                 problem["bookings"],
@@ -1020,25 +1164,34 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             if "preferred_driver_id" in problem:
                 prob_regs["preferred_driver_id"] = problem["preferred_driver_id"]
                 logger.info(
-                    "[Engine] ✅ preferred_driver_id propagé: %s → prob_regs", problem.get("preferred_driver_id")
+                    "[Engine] ✅ preferred_driver_id propagé: %s → prob_regs",
+                    problem.get("preferred_driver_id"),
                 )
             else:
                 logger.warning(
-                    "[Engine] ⚠️ preferred_driver_id NON présent dans problem (keys: %s)", list(problem.keys())[:20]
+                    "[Engine] ⚠️ preferred_driver_id NON présent dans problem (keys: %s)",
+                    list(problem.keys())[:20],
                 )
             if "company_coords" in problem:
                 prob_regs["company_coords"] = problem["company_coords"]
             if "driver_load_multipliers" in problem:
-                prob_regs["driver_load_multipliers"] = problem["driver_load_multipliers"]
+                prob_regs["driver_load_multipliers"] = problem[
+                    "driver_load_multipliers"
+                ]
             remaining_ids = remaining_ids_from(prob_regs)
 
-            if remaining_ids and mode in ("auto", "heuristic_only") and getattr(s.features, "enable_heuristics", True):
+            if (
+                remaining_ids
+                and mode in ("auto", "heuristic_only")
+                and getattr(s.features, "enable_heuristics", True)
+            ):
                 try:
                     h_sub = _filter_problem(prob_regs, remaining_ids, s)
                     # ✅ D1: Span heuristics
                     with tracer.start_as_current_span("heuristics") as heuristics_span:
                         heuristics_span.set_attribute(
-                            "parallel", getattr(s.features, "enable_parallel_heuristics", False)
+                            "parallel",
+                            getattr(s.features, "enable_parallel_heuristics", False),
                         )
                         # Mesurer le temps des heuristiques
                         if perf_collector:
@@ -1046,7 +1199,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                                 h_res = heuristics.assign(h_sub, settings=s)
                         else:
                             h_res = heuristics.assign(h_sub, settings=s)
-                        heuristics_span.set_attribute("assignments_count", len(h_res.assignments))
+                        heuristics_span.set_attribute(
+                            "assignments_count", len(h_res.assignments)
+                        )
                     used_heuristic = True
                     extend_unique(h_res.assignments)
                     logger.info(
@@ -1056,13 +1211,19 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     )
 
                     # 🧠 Optimisation RL (si modèle disponible) - ⚡ SAUF en mode rapide
-                    if mode == "auto" and not is_fast_mode and len(final_assignments) > 0:
+                    if (
+                        mode == "auto"
+                        and not is_fast_mode
+                        and len(final_assignments) > 0
+                    ):
                         try:
                             from services.unified_dispatch.rl_optimizer import (
                                 RLDispatchOptimizer,
                             )
 
-                            logger.info("[Engine] 🧠 Tentative d'optimisation RL des assignations...")
+                            logger.info(
+                                "[Engine] 🧠 Tentative d'optimisation RL des assignations..."
+                            )
 
                             optimizer = RLDispatchOptimizer(
                                 # 🆕 v2 (23 dispatches, gap~2)
@@ -1114,12 +1275,20 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                                 dispatch_metrics = {
                                     "max_delay_minutes": 0,  # À calculer depuis les assignations
                                     "avg_delay_minutes": 0,
-                                    "completion_rate": len(final_assignments) / len(problem["bookings"])
+                                    "completion_rate": len(final_assignments)
+                                    / len(problem["bookings"])
                                     if problem["bookings"]
                                     else 1,
                                     "invalid_action_rate": 0,  # À calculer depuis l'optimiseur
                                     "driver_loads": [
-                                        len([a for a in final_assignments if a.driver_id == d.id]) for d in regs
+                                        len(
+                                            [
+                                                a
+                                                for a in final_assignments
+                                                if a.driver_id == d.id
+                                            ]
+                                        )
+                                        for d in regs
                                     ],
                                     "avg_distance_km": 0,  # À calculer
                                     "max_distance_km": 0,
@@ -1136,8 +1305,10 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                                 }
 
                                 # Vérifier la sécurité
-                                is_safe, safety_result = safety_guards.check_dispatch_result(
-                                    dispatch_metrics, rl_metadata
+                                is_safe, safety_result = (
+                                    safety_guards.check_dispatch_result(
+                                        dispatch_metrics, rl_metadata
+                                    )
                                 )
 
                                 if not is_safe:
@@ -1170,15 +1341,24 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                                                 metadata=safety_result,
                                             )
                                     except Exception as notify_e:
-                                        logger.error("[Engine] Erreur notification rollback: %s", notify_e)
+                                        logger.error(
+                                            "[Engine] Erreur notification rollback: %s",
+                                            notify_e,
+                                        )
 
-                                    logger.info("[Engine] ✅ Rollback vers heuristique effectué")
+                                    logger.info(
+                                        "[Engine] ✅ Rollback vers heuristique effectué"
+                                    )
                                 else:
-                                    logger.info("[Engine] ✅ Safety Guards: Décision RL validée")
+                                    logger.info(
+                                        "[Engine] ✅ Safety Guards: Décision RL validée"
+                                    )
 
                                 logger.info("[Engine] ✅ Optimisation RL terminée")
                             else:
-                                logger.info("[Engine] ⏳ Optimiseur RL non disponible (modèle non trouvé)")
+                                logger.info(
+                                    "[Engine] ⏳ Optimiseur RL non disponible (modèle non trouvé)"
+                                )
 
                         except Exception as e:
                             logger.warning("[Engine] ⚠️ Optimisation RL échouée: %s", e)
@@ -1245,7 +1425,8 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                             final_assignments,
                             dispatch_run_id=(
                                 int(cast("Any", dispatch_run.id))
-                                if dispatch_run and getattr(dispatch_run, "id", None) is not None
+                                if dispatch_run
+                                and getattr(dispatch_run, "id", None) is not None
                                 else None
                             ),
                         )
@@ -1258,11 +1439,17 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                         )
                         db.session.commit()
                         # ✅ FIX: Inclure dispatch_run_id dans le résultat partiel
-                        drid_heuristic = _safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None
+                        drid_heuristic = (
+                            _safe_int(getattr(dispatch_run, "id", None))
+                            if dispatch_run
+                            else None
+                        )
                         # ✅ Standardisation: Utiliser DispatchResult
                         result = DispatchResult(
                             dispatch_run_id=drid_heuristic,
-                            assignments=[_serialize_assignment(a) for a in final_assignments],
+                            assignments=[
+                                _serialize_assignment(a) for a in final_assignments
+                            ],
                             unassigned=remaining_ids_from(prob_regs),
                             bookings=[],
                             drivers=[],
@@ -1282,26 +1469,35 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 
             remaining_ids = remaining_ids_from(prob_regs)
 
-            if remaining_ids and mode in ("auto", "solver_only") and getattr(s.features, "enable_solver", True):
+            if (
+                remaining_ids
+                and mode in ("auto", "solver_only")
+                and getattr(s.features, "enable_solver", True)
+            ):
                 try:
                     s_sub = _filter_problem(prob_regs, remaining_ids, s)
                     # Warm-start: Injecter les assignments heuristiques comme hint initial
                     if h_res and h_res.assignments:
                         s_sub["heuristic_assignments"] = h_res.assignments
                         logger.info(
-                            "[Engine] Passing %d heuristic assignments as warm-start to solver", len(h_res.assignments)
+                            "[Engine] Passing %d heuristic assignments as warm-start to solver",
+                            len(h_res.assignments),
                         )
                     # ✅ D1: Span solver
                     with tracer.start_as_current_span("solver") as solver_span:
                         solver_span.set_attribute("solver", "ortools")
-                        solver_span.set_attribute("warm_start", bool(h_res and h_res.assignments))
+                        solver_span.set_attribute(
+                            "warm_start", bool(h_res and h_res.assignments)
+                        )
                         # Mesurer le temps du solveur
                         if perf_collector:
                             with perf_collector.time_step("solver"):
                                 s_res = solver.solve(s_sub, settings=s)
                         else:
                             s_res = solver.solve(s_sub, settings=s)
-                        solver_span.set_attribute("assignments_count", len(s_res.assignments))
+                        solver_span.set_attribute(
+                            "assignments_count", len(s_res.assignments)
+                        )
                     used_solver = True
                     extend_unique(s_res.assignments)
                     logger.info(
@@ -1315,7 +1511,8 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                             final_assignments,
                             dispatch_run_id=(
                                 int(cast("Any", dispatch_run.id))
-                                if dispatch_run and getattr(dispatch_run, "id", None) is not None
+                                if dispatch_run
+                                and getattr(dispatch_run, "id", None) is not None
                                 else None
                             ),
                         )
@@ -1328,11 +1525,17 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                         )
                         db.session.commit()
                         # ✅ FIX: Inclure dispatch_run_id dans le résultat partiel
-                        drid_solver = _safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None
+                        drid_solver = (
+                            _safe_int(getattr(dispatch_run, "id", None))
+                            if dispatch_run
+                            else None
+                        )
                         # ✅ Standardisation: Utiliser DispatchResult
                         result = DispatchResult(
                             dispatch_run_id=drid_solver,
-                            assignments=[_serialize_assignment(a) for a in final_assignments],
+                            assignments=[
+                                _serialize_assignment(a) for a in final_assignments
+                            ],
                             unassigned=s_res.unassigned_booking_ids,
                             bookings=[],
                             drivers=[],
@@ -1356,8 +1559,12 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     # 📅 Injecter les états de l'heuristique dans le problem pour que le fallback les utilise
                     if h_res and h_res.debug:
                         prob_regs["busy_until"] = h_res.debug.get("busy_until", {})
-                        prob_regs["driver_scheduled_times"] = h_res.debug.get("driver_scheduled_times", {})
-                        prob_regs["proposed_load"] = h_res.debug.get("proposed_load", {})
+                        prob_regs["driver_scheduled_times"] = h_res.debug.get(
+                            "driver_scheduled_times", {}
+                        )
+                        prob_regs["proposed_load"] = h_res.debug.get(
+                            "proposed_load", {}
+                        )
                         # ✅ FIX: Réduire le niveau de log en mode testing (normal, injection d'état pour fallback)
                         is_testing_inj = False
                         try:
@@ -1365,24 +1572,33 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                             try:
                                 from flask import current_app
 
-                                is_testing_inj = is_testing_inj or current_app.config.get("TESTING", False)
+                                is_testing_inj = (
+                                    is_testing_inj
+                                    or current_app.config.get("TESTING", False)
+                                )
                             except RuntimeError:
                                 pass
                         except Exception:
                             pass
 
-                        log_level_inj = logger.debug if is_testing_inj else logger.warning
+                        log_level_inj = (
+                            logger.debug if is_testing_inj else logger.warning
+                        )
                         log_level_inj(
                             "[Engine] 📥 Injection état vers fallback: busy_until=%s, proposed_load=%s",
                             prob_regs.get("busy_until"),
                             prob_regs.get("proposed_load"),
                         )
 
-                    fb = heuristics.closest_feasible(prob_regs, remaining_ids, settings=s)
+                    fb = heuristics.closest_feasible(
+                        prob_regs, remaining_ids, settings=s
+                    )
                     used_fallback = True
                     extend_unique(fb.assignments)
                     logger.info(
-                        "[Engine] Fallback P1: +%d, reste=%d", len(fb.assignments), len(fb.unassigned_booking_ids)
+                        "[Engine] Fallback P1: +%d, reste=%d",
+                        len(fb.assignments),
+                        len(fb.unassigned_booking_ids),
                     )
                 except Exception:
                     logger.exception("[Engine] Fallback pass-1 failed")
@@ -1401,7 +1617,10 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         if remaining_all and allow_emg2 and emgs and company is not None:
             try:
                 used_emergency_pass = True
-                logger.info("[Engine] === Pass 2: Adding emergency drivers (%d total) ===", len(regs) + len(emgs))
+                logger.info(
+                    "[Engine] === Pass 2: Adding emergency drivers (%d total) ===",
+                    len(regs) + len(emgs),
+                )
                 prob_full = data.build_vrptw_problem(
                     company,
                     problem["bookings"],
@@ -1417,7 +1636,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 if "company_coords" in problem:
                     prob_full["company_coords"] = problem["company_coords"]
                 if "driver_load_multipliers" in problem:
-                    prob_full["driver_load_multipliers"] = problem["driver_load_multipliers"]
+                    prob_full["driver_load_multipliers"] = problem[
+                        "driver_load_multipliers"
+                    ]
 
                 # 📅 Injecter les états du Pass 1 dans le Pass 2 pour éviter les conflits
                 # Utiliser fb (fallback) en priorité car il contient les états les plus à jour
@@ -1425,8 +1646,12 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 latest_result = fb if (fb and fb.debug) else h_res
                 if latest_result and latest_result.debug:
                     prob_full["busy_until"] = latest_result.debug.get("busy_until", {})
-                    prob_full["driver_scheduled_times"] = latest_result.debug.get("driver_scheduled_times", {})
-                    prob_full["proposed_load"] = latest_result.debug.get("proposed_load", {})
+                    prob_full["driver_scheduled_times"] = latest_result.debug.get(
+                        "driver_scheduled_times", {}
+                    )
+                    prob_full["proposed_load"] = latest_result.debug.get(
+                        "proposed_load", {}
+                    )
                     source_name = "Fallback P1" if (fb and fb.debug) else "Heuristic P1"
                     logger.warning(
                         "[Engine] 📥 Injection état %s → Pass2: busy_until=%s, proposed_load=%s",
@@ -1437,7 +1662,11 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 
                 rem = remaining_ids_from(prob_full)
                 h2 = None
-                if rem and mode in ("auto", "heuristic_only") and getattr(s.features, "enable_heuristics", True):
+                if (
+                    rem
+                    and mode in ("auto", "heuristic_only")
+                    and getattr(s.features, "enable_heuristics", True)
+                ):
                     h_sub2 = _filter_problem(prob_full, rem, s)
                     h2 = heuristics.assign(h_sub2, settings=s)
                     used_heuristic = True
@@ -1449,7 +1678,11 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     )
 
                 rem = remaining_ids_from(prob_full)
-                if rem and mode in ("auto", "solver_only") and getattr(s.features, "enable_solver", True):
+                if (
+                    rem
+                    and mode in ("auto", "solver_only")
+                    and getattr(s.features, "enable_solver", True)
+                ):
                     s_sub2 = _filter_problem(prob_full, rem, s)
                     # Warm-start: Injecter les assignments heuristiques (Pass 2)
                     if h2 and h2.assignments:
@@ -1469,7 +1702,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     if h2 and h2.debug:
                         # Utiliser les états mis à jour du Pass 2
                         prob_full["busy_until"] = h2.debug.get("busy_until", {})
-                        prob_full["driver_scheduled_times"] = h2.debug.get("driver_scheduled_times", {})
+                        prob_full["driver_scheduled_times"] = h2.debug.get(
+                            "driver_scheduled_times", {}
+                        )
                         prob_full["proposed_load"] = h2.debug.get("proposed_load", {})
                         logger.warning(
                             "[Engine] 📥 Injection état P2 → Fallback P2: busy_until=%s, proposed_load=%s",
@@ -1481,7 +1716,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     used_fallback = True
                     extend_unique(fb2.assignments)
                     logger.info(
-                        "[Engine] Fallback P2: +%d, reste=%d", len(fb2.assignments), len(fb2.unassigned_booking_ids)
+                        "[Engine] Fallback P2: +%d, reste=%d",
+                        len(fb2.assignments),
+                        len(fb2.unassigned_booking_ids),
                     )
             except Exception:
                 logger.exception("[Engine] Emergency pass failed")
@@ -1490,12 +1727,20 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         if not regular_first and company is not None:
             phase = "direct"
             rem = remaining_ids_from(problem)
-            if rem and mode in ("auto", "heuristic_only") and getattr(s.features, "enable_heuristics", True):
+            if (
+                rem
+                and mode in ("auto", "heuristic_only")
+                and getattr(s.features, "enable_heuristics", True)
+            ):
                 h_sub = _filter_problem(problem, rem, s)
                 h_res = heuristics.assign(h_sub, settings=s)
                 extend_unique(h_res.assignments)
             rem = remaining_ids_from(problem)
-            if rem and mode in ("auto", "solver_only") and getattr(s.features, "enable_solver", True):
+            if (
+                rem
+                and mode in ("auto", "solver_only")
+                and getattr(s.features, "enable_solver", True)
+            ):
                 used_solver = True
                 s_sub = _filter_problem(problem, rem, s)
                 # Warm-start: Injecter les assignments heuristiques (direct mode)
@@ -1544,7 +1789,12 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                         logger.info(
                             "[B1] Quality score pré-apply: %.1f/100 (dominants: %s)",
                             quality_score_pre_apply,
-                            ", ".join(f"{k}={v:.1f}" for k, v in list(temp_metrics.dominant_factors.items())[:2]),
+                            ", ".join(
+                                f"{k}={v:.1f}"
+                                for k, v in list(temp_metrics.dominant_factors.items())[
+                                    :2
+                                ]
+                            ),
                         )
 
                         # ✅ B1: Garde-fou - Désactiver RL apply si quality_score < 70
@@ -1562,10 +1812,15 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                                 QUALITY_THRESHOLD,
                             )
                     except Exception as e:
-                        logger.warning("[B1] Failed to calculate pre-apply quality score: %s", e)
+                        logger.warning(
+                            "[B1] Failed to calculate pre-apply quality score: %s", e
+                        )
 
                 if should_apply_rl:
-                    logger.info("[ABRouter] Company %d: RL apply-mode enabled (bucket routing)", company_id)
+                    logger.info(
+                        "[ABRouter] Company %d: RL apply-mode enabled (bucket routing)",
+                        company_id,
+                    )
                     # Activer enable_rl_apply pour cette entreprise
                     s.features.enable_rl_apply = True
                 else:
@@ -1587,7 +1842,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 shadow_manager = ShadowModeManager()
 
                 # Construire les assignations courantes
-                current_assignments = {a.booking_id: a.driver_id for a in final_assignments if a.booking_id}
+                current_assignments = {
+                    a.booking_id: a.driver_id for a in final_assignments if a.booking_id
+                }
 
                 # Générer suggestions shadow
                 shadow_suggestions = shadow_manager.generate_shadow_suggestions(
@@ -1600,12 +1857,16 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 if shadow_suggestions:
                     kpi_snapshot = {
                         "assignments_count": len(final_assignments),
-                        "unassigned_count": len(rem_before_apply) if rem_before_apply else 0,
+                        "unassigned_count": len(rem_before_apply)
+                        if rem_before_apply
+                        else 0,
                         "heuristic_used": used_heuristic,
                         "solver_used": used_solver,
                     }
                     shadow_suggestions_stored = shadow_manager.store_shadow_suggestions(
-                        dispatch_run_id=dispatch_run.id, suggestions=shadow_suggestions, kpi_snapshot=kpi_snapshot
+                        dispatch_run_id=dispatch_run.id,
+                        suggestions=shadow_suggestions,
+                        kpi_snapshot=kpi_snapshot,
                     )
                     logger.info(
                         "[ShadowMode] Stored %s shadow suggestions for dispatch_run %s",
@@ -1613,7 +1874,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                         dispatch_run.id,
                     )
             except Exception as e:
-                logger.warning("[ShadowMode] Failed to generate/store shadow suggestions: %s", e)
+                logger.warning(
+                    "[ShadowMode] Failed to generate/store shadow suggestions: %s", e
+                )
 
         # 7) Application en DB
         if company is not None:
@@ -1635,7 +1898,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         rem = remaining_ids_from(problem)
 
         # Analyser les raisons détaillées de non-assignation
-        unassigned_reasons = _analyze_unassigned_reasons(problem, final_assignments, rem)
+        unassigned_reasons = _analyze_unassigned_reasons(
+            problem, final_assignments, rem
+        )
 
         # Mesures de performance agrégées si disponibles
         h_calls = 0
@@ -1669,7 +1934,11 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         ser_bookings = [_serialize_booking(b) for b in problem.get("bookings", [])]
         ser_drivers = [_serialize_driver(d) for d in problem.get("drivers", [])]
 
-        logger.info("[Engine] Serialized %d bookings, %d drivers for response", len(ser_bookings), len(ser_drivers))
+        logger.info(
+            "[Engine] Serialized %d bookings, %d drivers for response",
+            len(ser_bookings),
+            len(ser_drivers),
+        )
 
         debug_info: Dict[str, Any] = {
             "heuristic": getattr(h_res, "debug", None),
@@ -1679,7 +1948,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             "regular_first": regular_first,
             "allow_emergency": allow_emg,
             "unassigned_after": rem,
-            "phase": "regular_then_emergency" if used_emergency_pass and regular_first else phase,
+            "phase": "regular_then_emergency"
+            if used_emergency_pass and regular_first
+            else phase,
             "used_heuristic": used_heuristic,
             "used_solver": used_solver,
             "used_fallback": used_fallback,
@@ -1702,7 +1973,10 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             with _begin_tx():
                 dispatch_run.mark_completed(metrics)
         except Exception:
-            logger.exception("[Engine] Failed to complete DispatchRun id=%s", getattr(dispatch_run, "id", None))
+            logger.exception(
+                "[Engine] Failed to complete DispatchRun id=%s",
+                getattr(dispatch_run, "id", None),
+            )
 
         # 10) Collecter les métriques analytics (asynchrone, ne bloque pas le
         # dispatch)
@@ -1713,7 +1987,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 collect_dispatch_metrics(
                     dispatch_run_id=drid,
                     company_id=company_id,
-                    day=for_date if isinstance(for_date, date) else _to_date_ymd(for_date or day_str),
+                    day=for_date
+                    if isinstance(for_date, date)
+                    else _to_date_ymd(for_date or day_str),
                 )
 
         # 11) Collecter les métriques de qualité du dispatch
@@ -1726,13 +2002,19 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 quality_metrics = collect_quality_metrics(
                     dispatch_run_id=drid,
                     company_id=company_id,
-                    day=for_date if isinstance(for_date, date) else _to_date_ymd(for_date or day_str),
+                    day=for_date
+                    if isinstance(for_date, date)
+                    else _to_date_ymd(for_date or day_str),
                 )
                 logger.info(
                     "[Engine] Dispatch quality score: %.1f/100 (assignment: %.1f%%, on-time: %.1f%%, pooling: %.1f%%)",
                     quality_metrics.quality_score,
                     quality_metrics.assignment_rate,
-                    (quality_metrics.on_time_bookings / max(1, quality_metrics.total_bookings)) * 100,
+                    (
+                        quality_metrics.on_time_bookings
+                        / max(1, quality_metrics.total_bookings)
+                    )
+                    * 100,
                     quality_metrics.pooling_rate,
                 )
                 # Ajouter au debug_info pour le retour API
@@ -1748,7 +2030,10 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                             and hasattr(quality_metrics, "total_bookings")
                             and quality_metrics.total_bookings > 0
                         ):
-                            avg_delay_min = quality_metrics.total_late_minutes / quality_metrics.total_bookings
+                            avg_delay_min = (
+                                quality_metrics.total_late_minutes
+                                / quality_metrics.total_bookings
+                            )
 
                         # Préparer les KPIs pour le monitor
                         kpis = {
@@ -1758,13 +2043,23 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                         }
 
                         # Vérifier les KPIs et backout si nécessaire
-                        should_backout, reason = kpi_monitor.check_kpis(company_id, kpis)
+                        should_backout, reason = kpi_monitor.check_kpis(
+                            company_id, kpis
+                        )
 
                         if should_backout:
-                            logger.error("[KPI Monitor] Company %d: BACKOUT TRIGGERED - %s", company_id, reason)
+                            logger.error(
+                                "[KPI Monitor] Company %d: BACKOUT TRIGGERED - %s",
+                                company_id,
+                                reason,
+                            )
                             # Désactiver RL pour cette entreprise
                             s.features.enable_rl_apply = False
-                            debug_info["rl_backout"] = {"triggered": True, "reason": reason, "kpis": kpis}
+                            debug_info["rl_backout"] = {
+                                "triggered": True,
+                                "reason": reason,
+                                "kpis": kpis,
+                            }
                         else:
                             logger.info(
                                 "[KPI Monitor] Company %d: KPIs OK (quality_score=%.1f, on_time_rate=%.1f%%, avg_delay=%.1f min)",
@@ -1797,7 +2092,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 
         perf_metrics = None
         if perf_collector:
-            perf_metrics = perf_collector.finalize(algorithm_used=algorithm_used, feature_flags=feature_flags)
+            perf_metrics = perf_collector.finalize(
+                algorithm_used=algorithm_used, feature_flags=feature_flags
+            )
 
             # ✅ Enregistrer métriques Prometheus
             try:
@@ -1814,11 +2111,15 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 if drid is not None:
                     # Qualité
                     if perf_metrics.quality_score > 0:
-                        record_dispatch_quality(perf_metrics.quality_score, drid, company_id)
+                        record_dispatch_quality(
+                            perf_metrics.quality_score, drid, company_id
+                        )
 
                     # Taux d'assignation
                     if perf_metrics.assignment_rate > 0:
-                        record_assignment_rate(perf_metrics.assignment_rate, drid, company_id)
+                        record_assignment_rate(
+                            perf_metrics.assignment_rate, drid, company_id
+                        )
 
                     # Non assignés
                     unassigned_count = len(rem) if rem else 0
@@ -1826,20 +2127,28 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 
                     # Conflits temporels
                     if perf_metrics.temporal_conflicts_count > 0:
-                        record_temporal_conflicts(perf_metrics.temporal_conflicts_count, drid, company_id)
+                        record_temporal_conflicts(
+                            perf_metrics.temporal_conflicts_count, drid, company_id
+                        )
 
                     # Conflits DB
                     if perf_metrics.db_conflicts_count > 0:
-                        record_db_conflicts(perf_metrics.db_conflicts_count, drid, company_id)
+                        record_db_conflicts(
+                            perf_metrics.db_conflicts_count, drid, company_id
+                        )
 
                     # Durée
                     if perf_metrics.total_time > 0:
-                        record_dispatch_duration(perf_metrics.total_time, mode, company_id)
+                        record_dispatch_duration(
+                            perf_metrics.total_time, mode, company_id
+                        )
             except ImportError:
                 # Métriques Prometheus optionnelles
                 pass
             except Exception as e:
-                logger.warning("[Engine] Erreur enregistrement métriques Prometheus: %s", e)
+                logger.warning(
+                    "[Engine] Erreur enregistrement métriques Prometheus: %s", e
+                )
 
             # Récupérer le nombre de requêtes SQL
             perf_metrics.sql_queries_count = performance_metrics.get_sql_count()
@@ -1858,7 +2167,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     try:
                         from flask import current_app
 
-                        is_testing = is_testing or current_app.config.get("TESTING", False)
+                        is_testing = is_testing or current_app.config.get(
+                            "TESTING", False
+                        )
                     except RuntimeError:
                         # current_app pas disponible (hors contexte Flask), utiliser seulement env var
                         pass
@@ -1867,7 +2178,10 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     pass
 
                 log_level = logger.debug if is_testing else logger.warning
-                log_level("[Engine] ⚠️ %d conflits temporels détectés pendant ce dispatch", temporal_conflicts)
+                log_level(
+                    "[Engine] ⚠️ %d conflits temporels détectés pendant ce dispatch",
+                    temporal_conflicts,
+                )
 
             # ✅ A2: Récupérer le nombre de conflits DB (contraintes uniques)
             from services.unified_dispatch.apply import get_db_conflict_count
@@ -1876,7 +2190,10 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             perf_collector.metrics.db_conflicts_count = db_conflicts
             perf_metrics.db_conflicts_count = db_conflicts
             if db_conflicts > 0:
-                logger.info("[Engine] ℹ️ %d conflits DB (idempotence OK) pendant ce dispatch", db_conflicts)
+                logger.info(
+                    "[Engine] ℹ️ %d conflits DB (idempotence OK) pendant ce dispatch",
+                    db_conflicts,
+                )
 
             # ✅ A5: Récupérer les métriques cache OSRM
             from services.unified_dispatch.osrm_cache_metrics import (
@@ -1887,7 +2204,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             cache_metrics = get_cache_metrics_dict()
             perf_collector.metrics.osrm_cache_hits = cache_metrics["hits"]
             perf_collector.metrics.osrm_cache_misses = cache_metrics["misses"]
-            perf_collector.metrics.osrm_cache_bypass_count = cache_metrics["bypass_count"]
+            perf_collector.metrics.osrm_cache_bypass_count = cache_metrics[
+                "bypass_count"
+            ]
             perf_metrics.osrm_cache_hits = cache_metrics["hits"]
             perf_metrics.osrm_cache_misses = cache_metrics["misses"]
             perf_metrics.osrm_cache_bypass_count = cache_metrics["bypass_count"]
@@ -1903,7 +2222,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     try:
                         from flask import current_app
 
-                        is_testing = is_testing or current_app.config.get("TESTING", False)
+                        is_testing = is_testing or current_app.config.get(
+                            "TESTING", False
+                        )
                     except RuntimeError:
                         # current_app pas disponible (hors contexte Flask), utiliser seulement env var
                         pass
@@ -1922,7 +2243,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             from time import time
 
             n_bookings = len(final_assignments)
-            assignment_rate = len(final_assignments) / max(len(problem.get("bookings", [])), 1)
+            assignment_rate = len(final_assignments) / max(
+                len(problem.get("bookings", [])), 1
+            )
             # Défense en profondeur : result peut être None si le dispatch a échoué
             quality_score = 0.0
             if result is not None:
@@ -1938,7 +2261,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             if slo_check["breached"]:
                 current_time = time()
                 for breach in slo_check["breaches"]:
-                    get_slo_tracker().record_breach(breach_type=breach["dimension"], timestamp=current_time)
+                    get_slo_tracker().record_breach(
+                        breach_type=breach["dimension"], timestamp=current_time
+                    )
 
                 # ✅ FIX: Réduire le niveau de log en mode testing (seuils SLO peuvent être trop stricts pour petits batches)
                 # Note: Les seuils SLO sont optimisés pour production. En tests avec petits batches (< 10 bookings),
@@ -1952,7 +2277,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     try:
                         from flask import current_app
 
-                        is_testing = is_testing or current_app.config.get("TESTING", False)
+                        is_testing = is_testing or current_app.config.get(
+                            "TESTING", False
+                        )
                     except RuntimeError:
                         # current_app pas disponible (hors contexte Flask), utiliser seulement env var
                         pass
@@ -2018,7 +2345,10 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         except Exception:
             pass
         logger.exception(
-            "[Engine] Unhandled error during run company=%s day=%s extra=%s", company_id, day_str, extra_sql
+            "[Engine] Unhandled error during run company=%s day=%s extra=%s",
+            company_id,
+            day_str,
+            extra_sql,
         )
         try:
             db.session.rollback()  # ✅ défensif
@@ -2030,7 +2360,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 
         # Ajouter les métriques de performance même en cas d'erreur si perf_collector existe
         # ✅ FIX: Calculer dispatch_run_id même en cas d'erreur
-        drid_on_exception = _safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None
+        drid_on_exception = (
+            _safe_int(getattr(dispatch_run, "id", None)) if dispatch_run else None
+        )
         # Si perf_collector a été initialisé, inclure les métriques partielles
         perf_metrics_dict = None
         try:
@@ -2046,8 +2378,16 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             unassigned=[],
             bookings=[],
             drivers=[],
-            meta={"reason": "run_failed", "for_date": for_date or day_str, "dispatch_run_id": drid_on_exception},
-            debug={"reason": "run_failed", "for_date": for_date or day_str, "dispatch_run_id": drid_on_exception},
+            meta={
+                "reason": "run_failed",
+                "for_date": for_date or day_str,
+                "dispatch_run_id": drid_on_exception,
+            },
+            debug={
+                "reason": "run_failed",
+                "for_date": for_date or day_str,
+                "dispatch_run_id": drid_on_exception,
+            },
             performance_metrics=perf_metrics_dict,
         )
     finally:
@@ -2081,12 +2421,16 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 # ------------------------------------------------------------
 
 
-def _filter_problem(problem: Dict[str, Any], booking_ids: List[int], s: ud_settings.Settings) -> Dict[str, Any]:
+def _filter_problem(
+    problem: Dict[str, Any], booking_ids: List[int], s: ud_settings.Settings
+) -> Dict[str, Any]:
     """Reconstruit un sous-problème avec les mêmes settings que le run principal."""
     bookings_map = {b.id: b for b in problem.get("bookings", [])}
     new_bookings = [bookings_map[bid] for bid in booking_ids if bid in bookings_map]
     drivers = problem.get("drivers", [])
-    company_id = problem.get("company_id") or getattr(problem.get("company"), "id", None)
+    company_id = problem.get("company_id") or getattr(
+        problem.get("company"), "id", None
+    )
     company_id = _safe_int(company_id)
     if company_id is None:
         company_id = _safe_int(getattr(problem, "company_id", None))
@@ -2110,7 +2454,12 @@ def _filter_problem(problem: Dict[str, Any], booking_ids: List[int], s: ud_setti
         db.session.flush()  # S'assurer que les objets flushés sont visibles
     company = cast("Company", Company.query.get(company_id))
     result = data.build_vrptw_problem(
-        company, new_bookings, drivers, settings=s, base_time=problem.get("base_time"), for_date=problem.get("for_date")
+        company,
+        new_bookings,
+        drivers,
+        settings=s,
+        base_time=problem.get("base_time"),
+        for_date=problem.get("for_date"),
     )
 
     # Assurer que for_date et dispatch_run_id sont propagés
@@ -2138,7 +2487,9 @@ def _filter_problem(problem: Dict[str, Any], booking_ids: List[int], s: ud_setti
     return result
 
 
-def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: int | None) -> None:
+def _apply_and_emit(
+    company: Company, assignments: List[Any], dispatch_run_id: int | None
+) -> None:
     """Applique les assignations en base et émet événements/notifications.
 
     ✅ Validation temporelle stricte: Si des conflits sont détectés et que
@@ -2177,7 +2528,9 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
                         "driver_id": getattr(a, "driver_id", None),
                         "booking_id": getattr(a, "booking_id", None),
                         "scheduled_time": getattr(a, "scheduled_time", None),
-                        "estimated_duration_minutes": getattr(a, "estimated_duration_minutes", None),
+                        "estimated_duration_minutes": getattr(
+                            a, "estimated_duration_minutes", None
+                        ),
                     }
                     assignments_dict.append(assignment_dict)
 
@@ -2196,7 +2549,9 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
                 affected_booking_ids = []
                 for assignment in assignments:
                     booking_id = getattr(assignment, "booking_id", None) or (
-                        assignment.get("booking_id") if isinstance(assignment, dict) else None
+                        assignment.get("booking_id")
+                        if isinstance(assignment, dict)
+                        else None
                     )
                     if booking_id:
                         affected_booking_ids.append(booking_id)
@@ -2210,7 +2565,11 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
                 # Utiliser une nouvelle requête pour forcer le rechargement depuis la DB
                 if affected_booking_ids:
                     # Recharger depuis une nouvelle requête pour garantir l'état d'avant modification
-                    reloaded_bookings = db.session.query(Booking).filter(Booking.id.in_(affected_booking_ids)).all()
+                    reloaded_bookings = (
+                        db.session.query(Booking)
+                        .filter(Booking.id.in_(affected_booking_ids))
+                        .all()
+                    )
                     for booking in reloaded_bookings:
                         # S'assurer que l'objet est bien rechargé depuis la DB après rollback
                         # Le rollback devrait avoir restauré l'état d'avant modification
@@ -2227,11 +2586,15 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
                     "[Engine] ⚠️ Validation temporelle: %d avertissements (non bloquants)",
                     len(validation_result["warnings"]),
                 )
-                for warning in validation_result["warnings"][:5]:  # Limiter à 5 warnings
+                for warning in validation_result["warnings"][
+                    :5
+                ]:  # Limiter à 5 warnings
                     logger.warning("[Engine]   %s", warning)
     except ImportError:
         # Module validation non disponible, continuer sans validation
-        logger.warning("[Engine] Module validation non disponible, skip validation temporelle")
+        logger.warning(
+            "[Engine] Module validation non disponible, skip validation temporelle"
+        )
     except ValueError:
         # Ré-élever l'exception de validation
         raise
@@ -2245,7 +2608,9 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
 
         # 1) Apply en DB
         try:
-            logger.info("[Engine] Applying assignments with dispatch_run_id=%s", dispatch_run_id)
+            logger.info(
+                "[Engine] Applying assignments with dispatch_run_id=%s", dispatch_run_id
+            )
             company_id_int = _safe_int(getattr(company, "id", None)) or 0
             result = apply_assignments(
                 company_id_int,
@@ -2297,7 +2662,9 @@ def _apply_and_emit(company: Company, assignments: List[Any], dispatch_run_id: i
             try:
                 dr = db.session.get(DispatchRun, int(dispatch_run_id))
             except Exception as e:
-                logger.warning("[Engine] Failed to load DispatchRun %s: %s", dispatch_run_id, e)
+                logger.warning(
+                    "[Engine] Failed to load DispatchRun %s: %s", dispatch_run_id, e
+                )
 
             date_str: str | None = None
             if dr is not None:

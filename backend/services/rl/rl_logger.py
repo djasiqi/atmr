@@ -85,11 +85,23 @@ class RLLogger:
         self.enable_redis_logging = enable_redis_logging
 
         # Statistiques
-        self.stats = {"total_logs": 0, "redis_logs": 0, "db_logs": 0, "errors": 0, "start_time": datetime.now(UTC)}
+        self.stats = {
+            "total_logs": 0,
+            "redis_logs": 0,
+            "db_logs": 0,
+            "errors": 0,
+            "start_time": datetime.now(UTC),
+        }
 
-        logger.info("[RLLogger] Initialisé - Redis: %s, DB: %s", enable_redis_logging, enable_db_logging)
+        logger.info(
+            "[RLLogger] Initialisé - Redis: %s, DB: %s",
+            enable_redis_logging,
+            enable_db_logging,
+        )
 
-    def hash_state(self, state: Union[np.ndarray[Any, Any], Any, List[Any], Dict[str, Any]]) -> str:
+    def hash_state(
+        self, state: Union[np.ndarray[Any, Any], Any, List[Any], Dict[str, Any]]
+    ) -> str:
         """Génère un hash unique pour l'état donné.
 
         Args:
@@ -121,13 +133,18 @@ class RLLogger:
         except Exception as e:
             logger.error("[RLLogger] Erreur lors du hash de l'état: %s", e)
             # Fallback: hash basé sur le timestamp
-            return hashlib.sha256(str(time.time()).encode(), usedforsecurity=False).hexdigest()
+            return hashlib.sha256(
+                str(time.time()).encode(), usedforsecurity=False
+            ).hexdigest()
 
     def log_decision(
         self,
-        state: Union[np.ndarray[Any, Any], Any, List[Any], Dict[str, Any]],  # torch.Tensor
+        state: Union[
+            np.ndarray[Any, Any], Any, List[Any], Dict[str, Any]
+        ],  # torch.Tensor
         action: Union[float, Any],  # torch.Tensor
-        q_values: Union[np.ndarray[Any, Any], Any, List[Any]] | None = None,  # torch.Tensor
+        q_values: Union[np.ndarray[Any, Any], Any, List[Any]]
+        | None = None,  # torch.Tensor
         reward: float | None = None,
         latency_ms: float | None = None,
         model_version: str = "unknown",
@@ -155,7 +172,11 @@ class RLLogger:
             state_hash = self.hash_state(state)
 
             # Convertir l'action en int, using ternary for compliance with flake8-simplicity
-            action_int = int(action.item()) if torch is not None and isinstance(action, torch.Tensor) else int(action)
+            action_int = (
+                int(action.item())
+                if torch is not None and isinstance(action, torch.Tensor)
+                else int(action)
+            )
 
             # Traiter les q_values
             q_values_list = None
@@ -168,7 +189,9 @@ class RLLogger:
                     q_values_list = q_values
                 else:
                     # Fallback pour autres types
-                    q_values_list = list(q_values) if hasattr(q_values, "__iter__") else None
+                    q_values_list = (
+                        list(q_values) if hasattr(q_values, "__iter__") else None
+                    )
 
                 # Limiter à 64 valeurs pour éviter les logs trop volumineux
                 if q_values_list and len(q_values_list) > MAX_Q_VALUES_LOG:
@@ -236,7 +259,9 @@ class RLLogger:
 
             # Stocker dans Redis avec rotation automatique
             redis_client.lpush(f"{self.redis_key_prefix}:latest", record_json)
-            redis_client.ltrim(f"{self.redis_key_prefix}:latest", 0, self.max_redis_logs - 1)
+            redis_client.ltrim(
+                f"{self.redis_key_prefix}:latest", 0, self.max_redis_logs - 1
+            )
 
             # TTL de 24h pour les logs Redis
             redis_client.expire(f"{self.redis_key_prefix}:latest", 86400)
@@ -263,14 +288,22 @@ class RLLogger:
         try:
             # Créer l'objet RLSuggestionMetric avec les champs disponibles
             rl_metric = RLSuggestionMetric()
-            rl_metric.suggestion_id = f"log_{record['state_hash'][:8]}_{int(time.time())}"
-            rl_metric.company_id = 1  # Valeur par défaut, devrait être passé en paramètre
+            rl_metric.suggestion_id = (
+                f"log_{record['state_hash'][:8]}_{int(time.time())}"
+            )
+            rl_metric.company_id = (
+                1  # Valeur par défaut, devrait être passé en paramètre
+            )
             rl_metric.booking_id = record["metadata"].get("booking_id", 0)
             rl_metric.assignment_id = record["metadata"].get("assignment_id", 0)
             rl_metric.current_driver_id = record["metadata"].get("current_driver_id", 0)
-            rl_metric.suggested_driver_id = record["metadata"].get("suggested_driver_id", 0)
+            rl_metric.suggested_driver_id = record["metadata"].get(
+                "suggested_driver_id", 0
+            )
             rl_metric.confidence = record["constraints"].get("confidence", 0.0)
-            rl_metric.expected_gain_minutes = record["constraints"].get("improvement", 0)
+            rl_metric.expected_gain_minutes = record["constraints"].get(
+                "improvement", 0
+            )
             rl_metric.q_value = (
                 record["q_values"][record["action"]]
                 if record["q_values"] and len(record["q_values"]) > record["action"]
@@ -314,8 +347,10 @@ class RLLogger:
             "db_logs": self.stats["db_logs"],
             "errors": self.stats["errors"],
             "uptime_seconds": uptime.total_seconds(),
-            "logs_per_second": self.stats["total_logs"] / max(uptime.total_seconds(), 1),
-            "success_rate": (self.stats["total_logs"] - self.stats["errors"]) / max(self.stats["total_logs"], 1),
+            "logs_per_second": self.stats["total_logs"]
+            / max(uptime.total_seconds(), 1),
+            "success_rate": (self.stats["total_logs"] - self.stats["errors"])
+            / max(self.stats["total_logs"], 1),
         }
 
     def get_recent_logs(self, count: int = 100) -> List[Dict[str, Any]]:
@@ -333,7 +368,9 @@ class RLLogger:
 
         try:
             # Récupérer les logs depuis Redis
-            logs_json = redis_client.lrange(f"{self.redis_key_prefix}:latest", 0, count - 1)
+            logs_json = redis_client.lrange(
+                f"{self.redis_key_prefix}:latest", 0, count - 1
+            )
             # S'assurer que c'est une liste (Redis retourne une liste de bytes)
             if not isinstance(logs_json, list):
                 logs_json = []
@@ -400,7 +437,14 @@ def get_rl_logger() -> RLLogger:
 
 
 def log_rl_decision(
-    state, action, q_values=None, reward=None, latency_ms=None, model_version="unknown", constraints=None, metadata=None
+    state,
+    action,
+    q_values=None,
+    reward=None,
+    latency_ms=None,
+    model_version="unknown",
+    constraints=None,
+    metadata=None,
 ) -> bool:
     """Fonction de convenance pour logger une décision RL.
 

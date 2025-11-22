@@ -23,7 +23,9 @@ class TestRLSuggestionGenerator:
 
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés."""
-        generator = RLSuggestionGenerator(model_path="custom_model.pkl", enable_logging=True)
+        generator = RLSuggestionGenerator(
+            model_path="custom_model.pkl", enable_logging=True
+        )
 
         assert generator.model_path == "custom_model.pkl"
         assert generator.agent is None
@@ -49,7 +51,10 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         # Mock pour lever une exception
-        with patch("services.rl.suggestion_generator._dqn_agent", side_effect=ImportError("Module not found")):
+        with patch(
+            "services.rl.suggestion_generator._dqn_agent",
+            side_effect=ImportError("Module not found"),
+        ):
             result = generator._lazy_import_rl()
 
             assert result is False
@@ -87,7 +92,10 @@ class TestRLSuggestionGenerator:
         # Mock pour lever une exception
         with (
             patch("pathlib.Path.exists", return_value=True),
-            patch("services.rl.suggestion_generator._dqn_agent", side_effect=Exception("Load error")),
+            patch(
+                "services.rl.suggestion_generator._dqn_agent",
+                side_effect=Exception("Load error"),
+            ),
         ):
             result = generator._load_model()
 
@@ -158,7 +166,10 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         # Mock des drivers non disponibles
-        drivers = [{"id": "driver_1", "is_available": False}, {"id": "driver_2", "is_available": False}]
+        drivers = [
+            {"id": "driver_1", "is_available": False},
+            {"id": "driver_2", "is_available": False},
+        ]
 
         suggestions = generator.generate_suggestions(
             company_id="company_1",
@@ -177,7 +188,10 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         # Mock des assignments déjà assignés
-        assignments = [{"id": "assignment_1", "driver_id": "driver_1"}, {"id": "assignment_2", "driver_id": "driver_2"}]
+        assignments = [
+            {"id": "assignment_1", "driver_id": "driver_1"},
+            {"id": "assignment_2", "driver_id": "driver_2"},
+        ]
 
         suggestions = generator.generate_suggestions(
             company_id="company_1",
@@ -196,7 +210,9 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         # Mock pour lever une exception
-        with patch.object(generator, "_generate_rl_suggestions", side_effect=Exception("RL error")):
+        with patch.object(
+            generator, "_generate_rl_suggestions", side_effect=Exception("RL error")
+        ):
             suggestions = generator.generate_suggestions(
                 company_id="company_1",
                 assignments=[],
@@ -313,7 +329,12 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id=None, assignments=None, drivers=None, for_date=None, min_confidence=None, max_suggestions=None
+            company_id=None,
+            assignments=None,
+            drivers=None,
+            for_date=None,
+            min_confidence=None,
+            max_suggestions=None,
         )
 
         assert isinstance(suggestions, list)
@@ -324,7 +345,12 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         suggestions = generator.generate_suggestions(
-            company_id="", assignments=[], drivers=[], for_date=datetime.now(), min_confidence=0.5, max_suggestions=10
+            company_id="",
+            assignments=[],
+            drivers=[],
+            for_date=datetime.now(),
+            min_confidence=0.5,
+            max_suggestions=10,
         )
 
         assert isinstance(suggestions, list)

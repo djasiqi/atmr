@@ -18,7 +18,9 @@ depends_on = None
 
 def upgrade():
     # Ajouter la colonne preferential_rate à la table client
-    op.add_column("client", sa.Column("preferential_rate", sa.Numeric(10, 2), nullable=True))
+    op.add_column(
+        "client", sa.Column("preferential_rate", sa.Numeric(10, 2), nullable=True)
+    )
 
     # Ajouter un commentaire pour documenter les valeurs typiques
     op.execute(

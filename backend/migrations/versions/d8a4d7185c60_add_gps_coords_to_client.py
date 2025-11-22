@@ -18,12 +18,24 @@ depends_on = None
 
 def upgrade():
     # Ajouter les colonnes GPS pour l'adresse de domicile
-    op.add_column("client", sa.Column("domicile_lat", sa.Numeric(precision=10, scale=7), nullable=True))
-    op.add_column("client", sa.Column("domicile_lon", sa.Numeric(precision=10, scale=7), nullable=True))
+    op.add_column(
+        "client",
+        sa.Column("domicile_lat", sa.Numeric(precision=10, scale=7), nullable=True),
+    )
+    op.add_column(
+        "client",
+        sa.Column("domicile_lon", sa.Numeric(precision=10, scale=7), nullable=True),
+    )
 
     # Ajouter les colonnes GPS pour l'adresse de facturation
-    op.add_column("client", sa.Column("billing_lat", sa.Numeric(precision=10, scale=7), nullable=True))
-    op.add_column("client", sa.Column("billing_lon", sa.Numeric(precision=10, scale=7), nullable=True))
+    op.add_column(
+        "client",
+        sa.Column("billing_lat", sa.Numeric(precision=10, scale=7), nullable=True),
+    )
+    op.add_column(
+        "client",
+        sa.Column("billing_lon", sa.Numeric(precision=10, scale=7), nullable=True),
+    )
 
 
 def downgrade():

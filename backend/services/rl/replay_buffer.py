@@ -81,7 +81,9 @@ class PrioritizedReplayBuffer:
         self.position = int((self.position + 1) % self.capacity)
         self.size = int(min(self.size + 1, self.capacity))
 
-    def sample(self, batch_size: int) -> Tuple[List[Tuple[Any, int, float, Any, bool]], List[int], List[float]]:
+    def sample(
+        self, batch_size: int
+    ) -> Tuple[List[Tuple[Any, int, float, Any, bool]], List[int], List[float]]:
         """Échantillonne un batch avec importance sampling."""
         batch_size = int(batch_size)
         if self.size < batch_size:
@@ -89,7 +91,9 @@ class PrioritizedReplayBuffer:
             raise ValueError(msg)
 
         # Calculer beta actuel
-        beta = self.beta_start + (self.beta_end - self.beta_start) * (self.size / self.capacity)
+        beta = self.beta_start + (self.beta_end - self.beta_start) * (
+            self.size / self.capacity
+        )
 
         # Échantillonnage proportionnel aux priorités
         indices = []
@@ -114,7 +118,11 @@ class PrioritizedReplayBuffer:
         # Normaliser les poids pour qu'ils soient dans [0, 1]
         if weights:
             max_weight = max(weights)
-            weights = [w / max_weight for w in weights] if max_weight > 0 else [1.0] * len(weights)
+            weights = (
+                [w / max_weight for w in weights]
+                if max_weight > 0
+                else [1.0] * len(weights)
+            )
         else:
             weights = [1.0] * len(weights)
 
@@ -141,7 +149,9 @@ class PrioritizedReplayBuffer:
                     # Valeur absolue pour les valeurs négatives
                     processed_priority = abs(original_priority)
                 elif original_priority == 0:
-                    processed_priority = 1e-6  # Valeur minimale pour éviter les priorités zéro
+                    processed_priority = (
+                        1e-6  # Valeur minimale pour éviter les priorités zéro
+                    )
                 else:
                     processed_priority = original_priority
 
@@ -188,7 +198,9 @@ class PrioritizedReplayBuffer:
     @property
     def beta(self) -> float:
         """Retourne la valeur beta actuelle."""
-        return self.beta_start + (self.beta_end - self.beta_start) * (self.size / self.capacity)
+        return self.beta_start + (self.beta_end - self.beta_start) * (
+            self.size / self.capacity
+        )
 
     def clear(self) -> None:
         """Vide le buffer."""

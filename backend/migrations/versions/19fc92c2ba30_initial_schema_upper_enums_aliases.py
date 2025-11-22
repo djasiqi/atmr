@@ -29,8 +29,18 @@ def upgrade():
         sa.Column("lon", sa.Float(), nullable=False),
         sa.Column("aliases", sa.String(length=500), nullable=True),
         sa.Column("active", sa.Boolean(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.CheckConstraint("lat BETWEEN -90 AND 90", name="chk_med_estab_lat"),
         sa.CheckConstraint("lon BETWEEN -180 AND 180", name="chk_med_estab_lon"),
         sa.PrimaryKeyConstraint("id"),
@@ -48,7 +58,9 @@ def upgrade():
         sa.Column("phone", sa.String(length=20), nullable=True),
         sa.Column("address", sa.String(length=200), nullable=True),
         sa.Column("birth_date", sa.Date(), nullable=True),
-        sa.Column("gender", sa.Enum("HOMME", "FEMME", "AUTRE", name="gender"), nullable=True),
+        sa.Column(
+            "gender", sa.Enum("HOMME", "FEMME", "AUTRE", name="gender"), nullable=True
+        ),
         sa.Column("profile_image", sa.String(length=255), nullable=True),
         sa.Column("password", sa.String(length=255), nullable=False),
         sa.Column(
@@ -60,7 +72,12 @@ def upgrade():
         sa.Column("reset_token", sa.String(length=100), nullable=True),
         sa.Column("zip_code", sa.String(length=10), nullable=True),
         sa.Column("city", sa.String(length=100), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=True,
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("force_password_change", sa.Boolean(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
@@ -69,7 +86,9 @@ def upgrade():
     with op.batch_alter_table("user", schema=None) as batch_op:
         batch_op.create_index("idx_public_id", ["public_id"], unique=False)
         batch_op.create_index(batch_op.f("ix_user_email"), ["email"], unique=True)
-        batch_op.create_index(batch_op.f("ix_user_public_id"), ["public_id"], unique=True)
+        batch_op.create_index(
+            batch_op.f("ix_user_public_id"), ["public_id"], unique=True
+        )
         batch_op.create_index(batch_op.f("ix_user_username"), ["username"], unique=True)
 
     op.create_table(
@@ -83,7 +102,9 @@ def upgrade():
         sa.Column("domicile_address_line2", sa.String(length=200), nullable=True),
         sa.Column("domicile_zip", sa.String(length=10), nullable=True),
         sa.Column("domicile_city", sa.String(length=100), nullable=True),
-        sa.Column("domicile_country", sa.String(length=2), server_default="CH", nullable=True),
+        sa.Column(
+            "domicile_country", sa.String(length=2), server_default="CH", nullable=True
+        ),
         sa.Column("contact_email", sa.String(length=100), nullable=True),
         sa.Column("contact_phone", sa.String(length=20), nullable=True),
         sa.Column("iban", sa.String(length=34), nullable=True),
@@ -92,20 +113,35 @@ def upgrade():
         sa.Column("billing_notes", sa.Text(), nullable=True),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("is_approved", sa.Boolean(), server_default="false", nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("service_area", sa.String(length=200), nullable=True),
-        sa.Column("max_daily_bookings", sa.Integer(), server_default="50", nullable=True),
+        sa.Column(
+            "max_daily_bookings", sa.Integer(), server_default="50", nullable=True
+        ),
         sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("dispatch_enabled", sa.Boolean(), server_default="false", nullable=False),
+        sa.Column(
+            "dispatch_enabled", sa.Boolean(), server_default="false", nullable=False
+        ),
         sa.Column("is_partner", sa.Boolean(), server_default="false", nullable=False),
         sa.Column("logo_url", sa.String(length=255), nullable=True),
-        sa.ForeignKeyConstraint(["user_id"], ["user.id"], name="fk_company_user", ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["user.id"], name="fk_company_user", ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("company", schema=None) as batch_op:
         batch_op.create_index(batch_op.f("ix_company_iban"), ["iban"], unique=False)
-        batch_op.create_index(batch_op.f("ix_company_uid_ide"), ["uid_ide"], unique=False)
-        batch_op.create_index(batch_op.f("ix_company_user_id"), ["user_id"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_company_uid_ide"), ["uid_ide"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_company_user_id"), ["user_id"], unique=False
+        )
 
     op.create_table(
         "medical_service",
@@ -125,16 +161,38 @@ def upgrade():
         sa.Column("lat", sa.Float(), nullable=True),
         sa.Column("lon", sa.Float(), nullable=True),
         sa.Column("active", sa.Boolean(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.CheckConstraint("lat IS NULL OR (lat BETWEEN -90 AND 90)", name="chk_med_service_lat"),
-        sa.CheckConstraint("lon IS NULL OR (lon BETWEEN -180 AND 180)", name="chk_med_service_lon"),
-        sa.ForeignKeyConstraint(["establishment_id"], ["medical_establishment.id"], ondelete="CASCADE"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "lat IS NULL OR (lat BETWEEN -90 AND 90)", name="chk_med_service_lat"
+        ),
+        sa.CheckConstraint(
+            "lon IS NULL OR (lon BETWEEN -180 AND 180)", name="chk_med_service_lon"
+        ),
+        sa.ForeignKeyConstraint(
+            ["establishment_id"], ["medical_establishment.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("establishment_id", "name", name="uq_med_service_per_estab"),
+        sa.UniqueConstraint(
+            "establishment_id", "name", name="uq_med_service_per_estab"
+        ),
     )
     with op.batch_alter_table("medical_service", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_medical_service_establishment_id"), ["establishment_id"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_medical_service_establishment_id"),
+            ["establishment_id"],
+            unique=False,
+        )
 
     op.create_table(
         "client",
@@ -158,22 +216,42 @@ def upgrade():
         sa.Column("access_notes", sa.Text(), nullable=True),
         sa.Column("gp_name", sa.String(length=120), nullable=True),
         sa.Column("gp_phone", sa.String(length=50), nullable=True),
-        sa.Column("default_billed_to_type", sa.String(length=50), server_default="patient", nullable=False),
+        sa.Column(
+            "default_billed_to_type",
+            sa.String(length=50),
+            server_default="patient",
+            nullable=False,
+        ),
         sa.Column("default_billed_to_company_id", sa.Integer(), nullable=True),
         sa.Column("default_billed_to_contact", sa.String(length=120), nullable=True),
         sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["default_billed_to_company_id"], ["company.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["default_billed_to_company_id"], ["company.id"], ondelete="SET NULL"
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("user_id", "company_id", name="uq_user_company"),
     )
     with op.batch_alter_table("client", schema=None) as batch_op:
-        batch_op.create_index("ix_client_company_active", ["company_id", "is_active"], unique=False)
-        batch_op.create_index(batch_op.f("ix_client_company_id"), ["company_id"], unique=False)
-        batch_op.create_index("ix_client_company_user", ["company_id", "user_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_client_user_id"), ["user_id"], unique=False)
+        batch_op.create_index(
+            "ix_client_company_active", ["company_id", "is_active"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_client_company_id"), ["company_id"], unique=False
+        )
+        batch_op.create_index(
+            "ix_client_company_user", ["company_id", "user_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_client_user_id"), ["user_id"], unique=False
+        )
 
     op.create_table(
         "dispatch_run",
@@ -186,14 +264,21 @@ def upgrade():
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("config", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("metrics", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.CheckConstraint("status IN ('pending','running','completed','failed')", name="ck_dispatch_run_status"),
+        sa.CheckConstraint(
+            "status IN ('pending','running','completed','failed')",
+            name="ck_dispatch_run_status",
+        ),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("company_id", "day", name="uq_dispatch_run_company_day"),
     )
     with op.batch_alter_table("dispatch_run", schema=None) as batch_op:
-        batch_op.create_index("ix_dispatch_run_company_day", ["company_id", "day"], unique=False)
-        batch_op.create_index(batch_op.f("ix_dispatch_run_company_id"), ["company_id"], unique=False)
+        batch_op.create_index(
+            "ix_dispatch_run_company_day", ["company_id", "day"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_dispatch_run_company_id"), ["company_id"], unique=False
+        )
 
     op.create_table(
         "driver",
@@ -206,24 +291,42 @@ def upgrade():
         sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
         sa.Column("is_available", sa.Boolean(), server_default="true", nullable=False),
         sa.Column(
-            "driver_type", sa.Enum("REGULAR", "EMERGENCY", name="driver_type"), server_default="REGULAR", nullable=False
+            "driver_type",
+            sa.Enum("REGULAR", "EMERGENCY", name="driver_type"),
+            server_default="REGULAR",
+            nullable=False,
         ),
         sa.Column("latitude", sa.Float(), nullable=True),
         sa.Column("longitude", sa.Float(), nullable=True),
         sa.Column("last_position_update", sa.DateTime(timezone=True), nullable=True),
         sa.Column("driver_photo", sa.Text(), nullable=True),
         sa.Column("push_token", sa.String(length=255), nullable=True),
-        sa.CheckConstraint("(latitude IS NULL OR (latitude BETWEEN -90 AND 90))", name="chk_driver_lat"),
-        sa.CheckConstraint("(longitude IS NULL OR (longitude BETWEEN -180 AND 180))", name="chk_driver_lon"),
+        sa.CheckConstraint(
+            "(latitude IS NULL OR (latitude BETWEEN -90 AND 90))", name="chk_driver_lat"
+        ),
+        sa.CheckConstraint(
+            "(longitude IS NULL OR (longitude BETWEEN -180 AND 180))",
+            name="chk_driver_lon",
+        ),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("driver", schema=None) as batch_op:
-        batch_op.create_index("ix_driver_company_active", ["company_id", "is_active", "is_available"], unique=False)
-        batch_op.create_index(batch_op.f("ix_driver_company_id"), ["company_id"], unique=False)
-        batch_op.create_index("ix_driver_geo", ["company_id", "latitude", "longitude"], unique=False)
-        batch_op.create_index(batch_op.f("ix_driver_push_token"), ["push_token"], unique=False)
+        batch_op.create_index(
+            "ix_driver_company_active",
+            ["company_id", "is_active", "is_available"],
+            unique=False,
+        )
+        batch_op.create_index(
+            batch_op.f("ix_driver_company_id"), ["company_id"], unique=False
+        )
+        batch_op.create_index(
+            "ix_driver_geo", ["company_id", "latitude", "longitude"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_driver_push_token"), ["push_token"], unique=False
+        )
         batch_op.create_index(batch_op.f("ix_driver_user_id"), ["user_id"], unique=True)
 
     op.create_table(
@@ -235,8 +338,18 @@ def upgrade():
         sa.Column("lat", sa.Float(), nullable=False),
         sa.Column("lon", sa.Float(), nullable=False),
         sa.Column("tags", sa.String(length=200), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.CheckConstraint("lat BETWEEN -90 AND 90", name="chk_fav_lat"),
         sa.CheckConstraint("lon BETWEEN -180 AND 180", name="chk_fav_lon"),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
@@ -244,9 +357,15 @@ def upgrade():
         sa.UniqueConstraint("company_id", "address", name="uq_fav_company_address"),
     )
     with op.batch_alter_table("favorite_place", schema=None) as batch_op:
-        batch_op.create_index("ix_fav_company_coords", ["company_id", "lat", "lon"], unique=False)
-        batch_op.create_index("ix_fav_company_label", ["company_id", "label"], unique=False)
-        batch_op.create_index(batch_op.f("ix_favorite_place_company_id"), ["company_id"], unique=False)
+        batch_op.create_index(
+            "ix_fav_company_coords", ["company_id", "lat", "lon"], unique=False
+        )
+        batch_op.create_index(
+            "ix_fav_company_label", ["company_id", "label"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_favorite_place_company_id"), ["company_id"], unique=False
+        )
 
     op.create_table(
         "message",
@@ -254,23 +373,44 @@ def upgrade():
         sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("sender_id", sa.Integer(), nullable=True),
         sa.Column("receiver_id", sa.Integer(), nullable=True),
-        sa.Column("sender_role", sa.Enum("DRIVER", "COMPANY", name="sender_role"), nullable=False),
+        sa.Column(
+            "sender_role",
+            sa.Enum("DRIVER", "COMPANY", name="sender_role"),
+            nullable=False,
+        ),
         sa.Column("content", sa.Text(), nullable=False),
-        sa.Column("timestamp", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "timestamp",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("is_read", sa.Boolean(), nullable=False),
-        sa.CheckConstraint("sender_role IN ('DRIVER','COMPANY')", name="check_sender_role_valid"),
+        sa.CheckConstraint(
+            "sender_role IN ('DRIVER','COMPANY')", name="check_sender_role_valid"
+        ),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["receiver_id"], ["user.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["sender_id"], ["user.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("message", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_message_company_id"), ["company_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_message_receiver_id"), ["receiver_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_message_sender_id"), ["sender_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_message_timestamp"), ["timestamp"], unique=False)
         batch_op.create_index(
-            "ix_msg_company_receiver_unread_ts", ["company_id", "receiver_id", "is_read", "timestamp"], unique=False
+            batch_op.f("ix_message_company_id"), ["company_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_message_receiver_id"), ["receiver_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_message_sender_id"), ["sender_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_message_timestamp"), ["timestamp"], unique=False
+        )
+        batch_op.create_index(
+            "ix_msg_company_receiver_unread_ts",
+            ["company_id", "receiver_id", "is_read", "timestamp"],
+            unique=False,
         )
 
     op.create_table(
@@ -280,27 +420,48 @@ def upgrade():
         sa.Column(
             "event_type",
             sa.Enum(
-                "LOCATION_UPDATE", "STATUS_CHANGE", "ASSIGNMENT_DELTA", "DELAY_DETECTED", name="realtime_event_type"
+                "LOCATION_UPDATE",
+                "STATUS_CHANGE",
+                "ASSIGNMENT_DELTA",
+                "DELAY_DETECTED",
+                name="realtime_event_type",
             ),
             nullable=False,
         ),
         sa.Column(
-            "entity_type", sa.Enum("DRIVER", "BOOKING", "ASSIGNMENT", name="realtime_entity_type"), nullable=False
+            "entity_type",
+            sa.Enum("DRIVER", "BOOKING", "ASSIGNMENT", name="realtime_entity_type"),
+            nullable=False,
         ),
         sa.Column("entity_id", sa.Integer(), nullable=False),
         sa.Column("data", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("timestamp", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "timestamp",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.CheckConstraint("entity_id > 0", name="ck_realtime_entity_id_positive"),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("realtime_event", schema=None) as batch_op:
         batch_op.create_index(
-            "idx_realtime_event_company_type_time", ["company_id", "event_type", "timestamp"], unique=False
+            "idx_realtime_event_company_type_time",
+            ["company_id", "event_type", "timestamp"],
+            unique=False,
         )
-        batch_op.create_index("idx_realtime_event_entity_time", ["entity_type", "entity_id", "timestamp"], unique=False)
-        batch_op.create_index(batch_op.f("ix_realtime_event_company_id"), ["company_id"], unique=False)
-        batch_op.create_index("ix_realtime_event_data_gin", ["data"], unique=False, postgresql_using="gin")
+        batch_op.create_index(
+            "idx_realtime_event_entity_time",
+            ["entity_type", "entity_id", "timestamp"],
+            unique=False,
+        )
+        batch_op.create_index(
+            batch_op.f("ix_realtime_event_company_id"), ["company_id"], unique=False
+        )
+        batch_op.create_index(
+            "ix_realtime_event_data_gin", ["data"], unique=False, postgresql_using="gin"
+        )
 
     op.create_table(
         "vehicle",
@@ -311,21 +472,39 @@ def upgrade():
         sa.Column("year", sa.Integer(), nullable=True),
         sa.Column("vin", sa.String(length=32), nullable=True),
         sa.Column("seats", sa.Integer(), nullable=True),
-        sa.Column("wheelchair_accessible", sa.Boolean(), server_default="false", nullable=False),
+        sa.Column(
+            "wheelchair_accessible",
+            sa.Boolean(),
+            server_default="false",
+            nullable=False,
+        ),
         sa.Column("insurance_expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("inspection_expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.CheckConstraint("seats IS NULL OR seats >= 0", name="chk_vehicle_seats"),
-        sa.CheckConstraint("year IS NULL OR year BETWEEN 1950 AND 2100", name="chk_vehicle_year"),
+        sa.CheckConstraint(
+            "year IS NULL OR year BETWEEN 1950 AND 2100", name="chk_vehicle_year"
+        ),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("company_id", "license_plate", name="uq_company_plate"),
     )
     with op.batch_alter_table("vehicle", schema=None) as batch_op:
-        batch_op.create_index("ix_vehicle_company_active", ["company_id", "is_active"], unique=False)
-        batch_op.create_index(batch_op.f("ix_vehicle_company_id"), ["company_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_vehicle_license_plate"), ["license_plate"], unique=False)
+        batch_op.create_index(
+            "ix_vehicle_company_active", ["company_id", "is_active"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_vehicle_company_id"), ["company_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_vehicle_license_plate"), ["license_plate"], unique=False
+        )
 
     op.create_table(
         "booking",
@@ -333,7 +512,12 @@ def upgrade():
         sa.Column("customer_name", sa.String(length=100), nullable=False),
         sa.Column("pickup_location", sa.String(length=200), nullable=False),
         sa.Column("dropoff_location", sa.String(length=200), nullable=False),
-        sa.Column("booking_type", sa.String(length=200), server_default="standard", nullable=False),
+        sa.Column(
+            "booking_type",
+            sa.String(length=200),
+            server_default="standard",
+            nullable=False,
+        ),
         sa.Column("scheduled_time", sa.DateTime(), nullable=True),
         sa.Column("amount", sa.Float(), nullable=False),
         sa.Column(
@@ -364,8 +548,15 @@ def upgrade():
         sa.Column("client_id", sa.Integer(), nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=True),
         sa.Column("driver_id", sa.Integer(), nullable=True),
-        sa.Column("is_round_trip", sa.Boolean(), server_default=sa.text("false"), nullable=False),
-        sa.Column("is_return", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+        sa.Column(
+            "is_round_trip",
+            sa.Boolean(),
+            server_default=sa.text("false"),
+            nullable=False,
+        ),
+        sa.Column(
+            "is_return", sa.Boolean(), server_default=sa.text("false"), nullable=False
+        ),
         sa.Column("boarded_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("parent_booking_id", sa.Integer(), nullable=True),
@@ -373,36 +564,83 @@ def upgrade():
         sa.Column("doctor_name", sa.String(length=200), nullable=True),
         sa.Column("hospital_service", sa.String(length=100), nullable=True),
         sa.Column("notes_medical", sa.Text(), nullable=True),
-        sa.Column("is_urgent", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+        sa.Column(
+            "is_urgent", sa.Boolean(), server_default=sa.text("false"), nullable=False
+        ),
         sa.Column("pickup_lat", sa.Float(), nullable=True),
         sa.Column("pickup_lon", sa.Float(), nullable=True),
         sa.Column("dropoff_lat", sa.Float(), nullable=True),
         sa.Column("dropoff_lon", sa.Float(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("billed_to_type", sa.String(length=50), server_default="patient", nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "billed_to_type",
+            sa.String(length=50),
+            server_default="patient",
+            nullable=False,
+        ),
         sa.Column("billed_to_company_id", sa.Integer(), nullable=True),
         sa.Column("billed_to_contact", sa.String(length=120), nullable=True),
-        sa.CheckConstraint("dropoff_lat IS NULL OR (dropoff_lat BETWEEN -90 AND 90)", name="chk_booking_drop_lat"),
-        sa.CheckConstraint("dropoff_lon IS NULL OR (dropoff_lon BETWEEN -180 AND 180)", name="chk_booking_drop_lon"),
-        sa.CheckConstraint("pickup_lat IS NULL OR (pickup_lat BETWEEN -90 AND 90)", name="chk_booking_pickup_lat"),
-        sa.CheckConstraint("pickup_lon IS NULL OR (pickup_lon BETWEEN -180 AND 180)", name="chk_booking_pickup_lon"),
-        sa.ForeignKeyConstraint(["billed_to_company_id"], ["company.id"], ondelete="SET NULL"),
+        sa.CheckConstraint(
+            "dropoff_lat IS NULL OR (dropoff_lat BETWEEN -90 AND 90)",
+            name="chk_booking_drop_lat",
+        ),
+        sa.CheckConstraint(
+            "dropoff_lon IS NULL OR (dropoff_lon BETWEEN -180 AND 180)",
+            name="chk_booking_drop_lon",
+        ),
+        sa.CheckConstraint(
+            "pickup_lat IS NULL OR (pickup_lat BETWEEN -90 AND 90)",
+            name="chk_booking_pickup_lat",
+        ),
+        sa.CheckConstraint(
+            "pickup_lon IS NULL OR (pickup_lon BETWEEN -180 AND 180)",
+            name="chk_booking_pickup_lon",
+        ),
+        sa.ForeignKeyConstraint(
+            ["billed_to_company_id"], ["company.id"], ondelete="SET NULL"
+        ),
         sa.ForeignKeyConstraint(["client_id"], ["client.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["driver_id"], ["driver.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["parent_booking_id"], ["booking.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["parent_booking_id"], ["booking.id"], ondelete="SET NULL"
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("booking", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_booking_client_id"), ["client_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_booking_company_id"), ["company_id"], unique=False)
-        batch_op.create_index("ix_booking_company_scheduled", ["company_id", "scheduled_time"], unique=False)
-        batch_op.create_index(batch_op.f("ix_booking_driver_id"), ["driver_id"], unique=False)
-        batch_op.create_index("ix_booking_driver_status", ["driver_id", "status"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_booking_client_id"), ["client_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_booking_company_id"), ["company_id"], unique=False
+        )
+        batch_op.create_index(
+            "ix_booking_company_scheduled",
+            ["company_id", "scheduled_time"],
+            unique=False,
+        )
+        batch_op.create_index(
+            batch_op.f("ix_booking_driver_id"), ["driver_id"], unique=False
+        )
+        batch_op.create_index(
+            "ix_booking_driver_status", ["driver_id", "status"], unique=False
+        )
         batch_op.create_index(batch_op.f("ix_booking_status"), ["status"], unique=False)
-        batch_op.create_index("ix_booking_status_scheduled", ["status", "scheduled_time"], unique=False)
+        batch_op.create_index(
+            "ix_booking_status_scheduled", ["status", "scheduled_time"], unique=False
+        )
 
     op.create_table(
         "driver_vacations",
@@ -419,12 +657,24 @@ def upgrade():
         sa.CheckConstraint("start_date <= end_date", name="chk_vacation_dates_order"),
         sa.ForeignKeyConstraint(["driver_id"], ["driver.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("driver_id", "start_date", "end_date", "vacation_type", name="uq_vacation_exact_period"),
+        sa.UniqueConstraint(
+            "driver_id",
+            "start_date",
+            "end_date",
+            "vacation_type",
+            name="uq_vacation_exact_period",
+        ),
     )
     with op.batch_alter_table("driver_vacations", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_driver_vacations_driver_id"), ["driver_id"], unique=False)
-        batch_op.create_index("ix_vacation_driver_end", ["driver_id", "end_date"], unique=False)
-        batch_op.create_index("ix_vacation_driver_start", ["driver_id", "start_date"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_driver_vacations_driver_id"), ["driver_id"], unique=False
+        )
+        batch_op.create_index(
+            "ix_vacation_driver_end", ["driver_id", "end_date"], unique=False
+        )
+        batch_op.create_index(
+            "ix_vacation_driver_start", ["driver_id", "start_date"], unique=False
+        )
 
     op.create_table(
         "driver_working_config",
@@ -432,25 +682,45 @@ def upgrade():
         sa.Column("driver_id", sa.Integer(), nullable=False),
         sa.Column("earliest_start", sa.Integer(), server_default="360", nullable=False),
         sa.Column("latest_start", sa.Integer(), server_default="600", nullable=False),
-        sa.Column("total_working_minutes", sa.Integer(), server_default="510", nullable=False),
+        sa.Column(
+            "total_working_minutes", sa.Integer(), server_default="510", nullable=False
+        ),
         sa.Column("break_duration", sa.Integer(), server_default="60", nullable=False),
         sa.Column("break_earliest", sa.Integer(), server_default="600", nullable=False),
         sa.Column("break_latest", sa.Integer(), server_default="900", nullable=False),
-        sa.CheckConstraint("break_duration <= total_working_minutes", name="chk_dwc_break_vs_total"),
-        sa.CheckConstraint("break_duration BETWEEN 0 AND 1440", name="chk_dwc_break_dur"),
-        sa.CheckConstraint("break_earliest < break_latest", name="chk_dwc_break_window"),
-        sa.CheckConstraint("break_earliest BETWEEN 0 AND 1440", name="chk_dwc_break_earliest"),
-        sa.CheckConstraint("break_latest BETWEEN 0 AND 1440", name="chk_dwc_break_latest"),
-        sa.CheckConstraint("earliest_start < latest_start", name="chk_dwc_start_window"),
-        sa.CheckConstraint("earliest_start BETWEEN 0 AND 1440", name="chk_dwc_earliest"),
+        sa.CheckConstraint(
+            "break_duration <= total_working_minutes", name="chk_dwc_break_vs_total"
+        ),
+        sa.CheckConstraint(
+            "break_duration BETWEEN 0 AND 1440", name="chk_dwc_break_dur"
+        ),
+        sa.CheckConstraint(
+            "break_earliest < break_latest", name="chk_dwc_break_window"
+        ),
+        sa.CheckConstraint(
+            "break_earliest BETWEEN 0 AND 1440", name="chk_dwc_break_earliest"
+        ),
+        sa.CheckConstraint(
+            "break_latest BETWEEN 0 AND 1440", name="chk_dwc_break_latest"
+        ),
+        sa.CheckConstraint(
+            "earliest_start < latest_start", name="chk_dwc_start_window"
+        ),
+        sa.CheckConstraint(
+            "earliest_start BETWEEN 0 AND 1440", name="chk_dwc_earliest"
+        ),
         sa.CheckConstraint("latest_start BETWEEN 0 AND 1440", name="chk_dwc_latest"),
-        sa.CheckConstraint("total_working_minutes BETWEEN 0 AND 1440", name="chk_dwc_total"),
+        sa.CheckConstraint(
+            "total_working_minutes BETWEEN 0 AND 1440", name="chk_dwc_total"
+        ),
         sa.ForeignKeyConstraint(["driver_id"], ["driver.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("driver_id", name="uq_dwc_driver"),
     )
     with op.batch_alter_table("driver_working_config", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_driver_working_config_driver_id"), ["driver_id"], unique=True)
+        batch_op.create_index(
+            batch_op.f("ix_driver_working_config_driver_id"), ["driver_id"], unique=True
+        )
         batch_op.create_index("ix_dwc_driver", ["driver_id"], unique=False)
 
     op.create_table(
@@ -487,16 +757,30 @@ def upgrade():
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint("delay_seconds >= 0", name="ck_assignment_delay_nonneg"),
         sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["dispatch_run_id"], ["dispatch_run.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["dispatch_run_id"], ["dispatch_run.id"], ondelete="CASCADE"
+        ),
         sa.ForeignKeyConstraint(["driver_id"], ["driver.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("dispatch_run_id", "booking_id", name="uq_assignment_run_booking"),
+        sa.UniqueConstraint(
+            "dispatch_run_id", "booking_id", name="uq_assignment_run_booking"
+        ),
     )
     with op.batch_alter_table("assignment", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_assignment_booking_id"), ["booking_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_assignment_dispatch_run_id"), ["dispatch_run_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_assignment_driver_id"), ["driver_id"], unique=False)
-        batch_op.create_index("ix_assignment_driver_status", ["driver_id", "status"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_assignment_booking_id"), ["booking_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_assignment_dispatch_run_id"),
+            ["dispatch_run_id"],
+            unique=False,
+        )
+        batch_op.create_index(
+            batch_op.f("ix_assignment_driver_id"), ["driver_id"], unique=False
+        )
+        batch_op.create_index(
+            "ix_assignment_driver_status", ["driver_id", "status"], unique=False
+        )
 
     op.create_table(
         "invoice",
@@ -510,8 +794,18 @@ def upgrade():
         sa.Column("pdf_url", sa.String(length=255), nullable=True),
         sa.Column("due_date", sa.DateTime(timezone=True), nullable=True),
         sa.Column("paid_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column(
             "status",
             sa.Enum("UNPAID", "PAID", "CANCELED", name="invoice_status"),
@@ -519,28 +813,68 @@ def upgrade():
             nullable=False,
         ),
         sa.CheckConstraint("amount > 0", name="chk_invoice_amount_positive"),
-        sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], name="fk_invoice_booking", ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["company_id"], ["company.id"], name="fk_invoice_company", ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["user_id"], ["user.id"], name="fk_invoice_user", ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["booking_id"],
+            ["booking.id"],
+            name="fk_invoice_booking",
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["company_id"],
+            ["company.id"],
+            name="fk_invoice_company",
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["user.id"], name="fk_invoice_user", ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("booking_id", name="uq_invoice_booking_one"),
     )
     with op.batch_alter_table("invoice", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_invoice_booking_id"), ["booking_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_invoice_company_id"), ["company_id"], unique=False)
-        batch_op.create_index("ix_invoice_company_status_due", ["company_id", "status", "due_date"], unique=False)
-        batch_op.create_index(batch_op.f("ix_invoice_reference"), ["reference"], unique=True)
-        batch_op.create_index("ix_invoice_user_created", ["user_id", "created_at"], unique=False)
-        batch_op.create_index(batch_op.f("ix_invoice_user_id"), ["user_id"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_invoice_booking_id"), ["booking_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_invoice_company_id"), ["company_id"], unique=False
+        )
+        batch_op.create_index(
+            "ix_invoice_company_status_due",
+            ["company_id", "status", "due_date"],
+            unique=False,
+        )
+        batch_op.create_index(
+            batch_op.f("ix_invoice_reference"), ["reference"], unique=True
+        )
+        batch_op.create_index(
+            "ix_invoice_user_created", ["user_id", "created_at"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_invoice_user_id"), ["user_id"], unique=False
+        )
 
     op.create_table(
         "payment",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("amount", sa.Float(), nullable=False),
-        sa.Column("date", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column(
-            "method", sa.Enum("credit_card", "paypal", "bank_transfer", "cash", name="payment_method"), nullable=False
+            "date",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "method",
+            sa.Enum(
+                "credit_card", "paypal", "bank_transfer", "cash", name="payment_method"
+            ),
+            nullable=False,
         ),
         sa.Column(
             "status",
@@ -558,11 +892,21 @@ def upgrade():
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("payment", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_payment_booking_id"), ["booking_id"], unique=False)
-        batch_op.create_index("ix_payment_booking_status", ["booking_id", "status"], unique=False)
-        batch_op.create_index("ix_payment_client_date", ["client_id", "date"], unique=False)
-        batch_op.create_index(batch_op.f("ix_payment_client_id"), ["client_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_payment_user_id"), ["user_id"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_payment_booking_id"), ["booking_id"], unique=False
+        )
+        batch_op.create_index(
+            "ix_payment_booking_status", ["booking_id", "status"], unique=False
+        )
+        batch_op.create_index(
+            "ix_payment_client_date", ["client_id", "date"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_payment_client_id"), ["client_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_payment_user_id"), ["user_id"], unique=False
+        )
 
     op.create_table(
         "driver_status",
@@ -581,17 +925,34 @@ def upgrade():
         sa.Column("next_free_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("current_assignment_id", sa.Integer(), nullable=True),
         sa.Column("last_update", sa.DateTime(timezone=True), nullable=False),
-        sa.CheckConstraint("heading IS NULL OR (heading >= 0 AND heading <= 360)", name="ck_driver_status_heading"),
-        sa.CheckConstraint("latitude IS NULL OR (latitude BETWEEN -90 AND 90)", name="ck_driver_status_lat"),
-        sa.CheckConstraint("longitude IS NULL OR (longitude BETWEEN -180 AND 180)", name="ck_driver_status_lon"),
-        sa.CheckConstraint("speed IS NULL OR speed >= 0", name="ck_driver_status_speed"),
-        sa.ForeignKeyConstraint(["current_assignment_id"], ["assignment.id"], ondelete="SET NULL"),
+        sa.CheckConstraint(
+            "heading IS NULL OR (heading >= 0 AND heading <= 360)",
+            name="ck_driver_status_heading",
+        ),
+        sa.CheckConstraint(
+            "latitude IS NULL OR (latitude BETWEEN -90 AND 90)",
+            name="ck_driver_status_lat",
+        ),
+        sa.CheckConstraint(
+            "longitude IS NULL OR (longitude BETWEEN -180 AND 180)",
+            name="ck_driver_status_lon",
+        ),
+        sa.CheckConstraint(
+            "speed IS NULL OR speed >= 0", name="ck_driver_status_speed"
+        ),
+        sa.ForeignKeyConstraint(
+            ["current_assignment_id"], ["assignment.id"], ondelete="SET NULL"
+        ),
         sa.ForeignKeyConstraint(["driver_id"], ["driver.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("driver_status", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_driver_status_driver_id"), ["driver_id"], unique=True)
-        batch_op.create_index("ix_driver_status_state_nextfree", ["state", "next_free_at"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_driver_status_driver_id"), ["driver_id"], unique=True
+        )
+        batch_op.create_index(
+            "ix_driver_status_state_nextfree", ["state", "next_free_at"], unique=False
+        )
 
     # ### end Alembic commands ###
 

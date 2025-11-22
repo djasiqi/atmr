@@ -32,8 +32,12 @@ class MLPrediction(db.Model):
     id = db.Column(Integer, primary_key=True)
 
     # Identifiants
-    booking_id = db.Column(Integer, db.ForeignKey("booking.id"), nullable=False, index=True)
-    driver_id = db.Column(Integer, db.ForeignKey("driver.id"), nullable=True, index=True)
+    booking_id = db.Column(
+        Integer, db.ForeignKey("booking.id"), nullable=False, index=True
+    )
+    driver_id = db.Column(
+        Integer, db.ForeignKey("driver.id"), nullable=True, index=True
+    )
     request_id = db.Column(String(100), nullable=True, index=True)
 
     # Prédiction ML
@@ -59,7 +63,12 @@ class MLPrediction(db.Model):
     is_accurate = db.Column(db.Boolean, nullable=True)
 
     # Métadonnées
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    created_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+    )
     updated_at = db.Column(
         db.DateTime,
         default=lambda: datetime.now(timezone.utc),
@@ -68,8 +77,12 @@ class MLPrediction(db.Model):
     )
 
     # Relations
-    booking = db.relationship("Booking", backref=db.backref("ml_predictions", lazy="dynamic"))
-    driver = db.relationship("Driver", backref=db.backref("ml_predictions", lazy="dynamic"))
+    booking = db.relationship(
+        "Booking", backref=db.backref("ml_predictions", lazy="dynamic")
+    )
+    driver = db.relationship(
+        "Driver", backref=db.backref("ml_predictions", lazy="dynamic")
+    )
 
     @override
     def __repr__(self) -> str:

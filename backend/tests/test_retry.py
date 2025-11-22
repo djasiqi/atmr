@@ -19,7 +19,10 @@ class TestBackoffCalculation(unittest.TestCase):
 
     def test_exponential_backoff(self):
         """Test que le backoff est exponentiel."""
-        delays = [calculate_backoff_delay(i, base_delay_ms=250, use_jitter=False) for i in range(4)]
+        delays = [
+            calculate_backoff_delay(i, base_delay_ms=250, use_jitter=False)
+            for i in range(4)
+        ]
 
         # Sans jitter: 250ms, 500ms, 1000ms, 2000ms
         self.assertAlmostEqual(delays[0], 0.250, places=2)
@@ -64,8 +67,12 @@ class TestRetryableException(unittest.TestCase):
         class CustomError(Exception):
             pass
 
-        self.assertTrue(is_retryable_exception(CustomError(), retryable_exceptions=(CustomError,)))
-        self.assertFalse(is_retryable_exception(ValueError(), retryable_exceptions=(CustomError,)))
+        self.assertTrue(
+            is_retryable_exception(CustomError(), retryable_exceptions=(CustomError,))
+        )
+        self.assertFalse(
+            is_retryable_exception(ValueError(), retryable_exceptions=(CustomError,))
+        )
 
 
 class TestRetryWithBackoff(unittest.TestCase):
@@ -152,7 +159,9 @@ class TestRetryHttpRequest(unittest.TestCase):
             if attempts[0] < 2:
                 response = Mock()
                 response.status_code = 503
-                response.raise_for_status = Mock(side_effect=requests.HTTPError(response=response))
+                response.raise_for_status = Mock(
+                    side_effect=requests.HTTPError(response=response)
+                )
                 raise response.raise_for_status()
             return Mock(status_code=200)
 

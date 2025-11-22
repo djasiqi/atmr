@@ -34,9 +34,21 @@ class ChaosInjector:
 
     def __init__(self) -> None:  # type: ignore[no-untyped-def]
         # ✅ D3: Lire variables d'environnement (défaut: tout désactivé)
-        chaos_enabled = os.getenv("CHAOS_ENABLED", "false").lower() in ("true", "1", "yes")
-        chaos_osrm_down = os.getenv("CHAOS_OSRM_DOWN", "false").lower() in ("true", "1", "yes")
-        chaos_db_read_only = os.getenv("CHAOS_DB_READ_ONLY", "false").lower() in ("true", "1", "yes")
+        chaos_enabled = os.getenv("CHAOS_ENABLED", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+        chaos_osrm_down = os.getenv("CHAOS_OSRM_DOWN", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+        chaos_db_read_only = os.getenv("CHAOS_DB_READ_ONLY", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
 
         self.enabled = chaos_enabled
         self.latency_ms = 0
@@ -53,7 +65,9 @@ class ChaosInjector:
             if self.osrm_down:
                 logger.warning("[CHAOS] OSRM down activé via CHAOS_OSRM_DOWN=true")
             if self.db_read_only:
-                logger.warning("[CHAOS] DB read-only activé via CHAOS_DB_READ_ONLY=true")
+                logger.warning(
+                    "[CHAOS] DB read-only activé via CHAOS_DB_READ_ONLY=true"
+                )
 
     def enable(self):
         """Active l'injection de chaos."""
@@ -146,7 +160,9 @@ class ChaosInjector:
 
         return wrapper
 
-    def inject_timeout(self, func: Callable[..., T], timeout_sec: float = 5.0) -> Callable[..., T]:
+    def inject_timeout(
+        self, func: Callable[..., T], timeout_sec: float = 5.0
+    ) -> Callable[..., T]:
         """Décorateur pour injecter des timeouts."""
 
         @wraps(func)

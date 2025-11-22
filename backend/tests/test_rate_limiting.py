@@ -32,7 +32,9 @@ class TestRateLimitingBookings:
                 assert response.status_code in (201, 400, 403, 404)  # Pas de 429
             else:
                 # La 51ème devrait retourner 429
-                assert response.status_code == 429, f"Expected 429, got {response.status_code}"
+                assert response.status_code == 429, (
+                    f"Expected 429, got {response.status_code}"
+                )
 
     def test_list_bookings_rate_limit(self, client, auth_headers):
         """Test que la liste des réservations est limitée à 300/heure."""
@@ -43,7 +45,9 @@ class TestRateLimitingBookings:
             if i < 300:
                 assert response.status_code in (200, 401, 403)  # Pas de 429
             else:
-                assert response.status_code == 429, f"Expected 429, got {response.status_code}"
+                assert response.status_code == 429, (
+                    f"Expected 429, got {response.status_code}"
+                )
 
 
 class TestRateLimitingAdmin:
@@ -58,7 +62,9 @@ class TestRateLimitingAdmin:
             if i < 100:
                 assert response.status_code in (200, 401, 403)  # Pas de 429
             else:
-                assert response.status_code == 429, f"Expected 429, got {response.status_code}"
+                assert response.status_code == 429, (
+                    f"Expected 429, got {response.status_code}"
+                )
 
     def test_reset_password_rate_limit(self, client, admin_headers):
         """Test que le reset password est limité à 10/heure (sécurité)."""
@@ -72,7 +78,9 @@ class TestRateLimitingAdmin:
             if i < 10:
                 assert response.status_code in (200, 404, 401, 403)  # Pas de 429
             else:
-                assert response.status_code == 429, f"Expected 429, got {response.status_code}"
+                assert response.status_code == 429, (
+                    f"Expected 429, got {response.status_code}"
+                )
 
 
 class TestRateLimitingCompanies:
@@ -100,7 +108,9 @@ class TestRateLimitingCompanies:
             if i < 20:
                 assert response.status_code in (201, 400, 401, 403, 409)  # Pas de 429
             else:
-                assert response.status_code == 429, f"Expected 429, got {response.status_code}"
+                assert response.status_code == 429, (
+                    f"Expected 429, got {response.status_code}"
+                )
 
     def test_create_client_rate_limit(self, client, auth_headers):
         """Test que la création de client est limitée à 50/heure."""
@@ -120,7 +130,9 @@ class TestRateLimitingCompanies:
             if i < 50:
                 assert response.status_code in (201, 400, 401, 403)  # Pas de 429
             else:
-                assert response.status_code == 429, f"Expected 429, got {response.status_code}"
+                assert response.status_code == 429, (
+                    f"Expected 429, got {response.status_code}"
+                )
 
 
 class TestRateLimitingAuth:
@@ -141,4 +153,6 @@ class TestRateLimitingAuth:
             if i < 5:
                 assert response.status_code in (401, 404)  # Pas de 429
             else:
-                assert response.status_code == 429, f"Expected 429, got {response.status_code}"
+                assert response.status_code == 429, (
+                    f"Expected 429, got {response.status_code}"
+                )

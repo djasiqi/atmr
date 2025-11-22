@@ -55,7 +55,9 @@ class SeverityThresholds:
     high_max: float = 20.0
 
 
-def severity_label(delay_min: float, thresholds: SeverityThresholds | None = None) -> str:
+def severity_label(
+    delay_min: float, thresholds: SeverityThresholds | None = None
+) -> str:
     """Map a delay in minutes to a severity bucket.
     Negative (early) returns 'low' by convention.
     """
@@ -206,7 +208,9 @@ class DelayDecider:
           "severity": "medium"
         }.
         """
-        buffer_min = self.pickup_buffer_min if phase == "pickup" else self.dropoff_buffer_min
+        buffer_min = (
+            self.pickup_buffer_min if phase == "pickup" else self.dropoff_buffer_min
+        )
         dmin = delay_minutes(eta, scheduled)
         delayed_raw = dmin > buffer_min
         confirmed = self.anti_flap.observe(str(assignment_id), str(phase), delayed_raw)

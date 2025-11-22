@@ -29,7 +29,9 @@ def _load_encryption_key() -> bytes:
             raise RuntimeError(msg)
         return key
 
-    legacy_hex = (os.getenv("ENCRYPTION_KEY_HEX") or os.getenv("ENCRYPTION_KEY") or "").strip()
+    legacy_hex = (
+        os.getenv("ENCRYPTION_KEY_HEX") or os.getenv("ENCRYPTION_KEY") or ""
+    ).strip()
     if legacy_hex:
         if legacy_hex.lower().startswith("0x"):
             legacy_hex = legacy_hex[2:]

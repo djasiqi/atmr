@@ -46,7 +46,9 @@ class GeographicClustering:
         super().__init__()
         self.max_bookings_per_zone = max_bookings_per_zone
 
-    def create_zones(self, bookings: List[Any], drivers: List[Any], cross_zone_tolerance: float = 0.1) -> List[Zone]:
+    def create_zones(
+        self, bookings: List[Any], drivers: List[Any], cross_zone_tolerance: float = 0.1
+    ) -> List[Zone]:
         """Crée des zones géographiques.
 
         Args:
@@ -87,7 +89,9 @@ class GeographicClustering:
             # Créer les zones
             zones = []
             for zone_id in range(n_zones):
-                zone_bookings = [b for i, b in enumerate(bookings) if zone_labels[i] == zone_id]
+                zone_bookings = [
+                    b for i, b in enumerate(bookings) if zone_labels[i] == zone_id
+                ]
 
                 if not zone_bookings:
                     continue
@@ -96,7 +100,9 @@ class GeographicClustering:
                 center_lat, center_lon = kmeans.cluster_centers_[zone_id]
 
                 # Assigner les drivers à cette zone
-                zone_drivers = self._assign_drivers_to_zone(drivers, center_lat, center_lon, cross_zone_tolerance)
+                zone_drivers = self._assign_drivers_to_zone(
+                    drivers, center_lat, center_lon, cross_zone_tolerance
+                )
 
                 zones.append(
                     Zone(
@@ -120,7 +126,15 @@ class GeographicClustering:
         except Exception as e:
             logger.error("[Clustering] Failed to create zones: %s", e)
             # Fallback: zone unique
-            return [Zone(zone_id=0, bookings=bookings, drivers=drivers, center_lat=0.0, center_lon=0.0)]
+            return [
+                Zone(
+                    zone_id=0,
+                    bookings=bookings,
+                    drivers=drivers,
+                    center_lat=0.0,
+                    center_lon=0.0,
+                )
+            ]
 
     def _extract_coordinates(self, bookings: List[Any]) -> np.ndarray[Any, Any]:
         """Extrait les coordonnées des bookings.
@@ -149,7 +163,10 @@ class GeographicClustering:
                         lat_f = float(lat)
                         lon_f = float(lon)
                         # Vérifier que c'est dans une plage raisonnable
-                        if MIN_LATITUDE <= lat_f <= MAX_LATITUDE and MIN_LONGITUDE <= lon_f <= MAX_LONGITUDE:
+                        if (
+                            MIN_LATITUDE <= lat_f <= MAX_LATITUDE
+                            and MIN_LONGITUDE <= lon_f <= MAX_LONGITUDE
+                        ):
                             coords.append([lat_f, lon_f])
                     except (ValueError, TypeError):
                         continue
@@ -159,7 +176,11 @@ class GeographicClustering:
         return np.array(coords) if coords else np.array([])
 
     def _assign_drivers_to_zone(
-        self, drivers: List[Any], center_lat: float, center_lon: float, cross_zone_tolerance: float
+        self,
+        drivers: List[Any],
+        center_lat: float,
+        center_lon: float,
+        cross_zone_tolerance: float,
     ) -> List[Any]:
         """Assigne les drivers à une zone.
 
@@ -177,8 +198,12 @@ class GeographicClustering:
         for driver in drivers:
             try:
                 # Coordonnées du driver
-                lat = getattr(driver, "latitude", None) or getattr(driver, "current_lat", None)
-                lon = getattr(driver, "longitude", None) or getattr(driver, "current_lon", None)
+                lat = getattr(driver, "latitude", None) or getattr(
+                    driver, "current_lat", None
+                )
+                lon = getattr(driver, "longitude", None) or getattr(
+                    driver, "current_lon", None
+                )
 
                 if lat is None or lon is None:
                     # Driver sans position : l'ajouter à toutes les zones
@@ -201,7 +226,9 @@ class GeographicClustering:
 
         return zone_drivers
 
-    def _haversine_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    def _haversine_distance(
+        self, lat1: float, lon1: float, lat2: float, lon2: float
+    ) -> float:
         """Calcule la distance Haversine en km.
 
         Args:
@@ -218,13 +245,19 @@ class GeographicClustering:
         dlat = radians(lat2 - lat1)
         dlon = radians(lon2 - lon1)
 
-        a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+        a = (
+            sin(dlat / 2) ** 2
+            + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+        )
         c = 2 * atan2(sqrt(a), sqrt(1 - a))
 
         return R * c
 
     def stitch_zones(
-        self, zone_results: Dict[int, Dict[str, Any]], zones: List[Zone], enable_stitch_improvements: bool = True
+        self,
+        zone_results: Dict[int, Dict[str, Any]],
+        zones: List[Zone],
+        enable_stitch_improvements: bool = True,
     ) -> Dict[str, Any]:
         """✅ C1: Assemble les résultats de plusieurs zones avec stitching.
 
@@ -259,7 +292,10 @@ class GeographicClustering:
                 )
 
                 if improved > 0:
-                    logger.info("[C1] Stitching improved %d assignments across zone boundaries", improved)
+                    logger.info(
+                        "[C1] Stitching improved %d assignments across zone boundaries",
+                        improved,
+                    )
             except Exception as e:
                 logger.warning("[C1] Stitching failed: %s", e)
 
@@ -270,14 +306,20 @@ class GeographicClustering:
             len(zones),
         )
 
-        return {"assignments": final_assignments, "unassigned": final_unassigned, "zones": len(zones)}
+        return {
+            "assignments": final_assignments,
+            "unassigned": final_unassigned,
+            "zones": len(zones),
+        }
 
     def _stitch_boundary_bookings(
         self,
         _assignments: List[Any],  # Préfix _ pour indiquer inutilisé intentionnellement
         unassigned: List[Any],
         zones: List[Zone],
-        _zone_results: Dict[int, Dict[str, Any]],  # Préfix _ pour indiquer inutilisé intentionnellement
+        _zone_results: Dict[
+            int, Dict[str, Any]
+        ],  # Préfix _ pour indiquer inutilisé intentionnellement
     ) -> int:
         """✅ C1: Échange de bookings limitrophes pour améliorer les assignations.
 
@@ -307,8 +349,12 @@ class GeographicClustering:
 
                     if lat and lon:
                         # Distance aux deux zones
-                        dist1 = self._haversine_distance(lat, lon, zone1.center_lat, zone1.center_lon)
-                        dist2 = self._haversine_distance(lat, lon, zone2.center_lat, zone2.center_lon)
+                        dist1 = self._haversine_distance(
+                            lat, lon, zone1.center_lat, zone1.center_lon
+                        )
+                        dist2 = self._haversine_distance(
+                            lat, lon, zone2.center_lat, zone2.center_lon
+                        )
 
                         # Si proche de la frontière, essayer d'assigner
                         if min(dist1, dist2) < BOUNDARY_DISTANCE_KM:
@@ -317,7 +363,10 @@ class GeographicClustering:
                     continue
 
             # Si on trouve des bookings près de la frontière, essayer de les assigner
-            if boundary_unassigned and len(boundary_unassigned) <= MAX_BOUNDARY_BOOKINGS:
+            if (
+                boundary_unassigned
+                and len(boundary_unassigned) <= MAX_BOUNDARY_BOOKINGS
+            ):
                 # TODO: Logique plus sophistiquée pour tester ré-assignation
                 improvements += len(boundary_unassigned)
 

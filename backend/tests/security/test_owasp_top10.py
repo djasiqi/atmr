@@ -33,7 +33,11 @@ class TestA01BrokenAccessControl:
         # Tester un endpoint qui nécessite un rôle spécifique
         response = client.post(
             "/api/companies/me/clients",
-            json={"client_type": "PRIVATE", "first_name": "Test", "last_name": "Client"},
+            json={
+                "client_type": "PRIVATE",
+                "first_name": "Test",
+                "last_name": "Client",
+            },
             headers=auth_headers,
         )
         # Doit retourner 401, 403, ou 404 si le rôle est incorrect
@@ -63,7 +67,9 @@ class TestA02CryptographicFailures:
             assert stored_password is not None
             assert stored_password != "password123"  # Ne doit pas être en clair
             # Vérifier que c'est un hash (commence par un préfixe de hash)
-            assert stored_password.startswith("pbkdf2:") or stored_password.startswith("scrypt:")
+            assert stored_password.startswith("pbkdf2:") or stored_password.startswith(
+                "scrypt:"
+            )
 
             # Vérifier que check_password fonctionne
             assert user.check_password("password123") is True
@@ -76,7 +82,10 @@ class TestA02CryptographicFailures:
     def test_jwt_tokens_are_signed(self, client, sample_user):
         """Test que les tokens JWT sont signés correctement."""
         # Login pour obtenir un token
-        response = client.post("/api/auth/login", json={"email": "test@example.com", "password": "password123"})
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "test@example.com", "password": "password123"},
+        )
         if response.status_code == 200:
             token = response.get_json().get("token")
             assert token is not None
@@ -228,7 +237,9 @@ class TestA06VulnerableComponents:
         critical_deps = ["flask", "sqlalchemy", "flask-jwt-extended"]
         for dep in critical_deps:
             # Vérifier que la dépendance ou un variant est présent
-            assert any(dep in line for line in content.split("\n")), f"{dep} doit être dans requirements.txt"
+            assert any(dep in line for line in content.split("\n")), (
+                f"{dep} doit être dans requirements.txt"
+            )
 
 
 class TestA07AuthenticationFailures:
@@ -240,7 +251,10 @@ class TestA07AuthenticationFailures:
         """Test que le rate limiting est actif sur le login."""
         # Tester plusieurs tentatives de login échouées
         for i in range(6):
-            response = client.post("/api/auth/login", json={"email": "test@example.com", "password": "wrong"})
+            response = client.post(
+                "/api/auth/login",
+                json={"email": "test@example.com", "password": "wrong"},
+            )
             if i < 5:
                 # Les 5 premières doivent passer (ou échouer avec 401)
                 assert response.status_code in (401, 404)
@@ -251,7 +265,9 @@ class TestA07AuthenticationFailures:
     def test_password_reset_requires_validation(self, client):
         """Test que la réinitialisation de mot de passe nécessite une validation."""
         # Tester avec un email inexistant
-        response = client.post("/api/auth/forgot-password", json={"email": "nonexistent@example.com"})
+        response = client.post(
+            "/api/auth/forgot-password", json={"email": "nonexistent@example.com"}
+        )
         # Ne doit pas révéler si l'email existe ou non (security through obscurity)
         # Doit retourner 200 ou 404, mais pas d'erreur serveur
         assert response.status_code in (200, 404, 400)
@@ -259,7 +275,10 @@ class TestA07AuthenticationFailures:
     def test_jwt_tokens_expire(self, client, sample_user):
         """Test que les tokens JWT expirent."""
         # Login pour obtenir un token
-        response = client.post("/api/auth/login", json={"email": "test@example.com", "password": "password123"})
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "test@example.com", "password": "password123"},
+        )
         if response.status_code == 200:
             token = response.get_json().get("token")
             # Les tokens JWT doivent avoir une date d'expiration (audit dans test_jwt_hardening.py)
@@ -278,7 +297,9 @@ class TestA08SoftwareAndDataIntegrity:
 
         # Tester avec un fichier invalide
         invalid_file = BytesIO(b"fake exe content")
-        result = validate_file_upload(invalid_file, "malicious.exe", b"fake exe content")
+        result = validate_file_upload(
+            invalid_file, "malicious.exe", b"fake exe content"
+        )
         # Doit rejeter les fichiers .exe
         assert result[0] is None  # Fichier rejeté
 

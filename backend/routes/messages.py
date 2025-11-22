@@ -51,14 +51,21 @@ def _is_pdf(filename: str) -> bool:
     return ext in ALLOWED_PDF_EXT
 
 
-def _validate_file_upload(file, filename: str, file_bytes: bytes) -> tuple[dict[str, Any] | None, int]:
+def _validate_file_upload(
+    file, filename: str, file_bytes: bytes
+) -> tuple[dict[str, Any] | None, int]:
     """
     Valide un fichier uploadé.
     Retourne (error_dict, status_code) en cas d'erreur, ou (None, 0) si valide.
     """
     # Validation extension
     if not filename or not _allowed_file(filename):
-        return ({"error": f"Extension non autorisée. Autorisées: {', '.join(sorted(ALLOWED_EXT))}."}, 400)
+        return (
+            {
+                "error": f"Extension non autorisée. Autorisées: {', '.join(sorted(ALLOWED_EXT))}."
+            },
+            400,
+        )
 
     # Validation taille
     size_bytes = len(file_bytes)
@@ -68,14 +75,22 @@ def _validate_file_upload(file, filename: str, file_bytes: bytes) -> tuple[dict[
     # Validation MIME type
     mime_type = file.content_type or ""
     if mime_type not in ALLOWED_MIME:
-        return ({"error": f"Type MIME non autorisé: {mime_type}. Autorisés: {', '.join(sorted(ALLOWED_MIME))}."}, 400)
+        return (
+            {
+                "error": f"Type MIME non autorisé: {mime_type}. Autorisés: {', '.join(sorted(ALLOWED_MIME))}."
+            },
+            400,
+        )
 
     # Validation type de fichier
     is_image_file = _is_image(filename) and mime_type in ALLOWED_IMAGE_MIME
     is_pdf_file = _is_pdf(filename) and mime_type in ALLOWED_PDF_MIME
 
     if not (is_image_file or is_pdf_file):
-        return ({"error": "Type de fichier non reconnu (doit être une image ou un PDF)."}, 400)
+        return (
+            {"error": "Type de fichier non reconnu (doit être une image ou un PDF)."},
+            400,
+        )
 
     # Scan antivirus ClamAV
     is_safe, error_msg = scan_bytes(file_bytes)
@@ -106,13 +121,18 @@ class MessagesList(Resource):
             .first()
         )
         if not user:
-            app_logger.error(f"❌ Utilisateur introuvable pour public_id: {user_public_id}")
+            app_logger.error(
+                f"❌ Utilisateur introuvable pour public_id: {user_public_id}"
+            )
             result = {"error": "Utilisateur introuvable"}
             status_code = 404
         else:
             # 🔐 Contrôle d'accès
             if user.role == UserRole.driver:
-                if not getattr(user, "driver", None) or user.driver.company_id != company_id:
+                if (
+                    not getattr(user, "driver", None)
+                    or user.driver.company_id != company_id
+                ):
                     result = {"error": "Accès refusé au chat de cette entreprise"}
                     status_code = 403
             elif user.role == UserRole.company:
@@ -161,7 +181,11 @@ class MessagesList(Resource):
 
                         # Précharger l'entreprise (évite une requête par message)
                         company = Company.query.get(company_id)
-                        company_name = company.name if company and getattr(company, "name", None) else "Entreprise"
+                        company_name = (
+                            company.name
+                            if company and getattr(company, "name", None)
+                            else "Entreprise"
+                        )
 
                         # 🔧 Sérialisation (s'aligne sur Message.serialize pour cohérence API)
                         results: list[dict[str, Any]] = []
@@ -179,15 +203,26 @@ class MessagesList(Resource):
                                     "receiver_id": getattr(m, "receiver_id", None),
                                     "sender_role": getattr(m, "sender_role", None),
                                     "content": getattr(m, "content", None),
-                                    "timestamp": m.timestamp.isoformat() if getattr(m, "timestamp", None) else None,
+                                    "timestamp": m.timestamp.isoformat()
+                                    if getattr(m, "timestamp", None)
+                                    else None,
                                 }
                                 # enrichir noms
                                 base["sender_name"] = (
                                     company_name
-                                    if getattr(m, "sender_role", None) in ("COMPANY", "company")
-                                    else (getattr(getattr(m, "sender", None), "first_name", None))
+                                    if getattr(m, "sender_role", None)
+                                    in ("COMPANY", "company")
+                                    else (
+                                        getattr(
+                                            getattr(m, "sender", None),
+                                            "first_name",
+                                            None,
+                                        )
+                                    )
                                 )
-                                base["receiver_name"] = getattr(getattr(m, "receiver", None), "first_name", None)
+                                base["receiver_name"] = getattr(
+                                    getattr(m, "receiver", None), "first_name", None
+                                )
 
                             results.append(base)
 
@@ -232,10 +267,14 @@ class MessageUpload(Resource):
         # Validation fichiers
         files = request.files.getlist("file")
         if len(files) > MAX_FILES_PER_MESSAGE:
-            return {"error": f"Trop de fichiers. Maximum {MAX_FILES_PER_MESSAGE} fichier(s) par message."}, 400
+            return {
+                "error": f"Trop de fichiers. Maximum {MAX_FILES_PER_MESSAGE} fichier(s) par message."
+            }, 400
 
         if not files or not files[0] or not files[0].filename:
-            return {"error": "Aucun fichier fourni. Le champ doit s'appeler 'file'."}, 400
+            return {
+                "error": "Aucun fichier fourni. Le champ doit s'appeler 'file'."
+            }, 400
 
         file = files[0]
         filename = file.filename or ""
@@ -257,7 +296,9 @@ class MessageUpload(Resource):
         is_pdf_file = _is_pdf(filename) and mime_type in ALLOWED_PDF_MIME
 
         # Créer le dossier de stockage
-        upload_root = current_app.config.get("UPLOADS_DIR", str(Path(current_app.root_path) / "uploads"))
+        upload_root = current_app.config.get(
+            "UPLOADS_DIR", str(Path(current_app.root_path) / "uploads")
+        )
         chat_dir = Path(upload_root) / "chat"
         chat_dir.mkdir(parents=True, exist_ok=True)
 

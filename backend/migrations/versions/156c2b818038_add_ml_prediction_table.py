@@ -61,14 +61,25 @@ def upgrade():
     )
 
     # Index pour performance
-    op.create_index("ix_ml_prediction_booking_id", "ml_prediction", ["booking_id"], unique=False)
-    op.create_index("ix_ml_prediction_driver_id", "ml_prediction", ["driver_id"], unique=False)
-    op.create_index("ix_ml_prediction_request_id", "ml_prediction", ["request_id"], unique=False)
-    op.create_index("ix_ml_prediction_created_at", "ml_prediction", ["created_at"], unique=False)
+    op.create_index(
+        "ix_ml_prediction_booking_id", "ml_prediction", ["booking_id"], unique=False
+    )
+    op.create_index(
+        "ix_ml_prediction_driver_id", "ml_prediction", ["driver_id"], unique=False
+    )
+    op.create_index(
+        "ix_ml_prediction_request_id", "ml_prediction", ["request_id"], unique=False
+    )
+    op.create_index(
+        "ix_ml_prediction_created_at", "ml_prediction", ["created_at"], unique=False
+    )
 
     # Index composite pour queries fréquentes
     op.create_index(
-        "ix_ml_prediction_created_actual", "ml_prediction", ["created_at", "actual_delay_minutes"], unique=False
+        "ix_ml_prediction_created_actual",
+        "ml_prediction",
+        ["created_at", "actual_delay_minutes"],
+        unique=False,
     )
 
 

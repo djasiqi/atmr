@@ -84,7 +84,11 @@ class TestDisasterScenarios:
 
         try:
             result_with_fallback = engine.run(
-                company_id=company.id, for_date=for_date, mode="auto", regular_first=True, allow_emergency=True
+                company_id=company.id,
+                for_date=for_date,
+                mode="auto",
+                regular_first=True,
+                allow_emergency=True,
             )
 
             # ✅ Vérifier que le dispatch se termine sans crash
@@ -111,7 +115,9 @@ class TestDisasterScenarios:
             if haversine_fallback_detected:
                 logger.info("[D3] ✅ Fallback haversine détecté dans les logs")
             else:
-                logger.warning("[D3] ⚠️ Fallback haversine non détecté - peut-être cache utilisé")
+                logger.warning(
+                    "[D3] ⚠️ Fallback haversine non détecté - peut-être cache utilisé"
+                )
 
         finally:
             osrm_logger.removeHandler(handler)
@@ -128,12 +134,20 @@ class TestDisasterScenarios:
         def test_dispatch_after_recovery():
             """Teste une opération dispatch après restauration."""
             result_after_recovery = engine.run(
-                company_id=company.id, for_date=for_date, mode="auto", regular_first=True, allow_emergency=True
+                company_id=company.id,
+                for_date=for_date,
+                mode="auto",
+                regular_first=True,
+                allow_emergency=True,
             )
 
             # Vérifier que le dispatch après récupération fonctionne normalement
-            assert result_after_recovery is not None, "Dispatch doit retourner un résultat"
-            assert "assignments" in result_after_recovery, "Résultat doit contenir 'assignments'"
+            assert result_after_recovery is not None, (
+                "Dispatch doit retourner un résultat"
+            )
+            assert "assignments" in result_after_recovery, (
+                "Résultat doit contenir 'assignments'"
+            )
 
             return result_after_recovery
 
@@ -148,14 +162,25 @@ class TestDisasterScenarios:
         )
 
         # ✅ Assertion : RTO ≤ 30s
-        assert rto_seconds <= RTO_MAX_SECONDS, f"RTO trop élevé: {rto_seconds:.2f}s (max: {RTO_MAX_SECONDS}s)"
+        assert rto_seconds <= RTO_MAX_SECONDS, (
+            f"RTO trop élevé: {rto_seconds:.2f}s (max: {RTO_MAX_SECONDS}s)"
+        )
 
-        logger.info("[D3] ✅ Test OSRM down terminé avec succès (RTO: %.2fs)", rto_seconds)
+        logger.info(
+            "[D3] ✅ Test OSRM down terminé avec succès (RTO: %.2fs)", rto_seconds
+        )
 
         # Désactiver chaos (fait automatiquement par fixture reset_chaos)
         injector.disable()
 
-    def test_db_read_only(self, app_context: Flask, authenticated_client, reset_chaos, sample_company, sample_client):
+    def test_db_read_only(
+        self,
+        app_context: Flask,
+        authenticated_client,
+        reset_chaos,
+        sample_company,
+        sample_client,
+    ):
         """✅ D3: Test quand la DB est en read-only.
 
         Objectif: Les lectures fonctionnent, les écritures retournent une erreur
@@ -231,7 +256,10 @@ class TestDisasterScenarios:
         # ✅ Vérifier message d'erreur contient "read-only" ou similaire
         response_data = response_post.get_json()
         assert response_data is not None
-        error_message = str(response_data.get("error", "")).lower() + str(response_data.get("message", "")).lower()
+        error_message = (
+            str(response_data.get("error", "")).lower()
+            + str(response_data.get("message", "")).lower()
+        )
 
         assert (
             "read-only" in error_message
@@ -246,7 +274,9 @@ class TestDisasterScenarios:
 
         # ✅ Vérifier que système ne crash pas - tester une autre lecture
         users_after = User.query.limit(1).all()
-        assert users_after is not None, "Système ne doit pas crash après tentative d'écriture"
+        assert users_after is not None, (
+            "Système ne doit pas crash après tentative d'écriture"
+        )
         logger.info("[D3] ✅ Système reste opérationnel après tentative d'écriture")
 
         # ✅ Désactiver read-only et vérifier écritures reprennent
@@ -259,14 +289,20 @@ class TestDisasterScenarios:
         )
 
         # Maintenant ça devrait fonctionner (201 créé ou 500 si autre problème, mais pas 503 read-only)
-        assert response_post_after.status_code != 503, "Écriture devrait fonctionner après désactivation read-only"
+        assert response_post_after.status_code != 503, (
+            "Écriture devrait fonctionner après désactivation read-only"
+        )
 
         # Vérifier que ce n'est pas une erreur read-only
         if response_post_after.status_code != 201:
             response_data_after = response_post_after.get_json()
             error_msg_after = str(response_data_after or {}).lower()
-            has_readonly = "read-only" in error_msg_after or "readonly" in error_msg_after
-            assert not has_readonly, f"L'erreur ne devrait plus être read-only, reçu: {response_data_after}"
+            has_readonly = (
+                "read-only" in error_msg_after or "readonly" in error_msg_after
+            )
+            assert not has_readonly, (
+                f"L'erreur ne devrait plus être read-only, reçu: {response_data_after}"
+            )
 
         logger.info("[D3] ✅ Test DB read-only terminé avec succès")
 
@@ -283,7 +319,9 @@ class TestDisasterScenarios:
         - Pas de crash
         - Latence P95 < 5s
         """
-        logger.info("[D3] Test pic de charge: %s requêtes simultanées", PIC_LOAD_REQUESTS)
+        logger.info(
+            "[D3] Test pic de charge: %s requêtes simultanées", PIC_LOAD_REQUESTS
+        )
 
         results: List[Dict[str, Any]] = []
 
@@ -317,10 +355,16 @@ class TestDisasterScenarios:
                 }
 
         # ✅ Exécuter les requêtes en parallèle avec ThreadPoolExecutor
-        logger.info("[D3] Démarrage de %s requêtes avec %s workers", PIC_LOAD_REQUESTS, PIC_LOAD_CONCURRENT_WORKERS)
+        logger.info(
+            "[D3] Démarrage de %s requêtes avec %s workers",
+            PIC_LOAD_REQUESTS,
+            PIC_LOAD_CONCURRENT_WORKERS,
+        )
 
         with ThreadPoolExecutor(max_workers=PIC_LOAD_CONCURRENT_WORKERS) as executor:
-            futures = [executor.submit(make_request, i) for i in range(PIC_LOAD_REQUESTS)]
+            futures = [
+                executor.submit(make_request, i) for i in range(PIC_LOAD_REQUESTS)
+            ]
 
             for future in as_completed(futures):
                 results.append(future.result())
@@ -363,9 +407,15 @@ class TestDisasterScenarios:
                 logger.warning("  - Request #%s: %s", err["request_id"], err["error"])
 
         # ✅ Vérifications
-        assert total == PIC_LOAD_REQUESTS, f"Nombre de requêtes incorrect: {total} au lieu de {PIC_LOAD_REQUESTS}"
-        assert success_rate >= 95.0, f"Taux de succès trop bas: {success_rate:.1f}% (attendu ≥ 95%)"
-        assert p95_latency < 5.0, f"Latence P95 trop élevée: {p95_latency:.2f}s (attendu < 5s)"
+        assert total == PIC_LOAD_REQUESTS, (
+            f"Nombre de requêtes incorrect: {total} au lieu de {PIC_LOAD_REQUESTS}"
+        )
+        assert success_rate >= 95.0, (
+            f"Taux de succès trop bas: {success_rate:.1f}% (attendu ≥ 95%)"
+        )
+        assert p95_latency < 5.0, (
+            f"Latence P95 trop élevée: {p95_latency:.2f}s (attendu < 5s)"
+        )
 
         logger.info("[D3] ✅ Test pic de charge terminé avec succès")
 
@@ -441,14 +491,20 @@ class TestDisasterScenarios:
                     assert len(result["durations"]) > 0
                     assert len(result["durations"][0]) > 0
 
-                    results.append({"success": True, "duration": duration, "has_durations": True})
+                    results.append(
+                        {"success": True, "duration": duration, "has_durations": True}
+                    )
 
                     logger.info("[D3] Appel #%d réussi en %.2fs", i + 1, duration)
 
                 except Exception as e:
                     duration = time.time() - start
-                    logger.warning("[D3] Appel #%d échoué: %s (%.2fs)", i + 1, e, duration)
-                    results.append({"success": False, "duration": duration, "error": str(e)})
+                    logger.warning(
+                        "[D3] Appel #%d échoué: %s (%.2fs)", i + 1, e, duration
+                    )
+                    results.append(
+                        {"success": False, "duration": duration, "error": str(e)}
+                    )
 
                     # Si c'est un timeout ou connexion, c'est normal avec chaos
                     if "timeout" in str(e).lower() or "connection" in str(e).lower():
@@ -457,7 +513,9 @@ class TestDisasterScenarios:
             # ✅ Vérifier retries automatiques (détection via logs)
             log_output = log_capture.getvalue()
             retry_detected = (
-                "retry" in log_output.lower() or "retrying" in log_output.lower() or "attempt" in log_output.lower()
+                "retry" in log_output.lower()
+                or "retrying" in log_output.lower()
+                or "attempt" in log_output.lower()
             )
 
             # ✅ Vérifier fallback haversine si trop d'erreurs
@@ -470,7 +528,9 @@ class TestDisasterScenarios:
             if retry_detected:
                 logger.info("[D3] ✅ Retries automatiques détectés dans les logs")
             else:
-                logger.warning("[D3] ⚠️ Retries non détectés (peut-être cache utilisé ou pas d'erreurs)")
+                logger.warning(
+                    "[D3] ⚠️ Retries non détectés (peut-être cache utilisé ou pas d'erreurs)"
+                )
 
             if fallback_detected:
                 logger.info("[D3] ✅ Fallback haversine détecté (résilience confirmée)")
@@ -481,26 +541,38 @@ class TestDisasterScenarios:
             success_rate = (success_count / total_count) * 100 if total_count > 0 else 0
 
             logger.info(
-                "[D3] Résultats avec réseau flaky: %d/%d succès (%.1f%%)", success_count, total_count, success_rate
+                "[D3] Résultats avec réseau flaky: %d/%d succès (%.1f%%)",
+                success_count,
+                total_count,
+                success_rate,
             )
 
             # Au moins une requête doit réussir (via retry ou fallback)
             # Avec 30% d'erreur et retries, on devrait avoir au moins 1 succès sur 5
-            assert success_count >= 1, f"Aucune requête n'a réussi malgré retries/fallback (0/{total_count})"
+            assert success_count >= 1, (
+                f"Aucune requête n'a réussi malgré retries/fallback (0/{total_count})"
+            )
 
             # ✅ Vérifier pas de perte de données (idempotence)
             # Si plusieurs appels réussissent, les résultats doivent être cohérents
             successful_results = [r for r in results if r.get("success")]
             if len(successful_results) > 1:
-                logger.info("[D3] ✅ Plusieurs succès - cohérence des résultats vérifiée")
+                logger.info(
+                    "[D3] ✅ Plusieurs succès - cohérence des résultats vérifiée"
+                )
 
             # ✅ Vérifier timeouts gérés gracieusement
             # Les erreurs de timeout doivent être catchées sans crash
             error_results = [r for r in results if not r.get("success")]
-            timeout_errors = [r for r in error_results if "timeout" in str(r.get("error", "")).lower()]
+            timeout_errors = [
+                r for r in error_results if "timeout" in str(r.get("error", "")).lower()
+            ]
 
             if timeout_errors:
-                logger.info("[D3] ✅ %d timeouts détectés et gérés gracieusement", len(timeout_errors))
+                logger.info(
+                    "[D3] ✅ %d timeouts détectés et gérés gracieusement",
+                    len(timeout_errors),
+                )
 
             logger.info("[D3] ✅ Test réseau flaky terminé avec succès")
 
@@ -511,7 +583,9 @@ class TestDisasterScenarios:
         # Désactiver chaos (fait automatiquement par fixture reset_chaos)
         injector.disable()
 
-    def test_combined_disaster(self, app_context: Flask, dispatch_scenario, reset_chaos):
+    def test_combined_disaster(
+        self, app_context: Flask, dispatch_scenario, reset_chaos
+    ):
         """✅ D3: Test combinant plusieurs catastrophes simultanées.
 
         Objectif: Vérifier que le système ne crash pas même avec plusieurs
@@ -523,7 +597,9 @@ class TestDisasterScenarios:
         - Dispatch se termine (même si lent)
         - Optionnel : latence mesurée et comparée vs normal
         """
-        logger.info("[D3] Test catastrophe combinée (OSRM lent + DB charge + réseau flaky)")
+        logger.info(
+            "[D3] Test catastrophe combinée (OSRM lent + DB charge + réseau flaky)"
+        )
 
         # Récupérer le chaos injector
         try:
@@ -545,11 +621,19 @@ class TestDisasterScenarios:
 
         try:
             result_baseline = engine.run(
-                company_id=company.id, for_date=for_date, mode="auto", regular_first=True, allow_emergency=True
+                company_id=company.id,
+                for_date=for_date,
+                mode="auto",
+                regular_first=True,
+                allow_emergency=True,
             )
             baseline_duration = time.time() - start_baseline
-            baseline_success = result_baseline is not None and "assignments" in result_baseline
-            logger.info("[D3] Baseline: %.2fs, succès: %s", baseline_duration, baseline_success)
+            baseline_success = (
+                result_baseline is not None and "assignments" in result_baseline
+            )
+            logger.info(
+                "[D3] Baseline: %.2fs, succès: %s", baseline_duration, baseline_success
+            )
         except Exception as e:
             logger.warning("[D3] Baseline a échoué (peut être normal): %s", e)
             baseline_duration = None
@@ -601,42 +685,74 @@ class TestDisasterScenarios:
 
             try:
                 result_combined = engine.run(
-                    company_id=company.id, for_date=for_date, mode="auto", regular_first=True, allow_emergency=True
+                    company_id=company.id,
+                    for_date=for_date,
+                    mode="auto",
+                    regular_first=True,
+                    allow_emergency=True,
                 )
                 combined_duration = time.time() - start_combined
 
                 # ✅ Vérifier système reste opérationnel (même en mode dégradé)
-                assert result_combined is not None, "Dispatch doit retourner un résultat (même vide)"
-                assert "assignments" in result_combined, "Résultat doit contenir 'assignments'"
-                assert "unassigned" in result_combined, "Résultat doit contenir 'unassigned'"
+                assert result_combined is not None, (
+                    "Dispatch doit retourner un résultat (même vide)"
+                )
+                assert "assignments" in result_combined, (
+                    "Résultat doit contenir 'assignments'"
+                )
+                assert "unassigned" in result_combined, (
+                    "Résultat doit contenir 'unassigned'"
+                )
                 assert "meta" in result_combined, "Résultat doit contenir 'meta'"
 
-                logger.info("[D3] ✅ Dispatch terminé avec succès en %.2fs", combined_duration)
-                logger.info("[D3]   - Assignments: %d", len(result_combined.get("assignments", [])))
-                logger.info("[D3]   - Unassigned: %d", len(result_combined.get("unassigned", [])))
+                logger.info(
+                    "[D3] ✅ Dispatch terminé avec succès en %.2fs", combined_duration
+                )
+                logger.info(
+                    "[D3]   - Assignments: %d",
+                    len(result_combined.get("assignments", [])),
+                )
+                logger.info(
+                    "[D3]   - Unassigned: %d",
+                    len(result_combined.get("unassigned", [])),
+                )
 
             except Exception as e:
                 combined_duration = time.time() - start_combined
-                logger.error("[D3] ❌ Dispatch a échoué après %.2fs: %s", combined_duration, e)
+                logger.error(
+                    "[D3] ❌ Dispatch a échoué après %.2fs: %s", combined_duration, e
+                )
                 # Même en cas d'erreur, vérifier que ce n'est pas un crash système
                 error_msg = str(e).lower()
                 if "crash" in error_msg:
-                    raise AssertionError("Le système ne doit pas crash, mais peut échouer gracieusement") from e
+                    raise AssertionError(
+                        "Le système ne doit pas crash, mais peut échouer gracieusement"
+                    ) from e
                 raise
 
             # ✅ Vérifier pas de crash - système doit être toujours opérationnel
             # Tester une opération simple (lecture)
             try:
                 users_check = User.query.limit(1).all()
-                assert users_check is not None, "Système doit toujours permettre les lectures"
-                logger.info("[D3] ✅ Système toujours opérationnel après catastrophe combinée")
+                assert users_check is not None, (
+                    "Système doit toujours permettre les lectures"
+                )
+                logger.info(
+                    "[D3] ✅ Système toujours opérationnel après catastrophe combinée"
+                )
             except Exception as e:
                 logger.error("[D3] ❌ Système crash détecté: %s", e)
-                raise AssertionError(f"Système crash après catastrophe combinée: {e}") from e
+                raise AssertionError(
+                    f"Système crash après catastrophe combinée: {e}"
+                ) from e
 
             # ✅ Optionnel : mesurer latence/dégradation vs normal
             if baseline_duration is not None:
-                degradation_factor = combined_duration / baseline_duration if baseline_duration > 0 else float("inf")
+                degradation_factor = (
+                    combined_duration / baseline_duration
+                    if baseline_duration > 0
+                    else float("inf")
+                )
                 logger.info("[D3] Dégradation mesurée:")
                 logger.info("  - Baseline: %.2fs", baseline_duration)
                 logger.info("  - Avec chaos: %.2fs", combined_duration)
@@ -644,9 +760,14 @@ class TestDisasterScenarios:
 
                 # Accepter une dégradation raisonnable (≤ 5x) avec tous les chaos activés
                 if degradation_factor > 5.0:
-                    logger.warning("[D3] ⚠️ Dégradation importante (%.2fx), mais système fonctionne", degradation_factor)
+                    logger.warning(
+                        "[D3] ⚠️ Dégradation importante (%.2fx), mais système fonctionne",
+                        degradation_factor,
+                    )
                 else:
-                    logger.info("[D3] ✅ Dégradation acceptable (%.2fx)", degradation_factor)
+                    logger.info(
+                        "[D3] ✅ Dégradation acceptable (%.2fx)", degradation_factor
+                    )
 
             logger.info("[D3] ✅ Test catastrophe combinée terminé avec succès")
 
@@ -666,7 +787,9 @@ class TestDisasterScenarios:
         Ce test vérifie que les routes API ne redirigent pas vers /login ou autre
         en mode testing, même si l'authentification échoue.
         """
-        logger.info("[D3] Test de non-régression : pas de redirections 302 en mode testing")
+        logger.info(
+            "[D3] Test de non-régression : pas de redirections 302 en mode testing"
+        )
 
         # ✅ Utiliser la bonne route avec /v1/
         response = authenticated_client.get("/api/v1/bookings/")

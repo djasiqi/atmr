@@ -49,7 +49,10 @@ class EncryptionService:
         self.legacy_keys = legacy_keys or []
         self.key_rotation_interval = key_rotation_interval
 
-        logger.info("[D2] EncryptionService initialisé avec %d clé(s) legacy", len(self.legacy_keys))
+        logger.info(
+            "[D2] EncryptionService initialisé avec %d clé(s) legacy",
+            len(self.legacy_keys),
+        )
 
     def _generate_master_key(self) -> bytes:
         """Génère une clé maître aléatoire."""
@@ -83,7 +86,11 @@ class EncryptionService:
             iv = os.urandom(DEFAULT_IV_LENGTH)
 
             # Créer cipher
-            cipher = Cipher(algorithms.AES(self.master_key), modes.CBC(iv), backend=default_backend())
+            cipher = Cipher(
+                algorithms.AES(self.master_key),
+                modes.CBC(iv),
+                backend=default_backend(),
+            )
 
             encryptor = cipher.encryptor()
 
@@ -139,7 +146,9 @@ class EncryptionService:
         for key_idx, key in enumerate(all_keys):
             try:
                 # Créer cipher
-                cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+                cipher = Cipher(
+                    algorithms.AES(key), modes.CBC(iv), backend=default_backend()
+                )
 
                 decryptor = cipher.decryptor()
 
@@ -153,7 +162,9 @@ class EncryptionService:
 
                 # Si on utilise une clé legacy, logger pour audit
                 if key_idx > 0:
-                    logger.debug("[D2] Déchiffrement réussi avec clé legacy #%d", key_idx)
+                    logger.debug(
+                        "[D2] Déchiffrement réussi avec clé legacy #%d", key_idx
+                    )
 
                 return plaintext.decode("utf-8")
 
@@ -162,7 +173,10 @@ class EncryptionService:
                 continue  # Essayer la clé suivante
 
         # Si aucune clé n'a fonctionné
-        logger.error("[D2] Échec déchiffrement avec toutes les clés (active + %d legacy)", len(self.legacy_keys))
+        logger.error(
+            "[D2] Échec déchiffrement avec toutes les clés (active + %d legacy)",
+            len(self.legacy_keys),
+        )
         if last_error:
             raise last_error
         raise ValueError("Impossible de déchiffrer avec aucune des clés disponibles")
@@ -202,7 +216,9 @@ def rotate_to_new_key(service: EncryptionService, new_key: bytes) -> bytes:
     # Définir la nouvelle clé comme active
     service.master_key = new_key
 
-    logger.info("[2.5] Rotation clé effectuée (legacy keys: %d)", len(service.legacy_keys))
+    logger.info(
+        "[2.5] Rotation clé effectuée (legacy keys: %d)", len(service.legacy_keys)
+    )
 
     return old_key
 
@@ -227,9 +243,13 @@ def get_encryption_service() -> EncryptionService:
             try:
                 master_key = bytes.fromhex(master_key_hex)
             except ValueError:
-                logger.warning("[D2] MASTER_ENCRYPTION_KEY invalide (format hex attendu)")
+                logger.warning(
+                    "[D2] MASTER_ENCRYPTION_KEY invalide (format hex attendu)"
+                )
         else:
-            logger.warning("[D2] MASTER_ENCRYPTION_KEY non définie, génération clé temporaire")
+            logger.warning(
+                "[D2] MASTER_ENCRYPTION_KEY non définie, génération clé temporaire"
+            )
 
         # ✅ 2.5: Charger les clés legacy (séparées par virgule)
         legacy_keys: list[bytes] = []
@@ -243,9 +263,14 @@ def get_encryption_service() -> EncryptionService:
                         if legacy_key != master_key:  # Éviter doublon
                             legacy_keys.append(legacy_key)
                     except ValueError:
-                        logger.warning("[2.5] Clé legacy invalide ignorée: %s...", key_hex_clean[:10])
+                        logger.warning(
+                            "[2.5] Clé legacy invalide ignorée: %s...",
+                            key_hex_clean[:10],
+                        )
 
-        _encryption_service = EncryptionService(master_key=master_key, legacy_keys=legacy_keys if legacy_keys else None)
+        _encryption_service = EncryptionService(
+            master_key=master_key, legacy_keys=legacy_keys if legacy_keys else None
+        )
 
     return _encryption_service
 

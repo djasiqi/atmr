@@ -22,7 +22,12 @@ class TestShadowModeManagerUncovered:
             "driver_id": 1,
         }
 
-        context = {"avg_eta": 18, "avg_distance": 7.0, "avg_load": 3, "driver_performance": {1: {"rating": 4.5}}}
+        context = {
+            "avg_eta": 18,
+            "avg_distance": 7.0,
+            "avg_load": 3,
+            "driver_performance": {1: {"rating": 4.5}},
+        }
 
         reasons = manager._extract_decision_reasons(rl_decision, context)
 
@@ -68,7 +73,12 @@ class TestShadowModeManagerUncovered:
             "driver_id": 2,
         }
 
-        context = {"avg_eta": 18, "avg_distance": 7.0, "avg_load": 3, "driver_performance": {2: {"rating": 3.5}}}
+        context = {
+            "avg_eta": 18,
+            "avg_distance": 7.0,
+            "avg_load": 3,
+            "driver_performance": {2: {"rating": 3.5}},
+        }
 
         reasons = manager._extract_decision_reasons(rl_decision, context)
 
@@ -232,7 +242,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": 15, "delay_minutes": 2}
         context = {"avg_eta": 18, "avg_delay": 3, "total_bookings": 100}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -244,7 +256,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": 15, "delay_minutes": 2}
         context = {}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -256,7 +270,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {}
         context = {}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -268,7 +284,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": -3, "delay_minutes": -1}
         context = {"avg_eta": -4, "avg_delay": -1.5, "total_bookings": 100}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -280,7 +298,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": 500, "delay_minutes": 50}
         context = {"avg_eta": 750, "avg_delay": 75, "total_bookings": 1000}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -292,7 +312,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": 0, "delay_minutes": 0}
         context = {"avg_eta": 0, "avg_delay": 0, "total_bookings": 0}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -304,7 +326,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": 15.3, "delay_minutes": 1.8}
         context = {"avg_eta": 17.9, "avg_delay": 2.25, "total_bookings": 150.5}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -316,7 +340,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": "15", "delay_minutes": "2"}
         context = {"avg_eta": "18", "avg_delay": "3", "total_bookings": "100"}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -328,7 +354,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": "15", "delay_minutes": 2}
         context = {"avg_eta": 18, "avg_delay": "3", "total_bookings": 100}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -340,7 +368,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": None, "delay_minutes": None}
         context = {"avg_eta": None, "avg_delay": None, "total_bookings": None}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -352,7 +382,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": [15], "delay_minutes": {"value": 2}}
         context = {"avg_eta": [18], "avg_delay": {"value": 3}, "total_bookings": [100]}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -364,7 +396,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": False, "delay_minutes": True}
         context = {"avg_eta": True, "avg_delay": False, "total_bookings": True}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -376,7 +410,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": "", "delay_minutes": ""}
         context = {"avg_eta": "", "avg_delay": "", "total_bookings": ""}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -388,7 +424,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": " 15 ", "delay_minutes": " 2 "}
         context = {"avg_eta": " 18 ", "avg_delay": " 3 ", "total_bookings": " 100 "}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -400,7 +438,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": 5e1, "delay_minutes": 5e0}
         context = {"avg_eta": 7.5e1, "avg_delay": 7.5e0, "total_bookings": 1e2}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -412,9 +452,15 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": math.inf, "delay_minutes": -math.inf}
         rl_decision = {"eta_minutes": math.inf, "delay_minutes": -math.inf}
-        context = {"avg_eta": math.inf, "avg_delay": -math.inf, "total_bookings": math.inf}
+        context = {
+            "avg_eta": math.inf,
+            "avg_delay": -math.inf,
+            "total_bookings": math.inf,
+        }
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -425,9 +471,15 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": math.nan, "delay_minutes": math.nan}
         rl_decision = {"eta_minutes": math.nan, "delay_minutes": math.nan}
-        context = {"avg_eta": math.nan, "avg_delay": math.nan, "total_bookings": math.nan}
+        context = {
+            "avg_eta": math.nan,
+            "avg_delay": math.nan,
+            "total_bookings": math.nan,
+        }
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -439,7 +491,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": 0.0001, "delay_minutes": 999999}
         context = {"avg_eta": 499999.5, "avg_delay": 499999.5, "total_bookings": 999999}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -451,7 +505,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": 1e-11, "delay_minutes": 1e-16}
         context = {"avg_eta": 5.5e-11, "avg_delay": 5.5e-16, "total_bookings": 1e-10}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -463,7 +519,9 @@ class TestShadowModeManagerUncovered:
         rl_decision = {"eta_minutes": 1e9, "delay_minutes": 1e14}
         context = {"avg_eta": 5.5e9, "avg_delay": 5.5e14, "total_bookings": 1e10}
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -473,9 +531,15 @@ class TestShadowModeManagerUncovered:
 
         human_decision = {"eta_minutes": 20.123456789, "delay_minutes": 5.987654321}
         rl_decision = {"eta_minutes": 15.111111111, "delay_minutes": 2.999999999}
-        context = {"avg_eta": 17.61728395, "avg_delay": 4.49382716, "total_bookings": 150.555555555}
+        context = {
+            "avg_eta": 17.61728395,
+            "avg_delay": 4.49382716,
+            "total_bookings": 150.555555555,
+        }
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)
 
@@ -517,6 +581,8 @@ class TestShadowModeManagerUncovered:
             "total_bookings": 125.7,
         }
 
-        impact = manager._calculate_performance_impact(human_decision, rl_decision, context)
+        impact = manager._calculate_performance_impact(
+            human_decision, rl_decision, context
+        )
 
         assert isinstance(impact, float)

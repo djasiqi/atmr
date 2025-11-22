@@ -25,16 +25,36 @@ def upgrade():
         sa.Column("booking_id", sa.Integer(), nullable=False),
         sa.Column("driver_id", sa.Integer(), nullable=False),
         sa.Column("score", sa.Float(), nullable=False),
-        sa.Column("kpi_snapshot", sa.JSON(), nullable=True, comment="Snapshot des KPIs au moment de la suggestion"),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], name="fk_rl_suggestions_booking_id"),
-        sa.ForeignKeyConstraint(["dispatch_run_id"], ["dispatch_run.id"], name="fk_rl_suggestions_dispatch_run_id"),
-        sa.ForeignKeyConstraint(["driver_id"], ["driver.id"], name="fk_rl_suggestions_driver_id"),
+        sa.Column(
+            "kpi_snapshot",
+            sa.JSON(),
+            nullable=True,
+            comment="Snapshot des KPIs au moment de la suggestion",
+        ),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.ForeignKeyConstraint(
+            ["booking_id"], ["booking.id"], name="fk_rl_suggestions_booking_id"
+        ),
+        sa.ForeignKeyConstraint(
+            ["dispatch_run_id"],
+            ["dispatch_run.id"],
+            name="fk_rl_suggestions_dispatch_run_id",
+        ),
+        sa.ForeignKeyConstraint(
+            ["driver_id"], ["driver.id"], name="fk_rl_suggestions_driver_id"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
 
     # Créer index pour performance
-    op.create_index("ix_rl_suggestions_dispatch_run_id", "rl_suggestions", ["dispatch_run_id"])
+    op.create_index(
+        "ix_rl_suggestions_dispatch_run_id", "rl_suggestions", ["dispatch_run_id"]
+    )
     op.create_index("ix_rl_suggestions_booking_id", "rl_suggestions", ["booking_id"])
     op.create_index("ix_rl_suggestions_driver_id", "rl_suggestions", ["driver_id"])
     op.create_index("ix_rl_suggestions_created_at", "rl_suggestions", ["created_at"])

@@ -31,7 +31,9 @@ logger = logging.getLogger(__name__)
 
 # ✅ 3.4: Constantes
 TOP_FUNCTIONS_COUNT = 10
-PROFILING_DURATION_SECONDS = int(os.getenv("PROFILING_DURATION_SECONDS", "30"))  # 30s par défaut
+PROFILING_DURATION_SECONDS = int(
+    os.getenv("PROFILING_DURATION_SECONDS", "30")
+)  # 30s par défaut
 
 
 def _collect_system_metrics() -> dict[str, Any]:
@@ -71,7 +73,9 @@ def _collect_system_metrics() -> dict[str, Any]:
         }
 
 
-def _profile_endpoints(profiler: cProfile.Profile, duration_seconds: int = 30) -> dict[str, Any]:
+def _profile_endpoints(
+    profiler: cProfile.Profile, duration_seconds: int = 30
+) -> dict[str, Any]:
     """✅ 3.4: Profile quelques endpoints critiques pendant une durée définie.
 
     Args:
@@ -112,7 +116,11 @@ def _profile_endpoints(profiler: cProfile.Profile, duration_seconds: int = 30) -
         actual_duration = time.time() - start_time
         profiler.disable()
 
-        logger.info("[3.4 Profiling] Profiling terminé: %d requêtes en %.2fs", request_count, actual_duration)
+        logger.info(
+            "[3.4 Profiling] Profiling terminé: %d requêtes en %.2fs",
+            request_count,
+            actual_duration,
+        )
 
         # Analyser les résultats
         stats_buffer = StringIO()
@@ -200,13 +208,17 @@ def run_weekly_profiling(self: Task) -> dict[str, Any]:  # noqa: ARG001
             profiler = cProfile.Profile()
 
             # Profiler pendant la durée définie
-            profiling_results = _profile_endpoints(profiler, duration_seconds=PROFILING_DURATION_SECONDS)
+            profiling_results = _profile_endpoints(
+                profiler, duration_seconds=PROFILING_DURATION_SECONDS
+            )
 
             # Collecter métriques système après profiling
             system_metrics_after = _collect_system_metrics()
 
             if "error" in profiling_results:
-                logger.error("[3.4 Profiling] Erreur profiling: %s", profiling_results["error"])
+                logger.error(
+                    "[3.4 Profiling] Erreur profiling: %s", profiling_results["error"]
+                )
                 return {
                     "status": "error",
                     "error": profiling_results["error"],
@@ -215,7 +227,10 @@ def run_weekly_profiling(self: Task) -> dict[str, Any]:  # noqa: ARG001
             # Extraire top fonctions
             top_functions = profiling_results.get("top_functions", [])
 
-            logger.info("[3.4 Profiling] ✅ Profiling terminé: %d fonctions identifiées", len(top_functions))
+            logger.info(
+                "[3.4 Profiling] ✅ Profiling terminé: %d fonctions identifiées",
+                len(top_functions),
+            )
 
             # Stocker les résultats en base de données
             profiling_record = None
@@ -224,8 +239,12 @@ def run_weekly_profiling(self: Task) -> dict[str, Any]:  # noqa: ARG001
 
                 profiling_record = ProfilingMetrics()
                 profiling_record.profiling_date = datetime.now(UTC)
-                profiling_record.duration_seconds = profiling_results.get("duration_seconds", 0)
-                profiling_record.request_count = profiling_results.get("request_count", 0)
+                profiling_record.duration_seconds = profiling_results.get(
+                    "duration_seconds", 0
+                )
+                profiling_record.request_count = profiling_results.get(
+                    "request_count", 0
+                )
                 profiling_record.top_functions = top_functions
                 profiling_record.system_metrics_before = system_metrics_before
                 profiling_record.system_metrics_after = system_metrics_after
@@ -233,10 +252,15 @@ def run_weekly_profiling(self: Task) -> dict[str, Any]:  # noqa: ARG001
                 db.session.add(profiling_record)
                 db.session.commit()
 
-                logger.info("[3.4 Profiling] ✅ Métriques stockées (ID: %s)", profiling_record.id)
+                logger.info(
+                    "[3.4 Profiling] ✅ Métriques stockées (ID: %s)",
+                    profiling_record.id,
+                )
             except ImportError:
                 # Modèle ProfilingMetrics n'existe pas encore - logger mais continuer
-                logger.warning("[3.4 Profiling] ⚠️ Modèle ProfilingMetrics non trouvé - résultats non stockés")
+                logger.warning(
+                    "[3.4 Profiling] ⚠️ Modèle ProfilingMetrics non trouvé - résultats non stockés"
+                )
             except Exception as e:
                 logger.exception("[3.4 Profiling] Erreur stockage métriques: %s", e)
                 db.session.rollback()
@@ -249,8 +273,12 @@ def run_weekly_profiling(self: Task) -> dict[str, Any]:  # noqa: ARG001
             report_lines.append("✅ 3.4 PROFILING HEBDOMADAIRE")
             report_lines.append(separator_line)
             report_lines.append(f"Date: {datetime.now(UTC).isoformat()}")
-            report_lines.append(f"Durée: {profiling_results.get('duration_seconds', 0)}s")
-            report_lines.append(f"Requêtes: {profiling_results.get('request_count', 0)}")
+            report_lines.append(
+                f"Durée: {profiling_results.get('duration_seconds', 0)}s"
+            )
+            report_lines.append(
+                f"Requêtes: {profiling_results.get('request_count', 0)}"
+            )
             report_lines.append("")
 
             if top_functions:
@@ -260,7 +288,9 @@ def run_weekly_profiling(self: Task) -> dict[str, Any]:  # noqa: ARG001
                     func_name = func.get("function", "unknown")
                     cumtime = func.get("cumtime", 0)
                     ncalls = func.get("ncalls", "0")
-                    report_lines.append(f"{i:2d}. {func_name:50s} {cumtime:8.4f}s ({ncalls} calls)")
+                    report_lines.append(
+                        f"{i:2d}. {func_name:50s} {cumtime:8.4f}s ({ncalls} calls)"
+                    )
             else:
                 report_lines.append("⚠️ Aucune fonction identifiée")
 
@@ -274,7 +304,9 @@ def run_weekly_profiling(self: Task) -> dict[str, Any]:  # noqa: ARG001
                 report_lines.append(f"CPU: {cpu_percent}%")
                 report_lines.append(f"Mémoire: {memory_mb} MB ({memory_percent}%)")
             else:
-                report_lines.append("⚠️ psutil non disponible - métriques système limitées")
+                report_lines.append(
+                    "⚠️ psutil non disponible - métriques système limitées"
+                )
 
             report_lines.append(separator_line)
             report_text = "\n".join(report_lines)
@@ -315,11 +347,15 @@ def generate_profiling_report(self: Task, days: int = 7) -> dict[str, Any]:  # n
 
             cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
-            logger.info("[3.4 Profiling] Génération rapport profiling (derniers %d jours)", days)
+            logger.info(
+                "[3.4 Profiling] Génération rapport profiling (derniers %d jours)", days
+            )
 
             # Récupérer tous les profils récents
             recent_profiles = (
-                ProfilingMetrics.query.filter(ProfilingMetrics.profiling_date >= cutoff_date)
+                ProfilingMetrics.query.filter(
+                    ProfilingMetrics.profiling_date >= cutoff_date
+                )
                 .order_by(ProfilingMetrics.profiling_date.desc())
                 .all()
             )
@@ -348,7 +384,9 @@ def generate_profiling_report(self: Task, days: int = 7) -> dict[str, Any]:  # n
                     function_times[func_name].append(cumtime)
 
             # Identifier les fonctions les plus fréquemment chaudes
-            most_frequent = sorted(function_counts.items(), key=lambda x: x[1], reverse=True)[:TOP_FUNCTIONS_COUNT]
+            most_frequent = sorted(
+                function_counts.items(), key=lambda x: x[1], reverse=True
+            )[:TOP_FUNCTIONS_COUNT]
 
             # Calculer temps moyen pour chaque fonction
             avg_times = {}
@@ -364,14 +402,18 @@ def generate_profiling_report(self: Task, days: int = 7) -> dict[str, Any]:  # n
 
             for func_name, count in most_frequent:
                 appearance_rate = count / len(recent_profiles) if recent_profiles else 0
-                if appearance_rate >= HOT_FUNCTION_THRESHOLD:  # Apparaît dans >50% des profils
+                if (
+                    appearance_rate >= HOT_FUNCTION_THRESHOLD
+                ):  # Apparaît dans >50% des profils
                     avg_time = avg_times.get(func_name, 0.0)
                     if avg_time > SLOW_FUNCTION_THRESHOLD_SECONDS:  # > 1 seconde
                         recommendations.append(
                             {
                                 "function": func_name,
                                 "reason": f"Fonction chaude apparaissant dans {count}/{len(recent_profiles)} profils (temps moyen: {avg_time:.2f}s)",
-                                "priority": "high" if avg_time > CRITICAL_THRESHOLD_SECONDS else "medium",
+                                "priority": "high"
+                                if avg_time > CRITICAL_THRESHOLD_SECONDS
+                                else "medium",
                             }
                         )
 
@@ -383,13 +425,17 @@ def generate_profiling_report(self: Task, days: int = 7) -> dict[str, Any]:  # n
                     {
                         "function": func_name,
                         "appearance_count": count,
-                        "appearance_rate": round((count / len(recent_profiles)) * 100, 1),
+                        "appearance_rate": round(
+                            (count / len(recent_profiles)) * 100, 1
+                        ),
                         "avg_time_seconds": round(avg_times.get(func_name, 0.0), 4),
                     }
                     for func_name, count in most_frequent
                 ],
                 "recommendations": recommendations,
-                "last_profiling_date": recent_profiles[0].profiling_date.isoformat() if recent_profiles else None,
+                "last_profiling_date": recent_profiles[0].profiling_date.isoformat()
+                if recent_profiles
+                else None,
             }
 
     except ImportError:

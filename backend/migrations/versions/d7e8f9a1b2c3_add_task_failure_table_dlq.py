@@ -28,8 +28,18 @@ def upgrade():
         sa.Column("traceback", sa.Text(), nullable=True),
         sa.Column("args", sa.String(length=2000), nullable=True),
         sa.Column("kwargs", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("first_seen", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("last_seen", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "first_seen",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "last_seen",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
         sa.Column("failure_count", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("worker_name", sa.String(length=255), nullable=True),
         sa.Column("hostname", sa.String(length=255), nullable=True),
@@ -40,7 +50,9 @@ def upgrade():
     # Indexes pour performance
     op.create_index("ix_task_failure_task_id", "task_failure", ["task_id"], unique=True)
     op.create_index("ix_task_failure_task_name", "task_failure", ["task_name"])
-    op.create_index("ix_task_failure_dispatch_run_id", "task_failure", ["dispatch_run_id"])
+    op.create_index(
+        "ix_task_failure_dispatch_run_id", "task_failure", ["dispatch_run_id"]
+    )
     op.create_index("ix_task_failure_first_seen", "task_failure", ["first_seen"])
     op.create_index("ix_task_failure_last_seen", "task_failure", ["last_seen"])
 

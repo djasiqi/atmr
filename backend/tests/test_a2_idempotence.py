@@ -93,7 +93,11 @@ class TestIdempotence:
 
         # Créer un driver avec la company
         driver = DriverFactory(
-            company=company, latitude=46.2044, longitude=6.1432, driver_type=DriverType.REGULAR, is_active=True
+            company=company,
+            latitude=46.2044,
+            longitude=6.1432,
+            driver_type=DriverType.REGULAR,
+            is_active=True,
         )
         db_session.add(driver)
 
@@ -113,7 +117,10 @@ class TestIdempotence:
 
         # Premier appel
         result1 = apply_assignments(
-            company_id=company.id, assignments=[assignment_data], dispatch_run_id=dispatch_run.id, allow_reassign=True
+            company_id=company.id,
+            assignments=[assignment_data],
+            dispatch_run_id=dispatch_run.id,
+            allow_reassign=True,
         )
 
         logger.info("✅ Premier appel: %s", result1)
@@ -122,14 +129,22 @@ class TestIdempotence:
         # Vérifier qu'une assignation a été créée
         assignments_count_1 = (
             db_session.query(Assignment)
-            .filter(Assignment.booking_id == booking.id, Assignment.dispatch_run_id == dispatch_run.id)
+            .filter(
+                Assignment.booking_id == booking.id,
+                Assignment.dispatch_run_id == dispatch_run.id,
+            )
             .count()
         )
-        assert assignments_count_1 == 1, "Une assignation doit exister après le 1er appel"
+        assert assignments_count_1 == 1, (
+            "Une assignation doit exister après le 1er appel"
+        )
 
         # Deuxième appel IDENTIQUE (idempotence)
         result2 = apply_assignments(
-            company_id=company.id, assignments=[assignment_data], dispatch_run_id=dispatch_run.id, allow_reassign=True
+            company_id=company.id,
+            assignments=[assignment_data],
+            dispatch_run_id=dispatch_run.id,
+            allow_reassign=True,
         )
 
         logger.info("✅ Deuxième appel (idempotent): %s", result2)
@@ -137,11 +152,16 @@ class TestIdempotence:
         # Vérifier qu'il n'y a TOUJOURS qu'une seule assignation
         assignments_count_2 = (
             db_session.query(Assignment)
-            .filter(Assignment.booking_id == booking.id, Assignment.dispatch_run_id == dispatch_run.id)
+            .filter(
+                Assignment.booking_id == booking.id,
+                Assignment.dispatch_run_id == dispatch_run.id,
+            )
             .count()
         )
 
-        assert assignments_count_2 == 1, "Idempotence échouée: doublon créé lors du 2ème appel"
+        assert assignments_count_2 == 1, (
+            "Idempotence échouée: doublon créé lors du 2ème appel"
+        )
 
         logger.info("✅ Test idempotence réussi: 0 doublon créé")
 
@@ -173,7 +193,11 @@ class TestIdempotence:
 
         # Créer un driver avec la company
         driver = DriverFactory(
-            company=company, latitude=46.2044, longitude=6.1432, driver_type=DriverType.REGULAR, is_active=True
+            company=company,
+            latitude=46.2044,
+            longitude=6.1432,
+            driver_type=DriverType.REGULAR,
+            is_active=True,
         )
         db_session.add(driver)
 
@@ -185,14 +209,20 @@ class TestIdempotence:
 
         # Créer une première assignation
         assignment1 = Assignment(
-            booking_id=booking.id, driver_id=driver.id, dispatch_run_id=dispatch_run.id, status="SCHEDULED"
+            booking_id=booking.id,
+            driver_id=driver.id,
+            dispatch_run_id=dispatch_run.id,
+            status="SCHEDULED",
         )
         db_session.add(assignment1)
         db_session.commit()
 
         # Essayer de créer une seconde assignation avec le même (booking_id, dispatch_run_id)
         assignment2 = Assignment(
-            booking_id=booking.id, driver_id=driver.id, dispatch_run_id=dispatch_run.id, status="SCHEDULED"
+            booking_id=booking.id,
+            driver_id=driver.id,
+            dispatch_run_id=dispatch_run.id,
+            status="SCHEDULED",
         )
         db_session.add(assignment2)
 
@@ -200,7 +230,10 @@ class TestIdempotence:
         with pytest.raises(IntegrityError) as exc_info:
             db_session.commit()
 
-        assert "uq_assignment_run_booking" in str(exc_info.value) or "unique" in str(exc_info.value).lower()
+        assert (
+            "uq_assignment_run_booking" in str(exc_info.value)
+            or "unique" in str(exc_info.value).lower()
+        )
 
         logger.info("✅ Contrainte unique respectée")
 
@@ -240,14 +273,23 @@ class TestIdempotence:
         }
 
         result = apply_assignments(
-            company_id=company.id, assignments=[assignment_data], dispatch_run_id=dispatch_run.id, allow_reassign=True
+            company_id=company.id,
+            assignments=[assignment_data],
+            dispatch_run_id=dispatch_run.id,
+            allow_reassign=True,
         )
 
         # Vérifier que la transaction a été rollbackée (pas d'assignation créée)
-        assignments_count = db_session.query(Assignment).filter(Assignment.booking_id == booking.id).count()
+        assignments_count = (
+            db_session.query(Assignment)
+            .filter(Assignment.booking_id == booking.id)
+            .count()
+        )
 
         assert assignments_count == 0, "Pas d'assignation créée en cas d'erreur"
-        assert "error" in result or len(result["applied"]) == 0, "Aucune assignation appliquée"
+        assert "error" in result or len(result["applied"]) == 0, (
+            "Aucune assignation appliquée"
+        )
 
         logger.info("✅ Rollback automatique testé")
 
@@ -282,7 +324,11 @@ class TestIdempotence:
 
         # Créer un driver avec la company
         driver = DriverFactory(
-            company=company, latitude=46.2044, longitude=6.1432, driver_type=DriverType.REGULAR, is_active=True
+            company=company,
+            latitude=46.2044,
+            longitude=6.1432,
+            driver_type=DriverType.REGULAR,
+            is_active=True,
         )
         db_session.add(driver)
 

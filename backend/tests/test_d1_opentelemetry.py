@@ -56,7 +56,9 @@ class TestOpenTelemetry:
         # Vérifier que tous les spans sont dans la trace
         current_span = trace.get_current_span()
 
-        assert current_span is None or current_span.get_span_context().span_id is not None
+        assert (
+            current_span is None or current_span.get_span_context().span_id is not None
+        )
 
         logger.info("✅ Test: Trace contient tous les spans attendus")
 
@@ -75,7 +77,9 @@ class TestOpenTelemetry:
             assert "trace_id" in log_context
             assert log_context["trace_id"] == trace_id
 
-            logger.info("✅ Test: Trace-id dans logs (trace_id=%s)", log_context["trace_id"])
+            logger.info(
+                "✅ Test: Trace-id dans logs (trace_id=%s)", log_context["trace_id"]
+            )
 
     def test_spans_attributes(self):
         """Test: Attributs corrects sur tous les spans."""

@@ -32,7 +32,9 @@ def solve_dimensions():
         for bookings in [19, 20, 21, 22, 23, 24, 25]:
             state_dim = drivers * 4 + bookings * 4 + 2
             action_dim = drivers * bookings + 1
-            print("drivers={drivers}, bookings={bookings} → state={state_dim}, actions={action_dim}")
+            print(
+                "drivers={drivers}, bookings={bookings} → state={state_dim}, actions={action_dim}"
+            )
     return None
 
 

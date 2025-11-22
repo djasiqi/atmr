@@ -16,13 +16,18 @@ class TestPrometheusMetricsEndpoint:
 
         # L'endpoint doit exister (200 si prometheus-client installé, 503 sinon, 302 si redirection)
         # Note: 302 peut être retourné si un middleware redirige vers login
-        assert response.status_code in [200, 503, 302], f"Endpoint retourne {response.status_code}"
+        assert response.status_code in [200, 503, 302], (
+            f"Endpoint retourne {response.status_code}"
+        )
 
         if response.status_code == 503:
             # Si prometheus-client n'est pas installé, vérifier le message d'erreur
             data = response.get_json()
             assert "error" in data
-            assert "prometheus" in data.get("error", "").lower() or "prometheus" in data.get("message", "").lower()
+            assert (
+                "prometheus" in data.get("error", "").lower()
+                or "prometheus" in data.get("message", "").lower()
+            )
             pytest.skip("prometheus-client non installé - tests métriques ignorés")
 
         # Si prometheus-client est installé, valider le format Prometheus
@@ -143,7 +148,12 @@ class TestPrometheusMiddlewareIntegration:
         # Les erreurs doivent être dans les labels status
         assert "http_requests_total" in content
         # Vérifier qu'il y a des status != 200
-        assert 'status="404"' in content or "status=404" in content or 'status="4' in content or "status=4" in content
+        assert (
+            'status="404"' in content
+            or "status=404" in content
+            or 'status="4' in content
+            or "status=4" in content
+        )
 
 
 if __name__ == "__main__":

@@ -164,7 +164,9 @@ class TestModelRegistry:
 
         # Promouvoir le modèle
         kpi_thresholds = {"punctuality_rate": 0.85, "accuracy": 0.8}
-        success = registry.promote_model("test_model", "dueling_dqn", "v1.00", kpi_thresholds)
+        success = registry.promote_model(
+            "test_model", "dueling_dqn", "v1.00", kpi_thresholds
+        )
 
         assert success
 
@@ -195,7 +197,9 @@ class TestModelRegistry:
 
         # Essayer de promouvoir avec des seuils élevés
         kpi_thresholds = {"punctuality_rate": 0.85, "accuracy": 0.8}
-        success = registry.promote_model("test_model", "dueling_dqn", "v1.00", kpi_thresholds)
+        success = registry.promote_model(
+            "test_model", "dueling_dqn", "v1.00", kpi_thresholds
+        )
 
         assert not success  # Doit échouer à cause des KPIs
 
@@ -217,7 +221,9 @@ class TestModelRegistry:
 
         # Promouvoir la version v1.20
         kpi_thresholds = {"accuracy": 0.8}
-        registry.promote_model("test_model", "dueling_dqn", "v1.20", kpi_thresholds, force=True)
+        registry.promote_model(
+            "test_model", "dueling_dqn", "v1.20", kpi_thresholds, force=True
+        )
 
         # Rollback vers v1.10
         success = registry.rollback_model("test_model", "dueling_dqn", "v1.10")
@@ -293,7 +299,9 @@ class TestModelPromotionValidator:
         registry.register_model(sample_model, metadata)
 
         kpi_thresholds = {"punctuality_rate": 0.85, "accuracy": 0.8}
-        is_valid, issues = validator.validate_model_for_promotion("test_model", "dueling_dqn", "v1.00", kpi_thresholds)
+        is_valid, issues = validator.validate_model_for_promotion(
+            "test_model", "dueling_dqn", "v1.00", kpi_thresholds
+        )
 
         assert is_valid
         assert len(issues) == 0
@@ -316,7 +324,9 @@ class TestModelPromotionValidator:
         registry.register_model(sample_model, metadata)
 
         kpi_thresholds = {"punctuality_rate": 0.85, "accuracy": 0.8}
-        is_valid, issues = validator.validate_model_for_promotion("test_model", "dueling_dqn", "v1.00", kpi_thresholds)
+        is_valid, issues = validator.validate_model_for_promotion(
+            "test_model", "dueling_dqn", "v1.00", kpi_thresholds
+        )
 
         assert not is_valid
         assert len(issues) > 0
@@ -378,7 +388,10 @@ class TestTrainingMetadataSchema:
     def test_create_training_metadata(self):
         """Teste la création de métadonnées de training."""
         metadata = create_training_metadata(
-            model_name="test_model", model_arch="c51", version="v1.00", training_config={"learning_rate": 0.0001}
+            model_name="test_model",
+            model_arch="c51",
+            version="v1.00",
+            training_config={"learning_rate": 0.0001},
         )
 
         assert metadata["model_info"]["model_name"] == "test_model"
@@ -411,7 +424,11 @@ class TestIntegration:
             version="v1.00",
             created_at=datetime.now(UTC),
             training_config={"learning_rate": 0.0001},
-            performance_metrics={"punctuality_rate": 0.88, "avg_distance": 12.5, "avg_delay": 3.2},
+            performance_metrics={
+                "punctuality_rate": 0.88,
+                "avg_distance": 12.5,
+                "avg_delay": 3.2,
+            },
             features_config={"state_features": 15},
             scalers_config={"state_scaler": "StandardScaler"},
         )
@@ -421,9 +438,15 @@ class TestIntegration:
         assert model_path.exists()
 
         # 5. Promouvoir le modèle
-        kpi_thresholds = {"punctuality_rate": 0.85, "avg_distance": 15.0, "avg_delay": 5.0}
+        kpi_thresholds = {
+            "punctuality_rate": 0.85,
+            "avg_distance": 15.0,
+            "avg_delay": 5.0,
+        }
 
-        success = registry.promote_model("integration_test", "dueling_dqn", "v1.00", kpi_thresholds)
+        success = registry.promote_model(
+            "integration_test", "dueling_dqn", "v1.00", kpi_thresholds
+        )
         assert success
 
         # 6. Vérifier la promotion

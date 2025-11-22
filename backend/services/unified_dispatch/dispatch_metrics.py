@@ -107,7 +107,9 @@ class DispatchQualityMetrics:
         return {
             "quality_score": round(self.quality_score, 1),
             "assignment_rate": round(self.assignment_rate, 1),
-            "on_time_rate": round((self.on_time_bookings / max(1, self.total_bookings)) * 100, 1),
+            "on_time_rate": round(
+                (self.on_time_bookings / max(1, self.total_bookings)) * 100, 1
+            ),
             "pooling_rate": round(self.pooling_rate, 1),
             "fairness": round(self.fairness_coefficient * 100, 1),
             "avg_delay": round(self.average_delay_minutes, 1),
@@ -139,7 +141,9 @@ class DispatchMetricsCollector:
             run_date = run.day
 
             # Récupérer toutes les assignations de ce run
-            assignments = Assignment.query.filter_by(dispatch_run_id=dispatch_run_id).all()
+            assignments = Assignment.query.filter_by(
+                dispatch_run_id=dispatch_run_id
+            ).all()
 
             # Récupérer tous les bookings du jour (pour calculer le taux
             # d'assignation)
@@ -161,7 +165,11 @@ class DispatchMetricsCollector:
             )
 
         except Exception as e:
-            logger.exception("[DispatchMetrics] Failed to collect metrics for run %s: %s", dispatch_run_id, e)
+            logger.exception(
+                "[DispatchMetrics] Failed to collect metrics for run %s: %s",
+                dispatch_run_id,
+                e,
+            )
             raise
 
     def collect_for_date(self, target_date: date | str) -> DispatchQualityMetrics:
@@ -210,7 +218,9 @@ class DispatchMetricsCollector:
         pooling_rate = (pooled_bookings / max(1, assigned_bookings)) * 100
 
         # 3. Métriques de retard
-        on_time, delayed, avg_delay, max_delay = self._calculate_delay_metrics(assignments)
+        on_time, delayed, avg_delay, max_delay = self._calculate_delay_metrics(
+            assignments
+        )
 
         # 4. Métriques d'équité
         driver_stats = self._calculate_driver_fairness(assignments)
@@ -293,7 +303,10 @@ class DispatchMetricsCollector:
             # Vérifier si un autre booking du même chauffeur est à moins de
             # 10min
             for existing_time in driver_times[driver_id]:
-                if abs((scheduled_time - existing_time).total_seconds()) <= POOLING_WINDOW_SECONDS:  # 10min
+                if (
+                    abs((scheduled_time - existing_time).total_seconds())
+                    <= POOLING_WINDOW_SECONDS
+                ):  # 10min
                     pooled += 1
                     break
 
@@ -301,7 +314,9 @@ class DispatchMetricsCollector:
 
         return pooled
 
-    def _calculate_delay_metrics(self, assignments: List[Assignment]) -> tuple[int, int, float, int]:
+    def _calculate_delay_metrics(
+        self, assignments: List[Assignment]
+    ) -> tuple[int, int, float, int]:
         """Calcule les métriques de retard."""
         on_time = 0
         delayed = 0
@@ -310,7 +325,11 @@ class DispatchMetricsCollector:
 
         # ✅ PERF: Charger tous les bookings en une seule query (évite N+1)
         booking_ids = [a.booking_id for a in assignments]
-        bookings_map = {b.id: b for b in Booking.query.filter(Booking.id.in_(booking_ids)).all()} if booking_ids else {}
+        bookings_map = (
+            {b.id: b for b in Booking.query.filter(Booking.id.in_(booking_ids)).all()}
+            if booking_ids
+            else {}
+        )
 
         for assignment in assignments:
             booking = bookings_map.get(assignment.booking_id)
@@ -336,11 +355,15 @@ class DispatchMetricsCollector:
                 # Pas d'ETA → considéré comme à l'heure par défaut
                 on_time += 1
 
-        avg_delay = total_delay / max(1, delayed) if delayed > DELAYED_ZERO else DELAYED_ZERO
+        avg_delay = (
+            total_delay / max(1, delayed) if delayed > DELAYED_ZERO else DELAYED_ZERO
+        )
 
         return on_time, delayed, avg_delay, max_delay
 
-    def _calculate_driver_fairness(self, assignments: List[Assignment]) -> Dict[str, Any]:
+    def _calculate_driver_fairness(
+        self, assignments: List[Assignment]
+    ) -> Dict[str, Any]:
         """Calcule les métriques d'équité entre chauffeurs."""
         driver_counts: Dict[int, int] = {}
 
@@ -414,7 +437,9 @@ class DispatchMetricsCollector:
 
         return max(0.0, min(1.0, gini))
 
-    def _calculate_distance_metrics(self, assignments: List[Assignment], all_bookings: List[Booking]) -> Dict[str, Any]:
+    def _calculate_distance_metrics(
+        self, assignments: List[Assignment], all_bookings: List[Booking]
+    ) -> Dict[str, Any]:
         """Calcule les métriques de distance."""
         total_distance = 0
         emergency_drivers = set()
@@ -456,7 +481,12 @@ class DispatchMetricsCollector:
         }
 
     def _calculate_quality_score(
-        self, assignment_rate: float, on_time_rate: float, pooling_rate: float, fairness: float, avg_delay: float
+        self,
+        assignment_rate: float,
+        on_time_rate: float,
+        pooling_rate: float,
+        fairness: float,
+        avg_delay: float,
     ) -> Tuple[float, Dict[str, float]]:
         """Calcule un score global de qualité (0-100).
 
@@ -479,7 +509,13 @@ class DispatchMetricsCollector:
         fairness_contrib = fairness * 15
         delay_penalty = max(0, 10 - (avg_delay / 3))
 
-        score = assignment_contrib + on_time_contrib + pooling_contrib + fairness_contrib + delay_penalty
+        score = (
+            assignment_contrib
+            + on_time_contrib
+            + pooling_contrib
+            + fairness_contrib
+            + delay_penalty
+        )
 
         # Calculer les facteurs dominants (top 3)
         contributions = {
@@ -497,7 +533,9 @@ class DispatchMetricsCollector:
         return round(min(100, max(0, score)), 2), dominant_factors
 
 
-def collect_dispatch_metrics(dispatch_run_id: int, company_id: int, day: date) -> DispatchQualityMetrics:
+def collect_dispatch_metrics(
+    dispatch_run_id: int, company_id: int, day: date
+) -> DispatchQualityMetrics:
     """Fonction helper pour collecter les métriques d'un dispatch.
     Utilisée par engine.py après chaque dispatch.
 

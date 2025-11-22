@@ -68,7 +68,9 @@ from flask import Flask
 # Forcer environnement de test avant d'importer l'app
 os.environ["FLASK_ENV"] = "testing"
 os.environ["PDF_BASE_URL"] = "http://localhost:5000"  # Valeur factice pour tests
-os.environ.setdefault("TEST_DATABASE_URL", "postgresql://atmr:atmr@localhost:5432/atmr_test")
+os.environ.setdefault(
+    "TEST_DATABASE_URL", "postgresql://atmr:atmr@localhost:5432/atmr_test"
+)
 # Désactiver la doc RESTX pour éviter les conflits d'endpoint /specs en tests
 os.environ["API_DOCS"] = "off"
 # Désactiver l'API legacy pendant les tests pour éviter conflits RestX
@@ -90,7 +92,9 @@ def app() -> Flask:
     # Évite les problèmes d'enums, contraintes nommées, et JSONB
     # Les tests utilisent des savepoints (transactions nested) donc pas de risque pour les données
     # Workflow utilise test:test@localhost:5432/atmr_test
-    database_url = os.getenv("DATABASE_URL", "postgresql://test:test@localhost:5432/atmr_test")
+    database_url = os.getenv(
+        "DATABASE_URL", "postgresql://test:test@localhost:5432/atmr_test"
+    )
 
     app.config.update(
         {
@@ -272,7 +276,9 @@ def auth_headers(client, sample_user):
         "aud": "atmr-api",
     }
     with client.application.app_context():
-        token = create_access_token(identity=str(sample_user.public_id), additional_claims=claims)
+        token = create_access_token(
+            identity=str(sample_user.public_id), additional_claims=claims
+        )
     auth_headers._token_cache[cache_key] = token  # type: ignore[attr-defined]
     return {"Authorization": f"Bearer {token}"}
 
@@ -296,7 +302,9 @@ def admin_headers(client, sample_admin_user):
         "aud": "atmr-api",
     }
     with client.application.app_context():
-        token = create_access_token(identity=str(sample_admin_user.public_id), additional_claims=claims)
+        token = create_access_token(
+            identity=str(sample_admin_user.public_id), additional_claims=claims
+        )
     admin_headers._token_cache[cache_key] = token  # type: ignore[attr-defined]
     return {"Authorization": f"Bearer {token}"}
 
@@ -469,7 +477,11 @@ def simple_booking(db, sample_company):
     from tests.factories import create_booking_with_coordinates
 
     return create_booking_with_coordinates(
-        company=sample_company, pickup_lat=46.2044, pickup_lon=6.1432, dropoff_lat=46.2100, dropoff_lon=6.1500
+        company=sample_company,
+        pickup_lat=46.2044,
+        pickup_lon=6.1432,
+        dropoff_lat=46.2100,
+        dropoff_lon=6.1500,
     )
 
 
@@ -478,7 +490,9 @@ def simple_driver(db, sample_company):
     """Crée un driver simple avec position valide."""
     from tests.factories import create_driver_with_position
 
-    return create_driver_with_position(company=sample_company, latitude=46.2044, longitude=6.1432, is_available=True)
+    return create_driver_with_position(
+        company=sample_company, latitude=46.2044, longitude=6.1432, is_available=True
+    )
 
 
 @pytest.fixture
@@ -519,7 +533,11 @@ def sample_client(db, sample_company):
     user.address = "Rue Client 1, 1000 Lausanne"
     user.public_id = str(uuid.uuid4())
     password_hash = bcrypt.generate_password_hash("password123")
-    user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash  # type: ignore[unnecessary-isinstance]
+    user.password = (
+        password_hash.decode("utf-8")
+        if isinstance(password_hash, bytes)
+        else password_hash
+    )  # type: ignore[unnecessary-isinstance]
     db.session.add(user)
     db.session.flush()
 
@@ -574,7 +592,10 @@ def mock_external_services(monkeypatch):
         return {
             "duration": float(duration_s),
             "distance": int(km * 1000),  # mètres
-            "geometry": {"type": "LineString", "coordinates": [[origin[1], origin[0]], [dest[1], dest[0]]]},
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [[origin[1], origin[0]], [dest[1], dest[0]]],
+            },
             "legs": [{"distance": int(km * 1000), "duration": float(duration_s)}],
             "fallback": False,  # Simuler un appel OSRM réussi
         }
@@ -615,7 +636,9 @@ def mock_external_services(monkeypatch):
     # Patcher OSRM
     from services import osrm_client
 
-    monkeypatch.setattr(osrm_client, "build_distance_matrix_osrm", mock_build_distance_matrix_osrm)
+    monkeypatch.setattr(
+        osrm_client, "build_distance_matrix_osrm", mock_build_distance_matrix_osrm
+    )
     monkeypatch.setattr(osrm_client, "route_info", mock_route_info)
     monkeypatch.setattr(osrm_client, "get_distance_time", mock_get_distance_time)
     monkeypatch.setattr(osrm_client, "get_matrix", mock_get_matrix)
@@ -650,7 +673,9 @@ def mock_external_services(monkeypatch):
     try:
         from services import redis_client
 
-        monkeypatch.setattr(redis_client, "RedisClient", MagicMock(return_value=mock_redis))
+        monkeypatch.setattr(
+            redis_client, "RedisClient", MagicMock(return_value=mock_redis)
+        )
     except ImportError:
         pass
 
@@ -706,7 +731,10 @@ def mock_osrm_client(monkeypatch):
         return {
             "duration": float(duration_s),
             "distance": int(km * 1000),  # mètres
-            "geometry": {"type": "LineString", "coordinates": [[origin[1], origin[0]], [dest[1], dest[0]]]},
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [[origin[1], origin[0]], [dest[1], dest[0]]],
+            },
             "legs": [{"distance": int(km * 1000), "duration": float(duration_s)}],
         }
 
@@ -746,7 +774,9 @@ def mock_osrm_client(monkeypatch):
     from services import osrm_client
 
     # ✅ FIX: Mock les fonctions réelles utilisées
-    monkeypatch.setattr(osrm_client, "build_distance_matrix_osrm", mock_build_distance_matrix_osrm)
+    monkeypatch.setattr(
+        osrm_client, "build_distance_matrix_osrm", mock_build_distance_matrix_osrm
+    )
     monkeypatch.setattr(osrm_client, "route_info", mock_route_info)
     # Garder les anciens mocks pour compatibilité
     monkeypatch.setattr(osrm_client, "get_distance_time", mock_get_distance_time)
@@ -1007,7 +1037,9 @@ def pii_config():
     import os
 
     # Configurer les clés de chiffrement si nécessaire
-    os.environ.setdefault("APP_ENCRYPTION_KEY_B64", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY")
+    os.environ.setdefault(
+        "APP_ENCRYPTION_KEY_B64", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY"
+    )
     return True
 
 

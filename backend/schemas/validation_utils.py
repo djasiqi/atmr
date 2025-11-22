@@ -9,7 +9,9 @@ from marshmallow import Schema, ValidationError
 from marshmallow.validate import Length
 
 
-def validate_request(schema: Schema, data: Dict[str, Any], strict: bool = True) -> Dict[str, Any]:
+def validate_request(
+    schema: Schema, data: Dict[str, Any], strict: bool = True
+) -> Dict[str, Any]:
     """Valide les données de requête avec un schema Marshmallow.
 
     Args:
@@ -52,7 +54,10 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dict formaté avec structure standardisée
     """
-    formatted: Dict[str, Any] = {"message": "Erreur de validation des données", "errors": {}}
+    formatted: Dict[str, Any] = {
+        "message": "Erreur de validation des données",
+        "errors": {},
+    }
 
     for field, messages in errors.items():
         # ⚡ Ignorer les clés spéciales de Marshmallow (_schema, _nested, etc.)
@@ -60,7 +65,9 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
         if field.startswith("_"):
             # Si c'est une erreur au niveau du schéma, l'ajouter au message général
             if field == "_schema" and isinstance(messages, list):
-                formatted["message"] = messages[0] if messages else "Erreur de validation des données"
+                formatted["message"] = (
+                    messages[0] if messages else "Erreur de validation des données"
+                )
             continue
 
         # Si c'est une liste de messages, prendre directement
@@ -71,7 +78,8 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
             # ⚡ Détecter si c'est une erreur de validation de liste (clés = indices entiers)
             # Exemple: {'client_ids': {1: ['Must be greater than or equal to 1.']}}
             all_keys_are_int_indices = all(
-                (isinstance(k, int) or (isinstance(k, str) and k.isdigit())) for k in messages
+                (isinstance(k, int) or (isinstance(k, str) and k.isdigit()))
+                for k in messages
             )
 
             if all_keys_are_int_indices:
@@ -91,10 +99,14 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
                     if isinstance(nested_msgs, list):
                         formatted["errors"][f"{field}.{nested_field}"] = nested_msgs
                     else:
-                        formatted["errors"][f"{field}.{nested_field}"] = [str(nested_msgs)]
+                        formatted["errors"][f"{field}.{nested_field}"] = [
+                            str(nested_msgs)
+                        ]
             else:
                 # Formatage normal récursif pour champs nested
-                nested_formatted = _format_validation_errors(cast(Dict[str, Any], messages))
+                nested_formatted = _format_validation_errors(
+                    cast(Dict[str, Any], messages)
+                )
                 # Fusionner les erreurs nested directement dans formatted["errors"]
                 if "errors" in nested_formatted:
                     for nested_field, nested_msgs in nested_formatted["errors"].items():
@@ -106,7 +118,9 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
     return formatted
 
 
-def validate_query_params(schema: Schema, query_params: Any, strict: bool = False) -> Dict[str, Any]:
+def validate_query_params(
+    schema: Schema, query_params: Any, strict: bool = False
+) -> Dict[str, Any]:
     """Valide les query parameters GET avec un schema Marshmallow.
 
     Args:
@@ -175,11 +189,21 @@ def handle_validation_error(error: ValidationError):
 
 
 # Validators personnalisés réutilisables
-EMAIL_VALIDATOR = Length(min=5, max=254, error="Email doit faire entre 5 et 254 caractères")
-USERNAME_VALIDATOR = Length(min=3, max=50, error="Username doit faire entre 3 et 50 caractères")
-PASSWORD_VALIDATOR = Length(min=8, error="Mot de passe doit faire au moins 8 caractères")
-PHONE_VALIDATOR = Length(min=10, max=20, error="Téléphone doit faire entre 10 et 20 caractères")
+EMAIL_VALIDATOR = Length(
+    min=5, max=254, error="Email doit faire entre 5 et 254 caractères"
+)
+USERNAME_VALIDATOR = Length(
+    min=3, max=50, error="Username doit faire entre 3 et 50 caractères"
+)
+PASSWORD_VALIDATOR = Length(
+    min=8, error="Mot de passe doit faire au moins 8 caractères"
+)
+PHONE_VALIDATOR = Length(
+    min=10, max=20, error="Téléphone doit faire entre 10 et 20 caractères"
+)
 
 # Formats de validation courants
 ISO8601_DATE_REGEX = r"^\d{4}-\d{2}-\d{2}$"
-ISO8601_DATETIME_REGEX = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})?$"
+ISO8601_DATETIME_REGEX = (
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})?$"
+)

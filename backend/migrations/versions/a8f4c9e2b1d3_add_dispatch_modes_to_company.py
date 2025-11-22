@@ -23,7 +23,9 @@ def upgrade():
     - autonomous_config: Configuration JSON pour le dispatch autonome
     """
     # Créer l'enum pour dispatch_mode
-    dispatch_mode_enum = sa.Enum("MANUAL", "SEMI_AUTO", "FULLY_AUTO", name="dispatchmode")
+    dispatch_mode_enum = sa.Enum(
+        "MANUAL", "SEMI_AUTO", "FULLY_AUTO", name="dispatchmode"
+    )
     dispatch_mode_enum.create(op.get_bind(), checkfirst=True)
 
     # Ajouter la colonne dispatch_mode avec valeur par défaut
@@ -42,12 +44,17 @@ def upgrade():
     op.add_column(
         "company",
         sa.Column(
-            "autonomous_config", sa.Text(), nullable=True, comment="Configuration JSON pour le dispatch autonome"
+            "autonomous_config",
+            sa.Text(),
+            nullable=True,
+            comment="Configuration JSON pour le dispatch autonome",
         ),
     )
 
     # Créer un index sur dispatch_mode pour les requêtes de filtrage
-    op.create_index("ix_company_dispatch_mode", "company", ["dispatch_mode"], unique=False)
+    op.create_index(
+        "ix_company_dispatch_mode", "company", ["dispatch_mode"], unique=False
+    )
 
 
 def downgrade():
@@ -62,5 +69,7 @@ def downgrade():
     op.drop_column("company", "dispatch_mode")
 
     # Supprimer l'enum (si plus utilisé ailleurs)
-    dispatch_mode_enum = sa.Enum("MANUAL", "SEMI_AUTO", "FULLY_AUTO", name="dispatchmode")
+    dispatch_mode_enum = sa.Enum(
+        "MANUAL", "SEMI_AUTO", "FULLY_AUTO", name="dispatchmode"
+    )
     dispatch_mode_enum.drop(op.get_bind(), checkfirst=True)

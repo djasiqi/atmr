@@ -20,7 +20,12 @@ depends_on = None
 def upgrade():
     # ✅ B2: Ajouter decision_explanation (JSONB) à assignment
     op.add_column(
-        "assignment", sa.Column("decision_explanation", postgresql.JSONB(astext_type=sa.Text()), nullable=True)
+        "assignment",
+        sa.Column(
+            "decision_explanation",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
     )
 
 

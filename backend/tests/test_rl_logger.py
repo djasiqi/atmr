@@ -160,7 +160,9 @@ class TestRLLogger:
         """Test la récupération des statistiques."""
         # Loguer quelques décisions
         for i in range(3):
-            rl_logger.log_decision(state=sample_state, action=i, model_version=f"test_v{i}")
+            rl_logger.log_decision(
+                state=sample_state, action=i, model_version=f"test_v{i}"
+            )
 
         stats = rl_logger.get_stats()
 
@@ -217,7 +219,9 @@ class TestRLLoggerWithRedis:
             mock_redis.ltrim.return_value = True
             mock_redis.expire.return_value = True
 
-            success = rl_logger_redis.log_decision(state=sample_state, action=1, model_version="test_redis")
+            success = rl_logger_redis.log_decision(
+                state=sample_state, action=1, model_version="test_redis"
+            )
 
             assert success is True
             mock_redis.lpush.assert_called_once()
@@ -265,7 +269,9 @@ class TestRLLoggerWithDB:
             mock_metric_instance = Mock()
             mock_metric.return_value = mock_metric_instance
 
-            success = rl_logger_db.log_decision(state=sample_state, action=1, model_version="test_db")
+            success = rl_logger_db.log_decision(
+                state=sample_state, action=1, model_version="test_db"
+            )
 
             assert success is True
             mock_db.session.add.assert_called_once()
@@ -296,7 +302,9 @@ class TestRLLoggerIntegration:
             mock_logger.log_decision.return_value = True
             mock_get_logger.return_value = mock_logger
 
-            success = log_rl_decision(state=sample_state, action=1, model_version="test_convenience")
+            success = log_rl_decision(
+                state=sample_state, action=1, model_version="test_convenience"
+            )
 
             assert success is True
             mock_logger.log_decision.assert_called_once()
@@ -313,7 +321,10 @@ class TestRLLoggerIntegration:
         q_values_tensor = torch.tensor([0.1, 0.8, 0.3, 0.5, 0.2])
 
         success = logger.log_decision(
-            state=state_tensor, action=1, q_values=q_values_tensor, model_version="test_torch"
+            state=state_tensor,
+            action=1,
+            q_values=q_values_tensor,
+            model_version="test_torch",
         )
 
         assert success is True
@@ -347,7 +358,12 @@ def run_rl_logger_tests():
     print("🧪 Exécution des tests RLLogger")
 
     # Tests de base
-    test_classes = [TestRLLogger, TestRLLoggerWithRedis, TestRLLoggerWithDB, TestRLLoggerIntegration]
+    test_classes = [
+        TestRLLogger,
+        TestRLLoggerWithRedis,
+        TestRLLoggerWithDB,
+        TestRLLoggerIntegration,
+    ]
 
     total_tests = 0
     passed_tests = 0
@@ -373,7 +389,11 @@ def run_rl_logger_tests():
     print("\n📊 Résultats des tests RLLogger:")
     print("  Tests exécutés: {total_tests}")
     print("  Tests réussis: {passed_tests}")
-    print("  Taux de succès: {passed_tests/total_tests*100" if total_tests > 0 else "  Taux de succès: 0%")
+    print(
+        "  Taux de succès: {passed_tests/total_tests*100"
+        if total_tests > 0
+        else "  Taux de succès: 0%"
+    )
 
     return passed_tests, total_tests
 

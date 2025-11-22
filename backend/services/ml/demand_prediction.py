@@ -25,7 +25,9 @@ try:
 
     SKLEARN_AVAILABLE = True
 except ImportError:
-    logger.error("[DemandPrediction] scikit-learn requis. Installer avec: pip install scikit-learn")
+    logger.error(
+        "[DemandPrediction] scikit-learn requis. Installer avec: pip install scikit-learn"
+    )
     SKLEARN_AVAILABLE = False
 
 # statsmodels optionnel - pas utilisé dans cette implémentation
@@ -106,7 +108,9 @@ class DemandPredictor:
         self.holiday_service = None
         self._historical_data: Dict[str, pd.DataFrame] = {}  # zone_id -> DataFrame
 
-    def predict_demand_for_zone(self, zone_id: str, target_date: datetime) -> ZoneDemandPrediction:
+    def predict_demand_for_zone(
+        self, zone_id: str, target_date: datetime
+    ) -> ZoneDemandPrediction:
         """Prédit la demande pour une zone à une date donnée.
 
         Args:
@@ -120,7 +124,10 @@ class DemandPredictor:
             # Charger données historiques de la zone
             historical_data = self._get_historical_data_for_zone(zone_id)
 
-            if historical_data is None or len(historical_data) < MIN_HISTORICAL_DATA_POINTS:
+            if (
+                historical_data is None
+                or len(historical_data) < MIN_HISTORICAL_DATA_POINTS
+            ):
                 # Fallback: prédiction basée sur patterns de base
                 return self._fallback_prediction(zone_id, target_date)
 
@@ -129,16 +136,22 @@ class DemandPredictor:
             hour = target_date.hour
 
             # Moyenne historique par jour de semaine
-            avg_demand_by_weekday = historical_data.groupby(historical_data.index.weekday).mean()["demand"]
+            avg_demand_by_weekday = historical_data.groupby(
+                historical_data.index.weekday
+            ).mean()["demand"]
 
             # Moyenne historique par heure
-            avg_demand_by_hour = historical_data.groupby(historical_data.index.hour).mean()["demand"]
+            avg_demand_by_hour = historical_data.groupby(
+                historical_data.index.hour
+            ).mean()["demand"]
 
             # Base prediction
             base_demand_value = avg_demand_by_weekday.get(day_of_week, None)
             if base_demand_value is None:
                 avg_mean = avg_demand_by_weekday.mean()
-                base_demand = float(avg_mean if isinstance(avg_mean, (int, float)) else avg_mean.iloc[0])
+                base_demand = float(
+                    avg_mean if isinstance(avg_mean, (int, float)) else avg_mean.iloc[0]
+                )
             else:
                 base_demand = float(base_demand_value)
 
@@ -159,7 +172,9 @@ class DemandPredictor:
                 if future_hour_value is None or avg_hour_mean == 0:
                     hourly_demand_factor = 1.0
                 else:
-                    hourly_demand_factor = float(future_hour_value) / float(avg_hour_mean)
+                    hourly_demand_factor = float(future_hour_value) / float(
+                        avg_hour_mean
+                    )
 
                 # Facteur week-end
                 is_weekend = future_date.weekday() >= WEEKEND_DAY_START
@@ -176,18 +191,28 @@ class DemandPredictor:
                 rush_factor = RUSH_HOUR_MULTIPLIER if is_rush else 1.0
 
                 # Prédiction par heure
-                predicted_demand = base_demand * hourly_demand_factor * weekend_factor * holiday_factor * rush_factor
+                predicted_demand = (
+                    base_demand
+                    * hourly_demand_factor
+                    * weekend_factor
+                    * holiday_factor
+                    * rush_factor
+                )
                 predictions.append(predicted_demand)
 
             # Demande totale prédite
             total_predicted_demand = sum(predictions)
 
             # Heures de pointe (top 3)
-            peak_hours = sorted(range(24), key=lambda h: predictions[h], reverse=True)[:3]
+            peak_hours = sorted(range(24), key=lambda h: predictions[h], reverse=True)[
+                :3
+            ]
 
             # Confiance (basée sur quantité de données historiques)
             days_of_data = len(historical_data) / 24
-            confidence = min(1.0, days_of_data / 30)  # Au moins 30 jours pour confiance maximale
+            confidence = min(
+                1.0, days_of_data / 30
+            )  # Au moins 30 jours pour confiance maximale
 
             # Facteurs contributifs (utiliser valeurs initiales)
             is_rush_init = (
@@ -284,7 +309,9 @@ class DemandPredictor:
 
         return 1.0
 
-    def _fallback_prediction(self, zone_id: str, target_date: datetime) -> ZoneDemandPrediction:
+    def _fallback_prediction(
+        self, zone_id: str, target_date: datetime
+    ) -> ZoneDemandPrediction:
         """Prédiction de fallback."""
         is_weekend_value = target_date.weekday() >= WEEKEND_DAY_START
         is_rush_value = MORNING_RUSH_START <= target_date.hour <= EVENING_RUSH_END
@@ -308,7 +335,10 @@ class DemandPredictor:
         )
 
     def plan_emergency_drivers(
-        self, zone_id: str, current_driver_count: int, target_date: datetime | None = None
+        self,
+        zone_id: str,
+        current_driver_count: int,
+        target_date: datetime | None = None,
     ) -> EmergencyDriverPlanning:
         """Recommande le nombre de emergency drivers à activer.
 

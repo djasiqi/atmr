@@ -17,7 +17,9 @@ class PaginationQuerySchema(Schema):
     )
     per_page = fields.Int(
         load_default=50,
-        validate=validate.Range(min=1, max=500, error="per_page doit être entre 1 et 500"),
+        validate=validate.Range(
+            min=1, max=500, error="per_page doit être entre 1 et 500"
+        ),
     )
 
 
@@ -26,12 +28,16 @@ class DateRangeQuerySchema(Schema):
 
     start_date = fields.Str(
         load_default=None,
-        validate=validate.Regexp(ISO8601_DATE_REGEX, error="start_date doit être au format YYYY-MM-DD"),
+        validate=validate.Regexp(
+            ISO8601_DATE_REGEX, error="start_date doit être au format YYYY-MM-DD"
+        ),
         allow_none=True,
     )
     end_date = fields.Str(
         load_default=None,
-        validate=validate.Regexp(ISO8601_DATE_REGEX, error="end_date doit être au format YYYY-MM-DD"),
+        validate=validate.Regexp(
+            ISO8601_DATE_REGEX, error="end_date doit être au format YYYY-MM-DD"
+        ),
         allow_none=True,
     )
 

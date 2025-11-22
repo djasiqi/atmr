@@ -36,8 +36,13 @@ auth_ns = Namespace("auth", description="Opérations liées à l'authentificatio
 login_model = auth_ns.model(
     "Login",
     {
-        "email": fields.String(required=True, description="L'adresse email de l'utilisateur (format email valide)"),
-        "password": fields.String(required=True, description="Le mot de passe de l'utilisateur", min_length=6),
+        "email": fields.String(
+            required=True,
+            description="L'adresse email de l'utilisateur (format email valide)",
+        ),
+        "password": fields.String(
+            required=True, description="Le mot de passe de l'utilisateur", min_length=6
+        ),
     },
 )
 
@@ -45,20 +50,38 @@ login_model = auth_ns.model(
 register_model = auth_ns.model(
     "Register",
     {
-        "username": fields.String(required=True, description="Le nom d'utilisateur", min_length=3, max_length=50),
-        "email": fields.String(required=True, description="L'adresse email de l'utilisateur (format email valide)"),
-        "password": fields.String(required=True, description="Le mot de passe de l'utilisateur", min_length=6),
+        "username": fields.String(
+            required=True,
+            description="Le nom d'utilisateur",
+            min_length=3,
+            max_length=50,
+        ),
+        "email": fields.String(
+            required=True,
+            description="L'adresse email de l'utilisateur (format email valide)",
+        ),
+        "password": fields.String(
+            required=True, description="Le mot de passe de l'utilisateur", min_length=6
+        ),
         "first_name": fields.String(description="Prénom", default=None, max_length=100),
         "last_name": fields.String(description="Nom", default=None, max_length=100),
-        "phone": fields.String(description="Numéro de téléphone", default=None, max_length=20),
+        "phone": fields.String(
+            description="Numéro de téléphone", default=None, max_length=20
+        ),
         "address": fields.String(description="Adresse", default=None, max_length=500),
         "birth_date": fields.String(
-            description="Date de naissance (YYYY-MM-DD)", default=None, pattern="^\\d{4}-\\d{2}-\\d{2}$"
+            description="Date de naissance (YYYY-MM-DD)",
+            default=None,
+            pattern="^\\d{4}-\\d{2}-\\d{2}$",
         ),
         "gender": fields.String(
-            description="Genre (male|female|other)", default=None, enum=["male", "female", "other"]
+            description="Genre (male|female|other)",
+            default=None,
+            enum=["male", "female", "other"],
         ),
-        "profile_image": fields.String(description="URL ou données base64 de l'image de profil", default=None),
+        "profile_image": fields.String(
+            description="URL ou données base64 de l'image de profil", default=None
+        ),
     },
 )
 
@@ -129,7 +152,10 @@ class Login(Resource):
                         user_type="unknown",
                         result_status="failure",
                         result_message="Email ou mot de passe invalide",
-                        action_details={"email": mask_email(email), "reason": "invalid_credentials"},
+                        action_details={
+                            "email": mask_email(email),
+                            "reason": "invalid_credentials",
+                        },
                         ip_address=request.remote_addr,
                         user_agent=request.headers.get("User-Agent"),
                     )
@@ -138,7 +164,9 @@ class Login(Resource):
                     security_login_failures_total.inc()
                 except Exception as audit_error:
                     # Ne pas bloquer la réponse si l'audit logging échoue
-                    app_logger.warning("Échec audit logging login_failed: %s", audit_error)
+                    app_logger.warning(
+                        "Échec audit logging login_failed: %s", audit_error
+                    )
                 return {"error": "Email ou mot de passe invalide."}, 401
 
             # Création du token avec le rôle dans additional_claims
@@ -158,7 +186,8 @@ class Login(Resource):
 
             # Création du refresh token (durée configurée dans JWT_REFRESH_TOKEN_EXPIRES)
             refresh_token = create_refresh_token(
-                identity=str(user.public_id), expires_delta=current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
+                identity=str(user.public_id),
+                expires_delta=current_app.config["JWT_REFRESH_TOKEN_EXPIRES"],
             )
 
             # ✅ Priorité 7: Audit logging pour login réussi
@@ -209,7 +238,9 @@ class Login(Resource):
                     user_type="unknown",
                     result_status="failure",
                     result_message=f"Erreur interne: {type(e).__name__}",
-                    action_details={"email": mask_email(data.get("email", "")) if data else ""},
+                    action_details={
+                        "email": mask_email(data.get("email", "")) if data else ""
+                    },
                     ip_address=request.remote_addr,
                     user_agent=request.headers.get("User-Agent"),
                 )
@@ -267,7 +298,9 @@ class RefreshToken(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR refresh_token: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR refresh_token: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -347,7 +380,9 @@ class UserInfo(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR get_user_info: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR get_user_info: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -366,7 +401,9 @@ class Register(Resource):
             response = make_response("")
             response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
             response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            response.headers["Access-Control-Allow-Headers"] = (
+                "Content-Type, Authorization"
+            )
             response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
             return response, 204
 
@@ -400,7 +437,9 @@ class Register(Resource):
             user = User()
             user.username = username
             user.email = email
-            user.role = UserRole.client  # SQLAlchemy SAEnum peut accepter l'enum directement
+            user.role = (
+                UserRole.client
+            )  # SQLAlchemy SAEnum peut accepter l'enum directement
             user.public_id = str(uuid.uuid4())
             user.first_name = validated_data.get("first_name")
             user.last_name = validated_data.get("last_name")
@@ -432,9 +471,13 @@ class Register(Resource):
             client.contact_email = email
             db.session.add(client)
             db.session.commit()
-            app_logger.info("Client créé : user_id=%s, client_id=%s", user.id, client.id)
+            app_logger.info(
+                "Client créé : user_id=%s, client_id=%s", user.id, client.id
+            )
 
-            app_logger.info("Utilisateur et client enregistrés avec succès : %s", user.id)
+            app_logger.info(
+                "Utilisateur et client enregistrés avec succès : %s", user.id
+            )
             return {
                 "message": "User registered successfully!",
                 "user_id": user.public_id,
@@ -448,7 +491,9 @@ class Register(Resource):
             sentry_sdk.capture_exception(e)
             # Utiliser repr() pour éviter les problèmes de formatage avec %
             exception_message = repr(e) if "%" in str(e) else str(e)
-            app_logger.exception("❌ ERREUR register_user: %s - %s", type(e).__name__, exception_message)
+            app_logger.exception(
+                "❌ ERREUR register_user: %s - %s", type(e).__name__, exception_message
+            )
             auth_ns.abort(500, "Une erreur interne est survenue.")
 
 
@@ -488,7 +533,9 @@ class ForgotPassword(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR forgot_password: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR forgot_password: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -528,5 +575,7 @@ class ResetPassword(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR reset_password: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR reset_password: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500

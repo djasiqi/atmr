@@ -18,16 +18,22 @@ MIN_RATES_FOR_TREND = 2
 RECENT_RATES_COUNT = 3
 MIN_COMPARISON_RATES = 3
 
-dispatch_health_ns = Namespace("company_dispatch_health", description="Monitoring de santé du dispatch")
+dispatch_health_ns = Namespace(
+    "company_dispatch_health", description="Monitoring de santé du dispatch"
+)
 
 # ===== Schemas RESTX =====
 
 health_response = dispatch_health_ns.model(
     "DispatchHealthResponse",
     {
-        "last_24h_runs": fields.Integer(description="Nombre de runs dans les dernières 24h"),
+        "last_24h_runs": fields.Integer(
+            description="Nombre de runs dans les dernières 24h"
+        ),
         "avg_assignment_rate": fields.Float(description="Taux d'assignation moyen"),
-        "avg_run_time_sec": fields.Float(description="Temps d'exécution moyen en secondes"),
+        "avg_run_time_sec": fields.Float(
+            description="Temps d'exécution moyen en secondes"
+        ),
         "osrm_availability": fields.Float(description="Disponibilité OSRM (0-1)"),
         "failed_runs": fields.Integer(description="Nombre de runs échoués"),
         "unassigned_reasons": fields.Raw(description="Raisons de non-assignation"),
@@ -39,9 +45,15 @@ trends_response = dispatch_health_ns.model(
     "DispatchTrendsResponse",
     {
         "days": fields.List(fields.String, description="Dates"),
-        "assignment_rates": fields.List(fields.Float, description="Taux d'assignation par jour"),
-        "run_times": fields.List(fields.Float, description="Temps d'exécution par jour"),
-        "osrm_availability": fields.List(fields.Float, description="Disponibilité OSRM par jour"),
+        "assignment_rates": fields.List(
+            fields.Float, description="Taux d'assignation par jour"
+        ),
+        "run_times": fields.List(
+            fields.Float, description="Temps d'exécution par jour"
+        ),
+        "osrm_availability": fields.List(
+            fields.Float, description="Disponibilité OSRM par jour"
+        ),
         "failed_runs": fields.List(fields.Integer, description="Runs échoués par jour"),
     },
 )
@@ -65,7 +77,11 @@ class DLQResource(Resource):
 
         try:
             # Récupérer toutes les tâches échouées
-            failures = TaskFailure.query.order_by(TaskFailure.last_seen.desc()).limit(100).all()
+            failures = (
+                TaskFailure.query.order_by(TaskFailure.last_seen.desc())
+                .limit(100)
+                .all()
+            )
 
             # Calculer backlog et âge max
             backlog = len(failures)
@@ -93,7 +109,9 @@ class DLQResource(Resource):
                 if task_name not in by_task:
                     by_task[task_name] = {
                         "count": 0,
-                        "last_seen": failure.last_seen.isoformat() if failure.last_seen else None,
+                        "last_seen": failure.last_seen.isoformat()
+                        if failure.last_seen
+                        else None,
                         "examples": [],
                     }
                 by_task[task_name]["count"] += 1
@@ -102,8 +120,12 @@ class DLQResource(Resource):
                         {
                             "task_id": failure.task_id,
                             "exception": failure.exception[:200],
-                            "first_seen": failure.first_seen.isoformat() if failure.first_seen else None,
-                            "last_seen": failure.last_seen.isoformat() if failure.last_seen else None,
+                            "first_seen": failure.first_seen.isoformat()
+                            if failure.first_seen
+                            else None,
+                            "last_seen": failure.last_seen.isoformat()
+                            if failure.last_seen
+                            else None,
                             "failure_count": failure.failure_count,
                         }
                     )
@@ -135,7 +157,9 @@ class DLQResource(Resource):
                 "max_age_task": {
                     "task_id": oldest_task.task_id,
                     "task_name": oldest_task.task_name,
-                    "last_seen": oldest_task.last_seen.isoformat() if oldest_task and oldest_task.last_seen else None,
+                    "last_seen": oldest_task.last_seen.isoformat()
+                    if oldest_task and oldest_task.last_seen
+                    else None,
                 }
                 if oldest_task
                 else None,
@@ -169,7 +193,9 @@ class DispatchHealth(Resource):
         # Récupérer les runs des dernières 24h
         runs = (
             db.session.query(DispatchRun)
-            .filter(DispatchRun.company_id == company_id, DispatchRun.created_at >= last_24h)
+            .filter(
+                DispatchRun.company_id == company_id, DispatchRun.created_at >= last_24h
+            )
             .all()
         )
 
@@ -214,20 +240,29 @@ class DispatchHealth(Resource):
                 if "unassigned_reasons" in summary:
                     for _booking_id, reasons in summary["unassigned_reasons"].items():
                         for reason in reasons:
-                            unassigned_reasons[reason] = unassigned_reasons.get(reason, 0) + 1
+                            unassigned_reasons[reason] = (
+                                unassigned_reasons.get(reason, 0) + 1
+                            )
 
         # Calculer les moyennes
-        avg_assignment_rate = sum(assignment_rates) / len(assignment_rates) if assignment_rates else 0.0
+        avg_assignment_rate = (
+            sum(assignment_rates) / len(assignment_rates) if assignment_rates else 0.0
+        )
         avg_run_time_sec = sum(run_times) / len(run_times) if run_times else 0.0
         osrm_availability = (
-            sum(osrm_availability_scores) / len(osrm_availability_scores) if osrm_availability_scores else 1.0
+            sum(osrm_availability_scores) / len(osrm_availability_scores)
+            if osrm_availability_scores
+            else 1.0
         )
 
         # Déterminer la tendance de performance
         if len(assignment_rates) >= MIN_RATES_FOR_TREND:
-            recent_avg = sum(assignment_rates[-RECENT_RATES_COUNT:]) / min(RECENT_RATES_COUNT, len(assignment_rates))
+            recent_avg = sum(assignment_rates[-RECENT_RATES_COUNT:]) / min(
+                RECENT_RATES_COUNT, len(assignment_rates)
+            )
             older_avg = (
-                sum(assignment_rates[:-RECENT_RATES_COUNT]) / max(1, len(assignment_rates) - RECENT_RATES_COUNT)
+                sum(assignment_rates[:-RECENT_RATES_COUNT])
+                / max(1, len(assignment_rates) - RECENT_RATES_COUNT)
                 if len(assignment_rates) > MIN_COMPARISON_RATES
                 else recent_avg
             )
@@ -276,7 +311,10 @@ class DispatchTrends(Resource):
         # Récupérer les runs de la période
         runs = (
             db.session.query(DispatchRun)
-            .filter(DispatchRun.company_id == company_id, DispatchRun.created_at >= start_date)
+            .filter(
+                DispatchRun.company_id == company_id,
+                DispatchRun.created_at >= start_date,
+            )
             .order_by(DispatchRun.created_at)
             .all()
         )
@@ -302,11 +340,15 @@ class DispatchTrends(Resource):
                 summary = getattr(run, "result_summary", None)
                 if isinstance(summary, dict):
                     if "assignment_rate" in summary:
-                        daily_data[day_key]["assignment_rates"].append(summary["assignment_rate"])
+                        daily_data[day_key]["assignment_rates"].append(
+                            summary["assignment_rate"]
+                        )
                     if "run_time_sec" in summary:
                         daily_data[day_key]["run_times"].append(summary["run_time_sec"])
                     if "osrm_availability" in summary:
-                        daily_data[day_key]["osrm_scores"].append(summary["osrm_availability"])
+                        daily_data[day_key]["osrm_scores"].append(
+                            summary["osrm_availability"]
+                        )
 
         # Construire les listes de résultats
         days_list = []
@@ -328,10 +370,20 @@ class DispatchTrends(Resource):
 
                 # Moyennes pour le jour
                 avg_assignment_rate = (
-                    sum(data["assignment_rates"]) / len(data["assignment_rates"]) if data["assignment_rates"] else 0.0
+                    sum(data["assignment_rates"]) / len(data["assignment_rates"])
+                    if data["assignment_rates"]
+                    else 0.0
                 )
-                avg_run_time = sum(data["run_times"]) / len(data["run_times"]) if data["run_times"] else 0.0
-                avg_osrm = sum(data["osrm_scores"]) / len(data["osrm_scores"]) if data["osrm_scores"] else 1.0
+                avg_run_time = (
+                    sum(data["run_times"]) / len(data["run_times"])
+                    if data["run_times"]
+                    else 0.0
+                )
+                avg_osrm = (
+                    sum(data["osrm_scores"]) / len(data["osrm_scores"])
+                    if data["osrm_scores"]
+                    else 1.0
+                )
 
                 assignment_rates_list.append(round(avg_assignment_rate, 3))
                 run_times_list.append(round(avg_run_time, 2))

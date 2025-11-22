@@ -135,7 +135,9 @@ class TestRLIntegration:
         driver_loads = [8, 12, 6, 15, 9]
 
         # Calculer la récompense avec shaping
-        shaped_reward = reward_shaping.calculate_reward(delay_minutes, distance_km, driver_loads)
+        shaped_reward = reward_shaping.calculate_reward(
+            delay_minutes, distance_km, driver_loads
+        )
 
         # Vérifier que la récompense est calculée
         assert isinstance(shaped_reward, float)
@@ -229,7 +231,9 @@ class TestRLIntegration:
         # Test de l'échantillonnage PER
         batch = mock_buffer.sample(1)
 
-        assert len(batch) == 7  # states, actions, rewards, next_states, dones, weights, indices
+        assert (
+            len(batch) == 7
+        )  # states, actions, rewards, next_states, dones, weights, indices
         assert len(batch[0]) == 1  # Un échantillon
         assert len(batch[5]) == 1  # Un poids
 
@@ -379,10 +383,22 @@ class TestRLIntegration:
         }
 
         # Vérifier que les indicateurs sont valides
-        assert convergence_metrics["reward_trend"] in ["increasing", "stable", "decreasing"]
-        assert convergence_metrics["loss_trend"] in ["increasing", "stable", "decreasing"]
+        assert convergence_metrics["reward_trend"] in [
+            "increasing",
+            "stable",
+            "decreasing",
+        ]
+        assert convergence_metrics["loss_trend"] in [
+            "increasing",
+            "stable",
+            "decreasing",
+        ]
         assert convergence_metrics["epsilon_decay"] in ["linear", "exponential", "step"]
-        assert convergence_metrics["q_value_stability"] in ["stable", "unstable", "oscillating"]
+        assert convergence_metrics["q_value_stability"] in [
+            "stable",
+            "unstable",
+            "oscillating",
+        ]
 
 
 class TestRLSystemRobustness:
@@ -426,13 +442,22 @@ class TestRLSystemRobustness:
 
         for invalid_data in invalid_data_cases:
             # Tenter d'utiliser les données invalides
-            _result = np.isfinite(invalid_data) if isinstance(invalid_data, np.ndarray) else invalid_data is not None
+            _result = (
+                np.isfinite(invalid_data)
+                if isinstance(invalid_data, np.ndarray)
+                else invalid_data is not None
+            )
             # Le résultat n'est pas utilisé car c'est juste un test de robustesse
 
     def test_system_recovery(self):
         """Test la récupération du système après erreur."""
         # Simuler une récupération après erreur
-        error_scenarios = ["memory_overflow", "invalid_action", "network_error", "timeout_error"]
+        error_scenarios = [
+            "memory_overflow",
+            "invalid_action",
+            "network_error",
+            "timeout_error",
+        ]
 
         for scenario in error_scenarios:
             try:
@@ -505,7 +530,11 @@ def run_integration_tests():
     print("\n📊 Résultats des tests d'intégration:")
     print("  Tests exécutés: {total_tests}")
     print("  Tests réussis: {passed_tests}")
-    print("  Taux de succès: {passed_tests/total_tests*100" if total_tests > 0 else "  Taux de succès: 0%")
+    print(
+        "  Taux de succès: {passed_tests/total_tests*100"
+        if total_tests > 0
+        else "  Taux de succès: 0%"
+    )
 
     return passed_tests, total_tests
 

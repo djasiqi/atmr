@@ -27,7 +27,10 @@ class TestLazyImport:
             mock_dispatch_env = Mock()
 
             with patch("importlib.import_module") as mock_import:
-                mock_import.side_effect = [Mock(ImprovedDQNAgent=mock_dqn_agent), Mock(DispatchEnv=mock_dispatch_env)]
+                mock_import.side_effect = [
+                    Mock(ImprovedDQNAgent=mock_dqn_agent),
+                    Mock(DispatchEnv=mock_dispatch_env),
+                ]
 
                 _lazy_import_rl()
 
@@ -41,7 +44,9 @@ class TestLazyImport:
         with (
             patch("services.rl.suggestion_generator._dqn_agent", None),
             patch("services.rl.suggestion_generator._dispatch_env", None),
-            patch("importlib.import_module", side_effect=ImportError("Module not found")),
+            patch(
+                "importlib.import_module", side_effect=ImportError("Module not found")
+            ),
             pytest.raises(ImportError),
         ):
             _lazy_import_rl()
@@ -145,7 +150,10 @@ class TestRLSuggestionGenerator:
         drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": True}]
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=assignments, drivers=drivers, for_date="2024-0.1-0.1"
+            company_id=1,
+            assignments=assignments,
+            drivers=drivers,
+            for_date="2024-0.1-0.1",
         )
 
         # Devrait retourner des suggestions basiques
@@ -156,7 +164,9 @@ class TestRLSuggestionGenerator:
         """Test génération de suggestions avec entrée vide."""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
         assert len(suggestions) == 0
@@ -190,7 +200,10 @@ class TestRLSuggestionGenerator:
         drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": True}]
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=assignments, drivers=drivers, for_date="2024-0.1-0.1"
+            company_id=1,
+            assignments=assignments,
+            drivers=drivers,
+            for_date="2024-0.1-0.1",
         )
 
         assert isinstance(suggestions, list)
@@ -217,7 +230,10 @@ class TestRLSuggestionGenerator:
         drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": True}]
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=assignments, drivers=drivers, for_date="2024-0.1-0.1"
+            company_id=1,
+            assignments=assignments,
+            drivers=drivers,
+            for_date="2024-0.1-0.1",
         )
 
         # Devrait retourner des suggestions basiques en cas d'erreur
@@ -237,7 +253,10 @@ class TestRLSuggestionGenerator:
             mock_assignment.driver = mock_driver
             assignments.append(mock_assignment)
 
-        drivers = [{"id": i, "lat": 46.2 + i * 0.1, "lon": 6.1 + i * 0.1, "available": True} for i in range(5)]
+        drivers = [
+            {"id": i, "lat": 46.2 + i * 0.1, "lon": 6.1 + i * 0.1, "available": True}
+            for i in range(5)
+        ]
 
         suggestions = generator.generate_suggestions(
             company_id=1,
@@ -266,7 +285,10 @@ class TestRLSuggestionGenerator:
         drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": False}]
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=assignments, drivers=drivers, for_date="2024-0.1-0.1"
+            company_id=1,
+            assignments=assignments,
+            drivers=drivers,
+            for_date="2024-0.1-0.1",
         )
 
         assert isinstance(suggestions, list)
@@ -287,7 +309,10 @@ class TestRLSuggestionGenerator:
         drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": True}]
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=assignments, drivers=drivers, for_date="2024-0.1-0.1"
+            company_id=1,
+            assignments=assignments,
+            drivers=drivers,
+            for_date="2024-0.1-0.1",
         )
 
         assert isinstance(suggestions, list)

@@ -34,7 +34,9 @@ class TestRotateFlaskSecretKey:
         mock_vault = MagicMock()
         mock_vault.use_vault = True
         mock_vault._client = MagicMock()
-        mock_vault._client.secrets.kv.v2.read_secret_version = MagicMock(side_effect=Exception("Secret not found"))
+        mock_vault._client.secrets.kv.v2.read_secret_version = MagicMock(
+            side_effect=Exception("Secret not found")
+        )
         mock_vault._client.secrets.kv.v2.create_or_update_secret = MagicMock()
         mock_vault.clear_cache = MagicMock()
         mock_get_vault.return_value = mock_vault
@@ -52,7 +54,9 @@ class TestRotateFlaskSecretKey:
 
     @patch("tasks.vault_rotation_tasks.os.getenv")
     @patch("tasks.vault_rotation_tasks._get_vault_client")
-    def test_rotate_flask_secret_key_vault_unavailable(self, mock_get_vault, mock_getenv):
+    def test_rotate_flask_secret_key_vault_unavailable(
+        self, mock_get_vault, mock_getenv
+    ):
         """Test fallback si Vault indisponible."""
         # Mock Vault indisponible
         mock_get_vault.return_value = None
@@ -118,7 +122,9 @@ class TestRotateJWTSecret:
         mock_vault = MagicMock()
         mock_vault.use_vault = True
         mock_vault._client = MagicMock()
-        mock_vault._client.secrets.kv.v2.read_secret_version = MagicMock(side_effect=Exception("Secret not found"))
+        mock_vault._client.secrets.kv.v2.read_secret_version = MagicMock(
+            side_effect=Exception("Secret not found")
+        )
         mock_vault._client.secrets.kv.v2.create_or_update_secret = MagicMock()
         mock_vault.clear_cache = MagicMock()
         mock_get_vault.return_value = mock_vault
@@ -165,7 +171,9 @@ class TestRotateEncryptionKey:
         mock_vault = MagicMock()
         mock_vault.use_vault = True
         mock_vault._client = MagicMock()
-        mock_vault._client.secrets.kv.v2.read_secret_version = MagicMock(side_effect=Exception("Secret not found"))
+        mock_vault._client.secrets.kv.v2.read_secret_version = MagicMock(
+            side_effect=Exception("Secret not found")
+        )
         mock_vault._client.secrets.kv.v2.create_or_update_secret = MagicMock()
         mock_vault.clear_cache = MagicMock()
         mock_get_vault.return_value = mock_vault
@@ -196,7 +204,9 @@ class TestRotateEncryptionKey:
         mock_vault._client.secrets.kv.v2.read_secret_version = MagicMock(
             side_effect=[
                 {"data": {"data": {"value": "old-key-b64"}}},  # Ancienne clé
-                {"data": {"data": {"keys": ["legacy-key-1", "legacy-key-2"]}}},  # Legacy keys
+                {
+                    "data": {"data": {"keys": ["legacy-key-1", "legacy-key-2"]}}
+                },  # Legacy keys
             ]
         )
         mock_vault._client.secrets.kv.v2.create_or_update_secret = MagicMock()
@@ -209,7 +219,9 @@ class TestRotateEncryptionKey:
         result = rotate_encryption_key(mock_task)
 
         assert result["status"] == "success"
-        assert result["legacy_keys_count"] == 3  # 2 existantes + 1 nouvelle (ancienne clé)
+        assert (
+            result["legacy_keys_count"] == 3
+        )  # 2 existantes + 1 nouvelle (ancienne clé)
         # Vérifier que create_or_update_secret a été appelé pour master_key et legacy_keys
         assert mock_vault._client.secrets.kv.v2.create_or_update_secret.call_count == 2
 
@@ -220,7 +232,9 @@ class TestRotateAllSecrets:
     @patch("tasks.vault_rotation_tasks.rotate_encryption_key")
     @patch("tasks.vault_rotation_tasks.rotate_jwt_secret")
     @patch("tasks.vault_rotation_tasks.rotate_flask_secret_key")
-    def test_rotate_all_secrets_success(self, mock_rotate_flask, mock_rotate_jwt, mock_rotate_encryption):
+    def test_rotate_all_secrets_success(
+        self, mock_rotate_flask, mock_rotate_jwt, mock_rotate_encryption
+    ):
         """Test rotation globale réussie."""
         # Mock toutes les rotations réussies
         mock_rotate_flask.return_value = {"status": "success"}
@@ -241,7 +255,9 @@ class TestRotateAllSecrets:
     @patch("tasks.vault_rotation_tasks.rotate_encryption_key")
     @patch("tasks.vault_rotation_tasks.rotate_jwt_secret")
     @patch("tasks.vault_rotation_tasks.rotate_flask_secret_key")
-    def test_rotate_all_secrets_partial_failure(self, mock_rotate_flask, mock_rotate_jwt, mock_rotate_encryption):
+    def test_rotate_all_secrets_partial_failure(
+        self, mock_rotate_flask, mock_rotate_jwt, mock_rotate_encryption
+    ):
         """Test rotation globale avec échec partiel."""
         # Mock rotations avec un échec
         mock_rotate_flask.return_value = {"status": "success"}
@@ -268,7 +284,10 @@ class TestRotateAllSecrets:
         # Mock rotations avec échec
         mock_rotate_flask.return_value = {"status": "success"}
         mock_rotate_jwt.return_value = {"status": "error", "error": "Vault unavailable"}
-        mock_rotate_encryption.return_value = {"status": "error", "error": "Network error"}
+        mock_rotate_encryption.return_value = {
+            "status": "error",
+            "error": "Network error",
+        }
 
         # Mock task
         mock_task = Mock()
@@ -283,7 +302,9 @@ class TestRotateAllSecrets:
     @patch("tasks.vault_rotation_tasks.rotate_encryption_key")
     @patch("tasks.vault_rotation_tasks.rotate_jwt_secret")
     @patch("tasks.vault_rotation_tasks.rotate_flask_secret_key")
-    def test_rotate_all_secrets_exception(self, mock_rotate_flask, mock_rotate_jwt, mock_rotate_encryption):
+    def test_rotate_all_secrets_exception(
+        self, mock_rotate_flask, mock_rotate_jwt, mock_rotate_encryption
+    ):
         """Test gestion exception lors de rotation globale."""
         # Mock exception
         mock_rotate_flask.side_effect = Exception("Unexpected error")
@@ -309,7 +330,9 @@ class TestRotateSecretCacheClear:
         mock_vault = MagicMock()
         mock_vault.use_vault = True
         mock_vault._client = MagicMock()
-        mock_vault._client.secrets.kv.v2.read_secret_version = MagicMock(side_effect=Exception("Secret not found"))
+        mock_vault._client.secrets.kv.v2.read_secret_version = MagicMock(
+            side_effect=Exception("Secret not found")
+        )
         mock_vault._client.secrets.kv.v2.create_or_update_secret = MagicMock()
         mock_vault.clear_cache = MagicMock()
         mock_get_vault.return_value = mock_vault

@@ -34,7 +34,9 @@ class TestPrioritizedReplayBuffer:
         if PrioritizedReplayBuffer is None:
             pytest.skip("PrioritizedReplayBuffer non disponible")
 
-        return PrioritizedReplayBuffer(capacity=1000, alpha=0.6, beta_start=0.4, beta_end=1.0)
+        return PrioritizedReplayBuffer(
+            capacity=1000, alpha=0.6, beta_start=0.4, beta_end=1.0
+        )
 
     def test_buffer_initialization(self, buffer):
         """Test l'initialisation du buffer."""
@@ -240,7 +242,13 @@ class TestPrioritizedReplayBuffer:
 
         # Ajouter des transitions
         for i in range(5):
-            buffer.add(np.array([i, i + 1, i + 2]), i % 3, i * 0.1, np.array([i + 3, i + 4, i + 5]), i % 2 == 0)
+            buffer.add(
+                np.array([i, i + 1, i + 2]),
+                i % 3,
+                i * 0.1,
+                np.array([i + 3, i + 4, i + 5]),
+                i % 2 == 0,
+            )
 
         assert len(buffer) == 5
 
@@ -248,7 +256,13 @@ class TestPrioritizedReplayBuffer:
         """Test le vidage du buffer."""
         # Ajouter des transitions
         for i in range(5):
-            buffer.add(np.array([i, i + 1, i + 2]), i % 3, i * 0.1, np.array([i + 3, i + 4, i + 5]), i % 2 == 0)
+            buffer.add(
+                np.array([i, i + 1, i + 2]),
+                i % 3,
+                i * 0.1,
+                np.array([i + 3, i + 4, i + 5]),
+                i % 2 == 0,
+            )
 
         assert len(buffer) == 5
 
@@ -325,7 +339,12 @@ class TestPERIntegration:
     def test_per_performance_metrics(self):
         """Test les métriques de performance PER."""
         # Métriques typiques pour PER
-        metrics = {"sample_efficiency": 0.85, "convergence_speed": 0.92, "stability": 0.88, "memory_usage": 0.75}
+        metrics = {
+            "sample_efficiency": 0.85,
+            "convergence_speed": 0.92,
+            "stability": 0.88,
+            "memory_usage": 0.75,
+        }
 
         for metric, value in metrics.items():
             assert 0 <= value <= 1, f"{metric} devrait être entre 0 et 1"
@@ -343,7 +362,13 @@ class TestPEREdgeCases:
 
         # Ajouter des transitions
         for i in range(5):
-            buffer.add(np.array([i, i + 1, i + 2]), i % 3, i * 0.1, np.array([i + 3, i + 4, i + 5]), i % 2 == 0)
+            buffer.add(
+                np.array([i, i + 1, i + 2]),
+                i % 3,
+                i * 0.1,
+                np.array([i + 3, i + 4, i + 5]),
+                i % 2 == 0,
+            )
 
         # Tester avec des priorités très faibles
         buffer.update_priorities([0], [1e-10])
@@ -381,7 +406,13 @@ class TestPEREdgeCases:
 
         # Simuler des ajouts concurrents
         for i in range(100):
-            buffer.add(np.array([i, i + 1, i + 2]), i % 3, i * 0.1, np.array([i + 3, i + 4, i + 5]), i % 10 == 0)
+            buffer.add(
+                np.array([i, i + 1, i + 2]),
+                i % 3,
+                i * 0.1,
+                np.array([i + 3, i + 4, i + 5]),
+                i % 10 == 0,
+            )
 
         # Simuler des échantillonnages concurrents
         for _ in range(50):
@@ -420,7 +451,11 @@ def run_per_tests():
     print("\n📊 Résultats des tests PER:")
     print("  Tests exécutés: {total_tests}")
     print("  Tests réussis: {passed_tests}")
-    print("  Taux de succès: {passed_tests/total_tests*100" if total_tests > 0 else "  Taux de succès: 0%")
+    print(
+        "  Taux de succès: {passed_tests/total_tests*100"
+        if total_tests > 0
+        else "  Taux de succès: 0%"
+    )
 
     return passed_tests, total_tests
 

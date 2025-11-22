@@ -56,7 +56,9 @@ class TestEnginePublicAPI:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        result = engine.run(company_id=company.id, for_date=day.isoformat(), mode="heuristic_only")
+        result = engine.run(
+            company_id=company.id, for_date=day.isoformat(), mode="heuristic_only"
+        )
 
         # Vérifier qu'on a des assignments
         assert isinstance(result["assignments"], list)
@@ -93,7 +95,12 @@ class TestEnginePublicAPI:
 
         overrides = {"features": {"enable_heuristics": True, "enable_solver": False}}
 
-        result = engine.run(company_id=company.id, for_date=day.isoformat(), overrides=overrides, mode="heuristic_only")
+        result = engine.run(
+            company_id=company.id,
+            for_date=day.isoformat(),
+            overrides=overrides,
+            mode="heuristic_only",
+        )
 
         assert isinstance(result["assignments"], list)
         print("✅ Test overrides OK")
@@ -104,7 +111,9 @@ class TestEnginePublicAPI:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        result = engine.run(company_id=company.id, for_date=day.isoformat(), mode="heuristic_only")
+        result = engine.run(
+            company_id=company.id, for_date=day.isoformat(), mode="heuristic_only"
+        )
 
         assert isinstance(result["assignments"], list)
         assert "debug" in result
@@ -119,10 +128,14 @@ class TestEnginePublicAPI:
         # Mock solver pour éviter calcul lourd
         with patch("services.unified_dispatch.engine.solver") as mock_solver:
             mock_solver.solve.return_value = Mock(
-                assignments=[], unassigned_booking_ids=[b.id for b in scenario["bookings"]], debug={}
+                assignments=[],
+                unassigned_booking_ids=[b.id for b in scenario["bookings"]],
+                debug={},
             )
 
-            result = engine.run(company_id=company.id, for_date=day.isoformat(), mode="solver_only")
+            result = engine.run(
+                company_id=company.id, for_date=day.isoformat(), mode="solver_only"
+            )
 
             assert isinstance(result["assignments"], list)
             print("✅ Test solver_only mode OK")
@@ -137,14 +150,18 @@ class TestEnginePublicAPI:
         DispatchRun.query.filter_by(company_id=company.id, day=day).delete()
         db.session.commit()
 
-        result = engine.run(company_id=company.id, for_date=day.isoformat(), mode="heuristic_only")
+        result = engine.run(
+            company_id=company.id, for_date=day.isoformat(), mode="heuristic_only"
+        )
 
         # Vérifier le résultat de base
         assert isinstance(result["assignments"], list)
         assert "unassigned" in result
 
         # Vérifier en DB qu'un DispatchRun a été créé
-        dispatch_run = DispatchRun.query.filter_by(company_id=company.id, day=day).first()
+        dispatch_run = DispatchRun.query.filter_by(
+            company_id=company.id, day=day
+        ).first()
         assert dispatch_run is not None
         assert dispatch_run.company_id == company.id
         assert dispatch_run.day == day
@@ -158,7 +175,9 @@ class TestEnginePublicAPI:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        result = engine.run(company_id=company.id, for_date=day.isoformat(), mode="heuristic_only")
+        result = engine.run(
+            company_id=company.id, for_date=day.isoformat(), mode="heuristic_only"
+        )
 
         # Vérifier le résultat de base
         assert isinstance(result["assignments"], list)
@@ -166,7 +185,9 @@ class TestEnginePublicAPI:
 
         # Vérifier qu'il n'y a pas de duplication
         runs = DispatchRun.query.filter_by(company_id=company.id, day=day).all()
-        assert len(runs) == 1, f"Devrait avoir exactement 1 DispatchRun, trouvé {len(runs)}"
+        assert len(runs) == 1, (
+            f"Devrait avoir exactement 1 DispatchRun, trouvé {len(runs)}"
+        )
 
         print("✅ Test réutilisation DispatchRun OK")
 
@@ -239,7 +260,9 @@ class TestEngineInternalFunctions:
         assignments = []
         unassigned_ids = []
 
-        reasons = engine._analyze_unassigned_reasons(problem, assignments, unassigned_ids)
+        reasons = engine._analyze_unassigned_reasons(
+            problem, assignments, unassigned_ids
+        )
 
         assert reasons == {}
         print("✅ Test analyze_unassigned_reasons vide OK")
@@ -250,7 +273,9 @@ class TestEngineInternalFunctions:
         assignments = []
         unassigned_ids = [simple_booking.id]
 
-        reasons = engine._analyze_unassigned_reasons(problem, assignments, unassigned_ids)
+        reasons = engine._analyze_unassigned_reasons(
+            problem, assignments, unassigned_ids
+        )
 
         assert simple_booking.id in reasons
         assert "no_driver_available" in reasons[simple_booking.id]
@@ -346,12 +371,16 @@ class TestEngineApplyAndEmit:
             patch("services.unified_dispatch.engine.notify_booking_assigned"),
             patch("services.unified_dispatch.engine.notify_dispatch_run_completed"),
         ):
-            engine._apply_and_emit(company, [assignment], dispatch_run_id=dispatch_run.id)
+            engine._apply_and_emit(
+                company, [assignment], dispatch_run_id=dispatch_run.id
+            )
 
         # Vérifier que l'assignment a été créé en DB
         from models.dispatch import Assignment
 
-        db_assignment = Assignment.query.filter_by(booking_id=booking.id, driver_id=driver.id).first()
+        db_assignment = Assignment.query.filter_by(
+            booking_id=booking.id, driver_id=driver.id
+        ).first()
 
         assert db_assignment is not None
         print("✅ Test _apply_and_emit avec assignments OK")
@@ -365,7 +394,9 @@ class TestEngineEdgeCases:
         scenario = dispatch_scenario
         company = scenario["company"]
 
-        result = engine.run(company_id=company.id, for_date="invalid-date", mode="heuristic_only")
+        result = engine.run(
+            company_id=company.id, for_date="invalid-date", mode="heuristic_only"
+        )
 
         # Devrait fallback sur today et continuer
         assert isinstance(result, dict)
@@ -400,13 +431,18 @@ class TestEngineEdgeCases:
         day = scenario["dispatch_run"].day
 
         # Mock data.build_problem_data pour lever une exception
-        with patch("services.unified_dispatch.engine.data.build_problem_data", side_effect=Exception("DB Error")):
+        with patch(
+            "services.unified_dispatch.engine.data.build_problem_data",
+            side_effect=Exception("DB Error"),
+        ):
             result = engine.run(company_id=company.id, for_date=day.isoformat())
 
             assert result["meta"]["reason"] == "problem_build_failed"
 
             # Vérifier que le dispatch_run est marqué FAILED
-            dispatch_run = DispatchRun.query.filter_by(company_id=company.id, day=day).first()
+            dispatch_run = DispatchRun.query.filter_by(
+                company_id=company.id, day=day
+            ).first()
 
             # Le status peut être FAILED ou COMPLETED selon le timing
             assert dispatch_run is not None
@@ -420,7 +456,8 @@ class TestEngineEdgeCases:
 
         # Mock pour retourner problem vide
         with patch(
-            "services.unified_dispatch.engine.data.build_problem_data", return_value={"bookings": [], "drivers": []}
+            "services.unified_dispatch.engine.data.build_problem_data",
+            return_value={"bookings": [], "drivers": []},
         ):
             result = engine.run(company_id=company.id, for_date=day.isoformat())
 
@@ -450,8 +487,12 @@ class TestEngineAdditionalCoverage:
 
         # Test chaque mode
         for mode in ["heuristic_only", "solver_only", "hybrid"]:
-            result = engine.run(company_id=company.id, for_date=day.isoformat(), mode=mode)
-            assert isinstance(result["assignments"], list), f"Mode {mode} devrait retourner des assignments"
+            result = engine.run(
+                company_id=company.id, for_date=day.isoformat(), mode=mode
+            )
+            assert isinstance(result["assignments"], list), (
+                f"Mode {mode} devrait retourner des assignments"
+            )
             assert "unassigned" in result
             assert "debug" in result
 
@@ -463,9 +504,17 @@ class TestEngineAdditionalCoverage:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        overrides = {"features": {"enable_heuristics": True}, "solver": {"max_bookings_per_driver": 10}}
+        overrides = {
+            "features": {"enable_heuristics": True},
+            "solver": {"max_bookings_per_driver": 10},
+        }
 
-        result = engine.run(company_id=company.id, for_date=day.isoformat(), overrides=overrides, mode="heuristic_only")
+        result = engine.run(
+            company_id=company.id,
+            for_date=day.isoformat(),
+            overrides=overrides,
+            mode="heuristic_only",
+        )
 
         assert isinstance(result["assignments"], list)
         print("✅ Test overrides OK")
@@ -477,7 +526,10 @@ class TestEngineAdditionalCoverage:
         day = scenario["dispatch_run"].day
 
         result = engine.run(
-            company_id=company.id, for_date=day.isoformat(), allow_emergency=True, mode="heuristic_only"
+            company_id=company.id,
+            for_date=day.isoformat(),
+            allow_emergency=True,
+            mode="heuristic_only",
         )
 
         assert isinstance(result["assignments"], list)
@@ -488,7 +540,9 @@ class TestEngineAdditionalCoverage:
         # En dehors de transaction
         result1 = engine._begin_tx()
         # Devrait retourner quelque chose (True/False ou None)
-        assert result1 is not None or result1 is None  # Juste tester que ça ne crash pas
+        assert (
+            result1 is not None or result1 is None
+        )  # Juste tester que ça ne crash pas
 
         print("✅ Test _begin_tx OK")
 
@@ -500,11 +554,16 @@ class TestEngineAdditionalCoverage:
             "company": simple_booking.company,
         }
 
-        reasons = engine._analyze_unassigned_reasons(problem, assignments=[], unassigned_ids=[simple_booking.id])
+        reasons = engine._analyze_unassigned_reasons(
+            problem, assignments=[], unassigned_ids=[simple_booking.id]
+        )
 
         assert isinstance(reasons, dict)
         if simple_booking.id in reasons:
-            assert "no_driver_available" in reasons[simple_booking.id] or len(reasons[simple_booking.id]) > 0
+            assert (
+                "no_driver_available" in reasons[simple_booking.id]
+                or len(reasons[simple_booking.id]) > 0
+            )
 
         print("✅ Test analyze_unassigned sans drivers OK")
 
@@ -514,7 +573,12 @@ class TestEngineAdditionalCoverage:
         company = scenario["company"]
         day = scenario["dispatch_run"].day
 
-        result = engine.run(company_id=company.id, for_date=day.isoformat(), regular_first=False, mode="heuristic_only")
+        result = engine.run(
+            company_id=company.id,
+            for_date=day.isoformat(),
+            regular_first=False,
+            mode="heuristic_only",
+        )
 
         assert isinstance(result["assignments"], list)
         assert "unassigned" in result

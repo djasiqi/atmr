@@ -61,7 +61,9 @@ class ChaosMetrics:
             else:
                 _chaos_metrics["fallback_failure"][fallback_type] += 1
 
-        logger.debug("[CHAOS] Fallback recorded: type=%s, success=%s", fallback_type, success)
+        logger.debug(
+            "[CHAOS] Fallback recorded: type=%s, success=%s", fallback_type, success
+        )
 
     @staticmethod
     def record_latency(latency_ms: float) -> None:
@@ -120,7 +122,12 @@ class ChaosMetrics:
                 else:
                     success_rate[fallback_type] = 0.0
 
-            return {"used": used, "success": success, "failure": failure, "success_rate": success_rate}
+            return {
+                "used": used,
+                "success": success,
+                "failure": failure,
+                "success_rate": success_rate,
+            }
 
     @staticmethod
     def get_latency_stats() -> Dict[str, float]:
@@ -210,7 +217,11 @@ def measure_rto(
         >>>
         >>> rto = measure_rto("osrm", restore, test, objective_seconds=30.0)
     """
-    logger.info("[D3] Starting RTO measurement for service: %s (objective: %.1fs)", service_name, objective_seconds)
+    logger.info(
+        "[D3] Starting RTO measurement for service: %s (objective: %.1fs)",
+        service_name,
+        objective_seconds,
+    )
 
     # ✅ Restaurer le service
     restore_start = time.time()

@@ -40,7 +40,11 @@ def get_engine_url():
         except AttributeError:
             return str(engine.url).replace("%", "%%")
 
-    return os.getenv("SQLALCHEMY_DATABASE_URI") or os.getenv("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
+    return (
+        os.getenv("SQLALCHEMY_DATABASE_URI")
+        or os.getenv("DATABASE_URL")
+        or config.get_main_option("sqlalchemy.url")
+    )
 
 
 # add your model's MetaData object here
@@ -118,7 +122,9 @@ def run_migrations_online():
     connectable = get_engine()
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=get_metadata(), **conf_args)
+        context.configure(
+            connection=connection, target_metadata=get_metadata(), **conf_args
+        )
 
         with context.begin_transaction():
             context.run_migrations()

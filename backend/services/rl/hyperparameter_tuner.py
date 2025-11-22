@@ -129,7 +129,9 @@ class HyperparameterTuner:
             while not done and steps < STEPS_PERCENT:
                 action = agent.select_action(state)
                 next_state, reward, done, truncated, _ = env.step(action)
-                agent.store_transition(state, action, reward, next_state, done or truncated)
+                agent.store_transition(
+                    state, action, reward, next_state, done or truncated
+                )
 
                 if len(agent.memory) >= agent.batch_size:
                     agent.learn()
@@ -197,14 +199,20 @@ class HyperparameterTuner:
             "epsilon_end": trial.suggest_float("epsilon_end", 0.1, 0.1),
             "epsilon_decay": trial.suggest_float("epsilon_decay", 0.990, 0.999),
             # Replay buffer
-            "buffer_size": trial.suggest_categorical("buffer_size", [50000, 100000, 200000, 500000]),
+            "buffer_size": trial.suggest_categorical(
+                "buffer_size", [50000, 100000, 200000, 500000]
+            ),
             # Target network
             "target_update_freq": trial.suggest_int("target_update_freq", 5, 50),
             # === AMÉLIORATIONS AVANCÉES ===
             # Double DQN
-            "use_double_dqn": trial.suggest_categorical("use_double_dqn", [True, False]),
+            "use_double_dqn": trial.suggest_categorical(
+                "use_double_dqn", [True, False]
+            ),
             # Prioritized Experience Replay (PER)
-            "use_prioritized_replay": trial.suggest_categorical("use_prioritized_replay", [True, False]),
+            "use_prioritized_replay": trial.suggest_categorical(
+                "use_prioritized_replay", [True, False]
+            ),
             # Priorité exponentielle
             "alpha": trial.suggest_float("alpha", 0.4, 0.8),
             # Importance sampling début
@@ -265,14 +273,20 @@ class HyperparameterTuner:
         )
 
         print("\n✅ Optimisation terminée !")
-        print(f"   Trials complétés: {len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])}")
-        print(f"   Trials pruned: {len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED])}")
+        print(
+            f"   Trials complétés: {len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])}"
+        )
+        print(
+            f"   Trials pruned: {len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED])}"
+        )
         print("   Best trial: #{study.best_trial.number}")
         print("   Best value: {study.best_value")
 
         return study
 
-    def save_best_params(self, study: optuna.Study, output_path: str = "data/rl/optimal_config.json") -> None:
+    def save_best_params(
+        self, study: optuna.Study, output_path: str = "data/rl/optimal_config.json"
+    ) -> None:
         """Sauvegarde les meilleurs hyperparamètres.
 
         Args:
@@ -287,7 +301,9 @@ class HyperparameterTuner:
         best_trial = study.best_trial
 
         # Tri des trials par valeur
-        completed_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+        completed_trials = [
+            t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE
+        ]
         sorted_trials = sorted(completed_trials, key=lambda t: t.value, reverse=True)
 
         config = {
@@ -296,7 +312,9 @@ class HyperparameterTuner:
             "best_params": best_params,
             "n_trials_total": len(study.trials),
             "n_trials_completed": len(completed_trials),
-            "n_trials_pruned": len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]),
+            "n_trials_pruned": len(
+                [t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]
+            ),
             "optimization_history": [
                 {
                     "trial": t.number,
@@ -325,7 +343,9 @@ class HyperparameterTuner:
         # Log automatique des métriques et comparaisons
         self._log_metrics_and_comparisons(study, sorted_trials)
 
-    def _log_metrics_and_comparisons(self, study: optuna.Study, sorted_trials: list[optuna.trial.Trial]) -> None:
+    def _log_metrics_and_comparisons(
+        self, study: optuna.Study, sorted_trials: list[optuna.trial.Trial]
+    ) -> None:
         """Log automatique des métriques et résultats de comparaison.
 
         Args:
@@ -342,8 +362,12 @@ class HyperparameterTuner:
             "timestamp": timestamp,
             "study_name": self.study_name,
             "n_trials_total": len(study.trials),
-            "n_trials_completed": len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]),
-            "n_trials_pruned": len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]),
+            "n_trials_completed": len(
+                [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+            ),
+            "n_trials_pruned": len(
+                [t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]
+            ),
             "best_value": float(study.best_value),
             "best_trial_number": study.best_trial.number,
             "optimization_duration": None,  # À calculer si disponible
@@ -379,8 +403,11 @@ class HyperparameterTuner:
                 "best_score": float(study.best_value),
                 "target_score": 544.3,
                 "improvement_over_target": float(study.best_value) - 544.3,
-                "improvement_percentage": ((float(study.best_value) - 544.3) / 544.3) * 100,
-                "triplet_gagnant_analysis": self._analyze_triplet_gagnant(sorted_trials),
+                "improvement_percentage": ((float(study.best_value) - 544.3) / 544.3)
+                * 100,
+                "triplet_gagnant_analysis": self._analyze_triplet_gagnant(
+                    sorted_trials
+                ),
             },
             "top_10trials": [
                 {
@@ -417,7 +444,9 @@ class HyperparameterTuner:
         else:
             print("   ⚠️  Objectif non atteint, continuer l'optimisation")
 
-    def _analyze_triplet_gagnant(self, sorted_trials: list[optuna.trial.Trial]) -> dict[str, Any]:
+    def _analyze_triplet_gagnant(
+        self, sorted_trials: list[optuna.trial.Trial]
+    ) -> dict[str, Any]:
         """Analyse le triplet gagnant (PER + N-step + Dueling)."""
         triplet_stats = {
             "per_enabled": 0,
@@ -477,7 +506,9 @@ class HyperparameterTuner:
             "tau": params.get("tau", 0.005),
         }
 
-    def _analyze_feature_importance(self, sorted_trials: list[optuna.trial.Trial]) -> dict[str, Any]:
+    def _analyze_feature_importance(
+        self, sorted_trials: list[optuna.trial.Trial]
+    ) -> dict[str, Any]:
         """Analyse l'importance des features."""
         feature_scores = {
             "double_dqn": {"enabled": [], "disabled": []},
@@ -520,8 +551,16 @@ class HyperparameterTuner:
         # Calculer moyennes
         feature_importance = {}
         for feature, scores in feature_scores.items():
-            enabled_avg = sum(scores["enabled"]) / len(scores["enabled"]) if scores["enabled"] else 0
-            disabled_avg = sum(scores["disabled"]) / len(scores["disabled"]) if scores["disabled"] else 0
+            enabled_avg = (
+                sum(scores["enabled"]) / len(scores["enabled"])
+                if scores["enabled"]
+                else 0
+            )
+            disabled_avg = (
+                sum(scores["disabled"]) / len(scores["disabled"])
+                if scores["disabled"]
+                else 0
+            )
 
             feature_importance[feature] = {
                 "enabled_avg": enabled_avg,

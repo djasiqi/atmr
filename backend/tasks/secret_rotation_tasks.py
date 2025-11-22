@@ -50,7 +50,10 @@ def rotate_encryption_keys(self: Task) -> dict[str, Any]:  # noqa: ARG001
             old_key = rotate_to_new_key(service, new_key)
             old_key_hex = old_key.hex()
 
-            logger.info("[2.5] ✅ Rotation effectuée - Nouvelle clé: %s... (ancienne → legacy)", new_key_hex[:16])
+            logger.info(
+                "[2.5] ✅ Rotation effectuée - Nouvelle clé: %s... (ancienne → legacy)",
+                new_key_hex[:16],
+            )
 
             # ⚠️ IMPORTANT: Le développeur doit mettre à jour les variables d'environnement
             # MASTER_ENCRYPTION_KEY et LEGACY_ENCRYPTION_KEYS manuellement
@@ -212,17 +215,32 @@ def migrate_encrypted_data(
                             migrated_count += 1
 
                             if migrated_count % 10 == 0:
-                                logger.debug("[2.5] %d enregistrements migrés...", migrated_count)
+                                logger.debug(
+                                    "[2.5] %d enregistrements migrés...", migrated_count
+                                )
 
                     except Exception as e:
                         db.session.rollback()
-                        logger.error("[2.5] Erreur migration %s id=%s: %s", model_name, getattr(record, "id", "?"), e)
-                        errors.append({"model": model_name, "id": getattr(record, "id", None), "error": str(e)})
+                        logger.error(
+                            "[2.5] Erreur migration %s id=%s: %s",
+                            model_name,
+                            getattr(record, "id", "?"),
+                            e,
+                        )
+                        errors.append(
+                            {
+                                "model": model_name,
+                                "id": getattr(record, "id", None),
+                                "error": str(e),
+                            }
+                        )
 
                 offset += batch_size
 
             logger.info(
-                "[2.5] ✅ Migration terminée: %d enregistrements migrés, %d erreurs", migrated_count, len(errors)
+                "[2.5] ✅ Migration terminée: %d enregistrements migrés, %d erreurs",
+                migrated_count,
+                len(errors),
             )
 
             return {
@@ -257,7 +275,9 @@ def check_rotation_due(self: Task) -> dict[str, Any]:  # noqa: ARG001
             # Pour simplifier, on vérifie via variable d'environnement ou dernière rotation
             # En production, utiliser une table de métadonnées pour stocker la date de dernière rotation
 
-            rotation_interval_days = int(os.getenv("ENCRYPTION_KEY_ROTATION_INTERVAL_DAYS", "90"))
+            rotation_interval_days = int(
+                os.getenv("ENCRYPTION_KEY_ROTATION_INTERVAL_DAYS", "90")
+            )
 
             # Logique simplifiée: si pas de rotation récente détectée, suggérer rotation
             logger.info(

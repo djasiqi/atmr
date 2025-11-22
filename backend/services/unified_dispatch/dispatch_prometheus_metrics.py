@@ -32,7 +32,12 @@ logger = logging.getLogger(__name__)
 
 # ==================== Prometheus Metrics ====================
 
-if PROMETHEUS_AVAILABLE and Counter is not None and Gauge is not None and Histogram is not None:
+if (
+    PROMETHEUS_AVAILABLE
+    and Counter is not None
+    and Gauge is not None
+    and Histogram is not None
+):
     # Compteur de runs dispatch
     DISPATCH_RUNS_TOTAL = Counter(
         "dispatch_runs_total",
@@ -205,7 +210,9 @@ def record_assignment_rate(
                 company_id=str(company_id),
             ).set(assignment_rate)
         except Exception as e:
-            logger.warning("[DispatchMetrics] Erreur enregistrement assignment rate: %s", e)
+            logger.warning(
+                "[DispatchMetrics] Erreur enregistrement assignment rate: %s", e
+            )
 
 
 def record_unassigned_count(
@@ -227,7 +234,9 @@ def record_unassigned_count(
                 company_id=str(company_id),
             ).set(unassigned_count)
         except Exception as e:
-            logger.warning("[DispatchMetrics] Erreur enregistrement unassigned count: %s", e)
+            logger.warning(
+                "[DispatchMetrics] Erreur enregistrement unassigned count: %s", e
+            )
 
 
 def record_circuit_breaker_state(
@@ -247,7 +256,9 @@ def record_circuit_breaker_state(
                 company_id=str(company_id),
             ).set(state_value)
         except Exception as e:
-            logger.warning("[DispatchMetrics] Erreur enregistrement circuit breaker: %s", e)
+            logger.warning(
+                "[DispatchMetrics] Erreur enregistrement circuit breaker: %s", e
+            )
 
 
 def record_temporal_conflicts(
@@ -269,7 +280,9 @@ def record_temporal_conflicts(
                 company_id=str(company_id),
             ).inc(conflicts_count)
         except Exception as e:
-            logger.warning("[DispatchMetrics] Erreur enregistrement conflits temporels: %s", e)
+            logger.warning(
+                "[DispatchMetrics] Erreur enregistrement conflits temporels: %s", e
+            )
 
 
 def record_db_conflicts(

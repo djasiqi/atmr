@@ -70,7 +70,8 @@ class TestProactiveAlertsService:
             pytest.skip("ProactiveAlertsService non disponible")
 
         return ProactiveAlertsService(
-            notification_service=mock_notification_service, delay_predictor=mock_delay_predictor
+            notification_service=mock_notification_service,
+            delay_predictor=mock_delay_predictor,
         )
 
     def test_service_initialization(self, alerts_service):
@@ -91,7 +92,11 @@ class TestProactiveAlertsService:
             "company_id": "company_1",
         }
 
-        driver = {"id": "driver_456", "current_location": {"lat": 40.7128, "lng": -74.0060}, "status": "available"}
+        driver = {
+            "id": "driver_456",
+            "current_location": {"lat": 40.7128, "lng": -74.0060},
+            "status": "available",
+        }
 
         # Mock de la prédiction
         mock_delay_predictor.predict_delay_probability.return_value = 0.8
@@ -129,8 +134,8 @@ class TestProactiveAlertsService:
         assert can_alert is False
 
         # Attendre que le debounce expire (simulation)
-        alerts_service.alert_history[(booking_id, driver_id)]["last_alert_time"] = datetime.now(UTC) - timedelta(
-            minutes=10
+        alerts_service.alert_history[(booking_id, driver_id)]["last_alert_time"] = (
+            datetime.now(UTC) - timedelta(minutes=10)
         )
 
         # Troisième appel après expiration - devrait passer
@@ -147,9 +152,17 @@ class TestProactiveAlertsService:
             "company_id": "company_1",
         }
 
-        driver = {"id": "driver_456", "current_location": {"lat": 40.7128, "lng": -74.0060}, "status": "available"}
+        driver = {
+            "id": "driver_456",
+            "current_location": {"lat": 40.7128, "lng": -74.0060},
+            "status": "available",
+        }
 
-        risk_data = {"risk_level": "high", "probability": 0.85, "predicted_delay_minutes": 25}
+        risk_data = {
+            "risk_level": "high",
+            "probability": 0.85,
+            "predicted_delay_minutes": 25,
+        }
 
         # Test de la génération d'alerte
         alert_sent = alerts_service.send_proactive_alert(booking, driver, risk_data)
@@ -167,9 +180,17 @@ class TestProactiveAlertsService:
             "dropoff_address": "456 Oak Ave",
         }
 
-        driver = {"id": "driver_456", "current_location": {"lat": 40.7128, "lng": -74.0060}, "status": "available"}
+        driver = {
+            "id": "driver_456",
+            "current_location": {"lat": 40.7128, "lng": -74.0060},
+            "status": "available",
+        }
 
-        risk_data = {"risk_level": "high", "probability": 0.85, "predicted_delay_minutes": 25}
+        risk_data = {
+            "risk_level": "high",
+            "probability": 0.85,
+            "predicted_delay_minutes": 25,
+        }
 
         # Test de la génération d'explication
         explanation = alerts_service.generate_explanation(booking, driver, risk_data)
@@ -248,7 +269,9 @@ class TestProactiveAlertsService:
         assert 0 <= metrics["false_positive_rate"] <= 1
         assert 0 <= metrics["true_positive_rate"] <= 1
 
-    def test_integration_with_existing_services(self, alerts_service, mock_notification_service, mock_delay_predictor):
+    def test_integration_with_existing_services(
+        self, alerts_service, mock_notification_service, mock_delay_predictor
+    ):
         """Test l'intégration avec les services existants."""
         # Test de l'intégration complète
         booking = {
@@ -259,7 +282,11 @@ class TestProactiveAlertsService:
             "company_id": "company_1",
         }
 
-        driver = {"id": "driver_456", "current_location": {"lat": 40.7128, "lng": -74.0060}, "status": "available"}
+        driver = {
+            "id": "driver_456",
+            "current_location": {"lat": 40.7128, "lng": -74.0060},
+            "status": "available",
+        }
 
         # Vérifier que les services sont correctement intégrés
         assert alerts_service.notification_service == mock_notification_service
@@ -295,7 +322,9 @@ class TestAlertRoutes:
 
         # Simuler l'appel à l'endpoint
         try:
-            result = mock_alerts_service.check_delay_risk(request_data.get("booking_id"), request_data.get("driver_id"))
+            result = mock_alerts_service.check_delay_risk(
+                request_data.get("booking_id"), request_data.get("driver_id")
+            )
 
             assert isinstance(result, dict)
             assert "risk_level" in result
@@ -327,7 +356,11 @@ class TestSocketIOAlerts:
     def test_alert_subscription(self):
         """Test l'abonnement aux alertes."""
         # Mock des données de connexion (utilisé pour la validation)
-        _connection_data = {"company_id": "company_1", "user_id": "user_123", "socket_id": "socket_456"}
+        _connection_data = {
+            "company_id": "company_1",
+            "user_id": "user_123",
+            "socket_id": "socket_456",
+        }
 
         # Simuler l'abonnement
         subscribed = True
@@ -352,7 +385,10 @@ class TestSocketIOAlerts:
     def test_room_management(self):
         """Test la gestion des salles Socket.IO."""
         # Mock des salles
-        rooms = {"company_1": ["socket_1", "socket_2", "socket_3"], "company_2": ["socket_4", "socket_5"]}
+        rooms = {
+            "company_1": ["socket_1", "socket_2", "socket_3"],
+            "company_2": ["socket_4", "socket_5"],
+        }
 
         # Test de la gestion des salles
         assert len(rooms["company_1"]) == 3
@@ -390,7 +426,11 @@ def run_alerts_tests():
     print("\n📊 Résultats des tests d'alertes:")
     print("  Tests exécutés: {total_tests}")
     print("  Tests réussis: {passed_tests}")
-    print("  Taux de succès: {passed_tests/total_tests*100" if total_tests > 0 else "  Taux de succès: 0%")
+    print(
+        "  Taux de succès: {passed_tests/total_tests*100"
+        if total_tests > 0
+        else "  Taux de succès: 0%"
+    )
 
     return passed_tests, total_tests
 

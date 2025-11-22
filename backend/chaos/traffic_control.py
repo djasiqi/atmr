@@ -13,7 +13,9 @@ from subprocess import TimeoutExpired
 logger = logging.getLogger(__name__)
 
 # Constantes de sécurité pour validations
-INTERFACE_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,15}$")  # Noms d'interface réseau valides
+INTERFACE_NAME_PATTERN = re.compile(
+    r"^[a-zA-Z0-9_-]{1,15}$"
+)  # Noms d'interface réseau valides
 SUBPROCESS_TIMEOUT = 10  # Timeout en secondes pour commandes TC (10s max)
 MAX_LATENCY_MS = 10000  # Latence max : 10 secondes
 MAX_JITTER_MS = 1000  # Jitter max : 1 seconde
@@ -105,16 +107,32 @@ class TrafficControlManager:
 
         # ✅ Sécurité : Valider les paramètres d'entrée
         if not self._validate_latency_ms(ms):
-            logger.error("[TC] Invalid latency: %s (must be 0 < ms <= %d)", ms, MAX_LATENCY_MS)
+            logger.error(
+                "[TC] Invalid latency: %s (must be 0 < ms <= %d)", ms, MAX_LATENCY_MS
+            )
             return False
         if not self._validate_jitter_ms(jitter_ms):
-            logger.error("[TC] Invalid jitter: %s (must be 0 <= jitter_ms <= %d)", jitter_ms, MAX_JITTER_MS)
+            logger.error(
+                "[TC] Invalid jitter: %s (must be 0 <= jitter_ms <= %d)",
+                jitter_ms,
+                MAX_JITTER_MS,
+            )
             return False
 
         try:
             # ✅ Sécurité : Utiliser liste d'arguments (pas shell=True) pour éviter injection shell
             # Ajouter une qdisc netem pour la latence
-            cmd = ["tc", "qdisc", "add", "dev", self.interface, "root", "netem", "delay", f"{ms}ms"]
+            cmd = [
+                "tc",
+                "qdisc",
+                "add",
+                "dev",
+                self.interface,
+                "root",
+                "netem",
+                "delay",
+                f"{ms}ms",
+            ]
             if jitter_ms > 0:
                 cmd.extend([f"{jitter_ms}ms"])
 
@@ -135,7 +153,9 @@ class TrafficControlManager:
             return False
         except TimeoutExpired as e:
             # ✅ Sécurité : Gérer timeout avec log approprié
-            logger.error("[TC] Command timeout after %ds: %s", SUBPROCESS_TIMEOUT, e.cmd)
+            logger.error(
+                "[TC] Command timeout after %ds: %s", SUBPROCESS_TIMEOUT, e.cmd
+            )
             return False
         except Exception as e:
             logger.error("[TC] Error adding latency: %s", e)
@@ -157,12 +177,25 @@ class TrafficControlManager:
 
         # ✅ Sécurité : Valider le paramètre d'entrée
         if not self._validate_percent(percent):
-            logger.error("[TC] Invalid packet loss percent: %s (must be 0.0 <= percent <= 100.0)", percent)
+            logger.error(
+                "[TC] Invalid packet loss percent: %s (must be 0.0 <= percent <= 100.0)",
+                percent,
+            )
             return False
 
         try:
             # ✅ Sécurité : Utiliser liste d'arguments (pas shell=True) pour éviter injection shell
-            cmd = ["tc", "qdisc", "replace", "dev", self.interface, "root", "netem", "loss", f"{percent}%"]
+            cmd = [
+                "tc",
+                "qdisc",
+                "replace",
+                "dev",
+                self.interface,
+                "root",
+                "netem",
+                "loss",
+                f"{percent}%",
+            ]
             # ✅ Sécurité : Ajouter timeout pour éviter blocage indéfini
             result = subprocess.run(
                 cmd,
@@ -173,13 +206,17 @@ class TrafficControlManager:
                 # shell=False par défaut (sécurisé avec listes)
             )
             if result.returncode == 0:
-                logger.info("[TC] Added %.1f%% packet loss on %s", percent, self.interface)
+                logger.info(
+                    "[TC] Added %.1f%% packet loss on %s", percent, self.interface
+                )
                 return True
             logger.error("[TC] Failed to add packet loss: %s", result.stderr)
             return False
         except TimeoutExpired as e:
             # ✅ Sécurité : Gérer timeout avec log approprié
-            logger.error("[TC] Command timeout after %ds: %s", SUBPROCESS_TIMEOUT, e.cmd)
+            logger.error(
+                "[TC] Command timeout after %ds: %s", SUBPROCESS_TIMEOUT, e.cmd
+            )
             return False
         except Exception as e:
             logger.error("[TC] Error adding packet loss: %s", e)
@@ -213,7 +250,9 @@ class TrafficControlManager:
             return True
         except TimeoutExpired as e:
             # ✅ Sécurité : Gérer timeout avec log approprié
-            logger.error("[TC] Command timeout after %ds: %s", SUBPROCESS_TIMEOUT, e.cmd)
+            logger.error(
+                "[TC] Command timeout after %ds: %s", SUBPROCESS_TIMEOUT, e.cmd
+            )
             return False
         except Exception as e:
             logger.error("[TC] Error clearing rules: %s", e)
@@ -236,7 +275,9 @@ class TrafficControlManager:
             return "netem" in result.stdout
         except TimeoutExpired as e:
             # ✅ Sécurité : Gérer timeout avec log approprié
-            logger.error("[TC] Command timeout after %ds: %s", SUBPROCESS_TIMEOUT, e.cmd)
+            logger.error(
+                "[TC] Command timeout after %ds: %s", SUBPROCESS_TIMEOUT, e.cmd
+            )
             return False
         except Exception:
             return False

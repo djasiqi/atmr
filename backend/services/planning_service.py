@@ -16,8 +16,12 @@ def serialize_shift(shift: DriverShift) -> Dict[str, Any]:
         "id": shift.id,
         "company_id": shift.company_id,
         "driver_id": shift.driver_id,
-        "start_local": shift.start_local.isoformat() if shift.start_local is not None else None,
-        "end_local": shift.end_local.isoformat() if shift.end_local is not None else None,
+        "start_local": shift.start_local.isoformat()
+        if shift.start_local is not None
+        else None,
+        "end_local": shift.end_local.isoformat()
+        if shift.end_local is not None
+        else None,
         "timezone": getattr(shift, "timezone", "Europe/Zurich"),
         "type": getattr(shift.type, "value", str(shift.type)).lower(),
         "status": getattr(shift.status, "value", str(shift.status)).lower(),
@@ -55,7 +59,12 @@ def _normalize_to_local_naive(dt: datetime | None) -> datetime | None:
 
 
 def validate_shift_overlap(
-    company_id: int, driver_id: int, start_local: datetime, end_local: datetime, *, exclude_id: int | None = None
+    company_id: int,
+    driver_id: int,
+    start_local: datetime,
+    end_local: datetime,
+    *,
+    exclude_id: int | None = None,
 ) -> None:
     """Squelette: lève une ValueError si un chevauchement est détecté."""
     # Normalize to naive local for consistent comparisons & DB filters
@@ -85,13 +94,17 @@ def validate_shift_overlap(
         raise ValueError(msg)
 
 
-def compute_driver_availability(company_id: int, driver_id: int, from_dt: datetime, to_dt: datetime) -> Dict[str, Any]:
+def compute_driver_availability(
+    company_id: int, driver_id: int, from_dt: datetime, to_dt: datetime
+) -> Dict[str, Any]:
     """Retourne un squelette de calendrier busy/free pour l'intervalle demandé."""
     _ = company_id, driver_id, from_dt, to_dt  # Placeholder pour future implémentation
     return {"busy": [], "free": []}
 
 
-def materialize_template(company_id: int, driver_id: int, from_d: date, to_d: date) -> int:
+def materialize_template(
+    company_id: int, driver_id: int, from_d: date, to_d: date
+) -> int:
     """Génère des DriverShift depuis les templates (squelette). Retourne le nombre créés."""
     _ = company_id, driver_id, from_d, to_d  # Placeholder pour future implémentation
     return 0
@@ -164,5 +177,7 @@ def is_driver_available_at(company_id: int, driver_id: int, dt: datetime) -> boo
         import logging
 
         logger = logging.getLogger(__name__)
-        logger.warning("Erreur vérification disponibilité driver #%s à %s: %s", driver_id, dt, e)
+        logger.warning(
+            "Erreur vérification disponibilité driver #%s à %s: %s", driver_id, dt, e
+        )
         return False

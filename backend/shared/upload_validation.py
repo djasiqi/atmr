@@ -24,7 +24,9 @@ ALLOWED_PDF_EXT = {"pdf"}
 ALLOWED_LOGO_EXT = {"png", "jpg", "jpeg", "svg"}
 
 
-def validate_file_extension(filename: str, allowed_extensions: set[str]) -> tuple[bool, str | None]:
+def validate_file_extension(
+    filename: str, allowed_extensions: set[str]
+) -> tuple[bool, str | None]:
     """Valide l'extension d'un fichier.
 
     Args:
@@ -39,7 +41,10 @@ def validate_file_extension(filename: str, allowed_extensions: set[str]) -> tupl
 
     ext = filename.rsplit(".", 1)[1].lower()
     if ext not in allowed_extensions:
-        return False, f"Extension non autorisée: {ext}. Autorisées: {', '.join(sorted(allowed_extensions))}"
+        return (
+            False,
+            f"Extension non autorisée: {ext}. Autorisées: {', '.join(sorted(allowed_extensions))}",
+        )
 
     return True, None
 
@@ -56,12 +61,17 @@ def validate_file_size(file_size: int, max_size_bytes: int) -> tuple[bool, str |
     """
     if file_size > max_size_bytes:
         max_size_mb = max_size_bytes / (1024 * 1024)
-        return False, f"Fichier trop volumineux: {file_size} bytes (max {max_size_mb:.1f} Mo)"
+        return (
+            False,
+            f"Fichier trop volumineux: {file_size} bytes (max {max_size_mb:.1f} Mo)",
+        )
 
     return True, None
 
 
-def validate_file_content(file_bytes: bytes, expected_ext: str) -> tuple[bool, str | None]:
+def validate_file_content(
+    file_bytes: bytes, expected_ext: str
+) -> tuple[bool, str | None]:
     """Valide le contenu d'un fichier en vérifiant les magic bytes.
 
     Args:
@@ -93,7 +103,10 @@ def validate_file_content(file_bytes: bytes, expected_ext: str) -> tuple[bool, s
         if file_start.startswith(magic):
             return True, None
 
-    return False, f"Type de fichier invalide: le contenu ne correspond pas à l'extension {expected_ext}"
+    return (
+        False,
+        f"Type de fichier invalide: le contenu ne correspond pas à l'extension {expected_ext}",
+    )
 
 
 def _get_file_size(file: Any) -> tuple[int | None, str | None]:

@@ -28,10 +28,14 @@ class QRBillService:
         """Génère un QR-Bill SVG pour une facture."""
         try:
             # Récupérer les paramètres de facturation
-            billing_settings = CompanyBillingSettings.query.filter_by(company_id=invoice.company_id).first()
+            billing_settings = CompanyBillingSettings.query.filter_by(
+                company_id=invoice.company_id
+            ).first()
 
             if not billing_settings or not billing_settings.iban:
-                app_logger.warning("Pas d'IBAN configuré pour l'entreprise %s", invoice.company_id)
+                app_logger.warning(
+                    "Pas d'IBAN configuré pour l'entreprise %s", invoice.company_id
+                )
                 return None
 
             # Récupérer les informations de la facture
@@ -39,7 +43,10 @@ class QRBillService:
             client = invoice.client
 
             # Débiteur : Institution (si facturation tierce) ou Client (si facturation directe)
-            if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
+            if (
+                invoice.bill_to_client_id
+                and invoice.bill_to_client_id != invoice.client_id
+            ):
                 # 🏥 Facturation tierce : débiteur = institution payeuse
                 from models import Client as ClientModel
 
@@ -48,7 +55,9 @@ class QRBillService:
                 if institution and institution.is_institution:
                     debtor_name = institution.institution_name or "Institution"
                     debtor_street = (
-                        institution.billing_address or institution.contact_address or "Adresse non renseignée"
+                        institution.billing_address
+                        or institution.contact_address
+                        or "Adresse non renseignée"
                     )
                     # Extraire code postal et ville de l'adresse si possible
                     debtor_pcode = "1200"
@@ -80,7 +89,10 @@ class QRBillService:
                         debtor_city = client.domicile_city
                 # Priorité 2: Adresse de l'utilisateur
                 elif (
-                    hasattr(client, "user") and client.user and hasattr(client.user, "address") and client.user.address
+                    hasattr(client, "user")
+                    and client.user
+                    and hasattr(client.user, "address")
+                    and client.user.address
                 ):
                     full_address = client.user.address
                     # Format: "Allée de la Pépinière, 41, 74160, Archamps, France"
@@ -120,7 +132,9 @@ class QRBillService:
             )
 
             # Générer le SVG du QR-Bill
-            with tempfile.NamedTemporaryFile(mode="w+", suffix=".svg", delete=False) as temp_svg:
+            with tempfile.NamedTemporaryFile(
+                mode="w+", suffix=".svg", delete=False
+            ) as temp_svg:
                 qr_bill.as_svg(temp_svg.name)
 
                 # Lire le contenu SVG
@@ -130,7 +144,9 @@ class QRBillService:
                 # Nettoyer le fichier temporaire
                 Path(temp_svg.name).unlink()
 
-                app_logger.info("QR-Bill SVG généré pour facture %s", invoice.invoice_number)
+                app_logger.info(
+                    "QR-Bill SVG généré pour facture %s", invoice.invoice_number
+                )
                 return svg_content.encode("utf-8")
 
         except Exception as e:
@@ -141,10 +157,14 @@ class QRBillService:
         """Génère un QR-Bill pour une facture."""
         try:
             # Récupérer les paramètres de facturation
-            billing_settings = CompanyBillingSettings.query.filter_by(company_id=invoice.company_id).first()
+            billing_settings = CompanyBillingSettings.query.filter_by(
+                company_id=invoice.company_id
+            ).first()
 
             if not billing_settings or not billing_settings.iban:
-                app_logger.warning("Pas d'IBAN configuré pour l'entreprise %s", invoice.company_id)
+                app_logger.warning(
+                    "Pas d'IBAN configuré pour l'entreprise %s", invoice.company_id
+                )
                 return None
 
             # Récupérer les informations de la facture
@@ -152,7 +172,10 @@ class QRBillService:
             client = invoice.client
 
             # Débiteur : Institution (si facturation tierce) ou Client (si facturation directe)
-            if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
+            if (
+                invoice.bill_to_client_id
+                and invoice.bill_to_client_id != invoice.client_id
+            ):
                 # 🏥 Facturation tierce : débiteur = institution payeuse
                 from models import Client as ClientModel
 
@@ -161,7 +184,9 @@ class QRBillService:
                 if institution and institution.is_institution:
                     debtor_name = institution.institution_name or "Institution"
                     debtor_street = (
-                        institution.billing_address or institution.contact_address or "Adresse non renseignée"
+                        institution.billing_address
+                        or institution.contact_address
+                        or "Adresse non renseignée"
                     )
                     # Extraire code postal et ville de l'adresse si possible
                     debtor_pcode = "1200"
@@ -193,7 +218,10 @@ class QRBillService:
                         debtor_city = client.domicile_city
                 # Priorité 2: Adresse de l'utilisateur
                 elif (
-                    hasattr(client, "user") and client.user and hasattr(client.user, "address") and client.user.address
+                    hasattr(client, "user")
+                    and client.user
+                    and hasattr(client.user, "address")
+                    and client.user.address
                 ):
                     full_address = client.user.address
                     # Format: "Allée de la Pépinière, 41, 74160, Archamps, France"
@@ -233,7 +261,9 @@ class QRBillService:
             )
 
             # Générer le PDF du QR-Bill
-            with tempfile.NamedTemporaryFile(mode="w+", suffix=".svg", delete=False) as temp_svg:
+            with tempfile.NamedTemporaryFile(
+                mode="w+", suffix=".svg", delete=False
+            ) as temp_svg:
                 qr_bill.as_svg(temp_svg.name)
 
                 # Convertir SVG en PDF
@@ -251,7 +281,9 @@ class QRBillService:
                 # Nettoyer le fichier temporaire
                 Path(temp_svg.name).unlink()
 
-                app_logger.info("QR-Bill généré pour facture %s", invoice.invoice_number)
+                app_logger.info(
+                    "QR-Bill généré pour facture %s", invoice.invoice_number
+                )
                 return pdf_buffer.getvalue()
 
         except Exception as e:
@@ -277,13 +309,42 @@ class QRBillService:
             return qr_reference[:QR_REFERENCE_LENGTH]  # Limiter à 27 caractères
 
         except Exception as e:
-            app_logger.error("Erreur lors de la génération de la référence QR: %s", str(e))
+            app_logger.error(
+                "Erreur lors de la génération de la référence QR: %s", str(e)
+            )
             return None
 
     def _calculate_check_digit(self, reference):
         """Calcule le check digit pour une référence QR."""
         # Algorithme modulo 10 pour les références QR
-        weights = [1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3]
+        weights = [
+            1,
+            3,
+            1,
+            3,
+            1,
+            3,
+            1,
+            3,
+            1,
+            3,
+            1,
+            3,
+            1,
+            3,
+            1,
+            3,
+            1,
+            3,
+            1,
+            3,
+            1,
+            3,
+            1,
+            3,
+            1,
+            3,
+        ]
 
         total = 0
         for i, char in enumerate(reference):

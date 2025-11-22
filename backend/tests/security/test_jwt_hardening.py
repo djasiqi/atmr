@@ -41,7 +41,9 @@ class TestJWTExpirationConfig:
             actual_duration = exp - iat
 
             # Vérifier que la durée correspond à la config (tolérance de 1 seconde)
-            expected_duration = int(current_app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds())
+            expected_duration = int(
+                current_app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds()
+            )
             assert abs(actual_duration - expected_duration) <= 1
 
     def test_refresh_token_uses_config_expiration(self, app_context, sample_user):
@@ -64,12 +66,17 @@ class TestJWTExpirationConfig:
             actual_duration = exp - iat
 
             # Vérifier que la durée correspond à la config (tolérance de 1 seconde)
-            expected_duration = int(current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds())
+            expected_duration = int(
+                current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds()
+            )
             assert abs(actual_duration - expected_duration) <= 1
 
     def test_login_uses_config_expiration(self, client, sample_user):
         """Vérifie que le login utilise les durées d'expiration de la config."""
-        response = client.post("/api/auth/login", json={"email": "test@example.com", "password": "password123"})
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "test@example.com", "password": "password123"},
+        )
 
         assert response.status_code == 200
         data = response.get_json()
@@ -94,8 +101,12 @@ class TestJWTExpirationConfig:
 
         # Vérifier que les durées correspondent à la config
         with client.application.app_context():
-            expected_access = int(current_app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds())
-            expected_refresh = int(current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds())
+            expected_access = int(
+                current_app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds()
+            )
+            expected_refresh = int(
+                current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds()
+            )
 
             assert abs(duration_access - expected_access) <= 1
             assert abs(duration_refresh - expected_refresh) <= 1
@@ -107,13 +118,21 @@ class TestJWTAudienceValidation:
     def test_validate_jwt_audience_valid(self, app_context):
         """Vérifie que validate_jwt_audience accepte un token avec audience valide."""
         with app_context:
-            payload = {"aud": "atmr-api", "sub": "test-user", "exp": int(time.time()) + 3600}
+            payload = {
+                "aud": "atmr-api",
+                "sub": "test-user",
+                "exp": int(time.time()) + 3600,
+            }
             assert validate_jwt_audience(payload) is True
 
     def test_validate_jwt_audience_invalid(self, app_context):
         """Vérifie que validate_jwt_audience rejette un token avec audience invalide."""
         with app_context:
-            payload = {"aud": "wrong-audience", "sub": "test-user", "exp": int(time.time()) + 3600}
+            payload = {
+                "aud": "wrong-audience",
+                "sub": "test-user",
+                "exp": int(time.time()) + 3600,
+            }
             assert validate_jwt_audience(payload) is False
 
     def test_validate_jwt_audience_missing(self, app_context):
@@ -125,12 +144,17 @@ class TestJWTAudienceValidation:
     def test_token_with_valid_audience_accepted(self, client, sample_user):
         """Vérifie qu'un token avec audience valide est accepté."""
         # Login pour obtenir un token
-        response = client.post("/api/auth/login", json={"email": "test@example.com", "password": "password123"})
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "test@example.com", "password": "password123"},
+        )
         assert response.status_code == 200
         token = response.get_json()["token"]
 
         # Utiliser le token pour accéder à une route protégée
-        response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+        response = client.get(
+            "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
+        )
         assert response.status_code == 200
 
     def test_token_with_invalid_audience_rejected(self, app_context, sample_user):
@@ -162,7 +186,10 @@ class TestJWTAlgorithm:
     def test_token_uses_hs256_algorithm(self, client, sample_user):
         """Vérifie que les tokens générés utilisent l'algorithme HS256."""
         # Login pour obtenir un token
-        response = client.post("/api/auth/login", json={"email": "test@example.com", "password": "password123"})
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "test@example.com", "password": "password123"},
+        )
         assert response.status_code == 200
         token = response.get_json()["token"]
 
@@ -181,7 +208,10 @@ class TestJWTAlgorithm:
     def test_token_rejected_with_wrong_algorithm(self, client, sample_user):
         """Vérifie qu'un token signé avec un autre algorithme est rejeté."""
         # Login pour obtenir un token
-        response = client.post("/api/auth/login", json={"email": "test@example.com", "password": "password123"})
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "test@example.com", "password": "password123"},
+        )
         assert response.status_code == 200
         token = response.get_json()["token"]
 

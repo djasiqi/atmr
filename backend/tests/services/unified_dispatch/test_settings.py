@@ -64,7 +64,10 @@ class TestValidationOverrides:
         }
 
         # Vérifier que le mode strict est activé
-        strict_val = ud_settings.os.getenv("UD_SETTINGS_STRICT_VALIDATION", "false").lower() == "true"
+        strict_val = (
+            ud_settings.os.getenv("UD_SETTINGS_STRICT_VALIDATION", "false").lower()
+            == "true"
+        )
         assert strict_val is True
 
         # Test avec merge_overrides: devrait fonctionner si tous les paramètres sont valides

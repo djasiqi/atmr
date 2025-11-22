@@ -120,7 +120,9 @@ def is_retryable_exception(
         retryable_exceptions = DEFAULT_RETRYABLE_EXCEPTIONS
 
     # Vérifier si l'exception est une sous-classe d'une exception retryable
-    return any(isinstance(exception, retryable_type) for retryable_type in retryable_exceptions)
+    return any(
+        isinstance(exception, retryable_type) for retryable_type in retryable_exceptions
+    )
 
 
 def retry_with_backoff(
@@ -309,7 +311,10 @@ def retry_http_request(
         response = func()
 
         # Vérifier code HTTP
-        if hasattr(response, "status_code") and response.status_code in retryable_status_codes:
+        if (
+            hasattr(response, "status_code")
+            and response.status_code in retryable_status_codes
+        ):
             # Créer une exception HTTP pour déclencher le retry
             try:
                 response.raise_for_status()

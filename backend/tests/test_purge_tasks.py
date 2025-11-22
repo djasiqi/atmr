@@ -25,7 +25,9 @@ class TestPurgeOldBookings:
         assert result["deleted_count"] == 0
         assert result["retention_days"] == DEFAULT_RETENTION_DAYS
 
-    def test_purge_old_bookings_with_old_completed(self, db, factory_booking, sample_company):
+    def test_purge_old_bookings_with_old_completed(
+        self, db, factory_booking, sample_company
+    ):
         """Test purge avec bookings terminés anciens."""
         from models import BookingStatus
 

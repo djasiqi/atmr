@@ -60,7 +60,12 @@ class NStepBuffer:
         # Logging
         self.logger = logging.getLogger(__name__)
 
-        self.logger.info("[NStepBuffer] Initialisé - capacité: %s, n_step: %s, gamma: %s", capacity, n_step, gamma)
+        self.logger.info(
+            "[NStepBuffer] Initialisé - capacité: %s, n_step: %s, gamma: %s",
+            capacity,
+            n_step,
+            gamma,
+        )
 
     def add_transition(
         self,
@@ -197,7 +202,9 @@ class NStepBuffer:
             self.logger.error("[NStepBuffer] Erreur calcul retour N-step: %s", e)
             return 0
 
-    def _get_final_next_state(self, start_idx: int) -> np.ndarray[Any, np.dtype[np.float32]] | None:
+    def _get_final_next_state(
+        self, start_idx: int
+    ) -> np.ndarray[Any, np.dtype[np.float32]] | None:
         """Obtient l'état final après n étapes.
 
         Args:
@@ -314,7 +321,10 @@ class NStepPrioritizedBuffer(NStepBuffer):
         self.max_priority = 1
 
         self.logger.info(
-            "[NStepPrioritizedBuffer] Initialisé avec PER - alpha: %s, beta: %s-%s", alpha, beta_start, beta_end
+            "[NStepPrioritizedBuffer] Initialisé avec PER - alpha: %s, beta: %s-%s",
+            alpha,
+            beta_start,
+            beta_end,
         )
 
     def clear(self) -> None:  # type: ignore[override]
@@ -375,7 +385,9 @@ class NStepPrioritizedBuffer(NStepBuffer):
                 self.priorities[len(self.buffer) - 1] = priority
 
         except Exception as e:
-            self.logger.error("[NStepPrioritizedBuffer] Erreur mise à jour priorité: %s", e)
+            self.logger.error(
+                "[NStepPrioritizedBuffer] Erreur mise à jour priorité: %s", e
+            )
 
     def _update_priority_with_value(self, priority: float) -> None:
         """Met à jour la priorité avec une valeur donnée."""
@@ -387,7 +399,10 @@ class NStepPrioritizedBuffer(NStepBuffer):
                 self.priorities[len(self.buffer) - 1] = priority
 
         except Exception as e:
-            self.logger.error("[NStepPrioritizedBuffer] Erreur mise à jour priorité avec valeur: %s", e)
+            self.logger.error(
+                "[NStepPrioritizedBuffer] Erreur mise à jour priorité avec valeur: %s",
+                e,
+            )
 
     def add(  # type: ignore[override]
         self,
@@ -430,7 +445,9 @@ class NStepPrioritizedBuffer(NStepBuffer):
             probabilities = priorities / priorities.sum()
 
             # Échantillonnage basé sur les priorités
-            indices = np.random.choice(len(self.buffer), batch_size, replace=False, p=probabilities)
+            indices = np.random.choice(
+                len(self.buffer), batch_size, replace=False, p=probabilities
+            )
 
             # Calculer les poids d'importance
             weights = []
@@ -449,7 +466,9 @@ class NStepPrioritizedBuffer(NStepBuffer):
             return batch, weights, list(indices)
 
         except Exception as e:
-            self.logger.error("[NStepPrioritizedBuffer] Erreur échantillonnage priorisé: %s", e)
+            self.logger.error(
+                "[NStepPrioritizedBuffer] Erreur échantillonnage priorisé: %s", e
+            )
             return [], [], []
 
     def update_priorities(self, indices: List[int], td_errors: List[float]) -> None:
@@ -462,7 +481,9 @@ class NStepPrioritizedBuffer(NStepBuffer):
                     self.max_priority = max(self.max_priority, priority)
 
         except Exception as e:
-            self.logger.error("[NStepPrioritizedBuffer] Erreur mise à jour priorités: %s", e)
+            self.logger.error(
+                "[NStepPrioritizedBuffer] Erreur mise à jour priorités: %s", e
+            )
 
     def get_stats(self) -> Dict[str, Any]:  # type: ignore[override]
         """Retourne les statistiques du buffer priorisé."""
@@ -484,7 +505,11 @@ class NStepPrioritizedBuffer(NStepBuffer):
 
 # Fonction utilitaire pour créer le buffer approprié
 def create_n_step_buffer(
-    buffer_type: str = "n_step", capacity: int = 100000, n_step: int = 3, gamma: float = 0.99, **kwargs
+    buffer_type: str = "n_step",
+    capacity: int = 100000,
+    n_step: int = 3,
+    gamma: float = 0.99,
+    **kwargs,
 ) -> NStepBuffer:
     """Crée un buffer N-step du type spécifié.
 

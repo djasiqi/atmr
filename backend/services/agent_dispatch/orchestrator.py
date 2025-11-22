@@ -132,7 +132,9 @@ class AgentOrchestrator:
                 name=f"AgentDispatch-{self.company_id}",
             )
             self._thread.start()
-            logger.info("[AgentOrchestrator] ✅ Started for company %s", self.company_id)
+            logger.info(
+                "[AgentOrchestrator] ✅ Started for company %s", self.company_id
+            )
 
     def stop(self) -> None:
         """Arrête l'agent."""
@@ -206,7 +208,9 @@ class AgentOrchestrator:
                             self.state.last_known_preferred_driver_id,
                         )
 
-        preferred_driver_changed = current_preferred_driver_id != self.state.last_known_preferred_driver_id
+        preferred_driver_changed = (
+            current_preferred_driver_id != self.state.last_known_preferred_driver_id
+        )
         if preferred_driver_changed:
             logger.info(
                 "[AgentOrchestrator] 🔄 Changement de chauffeur préféré détecté: %s → %s",
@@ -214,10 +218,14 @@ class AgentOrchestrator:
                 current_preferred_driver_id,
             )
             self.state.last_known_preferred_driver_id = current_preferred_driver_id
-        elif current_preferred_driver_id and self.state.last_known_preferred_driver_id is None:
+        elif (
+            current_preferred_driver_id
+            and self.state.last_known_preferred_driver_id is None
+        ):
             # Premier tick avec chauffeur préféré configuré
             logger.info(
-                "[AgentOrchestrator] 🎯 Chauffeur préféré configuré au premier tick: #%s", current_preferred_driver_id
+                "[AgentOrchestrator] 🎯 Chauffeur préféré configuré au premier tick: #%s",
+                current_preferred_driver_id,
             )
             self.state.last_known_preferred_driver_id = current_preferred_driver_id
 
@@ -230,7 +238,9 @@ class AgentOrchestrator:
 
         # 3. ✅ DÉTECTION DES CHANGEMENTS : Comparer avec l'état précédent
         current_booking_ids = {j.get("job_id") for j in all_jobs if j.get("job_id")}
-        current_driver_ids = {d.get("driver_id") for d in all_drivers if d.get("driver_id")}
+        current_driver_ids = {
+            d.get("driver_id") for d in all_drivers if d.get("driver_id")
+        }
         unassigned_jobs = [j for j in all_jobs if j.get("status") == "unassigned"]
         unassigned_count = len(unassigned_jobs)
 
@@ -277,11 +287,17 @@ class AgentOrchestrator:
                 return
         else:
             # Détecter nouvelles courses (seulement celles qui n'étaient pas dans l'état précédent)
-            new_bookings = current_booking_ids - (self.state.last_known_booking_ids or set())
+            new_bookings = current_booking_ids - (
+                self.state.last_known_booking_ids or set()
+            )
             # Détecter chauffeurs devenus indisponibles
-            drivers_became_unavailable = (self.state.last_known_driver_ids or set()) - current_driver_ids
+            drivers_became_unavailable = (
+                self.state.last_known_driver_ids or set()
+            ) - current_driver_ids
             # Détecter changement dans le nombre de courses non assignées
-            unassigned_increased = unassigned_count > self.state.last_known_unassigned_count
+            unassigned_increased = (
+                unassigned_count > self.state.last_known_unassigned_count
+            )
 
             logger.debug(
                 "[AgentOrchestrator] 🔍 Détection changements: %d nouvelles courses, %d chauffeurs indisponibles, non assignées: %d (était %d)",
@@ -299,7 +315,12 @@ class AgentOrchestrator:
         # 4. ✅ RÈGLE 1 : Situation normale → Pas d'action
         # Si toutes les courses sont assignées, aucun changement détecté, et pas de retard
         # EXCEPTION: Si le chauffeur préféré a changé, on doit réoptimiser même si tout est assigné
-        if not unassigned_jobs and not new_bookings and not drivers_became_unavailable and not preferred_driver_changed:
+        if (
+            not unassigned_jobs
+            and not new_bookings
+            and not drivers_became_unavailable
+            and not preferred_driver_changed
+        ):
             logger.info(
                 "[AgentOrchestrator] ✅ Situation normale - Toutes les courses assignées (%d), aucun changement détecté. Surveillance uniquement.",
                 len(all_jobs),
@@ -355,7 +376,9 @@ class AgentOrchestrator:
         # 7. Générer rapport périodique (toutes les 2h et à 23:00)
         REPORT_HOUR_23 = 23
         REPORT_MINUTE_THRESHOLD = 5
-        if now.hour == REPORT_HOUR_23 or (now.hour % 2 == 0 and now.minute < REPORT_MINUTE_THRESHOLD):
+        if now.hour == REPORT_HOUR_23 or (
+            now.hour % 2 == 0 and now.minute < REPORT_MINUTE_THRESHOLD
+        ):
             self._generate_periodic_report()
 
     def _handle_progressive_decision(
@@ -423,16 +446,22 @@ class AgentOrchestrator:
                             force_reassign=True,  # ⚡ Forcer la réassignation pour appliquer le nouveau preferred_driver
                         )
                         if plan_retry and plan_retry.get("plan"):
-                            self._apply_plan_with_validation(plan_retry.get("plan", []), "full_retry", now)
+                            self._apply_plan_with_validation(
+                                plan_retry.get("plan", []), "full_retry", now
+                            )
             return
 
         if not unassigned_jobs:
-            logger.info("[AgentOrchestrator] Aucune course non assignée, pas d'action nécessaire")
+            logger.info(
+                "[AgentOrchestrator] Aucune course non assignée, pas d'action nécessaire"
+            )
             return
 
         # Étape 1 : Essayer assignation simple pour chaque nouvelle course
         # (seulement les nouvelles courses, pas toutes les non assignées)
-        new_unassigned_jobs = [j for j in unassigned_jobs if j.get("job_id") in new_bookings]
+        new_unassigned_jobs = [
+            j for j in unassigned_jobs if j.get("job_id") in new_bookings
+        ]
 
         if new_unassigned_jobs and len(new_unassigned_jobs) == 1:
             # Une seule nouvelle course → essayer assignation simple
@@ -469,7 +498,10 @@ class AgentOrchestrator:
 
         # Étape 2 : Réorganisation ciblée (seulement les courses impactées)
         MAX_JOBS_FOR_TARGETED_REORG = 3
-        if drivers_became_unavailable or len(unassigned_jobs) <= MAX_JOBS_FOR_TARGETED_REORG:
+        if (
+            drivers_became_unavailable
+            or len(unassigned_jobs) <= MAX_JOBS_FOR_TARGETED_REORG
+        ):
             logger.info(
                 "[AgentOrchestrator] 🔄 Réorganisation ciblée: %d course(s) non assignée(s) ou chauffeur indisponible",
                 len(unassigned_jobs),
@@ -488,9 +520,15 @@ class AgentOrchestrator:
                     except Exception:
                         pass
 
-            most_common_date = Counter(job_dates).most_common(1)[0][0] if job_dates else now.strftime("%Y-%m-%d")
+            most_common_date = (
+                Counter(job_dates).most_common(1)[0][0]
+                if job_dates
+                else now.strftime("%Y-%m-%d")
+            )
 
-            strategy = "full" if health.get("state") == "CLOSED" else "degraded_proximity"
+            strategy = (
+                "full" if health.get("state") == "CLOSED" else "degraded_proximity"
+            )
             plan = self.tools.reoptimize(
                 scope="window",
                 strategy=strategy,
@@ -502,11 +540,14 @@ class AgentOrchestrator:
                 success = self._apply_plan_with_validation(plan["plan"], strategy, now)
                 if success:
                     return
-                logger.warning("[AgentOrchestrator] ⚠️ Plan ciblé rejeté, passage au dispatch complet")
+                logger.warning(
+                    "[AgentOrchestrator] ⚠️ Plan ciblé rejeté, passage au dispatch complet"
+                )
 
         # Étape 3 : Dispatch complet (dernier recours)
         logger.info(
-            "[AgentOrchestrator] 🚀 Dispatch complet nécessaire: %d course(s) non assignée(s)", len(unassigned_jobs)
+            "[AgentOrchestrator] 🚀 Dispatch complet nécessaire: %d course(s) non assignée(s)",
+            len(unassigned_jobs),
         )
 
         job_dates = []
@@ -521,7 +562,11 @@ class AgentOrchestrator:
                 except Exception:
                     pass
 
-        most_common_date = Counter(job_dates).most_common(1)[0][0] if job_dates else now.strftime("%Y-%m-%d")
+        most_common_date = (
+            Counter(job_dates).most_common(1)[0][0]
+            if job_dates
+            else now.strftime("%Y-%m-%d")
+        )
         strategy = "full" if health.get("state") == "CLOSED" else "degraded_proximity"
 
         plan = self.tools.reoptimize(
@@ -534,9 +579,14 @@ class AgentOrchestrator:
         if plan and plan.get("plan"):
             success = self._apply_plan_with_validation(plan["plan"], strategy, now)
             if not success:
-                logger.error("[AgentOrchestrator] ❌ Échec application plan complet après %d tentatives", 3)
+                logger.error(
+                    "[AgentOrchestrator] ❌ Échec application plan complet après %d tentatives",
+                    3,
+                )
 
-    def _find_best_driver_simple(self, job: Dict[str, Any], drivers: list[Dict[str, Any]]) -> Optional[int]:
+    def _find_best_driver_simple(
+        self, job: Dict[str, Any], drivers: list[Dict[str, Any]]
+    ) -> Optional[int]:
         """Trouve le meilleur chauffeur pour une assignation simple sans impact.
 
         Retourne None si aucun chauffeur disponible sans conflit.
@@ -588,7 +638,12 @@ class AgentOrchestrator:
                     continue
 
                 # Vérifier si les deux courses sont trop proches temporellement
-                time_diff = abs((booking.scheduled_time - existing_booking.scheduled_time).total_seconds() / 60)
+                time_diff = abs(
+                    (
+                        booking.scheduled_time - existing_booking.scheduled_time
+                    ).total_seconds()
+                    / 60
+                )
                 if time_diff < MIN_TIME_GAP_MINUTES:
                     has_conflict = True
                     break
@@ -603,7 +658,9 @@ class AgentOrchestrator:
 
         return None
 
-    def _find_regular_driver_for_booking(self, booking_id: int, state: Dict[str, Any]) -> Optional[int]:
+    def _find_regular_driver_for_booking(
+        self, booking_id: int, state: Dict[str, Any]
+    ) -> Optional[int]:
         """Trouve un chauffeur régulier disponible pour une course actuellement assignée à l'urgent.
 
         Retourne None si aucun régulier disponible sans conflit.
@@ -669,7 +726,12 @@ class AgentOrchestrator:
                     continue
 
                 # Vérifier si les deux courses sont trop proches temporellement
-                time_diff = abs((booking.scheduled_time - existing_booking.scheduled_time).total_seconds() / 60)
+                time_diff = abs(
+                    (
+                        booking.scheduled_time - existing_booking.scheduled_time
+                    ).total_seconds()
+                    / 60
+                )
                 if time_diff < MIN_TIME_GAP_MINUTES:
                     has_conflict = True
                     break
@@ -711,7 +773,11 @@ class AgentOrchestrator:
 
         while retry_count <= max_retries:
             if retry_count > 0:
-                logger.info("[AgentOrchestrator] 🔄 Tentative %d/%d de ré-optimisation", retry_count, max_retries)
+                logger.info(
+                    "[AgentOrchestrator] 🔄 Tentative %d/%d de ré-optimisation",
+                    retry_count,
+                    max_retries,
+                )
 
                 # Ré-optimiser avec contraintes plus strictes
                 from collections import Counter
@@ -722,9 +788,15 @@ class AgentOrchestrator:
                     if job_id:
                         booking = Booking.query.get(job_id)
                         if booking and booking.scheduled_time:
-                            job_dates.append(booking.scheduled_time.strftime("%Y-%m-%d"))
+                            job_dates.append(
+                                booking.scheduled_time.strftime("%Y-%m-%d")
+                            )
 
-                most_common_date = Counter(job_dates).most_common(1)[0][0] if job_dates else now.strftime("%Y-%m-%d")
+                most_common_date = (
+                    Counter(job_dates).most_common(1)[0][0]
+                    if job_dates
+                    else now.strftime("%Y-%m-%d")
+                )
 
                 # Utiliser une stratégie plus stricte
                 retry_strategy = "full"  # Toujours utiliser "full" pour les retries
@@ -735,7 +807,9 @@ class AgentOrchestrator:
                 )
 
                 if not current_plan_result or not current_plan_result.get("plan"):
-                    logger.warning("[AgentOrchestrator] ⚠️ Ré-optimisation n'a pas généré de plan")
+                    logger.warning(
+                        "[AgentOrchestrator] ⚠️ Ré-optimisation n'a pas généré de plan"
+                    )
                     break
 
                 current_plan = current_plan_result.get("plan", [])
@@ -750,7 +824,9 @@ class AgentOrchestrator:
 
         return False
 
-    def _apply_plan(self, plan: list[Dict[str, Any]], strategy: str, now: datetime) -> bool:
+    def _apply_plan(
+        self, plan: list[Dict[str, Any]], strategy: str, now: datetime
+    ) -> bool:
         """Applique un plan d'assignations avec validations et ré-optimisation si nécessaire.
 
         Args:
@@ -790,7 +866,9 @@ class AgentOrchestrator:
                 )
 
                 if existing_assignment:
-                    logger.debug("[AgentOrchestrator] ⏭️ Job %s déjà assigné, skip", job_id)
+                    logger.debug(
+                        "[AgentOrchestrator] ⏭️ Job %s déjà assigné, skip", job_id
+                    )
                     continue
 
             filtered_plan.append(step)
@@ -831,7 +909,9 @@ class AgentOrchestrator:
         failed_count = 0
 
         for step in filtered_plan:
-            can_proceed, reason = self.safety.check_action(action_type="assign", context=step)
+            can_proceed, reason = self.safety.check_action(
+                action_type="assign", context=step
+            )
 
             if not can_proceed:
                 logger.warning("[AgentOrchestrator] ⚠️ Action bloquée: %s", reason)
@@ -860,7 +940,11 @@ class AgentOrchestrator:
                     result.get("error"),
                 )
 
-        logger.info("[AgentOrchestrator] Plan appliqué: %d réussies, %d échouées", applied_count, failed_count)
+        logger.info(
+            "[AgentOrchestrator] Plan appliqué: %d réussies, %d échouées",
+            applied_count,
+            failed_count,
+        )
 
         return applied_count > 0
 
@@ -885,7 +969,9 @@ class AgentOrchestrator:
         dispatch_settings = ud_settings.for_company(company)
         pickup_service_min = dispatch_settings.service_times.pickup_service_min
         dropoff_service_min = dispatch_settings.service_times.dropoff_service_min
-        min_transition_margin_min = dispatch_settings.service_times.min_transition_margin_min
+        min_transition_margin_min = (
+            dispatch_settings.service_times.min_transition_margin_min
+        )
 
         # Grouper par chauffeur
         by_driver: Dict[int, List[Dict[str, Any]]] = {}
@@ -922,7 +1008,10 @@ class AgentOrchestrator:
 
                 if not current_booking or not next_booking:
                     continue
-                if not current_booking.scheduled_time or not next_booking.scheduled_time:
+                if (
+                    not current_booking.scheduled_time
+                    or not next_booking.scheduled_time
+                ):
                     continue
 
                 # Calculer temps de trajet course actuelle
@@ -936,7 +1025,12 @@ class AgentOrchestrator:
                 next_pickup_lon = getattr(next_booking, "pickup_lon", None)
 
                 # Temps de trajet course actuelle
-                if current_pickup_lat and current_pickup_lon and current_dropoff_lat and current_dropoff_lon:
+                if (
+                    current_pickup_lat
+                    and current_pickup_lon
+                    and current_dropoff_lat
+                    and current_dropoff_lon
+                ):
                     trip_time_min = haversine_minutes(
                         current_pickup_lat,
                         current_pickup_lon,
@@ -948,9 +1042,18 @@ class AgentOrchestrator:
                     trip_time_min = 20  # Estimation par défaut
 
                 # Temps de transition
-                if current_dropoff_lat and current_dropoff_lon and next_pickup_lat and next_pickup_lon:
+                if (
+                    current_dropoff_lat
+                    and current_dropoff_lon
+                    and next_pickup_lat
+                    and next_pickup_lon
+                ):
                     transition_time_min = haversine_minutes(
-                        current_dropoff_lat, current_dropoff_lon, next_pickup_lat, next_pickup_lon, avg_speed_kmh=25
+                        current_dropoff_lat,
+                        current_dropoff_lon,
+                        next_pickup_lat,
+                        next_pickup_lon,
+                        avg_speed_kmh=25,
                     )
                 else:
                     transition_time_min = 15  # Estimation par défaut
@@ -971,12 +1074,16 @@ class AgentOrchestrator:
 
                 # Heure de début nécessaire
                 required_start_time = next_booking.scheduled_time - timedelta(
-                    minutes=transition_time_min + pickup_service_min + min_transition_margin_min
+                    minutes=transition_time_min
+                    + pickup_service_min
+                    + min_transition_margin_min
                 )
 
                 # Vérifier conflit
                 if current_end_time > required_start_time:
-                    time_gap = (required_start_time - current_end_time).total_seconds() / 60
+                    time_gap = (
+                        required_start_time - current_end_time
+                    ).total_seconds() / 60
                     logger.warning(
                         "[AgentOrchestrator] ⚠️ Conflit temporel détecté: Course #%s (fin %s) et #%s (début %s) → temps nécessaire: %dmin, écart disponible: %.1fmin",
                         current_booking.id,
@@ -990,7 +1097,9 @@ class AgentOrchestrator:
 
         return False
 
-    def _check_delayed_optimizer(self, now: datetime, all_jobs: list[Dict[str, Any]], state: Dict[str, Any]) -> None:
+    def _check_delayed_optimizer(
+        self, now: datetime, all_jobs: list[Dict[str, Any]], state: Dict[str, Any]
+    ) -> None:
         """Optimiseur différé : vérifie 1h avant chaque course pour détecter les retards.
 
         Ne réorganise que si une meilleure solution réduit réellement les retards.
@@ -1036,7 +1145,11 @@ class AgentOrchestrator:
                     emergency_assignments_to_check.append((job_id, driver_id))
 
         # Si des courses sont assignées à l'urgent, vérifier si on peut les réassigner à un régulier
-        if emergency_assignments_to_check and len(emergency_assignments_to_check) <= MAX_EMERGENCY_ASSIGNMENTS_TO_CHECK:
+        if (
+            emergency_assignments_to_check
+            and len(emergency_assignments_to_check)
+            <= MAX_EMERGENCY_ASSIGNMENTS_TO_CHECK
+        ):
             logger.info(
                 "[AgentOrchestrator] 🔍 Détection: %d course(s) assignée(s) à l'urgent, vérification si réassignation possible",
                 len(emergency_assignments_to_check),
@@ -1048,7 +1161,9 @@ class AgentOrchestrator:
                 self.state.emergency_corrections_done.add(job_id)
 
                 # Trouver un régulier disponible pour cette course
-                best_regular_driver = self._find_regular_driver_for_booking(job_id, state)
+                best_regular_driver = self._find_regular_driver_for_booking(
+                    job_id, state
+                )
 
                 if best_regular_driver:
                     logger.info(
@@ -1061,7 +1176,11 @@ class AgentOrchestrator:
                     # Vérifier garde-fous
                     can_proceed, reason = self.safety.check_action(
                         action_type="assign",
-                        context={"job_id": job_id, "driver_id": best_regular_driver, "reason": "correction_urgent"},
+                        context={
+                            "job_id": job_id,
+                            "driver_id": best_regular_driver,
+                            "reason": "correction_urgent",
+                        },
                     )
 
                     if can_proceed:
@@ -1087,11 +1206,14 @@ class AgentOrchestrator:
                             )
                     else:
                         logger.warning(
-                            "[AgentOrchestrator] ⚠️ Correction bloquée par safety pour course #%s: %s", job_id, reason
+                            "[AgentOrchestrator] ⚠️ Correction bloquée par safety pour course #%s: %s",
+                            job_id,
+                            reason,
                         )
                 else:
                     logger.debug(
-                        "[AgentOrchestrator] ℹ️ Aucun régulier disponible pour course #%s (urgent nécessaire)", job_id
+                        "[AgentOrchestrator] ℹ️ Aucun régulier disponible pour course #%s (urgent nécessaire)",
+                        job_id,
                     )
 
         # Vérifier les courses dans la prochaine heure pour détecter les retards
@@ -1152,7 +1274,9 @@ class AgentOrchestrator:
         try:
             report = generate_daily_report(self.company_id)
             # Envoyer via notification (Slack/Email)
-            company_email = getattr(self.company, "email", None) if self.company else None
+            company_email = (
+                getattr(self.company, "email", None) if self.company else None
+            )
             self.tools.notify(
                 channel="email",
                 to=company_email or "admin@atmr.com",
@@ -1173,12 +1297,16 @@ class AgentOrchestrator:
         """
         return {
             "running": self.state.running,
-            "last_tick": self.state.last_tick.isoformat() if self.state.last_tick else None,
+            "last_tick": self.state.last_tick.isoformat()
+            if self.state.last_tick
+            else None,
             "actions_today": self.state.actions_today,
             "actions_last_hour": self.state.actions_last_hour,
             "osrm_health": self.state.osrm_health,
             "current_plan": self.state.current_plan,
-            "last_report": self.state.last_report.isoformat() if self.state.last_report else None,
+            "last_report": self.state.last_report.isoformat()
+            if self.state.last_report
+            else None,
         }
 
 
@@ -1202,7 +1330,9 @@ def get_agent_for_company(company_id: int, app=None) -> AgentOrchestrator:
         if company_id not in _active_agents:
             agent = AgentOrchestrator(company_id, app=app)
             _active_agents[company_id] = agent
-            logger.info("[AgentOrchestrator] Created new agent for company %s", company_id)
+            logger.info(
+                "[AgentOrchestrator] Created new agent for company %s", company_id
+            )
         else:
             agent = _active_agents[company_id]
             logger.debug(
