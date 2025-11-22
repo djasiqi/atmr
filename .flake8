@@ -13,9 +13,11 @@ exclude =
 max-line-length = 120
 
 # Ignorer certaines règles qui sont gérées par Ruff
+# E203: whitespace before ':' (conflit avec black/ruff)
+# W503: line break before binary operator (conflit avec black/ruff)
 extend-ignore =
-    E203,  # whitespace before ':' (conflit avec black/ruff)
-    W503,  # line break before binary operator (conflit avec black/ruff)
+    E203,
+    W503
 
 # Ignorations par fichier
 per-file-ignores =

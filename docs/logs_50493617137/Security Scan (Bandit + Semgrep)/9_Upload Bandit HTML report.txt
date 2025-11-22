@@ -1,0 +1,28 @@
+﻿2025-11-21T16:05:46.3092439Z ##[group]Run actions/upload-artifact@v4
+2025-11-21T16:05:46.3092710Z with:
+2025-11-21T16:05:46.3092893Z   name: bandit-html-report
+2025-11-21T16:05:46.3093119Z   path: artifacts/bandit.html
+2025-11-21T16:05:46.3093329Z   retention-days: 30
+2025-11-21T16:05:46.3093524Z   if-no-files-found: warn
+2025-11-21T16:05:46.3093729Z   compression-level: 6
+2025-11-21T16:05:46.3093919Z   overwrite: false
+2025-11-21T16:05:46.3094263Z   include-hidden-files: false
+2025-11-21T16:05:46.3094613Z env:
+2025-11-21T16:05:46.3094842Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:46.3095236Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+2025-11-21T16:05:46.3095645Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:46.3096008Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:46.3096349Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:05:46.3096690Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+2025-11-21T16:05:46.3096999Z ##[endgroup]
+2025-11-21T16:05:46.5288676Z With the provided path, there will be 1 file uploaded
+2025-11-21T16:05:46.5293772Z Artifact name is valid!
+2025-11-21T16:05:46.5295486Z Root directory input is valid!
+2025-11-21T16:05:46.6459994Z Beginning upload of artifact content to blob storage
+2025-11-21T16:05:46.7164495Z Uploaded bytes 9209
+2025-11-21T16:05:46.7380402Z Finished uploading artifact content to blob storage!
+2025-11-21T16:05:46.7383974Z SHA256 digest of uploaded artifact zip is 8c298cc49b0721d37d90295a39c6f6b09e6c7784e1bbd9b7ca1e180515405cf5
+2025-11-21T16:05:46.7386258Z Finalizing artifact upload
+2025-11-21T16:05:46.8217486Z Artifact bandit-html-report.zip successfully finalized. Artifact ID 4642163364
+2025-11-21T16:05:46.8218581Z Artifact bandit-html-report has been successfully uploaded! Final size is 9209 bytes. Artifact ID is 4642163364
+2025-11-21T16:05:46.8225444Z Artifact download URL: https://github.com/djasiqi/atmr/actions/runs/19576210336/artifacts/4642163364

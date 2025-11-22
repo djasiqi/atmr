@@ -45,9 +45,9 @@ RUN apt-get update && apt-get upgrade -y && \
 # Copier et installer les dépendances Python
 COPY requirements.txt requirements-rl.txt ./
 RUN python -m pip install --upgrade pip setuptools wheel && \
-    pip wheel --no-cache-dir --wheel-dir /wheels --root-user-action=ignore -r requirements.txt && \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt && \
     (if [ "$WITH_RL" = "true" ] && [ -f requirements-rl.txt ]; then \
-    pip wheel --no-cache-dir --wheel-dir /wheels --root-user-action=ignore -r requirements-rl.txt; \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-rl.txt; \
     else \
     echo "Skip RL wheels (WITH_RL=$WITH_RL)"; \
     fi) && \

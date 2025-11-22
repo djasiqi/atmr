@@ -1,0 +1,53 @@
+﻿2025-11-21T16:06:14.1908104Z ##[group]Run cd backend
+2025-11-21T16:06:14.1908411Z [36;1mcd backend[0m
+2025-11-21T16:06:14.1908701Z [36;1m# Vérifier aucune migration auto-détectée non commitée[0m
+2025-11-21T16:06:14.1909111Z [36;1m# Générer une migration de test pour détecter les changements[0m
+2025-11-21T16:06:14.1909567Z [36;1mTEST_MIGRATION_FILE="migrations/versions/$(date +%s)_test_pending_check.py"[0m
+2025-11-21T16:06:14.1910084Z [36;1mflask db revision --autogenerate -m "test_pending_check" > /dev/null 2>&1 || true[0m
+2025-11-21T16:06:14.1910449Z [36;1m[0m
+2025-11-21T16:06:14.1910699Z [36;1m# Trouver le fichier de migration de test créé (le plus récent)[0m
+2025-11-21T16:06:14.1911233Z [36;1mLATEST_MIGRATION=$(ls -t migrations/versions/*test_pending_check.py 2>/dev/null | head -1 || echo "")[0m
+2025-11-21T16:06:14.1911669Z [36;1m[0m
+2025-11-21T16:06:14.1911905Z [36;1mif [ -n "$LATEST_MIGRATION" ] && [ -f "$LATEST_MIGRATION" ]; then[0m
+2025-11-21T16:06:14.1912360Z [36;1m  # Vérifier si la migration contient des changements (pas seulement un fichier vide)[0m
+2025-11-21T16:06:14.1912913Z [36;1m  if grep -q "def upgrade" "$LATEST_MIGRATION" && grep -q "op\." "$LATEST_MIGRATION"; then[0m
+2025-11-21T16:06:14.1913358Z [36;1m    echo "⚠️ Warning: Pending migrations detected!"[0m
+2025-11-21T16:06:14.1913718Z [36;1m    echo "La migration suivante a été générée automatiquement:"[0m
+2025-11-21T16:06:14.1914036Z [36;1m    cat "$LATEST_MIGRATION"[0m
+2025-11-21T16:06:14.1914266Z [36;1m    rm -f "$LATEST_MIGRATION"[0m
+2025-11-21T16:06:14.1914493Z [36;1m    exit 1[0m
+2025-11-21T16:06:14.1914667Z [36;1m  else[0m
+2025-11-21T16:06:14.1914881Z [36;1m    # Migration vide, pas de changements détectés[0m
+2025-11-21T16:06:14.1915215Z [36;1m    rm -f "$LATEST_MIGRATION"[0m
+2025-11-21T16:06:14.1915484Z [36;1m    echo "✅ Aucune migration en attente détectée"[0m
+2025-11-21T16:06:14.1915739Z [36;1m  fi[0m
+2025-11-21T16:06:14.1915894Z [36;1melse[0m
+2025-11-21T16:06:14.1916099Z [36;1m  echo "✅ Aucune migration en attente détectée"[0m
+2025-11-21T16:06:14.1916367Z [36;1mfi[0m
+2025-11-21T16:06:14.1949049Z shell: /usr/bin/bash -e {0}
+2025-11-21T16:06:14.1949271Z env:
+2025-11-21T16:06:14.1949650Z   DATABASE_URL: ***localhost:5432/atmr_test
+2025-11-21T16:06:14.1949908Z   PGHOST: localhost
+2025-11-21T16:06:14.1950086Z   PGPORT: 5432
+2025-11-21T16:06:14.1950252Z   PGUSER: test
+2025-11-21T16:06:14.1950415Z   PGPASSWORD: test
+2025-11-21T16:06:14.1950590Z   PGDATABASE: atmr_test
+2025-11-21T16:06:14.1950806Z   REDIS_URL: redis://localhost:6379/0
+2025-11-21T16:06:14.1951048Z   FLASK_CONFIG: testing
+2025-11-21T16:06:14.1951238Z   SECRET_KEY: test-secret-key
+2025-11-21T16:06:14.1951458Z   JWT_SECRET_KEY: test-jwt-secret
+2025-11-21T16:06:14.1951773Z   APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+2025-11-21T16:06:14.1952112Z   API_LEGACY_ENABLED: false
+2025-11-21T16:06:14.1952338Z   PYTHONPATH: /home/runner/work/atmr/atmr
+2025-11-21T16:06:14.1952589Z   SOCKETIO_ASYNC_MODE: threading
+2025-11-21T16:06:14.1952808Z   SKIP_SOCKETIO: true
+2025-11-21T16:06:14.1953000Z   SKIP_ROUTES_INIT: true
+2025-11-21T16:06:14.1953267Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:14.1953654Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+2025-11-21T16:06:14.1954029Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:14.1954369Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:14.1954715Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+2025-11-21T16:06:14.1955059Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+2025-11-21T16:06:14.1955346Z   FLASK_APP: backend.wsgi
+2025-11-21T16:06:14.1955541Z ##[endgroup]
+2025-11-21T16:06:16.7059507Z ✅ Aucune migration en attente détectée

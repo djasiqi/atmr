@@ -1,0 +1,347 @@
+﻿2025-11-21T16:18:27.4892663Z ##[group]Run aquasecurity/trivy-action@master
+2025-11-21T16:18:27.4893032Z with:
+2025-11-21T16:18:27.4893332Z   image-ref: ***:***
+2025-11-21T16:18:27.4893595Z   format: sarif
+2025-11-21T16:18:27.4893858Z   output: trivy-results.sarif
+2025-11-21T16:18:27.4894152Z   ignore-unfixed: true
+2025-11-21T16:18:27.4894422Z   vuln-type: os,library
+2025-11-21T16:18:27.4894684Z   scan-type: image
+2025-11-21T16:18:27.4894931Z   scan-ref: .
+2025-11-21T16:18:27.4895209Z   severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+2025-11-21T16:18:27.4895604Z   cache-dir: /home/runner/work/***/***/.cache/trivy
+2025-11-21T16:18:27.4896467Z   list-all-pkgs: false
+2025-11-21T16:18:27.4896747Z   version: v0.65.0
+2025-11-21T16:18:27.4896991Z   cache: true
+2025-11-21T16:18:27.4897239Z   skip-setup-trivy: false
+2025-11-21T16:18:27.4897630Z   token-setup-trivy: ***
+2025-11-21T16:18:27.4897907Z env:
+2025-11-21T16:18:27.4898161Z   DOCKER_IMAGE: ***
+2025-11-21T16:18:27.4898433Z   DOCKER_TAG: ***
+2025-11-21T16:18:27.4898688Z   SSH_HOST: ***
+2025-11-21T16:18:27.4898963Z   SSH_USER: ***
+2025-11-21T16:18:27.4899203Z   SSH_PORT: ***
+2025-11-21T16:18:27.4900934Z   SSH_KEY: ***
+2025-11-21T16:18:27.4901292Z   APP_ENCRYPTION_KEY_B64: ***
+2025-11-21T16:18:27.4901711Z   SECRET_KEY: ***
+2025-11-21T16:18:27.4902088Z   JWT_SECRET_KEY: ***
+2025-11-21T16:18:27.4902370Z   POSTGRES_PASSWORD: ***
+2025-11-21T16:18:27.4902654Z   POSTGRES_USER: ***
+2025-11-21T16:18:27.4902913Z   POSTGRES_DB: ***
+2025-11-21T16:18:27.4903176Z   MAIL_PASSWORD: ***
+2025-11-21T16:18:27.4903676Z   SENTRY_DSN: ***
+2025-11-21T16:18:27.4903918Z ##[endgroup]
+2025-11-21T16:18:27.5035548Z ##[group]Run aquasecurity/setup-trivy@e6c2c5e321ed9123bda567646e2f96565e34abe1
+2025-11-21T16:18:27.5036025Z with:
+2025-11-21T16:18:27.5036503Z   version: v0.65.0
+2025-11-21T16:18:27.5036765Z   cache: true
+2025-11-21T16:18:27.5037103Z   token: ***
+2025-11-21T16:18:27.5037358Z   path: $HOME/.local/bin
+2025-11-21T16:18:27.5037679Z   github-server-url: https://github.com
+2025-11-21T16:18:27.5037999Z env:
+2025-11-21T16:18:27.5038263Z   DOCKER_IMAGE: ***
+2025-11-21T16:18:27.5038524Z   DOCKER_TAG: ***
+2025-11-21T16:18:27.5038780Z   SSH_HOST: ***
+2025-11-21T16:18:27.5039030Z   SSH_USER: ***
+2025-11-21T16:18:27.5039263Z   SSH_PORT: ***
+2025-11-21T16:18:27.5040996Z   SSH_KEY: ***
+2025-11-21T16:18:27.5041364Z   APP_ENCRYPTION_KEY_B64: ***
+2025-11-21T16:18:27.5041785Z   SECRET_KEY: ***
+2025-11-21T16:18:27.5042167Z   JWT_SECRET_KEY: ***
+2025-11-21T16:18:27.5042456Z   POSTGRES_PASSWORD: ***
+2025-11-21T16:18:27.5042746Z   POSTGRES_USER: ***
+2025-11-21T16:18:27.5043005Z   POSTGRES_DB: ***
+2025-11-21T16:18:27.5043270Z   MAIL_PASSWORD: ***
+2025-11-21T16:18:27.5043771Z   SENTRY_DSN: ***
+2025-11-21T16:18:27.5044024Z ##[endgroup]
+2025-11-21T16:18:27.5072337Z ##[group]Run echo "dir=$HOME/.local/bin/trivy-bin" >> $GITHUB_OUTPUT
+2025-11-21T16:18:27.5072882Z [36;1mecho "dir=$HOME/.local/bin/trivy-bin" >> $GITHUB_OUTPUT[0m
+2025-11-21T16:18:27.5108557Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-11-21T16:18:27.5108958Z env:
+2025-11-21T16:18:27.5109252Z   DOCKER_IMAGE: ***
+2025-11-21T16:18:27.5109530Z   DOCKER_TAG: ***
+2025-11-21T16:18:27.5109787Z   SSH_HOST: ***
+2025-11-21T16:18:27.5110037Z   SSH_USER: ***
+2025-11-21T16:18:27.5110274Z   SSH_PORT: ***
+2025-11-21T16:18:27.5112011Z   SSH_KEY: ***
+2025-11-21T16:18:27.5112372Z   APP_ENCRYPTION_KEY_B64: ***
+2025-11-21T16:18:27.5112792Z   SECRET_KEY: ***
+2025-11-21T16:18:27.5113172Z   JWT_SECRET_KEY: ***
+2025-11-21T16:18:27.5113457Z   POSTGRES_PASSWORD: ***
+2025-11-21T16:18:27.5113738Z   POSTGRES_USER: ***
+2025-11-21T16:18:27.5113991Z   POSTGRES_DB: ***
+2025-11-21T16:18:27.5114254Z   MAIL_PASSWORD: ***
+2025-11-21T16:18:27.5114760Z   SENTRY_DSN: ***
+2025-11-21T16:18:27.5115015Z ##[endgroup]
+2025-11-21T16:18:27.5253704Z ##[group]Run actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+2025-11-21T16:18:27.5254095Z with:
+2025-11-21T16:18:27.5254356Z   path: /home/runner/.local/bin/trivy-bin
+2025-11-21T16:18:27.5254698Z   key: trivy-binary-v0.65.0-Linux-X64
+2025-11-21T16:18:27.5255022Z   enableCrossOsArchive: false
+2025-11-21T16:18:27.5255579Z   fail-on-cache-miss: false
+2025-11-21T16:18:27.5255856Z   lookup-only: false
+2025-11-21T16:18:27.5256109Z   save-always: false
+2025-11-21T16:18:27.5256591Z env:
+2025-11-21T16:18:27.5256874Z   DOCKER_IMAGE: ***
+2025-11-21T16:18:27.5257140Z   DOCKER_TAG: ***
+2025-11-21T16:18:27.5257395Z   SSH_HOST: ***
+2025-11-21T16:18:27.5257637Z   SSH_USER: ***
+2025-11-21T16:18:27.5257880Z   SSH_PORT: ***
+2025-11-21T16:18:27.5259621Z   SSH_KEY: ***
+2025-11-21T16:18:27.5259987Z   APP_ENCRYPTION_KEY_B64: ***
+2025-11-21T16:18:27.5260410Z   SECRET_KEY: ***
+2025-11-21T16:18:27.5260957Z   JWT_SECRET_KEY: ***
+2025-11-21T16:18:27.5261240Z   POSTGRES_PASSWORD: ***
+2025-11-21T16:18:27.5261517Z   POSTGRES_USER: ***
+2025-11-21T16:18:27.5261782Z   POSTGRES_DB: ***
+2025-11-21T16:18:27.5262047Z   MAIL_PASSWORD: ***
+2025-11-21T16:18:27.5262544Z   SENTRY_DSN: ***
+2025-11-21T16:18:27.5262790Z ##[endgroup]
+2025-11-21T16:18:27.8264701Z Cache hit for: trivy-binary-v0.65.0-Linux-X64
+2025-11-21T16:18:28.7079779Z Received 42139154 of 42139154 (100.0%), 57.6 MBs/sec
+2025-11-21T16:18:28.7080928Z Cache Size: ~40 MB (42139154 B)
+2025-11-21T16:18:28.7110522Z [command]/usr/bin/tar -xf /home/runner/work/_temp/e45aa61b-3a79-429d-9c5a-7183472818af/cache.tzst -P -C /home/runner/work/***/*** --use-compress-program unzstd
+2025-11-21T16:18:28.9365120Z Cache restored successfully
+2025-11-21T16:18:28.9527270Z Cache restored from key: trivy-binary-v0.65.0-Linux-X64
+2025-11-21T16:18:28.9657647Z ##[group]Run echo /home/runner/.local/bin/trivy-bin >> $GITHUB_PATH
+2025-11-21T16:18:28.9658204Z [36;1mecho /home/runner/.local/bin/trivy-bin >> $GITHUB_PATH[0m
+2025-11-21T16:18:28.9690527Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-11-21T16:18:28.9690932Z env:
+2025-11-21T16:18:28.9691236Z   DOCKER_IMAGE: ***
+2025-11-21T16:18:28.9691521Z   DOCKER_TAG: ***
+2025-11-21T16:18:28.9691788Z   SSH_HOST: ***
+2025-11-21T16:18:28.9692044Z   SSH_USER: ***
+2025-11-21T16:18:28.9692294Z   SSH_PORT: ***
+2025-11-21T16:18:28.9694072Z   SSH_KEY: ***
+2025-11-21T16:18:28.9694459Z   APP_ENCRYPTION_KEY_B64: ***
+2025-11-21T16:18:28.9694897Z   SECRET_KEY: ***
+2025-11-21T16:18:28.9695300Z   JWT_SECRET_KEY: ***
+2025-11-21T16:18:28.9695598Z   POSTGRES_PASSWORD: ***
+2025-11-21T16:18:28.9695893Z   POSTGRES_USER: ***
+2025-11-21T16:18:28.9696175Z   POSTGRES_DB: ***
+2025-11-21T16:18:28.9696644Z   MAIL_PASSWORD: ***
+2025-11-21T16:18:28.9697168Z   SENTRY_DSN: ***
+2025-11-21T16:18:28.9697440Z ##[endgroup]
+2025-11-21T16:18:28.9779339Z ##[group]Run echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+2025-11-21T16:18:28.9779793Z [36;1mecho "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT[0m
+2025-11-21T16:18:28.9812023Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-11-21T16:18:28.9812415Z env:
+2025-11-21T16:18:28.9812712Z   DOCKER_IMAGE: ***
+2025-11-21T16:18:28.9812988Z   DOCKER_TAG: ***
+2025-11-21T16:18:28.9813259Z   SSH_HOST: ***
+2025-11-21T16:18:28.9813507Z   SSH_USER: ***
+2025-11-21T16:18:28.9813751Z   SSH_PORT: ***
+2025-11-21T16:18:28.9815511Z   SSH_KEY: ***
+2025-11-21T16:18:28.9815881Z   APP_ENCRYPTION_KEY_B64: ***
+2025-11-21T16:18:28.9816513Z   SECRET_KEY: ***
+2025-11-21T16:18:28.9816919Z   JWT_SECRET_KEY: ***
+2025-11-21T16:18:28.9817220Z   POSTGRES_PASSWORD: ***
+2025-11-21T16:18:28.9817511Z   POSTGRES_USER: ***
+2025-11-21T16:18:28.9817782Z   POSTGRES_DB: ***
+2025-11-21T16:18:28.9818053Z   MAIL_PASSWORD: ***
+2025-11-21T16:18:28.9818572Z   SENTRY_DSN: ***
+2025-11-21T16:18:28.9818832Z ##[endgroup]
+2025-11-21T16:18:28.9919042Z ##[group]Run actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+2025-11-21T16:18:28.9919439Z with:
+2025-11-21T16:18:28.9919762Z   path: /home/runner/work/***/***/.cache/trivy
+2025-11-21T16:18:28.9920116Z   key: cache-trivy-2025-11-21
+2025-11-21T16:18:28.9920422Z   restore-keys: cache-trivy-
+2025-11-21T16:18:28.9920726Z   enableCrossOsArchive: false
+2025-11-21T16:18:28.9921022Z   fail-on-cache-miss: false
+2025-11-21T16:18:28.9921309Z   lookup-only: false
+2025-11-21T16:18:28.9921577Z   save-always: false
+2025-11-21T16:18:28.9922001Z env:
+2025-11-21T16:18:28.9922258Z   DOCKER_IMAGE: ***
+2025-11-21T16:18:28.9922525Z   DOCKER_TAG: ***
+2025-11-21T16:18:28.9922780Z   SSH_HOST: ***
+2025-11-21T16:18:28.9923030Z   SSH_USER: ***
+2025-11-21T16:18:28.9923280Z   SSH_PORT: ***
+2025-11-21T16:18:28.9925031Z   SSH_KEY: ***
+2025-11-21T16:18:28.9925400Z   APP_ENCRYPTION_KEY_B64: ***
+2025-11-21T16:18:28.9925829Z   SECRET_KEY: ***
+2025-11-21T16:18:28.9926221Z   JWT_SECRET_KEY: ***
+2025-11-21T16:18:28.9926697Z   POSTGRES_PASSWORD: ***
+2025-11-21T16:18:28.9926987Z   POSTGRES_USER: ***
+2025-11-21T16:18:28.9927252Z   POSTGRES_DB: ***
+2025-11-21T16:18:28.9927682Z   MAIL_PASSWORD: ***
+2025-11-21T16:18:28.9928195Z   SENTRY_DSN: ***
+2025-11-21T16:18:28.9928444Z ##[endgroup]
+2025-11-21T16:18:29.2777180Z Cache hit for restore-key: cache-trivy-2025-11-19
+2025-11-21T16:18:30.2897708Z Received 54895877 of 54895877 (100.0%), 60.9 MBs/sec
+2025-11-21T16:18:30.2898473Z Cache Size: ~52 MB (54895877 B)
+2025-11-21T16:18:30.2931734Z [command]/usr/bin/tar -xf /home/runner/work/_temp/204fcf92-64b4-4f2c-90e6-0c74c385b694/cache.tzst -P -C /home/runner/work/***/*** --use-compress-program unzstd
+2025-11-21T16:18:31.3417308Z Cache restored successfully
+2025-11-21T16:18:31.3600995Z Cache restored from key: cache-trivy-2025-11-19
+2025-11-21T16:18:31.3712350Z ##[group]Run echo "$GITHUB_ACTION_PATH" >> $GITHUB_PATH
+2025-11-21T16:18:31.3713153Z [36;1mecho "$GITHUB_ACTION_PATH" >> $GITHUB_PATH[0m
+2025-11-21T16:18:31.3761104Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-11-21T16:18:31.3761774Z env:
+2025-11-21T16:18:31.3762255Z   DOCKER_IMAGE: ***
+2025-11-21T16:18:31.3762758Z   DOCKER_TAG: ***
+2025-11-21T16:18:31.3763222Z   SSH_HOST: ***
+2025-11-21T16:18:31.3763657Z   SSH_USER: ***
+2025-11-21T16:18:31.3764110Z   SSH_PORT: ***
+2025-11-21T16:18:31.3767586Z   SSH_KEY: ***
+2025-11-21T16:18:31.3768311Z   APP_ENCRYPTION_KEY_B64: ***
+2025-11-21T16:18:31.3769086Z   SECRET_KEY: ***
+2025-11-21T16:18:31.3769774Z   JWT_SECRET_KEY: ***
+2025-11-21T16:18:31.3770306Z   POSTGRES_PASSWORD: ***
+2025-11-21T16:18:31.3770835Z   POSTGRES_USER: ***
+2025-11-21T16:18:31.3771321Z   POSTGRES_DB: ***
+2025-11-21T16:18:31.3771807Z   MAIL_PASSWORD: ***
+2025-11-21T16:18:31.3772718Z   SENTRY_DSN: ***
+2025-11-21T16:18:31.3773546Z   GITHUB_ACTION_PATH: /home/runner/work/_actions/aquasecurity/trivy-action/master
+2025-11-21T16:18:31.3774331Z ##[endgroup]
+2025-11-21T16:18:31.3862742Z ##[group]Run rm -f trivy_envs.txt
+2025-11-21T16:18:31.3863202Z [36;1mrm -f trivy_envs.txt[0m
+2025-11-21T16:18:31.3863521Z [36;1mtouch trivy_envs.txt[0m
+2025-11-21T16:18:31.3894685Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-11-21T16:18:31.3895106Z env:
+2025-11-21T16:18:31.3895392Z   DOCKER_IMAGE: ***
+2025-11-21T16:18:31.3895677Z   DOCKER_TAG: ***
+2025-11-21T16:18:31.3895949Z   SSH_HOST: ***
+2025-11-21T16:18:31.3896210Z   SSH_USER: ***
+2025-11-21T16:18:31.3896579Z   SSH_PORT: ***
+2025-11-21T16:18:31.3898343Z   SSH_KEY: ***
+2025-11-21T16:18:31.3898726Z   APP_ENCRYPTION_KEY_B64: ***
+2025-11-21T16:18:31.3899180Z   SECRET_KEY: ***
+2025-11-21T16:18:31.3899585Z   JWT_SECRET_KEY: ***
+2025-11-21T16:18:31.3899882Z   POSTGRES_PASSWORD: ***
+2025-11-21T16:18:31.3900178Z   POSTGRES_USER: ***
+2025-11-21T16:18:31.3900446Z   POSTGRES_DB: ***
+2025-11-21T16:18:31.3900730Z   MAIL_PASSWORD: ***
+2025-11-21T16:18:31.3901236Z   SENTRY_DSN: ***
+2025-11-21T16:18:31.3901522Z ##[endgroup]
+2025-11-21T16:18:31.4001920Z ##[group]Run # Note: There is currently no way to distinguish between undefined variables and empty strings in GitHub Actions.
+2025-11-21T16:18:31.4002806Z [36;1m# Note: There is currently no way to distinguish between undefined variables and empty strings in GitHub Actions.[0m
+2025-11-21T16:18:31.4003501Z [36;1m# This limitation affects how we handle default values and empty inputs.[0m
+2025-11-21T16:18:31.4004081Z [36;1m# For more information, see: https://github.com/actions/runner/issues/924[0m
+2025-11-21T16:18:31.4004519Z [36;1m[0m
+2025-11-21T16:18:31.4004934Z [36;1m# The following logic implements the configuration priority described in the README:[0m
+2025-11-21T16:18:31.4005596Z [36;1m#[0m
+2025-11-21T16:18:31.4005837Z [36;1m# Inputs[0m
+2025-11-21T16:18:31.4006120Z [36;1m# Environment Variables[0m
+2025-11-21T16:18:31.4006708Z [36;1m# Config File[0m
+2025-11-21T16:18:31.4006994Z [36;1m# Defaults[0m
+2025-11-21T16:18:31.4007250Z [36;1m#[0m
+2025-11-21T16:18:31.4007694Z [36;1m# As noted above defaults are awkward to handle as GitHub Actions will inject those values as the input[0m
+2025-11-21T16:18:31.4008382Z [36;1m# if the caller doesn't provide them, thus if the input matches the default we don't set it as we[0m
+2025-11-21T16:18:31.4009231Z [36;1m# can't tell the difference.  Plus if we did set it when it was the default value then it could potentially [0m
+2025-11-21T16:18:31.4009987Z [36;1m# override an external environment variable, or something in the callers configuration file, which then wouldn't [0m
+2025-11-21T16:18:31.4010617Z [36;1m# match the configuration priority that is documented.[0m
+2025-11-21T16:18:31.4011017Z [36;1mset_env_var_if_provided() {[0m
+2025-11-21T16:18:31.4011338Z [36;1m  local var_name="$1"[0m
+2025-11-21T16:18:31.4011645Z [36;1m  local input_value="$2"[0m
+2025-11-21T16:18:31.4011961Z [36;1m  local default_value="$3"[0m
+2025-11-21T16:18:31.4012263Z [36;1m[0m
+2025-11-21T16:18:31.4012598Z [36;1m  if [ ! -z "$input_value" ] && [ "$input_value" != "$default_value" ]; then[0m
+2025-11-21T16:18:31.4013115Z [36;1m    # If action was provided with explicit input by the caller set that[0m
+2025-11-21T16:18:31.4013599Z [36;1m    echo "export $var_name=$input_value" >> trivy_envs.txt[0m
+2025-11-21T16:18:31.4013984Z [36;1m  fi[0m
+2025-11-21T16:18:31.4014227Z [36;1m}[0m
+2025-11-21T16:18:31.4014462Z [36;1m[0m
+2025-11-21T16:18:31.4014805Z [36;1m# Set environment variables, handling those with default values[0m
+2025-11-21T16:18:31.4015454Z [36;1m# cf. https://aquasecurity.github.io/trivy/***/docs/configuration/#environment-variables[0m
+2025-11-21T16:18:31.4016019Z [36;1mset_env_var_if_provided "TRIVY_INPUT" "" ""[0m
+2025-11-21T16:18:31.4016640Z [36;1mset_env_var_if_provided "TRIVY_EXIT_CODE" "" ""[0m
+2025-11-21T16:18:31.4017094Z [36;1mset_env_var_if_provided "TRIVY_IGNORE_UNFIXED" "true" "false"[0m
+2025-11-21T16:18:31.4017601Z [36;1mset_env_var_if_provided "TRIVY_PKG_TYPES" "os,library" "os,library"[0m
+2025-11-21T16:18:31.4018260Z [36;1mset_env_var_if_provided "TRIVY_SEVERITY" "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL" "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"[0m
+2025-11-21T16:18:31.4018890Z [36;1mset_env_var_if_provided "TRIVY_FORMAT" "sarif" "table"[0m
+2025-11-21T16:18:31.4019330Z [36;1mset_env_var_if_provided "TRIVY_TEMPLATE" "" ""[0m
+2025-11-21T16:18:31.4019802Z [36;1mset_env_var_if_provided "TRIVY_OUTPUT" "trivy-results.sarif" ""[0m
+2025-11-21T16:18:31.4020263Z [36;1mset_env_var_if_provided "TRIVY_SKIP_DIRS" "" ""[0m
+2025-11-21T16:18:31.4020684Z [36;1mset_env_var_if_provided "TRIVY_SKIP_FILES" "" ""[0m
+2025-11-21T16:18:31.4021091Z [36;1mset_env_var_if_provided "TRIVY_TIMEOUT" "" ""[0m
+2025-11-21T16:18:31.4021532Z [36;1mset_env_var_if_provided "TRIVY_IGNORE_POLICY" "" ""[0m
+2025-11-21T16:18:31.4021941Z [36;1mset_env_var_if_provided "TRIVY_QUIET" "" ""[0m
+2025-11-21T16:18:31.4022374Z [36;1mset_env_var_if_provided "TRIVY_LIST_ALL_PKGS" "false" "false"[0m
+2025-11-21T16:18:31.4022811Z [36;1mset_env_var_if_provided "TRIVY_SCANNERS" "" ""[0m
+2025-11-21T16:18:31.4023204Z [36;1mset_env_var_if_provided "TRIVY_CONFIG" "" ""[0m
+2025-11-21T16:18:31.4023599Z [36;1mset_env_var_if_provided "TRIVY_TF_VARS" "" ""[0m
+2025-11-21T16:18:31.4023998Z [36;1mset_env_var_if_provided "TRIVY_DOCKER_HOST" "" ""[0m
+2025-11-21T16:18:31.4054323Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-11-21T16:18:31.4054739Z env:
+2025-11-21T16:18:31.4055027Z   DOCKER_IMAGE: ***
+2025-11-21T16:18:31.4055317Z   DOCKER_TAG: ***
+2025-11-21T16:18:31.4055588Z   SSH_HOST: ***
+2025-11-21T16:18:31.4055855Z   SSH_USER: ***
+2025-11-21T16:18:31.4056108Z   SSH_PORT: ***
+2025-11-21T16:18:31.4058269Z   SSH_KEY: ***
+2025-11-21T16:18:31.4058657Z   APP_ENCRYPTION_KEY_B64: ***
+2025-11-21T16:18:31.4059093Z   SECRET_KEY: ***
+2025-11-21T16:18:31.4059554Z   JWT_SECRET_KEY: ***
+2025-11-21T16:18:31.4060089Z   POSTGRES_PASSWORD: ***
+2025-11-21T16:18:31.4060577Z   POSTGRES_USER: ***
+2025-11-21T16:18:31.4061082Z   POSTGRES_DB: ***
+2025-11-21T16:18:31.4061529Z   MAIL_PASSWORD: ***
+2025-11-21T16:18:31.4119248Z   SENTRY_DSN: ***
+2025-11-21T16:18:31.4119598Z ##[endgroup]
+2025-11-21T16:18:31.4198334Z ##[group]Run entrypoint.sh
+2025-11-21T16:18:31.4198655Z [36;1mentrypoint.sh[0m
+2025-11-21T16:18:31.4228713Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-11-21T16:18:31.4229117Z env:
+2025-11-21T16:18:31.4229400Z   DOCKER_IMAGE: ***
+2025-11-21T16:18:31.4229692Z   DOCKER_TAG: ***
+2025-11-21T16:18:31.4229959Z   SSH_HOST: ***
+2025-11-21T16:18:31.4230218Z   SSH_USER: ***
+2025-11-21T16:18:31.4230466Z   SSH_PORT: ***
+2025-11-21T16:18:31.4232252Z   SSH_KEY: ***
+2025-11-21T16:18:31.4232641Z   APP_ENCRYPTION_KEY_B64: ***
+2025-11-21T16:18:31.4233085Z   SECRET_KEY: ***
+2025-11-21T16:18:31.4233483Z   JWT_SECRET_KEY: ***
+2025-11-21T16:18:31.4233786Z   POSTGRES_PASSWORD: ***
+2025-11-21T16:18:31.4234083Z   POSTGRES_USER: ***
+2025-11-21T16:18:31.4234357Z   POSTGRES_DB: ***
+2025-11-21T16:18:31.4234642Z   MAIL_PASSWORD: ***
+2025-11-21T16:18:31.4235158Z   SENTRY_DSN: ***
+2025-11-21T16:18:31.4235434Z   INPUT_SCAN_TYPE: image
+2025-11-21T16:18:31.4235763Z   INPUT_IMAGE_REF: ***:***
+2025-11-21T16:18:31.4236050Z   INPUT_SCAN_REF: .
+2025-11-21T16:18:31.4236493Z   INPUT_TRIVYIGNORES: 
+2025-11-21T16:18:31.4236790Z   INPUT_GITHUB_PAT: 
+2025-11-21T16:18:31.4237071Z   INPUT_LIMIT_SEVERITIES_FOR_SARIF: 
+2025-11-21T16:18:31.4237467Z   TRIVY_CACHE_DIR: /home/runner/work/***/***/.cache/trivy
+2025-11-21T16:18:31.4237832Z ##[endgroup]
+2025-11-21T16:18:31.4303970Z Building SARIF report with all severities
+2025-11-21T16:18:31.4304825Z Running Trivy with options: trivy image ***:***
+2025-11-21T16:18:31.4852610Z 2025-11-21T16:18:31Z	INFO	[vulndb] Need to update DB
+2025-11-21T16:18:31.4853540Z 2025-11-21T16:18:31Z	INFO	[vulndb] Downloading vulnerability DB...
+2025-11-21T16:18:31.4854482Z 2025-11-21T16:18:31Z	INFO	[vulndb] Downloading artifact...	repo="mirror.gcr.io/aquasec/trivy-db:2"
+2025-11-21T16:18:34.9052081Z 16.05 MiB / 76.00 MiB [------------>________________________________________________] 21.11% ? p/s ?52.00 MiB / 76.00 MiB [----------------------------------------->___________________] 68.42% ? p/s ?76.00 MiB / 76.00 MiB [----------------------------------------------------------->] 100.00% ? p/s ?76.00 MiB / 76.00 MiB [---------------------------------------------->] 100.00% 99.81 MiB p/s ETA 0s76.00 MiB / 76.00 MiB [---------------------------------------------->] 100.00% 99.81 MiB p/s ETA 0s76.00 MiB / 76.00 MiB [---------------------------------------------->] 100.00% 99.81 MiB p/s ETA 0s76.00 MiB / 76.00 MiB [---------------------------------------------->] 100.00% 93.37 MiB p/s ETA 0s76.00 MiB / 76.00 MiB [---------------------------------------------->] 100.00% 93.37 MiB p/s ETA 0s76.00 MiB / 76.00 MiB [---------------------------------------------->] 100.00% 93.37 MiB p/s ETA 0s76.00 MiB / 76.00 MiB [---------------------------------------------->] 100.00% 87.35 MiB p/s ETA 0s76.00 MiB / 76.00 MiB [---------------------------------------------->] 100.00% 87.35 MiB p/s ETA 0s76.00 MiB / 76.00 MiB [---------------------------------------------->] 100.00% 87.35 MiB p/s ETA 0s76.00 MiB / 76.00 MiB [---------------------------------------------->] 100.00% 81.72 MiB p/s ETA 0s76.00 MiB / 76.00 MiB [---------------------------------------------->] 100.00% 81.72 MiB p/s ETA 0s76.00 MiB / 76.00 MiB [-------------------------------------------------] 100.00% 27.79 MiB p/s 2.9s2025-11-21T16:18:34Z	INFO	[vulndb] Artifact successfully downloaded	repo="mirror.gcr.io/aquasec/trivy-db:2"
+2025-11-21T16:18:34.9061652Z 2025-11-21T16:18:34Z	INFO	[vuln] Vulnerability scanning is enabled
+2025-11-21T16:18:34.9062243Z 2025-11-21T16:18:34Z	INFO	[secret] Secret scanning is enabled
+2025-11-21T16:18:34.9063090Z 2025-11-21T16:18:34Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2025-11-21T16:18:34.9063944Z 2025-11-21T16:18:34Z	INFO	[secret] Please see also https://trivy.dev/v0.65/docs/scanner/secret#recommendation for faster secret detection
+2025-11-21T16:20:18.0751146Z 2025-11-21T16:20:18Z	WARN	Third-party SBOM may lead to inaccurate vulnerability detection
+2025-11-21T16:20:18.0752753Z 2025-11-21T16:20:18Z	WARN	Recommend using Trivy to generate SBOMs
+2025-11-21T16:20:18.1129630Z 2025-11-21T16:20:18Z	INFO	[python] Licenses acquired from one or more METADATA files may be subject to additional terms. Use `--debug` flag to see all affected packages.
+2025-11-21T16:20:18.1453237Z 2025-11-21T16:20:18Z	INFO	Detected OS	family="debian" version="12.12"
+2025-11-21T16:20:18.1454317Z 2025-11-21T16:20:18Z	INFO	[debian] Detecting vulnerabilities...	os_version="12" pkg_num=164
+2025-11-21T16:20:18.1710192Z 2025-11-21T16:20:18Z	INFO	Number of language-specific files	num=1
+2025-11-21T16:20:18.1710834Z 2025-11-21T16:20:18Z	INFO	[python-pkg] Detecting vulnerabilities...
+2025-11-21T16:20:18.1799861Z 2025-11-21T16:20:18Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/v0.65/docs/scanner/vulnerability#severity-selection for details.
+2025-11-21T16:20:18.1850843Z 
+2025-11-21T16:20:18.1851496Z 📣 [34mNotices:[0m
+2025-11-21T16:20:18.1852170Z   - Version 0.67.2 of Trivy is now available, current version is 0.65.0
+2025-11-21T16:20:18.1852691Z 
+2025-11-21T16:20:18.1853120Z To suppress version checks, run Trivy scans with the --skip-version-check flag
+2025-11-21T16:20:18.1853747Z 
+2025-11-21T16:20:18.2142149Z ##[group]Run rm -f trivy_envs.txt
+2025-11-21T16:20:18.2142522Z [36;1mrm -f trivy_envs.txt[0m
+2025-11-21T16:20:18.2175238Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-11-21T16:20:18.2175642Z env:
+2025-11-21T16:20:18.2175946Z   DOCKER_IMAGE: ***
+2025-11-21T16:20:18.2177169Z   DOCKER_TAG: ***
+2025-11-21T16:20:18.2177539Z   SSH_HOST: ***
+2025-11-21T16:20:18.2177807Z   SSH_USER: ***
+2025-11-21T16:20:18.2178064Z   SSH_PORT: ***
+2025-11-21T16:20:18.2179816Z   SSH_KEY: ***
+2025-11-21T16:20:18.2180208Z   APP_ENCRYPTION_KEY_B64: ***
+2025-11-21T16:20:18.2180654Z   SECRET_KEY: ***
+2025-11-21T16:20:18.2181092Z   JWT_SECRET_KEY: ***
+2025-11-21T16:20:18.2181394Z   POSTGRES_PASSWORD: ***
+2025-11-21T16:20:18.2181683Z   POSTGRES_USER: ***
+2025-11-21T16:20:18.2181956Z   POSTGRES_DB: ***
+2025-11-21T16:20:18.2182228Z   MAIL_PASSWORD: ***
+2025-11-21T16:20:18.2182743Z   SENTRY_DSN: ***
+2025-11-21T16:20:18.2183011Z ##[endgroup]

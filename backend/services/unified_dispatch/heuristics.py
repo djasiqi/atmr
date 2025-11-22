@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -2045,19 +2046,65 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
                             f"time_gap:{gap_minutes}min (heures non disponibles pour calcul détaillé)"
                         )
                         conflict_msg = f"⚠️ CONFLIT: Chauffeur #{did} a course à {existing_time}min, course #{cand.booking_id} à {scheduled_min}min (écart: {gap_minutes}min)"
-                        logger.warning("[DISPATCH] %s → SKIP", conflict_msg)
+                        # ✅ FIX: Réduire le niveau de log en mode testing (attendu dans tests de validation temporelle)
+                        is_testing = False
+                        try:
+                            is_testing = os.getenv("FLASK_CONFIG") == "testing"
+                            try:
+                                from flask import current_app
+
+                                is_testing = is_testing or current_app.config.get("TESTING", False)
+                            except RuntimeError:
+                                pass
+                        except Exception:
+                            pass
+
+                        log_level = logger.debug if is_testing else logger.warning
+                        log_level("[DISPATCH] %s → SKIP", conflict_msg)
                         has_conflict = True
                         break
                 else:
                     # Si pas de calcul détaillé possible (existing_booking non trouvé), utiliser la vérification simple
                     conflict_reasons_final.append(f"time_gap:{gap_minutes}min")
                     conflict_msg = f"⚠️ CONFLIT: Chauffeur #{did} a course à {existing_time}min, course #{cand.booking_id} à {scheduled_min}min (écart: {gap_minutes}min)"
-                    logger.warning("[DISPATCH] %s → SKIP", conflict_msg)
+                    # ✅ FIX: Réduire le niveau de log en mode testing (attendu dans tests de validation temporelle)
+                    is_testing = False
+                    try:
+                        is_testing = os.getenv("FLASK_CONFIG") == "testing"
+                        try:
+                            from flask import current_app
+
+                            is_testing = is_testing or current_app.config.get("TESTING", False)
+                        except RuntimeError:
+                            pass
+                    except Exception:
+                        pass
+
+                    log_level = logger.debug if is_testing else logger.warning
+                    log_level("[DISPATCH] %s → SKIP", conflict_msg)
                     has_conflict = True
                     break
 
         if has_conflict and not can_pool:
-            logger.warning(
+            # ✅ FIX: Réduire le niveau de log en mode testing (attendu dans tests de validation temporelle)
+            is_testing = False
+            try:
+                # Essayer d'abord via variable d'environnement (plus sûr, fonctionne partout)
+                is_testing = os.getenv("FLASK_CONFIG") == "testing"
+                # Si current_app est disponible, utiliser sa config (plus précis)
+                try:
+                    from flask import current_app
+
+                    is_testing = is_testing or current_app.config.get("TESTING", False)
+                except RuntimeError:
+                    # current_app pas disponible (hors contexte Flask), utiliser seulement env var
+                    pass
+            except Exception:
+                # En cas d'erreur, utiliser warning par défaut
+                pass
+
+            log_level = logger.debug if is_testing else logger.warning
+            log_level(
                 "[DISPATCH] 🔴 Conflit temporel (final) booking #%s + driver #%s: %s",
                 cand.booking_id,
                 did,
@@ -2512,7 +2559,49 @@ def closest_feasible(
         int(cast("Any", d.id)): list(previous_times.get(int(cast("Any", d.id)), [])) for d in drivers
     }
 
-    logger.warning(
+    # ✅ FIX: Vérifier la cohérence de l'état fallback injecté
+    import os
+
+    is_testing = False
+    try:
+        is_testing = os.getenv("FLASK_CONFIG") == "testing"
+        try:
+            from flask import current_app
+
+            is_testing = is_testing or current_app.config.get("TESTING", False)
+        except RuntimeError:
+            pass
+    except Exception:
+        pass
+
+    # Vérifier cohérence entre busy_until et scheduled_times
+    inconsistencies = []
+    for did in busy_until:
+        if did in driver_scheduled_times:
+            scheduled_list = driver_scheduled_times[did]
+            if scheduled_list:
+                max_scheduled = max(scheduled_list)
+                busy = busy_until.get(did, 0)
+                # busy_until devrait être >= au dernier scheduled_time
+                if busy > 0 and max_scheduled > busy:
+                    inconsistencies.append(f"Driver {did}: busy_until={busy} < max_scheduled={max_scheduled}")
+                # proposed_load devrait correspondre au nombre de scheduled_times
+                proposed = proposed_load.get(did, 0)
+                if proposed != len(scheduled_list):
+                    inconsistencies.append(
+                        f"Driver {did}: proposed_load={proposed} != len(scheduled_times)={len(scheduled_list)}"
+                    )
+
+    if inconsistencies:
+        log_level = logger.debug if is_testing else logger.warning
+        log_level(
+            "[FALLBACK] ⚠️ Incohérences détectées dans l'état fallback: %s",
+            "; ".join(inconsistencies),
+        )
+
+    # ✅ FIX: Réduire le niveau de log en mode testing (normal, état injecté depuis heuristique principale)
+    log_level_info = logger.debug if is_testing else logger.warning
+    log_level_info(
         "[FALLBACK] 📥 Récupération état précédent: busy_until=%s, scheduled_times=%s",
         dict(busy_until),
         dict(driver_scheduled_times),
@@ -2633,7 +2722,21 @@ def closest_feasible(
                         break
 
                     conflict_reasons_fb.append(f"time_gap:{gap_minutes}min")
-                    logger.warning(
+                    # ✅ FIX: Réduire le niveau de log en mode testing (attendu dans fallback, géré correctement)
+                    is_testing_fb = False
+                    try:
+                        is_testing_fb = os.getenv("FLASK_CONFIG") == "testing"
+                        try:
+                            from flask import current_app
+
+                            is_testing_fb = is_testing_fb or current_app.config.get("TESTING", False)
+                        except RuntimeError:
+                            pass
+                    except Exception:
+                        pass
+
+                    log_level_fb = logger.debug if is_testing_fb else logger.warning
+                    log_level_fb(
                         "[FALLBACK] ⚠️ CONFLIT: Chauffeur #%s a course à %smin, course #%s à %smin (écart: %smin) → SKIP",
                         did,
                         existing_time,

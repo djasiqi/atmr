@@ -1,0 +1,1371 @@
+﻿2025-11-21T16:20:28.7293371Z ##[group]Run appleboy/ssh-action@v0.1.10
+2025-11-21T16:20:28.7293761Z with:
+2025-11-21T16:20:28.7294029Z   host: ***
+2025-11-21T16:20:28.7294285Z   username: ***
+2025-11-21T16:20:28.7296057Z   key: ***
+2025-11-21T16:20:28.7296522Z   port: ***
+2025-11-21T16:20:28.7297133Z   envs: APP_ENCRYPTION_KEY_B64,SECRET_KEY,JWT_SECRET_KEY,POSTGRES_PASSWORD,POSTGRES_USER,POSTGRES_DB,MAIL_PASSWORD,SENTRY_DSN,DOCKER_IMAGE,DOCKER_TAG
+2025-11-21T16:20:28.7307174Z   script: cd /srv/***
+set -o errexit -o nounset -o pipefail -x
+export APP_ENCRYPTION_KEY_B64="***"
+export SECRET_KEY="***"
+export JWT_SECRET_KEY="***"
+export POSTGRES_PASSWORD="***"
+export POSTGRES_USER="***"
+export POSTGRES_DB="***"
+export MAIL_PASSWORD="***"
+export SENTRY_DSN="***"
+export DOCKER_IMAGE="***"
+export DOCKER_TAG="***"
+echo "🔄 Pull de l'image Docker..."
+docker compose -f docker-compose.production.yml pull
+echo "🔄 Arrêt des conteneurs existants..."
+docker compose -f docker-compose.production.yml down || true
+echo "🔄 Démarrage des services..."
+docker compose -f docker-compose.production.yml up -d
+
+echo "⏳ Attente que PostgreSQL soit prêt..."
+echo "📊 Vérification de l'état du conteneur PostgreSQL..."
+for i in $(seq 1 60); do
+  # Vérifier l'état du conteneur
+  POSTGRES_STATUS=$(docker compose -f docker-compose.production.yml ps postgres --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+  if [ "$POSTGRES_STATUS" = "running" ]; then
+    # Vérifier le healthcheck
+    HEALTH=$(docker inspect --format='{{.State.Health.Status}}' ***-postgres 2>/dev/null || echo "none")
+    if [ "$HEALTH" = "healthy" ]; then
+      # Vérifier avec pg_isready
+      if docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
+        echo "✅ PostgreSQL est prêt et healthy"
+        break
+      fi
+    elif [ "$HEALTH" = "unhealthy" ]; then
+      echo "⚠️  PostgreSQL est unhealthy, affichage des logs..."
+      docker compose -f docker-compose.production.yml logs postgres | tail -50
+    fi
+  elif [ "$POSTGRES_STATUS" = "exited" ] || [ "$POSTGRES_STATUS" = "dead" ]; then
+    echo "❌ Le conteneur PostgreSQL a échoué, affichage des logs..."
+    docker compose -f docker-compose.production.yml logs postgres | tail -50
+    exit 1
+  fi
+  if [ $i -eq 60 ]; then
+    echo "❌ Timeout: PostgreSQL n'est pas prêt après 120 secondes"
+    echo "---- État du conteneur ----"
+    docker compose -f docker-compose.production.yml ps postgres
+    echo "---- Logs PostgreSQL (dernières 100 lignes) ----"
+    docker compose -f docker-compose.production.yml logs postgres | tail -100
+    exit 1
+  fi
+  echo "  Tentative $i/60 (État: ${POSTGRES_STATUS:-unknown}, Health: ${HEALTH:-none})..."
+  sleep 2
+done
+echo "🔄 Exécution des migrations de base de données..."
+docker compose -f docker-compose.production.yml exec -T backend flask db upgrade || {
+  echo "❌ Erreur lors de l'exécution des migrations"
+  echo "---- Diagnostics (migration failed) ----"
+  docker compose -f docker-compose.production.yml exec -T backend flask db current || true
+  docker compose -f docker-compose.production.yml exec -T backend flask db heads || true
+  docker compose -f docker-compose.production.yml logs backend | tail -50 || true
+  exit 1
+}
+echo "✅ Migrations appliquées avec succès"
+echo "✅ Déploiement terminé"
+
+2025-11-21T16:20:28.7316106Z   sync: false
+2025-11-21T16:20:28.7316641Z   use_insecure_cipher: false
+2025-11-21T16:20:28.7316947Z   timeout: 30s
+2025-11-21T16:20:28.7317201Z   command_timeout: 10m
+2025-11-21T16:20:28.7317493Z   proxy_port: ***
+2025-11-21T16:20:28.7317753Z   proxy_timeout: 30s
+2025-11-21T16:20:28.7318041Z   proxy_use_insecure_cipher: false
+2025-11-21T16:20:28.7318352Z   script_stop: false
+2025-11-21T16:20:28.7318619Z   debug: false
+2025-11-21T16:20:28.7318854Z env:
+2025-11-21T16:20:28.7319120Z   DOCKER_IMAGE: ***
+2025-11-21T16:20:28.7319386Z   DOCKER_TAG: ***
+2025-11-21T16:20:28.7319650Z   SSH_HOST: ***
+2025-11-21T16:20:28.7319901Z   SSH_USER: ***
+2025-11-21T16:20:28.7320151Z   SSH_PORT: ***
+2025-11-21T16:20:28.7322091Z   SSH_KEY: ***
+2025-11-21T16:20:28.7322464Z   APP_ENCRYPTION_KEY_B64: ***
+2025-11-21T16:20:28.7322905Z   SECRET_KEY: ***
+2025-11-21T16:20:28.7323304Z   JWT_SECRET_KEY: ***
+2025-11-21T16:20:28.7323603Z   POSTGRES_PASSWORD: ***
+2025-11-21T16:20:28.7323892Z   POSTGRES_USER: ***
+2025-11-21T16:20:28.7324168Z   POSTGRES_DB: ***
+2025-11-21T16:20:28.7324446Z   MAIL_PASSWORD: ***
+2025-11-21T16:20:28.7324955Z   SENTRY_DSN: ***
+2025-11-21T16:20:28.7325213Z ##[endgroup]
+2025-11-21T16:20:28.7351753Z ##[command]/usr/bin/docker run --name e57903e5a40ea39acf48179f33f4c208a71bff_2a5de6 --label e57903 --workdir /github/workspace --rm -e "DOCKER_IMAGE" -e "DOCKER_TAG" -e "SSH_HOST" -e "SSH_USER" -e "SSH_PORT" -e "SSH_KEY" -e "APP_ENCRYPTION_KEY_B64" -e "SECRET_KEY" -e "JWT_SECRET_KEY" -e "POSTGRES_PASSWORD" -e "POSTGRES_USER" -e "POSTGRES_DB" -e "MAIL_PASSWORD" -e "SENTRY_DSN" -e "INPUT_HOST" -e "INPUT_USERNAME" -e "INPUT_KEY" -e "INPUT_PORT" -e "INPUT_ENVS" -e "INPUT_SCRIPT" -e "INPUT_PASSPHRASE" -e "INPUT_PASSWORD" -e "INPUT_SYNC" -e "INPUT_USE_INSECURE_CIPHER" -e "INPUT_CIPHER" -e "INPUT_TIMEOUT" -e "INPUT_COMMAND_TIMEOUT" -e "INPUT_KEY_PATH" -e "INPUT_FINGERPRINT" -e "INPUT_PROXY_HOST" -e "INPUT_PROXY_PORT" -e "INPUT_PROXY_USERNAME" -e "INPUT_PROXY_PASSWORD" -e "INPUT_PROXY_PASSPHRASE" -e "INPUT_PROXY_TIMEOUT" -e "INPUT_PROXY_KEY" -e "INPUT_PROXY_KEY_PATH" -e "INPUT_PROXY_FINGERPRINT" -e "INPUT_PROXY_CIPHER" -e "INPUT_PROXY_USE_INSECURE_CIPHER" -e "INPUT_SCRIPT_STOP" -e "INPUT_ENVS_FORMAT" -e "INPUT_DEBUG" -e "HOME" -e "GITHUB_JOB" -e "GITHUB_REF" -e "GITHUB_SHA" -e "GITHUB_REPOSITORY" -e "GITHUB_REPOSITORY_OWNER" -e "GITHUB_REPOSITORY_OWNER_ID" -e "GITHUB_RUN_ID" -e "GITHUB_RUN_NUMBER" -e "GITHUB_RETENTION_DAYS" -e "GITHUB_RUN_ATTEMPT" -e "GITHUB_ACTOR_ID" -e "GITHUB_ACTOR" -e "GITHUB_WORKFLOW" -e "GITHUB_HEAD_REF" -e "GITHUB_BASE_REF" -e "GITHUB_EVENT_NAME" -e "GITHUB_SERVER_URL" -e "GITHUB_API_URL" -e "GITHUB_GRAPHQL_URL" -e "GITHUB_REF_NAME" -e "GITHUB_REF_PROTECTED" -e "GITHUB_REF_TYPE" -e "GITHUB_WORKFLOW_REF" -e "GITHUB_WORKFLOW_SHA" -e "GITHUB_REPOSITORY_ID" -e "GITHUB_TRIGGERING_ACTOR" -e "GITHUB_WORKSPACE" -e "GITHUB_ACTION" -e "GITHUB_EVENT_PATH" -e "GITHUB_ACTION_REPOSITORY" -e "GITHUB_ACTION_REF" -e "GITHUB_PATH" -e "GITHUB_ENV" -e "GITHUB_STEP_SUMMARY" -e "GITHUB_STATE" -e "GITHUB_OUTPUT" -e "RUNNER_OS" -e "RUNNER_ARCH" -e "RUNNER_NAME" -e "RUNNER_ENVIRONMENT" -e "RUNNER_TOOL_CACHE" -e "RUNNER_TEMP" -e "RUNNER_WORKSPACE" -e "ACTIONS_RUNTIME_URL" -e "ACTIONS_RUNTIME_TOKEN" -e "ACTIONS_CACHE_URL" -e "ACTIONS_RESULTS_URL" -e GITHUB_ACTIONS=true -e CI=true -v "/var/run/docker.sock":"/var/run/docker.sock" -v "/home/runner/work/_temp/_github_home":"/github/home" -v "/home/runner/work/_temp/_github_workflow":"/github/workflow" -v "/home/runner/work/_temp/_runner_file_commands":"/github/file_commands" -v "/home/runner/work/***/***":"/github/workspace" e57903:e5a40ea39acf48179f33f4c208a71bff
+2025-11-21T16:20:28.8647063Z ======CMD======
+2025-11-21T16:20:28.8647570Z cd /srv/***
+2025-11-21T16:20:28.8648063Z set -o errexit -o nounset -o pipefail -x
+2025-11-21T16:20:28.8648641Z export APP_ENCRYPTION_KEY_B64="***"
+2025-11-21T16:20:28.8649218Z export SECRET_KEY="***"
+2025-11-21T16:20:28.8649715Z export JWT_SECRET_KEY="***"
+2025-11-21T16:20:28.8650056Z export POSTGRES_PASSWORD="***"
+2025-11-21T16:20:28.8650374Z export POSTGRES_USER="***"
+2025-11-21T16:20:28.8650672Z export POSTGRES_DB="***"
+2025-11-21T16:20:28.8650980Z export MAIL_PASSWORD="***"
+2025-11-21T16:20:28.8651681Z export SENTRY_DSN="***"
+2025-11-21T16:20:28.8652015Z export DOCKER_IMAGE="***"
+2025-11-21T16:20:28.8652312Z export DOCKER_TAG="***"
+2025-11-21T16:20:28.8652825Z echo "🔄 Pull de l'image Docker..."
+2025-11-21T16:20:28.8653219Z docker compose -f docker-compose.production.yml pull
+2025-11-21T16:20:28.8653692Z echo "🔄 Arrêt des conteneurs existants..."
+2025-11-21T16:20:28.8654131Z docker compose -f docker-compose.production.yml down || true
+2025-11-21T16:20:28.8654586Z echo "🔄 Démarrage des services..."
+2025-11-21T16:20:28.8654978Z docker compose -f docker-compose.production.yml up -d
+2025-11-21T16:20:28.8655635Z 
+2025-11-21T16:20:28.8655848Z echo "⏳ Attente que PostgreSQL soit prêt..."
+2025-11-21T16:20:28.8657111Z echo "📊 Vérification de l'état du conteneur PostgreSQL..."
+2025-11-21T16:20:28.8657597Z for i in $(seq 1 60); do
+2025-11-21T16:20:28.8657950Z   # Vérifier l'état du conteneur
+2025-11-21T16:20:28.8658657Z   POSTGRES_STATUS=$(docker compose -f docker-compose.production.yml ps postgres --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+2025-11-21T16:20:28.8659386Z   if [ "$POSTGRES_STATUS" = "running" ]; then
+2025-11-21T16:20:28.8659762Z     # Vérifier le healthcheck
+2025-11-21T16:20:28.8660285Z     HEALTH=$(docker inspect --format='{{.State.Health.Status}}' ***-postgres 2>/dev/null || echo "none")
+2025-11-21T16:20:28.8660796Z     if [ "$HEALTH" = "healthy" ]; then
+2025-11-21T16:20:28.8661155Z       # Vérifier avec pg_isready
+2025-11-21T16:20:28.8661790Z       if docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
+2025-11-21T16:20:28.8662650Z         echo "✅ PostgreSQL est prêt et healthy"
+2025-11-21T16:20:28.8663212Z         break
+2025-11-21T16:20:28.8663454Z       fi
+2025-11-21T16:20:28.8663710Z     elif [ "$HEALTH" = "unhealthy" ]; then
+2025-11-21T16:20:28.8664186Z       echo "⚠️  PostgreSQL est unhealthy, affichage des logs..."
+2025-11-21T16:20:28.8664696Z       docker compose -f docker-compose.production.yml logs postgres | tail -50
+2025-11-21T16:20:28.8665123Z     fi
+2025-11-21T16:20:28.8665468Z   elif [ "$POSTGRES_STATUS" = "exited" ] || [ "$POSTGRES_STATUS" = "dead" ]; then
+2025-11-21T16:20:28.8666032Z     echo "❌ Le conteneur PostgreSQL a échoué, affichage des logs..."
+2025-11-21T16:20:28.8666744Z     docker compose -f docker-compose.production.yml logs postgres | tail -50
+2025-11-21T16:20:28.8667172Z     exit 1
+2025-11-21T16:20:28.8667394Z   fi
+2025-11-21T16:20:28.8667629Z   if [ $i -eq 60 ]; then
+2025-11-21T16:20:28.8668075Z     echo "❌ Timeout: PostgreSQL n'est pas prêt après 120 secondes"
+2025-11-21T16:20:28.8668538Z     echo "---- État du conteneur ----"
+2025-11-21T16:20:28.8668959Z     docker compose -f docker-compose.production.yml ps postgres
+2025-11-21T16:20:28.8669466Z     echo "---- Logs PostgreSQL (dernières 100 lignes) ----"
+2025-11-21T16:20:28.8669970Z     docker compose -f docker-compose.production.yml logs postgres | tail -100
+2025-11-21T16:20:28.8670397Z     exit 1
+2025-11-21T16:20:28.8670627Z   fi
+2025-11-21T16:20:28.8671067Z   echo "  Tentative $i/60 (État: ${POSTGRES_STATUS:-unknown}, Health: ${HEALTH:-none})..."
+2025-11-21T16:20:28.8671515Z   sleep 2
+2025-11-21T16:20:28.8671740Z done
+2025-11-21T16:20:28.8672091Z echo "🔄 Exécution des migrations de base de données..."
+2025-11-21T16:20:28.8672622Z docker compose -f docker-compose.production.yml exec -T backend flask db upgrade || {
+2025-11-21T16:20:28.8673189Z   echo "❌ Erreur lors de l'exécution des migrations"
+2025-11-21T16:20:28.8673587Z   echo "---- Diagnostics (migration failed) ----"
+2025-11-21T16:20:28.8674110Z   docker compose -f docker-compose.production.yml exec -T backend flask db current || true
+2025-11-21T16:20:28.8674757Z   docker compose -f docker-compose.production.yml exec -T backend flask db heads || true
+2025-11-21T16:20:28.8675362Z   docker compose -f docker-compose.production.yml logs backend | tail -50 || true
+2025-11-21T16:20:28.8675914Z   exit 1
+2025-11-21T16:20:28.8676143Z }
+2025-11-21T16:20:28.8676624Z echo "✅ Migrations appliquées avec succès"
+2025-11-21T16:20:28.8677010Z echo "✅ Déploiement terminé"
+2025-11-21T16:20:28.8677200Z 
+2025-11-21T16:20:28.8677310Z ======END======
+2025-11-21T16:20:30.3149374Z err: + export APP_ENCRYPTION_KEY_B64=***
+2025-11-21T16:20:30.3151174Z err: + APP_ENCRYPTION_KEY_B64=***
+2025-11-21T16:20:30.3151865Z err: + export SECRET_KEY=***
+2025-11-21T16:20:30.3152428Z err: + SECRET_KEY=***
+2025-11-21T16:20:30.3152992Z err: + export JWT_SECRET_KEY=***
+2025-11-21T16:20:30.3153566Z err: + JWT_SECRET_KEY=***
+2025-11-21T16:20:30.3154374Z err: + export 'POSTGRES_PASSWORD=***'
+2025-11-21T16:20:30.3154827Z err: + POSTGRES_PASSWORD='***'
+2025-11-21T16:20:30.3155221Z err: + export POSTGRES_USER=***
+2025-11-21T16:20:30.3155630Z err: + POSTGRES_USER=***
+2025-11-21T16:20:30.3156000Z err: + export POSTGRES_DB=***
+2025-11-21T16:20:30.3156599Z err: + POSTGRES_DB=***
+2025-11-21T16:20:30.3156995Z err: + export 'MAIL_PASSWORD=***'
+2025-11-21T16:20:30.3157407Z err: + MAIL_PASSWORD='***'
+2025-11-21T16:20:30.3158140Z err: + export SENTRY_DSN=***
+2025-11-21T16:20:30.3158825Z err: + SENTRY_DSN=***
+2025-11-21T16:20:30.3159226Z err: + export DOCKER_IMAGE=***
+2025-11-21T16:20:30.3159631Z err: + DOCKER_IMAGE=***
+2025-11-21T16:20:30.3160003Z err: + export DOCKER_TAG=***
+2025-11-21T16:20:30.3160375Z err: + DOCKER_TAG=***
+2025-11-21T16:20:30.3161011Z err: + echo '🔄 Pull de l'\''image Docker...'
+2025-11-21T16:20:30.3161551Z err: + docker compose -f docker-compose.production.yml pull
+2025-11-21T16:20:30.3162125Z out: 🔄 Pull de l'image Docker...
+2025-11-21T16:20:30.5283390Z err:  celery-worker Skipped - Image is already being pulled by backend 
+2025-11-21T16:20:30.5284211Z err:  celery-beat Skipped - Image is already being pulled by backend 
+2025-11-21T16:20:30.5285135Z err:  postgres Pulling 
+2025-11-21T16:20:30.5285643Z err:  flower Skipped - Image is already being pulled by backend 
+2025-11-21T16:20:30.5286198Z err:  backend Pulling 
+2025-11-21T16:20:30.5286807Z err:  redis Pulling 
+2025-11-21T16:20:31.5206616Z err:  redis Pulled 
+2025-11-21T16:20:31.5233903Z err:  postgres Pulled 
+2025-11-21T16:20:32.1814884Z err:  8e44f01296e3 Already exists 
+2025-11-21T16:20:32.1877184Z err:  d1dc32d76c2b Already exists 
+2025-11-21T16:20:32.1932120Z err:  1be9fc5da4b1 Already exists 
+2025-11-21T16:20:32.1975022Z err:  e2ab42bb6841 Already exists 
+2025-11-21T16:20:32.2023086Z err:  124d7c93f2b7 Pulling fs layer 
+2025-11-21T16:20:32.2023571Z err:  708aebac8174 Pulling fs layer 
+2025-11-21T16:20:32.2023981Z err:  f2792cfdc96a Pulling fs layer 
+2025-11-21T16:20:32.2024399Z err:  6d83b0c1381b Pulling fs layer 
+2025-11-21T16:20:32.2024770Z err:  60d9e074b840 Pulling fs layer 
+2025-11-21T16:20:32.2025138Z err:  c562499f6b3a Pulling fs layer 
+2025-11-21T16:20:32.2025527Z err:  5ab9292bf2d7 Pulling fs layer 
+2025-11-21T16:20:32.2025899Z err:  6f745c5f7e5a Pulling fs layer 
+2025-11-21T16:20:32.2026509Z err:  d08609d2e933 Pulling fs layer 
+2025-11-21T16:20:32.2026930Z err:  6d83b0c1381b Waiting 
+2025-11-21T16:20:32.2027305Z err:  db3698e4f919 Pulling fs layer 
+2025-11-21T16:20:32.2027684Z err:  60d9e074b840 Waiting 
+2025-11-21T16:20:32.2028029Z err:  593b44db63f9 Pulling fs layer 
+2025-11-21T16:20:32.2028409Z err:  c562499f6b3a Waiting 
+2025-11-21T16:20:32.2028746Z err:  5ab9292bf2d7 Waiting 
+2025-11-21T16:20:32.2029081Z err:  6f745c5f7e5a Waiting 
+2025-11-21T16:20:32.2029414Z err:  d08609d2e933 Waiting 
+2025-11-21T16:20:32.2029773Z err:  8d2ebfb89677 Pulling fs layer 
+2025-11-21T16:20:32.2030161Z err:  db3698e4f919 Waiting 
+2025-11-21T16:20:32.2030513Z err:  593b44db63f9 Waiting 
+2025-11-21T16:20:32.2030865Z err:  8d2ebfb89677 Waiting 
+2025-11-21T16:20:33.0055107Z err:  124d7c93f2b7 Downloading [==================================================>]      92B/92B
+2025-11-21T16:20:33.0055917Z err:  124d7c93f2b7 Verifying Checksum 
+2025-11-21T16:20:33.0056578Z err:  124d7c93f2b7 Download complete 
+2025-11-21T16:20:33.0057099Z err:  124d7c93f2b7 Extracting [==================================================>]      92B/92B
+2025-11-21T16:20:33.0061381Z err:  124d7c93f2b7 Extracting [==================================================>]      92B/92B
+2025-11-21T16:20:33.0200956Z err:  f2792cfdc96a Downloading [>                                                  ]  540.7kB/588.9MB
+2025-11-21T16:20:33.0283076Z err:  124d7c93f2b7 Pull complete 
+2025-11-21T16:20:33.0373900Z err:  708aebac8174 Downloading [>                                                  ]  442.4kB/43.77MB
+2025-11-21T16:20:33.1382614Z err:  708aebac8174 Downloading [======>                                            ]  5.308MB/43.77MB
+2025-11-21T16:20:33.1383968Z err:  f2792cfdc96a Downloading [>                                                  ]  3.187MB/588.9MB
+2025-11-21T16:20:33.2476774Z err:  f2792cfdc96a Downloading [>                                                  ]  7.438MB/588.9MB
+2025-11-21T16:20:33.2488248Z err:  708aebac8174 Downloading [===========>                                       ]  9.736MB/43.77MB
+2025-11-21T16:20:33.3494137Z err:  f2792cfdc96a Downloading [>                                                  ]  11.16MB/588.9MB
+2025-11-21T16:20:33.3640875Z err:  708aebac8174 Downloading [===============>                                   ]  13.73MB/43.77MB
+2025-11-21T16:20:33.4525240Z err:  f2792cfdc96a Downloading [=>                                                 ]  15.98MB/588.9MB
+2025-11-21T16:20:33.4671281Z err:  708aebac8174 Downloading [======================>                            ]  19.94MB/43.77MB
+2025-11-21T16:20:33.5571147Z err:  f2792cfdc96a Downloading [=>                                                 ]  21.32MB/588.9MB
+2025-11-21T16:20:33.5749072Z err:  708aebac8174 Downloading [=========================>                         ]  ***.16MB/43.77MB
+2025-11-21T16:20:33.6594322Z err:  f2792cfdc96a Downloading [==>                                                ]  26.12MB/588.9MB
+2025-11-21T16:20:33.6788464Z err:  708aebac8174 Downloading [=================================>                 ]  29.27MB/43.77MB
+2025-11-21T16:20:33.7646607Z err:  f2792cfdc96a Downloading [==>                                                ]   30.9MB/588.9MB
+2025-11-21T16:20:33.7788106Z err:  708aebac8174 Downloading [=======================================>           ]  34.15MB/43.77MB
+2025-11-21T16:20:33.8179544Z err:  6d83b0c1381b Downloading [==================================>                ]  1.009kB/1.48kB
+2025-11-21T16:20:33.8180406Z err:  6d83b0c1381b Downloading [==================================================>]   1.48kB/1.48kB
+2025-11-21T16:20:33.8181060Z err:  6d83b0c1381b Verifying Checksum 
+2025-11-21T16:20:33.8181538Z err:  6d83b0c1381b Download complete 
+2025-11-21T16:20:33.8685955Z err:  f2792cfdc96a Downloading [===>                                               ]  36.23MB/588.9MB
+2025-11-21T16:20:33.8839502Z err:  708aebac8174 Downloading [============================================>      ]  39.03MB/43.77MB
+2025-11-21T16:20:33.9352833Z err:  708aebac8174 Verifying Checksum 
+2025-11-21T16:20:33.9353425Z err:  708aebac8174 Download complete 
+2025-11-21T16:20:33.9691811Z err:  f2792cfdc96a Downloading [===>                                               ]  41.01MB/588.9MB
+2025-11-21T16:20:33.9727580Z err:  708aebac8174 Extracting [>                                                  ]  458.8kB/43.77MB
+2025-11-21T16:20:34.0822069Z err:  708aebac8174 Extracting [=====>                                             ]  4.588MB/43.77MB
+2025-11-21T16:20:34.0973431Z err:  f2792cfdc96a Downloading [===>                                               ]  44.72MB/588.9MB
+2025-11-21T16:20:34.1857478Z err:  708aebac8174 Extracting [========>                                          ]   7.34MB/43.77MB
+2025-11-21T16:20:34.2166659Z err:  f2792cfdc96a Downloading [====>                                              ]  48.46MB/588.9MB
+2025-11-21T16:20:34.2907054Z err:  708aebac8174 Extracting [=============>                                     ]  11.47MB/43.77MB
+2025-11-21T16:20:34.3183013Z err:  f2792cfdc96a Downloading [====>                                              ]  51.66MB/588.9MB
+2025-11-21T16:20:34.4002807Z err:  708aebac8174 Extracting [=================>                                 ]   15.6MB/43.77MB
+2025-11-21T16:20:34.4210979Z err:  f2792cfdc96a Downloading [====>                                              ]  58.05MB/588.9MB
+2025-11-21T16:20:34.5093086Z err:  708aebac8174 Extracting [=====================>                             ]  18.81MB/43.77MB
+2025-11-21T16:20:34.5252210Z err:  f2792cfdc96a Downloading [=====>                                             ]  64.96MB/588.9MB
+2025-11-21T16:20:34.6217306Z err:  708aebac8174 Extracting [========================>                          ]  21.56MB/43.77MB
+2025-11-21T16:20:34.6314215Z err:  f2792cfdc96a Downloading [======>                                            ]  71.89MB/588.9MB
+2025-11-21T16:20:34.7182233Z err:  60d9e074b840 Downloading [>                                                  ]  540.7kB/657.4MB
+2025-11-21T16:20:34.7289698Z err:  708aebac8174 Extracting [============================>                      ]  24.77MB/43.77MB
+2025-11-21T16:20:34.7382329Z err:  c562499f6b3a Downloading [===================>                               ]  1.009kB/2.599kB
+2025-11-21T16:20:34.7384234Z err:  c562499f6b3a Downloading [==================================================>]  2.599kB/2.599kB
+2025-11-21T16:20:34.7388578Z err:  c562499f6b3a Download complete 
+2025-11-21T16:20:34.7389324Z err:  f2792cfdc96a Downloading [======>                                            ]  78.26MB/588.9MB
+2025-11-21T16:20:34.8328201Z err:  60d9e074b840 Downloading [>                                                  ]  1.6***MB/657.4MB
+2025-11-21T16:20:34.8359865Z err:  708aebac8174 Extracting [=================================>                 ]   28.9MB/43.77MB
+2025-11-21T16:20:34.8437910Z err:  f2792cfdc96a Downloading [=======>                                           ]  84.11MB/588.9MB
+2025-11-21T16:20:34.9436546Z err:  60d9e074b840 Downloading [>                                                  ]  3.768MB/657.4MB
+2025-11-21T16:20:34.9668604Z err:  f2792cfdc96a Downloading [=======>                                           ]  86.79MB/588.9MB
+2025-11-21T16:20:34.9670689Z err:  708aebac8174 Extracting [====================================>              ]  31.65MB/43.77MB
+2025-11-21T16:20:35.0570641Z err:  60d9e074b840 Downloading [>                                                  ]  8.032MB/657.4MB
+2025-11-21T16:20:35.0701592Z err:  708aebac8174 Extracting [======================================>            ]  33.49MB/43.77MB
+2025-11-21T16:20:35.0735029Z err:  f2792cfdc96a Downloading [========>                                          ]  94.28MB/588.9MB
+2025-11-21T16:20:35.1626035Z err:  60d9e074b840 Downloading [>                                                  ]  12.84MB/657.4MB
+2025-11-21T16:20:35.1821743Z err:  708aebac8174 Extracting [========================================>          ]  35.32MB/43.77MB
+2025-11-21T16:20:35.1883797Z err:  f2792cfdc96a Downloading [========>                                          ]  96.95MB/588.9MB
+2025-11-21T16:20:35.2660434Z err:  60d9e074b840 Downloading [=>                                                 ]  14.43MB/657.4MB
+2025-11-21T16:20:35.2895144Z err:  708aebac8174 Extracting [==========================================>        ]  37.62MB/43.77MB
+2025-11-21T16:20:35.3018039Z err:  f2792cfdc96a Downloading [========>                                          ]  99.63MB/588.9MB
+2025-11-21T16:20:35.3730006Z err:  60d9e074b840 Downloading [=>                                                 ]  19.77MB/657.4MB
+2025-11-21T16:20:35.3965059Z err:  708aebac8174 Extracting [==============================================>    ]  40.83MB/43.77MB
+2025-11-21T16:20:35.4290388Z err:  f2792cfdc96a Downloading [========>                                          ]  103.3MB/588.9MB
+2025-11-21T16:20:35.4764863Z err:  60d9e074b840 Downloading [=>                                                 ]  ***.95MB/657.4MB
+2025-11-21T16:20:35.5135126Z err:  5ab9292bf2d7 Downloading [>                                                  ]  540.4kB/57.12MB
+2025-11-21T16:20:35.5305224Z err:  f2792cfdc96a Downloading [=========>                                         ]  107.6MB/588.9MB
+2025-11-21T16:20:35.5865068Z err:  60d9e074b840 Downloading [==>                                                ]  27.75MB/657.4MB
+2025-11-21T16:20:35.6328651Z err:  f2792cfdc96a Downloading [=========>                                         ]  111.8MB/588.9MB
+2025-11-21T16:20:35.6509054Z err:  5ab9292bf2d7 Downloading [=====>                                             ]   6.39MB/57.12MB
+2025-11-21T16:20:35.6771637Z err:  708aebac8174 Extracting [===============================================>   ]  41.75MB/43.77MB
+2025-11-21T16:20:35.6888211Z err:  60d9e074b840 Downloading [==>                                                ]  29.87MB/657.4MB
+2025-11-21T16:20:35.7389742Z err:  f2792cfdc96a Downloading [=========>                                         ]  115.6MB/588.9MB
+2025-11-21T16:20:35.7509035Z err:  5ab9292bf2d7 Downloading [========>                                          ]  9.601MB/57.12MB
+2025-11-21T16:20:35.7938891Z err:  60d9e074b840 Downloading [==>                                                ]  34.14MB/657.4MB
+2025-11-21T16:20:35.8112346Z err:  708aebac8174 Extracting [==================================================>]  43.77MB/43.77MB
+2025-11-21T16:20:35.8527323Z err:  5ab9292bf2d7 Downloading [===============>                                   ]  17.61MB/57.12MB
+2025-11-21T16:20:35.8618674Z err:  f2792cfdc96a Downloading [==========>                                        ]  120.4MB/588.9MB
+2025-11-21T16:20:35.9037443Z err:  708aebac8174 Pull complete 
+2025-11-21T16:20:35.9085486Z err:  60d9e074b840 Downloading [==>                                                ]  38.92MB/657.4MB
+2025-11-21T16:20:35.9562621Z err:  5ab9292bf2d7 Downloading [====================>                              ]  ***.99MB/57.12MB
+2025-11-21T16:20:35.9648068Z err:  f2792cfdc96a Downloading [==========>                                        ]  127.3MB/588.9MB
+2025-11-21T16:20:36.0173897Z err:  60d9e074b840 Downloading [===>                                               ]  44.29MB/657.4MB
+2025-11-21T16:20:36.0609891Z err:  5ab9292bf2d7 Downloading [========================>                          ]  28.33MB/57.12MB
+2025-11-21T16:20:36.0673090Z err:  f2792cfdc96a Downloading [===========>                                       ]  131.6MB/588.9MB
+2025-11-21T16:20:36.1190367Z err:  60d9e074b840 Downloading [===>                                               ]  48.55MB/657.4MB
+2025-11-21T16:20:36.1684183Z err:  5ab9292bf2d7 Downloading [=============================>                     ]  33.66MB/57.12MB
+2025-11-21T16:20:36.1890129Z err:  f2792cfdc96a Downloading [===========>                                       ]  136.9MB/588.9MB
+2025-11-21T16:20:36.2261383Z err:  60d9e074b840 Downloading [===>                                               ]  52.29MB/657.4MB
+2025-11-21T16:20:36.2770665Z err:  5ab9292bf2d7 Downloading [================================>                  ]  37.42MB/57.12MB
+2025-11-21T16:20:36.3036863Z err:  f2792cfdc96a Downloading [============>                                      ]  143.3MB/588.9MB
+2025-11-21T16:20:36.3276727Z err:  60d9e074b840 Downloading [====>                                              ]  55.49MB/657.4MB
+2025-11-21T16:20:36.3844313Z err:  5ab9292bf2d7 Downloading [====================================>              ]  42.21MB/57.12MB
+2025-11-21T16:20:36.4117484Z err:  f2792cfdc96a Downloading [============>                                      ]  148.1MB/588.9MB
+2025-11-21T16:20:36.4299208Z err:  60d9e074b840 Downloading [====>                                              ]   58.7MB/657.4MB
+2025-11-21T16:20:36.4884182Z err:  5ab9292bf2d7 Downloading [=========================================>         ]     47MB/57.12MB
+2025-11-21T16:20:36.5371098Z err:  f2792cfdc96a Downloading [=============>                                     ]  153.5MB/588.9MB
+2025-11-21T16:20:36.5450197Z err:  60d9e074b840 Downloading [====>                                              ]  63.52MB/657.4MB
+2025-11-21T16:20:36.5925040Z err:  5ab9292bf2d7 Downloading [=============================================>     ]   51.8MB/57.12MB
+2025-11-21T16:20:36.6397280Z err:  f2792cfdc96a Downloading [=============>                                     ]  157.7MB/588.9MB
+2025-11-21T16:20:36.6457366Z err:  60d9e074b840 Downloading [=====>                                             ]  68.32MB/657.4MB
+2025-11-21T16:20:36.7058792Z err:  5ab9292bf2d7 Downloading [================================================>  ]  55.53MB/57.12MB
+2025-11-21T16:20:36.7452136Z err:  f2792cfdc96a Downloading [=============>                                     ]  162.5MB/588.9MB
+2025-11-21T16:20:36.7580379Z err:  60d9e074b840 Downloading [=====>                                             ]  69.91MB/657.4MB
+2025-11-21T16:20:36.7823539Z err:  5ab9292bf2d7 Verifying Checksum 
+2025-11-21T16:20:36.7824350Z err:  5ab9292bf2d7 Download complete 
+2025-11-21T16:20:36.8494970Z err:  f2792cfdc96a Downloading [==============>                                    ]  168.4MB/588.9MB
+2025-11-21T16:20:36.8587081Z err:  60d9e074b840 Downloading [=====>                                             ]  72.59MB/657.4MB
+2025-11-21T16:20:36.9513839Z err:  f2792cfdc96a Downloading [==============>                                    ]    171MB/588.9MB
+2025-11-21T16:20:36.9600734Z err:  60d9e074b840 Downloading [=====>                                             ]  78.43MB/657.4MB
+2025-11-21T16:20:37.0540140Z err:  f2792cfdc96a Downloading [==============>                                    ]  174.8MB/588.9MB
+2025-11-21T16:20:37.0633736Z err:  60d9e074b840 Downloading [======>                                            ]  83.21MB/657.4MB
+2025-11-21T16:20:37.1679009Z err:  f2792cfdc96a Downloading [===============>                                   ]  178.5MB/588.9MB
+2025-11-21T16:20:37.2049948Z err:  60d9e074b840 Downloading [======>                                            ]  88.53MB/657.4MB
+2025-11-21T16:20:37.2748618Z err:  f2792cfdc96a Downloading [===============>                                   ]  180.6MB/588.9MB
+2025-11-21T16:20:37.3052203Z err:  60d9e074b840 Downloading [=======>                                           ]  95.97MB/657.4MB
+2025-11-21T16:20:37.3934894Z err:  f2792cfdc96a Downloading [===============>                                   ]    187MB/588.9MB
+2025-11-21T16:20:37.4066704Z err:  60d9e074b840 Downloading [=======>                                           ]   99.7MB/657.4MB
+2025-11-21T16:20:37.4964405Z err:  f2792cfdc96a Downloading [================>                                  ]  191.8MB/588.9MB
+2025-11-21T16:20:37.5138659Z err:  60d9e074b840 Downloading [=======>                                           ]  104.5MB/657.4MB
+2025-11-21T16:20:37.5980309Z err:  f2792cfdc96a Downloading [================>                                  ]  197.6MB/588.9MB
+2025-11-21T16:20:37.5995803Z err:  6f745c5f7e5a Downloading [>                                                  ]  540.7kB/56.12MB
+2025-11-21T16:20:37.6195978Z err:  60d9e074b840 Downloading [========>                                          ]  110.3MB/657.4MB
+2025-11-21T16:20:37.7029130Z err:  6f745c5f7e5a Downloading [==>                                                ]  3.211MB/56.12MB
+2025-11-21T16:20:37.7199658Z err:  f2792cfdc96a Downloading [=================>                                 ]  204.1MB/588.9MB
+2025-11-21T16:20:37.7358211Z err:  60d9e074b840 Downloading [========>                                          ]    113MB/657.4MB
+2025-11-21T16:20:37.8397920Z err:  60d9e074b840 Downloading [=========>                                         ]  118.9MB/657.4MB
+2025-11-21T16:20:37.8466494Z err:  6f745c5f7e5a Downloading [===>                                               ]   4.28MB/56.12MB
+2025-11-21T16:20:37.8543725Z err:  f2792cfdc96a Downloading [==================>                                ]    212MB/588.9MB
+2025-11-21T16:20:37.9483714Z err:  60d9e074b840 Downloading [=========>                                         ]  121.5MB/657.4MB
+2025-11-21T16:20:37.9571905Z err:  f2792cfdc96a Downloading [==================>                                ]  218.4MB/588.9MB
+2025-11-21T16:20:37.9722879Z err:  6f745c5f7e5a Downloading [=======>                                           ]  8.007MB/56.12MB
+2025-11-21T16:20:38.0566751Z err:  60d9e074b840 Downloading [=========>                                         ]  125.8MB/657.4MB
+2025-11-21T16:20:38.0605412Z err:  f2792cfdc96a Downloading [==================>                                ]  ***.1MB/588.9MB
+2025-11-21T16:20:38.0868183Z err:  6f745c5f7e5a Downloading [===========>                                       ]  12.78MB/56.12MB
+2025-11-21T16:20:38.1613380Z err:  60d9e074b840 Downloading [=========>                                         ]  130.6MB/657.4MB
+2025-11-21T16:20:38.1658412Z err:  f2792cfdc96a Downloading [===================>                               ]  ***6.4MB/588.9MB
+2025-11-21T16:20:38.2077196Z err:  6f745c5f7e5a Downloading [==============>                                    ]  15.99MB/56.12MB
+2025-11-21T16:20:38.2705255Z err:  f2792cfdc96a Downloading [===================>                               ]  231.7MB/588.9MB
+2025-11-21T16:20:38.2867629Z err:  60d9e074b840 Downloading [==========>                                        ]  137.5MB/657.4MB
+2025-11-21T16:20:38.3171982Z err:  6f745c5f7e5a Downloading [=================>                                 ]  19.71MB/56.12MB
+2025-11-21T16:20:38.3739021Z err:  f2792cfdc96a Downloading [====================>                              ]  236.5MB/588.9MB
+2025-11-21T16:20:38.3982656Z err:  60d9e074b840 Downloading [==========>                                        ]  142.3MB/657.4MB
+2025-11-21T16:20:38.4282929Z err:  6f745c5f7e5a Downloading [===================>                               ]  ***.36MB/56.12MB
+2025-11-21T16:20:38.4774275Z err:  f2792cfdc96a Downloading [====================>                              ]  240.8MB/588.9MB
+2025-11-21T16:20:38.5058876Z err:  60d9e074b840 Downloading [===========>                                       ]  148.7MB/657.4MB
+2025-11-21T16:20:38.5295826Z err:  6f745c5f7e5a Downloading [=====================>                             ]   24.5MB/56.12MB
+2025-11-21T16:20:38.6053947Z err:  f2792cfdc96a Downloading [====================>                              ]  245.6MB/588.9MB
+2025-11-21T16:20:38.6065258Z err:  60d9e074b840 Downloading [===========>                                       ]  150.3MB/657.4MB
+2025-11-21T16:20:38.6634575Z err:  6f745c5f7e5a Downloading [==========================>                        ]  29.31MB/56.12MB
+2025-11-21T16:20:38.7098274Z err:  60d9e074b840 Downloading [===========>                                       ]  156.6MB/657.4MB
+2025-11-21T16:20:38.7156132Z err:  f2792cfdc96a Downloading [=====================>                             ]  250.4MB/588.9MB
+2025-11-21T16:20:38.8018840Z err:  6f745c5f7e5a Downloading [============================>                      ]  31.99MB/56.12MB
+2025-11-21T16:20:38.8184593Z err:  60d9e074b840 Downloading [============>                                      ]    162MB/657.4MB
+2025-11-21T16:20:38.8241698Z err:  f2792cfdc96a Downloading [=====================>                             ]  254.7MB/588.9MB
+2025-11-21T16:20:38.9049151Z err:  6f745c5f7e5a Downloading [================================>                  ]  36.24MB/56.12MB
+2025-11-21T16:20:38.9242448Z err:  60d9e074b840 Downloading [============>                                      ]  168.9MB/657.4MB
+2025-11-21T16:20:38.9316091Z err:  f2792cfdc96a Downloading [=====================>                             ]  258.9MB/588.9MB
+2025-11-21T16:20:39.0050157Z err:  6f745c5f7e5a Downloading [===================================>               ]  39.97MB/56.12MB
+2025-11-21T16:20:39.0352745Z err:  f2792cfdc96a Downloading [======================>                            ]  263.2MB/588.9MB
+2025-11-21T16:20:39.0482597Z err:  60d9e074b840 Downloading [=============>                                     ]  172.7MB/657.4MB
+2025-11-21T16:20:39.1376203Z err:  f2792cfdc96a Downloading [======================>                            ]    269MB/588.9MB
+2025-11-21T16:20:39.1571019Z err:  6f745c5f7e5a Downloading [========================================>          ]  45.32MB/56.12MB
+2025-11-21T16:20:39.1591381Z err:  60d9e074b840 Downloading [=============>                                     ]  175.4MB/657.4MB
+2025-11-21T16:20:39.2422106Z err:  f2792cfdc96a Downloading [=======================>                           ]  271.7MB/588.9MB
+2025-11-21T16:20:39.2577734Z err:  6f745c5f7e5a Downloading [==========================================>        ]  47.97MB/56.12MB
+2025-11-21T16:20:39.2890983Z err:  60d9e074b840 Downloading [=============>                                     ]  176.4MB/657.4MB
+2025-11-21T16:20:39.3620084Z err:  6f745c5f7e5a Downloading [=============================================>     ]  50.63MB/56.12MB
+2025-11-21T16:20:39.3768040Z err:  f2792cfdc96a Downloading [=======================>                           ]  279.2MB/588.9MB
+2025-11-21T16:20:39.4069314Z err:  60d9e074b840 Downloading [=============>                                     ]  179.1MB/657.4MB
+2025-11-21T16:20:39.4762511Z err:  6f745c5f7e5a Downloading [================================================>  ]  54.34MB/56.12MB
+2025-11-21T16:20:39.4825463Z err:  f2792cfdc96a Downloading [========================>                          ]    285MB/588.9MB
+2025-11-21T16:20:39.5105505Z err:  6f745c5f7e5a Verifying Checksum 
+2025-11-21T16:20:39.5106057Z err:  6f745c5f7e5a Download complete 
+2025-11-21T16:20:39.5210405Z err:  60d9e074b840 Downloading [=============>                                     ]  182.3MB/657.4MB
+2025-11-21T16:20:39.5900282Z err:  f2792cfdc96a Downloading [========================>                          ]  288.8MB/588.9MB
+2025-11-21T16:20:39.6250876Z err:  60d9e074b840 Downloading [==============>                                    ]  189.8MB/657.4MB
+2025-11-21T16:20:39.6909494Z err:  f2792cfdc96a Downloading [=========================>                         ]  295.2MB/588.9MB
+2025-11-21T16:20:39.7423308Z err:  60d9e074b840 Downloading [==============>                                    ]  192.4MB/657.4MB
+2025-11-21T16:20:39.7968730Z err:  f2792cfdc96a Downloading [=========================>                         ]  298.9MB/588.9MB
+2025-11-21T16:20:39.8687825Z err:  60d9e074b840 Downloading [===============>                                   ]  198.3MB/657.4MB
+2025-11-21T16:20:39.9002998Z err:  f2792cfdc96a Downloading [=========================>                         ]  304.2MB/588.9MB
+2025-11-21T16:20:39.9708772Z err:  60d9e074b840 Downloading [===============>                                   ]  203.1MB/657.4MB
+2025-11-21T16:20:40.0058553Z err:  f2792cfdc96a Downloading [==========================>                        ]  310.1MB/588.9MB
+2025-11-21T16:20:40.0942168Z err:  60d9e074b840 Downloading [===============>                                   ]  206.8MB/657.4MB
+2025-11-21T16:20:40.1212440Z err:  f2792cfdc96a Downloading [==========================>                        ]  314.3MB/588.9MB
+2025-11-21T16:20:40.1981105Z err:  60d9e074b840 Downloading [================>                                  ]    211MB/657.4MB
+2025-11-21T16:20:40.2253658Z err:  f2792cfdc96a Downloading [===========================>                       ]  320.2MB/588.9MB
+2025-11-21T16:20:40.2798367Z err:  d08609d2e933 Downloading [====================>                              ]  1.009kB/2.404kB
+2025-11-21T16:20:40.2799293Z err:  d08609d2e933 Downloading [==================================================>]  2.404kB/2.404kB
+2025-11-21T16:20:40.2800021Z err:  d08609d2e933 Download complete 
+2025-11-21T16:20:40.3023035Z err:  60d9e074b840 Downloading [================>                                  ]  214.2MB/657.4MB
+2025-11-21T16:20:40.3427039Z err:  f2792cfdc96a Downloading [===========================>                       ]    325MB/588.9MB
+2025-11-21T16:20:40.4024674Z err:  60d9e074b840 Downloading [================>                                  ]  ***1.1MB/657.4MB
+2025-11-21T16:20:40.4508180Z err:  f2792cfdc96a Downloading [===========================>                       ]  329.8MB/588.9MB
+2025-11-21T16:20:40.5038992Z err:  60d9e074b840 Downloading [=================>                                 ]  ***5.4MB/657.4MB
+2025-11-21T16:20:40.5963442Z err:  f2792cfdc96a Downloading [============================>                      ]  334.5MB/588.9MB
+2025-11-21T16:20:40.6196214Z err:  60d9e074b840 Downloading [=================>                                 ]  ***9.7MB/657.4MB
+2025-11-21T16:20:40.7007192Z err:  f2792cfdc96a Downloading [============================>                      ]  339.3MB/588.9MB
+2025-11-21T16:20:40.7380916Z err:  60d9e074b840 Downloading [=================>                                 ]  232.3MB/657.4MB
+2025-11-21T16:20:40.8036639Z err:  f2792cfdc96a Downloading [=============================>                     ]  344.7MB/588.9MB
+2025-11-21T16:20:40.8390403Z err:  60d9e074b840 Downloading [==================>                                ]  237.1MB/657.4MB
+2025-11-21T16:20:40.9064667Z err:  f2792cfdc96a Downloading [=============================>                     ]    350MB/588.9MB
+2025-11-21T16:20:40.9420707Z err:  60d9e074b840 Downloading [==================>                                ]  241.3MB/657.4MB
+2025-11-21T16:20:41.0250862Z err:  f2792cfdc96a Downloading [==============================>                    ]  354.7MB/588.9MB
+2025-11-21T16:20:41.0431802Z err:  60d9e074b840 Downloading [==================>                                ]  244.5MB/657.4MB
+2025-11-21T16:20:41.0666718Z err:  db3698e4f919 Downloading [=====================>                             ]  1.009kB/2.4kB
+2025-11-21T16:20:41.0669740Z err:  db3698e4f919 Verifying Checksum 
+2025-11-21T16:20:41.0670546Z err:  db3698e4f919 Download complete 
+2025-11-21T16:20:41.1338377Z err:  f2792cfdc96a Downloading [==============================>                    ]  360.1MB/588.9MB
+2025-11-21T16:20:41.1452493Z err:  60d9e074b840 Downloading [==================>                                ]  247.2MB/657.4MB
+2025-11-21T16:20:41.2397401Z err:  f2792cfdc96a Downloading [==============================>                    ]  364.3MB/588.9MB
+2025-11-21T16:20:41.2476430Z err:  60d9e074b840 Downloading [===================>                               ]    252MB/657.4MB
+2025-11-21T16:20:41.3552059Z err:  60d9e074b840 Downloading [===================>                               ]  255.2MB/657.4MB
+2025-11-21T16:20:41.3624940Z err:  f2792cfdc96a Downloading [===============================>                   ]  371.2MB/588.9MB
+2025-11-21T16:20:41.4582736Z err:  60d9e074b840 Downloading [===================>                               ]  259.4MB/657.4MB
+2025-11-21T16:20:41.4643597Z err:  f2792cfdc96a Downloading [===============================>                   ]    376MB/588.9MB
+2025-11-21T16:20:41.5820082Z err:  60d9e074b840 Downloading [===================>                               ]  262.6MB/657.4MB
+2025-11-21T16:20:41.6221801Z err:  f2792cfdc96a Downloading [================================>                  ]  379.7MB/588.9MB
+2025-11-21T16:20:41.6853059Z err:  60d9e074b840 Downloading [====================>                              ]  265.3MB/657.4MB
+2025-11-21T16:20:41.7240136Z err:  f2792cfdc96a Downloading [================================>                  ]  385.6MB/588.9MB
+2025-11-21T16:20:41.7951651Z err:  60d9e074b840 Downloading [====================>                              ]  268.5MB/657.4MB
+2025-11-21T16:20:41.8305128Z err:  f2792cfdc96a Downloading [=================================>                 ]  389.3MB/588.9MB
+2025-11-21T16:20:41.9048897Z err:  60d9e074b840 Downloading [====================>                              ]  271.2MB/657.4MB
+2025-11-21T16:20:41.9473075Z err:  f2792cfdc96a Downloading [=================================>                 ]  395.2MB/588.9MB
+2025-11-21T16:20:41.9581838Z err:  593b44db63f9 Downloading [>                                                  ]    164kB/16.29MB
+2025-11-21T16:20:42.0468568Z err:  60d9e074b840 Downloading [====================>                              ]  275.4MB/657.4MB
+2025-11-21T16:20:42.0583590Z err:  593b44db63f9 Downloading [===>                                               ]    983kB/16.29MB
+2025-11-21T16:20:42.0732942Z err:  f2792cfdc96a Downloading [==================================>                ]  401.6MB/588.9MB
+2025-11-21T16:20:42.1709482Z err:  593b44db63f9 Downloading [=====>                                             ]  1.642MB/16.29MB
+2025-11-21T16:20:42.1753396Z err:  f2792cfdc96a Downloading [==================================>                ]  404.8MB/588.9MB
+2025-11-21T16:20:42.1972987Z err:  60d9e074b840 Downloading [=====================>                             ]  281.3MB/657.4MB
+2025-11-21T16:20:42.2783985Z err:  f2792cfdc96a Downloading [==================================>                ]  410.6MB/588.9MB
+2025-11-21T16:20:42.2829964Z err:  593b44db63f9 Downloading [===========>                                       ]  3.682MB/16.29MB
+2025-11-21T16:20:42.2990516Z err:  60d9e074b840 Downloading [=====================>                             ]  286.6MB/657.4MB
+2025-11-21T16:20:42.3824386Z err:  f2792cfdc96a Downloading [===================================>               ]  414.9MB/588.9MB
+2025-11-21T16:20:42.3887881Z err:  593b44db63f9 Downloading [=======================>                           ]  7.508MB/16.29MB
+2025-11-21T16:20:42.4024740Z err:  60d9e074b840 Downloading [======================>                            ]  290.9MB/657.4MB
+2025-11-21T16:20:42.4927593Z err:  593b44db63f9 Downloading [================================>                  ]  10.66MB/16.29MB
+2025-11-21T16:20:42.5060584Z err:  60d9e074b840 Downloading [======================>                            ]  294.1MB/657.4MB
+2025-11-21T16:20:42.5087422Z err:  f2792cfdc96a Downloading [===================================>               ]  418.7MB/588.9MB
+2025-11-21T16:20:42.6041124Z err:  593b44db63f9 Downloading [===============================================>   ]  15.37MB/16.29MB
+2025-11-21T16:20:42.6143976Z err:  593b44db63f9 Verifying Checksum 
+2025-11-21T16:20:42.6144796Z err:  593b44db63f9 Download complete 
+2025-11-21T16:20:42.6183286Z err:  f2792cfdc96a Downloading [===================================>               ]  423.5MB/588.9MB
+2025-11-21T16:20:42.6458084Z err:  60d9e074b840 Downloading [======================>                            ]  297.8MB/657.4MB
+2025-11-21T16:20:42.7479370Z err:  f2792cfdc96a Downloading [====================================>              ]  428.3MB/588.9MB
+2025-11-21T16:20:42.7483099Z err:  60d9e074b840 Downloading [=======================>                           ]  303.7MB/657.4MB
+2025-11-21T16:20:42.8539078Z err:  60d9e074b840 Downloading [=======================>                           ]  307.4MB/657.4MB
+2025-11-21T16:20:42.8540011Z err:  f2792cfdc96a Downloading [====================================>              ]  430.9MB/588.9MB
+2025-11-21T16:20:42.9754201Z err:  8d2ebfb89677 Downloading [==================================================>]      76B/76B
+2025-11-21T16:20:42.9754758Z err:  8d2ebfb89677 Verifying Checksum 
+2025-11-21T16:20:42.9755122Z err:  8d2ebfb89677 Download complete 
+2025-11-21T16:20:42.9844271Z err:  60d9e074b840 Downloading [=======================>                           ]  314.4MB/657.4MB
+2025-11-21T16:20:42.9855289Z err:  f2792cfdc96a Downloading [=====================================>             ]  438.4MB/588.9MB
+2025-11-21T16:20:43.0857641Z err:  60d9e074b840 Downloading [========================>                          ]  320.2MB/657.4MB
+2025-11-21T16:20:43.0885540Z err:  f2792cfdc96a Downloading [=====================================>             ]  443.7MB/588.9MB
+2025-11-21T16:20:43.1942119Z err:  f2792cfdc96a Downloading [=====================================>             ]  447.5MB/588.9MB
+2025-11-21T16:20:43.2137777Z err:  60d9e074b840 Downloading [========================>                          ]  3***.9MB/657.4MB
+2025-11-21T16:20:43.2960852Z err:  f2792cfdc96a Downloading [======================================>            ]  451.8MB/588.9MB
+2025-11-21T16:20:43.3146131Z err:  60d9e074b840 Downloading [========================>                          ]  327.1MB/657.4MB
+2025-11-21T16:20:43.4305083Z err:  f2792cfdc96a Downloading [======================================>            ]    455MB/588.9MB
+2025-11-21T16:20:43.4485056Z err:  60d9e074b840 Downloading [=========================>                         ]  329.8MB/657.4MB
+2025-11-21T16:20:43.5358381Z err:  f2792cfdc96a Downloading [======================================>            ]  458.1MB/588.9MB
+2025-11-21T16:20:43.5510447Z err:  60d9e074b840 Downloading [=========================>                         ]  335.1MB/657.4MB
+2025-11-21T16:20:43.6633376Z err:  60d9e074b840 Downloading [=========================>                         ]  338.4MB/657.4MB
+2025-11-21T16:20:43.7579946Z err:  f2792cfdc96a Downloading [=======================================>           ]  459.7MB/588.9MB
+2025-11-21T16:20:43.7636534Z err:  60d9e074b840 Downloading [==========================>                        ]  343.1MB/657.4MB
+2025-11-21T16:20:43.8592266Z err:  f2792cfdc96a Downloading [=======================================>           ]    464MB/588.9MB
+2025-11-21T16:20:43.8674698Z err:  60d9e074b840 Downloading [==========================>                        ]  348.5MB/657.4MB
+2025-11-21T16:20:43.9648236Z err:  f2792cfdc96a Downloading [=======================================>           ]  467.7MB/588.9MB
+2025-11-21T16:20:43.9686929Z err:  60d9e074b840 Downloading [==========================>                        ]  353.8MB/657.4MB
+2025-11-21T16:20:44.0702992Z err:  f2792cfdc96a Downloading [========================================>          ]  471.4MB/588.9MB
+2025-11-21T16:20:44.0705855Z err:  60d9e074b840 Downloading [===========================>                       ]  359.7MB/657.4MB
+2025-11-21T16:20:44.1714621Z err:  60d9e074b840 Downloading [===========================>                       ]  362.3MB/657.4MB
+2025-11-21T16:20:44.2729900Z err:  60d9e074b840 Downloading [===========================>                       ]  367.1MB/657.4MB
+2025-11-21T16:20:44.3593153Z err:  f2792cfdc96a Downloading [========================================>          ]  474.1MB/588.9MB
+2025-11-21T16:20:44.3813654Z err:  60d9e074b840 Downloading [============================>                      ]  371.4MB/657.4MB
+2025-11-21T16:20:44.4624505Z err:  f2792cfdc96a Downloading [========================================>          ]    480MB/588.9MB
+2025-11-21T16:20:44.4857836Z err:  60d9e074b840 Downloading [============================>                      ]  374.6MB/657.4MB
+2025-11-21T16:20:44.5774299Z err:  f2792cfdc96a Downloading [=========================================>         ]  485.3MB/588.9MB
+2025-11-21T16:20:44.5897116Z err:  60d9e074b840 Downloading [============================>                      ]  378.9MB/657.4MB
+2025-11-21T16:20:44.6795128Z err:  f2792cfdc96a Downloading [=========================================>         ]    489MB/588.9MB
+2025-11-21T16:20:44.6937208Z err:  60d9e074b840 Downloading [=============================>                     ]  383.2MB/657.4MB
+2025-11-21T16:20:44.7969731Z err:  60d9e074b840 Downloading [=============================>                     ]  387.9MB/657.4MB
+2025-11-21T16:20:44.8172110Z err:  f2792cfdc96a Downloading [==========================================>        ]    497MB/588.9MB
+2025-11-21T16:20:44.9172282Z err:  f2792cfdc96a Downloading [==========================================>        ]  503.4MB/588.9MB
+2025-11-21T16:20:44.9175977Z err:  60d9e074b840 Downloading [==============================>                    ]  395.4MB/657.4MB
+2025-11-21T16:20:45.0435013Z err:  f2792cfdc96a Downloading [===========================================>       ]  509.8MB/588.9MB
+2025-11-21T16:20:45.0665027Z err:  60d9e074b840 Downloading [==============================>                    ]  398.1MB/657.4MB
+2025-11-21T16:20:45.1527860Z err:  f2792cfdc96a Downloading [===========================================>       ]    514MB/588.9MB
+2025-11-21T16:20:45.1793399Z err:  60d9e074b840 Downloading [==============================>                    ]  400.7MB/657.4MB
+2025-11-21T16:20:45.2816949Z err:  f2792cfdc96a Downloading [===========================================>       ]  516.7MB/588.9MB
+2025-11-21T16:20:45.2851792Z err:  60d9e074b840 Downloading [==============================>                    ]    405MB/657.4MB
+2025-11-21T16:20:45.3711409Z err:  f2792cfdc96a Downloading [============================================>      ]  521.5MB/588.9MB
+2025-11-21T16:20:45.3910666Z err:  60d9e074b840 Downloading [===============================>                   ]  410.3MB/657.4MB
+2025-11-21T16:20:45.4724722Z err:  f2792cfdc96a Downloading [============================================>      ]  525.7MB/588.9MB
+2025-11-21T16:20:45.5068381Z err:  60d9e074b840 Downloading [===============================>                   ]  415.1MB/657.4MB
+2025-11-21T16:20:45.5776627Z err:  f2792cfdc96a Downloading [============================================>      ]  529.5MB/588.9MB
+2025-11-21T16:20:45.6075105Z err:  60d9e074b840 Downloading [===============================>                   ]  419.4MB/657.4MB
+2025-11-21T16:20:45.6835128Z err:  f2792cfdc96a Downloading [=============================================>     ]  532.7MB/588.9MB
+2025-11-21T16:20:45.7091997Z err:  60d9e074b840 Downloading [================================>                  ]  425.8MB/657.4MB
+2025-11-21T16:20:45.8120269Z err:  60d9e074b840 Downloading [================================>                  ]  430.6MB/657.4MB
+2025-11-21T16:20:45.8121322Z err:  f2792cfdc96a Downloading [=============================================>     ]  537.5MB/588.9MB
+2025-11-21T16:20:45.9128985Z err:  f2792cfdc96a Downloading [==============================================>    ]  542.3MB/588.9MB
+2025-11-21T16:20:45.9342565Z err:  60d9e074b840 Downloading [=================================>                 ]  435.9MB/657.4MB
+2025-11-21T16:20:46.0175484Z err:  f2792cfdc96a Downloading [==============================================>    ]  546.5MB/588.9MB
+2025-11-21T16:20:46.0546923Z err:  60d9e074b840 Downloading [=================================>                 ]  440.7MB/657.4MB
+2025-11-21T16:20:46.1373895Z err:  f2792cfdc96a Downloading [==============================================>    ]  550.2MB/588.9MB
+2025-11-21T16:20:46.1669091Z err:  60d9e074b840 Downloading [=================================>                 ]  443.9MB/657.4MB
+2025-11-21T16:20:46.2650872Z err:  f2792cfdc96a Downloading [===============================================>   ]  555.6MB/588.9MB
+2025-11-21T16:20:46.3039271Z err:  60d9e074b840 Downloading [==================================>                ]  447.6MB/657.4MB
+2025-11-21T16:20:46.3688311Z err:  f2792cfdc96a Downloading [===============================================>   ]  561.4MB/588.9MB
+2025-11-21T16:20:46.4075565Z err:  60d9e074b840 Downloading [==================================>                ]  451.9MB/657.4MB
+2025-11-21T16:20:46.4694321Z err:  f2792cfdc96a Downloading [================================================>  ]  566.2MB/588.9MB
+2025-11-21T16:20:46.5204008Z err:  60d9e074b840 Downloading [==================================>                ]    454MB/657.4MB
+2025-11-21T16:20:46.5822819Z err:  f2792cfdc96a Downloading [================================================>  ]    571MB/588.9MB
+2025-11-21T16:20:46.6744538Z err:  60d9e074b840 Downloading [==================================>                ]  457.2MB/657.4MB
+2025-11-21T16:20:46.6864481Z err:  f2792cfdc96a Downloading [================================================>  ]  575.8MB/588.9MB
+2025-11-21T16:20:46.7952412Z err:  f2792cfdc96a Downloading [=================================================> ]  581.7MB/588.9MB
+2025-11-21T16:20:46.7961704Z err:  60d9e074b840 Downloading [==================================>                ]  458.8MB/657.4MB
+2025-11-21T16:20:46.9008477Z err:  60d9e074b840 Downloading [===================================>               ]    462MB/657.4MB
+2025-11-21T16:20:46.9018170Z err:  f2792cfdc96a Downloading [=================================================> ]  588.1MB/588.9MB
+2025-11-21T16:20:46.9538711Z err:  f2792cfdc96a Verifying Checksum 
+2025-11-21T16:20:46.9539454Z err:  f2792cfdc96a Download complete 
+2025-11-21T16:20:46.9727720Z err:  f2792cfdc96a Extracting [>                                                  ]  557.1kB/588.9MB
+2025-11-21T16:20:47.0038638Z err:  60d9e074b840 Downloading [===================================>               ]  465.8MB/657.4MB
+2025-11-21T16:20:47.0789070Z err:  f2792cfdc96a Extracting [>                                                  ]  7.242MB/588.9MB
+2025-11-21T16:20:47.1127784Z err:  60d9e074b840 Downloading [===================================>               ]  468.4MB/657.4MB
+2025-11-21T16:20:47.1882359Z err:  f2792cfdc96a Extracting [=>                                                 ]  15.04MB/588.9MB
+2025-11-21T16:20:47.2353164Z err:  60d9e074b840 Downloading [===================================>               ]    470MB/657.4MB
+2025-11-21T16:20:47.2916789Z err:  f2792cfdc96a Extracting [=>                                                 ]  21.73MB/588.9MB
+2025-11-21T16:20:47.3780821Z err:  60d9e074b840 Downloading [====================================>              ]  475.4MB/657.4MB
+2025-11-21T16:20:47.3941511Z err:  f2792cfdc96a Extracting [==>                                                ]  27.85MB/588.9MB
+2025-11-21T16:20:47.4801501Z err:  60d9e074b840 Downloading [====================================>              ]  478.5MB/657.4MB
+2025-11-21T16:20:47.4989875Z err:  f2792cfdc96a Extracting [===>                                               ]  36.21MB/588.9MB
+2025-11-21T16:20:47.5883280Z err:  60d9e074b840 Downloading [====================================>              ]  481.7MB/657.4MB
+2025-11-21T16:20:47.6021074Z err:  f2792cfdc96a Extracting [===>                                               ]  43.45MB/588.9MB
+2025-11-21T16:20:47.7012035Z err:  60d9e074b840 Downloading [====================================>              ]  483.9MB/657.4MB
+2025-11-21T16:20:47.7061794Z err:  f2792cfdc96a Extracting [====>                                              ]  51.25MB/588.9MB
+2025-11-21T16:20:47.8068377Z err:  f2792cfdc96a Extracting [====>                                              ]  57.93MB/588.9MB
+2025-11-21T16:20:47.8398283Z err:  60d9e074b840 Downloading [====================================>              ]  485.5MB/657.4MB
+2025-11-21T16:20:47.9096975Z err:  f2792cfdc96a Extracting [=====>                                             ]   67.4MB/588.9MB
+2025-11-21T16:20:47.9957983Z err:  60d9e074b840 Downloading [=====================================>             ]  487.1MB/657.4MB
+2025-11-21T16:20:48.0102818Z err:  f2792cfdc96a Extracting [======>                                            ]  75.76MB/588.9MB
+2025-11-21T16:20:48.1115625Z err:  f2792cfdc96a Extracting [=======>                                           ]  85.23MB/588.9MB
+2025-11-21T16:20:48.1506068Z err:  60d9e074b840 Downloading [=====================================>             ]  489.7MB/657.4MB
+2025-11-21T16:20:48.2155275Z err:  f2792cfdc96a Extracting [========>                                          ]  95.26MB/588.9MB
+2025-11-21T16:20:48.2553786Z err:  60d9e074b840 Downloading [=====================================>             ]  493.5MB/657.4MB
+2025-11-21T16:20:48.3173195Z err:  f2792cfdc96a Extracting [========>                                          ]  104.2MB/588.9MB
+2025-11-21T16:20:48.3597419Z err:  60d9e074b840 Downloading [=====================================>             ]  497.7MB/657.4MB
+2025-11-21T16:20:48.4177957Z err:  f2792cfdc96a Extracting [=========>                                         ]  113.1MB/588.9MB
+2025-11-21T16:20:48.4600575Z err:  60d9e074b840 Downloading [======================================>            ]  501.5MB/657.4MB
+2025-11-21T16:20:48.5288766Z err:  f2792cfdc96a Extracting [==========>                                        ]  120.3MB/588.9MB
+2025-11-21T16:20:48.6038259Z err:  60d9e074b840 Downloading [======================================>            ]  505.7MB/657.4MB
+2025-11-21T16:20:48.6322770Z err:  f2792cfdc96a Extracting [==========>                                        ]  127.6MB/588.9MB
+2025-11-21T16:20:48.7426651Z err:  f2792cfdc96a Extracting [===========>                                       ]  136.5MB/588.9MB
+2025-11-21T16:20:48.8148193Z err:  60d9e074b840 Downloading [======================================>            ]  506.3MB/657.4MB
+2025-11-21T16:20:48.8462299Z err:  f2792cfdc96a Extracting [============>                                      ]  143.7MB/588.9MB
+2025-11-21T16:20:48.9212832Z err:  60d9e074b840 Downloading [======================================>            ]  510.5MB/657.4MB
+2025-11-21T16:20:48.9513513Z err:  f2792cfdc96a Extracting [============>                                      ]  150.4MB/588.9MB
+2025-11-21T16:20:49.0315572Z err:  60d9e074b840 Downloading [=======================================>           ]  515.3MB/657.4MB
+2025-11-21T16:20:49.0622112Z err:  f2792cfdc96a Extracting [=============>                                     ]  159.3MB/588.9MB
+2025-11-21T16:20:49.1559608Z err:  60d9e074b840 Downloading [=======================================>           ]  519.6MB/657.4MB
+2025-11-21T16:20:49.1637631Z err:  f2792cfdc96a Extracting [==============>                                    ]  167.1MB/588.9MB
+2025-11-21T16:20:49.2590580Z err:  60d9e074b840 Downloading [=======================================>           ]  525.5MB/657.4MB
+2025-11-21T16:20:49.2716973Z err:  f2792cfdc96a Extracting [===============>                                   ]  177.1MB/588.9MB
+2025-11-21T16:20:49.3684455Z err:  60d9e074b840 Downloading [========================================>          ]  528.1MB/657.4MB
+2025-11-21T16:20:49.3799901Z err:  f2792cfdc96a Extracting [===============>                                   ]  187.2MB/588.9MB
+2025-11-21T16:20:49.4740360Z err:  60d9e074b840 Downloading [========================================>          ]  534.5MB/657.4MB
+2025-11-21T16:20:49.4860996Z err:  f2792cfdc96a Extracting [================>                                  ]    195MB/588.9MB
+2025-11-21T16:20:49.5778358Z err:  60d9e074b840 Downloading [=========================================>         ]  539.9MB/657.4MB
+2025-11-21T16:20:49.5861280Z err:  f2792cfdc96a Extracting [=================>                                 ]  201.7MB/588.9MB
+2025-11-21T16:20:49.6801340Z err:  60d9e074b840 Downloading [=========================================>         ]  545.2MB/657.4MB
+2025-11-21T16:20:49.6982204Z err:  f2792cfdc96a Extracting [=================>                                 ]  211.7MB/588.9MB
+2025-11-21T16:20:49.7833061Z err:  60d9e074b840 Downloading [=========================================>         ]  552.1MB/657.4MB
+2025-11-21T16:20:49.8027052Z err:  f2792cfdc96a Extracting [==================>                                ]    ***0MB/588.9MB
+2025-11-21T16:20:49.8831936Z err:  60d9e074b840 Downloading [==========================================>        ]  557.4MB/657.4MB
+2025-11-21T16:20:49.9097774Z err:  f2792cfdc96a Extracting [===================>                               ]  ***8.4MB/588.9MB
+2025-11-21T16:20:49.9937297Z err:  60d9e074b840 Downloading [==========================================>        ]  563.3MB/657.4MB
+2025-11-21T16:20:50.0141120Z err:  f2792cfdc96a Extracting [====================>                              ]  236.2MB/588.9MB
+2025-11-21T16:20:50.1042481Z err:  60d9e074b840 Downloading [===========================================>       ]  568.1MB/657.4MB
+2025-11-21T16:20:50.1159834Z err:  f2792cfdc96a Extracting [====================>                              ]    244MB/588.9MB
+2025-11-21T16:20:50.2079513Z err:  60d9e074b840 Downloading [===========================================>       ]  573.4MB/657.4MB
+2025-11-21T16:20:50.2186533Z err:  f2792cfdc96a Extracting [=====================>                             ]  252.3MB/588.9MB
+2025-11-21T16:20:50.3101216Z err:  60d9e074b840 Downloading [===========================================>       ]  577.7MB/657.4MB
+2025-11-21T16:20:50.3199079Z err:  f2792cfdc96a Extracting [======================>                            ]  259.6MB/588.9MB
+2025-11-21T16:20:50.4156597Z err:  60d9e074b840 Downloading [============================================>      ]    583MB/657.4MB
+2025-11-21T16:20:50.4234099Z err:  f2792cfdc96a Extracting [======================>                            ]  265.7MB/588.9MB
+2025-11-21T16:20:50.5204259Z err:  60d9e074b840 Downloading [============================================>      ]  587.3MB/657.4MB
+2025-11-21T16:20:50.5286497Z err:  f2792cfdc96a Extracting [=======================>                           ]  273.5MB/588.9MB
+2025-11-21T16:20:50.6304930Z err:  f2792cfdc96a Extracting [=======================>                           ]  281.3MB/588.9MB
+2025-11-21T16:20:50.6492804Z err:  60d9e074b840 Downloading [============================================>      ]  589.9MB/657.4MB
+2025-11-21T16:20:50.7545609Z err:  f2792cfdc96a Extracting [========================>                          ]  289.1MB/588.9MB
+2025-11-21T16:20:50.7747580Z err:  60d9e074b840 Downloading [=============================================>     ]  594.2MB/657.4MB
+2025-11-21T16:20:50.8557945Z err:  f2792cfdc96a Extracting [=========================>                         ]    298MB/588.9MB
+2025-11-21T16:20:50.8797409Z err:  60d9e074b840 Downloading [=============================================>     ]  599.5MB/657.4MB
+2025-11-21T16:20:50.9648712Z err:  f2792cfdc96a Extracting [==========================>                        ]  306.9MB/588.9MB
+2025-11-21T16:20:51.0164925Z err:  60d9e074b840 Downloading [=============================================>     ]  603.2MB/657.4MB
+2025-11-21T16:20:51.0695879Z err:  f2792cfdc96a Extracting [==========================>                        ]  314.7MB/588.9MB
+2025-11-21T16:20:51.1215000Z err:  60d9e074b840 Downloading [==============================================>    ]  605.4MB/657.4MB
+2025-11-21T16:20:51.1717457Z err:  f2792cfdc96a Extracting [===========================>                       ]  3***.5MB/588.9MB
+2025-11-21T16:20:51.2262927Z err:  60d9e074b840 Downloading [==============================================>    ]  607.5MB/657.4MB
+2025-11-21T16:20:51.2728170Z err:  f2792cfdc96a Extracting [============================>                      ]  331.4MB/588.9MB
+2025-11-21T16:20:51.3794323Z err:  f2792cfdc96a Extracting [============================>                      ]  339.8MB/588.9MB
+2025-11-21T16:20:51.4542644Z err:  60d9e074b840 Downloading [==============================================>    ]  613.4MB/657.4MB
+2025-11-21T16:20:51.4810748Z err:  f2792cfdc96a Extracting [=============================>                     ]  348.2MB/588.9MB
+2025-11-21T16:20:51.5708718Z err:  60d9e074b840 Downloading [==============================================>    ]  615.5MB/657.4MB
+2025-11-21T16:20:51.5872020Z err:  f2792cfdc96a Extracting [==============================>                    ]  358.2MB/588.9MB
+2025-11-21T16:20:51.6870816Z err:  60d9e074b840 Downloading [==============================================>    ]  617.6MB/657.4MB
+2025-11-21T16:20:51.6968763Z err:  f2792cfdc96a Extracting [==============================>                    ]  364.3MB/588.9MB
+2025-11-21T16:20:51.7890988Z err:  60d9e074b840 Downloading [===============================================>   ]  6***.4MB/657.4MB
+2025-11-21T16:20:51.8014632Z err:  f2792cfdc96a Extracting [===============================>                   ]  369.3MB/588.9MB
+2025-11-21T16:20:51.8932600Z err:  60d9e074b840 Downloading [===============================================>   ]  627.7MB/657.4MB
+2025-11-21T16:20:51.9104891Z err:  f2792cfdc96a Extracting [===============================>                   ]  376.6MB/588.9MB
+2025-11-21T16:20:52.0039846Z err:  60d9e074b840 Downloading [================================================>  ]    633MB/657.4MB
+2025-11-21T16:20:52.0256944Z err:  f2792cfdc96a Extracting [================================>                  ]  383.8MB/588.9MB
+2025-11-21T16:20:52.1143816Z err:  60d9e074b840 Downloading [================================================>  ]  636.2MB/657.4MB
+2025-11-21T16:20:52.1235935Z err:  f2792cfdc96a Extracting [=================================>                 ]  391.1MB/588.9MB
+2025-11-21T16:20:52.2261742Z err:  f2792cfdc96a Extracting [=================================>                 ]  396.1MB/588.9MB
+2025-11-21T16:20:52.2436848Z err:  60d9e074b840 Downloading [================================================>  ]    640MB/657.4MB
+2025-11-21T16:20:52.3266690Z err:  f2792cfdc96a Extracting [==================================>                ]  403.9MB/588.9MB
+2025-11-21T16:20:52.3833378Z err:  60d9e074b840 Downloading [================================================>  ]  643.7MB/657.4MB
+2025-11-21T16:20:52.4298420Z err:  f2792cfdc96a Extracting [==================================>                ]  411.1MB/588.9MB
+2025-11-21T16:20:52.4993283Z err:  60d9e074b840 Downloading [=================================================> ]    648MB/657.4MB
+2025-11-21T16:20:52.5314910Z err:  f2792cfdc96a Extracting [===================================>               ]  418.3MB/588.9MB
+2025-11-21T16:20:52.6048961Z err:  60d9e074b840 Downloading [=================================================> ]  651.2MB/657.4MB
+2025-11-21T16:20:52.6348211Z err:  f2792cfdc96a Extracting [====================================>              ]  425.6MB/588.9MB
+2025-11-21T16:20:52.7055334Z err:  60d9e074b840 Downloading [=================================================> ]  655.4MB/657.4MB
+2025-11-21T16:20:52.7353427Z err:  f2792cfdc96a Extracting [====================================>              ]  434.5MB/588.9MB
+2025-11-21T16:20:52.7491602Z err:  60d9e074b840 Verifying Checksum 
+2025-11-21T16:20:52.7492242Z err:  60d9e074b840 Download complete 
+2025-11-21T16:20:52.8441676Z err:  f2792cfdc96a Extracting [=====================================>             ]  444.5MB/588.9MB
+2025-11-21T16:20:52.9560101Z err:  f2792cfdc96a Extracting [======================================>            ]  453.4MB/588.9MB
+2025-11-21T16:20:53.0594035Z err:  f2792cfdc96a Extracting [=======================================>           ]  461.8MB/588.9MB
+2025-11-21T16:20:53.1623445Z err:  f2792cfdc96a Extracting [=======================================>           ]  470.7MB/588.9MB
+2025-11-21T16:20:53.2680339Z err:  f2792cfdc96a Extracting [========================================>          ]  479.1MB/588.9MB
+2025-11-21T16:20:53.3734006Z err:  f2792cfdc96a Extracting [=========================================>         ]  488.5MB/588.9MB
+2025-11-21T16:20:53.4764179Z err:  f2792cfdc96a Extracting [==========================================>        ]    498MB/588.9MB
+2025-11-21T16:20:53.5805707Z err:  f2792cfdc96a Extracting [==========================================>        ]  505.8MB/588.9MB
+2025-11-21T16:20:53.6854708Z err:  f2792cfdc96a Extracting [===========================================>       ]    513MB/588.9MB
+2025-11-21T16:20:53.7900689Z err:  f2792cfdc96a Extracting [============================================>      ]  520.3MB/588.9MB
+2025-11-21T16:20:53.8950958Z err:  f2792cfdc96a Extracting [=============================================>     ]  530.9MB/588.9MB
+2025-11-21T16:20:53.9975422Z err:  f2792cfdc96a Extracting [=============================================>     ]  539.8MB/588.9MB
+2025-11-21T16:20:54.0989116Z err:  f2792cfdc96a Extracting [==============================================>    ]  548.1MB/588.9MB
+2025-11-21T16:20:54.2051246Z err:  f2792cfdc96a Extracting [===============================================>   ]  558.7MB/588.9MB
+2025-11-21T16:20:54.3070894Z err:  f2792cfdc96a Extracting [================================================>  ]  569.3MB/588.9MB
+2025-11-21T16:20:54.4074025Z err:  f2792cfdc96a Extracting [=================================================> ]  579.3MB/588.9MB
+2025-11-21T16:20:54.4989527Z err:  f2792cfdc96a Extracting [==================================================>]  588.9MB/588.9MB
+2025-11-21T16:20:54.5132506Z err:  f2792cfdc96a Pull complete 
+2025-11-21T16:20:54.5167939Z err:  6d83b0c1381b Extracting [==================================================>]   1.48kB/1.48kB
+2025-11-21T16:20:54.5172266Z err:  6d83b0c1381b Extracting [==================================================>]   1.48kB/1.48kB
+2025-11-21T16:20:54.5326624Z err:  6d83b0c1381b Pull complete 
+2025-11-21T16:20:54.6287924Z err:  60d9e074b840 Extracting [>                                                  ]  557.1kB/657.4MB
+2025-11-21T16:20:54.7592234Z err:  60d9e074b840 Extracting [>                                                  ]  2.785MB/657.4MB
+2025-11-21T16:20:54.8714902Z err:  60d9e074b840 Extracting [>                                                  ]  3.899MB/657.4MB
+2025-11-21T16:20:55.0895742Z err:  60d9e074b840 Extracting [>                                                  ]  5.014MB/657.4MB
+2025-11-21T16:20:55.2469812Z err:  60d9e074b840 Extracting [>                                                  ]  6.128MB/657.4MB
+2025-11-21T16:20:55.4365216Z err:  60d9e074b840 Extracting [>                                                  ]  7.242MB/657.4MB
+2025-11-21T16:20:55.5897987Z err:  60d9e074b840 Extracting [>                                                  ]  8.356MB/657.4MB
+2025-11-21T16:20:55.6995444Z err:  60d9e074b840 Extracting [>                                                  ]  12.26MB/657.4MB
+2025-11-21T16:20:55.8711353Z err:  60d9e074b840 Extracting [=>                                                 ]  13.37MB/657.4MB
+2025-11-21T16:20:56.0084431Z err:  60d9e074b840 Extracting [=>                                                 ]  13.93MB/657.4MB
+2025-11-21T16:20:56.1121303Z err:  60d9e074b840 Extracting [=>                                                 ]  14.48MB/657.4MB
+2025-11-21T16:20:56.3070678Z err:  60d9e074b840 Extracting [=>                                                 ]   15.6MB/657.4MB
+2025-11-21T16:20:56.4538137Z err:  60d9e074b840 Extracting [=>                                                 ]  18.38MB/657.4MB
+2025-11-21T16:20:56.5909101Z err:  60d9e074b840 Extracting [=>                                                 ]   19.5MB/657.4MB
+2025-11-21T16:20:56.7347335Z err:  60d9e074b840 Extracting [=>                                                 ]  20.61MB/657.4MB
+2025-11-21T16:20:56.9372794Z err:  60d9e074b840 Extracting [=>                                                 ]  21.17MB/657.4MB
+2025-11-21T16:20:57.1175751Z err:  60d9e074b840 Extracting [=>                                                 ]  ***.28MB/657.4MB
+2025-11-21T16:20:57.2207094Z err:  60d9e074b840 Extracting [==>                                                ]  26.74MB/657.4MB
+2025-11-21T16:20:57.3599055Z err:  60d9e074b840 Extracting [==>                                                ]  28.97MB/657.4MB
+2025-11-21T16:20:57.4762376Z err:  60d9e074b840 Extracting [==>                                                ]  29.52MB/657.4MB
+2025-11-21T16:20:57.5888202Z err:  60d9e074b840 Extracting [==>                                                ]  30.08MB/657.4MB
+2025-11-21T16:20:57.9443450Z err:  60d9e074b840 Extracting [==>                                                ]  30.64MB/657.4MB
+2025-11-21T16:20:58.3431031Z err:  60d9e074b840 Extracting [==>                                                ]   31.2MB/657.4MB
+2025-11-21T16:20:58.4918000Z err:  60d9e074b840 Extracting [==>                                                ]  31.75MB/657.4MB
+2025-11-21T16:20:58.6918975Z err:  60d9e074b840 Extracting [==>                                                ]  32.87MB/657.4MB
+2025-11-21T16:20:58.7983697Z err:  60d9e074b840 Extracting [==>                                                ]  33.42MB/657.4MB
+2025-11-21T16:20:58.9147523Z err:  60d9e074b840 Extracting [==>                                                ]  35.65MB/657.4MB
+2025-11-21T16:20:59.0796711Z err:  60d9e074b840 Extracting [==>                                                ]  37.88MB/657.4MB
+2025-11-21T16:20:59.2600046Z err:  60d9e074b840 Extracting [===>                                               ]  41.***MB/657.4MB
+2025-11-21T16:20:59.4692216Z err:  60d9e074b840 Extracting [===>                                               ]  43.45MB/657.4MB
+2025-11-21T16:20:59.5945654Z err:  60d9e074b840 Extracting [===>                                               ]  44.56MB/657.4MB
+2025-11-21T16:20:59.7015716Z err:  60d9e074b840 Extracting [===>                                               ]  47.35MB/657.4MB
+2025-11-21T16:20:59.8106828Z err:  60d9e074b840 Extracting [===>                                               ]  48.46MB/657.4MB
+2025-11-21T16:20:59.9557403Z err:  60d9e074b840 Extracting [===>                                               ]  50.14MB/657.4MB
+2025-11-21T16:21:00.0803811Z err:  60d9e074b840 Extracting [===>                                               ]  50.69MB/657.4MB
+2025-11-21T16:21:00.2131767Z err:  60d9e074b840 Extracting [===>                                               ]  51.25MB/657.4MB
+2025-11-21T16:21:00.3463519Z err:  60d9e074b840 Extracting [===>                                               ]  51.81MB/657.4MB
+2025-11-21T16:21:00.4779966Z err:  60d9e074b840 Extracting [====>                                              ]  53.48MB/657.4MB
+2025-11-21T16:21:00.5787891Z err:  60d9e074b840 Extracting [====>                                              ]  54.59MB/657.4MB
+2025-11-21T16:21:00.7601471Z err:  60d9e074b840 Extracting [====>                                              ]  56.26MB/657.4MB
+2025-11-21T16:21:00.8709088Z err:  60d9e074b840 Extracting [====>                                              ]  58.49MB/657.4MB
+2025-11-21T16:21:00.9838393Z err:  60d9e074b840 Extracting [====>                                              ]  62.39MB/657.4MB
+2025-11-21T16:21:01.1017444Z err:  60d9e074b840 Extracting [====>                                              ]  65.18MB/657.4MB
+2025-11-21T16:21:01.2082440Z err:  60d9e074b840 Extracting [=====>                                             ]  72.42MB/657.4MB
+2025-11-21T16:21:01.3188239Z err:  60d9e074b840 Extracting [======>                                            ]  79.66MB/657.4MB
+2025-11-21T16:21:01.4190200Z err:  60d9e074b840 Extracting [======>                                            ]  85.79MB/657.4MB
+2025-11-21T16:21:01.5225553Z err:  60d9e074b840 Extracting [=======>                                           ]  93.59MB/657.4MB
+2025-11-21T16:21:01.6247751Z err:  60d9e074b840 Extracting [=======>                                           ]  101.9MB/657.4MB
+2025-11-21T16:21:01.7261069Z err:  60d9e074b840 Extracting [========>                                          ]  110.3MB/657.4MB
+2025-11-21T16:21:01.8384940Z err:  60d9e074b840 Extracting [========>                                          ]  117.5MB/657.4MB
+2025-11-21T16:21:01.9468898Z err:  60d9e074b840 Extracting [=========>                                         ]  123.7MB/657.4MB
+2025-11-21T16:21:02.0565662Z err:  60d9e074b840 Extracting [=========>                                         ]  129.2MB/657.4MB
+2025-11-21T16:21:02.1605547Z err:  60d9e074b840 Extracting [==========>                                        ]  134.8MB/657.4MB
+2025-11-21T16:21:02.2698544Z err:  60d9e074b840 Extracting [==========>                                        ]  139.3MB/657.4MB
+2025-11-21T16:21:02.3717952Z err:  60d9e074b840 Extracting [===========>                                       ]  145.9MB/657.4MB
+2025-11-21T16:21:02.4733984Z err:  60d9e074b840 Extracting [===========>                                       ]  152.6MB/657.4MB
+2025-11-21T16:21:02.5780738Z err:  60d9e074b840 Extracting [============>                                      ]  158.8MB/657.4MB
+2025-11-21T16:21:02.6804821Z err:  60d9e074b840 Extracting [============>                                      ]  164.9MB/657.4MB
+2025-11-21T16:21:02.7848221Z err:  60d9e074b840 Extracting [=============>                                     ]    171MB/657.4MB
+2025-11-21T16:21:02.8981361Z err:  60d9e074b840 Extracting [=============>                                     ]  178.8MB/657.4MB
+2025-11-21T16:21:03.0044338Z err:  60d9e074b840 Extracting [==============>                                    ]  185.5MB/657.4MB
+2025-11-21T16:21:03.1145467Z err:  60d9e074b840 Extracting [==============>                                    ]  191.1MB/657.4MB
+2025-11-21T16:21:03.2158383Z err:  60d9e074b840 Extracting [===============>                                   ]  197.8MB/657.4MB
+2025-11-21T16:21:03.3245224Z err:  60d9e074b840 Extracting [===============>                                   ]  203.9MB/657.4MB
+2025-11-21T16:21:03.4270317Z err:  60d9e074b840 Extracting [================>                                  ]  210.6MB/657.4MB
+2025-11-21T16:21:03.5457791Z err:  60d9e074b840 Extracting [================>                                  ]  218.9MB/657.4MB
+2025-11-21T16:21:03.6481727Z err:  60d9e074b840 Extracting [=================>                                 ]  ***6.7MB/657.4MB
+2025-11-21T16:21:03.7567994Z err:  60d9e074b840 Extracting [=================>                                 ]  232.8MB/657.4MB
+2025-11-21T16:21:03.8621958Z err:  60d9e074b840 Extracting [==================>                                ]  239.5MB/657.4MB
+2025-11-21T16:21:03.9643142Z err:  60d9e074b840 Extracting [==================>                                ]  245.7MB/657.4MB
+2025-11-21T16:21:04.0649226Z err:  60d9e074b840 Extracting [===================>                               ]  252.9MB/657.4MB
+2025-11-21T16:21:04.1706750Z err:  60d9e074b840 Extracting [===================>                               ]  260.7MB/657.4MB
+2025-11-21T16:21:04.2717891Z err:  60d9e074b840 Extracting [====================>                              ]  269.1MB/657.4MB
+2025-11-21T16:21:04.3743764Z err:  60d9e074b840 Extracting [====================>                              ]  274.6MB/657.4MB
+2025-11-21T16:21:04.4907118Z err:  60d9e074b840 Extracting [=====================>                             ]  280.2MB/657.4MB
+2025-11-21T16:21:04.5965421Z err:  60d9e074b840 Extracting [=====================>                             ]  287.4MB/657.4MB
+2025-11-21T16:21:04.7019638Z err:  60d9e074b840 Extracting [======================>                            ]  295.2MB/657.4MB
+2025-11-21T16:21:04.8040110Z err:  60d9e074b840 Extracting [=======================>                           ]    303MB/657.4MB
+2025-11-21T16:21:04.9089530Z err:  60d9e074b840 Extracting [=======================>                           ]  309.7MB/657.4MB
+2025-11-21T16:21:05.0154558Z err:  60d9e074b840 Extracting [========================>                          ]    317MB/657.4MB
+2025-11-21T16:21:05.1175598Z err:  60d9e074b840 Extracting [========================>                          ]  325.3MB/657.4MB
+2025-11-21T16:21:05.2255616Z err:  60d9e074b840 Extracting [=========================>                         ]  333.1MB/657.4MB
+2025-11-21T16:21:05.3272720Z err:  60d9e074b840 Extracting [=========================>                         ]  339.2MB/657.4MB
+2025-11-21T16:21:05.4339953Z err:  60d9e074b840 Extracting [==========================>                        ]  347.6MB/657.4MB
+2025-11-21T16:21:05.5437107Z err:  60d9e074b840 Extracting [===========================>                       ]  355.4MB/657.4MB
+2025-11-21T16:21:05.6621862Z err:  60d9e074b840 Extracting [===========================>                       ]  360.4MB/657.4MB
+2025-11-21T16:21:05.7791231Z err:  60d9e074b840 Extracting [===========================>                       ]  362.1MB/657.4MB
+2025-11-21T16:21:05.9312798Z err:  60d9e074b840 Extracting [===========================>                       ]  362.6MB/657.4MB
+2025-11-21T16:21:06.1650835Z err:  60d9e074b840 Extracting [===========================>                       ]  363.2MB/657.4MB
+2025-11-21T16:21:06.2658441Z err:  60d9e074b840 Extracting [===========================>                       ]  367.1MB/657.4MB
+2025-11-21T16:21:06.3957435Z err:  60d9e074b840 Extracting [============================>                      ]  370.4MB/657.4MB
+2025-11-21T16:21:06.5066592Z err:  60d9e074b840 Extracting [============================>                      ]  373.8MB/657.4MB
+2025-11-21T16:21:06.6160059Z err:  60d9e074b840 Extracting [============================>                      ]  378.2MB/657.4MB
+2025-11-21T16:21:06.7384280Z err:  60d9e074b840 Extracting [============================>                      ]    381MB/657.4MB
+2025-11-21T16:21:06.8439931Z err:  60d9e074b840 Extracting [=============================>                     ]  384.9MB/657.4MB
+2025-11-21T16:21:06.9538345Z err:  60d9e074b840 Extracting [=============================>                     ]  388.3MB/657.4MB
+2025-11-21T16:21:07.0736912Z err:  60d9e074b840 Extracting [=============================>                     ]  389.9MB/657.4MB
+2025-11-21T16:21:07.2144767Z err:  60d9e074b840 Extracting [=============================>                     ]  391.1MB/657.4MB
+2025-11-21T16:21:07.3264189Z err:  60d9e074b840 Extracting [=============================>                     ]  392.2MB/657.4MB
+2025-11-21T16:21:07.4698703Z err:  60d9e074b840 Extracting [=============================>                     ]  394.4MB/657.4MB
+2025-11-21T16:21:07.5824344Z err:  60d9e074b840 Extracting [==============================>                    ]  396.6MB/657.4MB
+2025-11-21T16:21:07.6923753Z err:  60d9e074b840 Extracting [==============================>                    ]    400MB/657.4MB
+2025-11-21T16:21:07.8106574Z err:  60d9e074b840 Extracting [==============================>                    ]  401.1MB/657.4MB
+2025-11-21T16:21:07.9319013Z err:  60d9e074b840 Extracting [==============================>                    ]  402.2MB/657.4MB
+2025-11-21T16:21:08.0707110Z err:  60d9e074b840 Extracting [==============================>                    ]  403.9MB/657.4MB
+2025-11-21T16:21:08.2186035Z err:  60d9e074b840 Extracting [==============================>                    ]    405MB/657.4MB
+2025-11-21T16:21:08.3191943Z err:  60d9e074b840 Extracting [==============================>                    ]  405.5MB/657.4MB
+2025-11-21T16:21:08.4830088Z err:  60d9e074b840 Extracting [==============================>                    ]  406.1MB/657.4MB
+2025-11-21T16:21:08.6024553Z err:  60d9e074b840 Extracting [==============================>                    ]  406.7MB/657.4MB
+2025-11-21T16:21:08.7948532Z err:  60d9e074b840 Extracting [===============================>                   ]  407.8MB/657.4MB
+2025-11-21T16:21:08.9552201Z err:  60d9e074b840 Extracting [===============================>                   ]  408.9MB/657.4MB
+2025-11-21T16:21:09.0987634Z err:  60d9e074b840 Extracting [===============================>                   ]  409.4MB/657.4MB
+2025-11-21T16:21:09.2567296Z err:  60d9e074b840 Extracting [===============================>                   ]  410.6MB/657.4MB
+2025-11-21T16:21:09.3581691Z err:  60d9e074b840 Extracting [===============================>                   ]  411.1MB/657.4MB
+2025-11-21T16:21:09.4643719Z err:  60d9e074b840 Extracting [===============================>                   ]  411.7MB/657.4MB
+2025-11-21T16:21:09.6480145Z err:  60d9e074b840 Extracting [===============================>                   ]  412.8MB/657.4MB
+2025-11-21T16:21:09.7719304Z err:  60d9e074b840 Extracting [===============================>                   ]  413.3MB/657.4MB
+2025-11-21T16:21:09.9060876Z err:  60d9e074b840 Extracting [===============================>                   ]  413.9MB/657.4MB
+2025-11-21T16:21:10.0503952Z err:  60d9e074b840 Extracting [===============================>                   ]  414.4MB/657.4MB
+2025-11-21T16:21:10.1504217Z err:  60d9e074b840 Extracting [===============================>                   ]  416.7MB/657.4MB
+2025-11-21T16:21:10.2525171Z err:  60d9e074b840 Extracting [===============================>                   ]  419.5MB/657.4MB
+2025-11-21T16:21:10.4491277Z err:  60d9e074b840 Extracting [================================>                  ]  421.1MB/657.4MB
+2025-11-21T16:21:10.5879568Z err:  60d9e074b840 Extracting [================================>                  ]  4***.2MB/657.4MB
+2025-11-21T16:21:10.7640093Z err:  60d9e074b840 Extracting [================================>                  ]  423.4MB/657.4MB
+2025-11-21T16:21:10.8892440Z err:  60d9e074b840 Extracting [================================>                  ]  423.9MB/657.4MB
+2025-11-21T16:21:11.0259760Z err:  60d9e074b840 Extracting [================================>                  ]  424.5MB/657.4MB
+2025-11-21T16:21:11.1746446Z err:  60d9e074b840 Extracting [================================>                  ]    425MB/657.4MB
+2025-11-21T16:21:11.3306174Z err:  60d9e074b840 Extracting [================================>                  ]  425.6MB/657.4MB
+2025-11-21T16:21:11.4430442Z err:  60d9e074b840 Extracting [================================>                  ]  426.1MB/657.4MB
+2025-11-21T16:21:11.5608574Z err:  60d9e074b840 Extracting [================================>                  ]  428.9MB/657.4MB
+2025-11-21T16:21:11.6634368Z err:  60d9e074b840 Extracting [================================>                  ]  431.2MB/657.4MB
+2025-11-21T16:21:11.7640611Z err:  60d9e074b840 Extracting [=================================>                 ]  433.9MB/657.4MB
+2025-11-21T16:21:11.8823348Z err:  60d9e074b840 Extracting [=================================>                 ]  435.6MB/657.4MB
+2025-11-21T16:21:12.0449647Z err:  60d9e074b840 Extracting [=================================>                 ]  436.7MB/657.4MB
+2025-11-21T16:21:12.1661041Z err:  60d9e074b840 Extracting [=================================>                 ]    439MB/657.4MB
+2025-11-21T16:21:12.3340087Z err:  60d9e074b840 Extracting [=================================>                 ]  440.1MB/657.4MB
+2025-11-21T16:21:12.4642679Z err:  60d9e074b840 Extracting [=================================>                 ]  440.6MB/657.4MB
+2025-11-21T16:21:12.6055588Z err:  60d9e074b840 Extracting [=================================>                 ]  441.2MB/657.4MB
+2025-11-21T16:21:13.0598399Z err:  60d9e074b840 Extracting [=================================>                 ]  441.7MB/657.4MB
+2025-11-21T16:21:13.2401876Z err:  60d9e074b840 Extracting [=================================>                 ]  442.9MB/657.4MB
+2025-11-21T16:21:13.3416747Z err:  60d9e074b840 Extracting [=================================>                 ]  444.5MB/657.4MB
+2025-11-21T16:21:13.4799434Z err:  60d9e074b840 Extracting [=================================>                 ]  445.6MB/657.4MB
+2025-11-21T16:21:13.5918281Z err:  60d9e074b840 Extracting [=================================>                 ]  446.8MB/657.4MB
+2025-11-21T16:21:13.7120419Z err:  60d9e074b840 Extracting [==================================>                ]  447.9MB/657.4MB
+2025-11-21T16:21:13.9107000Z err:  60d9e074b840 Extracting [==================================>                ]    449MB/657.4MB
+2025-11-21T16:21:14.0398267Z err:  60d9e074b840 Extracting [==================================>                ]  450.1MB/657.4MB
+2025-11-21T16:21:14.1837718Z err:  60d9e074b840 Extracting [==================================>                ]  451.8MB/657.4MB
+2025-11-21T16:21:14.2990890Z err:  60d9e074b840 Extracting [==================================>                ]  453.4MB/657.4MB
+2025-11-21T16:21:14.5562755Z err:  60d9e074b840 Extracting [==================================>                ]  454.6MB/657.4MB
+2025-11-21T16:21:14.6920457Z err:  60d9e074b840 Extracting [==================================>                ]  456.2MB/657.4MB
+2025-11-21T16:21:14.8432107Z err:  60d9e074b840 Extracting [==================================>                ]  457.3MB/657.4MB
+2025-11-21T16:21:14.9665044Z err:  60d9e074b840 Extracting [==================================>                ]  458.5MB/657.4MB
+2025-11-21T16:21:15.0779284Z err:  60d9e074b840 Extracting [===================================>               ]  461.2MB/657.4MB
+2025-11-21T16:21:15.2043370Z err:  60d9e074b840 Extracting [===================================>               ]  462.9MB/657.4MB
+2025-11-21T16:21:15.3159438Z err:  60d9e074b840 Extracting [===================================>               ]    464MB/657.4MB
+2025-11-21T16:21:15.4245777Z err:  60d9e074b840 Extracting [===================================>               ]  465.1MB/657.4MB
+2025-11-21T16:21:15.5529034Z err:  60d9e074b840 Extracting [===================================>               ]  467.4MB/657.4MB
+2025-11-21T16:21:15.6723665Z err:  60d9e074b840 Extracting [===================================>               ]    469MB/657.4MB
+2025-11-21T16:21:15.7726750Z err:  60d9e074b840 Extracting [===================================>               ]  470.7MB/657.4MB
+2025-11-21T16:21:15.9124560Z err:  60d9e074b840 Extracting [===================================>               ]  472.4MB/657.4MB
+2025-11-21T16:21:16.0325664Z err:  60d9e074b840 Extracting [====================================>              ]  475.2MB/657.4MB
+2025-11-21T16:21:16.1830178Z err:  60d9e074b840 Extracting [====================================>              ]    478MB/657.4MB
+2025-11-21T16:21:16.2970171Z err:  60d9e074b840 Extracting [====================================>              ]  480.2MB/657.4MB
+2025-11-21T16:21:16.4090270Z err:  60d9e074b840 Extracting [====================================>              ]  482.4MB/657.4MB
+2025-11-21T16:21:16.5215945Z err:  60d9e074b840 Extracting [====================================>              ]  483.5MB/657.4MB
+2025-11-21T16:21:16.6559970Z err:  60d9e074b840 Extracting [====================================>              ]  486.3MB/657.4MB
+2025-11-21T16:21:16.7688002Z err:  60d9e074b840 Extracting [=====================================>             ]  488.5MB/657.4MB
+2025-11-21T16:21:16.8838890Z err:  60d9e074b840 Extracting [=====================================>             ]  492.4MB/657.4MB
+2025-11-21T16:21:17.0456631Z err:  60d9e074b840 Extracting [=====================================>             ]  493.6MB/657.4MB
+2025-11-21T16:21:17.2856009Z err:  60d9e074b840 Extracting [=====================================>             ]  494.1MB/657.4MB
+2025-11-21T16:21:17.4158561Z err:  60d9e074b840 Extracting [=====================================>             ]  495.8MB/657.4MB
+2025-11-21T16:21:17.5336755Z err:  60d9e074b840 Extracting [=====================================>             ]  496.9MB/657.4MB
+2025-11-21T16:21:17.6413778Z err:  60d9e074b840 Extracting [=====================================>             ]  497.5MB/657.4MB
+2025-11-21T16:21:17.7442654Z err:  60d9e074b840 Extracting [=====================================>             ]  498.6MB/657.4MB
+2025-11-21T16:21:17.8686961Z err:  60d9e074b840 Extracting [=====================================>             ]  499.1MB/657.4MB
+2025-11-21T16:21:17.9747832Z err:  60d9e074b840 Extracting [======================================>            ]  499.7MB/657.4MB
+2025-11-21T16:21:18.1020829Z err:  60d9e074b840 Extracting [======================================>            ]  500.8MB/657.4MB
+2025-11-21T16:21:18.2457999Z err:  60d9e074b840 Extracting [======================================>            ]  502.5MB/657.4MB
+2025-11-21T16:21:18.3580292Z err:  60d9e074b840 Extracting [======================================>            ]  503.6MB/657.4MB
+2025-11-21T16:21:18.4659006Z err:  60d9e074b840 Extracting [======================================>            ]  504.7MB/657.4MB
+2025-11-21T16:21:18.5844976Z err:  60d9e074b840 Extracting [======================================>            ]  505.8MB/657.4MB
+2025-11-21T16:21:18.7143517Z err:  60d9e074b840 Extracting [======================================>            ]  506.9MB/657.4MB
+2025-11-21T16:21:18.8265522Z err:  60d9e074b840 Extracting [======================================>            ]    508MB/657.4MB
+2025-11-21T16:21:19.0233045Z err:  60d9e074b840 Extracting [======================================>            ]  509.1MB/657.4MB
+2025-11-21T16:21:19.1478036Z err:  60d9e074b840 Extracting [======================================>            ]  510.8MB/657.4MB
+2025-11-21T16:21:19.2582184Z err:  60d9e074b840 Extracting [======================================>            ]  511.9MB/657.4MB
+2025-11-21T16:21:19.4004199Z err:  60d9e074b840 Extracting [=======================================>           ]  513.6MB/657.4MB
+2025-11-21T16:21:19.5560973Z err:  60d9e074b840 Extracting [=======================================>           ]  515.3MB/657.4MB
+2025-11-21T16:21:19.7012177Z err:  60d9e074b840 Extracting [=======================================>           ]  515.8MB/657.4MB
+2025-11-21T16:21:19.8827749Z err:  60d9e074b840 Extracting [=======================================>           ]  516.4MB/657.4MB
+2025-11-21T16:21:20.0702702Z err:  60d9e074b840 Extracting [=======================================>           ]  517.5MB/657.4MB
+2025-11-21T16:21:20.1895620Z err:  60d9e074b840 Extracting [=======================================>           ]  519.2MB/657.4MB
+2025-11-21T16:21:20.3948018Z err:  60d9e074b840 Extracting [=======================================>           ]  520.3MB/657.4MB
+2025-11-21T16:21:20.5434703Z err:  60d9e074b840 Extracting [=======================================>           ]  521.4MB/657.4MB
+2025-11-21T16:21:20.6579592Z err:  60d9e074b840 Extracting [=======================================>           ]    5***MB/657.4MB
+2025-11-21T16:21:20.7831411Z err:  60d9e074b840 Extracting [=======================================>           ]  523.1MB/657.4MB
+2025-11-21T16:21:20.9645120Z err:  60d9e074b840 Extracting [=======================================>           ]  524.2MB/657.4MB
+2025-11-21T16:21:21.1122975Z err:  60d9e074b840 Extracting [=======================================>           ]  525.3MB/657.4MB
+2025-11-21T16:21:21.2251495Z err:  60d9e074b840 Extracting [========================================>          ]    527MB/657.4MB
+2025-11-21T16:21:21.3641737Z err:  60d9e074b840 Extracting [========================================>          ]  529.8MB/657.4MB
+2025-11-21T16:21:21.4960912Z err:  60d9e074b840 Extracting [========================================>          ]  530.9MB/657.4MB
+2025-11-21T16:21:21.7286633Z err:  60d9e074b840 Extracting [========================================>          ]    532MB/657.4MB
+2025-11-21T16:21:21.9763491Z err:  60d9e074b840 Extracting [========================================>          ]  532.5MB/657.4MB
+2025-11-21T16:21:22.1044908Z err:  60d9e074b840 Extracting [========================================>          ]  533.1MB/657.4MB
+2025-11-21T16:21:22.2663949Z err:  60d9e074b840 Extracting [========================================>          ]  533.7MB/657.4MB
+2025-11-21T16:21:22.4438562Z err:  60d9e074b840 Extracting [========================================>          ]  534.2MB/657.4MB
+2025-11-21T16:21:22.6164839Z err:  60d9e074b840 Extracting [========================================>          ]  534.8MB/657.4MB
+2025-11-21T16:21:22.9744746Z err:  60d9e074b840 Extracting [========================================>          ]  535.3MB/657.4MB
+2025-11-21T16:21:23.4865358Z err:  60d9e074b840 Extracting [========================================>          ]  535.9MB/657.4MB
+2025-11-21T16:21:23.6686156Z err:  60d9e074b840 Extracting [========================================>          ]  536.4MB/657.4MB
+2025-11-21T16:21:23.7904326Z err:  60d9e074b840 Extracting [========================================>          ]  537.6MB/657.4MB
+2025-11-21T16:21:24.1689491Z err:  60d9e074b840 Extracting [========================================>          ]  538.1MB/657.4MB
+2025-11-21T16:21:24.2866441Z err:  60d9e074b840 Extracting [========================================>          ]  538.7MB/657.4MB
+2025-11-21T16:21:24.4228614Z err:  60d9e074b840 Extracting [=========================================>         ]  539.8MB/657.4MB
+2025-11-21T16:21:24.5474840Z err:  60d9e074b840 Extracting [=========================================>         ]  543.1MB/657.4MB
+2025-11-21T16:21:24.6589326Z err:  60d9e074b840 Extracting [=========================================>         ]  546.5MB/657.4MB
+2025-11-21T16:21:24.7672973Z err:  60d9e074b840 Extracting [=========================================>         ]  549.3MB/657.4MB
+2025-11-21T16:21:24.8793898Z err:  60d9e074b840 Extracting [=========================================>         ]  551.5MB/657.4MB
+2025-11-21T16:21:24.9820943Z err:  60d9e074b840 Extracting [==========================================>        ]  555.9MB/657.4MB
+2025-11-21T16:21:25.0893239Z err:  60d9e074b840 Extracting [==========================================>        ]  560.4MB/657.4MB
+2025-11-21T16:21:25.2010227Z err:  60d9e074b840 Extracting [===========================================>       ]  565.4MB/657.4MB
+2025-11-21T16:21:25.3050930Z err:  60d9e074b840 Extracting [===========================================>       ]  569.9MB/657.4MB
+2025-11-21T16:21:25.4065036Z err:  60d9e074b840 Extracting [===========================================>       ]  574.3MB/657.4MB
+2025-11-21T16:21:25.5103509Z err:  60d9e074b840 Extracting [============================================>      ]  580.5MB/657.4MB
+2025-11-21T16:21:25.6182220Z err:  60d9e074b840 Extracting [============================================>      ]  587.7MB/657.4MB
+2025-11-21T16:21:25.7249477Z err:  60d9e074b840 Extracting [=============================================>     ]  593.8MB/657.4MB
+2025-11-21T16:21:25.8269233Z err:  60d9e074b840 Extracting [=============================================>     ]  600.5MB/657.4MB
+2025-11-21T16:21:25.9353281Z err:  60d9e074b840 Extracting [==============================================>    ]  606.6MB/657.4MB
+2025-11-21T16:21:26.0443612Z err:  60d9e074b840 Extracting [==============================================>    ]  612.2MB/657.4MB
+2025-11-21T16:21:26.1522615Z err:  60d9e074b840 Extracting [===============================================>   ]  618.3MB/657.4MB
+2025-11-21T16:21:26.2574638Z err:  60d9e074b840 Extracting [===============================================>   ]  626.1MB/657.4MB
+2025-11-21T16:21:26.3582622Z err:  60d9e074b840 Extracting [================================================>  ]  631.1MB/657.4MB
+2025-11-21T16:21:26.4692914Z err:  60d9e074b840 Extracting [================================================>  ]  636.7MB/657.4MB
+2025-11-21T16:21:26.5724778Z err:  60d9e074b840 Extracting [================================================>  ]  642.3MB/657.4MB
+2025-11-21T16:21:26.6800846Z err:  60d9e074b840 Extracting [=================================================> ]  647.3MB/657.4MB
+2025-11-21T16:21:26.7927232Z err:  60d9e074b840 Extracting [=================================================> ]  649.5MB/657.4MB
+2025-11-21T16:21:26.9267260Z err:  60d9e074b840 Extracting [=================================================> ]  651.8MB/657.4MB
+2025-11-21T16:21:27.0552086Z err:  60d9e074b840 Extracting [=================================================> ]  653.4MB/657.4MB
+2025-11-21T16:21:27.1592154Z err:  60d9e074b840 Extracting [=================================================> ]  655.1MB/657.4MB
+2025-11-21T16:21:27.2741027Z err:  60d9e074b840 Extracting [=================================================> ]  657.3MB/657.4MB
+2025-11-21T16:21:27.2968662Z err:  60d9e074b840 Extracting [==================================================>]  657.4MB/657.4MB
+2025-11-21T16:21:27.6556631Z err:  60d9e074b840 Pull complete 
+2025-11-21T16:21:27.6585536Z err:  c562499f6b3a Extracting [==================================================>]  2.599kB/2.599kB
+2025-11-21T16:21:27.6591634Z err:  c562499f6b3a Extracting [==================================================>]  2.599kB/2.599kB
+2025-11-21T16:21:27.6823612Z err:  c562499f6b3a Pull complete 
+2025-11-21T16:21:27.7100959Z err:  5ab9292bf2d7 Extracting [>                                                  ]  557.1kB/57.12MB
+2025-11-21T16:21:27.8234599Z err:  5ab9292bf2d7 Extracting [======>                                            ]  7.242MB/57.12MB
+2025-11-21T16:21:27.9317321Z err:  5ab9292bf2d7 Extracting [========>                                          ]   9.47MB/57.12MB
+2025-11-21T16:21:28.0559418Z err:  5ab9292bf2d7 Extracting [==========>                                        ]   11.7MB/57.12MB
+2025-11-21T16:21:28.1761913Z err:  5ab9292bf2d7 Extracting [============>                                      ]  13.93MB/57.12MB
+2025-11-21T16:21:28.2773801Z err:  5ab9292bf2d7 Extracting [==============>                                    ]  16.71MB/57.12MB
+2025-11-21T16:21:28.3909795Z err:  5ab9292bf2d7 Extracting [================>                                  ]  18.38MB/57.12MB
+2025-11-21T16:21:28.4925297Z err:  5ab9292bf2d7 Extracting [====================>                              ]  23.95MB/57.12MB
+2025-11-21T16:21:28.5938269Z err:  5ab9292bf2d7 Extracting [===========================>                       ]   31.2MB/57.12MB
+2025-11-21T16:21:28.6995435Z err:  5ab9292bf2d7 Extracting [==================================>                ]  38.99MB/57.12MB
+2025-11-21T16:21:28.8030673Z err:  5ab9292bf2d7 Extracting [=========================================>         ]  47.35MB/57.12MB
+2025-11-21T16:21:28.9090664Z err:  5ab9292bf2d7 Extracting [==============================================>    ]  52.92MB/57.12MB
+2025-11-21T16:21:29.0156731Z err:  5ab9292bf2d7 Extracting [=================================================> ]  56.26MB/57.12MB
+2025-11-21T16:21:29.1888400Z err:  5ab9292bf2d7 Extracting [=================================================> ]  56.82MB/57.12MB
+2025-11-21T16:21:29.3198545Z err:  5ab9292bf2d7 Extracting [==================================================>]  57.12MB/57.12MB
+2025-11-21T16:21:29.3931667Z err:  5ab9292bf2d7 Pull complete 
+2025-11-21T16:21:29.4258419Z err:  6f745c5f7e5a Extracting [>                                                  ]  557.1kB/56.12MB
+2025-11-21T16:21:29.5460271Z err:  6f745c5f7e5a Extracting [======>                                            ]  7.799MB/56.12MB
+2025-11-21T16:21:29.6483712Z err:  6f745c5f7e5a Extracting [========>                                          ]  10.03MB/56.12MB
+2025-11-21T16:21:29.7509476Z err:  6f745c5f7e5a Extracting [==========>                                        ]   11.7MB/56.12MB
+2025-11-21T16:21:29.8862666Z err:  6f745c5f7e5a Extracting [============>                                      ]  13.93MB/56.12MB
+2025-11-21T16:21:30.0861983Z err:  6f745c5f7e5a Extracting [================>                                  ]  18.38MB/56.12MB
+2025-11-21T16:21:30.1894465Z err:  6f745c5f7e5a Extracting [=======================>                           ]  26.74MB/56.12MB
+2025-11-21T16:21:30.2909292Z err:  6f745c5f7e5a Extracting [===============================>                   ]  35.09MB/56.12MB
+2025-11-21T16:21:30.3933154Z err:  6f745c5f7e5a Extracting [=====================================>             ]  42.34MB/56.12MB
+2025-11-21T16:21:30.4984294Z err:  6f745c5f7e5a Extracting [============================================>      ]  49.58MB/56.12MB
+2025-11-21T16:21:30.6165215Z err:  6f745c5f7e5a Extracting [=================================================> ]  55.71MB/56.12MB
+2025-11-21T16:21:30.6232241Z err:  6f745c5f7e5a Extracting [==================================================>]  56.12MB/56.12MB
+2025-11-21T16:21:30.6867088Z err:  6f745c5f7e5a Pull complete 
+2025-11-21T16:21:30.6942286Z err:  d08609d2e933 Extracting [==================================================>]  2.404kB/2.404kB
+2025-11-21T16:21:30.6944596Z err:  d08609d2e933 Extracting [==================================================>]  2.404kB/2.404kB
+2025-11-21T16:21:30.7082855Z err:  d08609d2e933 Pull complete 
+2025-11-21T16:21:30.7112295Z err:  db3698e4f919 Extracting [==================================================>]    2.4kB/2.4kB
+2025-11-21T16:21:30.7113818Z err:  db3698e4f919 Extracting [==================================================>]    2.4kB/2.4kB
+2025-11-21T16:21:30.7278409Z err:  db3698e4f919 Pull complete 
+2025-11-21T16:21:30.7337026Z err:  593b44db63f9 Extracting [>                                                  ]  163.8kB/16.29MB
+2025-11-21T16:21:30.8473897Z err:  593b44db63f9 Extracting [======>                                            ]   2.13MB/16.29MB
+2025-11-21T16:21:30.9496047Z err:  593b44db63f9 Extracting [=============>                                     ]   4.26MB/16.29MB
+2025-11-21T16:21:31.0708740Z err:  593b44db63f9 Extracting [===================>                               ]  6.***6MB/16.29MB
+2025-11-21T16:21:31.1831706Z err:  593b44db63f9 Extracting [======================>                            ]  7.209MB/16.29MB
+2025-11-21T16:21:31.2831394Z err:  593b44db63f9 Extracting [========================>                          ]  7.864MB/16.29MB
+2025-11-21T16:21:31.3897237Z err:  593b44db63f9 Extracting [==============================>                    ]   9.83MB/16.29MB
+2025-11-21T16:21:31.5108181Z err:  593b44db63f9 Extracting [==================================>                ]   11.3MB/16.29MB
+2025-11-21T16:21:31.6511796Z err:  593b44db63f9 Extracting [===================================>               ]  11.63MB/16.29MB
+2025-11-21T16:21:31.7589984Z err:  593b44db63f9 Extracting [=====================================>             ]  12.29MB/16.29MB
+2025-11-21T16:21:31.8622615Z err:  593b44db63f9 Extracting [========================================>          ]  13.11MB/16.29MB
+2025-11-21T16:21:31.9932536Z err:  593b44db63f9 Extracting [==========================================>        ]  13.76MB/16.29MB
+2025-11-21T16:21:32.0953042Z err:  593b44db63f9 Extracting [===========================================>       ]  14.25MB/16.29MB
+2025-11-21T16:21:32.1994258Z err:  593b44db63f9 Extracting [==============================================>    ]  15.07MB/16.29MB
+2025-11-21T16:21:32.3957833Z err:  593b44db63f9 Extracting [===============================================>   ]  15.56MB/16.29MB
+2025-11-21T16:21:32.5619666Z err:  593b44db63f9 Extracting [================================================>  ]  15.73MB/16.29MB
+2025-11-21T16:21:32.7123156Z err:  593b44db63f9 Extracting [==================================================>]  16.29MB/16.29MB
+2025-11-21T16:21:32.8135305Z err:  593b44db63f9 Pull complete 
+2025-11-21T16:21:44.8007240Z err:  8d2ebfb89677 Extracting [==================================================>]      76B/76B
+2025-11-21T16:21:44.8008278Z err:  8d2ebfb89677 Extracting [==================================================>]      76B/76B
+2025-11-21T16:21:44.8183685Z err:  8d2ebfb89677 Pull complete 
+2025-11-21T16:21:44.8359608Z err:  backend Pulled 
+2025-11-21T16:21:44.8544116Z err: + echo '🔄 Arrêt des conteneurs existants...'
+2025-11-21T16:21:44.8544969Z err: + docker compose -f docker-compose.production.yml down
+2025-11-21T16:21:44.8545493Z out: 🔄 Arrêt des conteneurs existants...
+2025-11-21T16:21:45.1341179Z err:  Container ***-flower  Stopping
+2025-11-21T16:21:45.1341997Z err:  Container ***-celery-beat  Stopping
+2025-11-21T16:21:45.1342589Z err:  Container ***-backend  Stopping
+2025-11-21T16:21:45.1343159Z err:  Container ***-celery-worker  Stopping
+2025-11-21T16:21:45.1566119Z err:  Container ***-celery-worker  Stopped
+2025-11-21T16:21:45.1566963Z err:  Container ***-celery-worker  Removing
+2025-11-21T16:21:45.1681182Z err:  Container ***-celery-worker  Removed
+2025-11-21T16:21:45.7557667Z err:  Container ***-celery-beat  Stopped
+2025-11-21T16:21:45.7558660Z err:  Container ***-celery-beat  Removing
+2025-11-21T16:21:45.7559768Z err:  Container ***-backend  Stopped
+2025-11-21T16:21:45.7560514Z err:  Container ***-backend  Removing
+2025-11-21T16:21:45.7665302Z err:  Container ***-backend  Removed
+2025-11-21T16:21:45.7666578Z err:  Container ***-celery-beat  Removed
+2025-11-21T16:21:45.7667238Z err:  Container ***-postgres  Stopping
+2025-11-21T16:21:45.8740841Z err:  Container ***-flower  Stopped
+2025-11-21T16:21:45.8741441Z err:  Container ***-flower  Removing
+2025-11-21T16:21:45.8819974Z err:  Container ***-flower  Removed
+2025-11-21T16:21:45.8820524Z err:  Container ***-redis  Stopping
+2025-11-21T16:21:46.2129339Z err:  Container ***-postgres  Stopped
+2025-11-21T16:21:46.2130127Z err:  Container ***-postgres  Removing
+2025-11-21T16:21:46.2225701Z err:  Container ***-postgres  Removed
+2025-11-21T16:21:46.2916506Z err:  Container ***-redis  Stopped
+2025-11-21T16:21:46.2917125Z err:  Container ***-redis  Removing
+2025-11-21T16:21:46.3001981Z err:  Container ***-redis  Removed
+2025-11-21T16:21:46.3015595Z err:  Network ***_***-network  Removing
+2025-11-21T16:21:46.6690524Z err:  Network ***_***-network  Removed
+2025-11-21T16:21:46.6795359Z err: + echo '🔄 Démarrage des services...'
+2025-11-21T16:21:46.6795934Z err: + docker compose -f docker-compose.production.yml up -d
+2025-11-21T16:21:46.6796681Z out: 🔄 Démarrage des services...
+2025-11-21T16:21:46.8766165Z err:  Network ***_***-network  Creating
+2025-11-21T16:21:46.9772212Z err:  Network ***_***-network  Created
+2025-11-21T16:21:46.9864529Z err: time="2025-11-21T16:21:46Z" level=warning msg="Found orphan containers ([***-nginx]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+2025-11-21T16:21:46.9867314Z err:  Container ***-postgres  Creating
+2025-11-21T16:21:46.9868142Z err:  Container ***-redis  Creating
+2025-11-21T16:21:47.0678488Z err:  Container ***-postgres  Created
+2025-11-21T16:21:47.0679483Z err:  Container ***-redis  Created
+2025-11-21T16:21:47.0680334Z err:  Container ***-backend  Creating
+2025-11-21T16:21:47.0681227Z err:  Container ***-celery-beat  Creating
+2025-11-21T16:21:47.0682133Z err:  Container ***-celery-worker  Creating
+2025-11-21T16:21:47.0683023Z err:  Container ***-flower  Creating
+2025-11-21T16:21:47.1115665Z err:  Container ***-flower  Created
+2025-11-21T16:21:47.1116572Z err:  Container ***-celery-beat  Created
+2025-11-21T16:21:47.1134965Z err:  Container ***-celery-worker  Created
+2025-11-21T16:21:47.1170536Z err:  Container ***-backend  Created
+2025-11-21T16:21:47.1247958Z err:  Container ***-redis  Starting
+2025-11-21T16:21:47.1248642Z err:  Container ***-postgres  Starting
+2025-11-21T16:21:47.4506130Z err:  Container ***-postgres  Started
+2025-11-21T16:21:47.4869960Z err:  Container ***-redis  Started
+2025-11-21T16:21:47.4870980Z err:  Container ***-postgres  Waiting
+2025-11-21T16:21:47.4871596Z err:  Container ***-flower  Starting
+2025-11-21T16:21:47.4872182Z err:  Container ***-redis  Waiting
+2025-11-21T16:21:47.4872784Z err:  Container ***-postgres  Waiting
+2025-11-21T16:21:47.4873369Z err:  Container ***-redis  Waiting
+2025-11-21T16:21:47.4873940Z err:  Container ***-postgres  Waiting
+2025-11-21T16:21:47.4874402Z err:  Container ***-redis  Waiting
+2025-11-21T16:21:47.9226583Z err:  Container ***-flower  Started
+2025-11-21T16:21:52.9904130Z err:  Container ***-postgres  Healthy
+2025-11-21T16:21:52.9913091Z err:  Container ***-postgres  Healthy
+2025-11-21T16:21:52.9913932Z err:  Container ***-postgres  Healthy
+2025-11-21T16:21:57.9904272Z err:  Container ***-redis  Healthy
+2025-11-21T16:21:57.9905186Z err:  Container ***-celery-beat  Starting
+2025-11-21T16:21:57.9905815Z err:  Container ***-redis  Healthy
+2025-11-21T16:21:57.9906618Z err:  Container ***-celery-worker  Starting
+2025-11-21T16:21:57.9911561Z err:  Container ***-redis  Healthy
+2025-11-21T16:21:57.9912083Z err:  Container ***-backend  Starting
+2025-11-21T16:21:58.2751451Z err:  Container ***-celery-worker  Started
+2025-11-21T16:21:58.3627919Z err:  Container ***-celery-beat  Started
+2025-11-21T16:21:58.4044930Z err:  Container ***-backend  Started
+2025-11-21T16:21:58.4138346Z err: + echo '⏳ Attente que PostgreSQL soit prêt...'
+2025-11-21T16:21:58.4139464Z err: + echo '📊 Vérification de l'\''état du conteneur PostgreSQL...'
+2025-11-21T16:21:58.4140059Z out: ⏳ Attente que PostgreSQL soit prêt...
+2025-11-21T16:21:58.4140605Z out: 📊 Vérification de l'état du conteneur PostgreSQL...
+2025-11-21T16:21:58.4144585Z err: ++ seq 1 60
+2025-11-21T16:21:58.4179747Z err: + for i in $(seq 1 60)
+2025-11-21T16:21:58.4192111Z err: ++ docker compose -f docker-compose.production.yml ps postgres --format json
+2025-11-21T16:21:58.4193134Z err: ++ grep -o '"State":"[^"]*"'
+2025-11-21T16:21:58.4194658Z err: ++ cut '-d"' -f4
+2025-11-21T16:21:58.6573856Z err: + POSTGRES_STATUS=running
+2025-11-21T16:21:58.6574373Z err: + '[' running = running ']'
+2025-11-21T16:21:58.6583601Z err: ++ docker inspect '--format={{.State.Health.Status}}' ***-postgres
+2025-11-21T16:21:58.7053883Z err: + HEALTH=healthy
+2025-11-21T16:21:58.7054455Z err: + '[' healthy = healthy ']'
+2025-11-21T16:21:58.7055278Z err: + docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U *** -d ***
+2025-11-21T16:21:59.0132394Z err: + echo '✅ PostgreSQL est prêt et healthy'
+2025-11-21T16:21:59.0133058Z err: + break
+2025-11-21T16:21:59.0133726Z err: + echo '🔄 Exécution des migrations de base de données...'
+2025-11-21T16:21:59.0134647Z err: + docker compose -f docker-compose.production.yml exec -T backend flask db upgrade
+2025-11-21T16:21:59.0135520Z out: ✅ PostgreSQL est prêt et healthy
+2025-11-21T16:21:59.0136189Z out: 🔄 Exécution des migrations de base de données...
+2025-11-21T16:22:01.2435862Z err: [4.1 Vault] Aucune authentification configurée, désactivation
+2025-11-21T16:22:01.2437222Z err: [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=dev/mail/password, key=value)
+2025-11-21T16:22:01.2438255Z err: [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=prod/mail/password, key=value)
+2025-11-21T16:22:02.5540054Z err: [2.9] OpenTelemetry non installé - installer avec: pip install -r requirements-otel.txt
+2025-11-21T16:22:02.5542794Z err: [2025-11-21 16:***:02,494] WARNING in app: [2.9] Échec instrumentation SQLAlchemy: Working outside of application context.
+2025-11-21T16:22:02.5543605Z err: This typically means that you attempted to use functionality that needed
+2025-11-21T16:22:02.5544232Z err: the current application. To solve this, set up an application context
+2025-11-21T16:22:02.5544827Z err: with app.app_context(). See the documentation for more information.
+2025-11-21T16:22:02.5571464Z err: [2025-11-21 16:***:02,497] DEBUG in ext: [DB Profiler] Profiling désactivé (set ENABLE_DB_PROFILING=true)
+2025-11-21T16:22:02.5594647Z err: [2025-11-21 16:***:02,499] DEBUG in logging_centralized: [Centralized Logging] Désactivé (LOG_CENTRALIZATION_ENDPOINT non configuré)
+2025-11-21T16:22:02.5899253Z err: [2025-11-21 16:***:02,529] INFO in metrics: [Prometheus] Middleware métriques HTTP activé
+2025-11-21T16:22:02.7821787Z err: [2025-11-21 16:***:02,721] INFO in app: Celery initialized successfully
+2025-11-21T16:22:02.7822918Z err: [2025-11-21 16:***:02,7***] INFO in app: 🔧 [INIT] Configuration Socket.IO...
+2025-11-21T16:22:02.7825120Z err: [2025-11-21 16:***:02,7***] INFO in app: ✅ Socket.IO initialisé: async_mode=eventlet, cors=*, allow_upgrades=False
+2025-11-21T16:22:02.7826022Z err: [2025-11-21 16:***:02,7***] INFO in app: [2.9] Logging enrichi avec trace_id/span_id
+2025-11-21T16:22:03.0642224Z err: [2025-11-21 16:***:03,003] INFO in app: 🔧 [INIT] Enregistrement des routes et handlers Socket.IO...
+2025-11-21T16:22:07.3114289Z err: INFO:services.unified_dispatch.ml_predictor:[MLPredictor] Model loaded from data/ml/models/delay_predictor.pkl (trained at: 2025-10-20T17:09:27.697024, features: 35, MAE test: 2.2555205)
+2025-11-21T16:22:07.3116402Z err: INFO:services.proactive_alerts:[ProactiveAlerts] ✅ Modèle delay_predictor chargé via DelayMLPredictor
+2025-11-21T16:22:07.3117548Z err: INFO:services.proactive_alerts:[ProactiveAlerts] Service initialisé avec seuils: {'low': 0.3, 'medium': 0.6, 'high': 0.8}
+2025-11-21T16:22:07.3118371Z err: INFO:sockets.websocket_ack:[C3] Registered ACK handlers
+2025-11-21T16:22:07.3119202Z err: INFO:sockets.proactive_alerts:[ProactiveAlerts] Handlers Socket.IO enregistrés (incluant ACK C3)
+2025-11-21T16:22:07.6549963Z err: [2025-11-21 16:***:07,594] INFO in routes_api: [api] ✅ API v1 initialisée: /api/v1
+2025-11-21T16:22:07.6550844Z err: INFO:app:[api] ✅ API v1 initialisée: /api/v1
+2025-11-21T16:22:07.6551821Z err: [2025-11-21 16:***:07,594] INFO in routes_api: [api] ℹ️  API v2 prête mais non initialisée (vide pour l'instant)
+2025-11-21T16:22:07.6552850Z err: INFO:app:[api] ℹ️  API v2 prête mais non initialisée (vide pour l'instant)
+2025-11-21T16:22:07.6553658Z err: [2025-11-21 16:***:07,595] INFO in routes_api: [api] ℹ️  API legacy désactivée (API_LEGACY_ENABLED=false)
+2025-11-21T16:22:07.6554428Z err: INFO:app:[api] ℹ️  API legacy désactivée (API_LEGACY_ENABLED=false)
+2025-11-21T16:22:07.6555145Z err: [2025-11-21 16:***:07,595] INFO in routes_api: [api] Documentation: v1=disabled, v2=disabled, legacy=disabled
+2025-11-21T16:22:07.6555877Z err: INFO:app:[api] Documentation: v1=disabled, v2=disabled, legacy=disabled
+2025-11-21T16:22:07.7475305Z err: INFO:services.unified_dispatch.ml_predictor:[MLPredictor] Model loaded from data/ml/models/delay_predictor.pkl (trained at: 2025-10-20T17:09:27.697024, features: 35, MAE test: 2.2555205)
+2025-11-21T16:22:07.7477240Z err: INFO:services.proactive_alerts:[ProactiveAlerts] ✅ Modèle delay_predictor chargé via DelayMLPredictor
+2025-11-21T16:22:07.7478478Z err: INFO:services.proactive_alerts:[ProactiveAlerts] Service initialisé avec seuils: {'low': 0.3, 'medium': 0.6, 'high': 0.8}
+2025-11-21T16:22:07.7581809Z err: INFO:routes.proactive_alerts:[ProactiveAlerts] Routes enregistrées: /api/alerts/*
+2025-11-21T16:22:07.7582997Z err: [2025-11-21 16:***:07,698] INFO in app: 🔧 [INIT] Enregistrement des handlers Socket.IO chat...
+2025-11-21T16:22:07.7583809Z err: INFO:app:🔧 [INIT] Enregistrement des handlers Socket.IO chat...
+2025-11-21T16:22:07.7723386Z err: INFO:socketio:🔧 [INIT] Initialisation des handlers Socket.IO chat
+2025-11-21T16:22:07.7724185Z err: [2025-11-21 16:***:07,712] INFO in app: ✅ Handlers Socket.IO chat enregistrés
+2025-11-21T16:22:07.7724857Z err: INFO:app:✅ Handlers Socket.IO chat enregistrés
+2025-11-21T16:22:07.7935969Z err: Traceback (most recent call last):
+2025-11-21T16:22:07.7937002Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
+2025-11-21T16:22:07.7937704Z err:     self._dbapi_connection = engine.raw_connection()
+2025-11-21T16:22:07.7938200Z err:                              ^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.7938885Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 3301, in raw_connection
+2025-11-21T16:22:07.7943056Z err:     return self.pool.connect()
+2025-11-21T16:22:07.7943687Z err:            ^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.7944631Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 447, in connect
+2025-11-21T16:22:07.7945672Z err:     return _ConnectionFairy._checkout(self)
+2025-11-21T16:22:07.7946227Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.7947163Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 1264, in _checkout
+2025-11-21T16:22:07.7951936Z err:     fairy = _ConnectionRecord.checkout(pool)
+2025-11-21T16:22:07.7952705Z err:             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.7953465Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 711, in checkout
+2025-11-21T16:22:07.7955916Z err:     rec = pool._do_get()
+2025-11-21T16:22:07.7956502Z err:           ^^^^^^^^^^^^^^
+2025-11-21T16:22:07.7957070Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
+2025-11-21T16:22:07.7961320Z err:     with util.safe_reraise():
+2025-11-21T16:22:07.7962086Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/langhelpers.py", line ***4, in __exit__
+2025-11-21T16:22:07.7962699Z err:     raise exc_value.with_traceback(exc_tb)
+2025-11-21T16:22:07.7963243Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
+2025-11-21T16:22:07.8688398Z err:     return self._create_connection()
+2025-11-21T16:22:07.8688899Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8689595Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 388, in _create_connection
+2025-11-21T16:22:07.8690287Z err:     return _ConnectionRecord(self)
+2025-11-21T16:22:07.8690713Z err:            ^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8691327Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 673, in __init__
+2025-11-21T16:22:07.8691958Z err:     self.__connect()
+2025-11-21T16:22:07.8692546Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 899, in __connect
+2025-11-21T16:22:07.8693192Z err:     with util.safe_reraise():
+2025-11-21T16:22:07.8693921Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/langhelpers.py", line ***4, in __exit__
+2025-11-21T16:22:07.8701211Z err:     raise exc_value.with_traceback(exc_tb)
+2025-11-21T16:22:07.8701839Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 895, in __connect
+2025-11-21T16:22:07.8702463Z err:     self.dbapi_connection = connection = pool._invoke_creator(self)
+2025-11-21T16:22:07.8702917Z err:                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8703778Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/create.py", line 661, in connect
+2025-11-21T16:22:07.8704344Z err:     return dialect.connect(*cargs, **cparams)
+2025-11-21T16:22:07.8704729Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8705292Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 629, in connect
+2025-11-21T16:22:07.8706015Z err:     return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+2025-11-21T16:22:07.8706690Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8707246Z err:   File "/usr/local/lib/python3.11/site-packages/psycopg2/__init__.py", line 1***, in connect
+2025-11-21T16:22:07.8707863Z err:     conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+2025-11-21T16:22:07.8708311Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8708910Z err: psycopg2.OperationalError: could not translate host name "37_46!!@postgres" to address: Name or service not known
+2025-11-21T16:22:07.8709590Z err: The above exception was the direct cause of the following exception:
+2025-11-21T16:22:07.8710199Z err: Traceback (most recent call last):
+2025-11-21T16:22:07.8710573Z err:   File "/usr/local/bin/flask", line 7, in <module>
+2025-11-21T16:22:07.8710935Z err:     sys.exit(main())
+2025-11-21T16:22:07.8711222Z err:              ^^^^^^
+2025-11-21T16:22:07.8711641Z err:   File "/usr/local/lib/python3.11/site-packages/flask/cli.py", line 1131, in main
+2025-11-21T16:22:07.8790702Z err:     cli.main()
+2025-11-21T16:22:07.8791619Z err:   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1406, in main
+2025-11-21T16:22:07.8792264Z err:     rv = self.invoke(ctx)
+2025-11-21T16:22:07.8792679Z err:          ^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8793159Z err:   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1873, in invoke
+2025-11-21T16:22:07.8793726Z err:     return _process_result(sub_ctx.command.invoke(sub_ctx))
+2025-11-21T16:22:07.8794144Z err:                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8794642Z err:   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1873, in invoke
+2025-11-21T16:22:07.8795187Z err:     return _process_result(sub_ctx.command.invoke(sub_ctx))
+2025-11-21T16:22:07.8795597Z err:                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8796088Z err:   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1269, in invoke
+2025-11-21T16:22:07.8796778Z err:     return ctx.invoke(self.callback, **ctx.params)
+2025-11-21T16:22:07.8797154Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8797618Z err:   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 824, in invoke
+2025-11-21T16:22:07.8798089Z err:     return callback(*args, **kwargs)
+2025-11-21T16:22:07.8798420Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8798896Z err:   File "/usr/local/lib/python3.11/site-packages/click/decorators.py", line 34, in new_func
+2025-11-21T16:22:07.8799427Z err:     return f(get_current_context(), *args, **kwargs)
+2025-11-21T16:22:07.8799798Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8800274Z err:   File "/usr/local/lib/python3.11/site-packages/flask/cli.py", line 400, in decorator
+2025-11-21T16:22:07.8800771Z err:     return ctx.invoke(f, *args, **kwargs)
+2025-11-21T16:22:07.8801115Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8801566Z err:   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 824, in invoke
+2025-11-21T16:22:07.8802035Z err:     return callback(*args, **kwargs)
+2025-11-21T16:22:07.8802348Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8802817Z err:   File "/usr/local/lib/python3.11/site-packages/flask_migrate/cli.py", line 157, in upgrade
+2025-11-21T16:22:07.8803418Z err:     _upgrade(directory or g.directory, revision, sql, tag, x_arg or g.x_arg)
+2025-11-21T16:22:07.8804201Z err:   File "/usr/local/lib/python3.11/site-packages/flask_migrate/__init__.py", line 111, in wrapped
+2025-11-21T16:22:07.8804710Z err:     f(*args, **kwargs)
+2025-11-21T16:22:07.8805172Z err:   File "/usr/local/lib/python3.11/site-packages/flask_migrate/__init__.py", line 200, in upgrade
+2025-11-21T16:22:07.8805734Z err:     command.upgrade(config, revision, sql=sql, tag=tag)
+2025-11-21T16:22:07.8806364Z err:   File "/usr/local/lib/python3.11/site-packages/alembic/command.py", line 483, in upgrade
+2025-11-21T16:22:07.8806849Z err:     script.run_env()
+2025-11-21T16:22:07.8807313Z err:   File "/usr/local/lib/python3.11/site-packages/alembic/script/base.py", line 545, in run_env
+2025-11-21T16:22:07.8807841Z err:     util.load_python_file(self.dir, "env.py")
+2025-11-21T16:22:07.8808400Z err:   File "/usr/local/lib/python3.11/site-packages/alembic/util/pyfiles.py", line 116, in load_python_file
+2025-11-21T16:22:07.8808966Z err:     module = load_module_py(module_id, path)
+2025-11-21T16:22:07.8809317Z err:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8809837Z err:   File "/usr/local/lib/python3.11/site-packages/alembic/util/pyfiles.py", line 136, in load_module_py
+2025-11-21T16:22:07.8810561Z err:     spec.loader.exec_module(module)  # type: ignore
+2025-11-21T16:22:07.8810923Z err:     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8811345Z err:   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+2025-11-21T16:22:07.8811884Z err:   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+2025-11-21T16:22:07.8812368Z err:   File "/app/migrations/env.py", line 130, in <module>
+2025-11-21T16:22:07.8812741Z err:     run_migrations_online()
+2025-11-21T16:22:07.8813135Z err:   File "/app/migrations/env.py", line 120, in run_migrations_online
+2025-11-21T16:22:07.8813572Z err:     with connectable.connect() as connection:
+2025-11-21T16:22:07.8813932Z err:          ^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8814431Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 3277, in connect
+2025-11-21T16:22:07.8814955Z err:     return self._connection_cls(self)
+2025-11-21T16:22:07.8815280Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8815770Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 145, in __init__
+2025-11-21T16:22:07.8816493Z err:     Connection._handle_dbapi_exception_noconnection(
+2025-11-21T16:22:07.8817183Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2440, in _handle_dbapi_exception_noconnection
+2025-11-21T16:22:07.8817869Z err:     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+2025-11-21T16:22:07.8818449Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
+2025-11-21T16:22:07.8818991Z err:     self._dbapi_connection = engine.raw_connection()
+2025-11-21T16:22:07.8819364Z err:                              ^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8819904Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 3301, in raw_connection
+2025-11-21T16:22:07.8820450Z err:     return self.pool.connect()
+2025-11-21T16:22:07.8820758Z err:            ^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8821226Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 447, in connect
+2025-11-21T16:22:07.8821760Z err:     return _ConnectionFairy._checkout(self)
+2025-11-21T16:22:07.8935218Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8936747Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 1264, in _checkout
+2025-11-21T16:22:07.8937658Z err:     fairy = _ConnectionRecord.checkout(pool)
+2025-11-21T16:22:07.8938058Z err:             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8938573Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 711, in checkout
+2025-11-21T16:22:07.8939295Z err:     rec = pool._do_get()
+2025-11-21T16:22:07.8939588Z err:           ^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8940059Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
+2025-11-21T16:22:07.8940573Z err:     with util.safe_reraise():
+2025-11-21T16:22:07.8941178Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/langhelpers.py", line ***4, in __exit__
+2025-11-21T16:22:07.8941773Z err:     raise exc_value.with_traceback(exc_tb)
+2025-11-21T16:22:07.8942308Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
+2025-11-21T16:22:07.8942839Z err:     return self._create_connection()
+2025-11-21T16:22:07.8943175Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8943708Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 388, in _create_connection
+2025-11-21T16:22:07.8944276Z err:     return _ConnectionRecord(self)
+2025-11-21T16:22:07.8944595Z err:            ^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8945089Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 673, in __init__
+2025-11-21T16:22:07.8945729Z err:     self.__connect()
+2025-11-21T16:22:07.8946201Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 899, in __connect
+2025-11-21T16:22:07.8946938Z err:     with util.safe_reraise():
+2025-11-21T16:22:07.8947496Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/langhelpers.py", line ***4, in __exit__
+2025-11-21T16:22:07.8948088Z err:     raise exc_value.with_traceback(exc_tb)
+2025-11-21T16:22:07.8948625Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 895, in __connect
+2025-11-21T16:22:07.8949245Z err:     self.dbapi_connection = connection = pool._invoke_creator(self)
+2025-11-21T16:22:07.8949684Z err:                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8950228Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/create.py", line 661, in connect
+2025-11-21T16:22:07.8950789Z err:     return dialect.connect(*cargs, **cparams)
+2025-11-21T16:22:07.8951155Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.8951672Z err:   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 629, in connect
+2025-11-21T16:22:07.8952389Z err:     return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+2025-11-21T16:22:07.9146536Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.9147473Z err:   File "/usr/local/lib/python3.11/site-packages/psycopg2/__init__.py", line 1***, in connect
+2025-11-21T16:22:07.9148221Z err:     conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+2025-11-21T16:22:07.9148769Z err:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:07.9149638Z err: sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) could not translate host name "37_46!!@postgres" to address: Name or service not known
+2025-11-21T16:22:07.9150768Z err: (Background on this error at: https://sqlalche.me/e/20/e3q8)
+2025-11-21T16:22:08.9907146Z err: + echo '❌ Erreur lors de l'\''exécution des migrations'
+2025-11-21T16:22:08.9907957Z err: + echo '---- Diagnostics (migration failed) ----'
+2025-11-21T16:22:08.9908609Z err: + docker compose -f docker-compose.production.yml exec -T backend flask db current
+2025-11-21T16:22:08.9909299Z out: ❌ Erreur lors de l'exécution des migrations
+2025-11-21T16:22:08.9909755Z out: ---- Diagnostics (migration failed) ----
+2025-11-21T16:22:11.3388109Z err: [4.1 Vault] Aucune authentification configurée, désactivation
+2025-11-21T16:22:11.3389114Z err: [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=dev/mail/password, key=value)
+2025-11-21T16:22:11.3391998Z err: [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=prod/mail/password, key=value)
+2025-11-21T16:22:12.4339487Z err: [2.9] OpenTelemetry non installé - installer avec: pip install -r requirements-otel.txt
+2025-11-21T16:22:12.4341217Z err: [2025-11-21 16:***:12,373] WARNING in app: [2.9] Échec instrumentation SQLAlchemy: Working outside of application context.
+2025-11-21T16:22:12.4342236Z err: This typically means that you attempted to use functionality that needed
+2025-11-21T16:22:12.4342914Z err: the current application. To solve this, set up an application context
+2025-11-21T16:22:12.4343554Z err: with app.app_context(). See the documentation for more information.
+2025-11-21T16:22:12.4361581Z err: [2025-11-21 16:***:12,376] DEBUG in ext: [DB Profiler] Profiling désactivé (set ENABLE_DB_PROFILING=true)
+2025-11-21T16:22:12.4376594Z err: [2025-11-21 16:***:12,377] DEBUG in logging_centralized: [Centralized Logging] Désactivé (LOG_CENTRALIZATION_ENDPOINT non configuré)
+2025-11-21T16:22:12.4806853Z err: + true
+2025-11-21T16:22:12.4807509Z err: + docker compose -f docker-compose.production.yml exec -T backend flask db heads
+2025-11-21T16:22:14.9317907Z err: [4.1 Vault] Aucune authentification configurée, désactivation
+2025-11-21T16:22:14.9318901Z err: [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=dev/mail/password, key=value)
+2025-11-21T16:22:14.9320006Z err: [4.1 Vault] Secret non trouvé: MAIL_PASSWORD (path=prod/mail/password, key=value)
+2025-11-21T16:22:16.1443279Z err: [2.9] OpenTelemetry non installé - installer avec: pip install -r requirements-otel.txt
+2025-11-21T16:22:16.1444498Z err: [2025-11-21 16:***:16,083] WARNING in app: [2.9] Échec instrumentation SQLAlchemy: Working outside of application context.
+2025-11-21T16:22:16.1445379Z err: This typically means that you attempted to use functionality that needed
+2025-11-21T16:22:16.1446117Z err: the current application. To solve this, set up an application context
+2025-11-21T16:22:16.1447039Z err: with app.app_context(). See the documentation for more information.
+2025-11-21T16:22:16.1468707Z err: [2025-11-21 16:***:16,086] DEBUG in ext: [DB Profiler] Profiling désactivé (set ENABLE_DB_PROFILING=true)
+2025-11-21T16:22:16.1490809Z err: [2025-11-21 16:***:16,089] DEBUG in logging_centralized: [Centralized Logging] Désactivé (LOG_CENTRALIZATION_ENDPOINT non configuré)
+2025-11-21T16:22:16.1768897Z err: [2025-11-21 16:***:16,116] INFO in metrics: [Prometheus] Middleware métriques HTTP activé
+2025-11-21T16:22:16.3803990Z err: [2025-11-21 16:***:16,319] INFO in app: Celery initialized successfully
+2025-11-21T16:22:16.3805150Z err: [2025-11-21 16:***:16,320] INFO in app: 🔧 [INIT] Configuration Socket.IO...
+2025-11-21T16:22:16.3809492Z err: [2025-11-21 16:***:16,320] INFO in app: ✅ Socket.IO initialisé: async_mode=eventlet, cors=*, allow_upgrades=False
+2025-11-21T16:22:16.3810355Z err: [2025-11-21 16:***:16,321] INFO in app: [2.9] Logging enrichi avec trace_id/span_id
+2025-11-21T16:22:16.7569490Z err: [2025-11-21 16:***:16,696] INFO in app: 🔧 [INIT] Enregistrement des routes et handlers Socket.IO...
+2025-11-21T16:22:20.7310777Z err: INFO:services.unified_dispatch.ml_predictor:[MLPredictor] Model loaded from data/ml/models/delay_predictor.pkl (trained at: 2025-10-20T17:09:27.697024, features: 35, MAE test: 2.2555205)
+2025-11-21T16:22:20.7312478Z err: INFO:services.proactive_alerts:[ProactiveAlerts] ✅ Modèle delay_predictor chargé via DelayMLPredictor
+2025-11-21T16:22:20.7313653Z err: INFO:services.proactive_alerts:[ProactiveAlerts] Service initialisé avec seuils: {'low': 0.3, 'medium': 0.6, 'high': 0.8}
+2025-11-21T16:22:20.7314486Z err: INFO:sockets.websocket_ack:[C3] Registered ACK handlers
+2025-11-21T16:22:20.7315315Z err: INFO:sockets.proactive_alerts:[ProactiveAlerts] Handlers Socket.IO enregistrés (incluant ACK C3)
+2025-11-21T16:22:21.0512169Z err: [2025-11-21 16:***:20,990] INFO in routes_api: [api] ✅ API v1 initialisée: /api/v1
+2025-11-21T16:22:21.0513067Z err: INFO:app:[api] ✅ API v1 initialisée: /api/v1
+2025-11-21T16:22:21.0514056Z err: [2025-11-21 16:***:20,991] INFO in routes_api: [api] ℹ️  API v2 prête mais non initialisée (vide pour l'instant)
+2025-11-21T16:22:21.0514914Z err: INFO:app:[api] ℹ️  API v2 prête mais non initialisée (vide pour l'instant)
+2025-11-21T16:22:21.0516092Z err: [2025-11-21 16:***:20,991] INFO in routes_api: [api] ℹ️  API legacy désactivée (API_LEGACY_ENABLED=false)
+2025-11-21T16:22:21.0517145Z err: INFO:app:[api] ℹ️  API legacy désactivée (API_LEGACY_ENABLED=false)
+2025-11-21T16:22:21.0517876Z err: [2025-11-21 16:***:20,991] INFO in routes_api: [api] Documentation: v1=disabled, v2=disabled, legacy=disabled
+2025-11-21T16:22:21.0518626Z err: INFO:app:[api] Documentation: v1=disabled, v2=disabled, legacy=disabled
+2025-11-21T16:22:21.1917813Z err: INFO:services.unified_dispatch.ml_predictor:[MLPredictor] Model loaded from data/ml/models/delay_predictor.pkl (trained at: 2025-10-20T17:09:27.697024, features: 35, MAE test: 2.2555205)
+2025-11-21T16:22:21.1919549Z err: INFO:services.proactive_alerts:[ProactiveAlerts] ✅ Modèle delay_predictor chargé via DelayMLPredictor
+2025-11-21T16:22:21.1920785Z err: INFO:services.proactive_alerts:[ProactiveAlerts] Service initialisé avec seuils: {'low': 0.3, 'medium': 0.6, 'high': 0.8}
+2025-11-21T16:22:21.2040057Z err: INFO:routes.proactive_alerts:[ProactiveAlerts] Routes enregistrées: /api/alerts/*
+2025-11-21T16:22:21.2041584Z err: [2025-11-21 16:***:21,144] INFO in app: 🔧 [INIT] Enregistrement des handlers Socket.IO chat...
+2025-11-21T16:22:21.2042441Z err: INFO:app:🔧 [INIT] Enregistrement des handlers Socket.IO chat...
+2025-11-21T16:22:21.2175813Z err: INFO:socketio:🔧 [INIT] Initialisation des handlers Socket.IO chat
+2025-11-21T16:22:21.2177183Z err: [2025-11-21 16:***:21,157] INFO in app: ✅ Handlers Socket.IO chat enregistrés
+2025-11-21T16:22:21.2177897Z err: INFO:app:✅ Handlers Socket.IO chat enregistrés
+2025-11-21T16:22:21.4099043Z out: 68116559b15d (head)
+2025-11-21T16:22:22.6994867Z err: + docker compose -f docker-compose.production.yml logs backend
+2025-11-21T16:22:22.6995477Z err: + tail -50
+2025-11-21T16:22:22.8911066Z out: ***-backend  | tests/rl/test_dispatch_env_simplified.py:10: in <module>
+2025-11-21T16:22:22.8912145Z out: ***-backend  |     from services.rl.dispatch_env import DispatchEnv
+2025-11-21T16:22:22.8913026Z out: ***-backend  | services/rl/dispatch_env.py:9: in <module>
+2025-11-21T16:22:22.8913792Z out: ***-backend  |     import gymnasium as gym
+2025-11-21T16:22:22.8914351Z out: ***-backend  | E   ModuleNotFoundError: No module named 'gymnasium'
+2025-11-21T16:22:22.8915189Z out: ***-backend  | ___________ ERROR collecting tests/rl/test_dispatch_env_targeted.py ____________
+2025-11-21T16:22:22.8916681Z out: ***-backend  | ImportError while importing test module '/app/tests/rl/test_dispatch_env_targeted.py'.
+2025-11-21T16:22:22.8918124Z out: ***-backend  | Hint: make sure your test modules/packages have valid Python names.
+2025-11-21T16:22:22.8919041Z out: ***-backend  | Traceback:
+2025-11-21T16:22:22.8920070Z out: ***-backend  | /usr/local/lib/python3.11/site-packages/_pytest/python.py:507: in importtestmodule
+2025-11-21T16:22:22.8921104Z out: ***-backend  |     mod = import_path(
+2025-11-21T16:22:22.8921890Z out: ***-backend  | /usr/local/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+2025-11-21T16:22:22.8922592Z out: ***-backend  |     importlib.import_module(module_name)
+2025-11-21T16:22:22.8923464Z out: ***-backend  | /usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+2025-11-21T16:22:22.8924479Z out: ***-backend  |     return _bootstrap._gcd_import(name[level:], package, level)
+2025-11-21T16:22:22.8925369Z out: ***-backend  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-11-21T16:22:22.8926200Z 2025/11/21 16:***:*** Process exited with status 1
+2025-11-21T16:22:22.8927051Z err: + exit 1
+2025-11-21T16:22:22.8927672Z out: ***-backend  | <frozen importlib._bootstrap>:1204: in _gcd_import
+2025-11-21T16:22:22.8928574Z out: ***-backend  |     ???
+2025-11-21T16:22:22.8929290Z out: ***-backend  | <frozen importlib._bootstrap>:1176: in _find_and_load
+2025-11-21T16:22:22.8930030Z out: ***-backend  |     ???
+2025-11-21T16:22:22.8930731Z out: ***-backend  | <frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+2025-11-21T16:22:22.8931799Z out: ***-backend  |     ???
+2025-11-21T16:22:22.8932449Z out: ***-backend  | <frozen importlib._bootstrap>:690: in _load_unlocked
+2025-11-21T16:22:22.8933176Z out: ***-backend  |     ???
+2025-11-21T16:22:22.8934156Z out: ***-backend  | /usr/local/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:197: in exec_module
+2025-11-21T16:22:22.8935037Z out: ***-backend  |     exec(co, module.__dict__)
+2025-11-21T16:22:22.8935783Z out: ***-backend  | tests/rl/test_dispatch_env_targeted.py:10: in <module>
+2025-11-21T16:22:22.8936943Z out: ***-backend  |     from services.rl.dispatch_env import DispatchEnv
+2025-11-21T16:22:22.8937609Z out: ***-backend  | services/rl/dispatch_env.py:9: in <module>
+2025-11-21T16:22:22.8938094Z out: ***-backend  |     import gymnasium as gym
+2025-11-21T16:22:22.8938691Z out: ***-backend  | E   ModuleNotFoundError: No module named 'gymnasium'
+2025-11-21T16:22:22.8939321Z out: ***-backend  | =========================== short test summary info ============================
+2025-11-21T16:22:22.8939862Z out: ***-backend  | ERROR tests/e2e/test_dispatch_e2e.py
+2025-11-21T16:22:22.8940654Z out: ***-backend  | ERROR tests/e2e/test_dispatch_metrics_e2e.py
+2025-11-21T16:22:22.8941226Z out: ***-backend  | ERROR tests/ml/test_model_registry.py
+2025-11-21T16:22:22.8941905Z out: ***-backend  | ERROR tests/rl/test_dispatch_env.py
+2025-11-21T16:22:22.8942444Z out: ***-backend  | ERROR tests/rl/test_dispatch_env_additional_edge_cases.py
+2025-11-21T16:22:22.8943379Z out: ***-backend  | ERROR tests/rl/test_dispatch_env_comprehensive.py
+2025-11-21T16:22:22.8944063Z out: ***-backend  | ERROR tests/rl/test_dispatch_env_edge_cases.py
+2025-11-21T16:22:22.8944981Z out: ***-backend  | ERROR tests/rl/test_dispatch_env_simple_effective.py
+2025-11-21T16:22:22.8945659Z out: ***-backend  | ERROR tests/rl/test_dispatch_env_simplified.py
+2025-11-21T16:22:22.8946415Z out: ***-backend  | ERROR tests/rl/test_dispatch_env_targeted.py
+2025-11-21T16:22:22.8947730Z out: ***-backend  | !!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 10 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
+2025-11-21T16:22:22.8948653Z out: ***-backend  | ======================== 3 warnings, 10 errors in 8.78s ========================
+2025-11-21T16:22:22.8949668Z out: ***-backend  | ============================= test session starts ==============================
+2025-11-21T16:22:22.8950667Z out: ***-backend  | platform linux -- Python 3.11.14, pytest-9.0.1, pluggy-1.6.0 -- /usr/local/bin/python
+2025-11-21T16:22:22.8951266Z out: ***-backend  | cachedir: .pytest_cache
+2025-11-21T16:22:22.8951851Z out: ***-backend  | rootdir: /app
+2025-11-21T16:22:22.8952423Z out: ***-backend  | configfile: pytest.ini
+2025-11-21T16:22:22.8953073Z out: ***-backend  | plugins: flask-1.3.0

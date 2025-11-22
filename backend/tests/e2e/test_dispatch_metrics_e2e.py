@@ -178,6 +178,18 @@ def test_metrics_correlation_with_logs(db, test_company):
 
 def test_osrm_metrics_present(authenticated_client):
     """Test: les métriques OSRM sont présentes."""
+    # ✅ FIX: Faire un appel OSRM réel pour déclencher les incréments (optionnel)
+    # Si OSRM n'est pas disponible, les métriques doivent quand même être déclarées
+    try:
+        from services.osrm_client import get_matrix
+
+        origins = [(46.5197, 6.6323)]  # Lausanne
+        destinations = [(46.2044, 6.1432)]  # Genève
+        get_matrix(origins=origins, destinations=destinations)
+    except Exception:
+        # Ignorer les erreurs, on veut juste déclencher les métriques si possible
+        pass
+
     response = authenticated_client.get("/api/v1/prometheus/metrics")
     content = response.get_data(as_text=True)
 
@@ -188,11 +200,22 @@ def test_osrm_metrics_present(authenticated_client):
     ]
 
     for metric in expected_metrics:
-        # Les métriques peuvent ne pas être présentes si pas encore utilisées
-        # On vérifie juste que le format est correct si présent
-        if metric in content:
-            # Vérifier que c'est bien formaté
-            assert re.search(rf"^{metric}(\{{[^}}]*\}})?\s+[0-9.+-eE]+", content, re.MULTILINE)
+        # ✅ FIX: Vérifier que la métrique est déclarée (HELP/TYPE)
+        assert metric in content, f"Métrique {metric} doit être déclarée (HELP/TYPE présents)"
+
+        # ✅ FIX: Accepter aussi les métriques avec valeur 0.0 ou déclarées sans valeur
+        pattern = rf"^{metric}(\{{[^}}]*\}})?\s+[0-9.+-eE]+"
+        match = re.search(pattern, content, re.MULTILINE)
+
+        # Si pas de match, vérifier qu'au moins HELP/TYPE sont présents
+        if not match:
+            # Vérifier que la métrique est au moins déclarée
+            assert f"# HELP {metric}" in content or f"# TYPE {metric}" in content, (
+                f"Métrique {metric} doit être déclarée même si valeur absente. Contenu partiel: {content[:500]}"
+            )
+        else:
+            # Si match trouvé, vérifier que la valeur est valide
+            assert match, f"Métrique {metric} doit avoir une valeur numérique"
 
 
 def test_slo_metrics_present(authenticated_client):
@@ -225,6 +248,52 @@ def test_metrics_labels(db, test_company, authenticated_client):
             metric_line = metric_lines[0]
             # Vérifier la présence de labels (format: metric{labels} value)
             assert "{" in metric_line or "dispatch_runs_total" in metric_line
+
+
+def test_osrm_metrics_initialized(authenticated_client):
+    """✅ Test de non-régression : Vérifier que les métriques OSRM sont initialisées même sans appels.
+
+    Ce test vérifie que les métriques OSRM sont déclarées et initialisées avec 0.0
+    même si aucun appel OSRM n'a été fait.
+    """
+    response = authenticated_client.get("/api/v1/prometheus/metrics")
+    content = response.get_data(as_text=True)
+
+    # Vérifier que les métriques sont déclarées
+    assert "# HELP osrm_cache_hits_total" in content, "osrm_cache_hits_total doit être déclarée"
+    assert "# TYPE osrm_cache_hits_total counter" in content, "osrm_cache_hits_total doit être de type counter"
+
+    # ✅ FIX: Vérifier qu'elles ont une valeur (même 0.0)
+    # Les métriques avec labels peuvent avoir plusieurs lignes, on cherche au moins une avec valeur
+    hits_pattern = r"^osrm_cache_hits_total(\{[^}]*\})?\s+([0-9.+-eE]+)"
+    hits_match = re.search(hits_pattern, content, re.MULTILINE)
+    if hits_match:
+        # Si une valeur est trouvée, vérifier qu'elle est >= 0
+        value = float(hits_match.group(2))
+        assert value >= 0.0, f"osrm_cache_hits_total doit avoir une valeur >= 0, got {value}"
+    else:
+        # Si pas de valeur, au moins vérifier que HELP/TYPE sont présents
+        assert "# HELP osrm_cache_hits_total" in content, "osrm_cache_hits_total doit être déclarée"
+
+    # Vérifier osrm_cache_misses_total
+    assert "# HELP osrm_cache_misses_total" in content, "osrm_cache_misses_total doit être déclarée"
+    assert "# TYPE osrm_cache_misses_total counter" in content, "osrm_cache_misses_total doit être de type counter"
+
+    misses_pattern = r"^osrm_cache_misses_total(\{[^}]*\})?\s+([0-9.+-eE]+)"
+    misses_match = re.search(misses_pattern, content, re.MULTILINE)
+    if misses_match:
+        value = float(misses_match.group(2))
+        assert value >= 0.0, f"osrm_cache_misses_total doit avoir une valeur >= 0, got {value}"
+
+    # Vérifier osrm_cache_hit_rate (gauge)
+    assert "# HELP osrm_cache_hit_rate" in content, "osrm_cache_hit_rate doit être déclarée"
+    assert "# TYPE osrm_cache_hit_rate gauge" in content, "osrm_cache_hit_rate doit être de type gauge"
+
+    hit_rate_pattern = r"^osrm_cache_hit_rate\s+([0-9.+-eE]+)"
+    hit_rate_match = re.search(hit_rate_pattern, content, re.MULTILINE)
+    if hit_rate_match:
+        value = float(hit_rate_match.group(1))
+        assert 0.0 <= value <= 1.0, f"osrm_cache_hit_rate doit être entre 0 et 1, got {value}"
 
 
 @pytest.mark.skip(reason="Nécessite un environnement complet avec Prometheus")

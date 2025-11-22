@@ -1036,7 +1036,26 @@ def build_vrptw_problem(
         fairness_counts = {int(cast("Any", d.id)): 0 for d in drivers}
         logger.warning("[Dispatch] Using fallback fairness_counts (all zeros)")
     if not any(fairness_counts.values()):
-        logger.warning(
+        # ✅ FIX: Réduire le niveau de log en mode testing (normal, pas d'historique)
+        # Vérifier si on est en mode testing via variable d'environnement ou current_app
+        is_testing = False
+        try:
+            # Essayer d'abord via variable d'environnement (plus sûr, fonctionne partout)
+            is_testing = os.getenv("FLASK_CONFIG") == "testing"
+            # Si current_app est disponible, utiliser sa config (plus précis)
+            try:
+                from flask import current_app
+
+                is_testing = is_testing or current_app.config.get("TESTING", False)
+            except RuntimeError:
+                # current_app pas disponible (hors contexte Flask), utiliser seulement env var
+                pass
+        except Exception:
+            # En cas d'erreur, utiliser warning par défaut
+            pass
+
+        log_level = logger.debug if is_testing else logger.warning
+        log_level(
             "[Dispatch] ⚠️ Fairness counts vides pour %d chauffeurs (date=%s) — vérifier statuts/horaires",
             len(drivers),
             for_date or "now",

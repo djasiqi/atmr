@@ -1,7 +1,10 @@
 # backend/services/unified_dispatch/engine.py
 from __future__ import annotations
 
+import inspect
 import logging
+import os
+import traceback
 from contextlib import suppress
 from dataclasses import asdict
 from datetime import UTC, date, datetime, timedelta
@@ -18,6 +21,11 @@ from services.unified_dispatch import settings as ud_settings
 from services.unified_dispatch.ab_router import ABRouter
 from services.unified_dispatch.apply import apply_assignments
 from services.unified_dispatch.clustering import GeographicClustering
+from services.unified_dispatch.error_metrics import (
+    track_company_not_found,
+    track_integrity_error,
+)
+from services.unified_dispatch.exceptions import CompanyNotFoundError
 from services.unified_dispatch.rl_kpi_monitor import RLKPIMonitor
 from services.unified_dispatch.slo import check_slo_breach, get_slo_tracker
 from services.unified_dispatch.transaction_helpers import _begin_tx
@@ -190,8 +198,46 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
     allow_emergency: bool | None = None,
     overrides: dict[str, Any] | None = None,
     existing_dispatch_run_id: int | None = None,  # ✅ Nouveau paramètre optionnel
+    raise_on_company_not_found: bool = False,  # ✅ Nouveau paramètre pour lever une exception
 ) -> Dict[str, Any]:
-    """Exécute un dispatch avec métriques Prometheus intégrées."""
+    """Exécute un dispatch avec métriques Prometheus intégrées.
+
+    Run the dispatch optimization for a company on a specific date.
+    Creates a DispatchRun record and links assignments to it.
+
+    ⚠️ COMPORTEMENT IMPORTANT - ROLLBACK DÉFENSIF :
+    - Cette fonction effectue un rollback défensif au début (ligne 219) pour garantir
+      un état de session propre, même si une transaction précédente a échoué.
+    - Ce rollback peut expirer les objets SQLAlchemy non commités dans la session.
+    - IMPLICATION : Les objets (Company, Booking, Driver) DOIVENT être commités
+      avant d'appeler cette fonction, sinon ils seront expirés et invisibles.
+
+    📝 UTILISATION DANS LES TESTS :
+    - Utiliser les fixtures `company`, `drivers`, `bookings` qui garantissent le commit
+    - Ou appeler `db.session.commit()` explicitement avant `engine.run()`
+    - Après `engine.run()`, recharger les objets depuis la DB si nécessaire
+
+    🔄 GESTION DES TRANSACTIONS :
+    - La fonction crée sa propre transaction pour le DispatchRun et les assignments
+    - Les objets commités avant l'appel restent visibles dans le savepoint du test
+    - Le rollback défensif n'affecte que les objets non commités dans la session
+
+    Args:
+        company_id: ID de l'entreprise pour laquelle exécuter le dispatch
+        mode: Mode de dispatch ("auto", "manual", etc.)
+        for_date: Date au format YYYY-MM-DD (None = aujourd'hui)
+        regular_first: Prioriser les courses régulières
+        allow_emergency: Autoriser les courses d'urgence
+        existing_dispatch_run_id: ID d'un DispatchRun existant (pour reprise)
+        raise_on_company_not_found: Si True, lève une exception `CompanyNotFoundError`
+            au lieu de retourner un résultat avec reason="company_not_found" (défaut: False)
+
+    Returns:
+        Dict contenant assignments, unassigned, meta, dispatch_run_id, etc.
+
+    Raises:
+        CompanyNotFoundError: Si `raise_on_company_not_found=True` et que la Company est introuvable
+    """
     # ✅ Context manager pour métriques Prometheus
     # Note: dispatch_run_id sera disponible après création du DispatchRun
     # On utilisera le context manager plus tard dans la fonction
@@ -204,9 +250,6 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
     except ImportError:
         _dispatch_metrics_context = None
         _ = _dispatch_metrics_context
-    """Run the dispatch optimization for a company on a specific date.
-    Creates a DispatchRun record and links assignments to it.
-    """
 
     # ✅ D1: Créer span racine pour le dispatch
     with tracer.start_as_current_span("dispatch.run") as root_span:
@@ -240,53 +283,74 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             company = Company.query.filter_by(id=company_id).first()
 
         if not company:
-            logger.warning("[Engine] Company %s introuvable", company_id)
-            # ✅ FIX RC3: Créer DispatchRun avec status 'failed' pour traçabilité
-            try:
-                day_date = _to_date_ymd(day_str)
-            except ValueError:
-                # Si day_str invalide, utiliser aujourd'hui
-                day_date = datetime.now(UTC).date()
-                logger.warning("[Engine] Invalid day_str=%r, fallback to today for failed DispatchRun", day_str)
+            # ✅ FIX P1.2: Améliorer la gestion d'erreurs - Company introuvable
+            # Récupérer le contexte de l'appelant pour améliorer le logging
+            caller_frame = inspect.currentframe()
+            caller_info = None
+            if caller_frame and caller_frame.f_back:
+                caller_frame = caller_frame.f_back
+                caller_info = {
+                    "file": caller_frame.f_code.co_filename,
+                    "line": caller_frame.f_lineno,
+                    "function": caller_frame.f_code.co_name,
+                }
 
-            try:
-                with _begin_tx():
-                    dr_failed: Any = DispatchRun()
-                    dr_failed.company_id = int(company_id)
-                    dr_failed.day = day_date
-                    dr_failed.status = DispatchStatus.FAILED
-                    dr_failed.started_at = datetime.now(UTC)
-                    dr_failed.completed_at = datetime.now(UTC)
-                    dr_failed.created_at = datetime.now(UTC)
-                    dr_failed.config = {"error": f"Company {company_id} introuvable"}
-                    db.session.add(dr_failed)
-                    db.session.flush()
-                    dispatch_run = cast("DispatchRun", dr_failed)
-                    dispatch_run_id = dispatch_run.id if dispatch_run.id else None
-                    logger.info(
-                        "[Engine] Created failed DispatchRun id=%s for company=%s day=%s (company not found)",
-                        dispatch_run_id,
-                        company_id,
-                        day_str,
-                    )
-            except Exception as e:
-                # Si la création échoue (ex: ForeignKey constraint), logger l'erreur mais continuer
-                logger.error(
-                    "[Engine] Failed to create DispatchRun for company=%s: %s",
-                    company_id,
-                    e,
+            # Construire le message d'erreur avec contexte
+            error_msg = (
+                f"[Engine] ❌ Company {company_id} introuvable - dispatch impossible. "
+                f"Vérifier que la Company existe en DB et est commitée avant d'appeler engine.run()"
+            )
+
+            # Ajouter les informations du caller si disponibles
+            if caller_info:
+                error_msg += (
+                    f" | Appelé depuis: {caller_info['function']}() "
+                    f"({caller_info['file'].split('/')[-1]}:{caller_info['line']})"
                 )
-                dispatch_run_id = None
 
-            # ✅ Standardisation: Utiliser DispatchResult avec dispatch_run_id si créé
+            # Logger avec stack trace en mode DEBUG
+            logger.error(error_msg, extra={"company_id": company_id, "caller": caller_info})
+            logger.debug(
+                "[Engine] Stack trace pour CompanyNotFoundError:\n%s",
+                "".join(traceback.format_stack()[:-1]),  # Exclure la ligne actuelle
+                extra={"company_id": company_id},
+            )
+
+            # ⚠️ Ne pas créer DispatchRun avec company_id invalide (violation FK)
+            # Le DispatchRun nécessite une Company valide en DB
+
+            # ✅ P2.2: Track métrique CompanyNotFoundError
+            track_company_not_found(company_id, dispatch_run_id=None)
+
+            # ✅ Option A: Lever une exception si demandé
+            if raise_on_company_not_found:
+                raise CompanyNotFoundError(
+                    company_id=company_id,
+                    caller=caller_info,
+                    for_date=for_date,
+                    mode=mode,
+                )
+
+            # ✅ Option par défaut: Retourner un résultat structuré pour traçabilité
             return DispatchResult(
-                dispatch_run_id=dispatch_run_id,
+                dispatch_run_id=None,  # Pas de DispatchRun créé (Company n'existe pas)
                 assignments=[],
                 unassigned=[],
                 bookings=[],
                 drivers=[],
-                meta={"reason": "company_not_found", "dispatch_run_id": dispatch_run_id},
-                debug={"reason": "company_not_found", "dispatch_run_id": dispatch_run_id},
+                meta={
+                    "reason": "company_not_found",
+                    "error": f"Company {company_id} introuvable en DB",
+                    "dispatch_run_id": None,
+                    "caller": caller_info,  # ✅ Ajout du contexte du caller
+                },
+                debug={
+                    "reason": "company_not_found",
+                    "error": f"Company {company_id} introuvable en DB",
+                    "dispatch_run_id": None,
+                    "caller": caller_info,  # ✅ Ajout du contexte du caller
+                    "stack_trace": traceback.format_stack()[:-1] if logger.isEnabledFor(logging.DEBUG) else None,
+                },
             ).to_dict()
         # 1) Configuration
         s = custom_settings or ud_settings.for_company(company)
@@ -489,7 +553,15 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 logger.info(
                     "[Engine] Created DispatchRun id=%s for company=%s day=%s", dispatch_run.id, company_id, day_str
                 )
-            except IntegrityError:
+            except IntegrityError as e:
+                # ✅ P2.2: Track métrique IntegrityError (race condition)
+                error_code = getattr(e.orig, "pgcode", None) if hasattr(e, "orig") else None
+                track_integrity_error(
+                    error_code=str(error_code) if error_code else "unknown",
+                    company_id=company_id,
+                    dispatch_run_id=None,
+                )
+
                 # Un autre thread l'a créé entre-temps → récupère l'existant
                 # puis MAJ sous TX courte
                 db.session.rollback()
@@ -1269,7 +1341,21 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                         prob_regs["busy_until"] = h_res.debug.get("busy_until", {})
                         prob_regs["driver_scheduled_times"] = h_res.debug.get("driver_scheduled_times", {})
                         prob_regs["proposed_load"] = h_res.debug.get("proposed_load", {})
-                        logger.warning(
+                        # ✅ FIX: Réduire le niveau de log en mode testing (normal, injection d'état pour fallback)
+                        is_testing_inj = False
+                        try:
+                            is_testing_inj = os.getenv("FLASK_CONFIG") == "testing"
+                            try:
+                                from flask import current_app
+
+                                is_testing_inj = is_testing_inj or current_app.config.get("TESTING", False)
+                            except RuntimeError:
+                                pass
+                        except Exception:
+                            pass
+
+                        log_level_inj = logger.debug if is_testing_inj else logger.warning
+                        log_level_inj(
                             "[Engine] 📥 Injection état vers fallback: busy_until=%s, proposed_load=%s",
                             prob_regs.get("busy_until"),
                             prob_regs.get("proposed_load"),
@@ -1744,7 +1830,25 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             perf_collector.metrics.temporal_conflicts_count = temporal_conflicts
             perf_metrics.temporal_conflicts_count = temporal_conflicts
             if temporal_conflicts > 0:
-                logger.warning("[Engine] ⚠️ %d conflits temporels détectés pendant ce dispatch", temporal_conflicts)
+                # ✅ FIX: Réduire le niveau de log en mode testing (attendu dans tests de validation temporelle)
+                is_testing = False
+                try:
+                    # Essayer d'abord via variable d'environnement (plus sûr, fonctionne partout)
+                    is_testing = os.getenv("FLASK_CONFIG") == "testing"
+                    # Si current_app est disponible, utiliser sa config (plus précis)
+                    try:
+                        from flask import current_app
+
+                        is_testing = is_testing or current_app.config.get("TESTING", False)
+                    except RuntimeError:
+                        # current_app pas disponible (hors contexte Flask), utiliser seulement env var
+                        pass
+                except Exception:
+                    # En cas d'erreur, utiliser warning par défaut
+                    pass
+
+                log_level = logger.debug if is_testing else logger.warning
+                log_level("[Engine] ⚠️ %d conflits temporels détectés pendant ce dispatch", temporal_conflicts)
 
             # ✅ A2: Récupérer le nombre de conflits DB (contraintes uniques)
             from services.unified_dispatch.apply import get_db_conflict_count
@@ -1771,7 +1875,25 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 
             hit_rate = cache_metrics["hit_rate"]
             if hit_rate < HIT_RATE_THRESHOLD:
-                logger.warning("[Engine] ⚠️ Cache OSRM hit-rate bas: %.2f%%", hit_rate * 100)
+                # ✅ FIX: Réduire le niveau de log en mode testing (normal en tests, pas de cache Redis)
+                is_testing = False
+                try:
+                    # Essayer d'abord via variable d'environnement (plus sûr, fonctionne partout)
+                    is_testing = os.getenv("FLASK_CONFIG") == "testing"
+                    # Si current_app est disponible, utiliser sa config (plus précis)
+                    try:
+                        from flask import current_app
+
+                        is_testing = is_testing or current_app.config.get("TESTING", False)
+                    except RuntimeError:
+                        # current_app pas disponible (hors contexte Flask), utiliser seulement env var
+                        pass
+                except Exception:
+                    # En cas d'erreur, utiliser warning par défaut
+                    pass
+
+                log_level = logger.debug if is_testing else logger.warning
+                log_level("[Engine] ⚠️ Cache OSRM hit-rate bas: %.2f%%", hit_rate * 100)
 
             # Ajouter les compteurs
             perf_collector.metrics.bookings_processed = len(final_assignments)
@@ -1799,7 +1921,28 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                 for breach in slo_check["breaches"]:
                     get_slo_tracker().record_breach(breach_type=breach["dimension"], timestamp=current_time)
 
-                logger.warning(
+                # ✅ FIX: Réduire le niveau de log en mode testing (seuils SLO peuvent être trop stricts pour petits batches)
+                # Note: Les seuils SLO sont optimisés pour production. En tests avec petits batches (< 10 bookings),
+                # les seuils peuvent être trop stricts (ex: quality_score_min=80.0 pour batch size 2).
+                # Considérer ajuster les seuils SLO pour tests si nécessaire (voir slo.py:SLO_BY_BATCH_SIZE)
+                is_testing = False
+                try:
+                    # Essayer d'abord via variable d'environnement (plus sûr, fonctionne partout)
+                    is_testing = os.getenv("FLASK_CONFIG") == "testing"
+                    # Si current_app est disponible, utiliser sa config (plus précis)
+                    try:
+                        from flask import current_app
+
+                        is_testing = is_testing or current_app.config.get("TESTING", False)
+                    except RuntimeError:
+                        # current_app pas disponible (hors contexte Flask), utiliser seulement env var
+                        pass
+                except Exception:
+                    # En cas d'erreur, utiliser warning par défaut
+                    pass
+
+                log_level = logger.debug if is_testing else logger.warning
+                log_level(
                     "[Engine] ⚠️ SLO breach détecté: %d violations pour batch size %d",
                     len(slo_check["breaches"]),
                     n_bookings,

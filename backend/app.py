@@ -584,13 +584,20 @@ def create_app(config_name: str | None = None):
         force_https = False
         strict_transport_security = False
 
-    talisman = Talisman(
-        content_security_policy=csp,
-        force_https=force_https,
-        strict_transport_security=strict_transport_security,
-        strict_transport_security_max_age=31536000 if strict_transport_security else 0,  # 1 an
-    )
-    talisman.init_app(app)
+    # ✅ FIX: En mode testing, désactiver complètement Talisman pour éviter toute redirection 302
+    # Talisman peut encore causer des redirections même avec force_https=False dans certains cas
+    if config_name == "testing" or app.config.get("TESTING", False) or os.getenv("FLASK_CONFIG") == "testing":
+        # Ne pas initialiser Talisman en mode testing
+        talisman = None
+        app.logger.info("[App] Talisman désactivé en mode testing pour éviter les redirections 302")
+    else:
+        talisman = Talisman(
+            content_security_policy=csp,
+            force_https=force_https,
+            strict_transport_security=strict_transport_security,
+            strict_transport_security_max_age=31536000 if strict_transport_security else 0,  # 1 an
+        )
+        talisman.init_app(app)
 
     # Retirer CSP pour les réponses JSON et forcer UTF-8
     @app.after_request

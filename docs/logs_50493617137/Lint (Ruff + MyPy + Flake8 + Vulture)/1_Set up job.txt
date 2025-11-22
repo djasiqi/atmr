@@ -1,0 +1,30 @@
+﻿2025-11-21T16:04:30.9606623Z Current runner version: '2.329.0'
+2025-11-21T16:04:30.9631127Z ##[group]Runner Image Provisioner
+2025-11-21T16:04:30.9631992Z Hosted Compute Agent
+2025-11-21T16:04:30.9632777Z Version: 20251016.436
+2025-11-21T16:04:30.9633379Z Commit: 8ab8ac8bfd662a3739dab9fe09456aba92132568
+2025-11-21T16:04:30.9634028Z Build Date: 2025-10-15T20:44:12Z
+2025-11-21T16:04:30.9634717Z ##[endgroup]
+2025-11-21T16:04:30.9635249Z ##[group]Operating System
+2025-11-21T16:04:30.9635792Z Ubuntu
+2025-11-21T16:04:30.9636297Z 24.04.3
+2025-11-21T16:04:30.9636765Z LTS
+2025-11-21T16:04:30.9637184Z ##[endgroup]
+2025-11-21T16:04:30.9637728Z ##[group]Runner Image
+2025-11-21T16:04:30.9638302Z Image: ubuntu-24.04
+2025-11-21T16:04:30.9638779Z Version: 20251112.124.1
+2025-11-21T16:04:30.9639849Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20251112.124/images/ubuntu/Ubuntu2404-Readme.md
+2025-11-21T16:04:30.9641210Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20251112.124
+2025-11-21T16:04:30.9642719Z ##[endgroup]
+2025-11-21T16:04:30.9643728Z ##[group]GITHUB_TOKEN Permissions
+2025-11-21T16:04:30.9645540Z Actions: read
+2025-11-21T16:04:30.9646118Z Contents: read
+2025-11-21T16:04:30.9646655Z Metadata: read
+2025-11-21T16:04:30.9647199Z ##[endgroup]
+2025-11-21T16:04:30.9649548Z Secret source: Actions
+2025-11-21T16:04:30.9650315Z Prepare workflow directory
+2025-11-21T16:04:31.0109489Z Prepare all required actions
+2025-11-21T16:04:31.0165617Z Getting action download info
+2025-11-21T16:04:31.3423213Z Download action repository 'actions/checkout@v4' (SHA:34e114876b0b11c390a56381ad16ebd13914f8d5)
+2025-11-21T16:04:31.9679940Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2025-11-21T16:04:32.2337210Z Complete job name: Lint (Ruff + MyPy + Flake8 + Vulture)

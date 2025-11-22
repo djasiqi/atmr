@@ -1,0 +1,7 @@
+﻿2025-11-21T16:06:16.7106020Z Post job cleanup.
+2025-11-21T16:06:16.8851416Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/atmr/atmr --files-from manifest.txt --use-compress-program zstdmt
+2025-11-21T16:06:19.1213032Z Sent 0 of 746550289 (0.0%), 0.0 MBs/sec
+2025-11-21T16:06:20.1220663Z Sent 402653184 of 746550289 (53.9%), 191.9 MBs/sec
+2025-11-21T16:06:21.1232243Z Sent 679441425 of 746550289 (91.0%), 215.8 MBs/sec
+2025-11-21T16:06:21.2135583Z Sent 746550289 of 746550289 (100.0%), 230.2 MBs/sec
+2025-11-21T16:06:21.6764852Z Cache saved with the key: setup-python-Linux-x64-24.04-Ubuntu-python-3.11.14-pip-b0c0a87e0774d21a41b25b21b4d7a33cc9e02e518989194b9e2bfe6f9bbe6863

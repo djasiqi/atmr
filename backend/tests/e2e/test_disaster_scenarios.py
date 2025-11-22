@@ -184,7 +184,8 @@ class TestDisasterScenarios:
         assert users_before is not None
 
         # Test GET (lecture) - doit fonctionner même en read-only
-        response_get = authenticated_client.get("/api/bookings/")
+        # ✅ FIX: Utiliser la route correcte /api/v1/bookings/ (pas /api/bookings/)
+        response_get = authenticated_client.get("/api/v1/bookings/")
         assert response_get.status_code in [200, 404], (
             f"GET devrait fonctionner même en read-only, reçu: {response_get.status_code}"
         )
@@ -198,7 +199,8 @@ class TestDisasterScenarios:
         users_read = User.query.limit(1).all()
         assert users_read is not None, "Lectures doivent fonctionner en read-only"
 
-        response_get_readonly = authenticated_client.get("/api/bookings/")
+        # ✅ FIX: Utiliser la route correcte /api/v1/bookings/ (pas /api/bookings/)
+        response_get_readonly = authenticated_client.get("/api/v1/bookings/")
         assert response_get_readonly.status_code in [200, 404], (
             f"GET devrait fonctionner en read-only, reçu: {response_get_readonly.status_code}"
         )
@@ -657,3 +659,29 @@ class TestDisasterScenarios:
 
             # Désactiver chaos (fait automatiquement par fixture reset_chaos)
             injector.disable()
+
+    def test_no_redirects_in_testing_mode(self, authenticated_client):
+        """✅ Test de non-régression : Vérifier qu'aucune redirection 302 n'est générée en mode testing.
+
+        Ce test vérifie que les routes API ne redirigent pas vers /login ou autre
+        en mode testing, même si l'authentification échoue.
+        """
+        logger.info("[D3] Test de non-régression : pas de redirections 302 en mode testing")
+
+        # ✅ Utiliser la bonne route avec /v1/
+        response = authenticated_client.get("/api/v1/bookings/")
+
+        # Vérifier qu'il n'y a pas de redirection 302
+        assert response.status_code != 302, (
+            f"Pas de redirections en mode testing, reçu: {response.status_code} "
+            f"(Location: {response.headers.get('Location', 'N/A')})"
+        )
+
+        # Vérifier que c'est soit 200 (succès) soit 401/403 (erreur auth) mais pas 302
+        assert response.status_code in [200, 401, 403, 404], (
+            f"Status code inattendu: {response.status_code}. "
+            f"En mode testing, on attend 200 (succès), 401 (unauthorized), 403 (forbidden) ou 404 (not found), "
+            f"mais pas 302 (redirection)."
+        )
+
+        logger.info("[D3] ✅ Test de non-régression : pas de redirections 302 confirmé")
