@@ -7,7 +7,7 @@ Améliore la couverture de tests pour le système PER
 implémenté dans les étapes précédentes.
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import numpy as np
 import pytest

@@ -449,13 +449,13 @@ class CompanyDispatchRun(Resource):
         - Retourne 202 avec job_id et dispatch_run_id
         - Utilisez GET /company_dispatch/status pour suivre le statut
         - Recommandé pour >10 bookings
-        
+
         **Mode synchrone (async=false)**:
         - Exécute le dispatch immédiatement
         - Retourne 200 avec le résultat complet
         - Limité à <10 bookings (sinon erreur 400)
         - Utilisez uniquement pour tests ou petits volumes
-        
+
         **Overrides**:
         Les overrides permettent de surcharger les paramètres de dispatch:
         - `heuristic`: { "driver_load_balance": 0.5, "proximity": 0.3 }
@@ -464,9 +464,9 @@ class CompanyDispatchRun(Resource):
         - `preferred_driver_id`: ID du chauffeur préféré (ignoré dans Settings mais utilisé par heuristics)
         - `reset_existing`: true pour réinitialiser les assignations existantes
         - `fast_mode`: true pour activer le mode rapide (solver désactivé)
-        
+
         **Exemples de payload**:
-        
+
         Dispatch asynchrone simple:
         ```json
         {
@@ -474,7 +474,7 @@ class CompanyDispatchRun(Resource):
           "async": true
         }
         ```
-        
+
         Dispatch avec overrides:
         ```json
         {
@@ -494,7 +494,7 @@ class CompanyDispatchRun(Resource):
           }
         }
         ```
-        
+
         **Validation**:
         Utilisez POST /company_dispatch/settings/validate pour valider les overrides avant exécution.
         """,
@@ -703,11 +703,11 @@ class DispatchTrigger(Resource):
     @dispatch_ns.doc(
         description="""
         ⚠️ **DÉPRÉCIÉ** - Cet endpoint sera supprimé dans une future version.
-        
+
         **Migration recommandée**: Utilisez `POST /company_dispatch/run` avec `async=true`.
-        
+
         **Guide de migration**: Voir `/docs/API_MIGRATION_TRIGGER_TO_RUN.md`
-        
+
         Cet endpoint est maintenu pour compatibilité mais redirige vers `/run`.
         """,
         deprecated=True,
@@ -1710,7 +1710,6 @@ class LiveDelaysResource(Resource):
         except Exception as e:
             logger.warning("[LiveDelays] Could not check OSRM circuit breaker: %s, will try OSRM first", e)
             # Si on ne peut pas vérifier le circuit breaker, continuer normalement
-            pass
 
         # ✅ ÉTAPE 3: Calculer tous les ETAs en parallèle avec timeout global
         eta_results = {}  # {assignment_id: eta_seconds}
@@ -1908,7 +1907,6 @@ class LiveDelaysResource(Resource):
                             status = "on_time"
                 except Exception as e:
                     logger.warning("[LiveDelays] Error calculating intelligent delay: %s", e)
-                    pass
             elif pickup_time and not current_eta:
                 # ⭐ FALLBACK : Si pas d'ETA disponible, comparer heure actuelle vs heure prévue
                 # Utile pour détecter les retards même sans GPS

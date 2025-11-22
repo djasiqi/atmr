@@ -8,15 +8,11 @@ Ce module teste les implémentations C51 et QR-DQN pour s'assurer
 qu'elles fonctionnent correctement et capturent l'incertitude.
 """
 
-import math
 import sys
 from pathlib import Path
-from typing import Dict, List
 
 import pytest
 import torch
-import torch.nn.functional as F
-from torch import nn
 
 # Ajouter le répertoire backend au path Python
 backend_dir = Path(__file__).parent.parent.parent

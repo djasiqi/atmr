@@ -1,7 +1,6 @@
 # backend/tests/services/unified_dispatch/test_settings.py
 """Tests pour la validation des overrides de settings."""
 
-import pytest
 
 from services.unified_dispatch import settings as ud_settings
 

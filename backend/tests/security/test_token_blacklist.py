@@ -9,7 +9,7 @@ Valide le fonctionnement de la blacklist des tokens :
 
 import hashlib
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

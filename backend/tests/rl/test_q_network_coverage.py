@@ -2,9 +2,7 @@
 Tests supplémentaires pour améliorer la couverture de improved_q_network.py
 """
 
-from unittest.mock import Mock, patch
 
-import numpy as np
 import pytest
 import torch
 

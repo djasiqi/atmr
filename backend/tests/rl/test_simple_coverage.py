@@ -2,9 +2,8 @@
 Tests ultra-simples pour améliorer la couverture - Version fonctionnelle
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
-import pytest
 
 
 class TestSimpleCoverage:

@@ -3,15 +3,11 @@
 Tests pour shadow_mode_manager.py - couverture de base simplifiée
 """
 
-import json
 import tempfile
-from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import patch
 
-import numpy as np
 import pytest
-import torch
 
 from services.rl.shadow_mode_manager import ShadowModeManager
 

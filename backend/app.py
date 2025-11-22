@@ -425,7 +425,6 @@ def create_app(config_name: str | None = None):
         except Exception:
             # En cas d'erreur inattendue, continuer (ne pas bloquer le système)
             app.logger.warning("[CHAOS] Error checking DB read-only status", exc_info=True)
-            pass
 
         return None
 

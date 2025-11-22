@@ -8,16 +8,13 @@ Valide l'intégration complète des fonctionnalités :
 """
 
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from flask import Flask
 from flask_jwt_extended import create_access_token
 from werkzeug.exceptions import Forbidden
 
 from routes.admin import AdminStats
-from routes.auth import Logout
 
 
 @pytest.fixture

@@ -2,7 +2,6 @@
 Tests pour les routes clients (CRUD, validation, search).
 """
 
-import pytest
 
 from models import Client, User, UserRole
 

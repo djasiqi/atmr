@@ -9,8 +9,8 @@ exclude =
     .env,
     */site-packages/*
 
-# Aligner avec Ruff (line-length=120)
-max-line-length = 120
+# Aligner avec Ruff (line-length=88, valeur par défaut de ruff format)
+max-line-length = 88
 
 # Ignorer certaines règles qui sont gérées par Ruff
 # E203: whitespace before ':' (conflit avec black/ruff)

@@ -7,11 +7,9 @@ Teste que les tâches échouées sont stockées en DLQ et qu'on peut les consult
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 import pytest
 
-from celery_app import celery
 from ext import db
 from models import TaskFailure
 

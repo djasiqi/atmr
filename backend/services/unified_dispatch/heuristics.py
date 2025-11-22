@@ -2968,8 +2968,8 @@ def estimate_wait_or_require_extra(
             continue
         try:
             pick = (
-                float(cast("Any", b.pickup_lat)),
-                float(cast("Any", b.pickup_lon)),
+                float(b.pickup_lat),
+                float(b.pickup_lon),
             )
         except Exception:
             # si coordonnées manquent, on saute (devrait être enrichi par

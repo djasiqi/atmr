@@ -3,7 +3,6 @@
 Valide la protection CSRF si activée, et vérifie la configuration CORS.
 """
 
-import pytest
 
 
 class TestCSRFConfiguration:

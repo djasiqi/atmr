@@ -2,9 +2,8 @@
 Tests minimaux pour rl_logger.py - Version corrigée
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
-import pytest
 
 from services.rl.rl_logger import RLLogger
 

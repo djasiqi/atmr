@@ -1,7 +1,6 @@
 # pyright: reportArgumentType=false
 """Tests d'intégration pour le modèle ML de prédiction de retards."""
 
-import os
 import sys
 from datetime import datetime
 from pathlib import Path

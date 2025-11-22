@@ -8,9 +8,8 @@ des alertes proactives et de l'explicabilité.
 """
 
 import contextlib
-import json
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock
 
 import pytest
 

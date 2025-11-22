@@ -3,10 +3,7 @@
 Tests pour distributional_dqn.py - couverture de base
 """
 
-from datetime import datetime
-from unittest.mock import MagicMock, Mock, patch
 
-import numpy as np
 import pytest
 import torch
 

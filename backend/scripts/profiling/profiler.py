@@ -11,7 +11,6 @@ import os
 import pstats
 import time
 from contextlib import contextmanager
-from datetime import UTC, datetime
 from io import StringIO
 from typing import Any, Dict, List
 

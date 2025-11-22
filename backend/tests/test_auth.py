@@ -2,9 +2,7 @@
 Tests pour les routes d'authentification.
 """
 
-import pytest
 
-from models import User, UserRole
 
 
 def test_login_success(client, sample_user):

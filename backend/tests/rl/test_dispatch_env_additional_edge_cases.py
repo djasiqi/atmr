@@ -2,11 +2,9 @@
 Tests supplémentaires pour dispatch_env.py - Couverture 95%+ (Partie 2)
 """
 
-import logging
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import numpy as np
-import pytest
 
 from services.rl.dispatch_env import DispatchEnv
 

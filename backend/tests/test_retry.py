@@ -1,8 +1,7 @@
 """Tests pour le module retry (retry uniformisé avec exponential backoff)."""
 
-import time
 import unittest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 

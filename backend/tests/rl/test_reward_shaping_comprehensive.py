@@ -5,7 +5,6 @@ Tests complets pour reward_shaping.py - Couverture 90%+
 from unittest.mock import patch
 
 import numpy as np
-import pytest
 
 from services.rl.reward_shaping import AdvancedRewardShaping, RewardShapingConfig
 

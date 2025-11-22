@@ -5,14 +5,12 @@ Vérifie que le shadow mode fonctionne correctement en production.
 """
 
 import json
-import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pytest
 
 from services.rl.shadow_mode_manager import ShadowModeManager
 

@@ -90,6 +90,9 @@ ignore = [
     "PT009",    # unittest-style assertions OK dans tests
     "EXE002",   # Executable files OK dans tests
 ]
+"tests/e2e/test_disaster_scenarios.py" = [
+    "I001",     # Import sorting - complex import structure
+]
 
 [lint.isort]
 known-first-party = ["services", "models", "routes", "shared"]

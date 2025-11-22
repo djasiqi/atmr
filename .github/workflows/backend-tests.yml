@@ -46,14 +46,14 @@ jobs:
             pip install -r requirements.txt
           fi
 
-      - name: Ruff format
+      - name: Ruff format check
         run: |
           cd backend
-          # Formater automatiquement le code
-          ruff format .
           # Vérifier que le code est bien formaté (fail si des changements sont nécessaires)
+          # Note: On vérifie seulement en CI, le formatage doit être fait localement via pre-commit hooks
           ruff format --check . || {
-            echo "❌ Le code n'est pas formaté correctement. Exécutez 'ruff format .' localement."
+            echo "❌ Le code n'est pas formaté correctement."
+            echo "💡 Exécutez 'ruff format .' localement ou installez les pre-commit hooks."
             exit 1
           }
 

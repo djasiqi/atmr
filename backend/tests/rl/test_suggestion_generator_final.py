@@ -1,9 +1,6 @@
 """Tests finaux pour suggestion_generator.py"""
 
-from unittest.mock import MagicMock, Mock, patch
 
-import numpy as np
-import pytest
 
 from services.rl.suggestion_generator import RLSuggestionGenerator
 

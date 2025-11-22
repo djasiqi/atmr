@@ -7,14 +7,11 @@ non autorisées via IP whitelist :
 - Rate limiting pour éviter le spam
 """
 
-import os
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-import sentry_sdk
 
-from security.audit_log import AuditLogger
 from security.ip_whitelist_alerts import (
     ALERT_RATE_LIMIT_MINUTES,
     REDIS_ALERT_KEY_PREFIX,

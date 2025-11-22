@@ -15,7 +15,6 @@ from scripts.profiling.profiler import (
     PERFORMANCE_BUDGETS,
     DispatchProfiler,
     get_profiler,
-    is_profiling_enabled,
 )
 
 logger = logging.getLogger(__name__)

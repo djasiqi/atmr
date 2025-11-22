@@ -1,7 +1,7 @@
 """Tests pour le module api_slo (Service Level Objectives)."""
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from services.api_slo import (
     API_SLOS,

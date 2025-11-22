@@ -2,10 +2,9 @@
 Tests supplémentaires pour couvrir les lignes manquantes de n_step_buffer.py
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import numpy as np
-import pytest
 
 from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
 

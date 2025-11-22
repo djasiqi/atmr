@@ -57,7 +57,7 @@ class DayReplayer:
     def __init__(self, stochastic_traffic: bool = True):
         super().__init__()
         """Initialise le replayer.
-        
+
         Args:
             stochastic_traffic: Activer bruit stochastique sur temps trajet
         """

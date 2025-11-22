@@ -8,9 +8,8 @@ du shadow mode et des KPIs.
 """
 
 import contextlib
-import json
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock
 
 import pytest
 

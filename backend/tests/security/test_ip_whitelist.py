@@ -8,14 +8,12 @@ Valide le fonctionnement de la restriction d'accès par IP :
 - Configuration via variables d'environnement
 """
 
-import os
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-from flask import Flask, abort
+from flask import Flask
 
 from security.ip_whitelist import ip_whitelist_required
-from security.ip_whitelist_alerts import send_ip_whitelist_alert
 
 
 @pytest.fixture

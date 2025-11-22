@@ -3,7 +3,6 @@
 Tests supplémentaires pour couvrir les lignes manquantes dans improved_q_network.py
 """
 
-import numpy as np
 import pytest
 import torch
 

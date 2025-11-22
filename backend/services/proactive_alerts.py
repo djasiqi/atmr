@@ -59,7 +59,7 @@ class ProactiveAlertsService:
 
     def __init__(self, notification_service=None, delay_predictor=None):
         """Initialise le service d'alertes proactives.
-        
+
         Args:
             notification_service: Service de notification optionnel (pour injection de dépendances dans les tests)
             delay_predictor: Prédicteur de retard optionnel (pour injection de dépendances dans les tests)

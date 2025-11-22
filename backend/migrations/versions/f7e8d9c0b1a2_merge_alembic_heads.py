@@ -8,7 +8,6 @@ Create Date: 2025-01-28 12:00:00.000000
 
 """
 
-from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "f7e8d9c0b1a2"
@@ -22,12 +21,9 @@ def upgrade():
     Merge migration - aucune modification de schéma nécessaire.
     Cette migration unifie simplement les branches de migration.
     """
-    pass
 
 
 def downgrade():
     """
     Downgrade - aucune modification de schéma nécessaire.
     """
-    pass
-

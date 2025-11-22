@@ -12,9 +12,7 @@ import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import Mock, patch
 
-import pandas as pd
 import pytest
 
 from services.rl.shadow_mode_manager import ShadowModeManager

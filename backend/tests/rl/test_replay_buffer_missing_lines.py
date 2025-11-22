@@ -3,10 +3,9 @@ Tests supplémentaires pour couvrir les lignes manquantes de replay_buffer.py
 """
 
 import contextlib
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import numpy as np
-import pytest
 
 from services.rl.replay_buffer import PrioritizedReplayBuffer
 

@@ -7,13 +7,11 @@ Teste que le système tolère les relances/retry sans doublons.
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict
 
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from ext import db
-from models import Assignment, Booking, BookingStatus, DispatchRun, Driver, DriverState, DriverStatus, DriverType
+from models import Assignment, BookingStatus, DriverState, DriverStatus, DriverType
 from services.unified_dispatch.apply import apply_assignments
 from tests.factories import BookingFactory, CompanyFactory, DispatchRunFactory, DriverFactory
 

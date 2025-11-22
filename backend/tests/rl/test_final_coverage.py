@@ -5,7 +5,6 @@ Tests corrigés pour améliorer la couverture - Version finale
 from unittest.mock import Mock, patch
 
 import numpy as np
-import pytest
 import torch
 
 from services.rl.dispatch_env import DispatchEnv

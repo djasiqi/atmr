@@ -7,9 +7,7 @@ Teste que les SLO sont respectés pour différentes tailles de batch.
 
 import logging
 import time
-from datetime import UTC, datetime
 
-import pytest
 
 from services.unified_dispatch.slo import (
     SLOBreachTracker,

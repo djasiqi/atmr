@@ -1,6 +1,5 @@
 """Tests pour le service météo."""
 
-import pytest
 
 
 class TestWeatherService:

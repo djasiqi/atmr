@@ -7,22 +7,19 @@ Ce module teste le système complet de gestion des modèles avec
 traçabilité, promotion contrôlée et rollback.
 """
 
-import json
 import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List
 
 import pytest
-import torch
 from torch import nn
 
 # Ajouter le répertoire backend au path Python
 backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from services.ml.model_registry import ModelMetadata, ModelPromotionValidator, ModelRegistry, create_model_registry
+from services.ml.model_registry import ModelMetadata, ModelPromotionValidator, create_model_registry
 from services.ml.training_metadata_schema import TrainingMetadataSchema, create_training_metadata
 
 

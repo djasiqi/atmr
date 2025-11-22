@@ -4,7 +4,6 @@ Teste que les fonctions de sanitisation échappent correctement HTML/JS
 et valident les inputs utilisateur.
 """
 
-import pytest
 
 from shared.input_sanitizer import (
     escape_html,

@@ -12,8 +12,6 @@ import pytest
 
 from sockets.websocket_ack import (
     MAX_RETRIES,
-    PendingMessage,
-    WebSocketACKManager,
     get_ack_manager,
     reset_ack_manager,
 )

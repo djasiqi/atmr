@@ -7,10 +7,8 @@ Ce module teste les fonctionnalités des Noisy Networks pour l'exploration
 paramétrique, incluant la validation du bruit non-zéro et des gradients.
 """
 
-import math
 import sys
 from pathlib import Path
-from typing import Dict, List
 
 import pytest
 import torch

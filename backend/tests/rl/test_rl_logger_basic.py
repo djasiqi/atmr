@@ -3,12 +3,8 @@
 Tests pour rl_logger.py - couverture de base
 """
 
-import json
-from datetime import datetime
-from unittest.mock import MagicMock, Mock, patch
 
 import numpy as np
-import pytest
 
 from services.rl.rl_logger import RLLogger
 

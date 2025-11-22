@@ -8,13 +8,9 @@ Valide le fonctionnement du handler de logging centralisé :
 - Gestion des erreurs
 """
 
-import json
 import logging
-import os
-from datetime import UTC, datetime
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
 import requests
 
 from shared.logging_centralized import CentralizedLogHandler, setup_centralized_logging

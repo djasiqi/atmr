@@ -10,7 +10,6 @@ pour permettre le DROP en tests.
 
 from contextlib import suppress
 
-import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.

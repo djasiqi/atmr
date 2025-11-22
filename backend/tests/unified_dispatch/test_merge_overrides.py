@@ -10,9 +10,7 @@ Valide que merge_overrides gère correctement:
 """
 
 import logging
-from typing import Any, Dict
 
-import pytest
 
 from services.unified_dispatch.settings import Settings, merge_overrides
 

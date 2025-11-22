@@ -2,11 +2,10 @@
 Tests complets pour dispatch_env.py - Couverture 90%+
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import gymnasium as gym
 import numpy as np
-import pytest
 
 from services.rl.dispatch_env import DispatchEnv
 
