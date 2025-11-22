@@ -683,7 +683,8 @@ class TestClientCreateSchema:
         assert "errors" in exc_info.value.messages
         assert "email" in exc_info.value.messages["errors"]
 
-        # Note: email absent n'est pas validé par le schéma (validé par la route pour SELF_SERVICE)
+        # Note: email absent n'est pas validé par le schéma
+        # (validé par la route pour SELF_SERVICE)
         # mais testons que le schéma l'accepte comme optionnel
         data = {
             "client_type": "SELF_SERVICE"
@@ -694,11 +695,16 @@ class TestClientCreateSchema:
         assert "email" not in result or result.get("email") is None
 
     def test_required_fields_for_private_corporate(self):
-        """✅ Test validation champs requis pour PRIVATE et CORPORATE (validés logiquement dans la route)."""
-        # PRIVATE sans first_name, last_name, address (valides pour le schéma, validés par la route)
+        """✅ Test validation champs requis pour PRIVATE et CORPORATE.
+
+        Validés logiquement dans la route.
+        """
+        # PRIVATE sans first_name, last_name, address
+        # (valides pour le schéma, validés par la route)
         data = {
             "client_type": "PRIVATE"
-            # first_name, last_name, address manquants (valides pour schéma, route les exigera)
+            # first_name, last_name, address manquants
+            # (valides pour schéma, route les exigera)
         }
         result = validate_request(ClientCreateSchema(), data, strict=False)
         assert result["client_type"] == "PRIVATE"
@@ -795,7 +801,10 @@ class TestManualBookingCreateSchema:
     """Tests pour ManualBookingCreateSchema."""
 
     def test_valid_manual_booking_minimal(self):
-        """✅ Test validation création réservation manuelle avec champs requis uniquement."""
+        """✅ Test validation création réservation manuelle.
+
+        Avec champs requis uniquement.
+        """
         data = {
             "client_id": 123,
             "pickup_location": "123 Main St, Geneva",
@@ -1181,7 +1190,10 @@ class TestBillingSettingsUpdateSchema:
         assert result["payment_terms_days"] == 365
 
     def test_fees_validation(self):
-        """✅ Test validation des frais (overdue_fee, reminder1fee, reminder2fee, reminder3fee >= 0)."""
+        """✅ Test validation des frais.
+
+        overdue_fee, reminder1fee, reminder2fee, reminder3fee >= 0.
+        """
         # Frais valides
         fees = ["overdue_fee", "reminder1fee", "reminder2fee", "reminder3fee"]
         for fee in fees:
@@ -1296,7 +1308,10 @@ class TestBillingSettingsUpdateSchema:
         assert result["auto_reminders_enabled"] is False
 
     def test_reminder_schedule_days(self):
-        """Test validation reminder_schedule_days (Raw field, accepte diverses structures)."""
+        """Test validation reminder_schedule_days.
+
+        Raw field, accepte diverses structures.
+        """
         # Liste
         data = {"reminder_schedule_days": [10, 20, 30]}
         result = validate_request(BillingSettingsUpdateSchema(), data, strict=False)
@@ -1313,7 +1328,10 @@ class TestBillingSettingsUpdateSchema:
         assert result.get("reminder_schedule_days") is None
 
     def test_template_fields(self):
-        """Test validation des templates (reminder1template, reminder2template, reminder3template)."""
+        """Test validation des templates.
+
+        reminder1template, reminder2template, reminder3template.
+        """
         templates = ["reminder1template", "reminder2template", "reminder3template"]
         for template in templates:
             # Template valide
@@ -1588,12 +1606,14 @@ class TestInvoiceGenerateSchema:
 
     def test_minimal_valid_invoice_generate(self):
         """Test validation minimale (seulement period_year et period_month requis)."""
-        # Note: client_id et client_ids ne sont pas requis (au moins un doit être fourni logiquement)
+        # Note: client_id et client_ids ne sont pas requis
+        # (au moins un doit être fourni logiquement)
         data = {"period_year": 2025, "period_month": 12}
         result = validate_request(InvoiceGenerateSchema(), data, strict=False)
         assert result["period_year"] == 2025
         assert result["period_month"] == 12
-        # client_id et client_ids peuvent être absents (validation logique dans la route)
+        # client_id et client_ids peuvent être absents
+        # (validation logique dans la route)
 
 
 class TestPaymentStatusUpdateSchema:
@@ -2059,7 +2079,8 @@ class TestAnalyticsInsightsQuerySchema:
 
         # Float non entier (invalide pour Int, mais Marshmallow peut convertir 30.0 en 30)
         # Testons avec une valeur qui ne peut pas être convertie en int
-        # Marshmallow peut accepter 30.0 et le convertir, donc testons avec une vraie valeur invalide
+        # Marshmallow peut accepter 30.0 et le convertir
+        # donc testons avec une vraie valeur invalide
         data = {"lookback_days": "not_a_number"}
         with pytest.raises(ValidationError) as exc_info:
             validate_request(AnalyticsInsightsQuerySchema(), data, strict=False)
@@ -2417,7 +2438,8 @@ class TestPlanningShiftsQuerySchema:
         """✅ Test validation type driver_id (doit être Int)."""
         # String numérique (Marshmallow devrait convertir)
         data = {"driver_id": "123"}
-        # Marshmallow peut convertir "123" en int, donc testons avec une vraie string non numérique
+        # Marshmallow peut convertir "123" en int
+        # donc testons avec une vraie string non numérique
         data_invalid = {"driver_id": "abc"}
         with pytest.raises(ValidationError) as exc_info:
             validate_request(PlanningShiftsQuerySchema(), data_invalid, strict=False)
