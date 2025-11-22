@@ -321,8 +321,8 @@ class SafetyGuards:
             self.violation_history = self.violation_history[-self.max_history_size :]
 
     def _calculate_severity(
-        self, checks: Dict[str, bool], metrics: Dict[str, Any]
-    ) -> str:  # noqa: ARG002
+        self, checks: Dict[str, bool], _metrics: Dict[str, Any]
+    ) -> str:
         """Calcule la sévérité de la violation."""
         violation_count = sum(1 for passed in checks.values() if not passed)
 

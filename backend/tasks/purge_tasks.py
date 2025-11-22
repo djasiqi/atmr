@@ -241,8 +241,8 @@ def purge_old_messages(self: Task, retention_days: int | None = None) -> dict[st
 
 @celery.task(bind=True, name="tasks.purge_tasks.purge_old_realtime_events")
 def purge_old_realtime_events(
-    self: Task, retention_days: int | None = None
-) -> dict[str, Any]:  # noqa: ARG001
+    _self: Task, retention_days: int | None = None
+) -> dict[str, Any]:
     """✅ 3.3: Purge les événements temps réel anciens (> 7 ans par défaut).
 
     Args:
@@ -304,8 +304,8 @@ def purge_old_realtime_events(
 
 @celery.task(bind=True, name="tasks.purge_tasks.purge_old_autonomous_actions")
 def purge_old_autonomous_actions(
-    self: Task, retention_days: int | None = None
-) -> dict[str, Any]:  # noqa: ARG001
+    _self: Task, retention_days: int | None = None
+) -> dict[str, Any]:
     """✅ 3.3: Purge les actions autonomes anciennes (> 7 ans par défaut).
 
     Les actions reviewées peuvent être purgées, les non-reviewées sont conservées plus longtemps.
@@ -386,8 +386,8 @@ def purge_old_autonomous_actions(
 
 @celery.task(bind=True, name="tasks.purge_tasks.purge_old_task_failures")
 def purge_old_task_failures(
-    self: Task, retention_days: int | None = None
-) -> dict[str, Any]:  # noqa: ARG001
+    _self: Task, retention_days: int | None = None
+) -> dict[str, Any]:
     """✅ 3.3: Purge les TaskFailure anciennes (> 7 ans par défaut).
 
     Args:
@@ -547,8 +547,8 @@ def purge_all_old_data(self: Task) -> dict[str, Any]:
 
 @celery.task(bind=True, name="tasks.purge_tasks.anonymize_old_user_data")
 def anonymize_old_user_data(
-    self: Task, retention_days: int | None = None
-) -> dict[str, Any]:  # noqa: ARG001
+    _self: Task, retention_days: int | None = None
+) -> dict[str, Any]:
     """✅ 3.3: Anonymise les données utilisateur anciennes (> 7 ans) au lieu de supprimer.
 
     Conformément RGPD, anonymise plutôt que supprimer pour préserver statistiques.

@@ -615,11 +615,13 @@ class AutonomousActionsStats(Resource):
 
             # Statistiques globales
             total_actions = query.count()
-            successful_actions = query.filter(AutonomousAction.success == True).count()  # noqa: E712
-            failed_actions = query.filter(AutonomousAction.success == False).count()  # noqa: E712
+            successful_actions = query.filter(
+                AutonomousAction.success.is_(True)
+            ).count()
+            failed_actions = query.filter(AutonomousAction.success.is_(False)).count()
             reviewed_actions = query.filter(
-                AutonomousAction.reviewed_by_admin == True
-            ).count()  # noqa: E712
+                AutonomousAction.reviewed_by_admin.is_(True)
+            ).count()
 
             # Stats par type d'action
             action_type_stats = db.session.query(
