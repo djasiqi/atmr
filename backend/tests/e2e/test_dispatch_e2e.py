@@ -10,14 +10,12 @@ Scénarios testés:
 6. Rollback transactionnel complet
 """
 
-import time
 from datetime import UTC, date, datetime, timedelta
-from typing import Any, Dict
 
 import pytest
 
 from ext import db
-from models import Assignment, Booking, BookingStatus, DispatchRun, DispatchStatus, Driver
+from models import Assignment, Booking, BookingStatus, DispatchRun, DispatchStatus
 from services.unified_dispatch import engine
 from tests.factories import BookingFactory, CompanyFactory, DriverFactory
 

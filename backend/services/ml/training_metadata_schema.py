@@ -233,7 +233,7 @@ class TrainingMetadataSchema:
 
         """
         issues = []
-        _template = TrainingMetadataSchema.create_metadata_template()
+        # Note: _template supprimé car non utilisé
 
         # Vérifier les sections obligatoires
         required_sections = [

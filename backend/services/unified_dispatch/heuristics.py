@@ -1519,20 +1519,21 @@ def assign(problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS) -> He
                 )
 
                 # Calculer l'heure de fin estimée de la course précédente
-                from datetime import timedelta
+                # Utiliser datetime.timedelta directement pour éviter problème de scope avec le linter
+                from datetime import timedelta as dt_timedelta
 
                 existing_scheduled_dt = getattr(existing_booking, "scheduled_time", None)
                 if not existing_scheduled_dt:
                     continue
 
-                existing_end_time = existing_scheduled_dt + timedelta(
+                existing_end_time = existing_scheduled_dt + dt_timedelta(
                     minutes=trip_time_min + pickup_service_min + dropoff_service_min
                 )
 
                 # Calculer l'heure de début nécessaire pour la nouvelle course
                 booking_scheduled_dt = getattr(b, "scheduled_time", None)
                 if booking_scheduled_dt:
-                    required_start_time = booking_scheduled_dt - timedelta(
+                    required_start_time = booking_scheduled_dt - dt_timedelta(
                         minutes=transition_time_min + pickup_service_min + min_transition_margin_min
                     )
 

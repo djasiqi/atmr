@@ -19,9 +19,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Union
 
 import numpy as np
 
-if TYPE_CHECKING:
-    import torch  # type: ignore[reportMissingImports]
-
 logger = logging.getLogger(__name__)
 
 # Constantes pour éviter les valeurs magiques
@@ -45,11 +42,13 @@ except ImportError:
     RLSuggestionMetric = None
 
 # Import conditionnel de torch pour éviter NameError
-# Note: torch est aussi importé dans TYPE_CHECKING pour les annotations de type
 try:
     import torch  # type: ignore[import-untyped]
 except ImportError:
     torch = None
+
+if TYPE_CHECKING:
+    import torch as torch_type  # type: ignore[reportMissingImports]  # noqa: F401
 
 
 class RLLogger:

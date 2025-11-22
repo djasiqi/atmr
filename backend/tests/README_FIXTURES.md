@@ -80,13 +80,28 @@ Crée un objet via une factory, le commit dans la DB, et le recharge pour garant
 
 **Paramètres** :
 
-- `db_session` : Session SQLAlchemy (généralement la fixture `db`)
+- `db_session` : **Instance Flask-SQLAlchemy** (généralement la fixture `db` ou `db_session`)
+  - ⚠️ **IMPORTANT** : `db_session` est l'instance Flask-SQLAlchemy (`_db`), pas la session SQLAlchemy
+  - La fonction utilise `db_session.session.add()`, `db_session.session.commit()`, etc. en interne
+  - Ne pas passer `db.session` directement, passer `db` (l'instance Flask-SQLAlchemy)
 - `factory_instance` : Instance de factory (ex: `CompanyFactory()`)
 - `model_class` : Classe du modèle SQLAlchemy (ex: `Company`)
 - `reload` : Si True, expire et recharge l'objet depuis la DB (défaut: True)
 - `assert_exists` : Si True, vérifie que l'objet existe après reload (défaut: True)
 
 **Retourne** : Instance du modèle persisté et rechargé depuis la DB
+
+**Pattern correct** :
+
+```python
+# ✅ CORRECT : Passer l'instance Flask-SQLAlchemy
+company = persisted_fixture(db, CompanyFactory(), Company)
+
+# ❌ INCORRECT : Ne pas passer db.session directement
+# company = persisted_fixture(db.session, CompanyFactory(), Company)  # ERREUR
+```
+
+**Note technique** : `persisted_fixture()` utilise `db_session.session.add()` en interne car `db_session` est l'instance Flask-SQLAlchemy qui expose la session via l'attribut `.session`.
 
 ### `ensure_committed(db_session)`
 
@@ -122,6 +137,59 @@ def test_nested_transaction(db):
 ```
 
 ⚠️ **Attention** : Les savepoints imbriqués sont rollback automatiquement si le savepoint parent est rollback. Ne pas utiliser pour isoler des tests (utiliser la fixture `db` à la place).
+
+## 🔑 Patterns SQLAlchemy Corrects
+
+### Utilisation de Flask-SQLAlchemy dans les tests
+
+**Pattern correct** : Utiliser `db.session` pour accéder à la session SQLAlchemy
+
+```python
+# ✅ CORRECT : db est l'instance Flask-SQLAlchemy
+db.session.add(obj)
+db.session.commit()
+db.session.query(Model).filter_by(...).first()
+
+# ❌ INCORRECT : Ne pas utiliser db.add() directement
+# db.add(obj)  # AttributeError: add n'existe pas sur l'instance Flask-SQLAlchemy
+```
+
+**Explication** :
+
+- `db` (ou `db_session`) est l'instance Flask-SQLAlchemy (`_db` importée depuis `ext`)
+- Flask-SQLAlchemy expose la session SQLAlchemy via l'attribut `.session`
+- Pour accéder aux méthodes de la session (add, commit, query, etc.), utiliser `db.session.add()`, pas `db.add()`
+
+**Dans persisted_fixture()** :
+
+- La fonction reçoit `db` (instance Flask-SQLAlchemy)
+- Elle utilise `db_session.session.add()` en interne
+- C'est pourquoi il faut passer `db` et non `db.session` à `persisted_fixture()`
+
+### Pattern pour les fixtures
+
+```python
+@pytest.fixture
+def db_session(db):
+    """Alias pour db pour compatibilité avec les tests existants."""
+    return db  # Retourne l'instance Flask-SQLAlchemy, pas db.session
+
+@pytest.fixture
+def my_entity(db):
+    # ✅ CORRECT : Passer db (instance Flask-SQLAlchemy)
+    return persisted_fixture(db, MyEntityFactory(), MyEntity)
+
+    # ❌ INCORRECT : Ne pas passer db.session
+    # return persisted_fixture(db.session, MyEntityFactory(), MyEntity)  # ERREUR
+```
+
+### Pièges à éviter
+
+1. **Ne pas utiliser `db.add()` directement** : Utiliser `db.session.add()`
+2. **Ne pas passer `db.session` à `persisted_fixture()`** : Passer `db` (l'instance)
+3. **Ne pas confondre `db` et `db.session`** :
+   - `db` = instance Flask-SQLAlchemy
+   - `db.session` = session SQLAlchemy
 
 ## 📝 Bonnes Pratiques
 

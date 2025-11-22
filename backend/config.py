@@ -213,6 +213,12 @@ class ProductionConfig(Config):
         required=False,  # Pas requis si variables individuelles disponibles
     )
     SQLALCHEMY_DATABASE_URI = _db_url_from_secret if _db_url_from_secret else _build_database_url_safe()
+    # Validation explicite pour éviter les erreurs lors de l'initialisation Flask-SQLAlchemy
+    if not SQLALCHEMY_DATABASE_URI:
+        raise RuntimeError(
+            "SQLALCHEMY_DATABASE_URI must be set. "
+            + "Provide either DATABASE_URL or POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB"
+        )
 
     # ✅ PostgreSQL-specific options
     SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {  # pyright: ignore[reportIncompatibleVariableOverride]
