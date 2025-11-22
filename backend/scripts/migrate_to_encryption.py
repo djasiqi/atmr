@@ -46,11 +46,11 @@ def migrate_users(dry_run: bool = False, batch_size: int = 100):
     while offset < total_count:
         # Charger un chunk d'utilisateurs
         users = (
-            User.query.filter(User.encryption_migrated == False)
+            User.query.filter(User.encryption_migrated.is_(False))
             .offset(offset)
             .limit(chunk_size)
             .all()
-        )  # noqa: E712
+        )
 
         if not users:
             break
@@ -190,11 +190,11 @@ def migrate_clients(dry_run: bool = False, batch_size: int = 100):
     while offset < total_count:
         # Charger un chunk de clients
         clients = (
-            Client.query.filter(Client.encryption_migrated == False)
+            Client.query.filter(Client.encryption_migrated.is_(False))
             .offset(offset)
             .limit(chunk_size)
             .all()
-        )  # noqa: E712
+        )
 
         if not clients:
             break
