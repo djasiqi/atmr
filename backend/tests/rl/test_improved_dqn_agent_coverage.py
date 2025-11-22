@@ -2,10 +2,9 @@
 Tests supplémentaires pour améliorer la couverture de improved_dqn_agent.py
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import patch
 
 import numpy as np
-import pytest
 import torch
 
 from services.rl.improved_dqn_agent import ImprovedDQNAgent

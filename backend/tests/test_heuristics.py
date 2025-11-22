@@ -5,11 +5,9 @@ Coverage cible : 70%+
 """
 
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
 
-import pytest
 
-from models import Booking, BookingStatus, Driver
+from models import BookingStatus
 from services.unified_dispatch.heuristics import (
     HeuristicAssignment,
     HeuristicResult,

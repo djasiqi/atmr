@@ -1,13 +1,10 @@
 """Tests unitaires pour les endpoints de monitoring des rotations de secrets."""
 
-from datetime import UTC, datetime, timedelta
 
 import pytest
-from flask import Flask
 
 from ext import db
-from models import SecretRotation, User, UserRole
-from routes.secret_rotation_monitoring import secret_rotation_ns
+from models import User, UserRole
 from services.secret_rotation_monitor import record_rotation
 
 

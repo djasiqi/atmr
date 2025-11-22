@@ -9,10 +9,6 @@ Améliore la couverture de tests en testant tous les aspects
 du hardening Docker et des services de production.
 """
 
-import json
-import os
-from datetime import UTC, datetime
-from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 

@@ -12,11 +12,8 @@ import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-import pytest
 
 from services.ml.model_registry import ModelRegistry
-from services.unified_dispatch.queue import trigger_job
-from sockets.websocket_ack import PendingMessage
 
 
 class TestOSRMClientSHA256:

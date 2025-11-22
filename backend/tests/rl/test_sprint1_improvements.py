@@ -12,11 +12,9 @@ Auteur: ATMR Project - RL Team
 Date: 21 octobre 2025
 """
 
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-import torch
 
 from services.rl.dispatch_env import DispatchEnv
 from services.rl.improved_dqn_agent import ImprovedDQNAgent

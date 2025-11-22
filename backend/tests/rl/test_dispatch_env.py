@@ -11,7 +11,6 @@ Teste:
 """
 
 import numpy as np
-import pytest
 
 from services.rl.dispatch_env import DispatchEnv
 

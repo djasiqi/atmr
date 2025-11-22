@@ -35,11 +35,9 @@ except ImportError:
 
     def track_context_manager_usage(manager_type: str) -> None:
         """No-op si métriques non disponibles."""
-        pass
 
     def track_session_error(error_type: str) -> None:
         """No-op si métriques non disponibles."""
-        pass
 
     def track_transaction(operation: str) -> Any:
         """No-op context manager si métriques non disponibles."""

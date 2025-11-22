@@ -3,7 +3,6 @@
 Valide que toutes les protections de sécurité fonctionnent ensemble dans des scénarios complets.
 """
 
-import pytest
 
 
 class TestCombinedAttackScenarios:

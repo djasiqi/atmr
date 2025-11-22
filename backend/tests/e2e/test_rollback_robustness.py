@@ -7,12 +7,9 @@ correctement les valeurs en DB dans différents scénarios.
 
 from datetime import date
 
-import pytest
-
-from models import Assignment, Booking, BookingStatus, Company, DispatchRun, Driver
+from models import Assignment, Booking, BookingStatus
 from services.unified_dispatch import engine
-from tests.conftest import persisted_fixture
-from tests.factories import BookingFactory, CompanyFactory, DriverFactory
+from tests.factories import BookingFactory, DriverFactory
 from tests.helpers.rollback_verification import (
     capture_original_values,
     verify_multiple_rollbacks,

@@ -8,9 +8,6 @@ Valide les mesures de sécurité mises en place :
 """
 
 import os
-import tempfile
-from io import BytesIO
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -279,7 +276,6 @@ class TestShellInjectionProtection:
 
     def test_subprocess_list_arguments_safe(self):
         """Test que l'utilisation de listes d'arguments est sécurisée."""
-        import subprocess
 
         # Utilisation sécurisée avec liste
         cmd = ["echo", "safe", "command"]

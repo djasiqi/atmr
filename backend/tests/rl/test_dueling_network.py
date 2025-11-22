@@ -9,8 +9,6 @@ et l'agrégation Value + Advantage - mean(Advantage).
 
 import sys
 
-import numpy as np
-import pytest
 import torch
 
 from services.rl.improved_q_network import DuelingQNetwork, ImprovedQNetwork

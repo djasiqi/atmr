@@ -2,10 +2,8 @@
 Tests simples et efficaces pour améliorer la couverture de n_step_buffer.py
 """
 
-from unittest.mock import Mock, patch
 
 import numpy as np
-import pytest
 
 from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
 

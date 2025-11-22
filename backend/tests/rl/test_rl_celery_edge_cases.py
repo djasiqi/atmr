@@ -12,8 +12,7 @@ Auteur: ATMR Project - RL Team
 Date: 24 octobre 2025
 """
 
-import time
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 

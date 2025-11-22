@@ -16,7 +16,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from models.autonomous_action import AutonomousAction
-from models.company import Company
 from models.enums import DispatchMode
 from services.unified_dispatch.autonomous_manager import AutonomousDispatchManager
 from services.unified_dispatch.reactive_suggestions import Suggestion

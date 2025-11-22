@@ -12,7 +12,6 @@ Date: 21 octobre 2025
 
 import logging
 import unittest
-from unittest.mock import Mock, patch
 
 import numpy as np
 

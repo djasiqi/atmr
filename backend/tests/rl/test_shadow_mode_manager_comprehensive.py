@@ -1,10 +1,7 @@
 """Tests complets pour shadow_mode_manager.py."""
 
-import json
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, Mock, patch
+from datetime import datetime
 
-import pytest
 
 from services.rl.shadow_mode_manager import ShadowModeManager
 

@@ -21,7 +21,7 @@ from schemas.planning_schemas import (
     PlanningUnavailabilityQuerySchema,
     PlanningWeeklyTemplateQuerySchema,
 )
-from schemas.validation_utils import ISO8601_DATE_REGEX, validate_request
+from schemas.validation_utils import validate_request
 
 
 class TestLoginSchema:

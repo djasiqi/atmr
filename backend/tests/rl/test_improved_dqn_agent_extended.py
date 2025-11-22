@@ -3,11 +3,10 @@
 Tests supplémentaires pour ImprovedDQNAgent - Version corrigée
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
-import torch
 
 from services.rl.improved_dqn_agent import ImprovedDQNAgent
 

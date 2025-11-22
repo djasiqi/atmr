@@ -184,7 +184,7 @@ def get_bookings_for_dispatch(company_id: int, horizon_minutes: int) -> List[Boo
     bookings = (
         Booking.query
         # évite les soucis de typage Pylance sur RelationshipProperty
-        .options(joinedload("driver"))  # type: ignore[arg-type]
+        .options(joinedload("driver"))
         .filter(
             Booking.company_id == company_id,
             # caster la colonne pour éviter les bool Python
@@ -389,8 +389,8 @@ def get_available_drivers(company_id: int) -> List[Driver]:
     """
     drivers = Driver.query.filter(
         Driver.company_id == company_id,
-        cast("Any", Driver.is_active).is_(True),
-        cast("Any", Driver.is_available).is_(True),
+        Driver.is_active.is_(True),
+        Driver.is_available.is_(True),
     ).all()
 
     # \ud83d\udd27 Normalisation "en m\u00e9moire" (mode na\u00eff)

@@ -10,7 +10,7 @@ import logging
 
 import pytest
 
-from security.audit_log import AuditLog, AuditLogger
+from security.audit_log import AuditLogger
 from security.crypto import EncryptionService, get_encryption_service, reset_encryption_service
 
 logger = logging.getLogger(__name__)

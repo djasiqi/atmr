@@ -42,7 +42,7 @@ class ParetoFront:
     def __init__(self, max_solutions: int = 3):
         super().__init__()
         """Initialise le front Pareto.
-        
+
         Args:
             max_solutions: Nombre max de solutions à conserver
         """

@@ -7,7 +7,6 @@ Valide que SQLAlchemy protège contre l'injection SQL dans :
 - Body JSON (champs texte)
 """
 
-import pytest
 
 # Payloads SQL injection classiques à tester
 SQL_INJECTION_PAYLOADS = [

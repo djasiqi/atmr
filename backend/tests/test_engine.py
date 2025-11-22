@@ -9,16 +9,12 @@ DTZ003/DTZ011 = datetime.utcnow()/date.today() OK dans tests
 T201 = print() OK dans tests
 """
 
-from datetime import date, datetime, timedelta
-from unittest.mock import MagicMock, Mock, patch
+from datetime import date, datetime
+from unittest.mock import Mock, patch
 
 import pytest
 
-from models.booking import Booking, BookingStatus
-from models.company import Company
 from models.dispatch import DispatchRun, DispatchStatus
-from models.driver import Driver
-from models.enums import DriverType
 from services.unified_dispatch import engine, settings
 
 

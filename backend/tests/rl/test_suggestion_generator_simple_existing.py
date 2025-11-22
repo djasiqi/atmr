@@ -4,7 +4,6 @@ from datetime import datetime
 from unittest.mock import Mock, patch
 
 import numpy as np
-import pytest
 import torch
 
 from services.rl.suggestion_generator import RLSuggestionGenerator

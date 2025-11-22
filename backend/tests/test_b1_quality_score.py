@@ -13,7 +13,6 @@ import pytest
 from services.unified_dispatch.dispatch_metrics import (
     QUALITY_FORMULA_VERSION,
     QUALITY_THRESHOLD,
-    QUALITY_WEIGHTS,
     DispatchMetricsCollector,
     get_quality_formula_hash,
 )

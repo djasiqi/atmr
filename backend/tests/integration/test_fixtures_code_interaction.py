@@ -13,8 +13,6 @@ Scénarios testés :
 
 from datetime import date
 
-import pytest
-
 from models import Company, DispatchRun
 from services.unified_dispatch import engine
 from tests.conftest import ensure_committed, nested_savepoint, persisted_fixture

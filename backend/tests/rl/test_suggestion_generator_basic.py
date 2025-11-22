@@ -3,15 +3,9 @@
 Tests pour suggestion_generator.py - couverture de base
 """
 
-import json
-import tempfile
-from datetime import UTC, datetime
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from datetime import datetime
+from unittest.mock import Mock, patch
 
-import numpy as np
-import pytest
-import torch
 
 from services.rl.suggestion_generator import RLSuggestionGenerator
 

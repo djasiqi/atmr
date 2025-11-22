@@ -1,10 +1,8 @@
 """Tests supplémentaires pour n_step_buffer.py - lignes manquantes."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import numpy as np
-import pytest
-import torch
 
 from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
 

@@ -9,7 +9,6 @@ Create Date: 2025-01-28 12:00:00.000000
 
 """
 
-import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -27,15 +26,15 @@ def upgrade():
     # Vérifier si 'admin' existe déjà dans l'enum user_role
     # Si non, l'ajouter
     op.execute("""
-        DO $$ 
-        BEGIN 
+        DO $$
+        BEGIN
             IF NOT EXISTS (
-                SELECT 1 
-                FROM pg_enum e 
-                JOIN pg_type t ON e.enumtypid = t.oid 
-                WHERE t.typname = 'user_role' 
+                SELECT 1
+                FROM pg_enum e
+                JOIN pg_type t ON e.enumtypid = t.oid
+                WHERE t.typname = 'user_role'
                 AND e.enumlabel = 'admin'
-            ) THEN 
+            ) THEN
                 ALTER TYPE user_role ADD VALUE 'admin';
             END IF;
         END $$;
@@ -48,5 +47,3 @@ def downgrade():
     On laisse vide car la suppression d'une valeur d'enum nécessite
     de recréer le type ou de migrer les données.
     """
-    pass
-

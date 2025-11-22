@@ -8,8 +8,6 @@ Valide le fonctionnement de la rotation des secrets :
 - Gestion des erreurs et fallbacks
 """
 
-import os
-from datetime import UTC, datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest

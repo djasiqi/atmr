@@ -1,11 +1,8 @@
 """Tests pour les méthodes non couvertes de shadow_mode_manager.py."""
 
-import json
 import math
-from datetime import UTC, datetime
-from unittest.mock import Mock, patch
+from datetime import datetime
 
-import pytest
 
 from services.rl.shadow_mode_manager import ShadowModeManager
 

@@ -6,13 +6,10 @@ Ces tests valident l'intégration entre les tâches Celery et le système RL,
 notamment pour l'entraînement asynchrone et la génération de suggestions.
 """
 
-import json
 import sys
 import time
 from pathlib import Path
 from unittest.mock import Mock, patch
-
-import pytest
 
 # Ajouter le répertoire backend au path Python
 backend_dir = Path(__file__).parent.parent.parent

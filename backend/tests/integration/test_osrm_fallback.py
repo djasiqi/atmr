@@ -11,7 +11,6 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 
 # Ajouter le répertoire backend au path Python
 backend_dir = Path(__file__).parent.parent.parent
@@ -44,7 +43,7 @@ class TestOSRMFallback:
 
     def test_osrm_build_distance_matrix_osrm_fallback_on_error(self):
         """Test que build_distance_matrix_osrm utilise le fallback haversine quand OSRM échoue."""
-        from services.osrm_client import _fallback_matrix, build_distance_matrix_osrm
+        from services.osrm_client import build_distance_matrix_osrm
 
         # Coordonnées de test (Lausanne)
         coords = [(46.2044, 6.1432), (46.2100, 6.1500)]

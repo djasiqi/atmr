@@ -1,6 +1,5 @@
 """Tests pour le système de feature flags ML."""
 
-import pytest
 
 
 class TestFeatureFlags:

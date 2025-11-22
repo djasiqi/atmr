@@ -4,12 +4,11 @@
 Vérifie que les logs contiennent dispatch_run_id et trace_id pour corrélation.
 """
 
-import json
 import re
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 # Ajouter le répertoire parent au path
 backend_dir = Path(__file__).parent.parent

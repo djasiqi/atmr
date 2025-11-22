@@ -3,9 +3,6 @@ Tests complets pour optimal_hyperparameters.py - Couverture 95%+
 """
 
 import json
-import logging
-import tempfile
-from pathlib import Path
 from unittest.mock import mock_open, patch
 
 import pytest

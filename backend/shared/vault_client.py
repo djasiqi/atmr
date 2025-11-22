@@ -36,7 +36,6 @@ _cache_ttl = 300  # 5 minutes
 class VaultClientError(Exception):
     """Exception levée lors d'erreurs avec Vault."""
 
-    pass
 
 
 class VaultClient:

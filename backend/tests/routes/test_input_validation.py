@@ -4,7 +4,6 @@ Teste que les validations Marshmallow fonctionnent correctement dans les endpoin
 et que les tentatives d'injection sont rejetées.
 """
 
-import pytest
 
 # Note: Ces tests utilisent les fixtures de conftest.py (app, client, auth_headers, admin_headers, etc.)
 

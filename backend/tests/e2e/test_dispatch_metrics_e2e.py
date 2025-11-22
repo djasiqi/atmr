@@ -13,8 +13,7 @@ try:
 except ImportError:
     requests = None  # type: ignore
 
-from app import create_app
-from models import Booking, BookingStatus, Company, DispatchRun, Driver
+from models import BookingStatus, DispatchRun
 from services.unified_dispatch import engine
 from tests.factories import (
     BookingFactory,

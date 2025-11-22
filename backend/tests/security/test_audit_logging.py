@@ -6,11 +6,10 @@ Valide que l'audit logging fonctionne correctement pour :
 - Changements de permissions
 """
 
-import pytest
 from flask import current_app
 
 from models import User, UserRole
-from security.audit_log import AuditLog, AuditLogger
+from security.audit_log import AuditLogger
 
 
 class TestAuditLoggingAuth:

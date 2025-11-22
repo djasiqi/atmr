@@ -8,7 +8,6 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
-from flask import Flask
 
 from models import UserRole
 
@@ -618,7 +617,7 @@ class TestSchemaValidationE2E:
 
     def test_create_client_valid_schema_self_service(self, client, db, sample_company):
         """✅ Test E2E POST /api/companies/me/clients avec ClientCreateSchema valide (SELF_SERVICE)."""
-        from models import User, UserRole
+        from models import User
 
         # Login en tant que company
         company_user = sample_company.user if hasattr(sample_company, "user") else None
@@ -640,7 +639,6 @@ class TestSchemaValidationE2E:
 
     def test_create_client_valid_schema_private(self, client, db, sample_company):
         """✅ Test E2E POST /api/companies/me/clients avec ClientCreateSchema valide (PRIVATE)."""
-        from ext import bcrypt
         from models import User, UserRole
 
         # Authentification: générer un JWT company directement
@@ -677,7 +675,6 @@ class TestSchemaValidationE2E:
 
     def test_create_client_valid_schema_corporate(self, client, db, sample_company):
         """✅ Test E2E POST /api/companies/me/clients avec ClientCreateSchema valide (CORPORATE)."""
-        from ext import bcrypt
         from models import User, UserRole
 
         # Authentification: générer un JWT company directement
@@ -715,7 +712,6 @@ class TestSchemaValidationE2E:
 
     def test_create_client_invalid_schema(self, client, db, sample_company):
         """✅ Test E2E POST /api/companies/me/clients avec ClientCreateSchema invalide."""
-        from ext import bcrypt
         from models import User, UserRole
 
         # Authentification: générer un JWT company directement
@@ -1074,7 +1070,7 @@ class TestSchemaValidationE2E:
         from datetime import UTC, timedelta
 
         from ext import bcrypt
-        from models import Booking, BookingStatus, Client, Payment, PaymentStatus, User, UserRole
+        from models import Booking, BookingStatus, Client, User, UserRole
 
         # Créer un client user et une réservation
         client_user = User()
@@ -1178,7 +1174,7 @@ class TestSchemaValidationE2E:
         from datetime import UTC, timedelta
 
         from ext import bcrypt
-        from models import Booking, BookingStatus, Client, Payment, PaymentStatus, User, UserRole
+        from models import Booking, BookingStatus, Client, User, UserRole
 
         # Créer un client user et une réservation
         client_user = User()
@@ -1293,7 +1289,7 @@ class TestSchemaValidationE2E:
     def test_update_client_valid_schema(self, client, db):
         """✅ Test E2E PUT /api/clients/<id> avec ClientUpdateSchema valide."""
         from ext import bcrypt
-        from models import Client, GenderEnum, User, UserRole
+        from models import Client, User, UserRole
 
         # Créer un client user
         client_user = User()
@@ -2002,7 +1998,7 @@ class TestSchemaValidationE2E:
 
     def test_generate_invoice_valid_schema(self, client, db, sample_company):
         """✅ Test E2E POST /api/v1/invoices/companies/<id>/invoices/generate avec InvoiceGenerateSchema valide."""
-        from datetime import UTC, timedelta
+        from datetime import UTC
 
         from ext import bcrypt
         from models import Client, User, UserRole

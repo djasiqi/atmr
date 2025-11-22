@@ -9,8 +9,6 @@ Valide que l'espace de recherche n'est pas vide et que les bornes sont correctes
 import sys
 
 import optuna
-import pytest
-from optuna.trial import Trial
 
 from services.rl.hyperparameter_tuner import HyperparameterTuner
 

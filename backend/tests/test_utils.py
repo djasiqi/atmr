@@ -4,7 +4,6 @@ Tests des utilitaires (timezone, helpers).
 
 from datetime import UTC, datetime
 
-import pytest
 
 
 def test_time_utils_import():

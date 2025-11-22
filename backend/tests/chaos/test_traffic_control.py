@@ -10,7 +10,6 @@ import pytest
 # Import conditionnel pour éviter les erreurs si le module n'est pas disponible
 try:
     from chaos.traffic_control import (
-        INTERFACE_NAME_PATTERN,
         MAX_JITTER_MS,
         MAX_LATENCY_MS,
         SUBPROCESS_TIMEOUT,

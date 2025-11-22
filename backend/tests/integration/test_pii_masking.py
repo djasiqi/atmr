@@ -14,8 +14,6 @@ import sys
 from io import StringIO
 from pathlib import Path
 
-import pytest
-
 # Ajouter le répertoire backend au path Python
 backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))

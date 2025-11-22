@@ -1,8 +1,6 @@
 # pyright: reportAttributeAccessIssue=false
 """Tests pour le service de monitoring ML."""
 
-import json
-from datetime import datetime, timedelta
 
 import pytest
 
@@ -13,7 +11,6 @@ class TestMLMonitoringService:
     def test_log_prediction(self, app, sample_booking):
         """Test enregistrement d'une prédiction."""
         from db import db
-        from models.ml_prediction import MLPrediction
         from services.ml_monitoring_service import MLMonitoringService
 
         with app.app_context():

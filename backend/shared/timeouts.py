@@ -53,7 +53,6 @@ class TimeoutError(Exception):  # noqa: A001
     Note: Le nom TimeoutError est intentionnel pour correspondre au plan d'audit.
     """
 
-    pass
 
 
 def timeout(seconds: float) -> Callable[[Callable[..., T]], Callable[..., T]]:

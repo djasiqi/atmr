@@ -1,13 +1,13 @@
 # backend/tests/services/unified_dispatch/test_apply.py
 """Tests pour apply_assignments avec rollback transactionnel complet."""
 
-from datetime import UTC, date, datetime
+from datetime import date
 
 import pytest
 from flask import Flask
 from sqlalchemy.exc import IntegrityError
 
-from models import Assignment, Booking, BookingStatus, Driver, DriverType
+from models import Assignment, Booking, BookingStatus
 from services.unified_dispatch.apply import apply_assignments
 from tests.factories import BookingFactory, CompanyFactory, DispatchRunFactory, DriverFactory
 

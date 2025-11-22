@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Script pour vérifier que tous les paramètres configurés sont bien utilisés."""
 
-import json
 import sys
 from pathlib import Path
 

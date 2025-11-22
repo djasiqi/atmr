@@ -2,8 +2,7 @@
 Tests ultra-simplifiés pour hyperparameter_tuner.py - Couverture 95%+
 """
 
-import json
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import optuna
 import pytest

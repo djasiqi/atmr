@@ -4,7 +4,6 @@ Valide que les 10 catégories de vulnérabilités OWASP Top 10 sont adéquatemen
 """
 
 import pytest
-from werkzeug.security import check_password_hash
 
 
 class TestA01BrokenAccessControl:

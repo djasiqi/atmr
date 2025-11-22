@@ -2,9 +2,8 @@
 Tests pour les routes drivers (disponibilité, assignations).
 """
 
-import pytest
 
-from models import Driver, User, UserRole
+from models import Driver, UserRole
 
 
 def test_list_drivers_unauthenticated(client):

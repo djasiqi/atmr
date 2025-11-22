@@ -6,8 +6,6 @@ des objets dans la base de données pour les fixtures de tests.
 
 from __future__ import annotations
 
-import pytest
-
 from models import Company, Driver
 from tests.conftest import persisted_fixture
 from tests.factories import CompanyFactory, DriverFactory

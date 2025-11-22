@@ -168,7 +168,7 @@ class SLOBreachTracker:
     def __init__(self, window_minutes: int = 15, breach_threshold: int = 3):
         super().__init__()
         """Initialise le tracker.
-        
+
         Args:
             window_minutes: Fenêtre temporelle (minutes)
             breach_threshold: Seuil de breaches pour alerter

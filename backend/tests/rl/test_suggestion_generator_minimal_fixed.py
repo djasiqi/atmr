@@ -2,11 +2,9 @@
 Tests minimaux pour RLSuggestionGenerator - Version corrigée
 """
 
-import os
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
-import pytest
 
 from services.rl.suggestion_generator import RLSuggestionGenerator
 

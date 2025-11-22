@@ -14,14 +14,13 @@ Date: 21 octobre 2025
 """
 
 import gc
-import json
 import time
-from datetime import UTC, datetime, timedelta, timezone
-from unittest.mock import MagicMock, Mock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from routes.proactive_alerts import _get_mock_booking_data, _get_mock_driver_data, proactive_alerts_bp
+from routes.proactive_alerts import _get_mock_booking_data, _get_mock_driver_data
 from services.proactive_alerts import ProactiveAlertsService
 
 
@@ -601,7 +600,6 @@ class TestPerformanceMetrics:
 
     def test_memory_usage(self):
         """Test utilisation mémoire."""
-        import sys
 
         # Mesurer la mémoire avant
         initial_objects = len(gc.get_objects()) if "gc" in globals() else 0

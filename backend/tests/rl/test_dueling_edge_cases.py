@@ -12,7 +12,6 @@ Auteur: ATMR Project - RL Team
 Date: 24 octobre 2025
 """
 
-import numpy as np
 import pytest
 
 # Imports conditionnels

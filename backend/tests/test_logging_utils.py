@@ -2,7 +2,6 @@
 Tests pour les utilitaires de masquage PII (logging_utils).
 """
 
-import pytest
 
 from shared.logging_utils import PIIFilter, mask_email, mask_iban, mask_phone, sanitize_log_data
 

@@ -1,7 +1,7 @@
 """Tests ultra-finaux pour suggestion_generator.py et improved_q_network.py"""
 
 from datetime import date
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest

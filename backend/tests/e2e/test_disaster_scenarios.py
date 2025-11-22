@@ -7,18 +7,18 @@ Scénarios testés :
 - Réseau mobile flaky
 """
 
-import logging
+import logging 
 import os
 import time
+
+import pytest
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
+from flask import Flask
 from io import StringIO
 from typing import Any, Dict, List
 
-import pytest
-from flask import Flask
-
-from ext import db
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
 
 from tasks.purge_tasks import (
     DEFAULT_RETENTION_DAYS,

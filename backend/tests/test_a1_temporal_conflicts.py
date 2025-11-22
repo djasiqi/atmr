@@ -13,11 +13,10 @@ Scénarios testés:
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
 
 import pytest
 
-from services.unified_dispatch import data, heuristics
+from services.unified_dispatch import heuristics
 from services.unified_dispatch.settings import Settings
 
 logger = logging.getLogger(__name__)

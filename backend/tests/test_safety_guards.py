@@ -9,9 +9,8 @@ Auteur: ATMR Project - RL Team
 Date: 21 octobre 2025
 """
 
-import logging
 from datetime import UTC, datetime, timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 # Constantes pour éviter les valeurs magiques
-from pathlib import Path
 
 DRIVERS_ZERO = 0
 REWARD_ZERO = 0
@@ -25,7 +24,7 @@ Date: 21 octobre 2025
 """
 
 import logging
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest

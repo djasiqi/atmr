@@ -11,7 +11,6 @@ Date: 21 octobre 2025
 
 import json
 import time
-from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
 import numpy as np

@@ -5,8 +5,7 @@ Valide que les métriques Prometheus de sécurité sont correctement incrément�
 - Métriques d'actions sensibles (création utilisateur, changement permissions)
 """
 
-import pytest
-from prometheus_client import CollectorRegistry, Counter, generate_latest
+from prometheus_client import generate_latest
 
 
 class TestSecurityMetricsAuth:

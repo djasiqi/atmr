@@ -3,7 +3,7 @@
 Tests basiques pour ImprovedDQNAgent - Version corrigée
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
