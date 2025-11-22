@@ -218,7 +218,11 @@ class TestBookingUpdateSchema:
         assert "amount" not in result
 
         # Test avec plusieurs champs (mais pas tous)
-        data = {"pickup_location": "123 New Street", "amount": 75.5, "medical_facility": "Hôpital Cantonal"}
+        data = {
+            "pickup_location": "123 New Street",
+            "amount": 75.5,
+            "medical_facility": "Hôpital Cantonal",
+        }
         result = validate_request(BookingUpdateSchema(), data, strict=False)
         assert result["pickup_location"] == "123 New Street"
         assert result["amount"] == 75.5
@@ -258,11 +262,13 @@ class TestBookingUpdateSchema:
     def test_invalid_status(self):
         """✅ Test validation avec statut invalide."""
         data = {
-            "status": "invalid_status"  # Doit être pending, confirmed, in_progress, completed, cancelled
+            # Doit être pending, confirmed, in_progress, completed, cancelled
+            "status": "invalid_status"
         }
         with pytest.raises(ValidationError) as exc_info:
             validate_request(BookingUpdateSchema(), data, strict=False)
-        # Les erreurs sont formatées avec une structure {'message': '...', 'errors': {...}}
+        # Les erreurs sont formatées avec une structure
+        # {'message': '...', 'errors': {...}}
         assert "errors" in exc_info.value.messages
         assert "status" in exc_info.value.messages["errors"]
 
@@ -279,7 +285,8 @@ class TestBookingUpdateSchema:
         """✅ Test validation avec dates invalides."""
         # Format datetime invalide
         data = {
-            "scheduled_time": "2025-12-25 14:00"  # Format invalide (manque le Z ou timezone)
+            # Format invalide (manque le Z ou timezone)
+            "scheduled_time": "2025-12-25 14:00"
         }
         with pytest.raises(ValidationError) as exc_info:
             validate_request(BookingUpdateSchema(), data, strict=False)
@@ -348,7 +355,13 @@ class TestBookingUpdateSchema:
 
     def test_valid_status_values(self):
         """Test tous les statuts valides."""
-        valid_statuses = ["pending", "confirmed", "in_progress", "completed", "cancelled"]
+        valid_statuses = [
+            "pending",
+            "confirmed",
+            "in_progress",
+            "completed",
+            "cancelled",
+        ]
         for status in valid_statuses:
             data = {"status": status}
             result = validate_request(BookingUpdateSchema(), data, strict=False)
@@ -371,7 +384,12 @@ class TestPaymentCreateSchema:
     def test_valid_payment_create(self):
         """✅ Test validation création paiement valide."""
         # Test avec tous les champs requis
-        data = {"amount": 50.0, "method": "credit_card", "booking_id": 1, "reference": "REF-12345"}
+        data = {
+            "amount": 50.0,
+            "method": "credit_card",
+            "booking_id": 1,
+            "reference": "REF-12345",
+        }
         result = validate_request(PaymentCreateSchema(), data)
         assert result["amount"] == 50.0
         assert result["method"] == "credit_card"
@@ -630,7 +648,8 @@ class TestClientCreateSchema:
     def test_invalid_client_type(self):
         """✅ Test erreur si client_type invalide."""
         data = {
-            "client_type": "INVALID_TYPE"  # Doit être SELF_SERVICE, PRIVATE ou CORPORATE
+            # Doit être SELF_SERVICE, PRIVATE ou CORPORATE
+            "client_type": "INVALID_TYPE"
         }
         with pytest.raises(ValidationError) as exc_info:
             validate_request(ClientCreateSchema(), data, strict=False)
@@ -638,7 +657,10 @@ class TestClientCreateSchema:
         assert "client_type" in exc_info.value.messages["errors"]
 
     def test_email_validation_for_self_service(self):
-        """✅ Test validation email pour SELF_SERVICE (email optionnel dans schema mais requis logiquement)."""
+        """✅ Test validation email pour SELF_SERVICE.
+
+        Email optionnel dans schema mais requis logiquement.
+        """
         # Email valide
         data = {"client_type": "SELF_SERVICE", "email": "valid@example.com"}
         result = validate_request(ClientCreateSchema(), data, strict=False)
@@ -831,14 +853,22 @@ class TestManualBookingCreateSchema:
         assert "client_id" in exc_info.value.messages["errors"]
 
         # pickup_location manquant
-        data = {"client_id": 123, "dropoff_location": "456 Oak Ave", "scheduled_time": "2025-12-25T14:00:00Z"}
+        data = {
+            "client_id": 123,
+            "dropoff_location": "456 Oak Ave",
+            "scheduled_time": "2025-12-25T14:00:00Z",
+        }
         with pytest.raises(ValidationError) as exc_info:
             validate_request(ManualBookingCreateSchema(), data)
         assert "errors" in exc_info.value.messages
         assert "pickup_location" in exc_info.value.messages["errors"]
 
         # scheduled_time manquant
-        data = {"client_id": 123, "pickup_location": "123 Main St", "dropoff_location": "456 Oak Ave"}
+        data = {
+            "client_id": 123,
+            "pickup_location": "123 Main St",
+            "dropoff_location": "456 Oak Ave",
+        }
         with pytest.raises(ValidationError) as exc_info:
             validate_request(ManualBookingCreateSchema(), data)
         assert "errors" in exc_info.value.messages
@@ -1075,7 +1105,11 @@ class TestBillingSettingsUpdateSchema:
     def test_valid_billing_settings_update_partial(self):
         """✅ Test validation mise à jour partielle des paramètres de facturation."""
         # Test avec seulement quelques champs
-        data = {"payment_terms_days": 30, "overdue_fee": 25.0, "auto_reminders_enabled": True}
+        data = {
+            "payment_terms_days": 30,
+            "overdue_fee": 25.0,
+            "auto_reminders_enabled": True,
+        }
         result = validate_request(BillingSettingsUpdateSchema(), data, strict=False)
         assert result["payment_terms_days"] == 30
         assert result["overdue_fee"] == 25.0
@@ -1180,7 +1214,9 @@ class TestBillingSettingsUpdateSchema:
         assert result["qr_iban"] == "CH2108307000289537320"
 
         # IBAN invalide (format incorrect - pas de préfixe pays à 2 lettres)
-        data = {"iban": "12345678901234567890"}  # Format incorrect (pas de préfixe XX + 2 chiffres)
+        data = {
+            "iban": "12345678901234567890"
+        }  # Format incorrect (pas de préfixe XX + 2 chiffres)
         with pytest.raises(ValidationError) as exc_info:
             validate_request(BillingSettingsUpdateSchema(), data, strict=False)
         assert "errors" in exc_info.value.messages
@@ -1455,36 +1491,66 @@ class TestInvoiceGenerateSchema:
     def test_bill_to_client_id_validation(self):
         """Test validation bill_to_client_id (>= 1 si fourni, optionnel)."""
         # bill_to_client_id invalide (0)
-        data = {"client_id": 123, "period_year": 2025, "period_month": 12, "bill_to_client_id": 0}
+        data = {
+            "client_id": 123,
+            "period_year": 2025,
+            "period_month": 12,
+            "bill_to_client_id": 0,
+        }
         with pytest.raises(ValidationError) as exc_info:
             validate_request(InvoiceGenerateSchema(), data, strict=False)
         assert "errors" in exc_info.value.messages
         assert "bill_to_client_id" in exc_info.value.messages["errors"]
 
         # bill_to_client_id None (valide car optionnel)
-        data = {"client_id": 123, "period_year": 2025, "period_month": 12, "bill_to_client_id": None}
+        data = {
+            "client_id": 123,
+            "period_year": 2025,
+            "period_month": 12,
+            "bill_to_client_id": None,
+        }
         result = validate_request(InvoiceGenerateSchema(), data, strict=False)
         assert result.get("bill_to_client_id") is None
 
         # bill_to_client_id valide
-        data = {"client_id": 123, "period_year": 2025, "period_month": 12, "bill_to_client_id": 999}
+        data = {
+            "client_id": 123,
+            "period_year": 2025,
+            "period_month": 12,
+            "bill_to_client_id": 999,
+        }
         result = validate_request(InvoiceGenerateSchema(), data, strict=False)
         assert result["bill_to_client_id"] == 999
 
     def test_reservation_ids_validation(self):
         """Test validation reservation_ids (liste optionnelle)."""
         # reservation_ids présente
-        data = {"client_id": 123, "period_year": 2025, "period_month": 12, "reservation_ids": [1, 2, 3, 4, 5]}
+        data = {
+            "client_id": 123,
+            "period_year": 2025,
+            "period_month": 12,
+            "reservation_ids": [1, 2, 3, 4, 5],
+        }
         result = validate_request(InvoiceGenerateSchema(), data, strict=False)
         assert result["reservation_ids"] == [1, 2, 3, 4, 5]
 
         # reservation_ids None (valide car optionnel)
-        data = {"client_id": 123, "period_year": 2025, "period_month": 12, "reservation_ids": None}
+        data = {
+            "client_id": 123,
+            "period_year": 2025,
+            "period_month": 12,
+            "reservation_ids": None,
+        }
         result = validate_request(InvoiceGenerateSchema(), data, strict=False)
         assert result.get("reservation_ids") is None
 
         # reservation_ids vide (valide, liste vide)
-        data = {"client_id": 123, "period_year": 2025, "period_month": 12, "reservation_ids": []}
+        data = {
+            "client_id": 123,
+            "period_year": 2025,
+            "period_month": 12,
+            "reservation_ids": [],
+        }
         result = validate_request(InvoiceGenerateSchema(), data, strict=False)
         assert result["reservation_ids"] == []
 
@@ -1501,12 +1567,22 @@ class TestInvoiceGenerateSchema:
         assert result["client_reservations"] == {"123": [1, 2, 3], "456": [4, 5]}
 
         # client_reservations None (valide car optionnel)
-        data = {"client_id": 123, "period_year": 2025, "period_month": 12, "client_reservations": None}
+        data = {
+            "client_id": 123,
+            "period_year": 2025,
+            "period_month": 12,
+            "client_reservations": None,
+        }
         result = validate_request(InvoiceGenerateSchema(), data, strict=False)
         assert result.get("client_reservations") is None
 
         # client_reservations vide (valide, dict vide)
-        data = {"client_id": 123, "period_year": 2025, "period_month": 12, "client_reservations": {}}
+        data = {
+            "client_id": 123,
+            "period_year": 2025,
+            "period_month": 12,
+            "client_reservations": {},
+        }
         result = validate_request(InvoiceGenerateSchema(), data, strict=False)
         assert result["client_reservations"] == {}
 
@@ -1780,7 +1856,9 @@ class TestAnalyticsDashboardQuerySchema:
         valid_periods = ["7d", "30d", "90d", "1y"]
         for period in valid_periods:
             data = {"period": period}
-            result = validate_request(AnalyticsDashboardQuerySchema(), data, strict=False)
+            result = validate_request(
+                AnalyticsDashboardQuerySchema(), data, strict=False
+            )
             assert result["period"] == period
 
     def test_invalid_period(self):
@@ -1880,12 +1958,20 @@ class TestAnalyticsDashboardQuerySchema:
         for period in periods:
             # Period seule
             data = {"period": period}
-            result = validate_request(AnalyticsDashboardQuerySchema(), data, strict=False)
+            result = validate_request(
+                AnalyticsDashboardQuerySchema(), data, strict=False
+            )
             assert result["period"] == period
 
             # Period + dates
-            data = {"period": period, "start_date": "2024-01-01", "end_date": "2024-01-31"}
-            result = validate_request(AnalyticsDashboardQuerySchema(), data, strict=False)
+            data = {
+                "period": period,
+                "start_date": "2024-01-01",
+                "end_date": "2024-01-31",
+            }
+            result = validate_request(
+                AnalyticsDashboardQuerySchema(), data, strict=False
+            )
             assert result["period"] == period
             assert result["start_date"] == "2024-01-01"
             assert result["end_date"] == "2024-01-31"
@@ -1986,7 +2072,9 @@ class TestAnalyticsInsightsQuerySchema:
         valid_values = [1, 30, 60, 90, 180, 365]
         for value in valid_values:
             data = {"lookback_days": value}
-            result = validate_request(AnalyticsInsightsQuerySchema(), data, strict=False)
+            result = validate_request(
+                AnalyticsInsightsQuerySchema(), data, strict=False
+            )
             assert result["lookback_days"] == value
 
 
@@ -1996,25 +2084,33 @@ class TestAnalyticsWeeklySummaryQuerySchema:
     def test_valid_query_with_week_start(self):
         """✅ Test validation avec week_start spécifié."""
         data = {"week_start": "2024-01-01"}
-        result = validate_request(AnalyticsWeeklySummaryQuerySchema(), data, strict=False)
+        result = validate_request(
+            AnalyticsWeeklySummaryQuerySchema(), data, strict=False
+        )
         assert result["week_start"] == "2024-01-01"
 
         # Date valide différente
         data = {"week_start": "2024-12-31"}
-        result = validate_request(AnalyticsWeeklySummaryQuerySchema(), data, strict=False)
+        result = validate_request(
+            AnalyticsWeeklySummaryQuerySchema(), data, strict=False
+        )
         assert result["week_start"] == "2024-12-31"
 
     def test_valid_query_without_week_start(self):
         """✅ Test validation sans week_start (optionnel)."""
         data = {}
-        result = validate_request(AnalyticsWeeklySummaryQuerySchema(), data, strict=False)
+        result = validate_request(
+            AnalyticsWeeklySummaryQuerySchema(), data, strict=False
+        )
         assert result.get("week_start") is None or result["week_start"] is None
 
     def test_week_start_validation_format(self):
         """✅ Test validation format week_start (YYYY-MM-DD)."""
         # Date valide
         data = {"week_start": "2024-01-15"}
-        result = validate_request(AnalyticsWeeklySummaryQuerySchema(), data, strict=False)
+        result = validate_request(
+            AnalyticsWeeklySummaryQuerySchema(), data, strict=False
+        )
         assert result["week_start"] == "2024-01-15"
 
         # Format invalide (YYYY-MM-DD requis)
@@ -2042,12 +2138,16 @@ class TestAnalyticsWeeklySummaryQuerySchema:
         """✅ Test validation week_start optionnel."""
         # week_start None
         data = {"week_start": None}
-        result = validate_request(AnalyticsWeeklySummaryQuerySchema(), data, strict=False)
+        result = validate_request(
+            AnalyticsWeeklySummaryQuerySchema(), data, strict=False
+        )
         assert result.get("week_start") is None
 
         # week_start absent
         data = {}
-        result = validate_request(AnalyticsWeeklySummaryQuerySchema(), data, strict=False)
+        result = validate_request(
+            AnalyticsWeeklySummaryQuerySchema(), data, strict=False
+        )
         assert "week_start" not in result or result.get("week_start") is None
 
         # week_start vide string (valide car optionnel, mais format invalide)
@@ -2062,29 +2162,39 @@ class TestAnalyticsWeeklySummaryQuerySchema:
         """✅ Test cas limites pour week_start."""
         # Date début d'année
         data = {"week_start": "2024-01-01"}
-        result = validate_request(AnalyticsWeeklySummaryQuerySchema(), data, strict=False)
+        result = validate_request(
+            AnalyticsWeeklySummaryQuerySchema(), data, strict=False
+        )
         assert result["week_start"] == "2024-01-01"
 
         # Date fin d'année
         data = {"week_start": "2024-12-31"}
-        result = validate_request(AnalyticsWeeklySummaryQuerySchema(), data, strict=False)
+        result = validate_request(
+            AnalyticsWeeklySummaryQuerySchema(), data, strict=False
+        )
         assert result["week_start"] == "2024-12-31"
 
         # Date avec zéros (jour/mois)
         data = {"week_start": "2024-01-01"}
-        result = validate_request(AnalyticsWeeklySummaryQuerySchema(), data, strict=False)
+        result = validate_request(
+            AnalyticsWeeklySummaryQuerySchema(), data, strict=False
+        )
         assert result["week_start"] == "2024-01-01"
 
         # Date 29 février (année bissextile)
         data = {"week_start": "2024-02-29"}
-        result = validate_request(AnalyticsWeeklySummaryQuerySchema(), data, strict=False)
+        result = validate_request(
+            AnalyticsWeeklySummaryQuerySchema(), data, strict=False
+        )
         assert result["week_start"] == "2024-02-29"
 
         # Date invalide (30 février)
         data = {"week_start": "2024-02-30"}
         # Le format YYYY-MM-DD sera validé mais la date est logiquement invalide
         # Marshmallow ne valide que le format, pas la logique de la date
-        result = validate_request(AnalyticsWeeklySummaryQuerySchema(), data, strict=False)
+        result = validate_request(
+            AnalyticsWeeklySummaryQuerySchema(), data, strict=False
+        )
         # Format correct, logique incorrecte (géré par route)
         assert result["week_start"] == "2024-02-30"
 
@@ -2329,18 +2439,24 @@ class TestPlanningUnavailabilityQuerySchema:
     def test_valid_query_with_driver_id(self):
         """✅ Test validation avec driver_id spécifié."""
         data = {"driver_id": 123}
-        result = validate_request(PlanningUnavailabilityQuerySchema(), data, strict=False)
+        result = validate_request(
+            PlanningUnavailabilityQuerySchema(), data, strict=False
+        )
         assert result["driver_id"] == 123
 
         # Valeur minimale (1)
         data = {"driver_id": 1}
-        result = validate_request(PlanningUnavailabilityQuerySchema(), data, strict=False)
+        result = validate_request(
+            PlanningUnavailabilityQuerySchema(), data, strict=False
+        )
         assert result["driver_id"] == 1
 
     def test_valid_query_without_driver_id(self):
         """✅ Test validation sans driver_id (optionnel)."""
         data = {}
-        result = validate_request(PlanningUnavailabilityQuerySchema(), data, strict=False)
+        result = validate_request(
+            PlanningUnavailabilityQuerySchema(), data, strict=False
+        )
         assert result.get("driver_id") is None or result["driver_id"] is None
 
     def test_driver_id_validation(self):
@@ -2361,24 +2477,32 @@ class TestPlanningUnavailabilityQuerySchema:
 
         # driver_id valide
         data = {"driver_id": 1}
-        result = validate_request(PlanningUnavailabilityQuerySchema(), data, strict=False)
+        result = validate_request(
+            PlanningUnavailabilityQuerySchema(), data, strict=False
+        )
         assert result["driver_id"] == 1
 
         # driver_id valide plus grand
         data = {"driver_id": 999}
-        result = validate_request(PlanningUnavailabilityQuerySchema(), data, strict=False)
+        result = validate_request(
+            PlanningUnavailabilityQuerySchema(), data, strict=False
+        )
         assert result["driver_id"] == 999
 
     def test_driver_id_optional(self):
         """✅ Test validation driver_id optionnel."""
         # driver_id None
         data = {"driver_id": None}
-        result = validate_request(PlanningUnavailabilityQuerySchema(), data, strict=False)
+        result = validate_request(
+            PlanningUnavailabilityQuerySchema(), data, strict=False
+        )
         assert result.get("driver_id") is None
 
         # driver_id absent
         data = {}
-        result = validate_request(PlanningUnavailabilityQuerySchema(), data, strict=False)
+        result = validate_request(
+            PlanningUnavailabilityQuerySchema(), data, strict=False
+        )
         assert "driver_id" not in result or result.get("driver_id") is None
 
     def test_driver_id_type_validation(self):
@@ -2405,18 +2529,24 @@ class TestPlanningWeeklyTemplateQuerySchema:
     def test_valid_query_with_driver_id(self):
         """✅ Test validation avec driver_id spécifié."""
         data = {"driver_id": 123}
-        result = validate_request(PlanningWeeklyTemplateQuerySchema(), data, strict=False)
+        result = validate_request(
+            PlanningWeeklyTemplateQuerySchema(), data, strict=False
+        )
         assert result["driver_id"] == 123
 
         # Valeur minimale (1)
         data = {"driver_id": 1}
-        result = validate_request(PlanningWeeklyTemplateQuerySchema(), data, strict=False)
+        result = validate_request(
+            PlanningWeeklyTemplateQuerySchema(), data, strict=False
+        )
         assert result["driver_id"] == 1
 
     def test_valid_query_without_driver_id(self):
         """✅ Test validation sans driver_id (optionnel)."""
         data = {}
-        result = validate_request(PlanningWeeklyTemplateQuerySchema(), data, strict=False)
+        result = validate_request(
+            PlanningWeeklyTemplateQuerySchema(), data, strict=False
+        )
         assert result.get("driver_id") is None or result["driver_id"] is None
 
     def test_driver_id_validation(self):
@@ -2437,24 +2567,32 @@ class TestPlanningWeeklyTemplateQuerySchema:
 
         # driver_id valide
         data = {"driver_id": 1}
-        result = validate_request(PlanningWeeklyTemplateQuerySchema(), data, strict=False)
+        result = validate_request(
+            PlanningWeeklyTemplateQuerySchema(), data, strict=False
+        )
         assert result["driver_id"] == 1
 
         # driver_id valide plus grand
         data = {"driver_id": 999}
-        result = validate_request(PlanningWeeklyTemplateQuerySchema(), data, strict=False)
+        result = validate_request(
+            PlanningWeeklyTemplateQuerySchema(), data, strict=False
+        )
         assert result["driver_id"] == 999
 
     def test_driver_id_optional(self):
         """✅ Test validation driver_id optionnel."""
         # driver_id None
         data = {"driver_id": None}
-        result = validate_request(PlanningWeeklyTemplateQuerySchema(), data, strict=False)
+        result = validate_request(
+            PlanningWeeklyTemplateQuerySchema(), data, strict=False
+        )
         assert result.get("driver_id") is None
 
         # driver_id absent
         data = {}
-        result = validate_request(PlanningWeeklyTemplateQuerySchema(), data, strict=False)
+        result = validate_request(
+            PlanningWeeklyTemplateQuerySchema(), data, strict=False
+        )
         assert "driver_id" not in result or result.get("driver_id") is None
 
     def test_driver_id_type_validation(self):

@@ -2,7 +2,7 @@
 # Documentation: https://docs.astral.sh/ruff/
 
 target-version = "py311"
-line-length = 120
+line-length = 88  # Aligné avec flake8 max-line-length
 
 [lint]
 # Configuration optimisée pour Docker - règles critiques uniquement
