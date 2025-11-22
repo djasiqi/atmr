@@ -21,9 +21,14 @@ from sqlalchemy.orm import joinedload
 from models import Booking, BookingStatus, Company, Driver
 from services.dispatch_utils import count_assigned_bookings_for_day
 from services.maps import geocode_address
-from services.osrm_client import build_distance_matrix_osrm_with_cb as build_distance_matrix_osrm
+from services.osrm_client import (
+    build_distance_matrix_osrm_with_cb as build_distance_matrix_osrm,
+)
 from services.osrm_client import eta_seconds as osrm_eta_seconds
-from services.unified_dispatch.heuristics import baseline_and_cap_loads, haversine_minutes
+from services.unified_dispatch.heuristics import (
+    baseline_and_cap_loads,
+    haversine_minutes,
+)
 from services.unified_dispatch.settings import Settings, driver_work_window_from_config
 from shared import safe_execute
 from shared.time_utils import day_local_bounds, now_local, parse_local_naive
@@ -54,7 +59,13 @@ DEFAULT_SETTINGS = Settings()
 # Autoriser (ou non) le g\u00e9ocodage serveur pour compl\u00e9ter des coordonn\u00e9es manquantes.
 # Par d\u00e9faut: d\u00e9sactiv\u00e9 (respect du "sans g\u00e9ocodage
 # serveur").
-_ALLOW_SERVER_GEOCODE = os.getenv("DISPATCH_ALLOW_SERVER_GEOCODE", "0") not in ("0", "", "false", "False", "FALSE")
+_ALLOW_SERVER_GEOCODE = os.getenv("DISPATCH_ALLOW_SERVER_GEOCODE", "0") not in (
+    "0",
+    "",
+    "false",
+    "False",
+    "FALSE",
+)
 
 FALLBACK_COORD_DEFAULT = (46.2044, 6.1432)
 COORD_QUALITY_FACTORS: Dict[str, float] = {
@@ -90,7 +101,9 @@ def _get_redis_from_settings(settings) -> Any | None:
     except Exception:
         pass
     try:
-        url = os.getenv("REDIS_URL", None) or getattr(getattr(settings, "matrix", None), "redis_url", None)
+        url = os.getenv("REDIS_URL", None) or getattr(
+            getattr(settings, "matrix", None), "redis_url", None
+        )
         if url:
             # Lazy import pour compat Windows, pas d'obligation de
             # d\u00e9pendance
@@ -98,11 +111,15 @@ def _get_redis_from_settings(settings) -> Any | None:
 
             return redis.from_url(url, decode_responses=False)
     except Exception:
-        logger.warning("[Dispatch] Redis unavailable; continuing without cache.", exc_info=True)
+        logger.warning(
+            "[Dispatch] Redis unavailable; continuing without cache.", exc_info=True
+        )
     return None
 
 
-def _canonical_coords(coords: List[Tuple[float, float]], prec: int = 5) -> List[Tuple[float, float]]:
+def _canonical_coords(
+    coords: List[Tuple[float, float]], prec: int = 5
+) -> List[Tuple[float, float]]:
     """Arrondit les coordonn\u00e9es pour stabiliser les cl\u00e9s cache (~1m par d\u00e9faut)."""
     out: List[Tuple[float, float]] = []
     for lat, lon in coords:
@@ -117,7 +134,9 @@ def _canonical_coords(coords: List[Tuple[float, float]], prec: int = 5) -> List[
 
 
 @lru_cache(maxsize=128)
-def _haversine_matrix_cached(coords_key_json: str, avg_speed_kmh: float) -> List[List[float]]:
+def _haversine_matrix_cached(
+    coords_key_json: str, avg_speed_kmh: float
+) -> List[List[float]]:
     """Cache process-local d'une matrice Haversine.
     coords_key_json: JSON compact d'une liste de coordonn\u00e9es arrondies.
     """
@@ -154,11 +173,15 @@ def _haversine_matrix_cached(coords_key_json: str, avg_speed_kmh: float) -> List
                 valid_coords.append((lat_float, lon_float))
             else:
                 logger.warning(
-                    "[Dispatch] Invalid coordinate range: lat=%s, lon=%s, using fallback", lat_float, lon_float
+                    "[Dispatch] Invalid coordinate range: lat=%s, lon=%s, using fallback",
+                    lat_float,
+                    lon_float,
                 )
                 valid_coords.append((46.2044, 6.1432))
         except (ValueError, TypeError) as e:
-            logger.warning("[Dispatch] Failed to parse coordinate %s: %s, using fallback", coord, e)
+            logger.warning(
+                "[Dispatch] Failed to parse coordinate %s: %s, using fallback", coord, e
+            )
             valid_coords.append((46.2044, 6.1432))
 
     # Ensure we have at least 2 coordinates for matrix calculation
@@ -166,7 +189,9 @@ def _haversine_matrix_cached(coords_key_json: str, avg_speed_kmh: float) -> List
         logger.warning("[Dispatch] Less than 2 valid coordinates, using fallback")
         valid_coords = [(46.2044, 6.1432), (46.2044, 6.1432)]
 
-    logger.info("[Dispatch] Using %s valid coordinates for haversine matrix", len(valid_coords))
+    logger.info(
+        "[Dispatch] Using %s valid coordinates for haversine matrix", len(valid_coords)
+    )
     return _build_distance_matrix_haversine(valid_coords, avg_speed_kmh)
 
 
@@ -218,7 +243,12 @@ def get_bookings_for_dispatch(company_id: int, horizon_minutes: int) -> List[Boo
         is_return = bool(getattr(b, "is_return", False))
         time_confirmed = bool(getattr(b, "time_confirmed", True))
 
-        logger.info("[DATA] Course #%s: is_return=%s, time_confirmed=%s", b.id, is_return, time_confirmed)
+        logger.info(
+            "[DATA] Course #%s: is_return=%s, time_confirmed=%s",
+            b.id,
+            is_return,
+            time_confirmed,
+        )
 
         if is_return and not time_confirmed:
             excluded_count += 1
@@ -232,7 +262,11 @@ def get_bookings_for_dispatch(company_id: int, horizon_minutes: int) -> List[Boo
         logger.info("[DATA] ✅ Course #%s INCLUSE dans le dispatch", b.id)
         filtered_bookings.append(b)
 
-    logger.error("[DATA] ✅ %s courses après filtrage (%s retours exclus)", len(filtered_bookings), excluded_count)
+    logger.error(
+        "[DATA] ✅ %s courses après filtrage (%s retours exclus)",
+        len(filtered_bookings),
+        excluded_count,
+    )
     return filtered_bookings
 
 
@@ -269,7 +303,9 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
     try:
         y, m, d = map(int, day_str.split("-"))
     except (ValueError, AttributeError):
-        logger.warning("[Dispatch] Failed to parse day_str: %s, using today's date", day_str)
+        logger.warning(
+            "[Dispatch] Failed to parse day_str: %s, using today's date", day_str
+        )
         today = datetime.now()
         y, m, d = today.year, today.month, today.day
 
@@ -344,7 +380,12 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
         booking_ids = [b.id for b in result]
         booking_times = [getattr(b, "scheduled_time", None) for b in result]
 
-        logger.info("[Dispatch] Found %s bookings for company %s on %s", len(result), company_id, day_str)
+        logger.info(
+            "[Dispatch] Found %s bookings for company %s on %s",
+            len(result),
+            company_id,
+            day_str,
+        )
         if result:
             logger.info("[Dispatch] Booking IDs: %s...", booking_ids[:3])
             logger.info("[Dispatch] Booking times: %s...", booking_times[:3])
@@ -353,7 +394,10 @@ def get_bookings_for_day(company_id, day_str, Booking=None, BookingStatus=None):
         filtered_result = []
         excluded_count = 0
 
-        logger.error("[DATA] 🔍 FILTRAGE de %s courses pour retours non confirmés...", len(result))
+        logger.error(
+            "[DATA] 🔍 FILTRAGE de %s courses pour retours non confirmés...",
+            len(result),
+        )
 
         for b in result:
             # Si c'est un retour avec time_confirmed = False → exclure du
@@ -456,7 +500,9 @@ def get_available_drivers_split(company_id: int) -> tuple[List[Driver], List[Dri
     # Optionnel: si tout est "unknown", prends-les comme réguliers pour ne pas
     # bloquer
     if not regs and not emgs and unknown:
-        logger.warning("[Dispatch] All drivers have unknown driver_type → falling back to REGULAR for all.")
+        logger.warning(
+            "[Dispatch] All drivers have unknown driver_type → falling back to REGULAR for all."
+        )
         regs = unknown
         unknown = []
 
@@ -530,7 +576,12 @@ def _compute_bookings_centroid(bookings: List[Booking]) -> tuple[float, float] |
             lon = _to_float_opt(getattr(b, "dropoff_lon", None))
         if lat is None or lon is None:
             continue
-        if pickup_quality and pickup_quality in {"company", "centroid", "configured", "default"}:
+        if pickup_quality and pickup_quality in {
+            "company",
+            "centroid",
+            "configured",
+            "default",
+        }:
             continue
         coords.append((lat, lon))
 
@@ -575,7 +626,9 @@ def _geocode_safe_cached(address: str) -> tuple[float, float] | None:
                 return lat, lon
             return None
     except Exception:
-        logger.warning("[Dispatch] geocode_address failed for '%s'", address, exc_info=True)
+        logger.warning(
+            "[Dispatch] geocode_address failed for '%s'", address, exc_info=True
+        )
     return None
 
 
@@ -610,7 +663,11 @@ def enrich_booking_coords(bookings: List[Booking], company: Company) -> None:
         plon = _to_float_opt(getattr(b, "pickup_lon", None))
         if plat is None or plon is None:
             addr = getattr(b, "pickup_address", None) or getattr(b, "pickup", None)
-            got = _geocode_safe_cached(str(addr)) if (_ALLOW_SERVER_GEOCODE and addr) else None
+            got = (
+                _geocode_safe_cached(str(addr))
+                if (_ALLOW_SERVER_GEOCODE and addr)
+                else None
+            )
             if got:
                 plat, plon = got
                 pickup_quality = "geocoded"
@@ -631,14 +688,20 @@ def enrich_booking_coords(bookings: List[Booking], company: Company) -> None:
         dlon = _to_float_opt(getattr(b, "dropoff_lon", None))
         if dlat is None or dlon is None:
             addr = getattr(b, "dropoff_address", None) or getattr(b, "dropoff", None)
-            got = _geocode_safe_cached(str(addr)) if (_ALLOW_SERVER_GEOCODE and addr) else None
+            got = (
+                _geocode_safe_cached(str(addr))
+                if (_ALLOW_SERVER_GEOCODE and addr)
+                else None
+            )
             if got:
                 dlat, dlon = got
                 drop_quality = "geocoded"
             else:
                 # Fallback sur pickup déjà résolu
                 dlat, dlon = b_any.pickup_lat, b_any.pickup_lon
-                drop_quality = pickup_quality if pickup_quality != "default" else "configured"
+                drop_quality = (
+                    pickup_quality if pickup_quality != "default" else "configured"
+                )
         try:
             b_any.dropoff_lat = float(cast("Any", dlat))
             b_any.dropoff_lon = float(cast("Any", dlon))
@@ -655,7 +718,9 @@ def enrich_booking_coords(bookings: List[Booking], company: Company) -> None:
         )
         b_any._coord_quality_factor = overall_factor
         b_any._coord_quality_label = (
-            pickup_quality if pickup_quality == drop_quality else f"{pickup_quality}|{drop_quality}"
+            pickup_quality
+            if pickup_quality == drop_quality
+            else f"{pickup_quality}|{drop_quality}"
         )
 
 
@@ -724,7 +789,10 @@ def enrich_driver_coords(drivers: List[Driver], company: Company) -> None:
 
 
 def build_time_matrix(
-    bookings: List[Booking], drivers: List[Driver], settings=DEFAULT_SETTINGS, for_date: str | None = None
+    bookings: List[Booking],
+    drivers: List[Driver],
+    settings=DEFAULT_SETTINGS,
+    for_date: str | None = None,
 ) -> Tuple[List[List[int]], List[Tuple[float, float]], Dict[str, Any]]:
     _ = for_date
     """Construit la matrice de temps en minutes entre chaque point
@@ -825,7 +893,11 @@ def build_time_matrix(
                 coord_precision=coord_prec,
             )
             # Validation de forme : OSRM doit renvoyer une matrice n x n
-            if not matrix_sec or len(matrix_sec) != n or any(len(r) != n for r in matrix_sec):
+            if (
+                not matrix_sec
+                or len(matrix_sec) != n
+                or any(len(r) != n for r in matrix_sec)
+            ):
                 msg = f"OSRM returned invalid matrix shape (got {len(matrix_sec)} rows for n={n})"
                 raise ValueError(msg)
             logger.info(
@@ -841,9 +913,14 @@ def build_time_matrix(
                 type(e).__name__,
                 exc_info=True,
             )
-            avg_kmh = float(getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25))
+            avg_kmh = float(
+                getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25)
+            )
             matrix_sec = _haversine_matrix_cached(coords_key, avg_kmh)
-            logger.info("[Dispatch] ✅ Fallback haversine activated: avg_speed_kmh=%.1f", avg_kmh)
+            logger.info(
+                "[Dispatch] ✅ Fallback haversine activated: avg_speed_kmh=%.1f",
+                avg_kmh,
+            )
         finally:
             dur_ms = int((time.time() - start) * 1000)
             logger.info(
@@ -921,7 +998,11 @@ def _to_minutes_window(win: Any, t0: datetime, horizon: int) -> tuple[int, int]:
             return int(s), int(e)
     except Exception:
         pass
-    if isinstance(win, tuple) and len(win) == N_THRESHOLD and all(isinstance(x, datetime) for x in win):
+    if (
+        isinstance(win, tuple)
+        and len(win) == N_THRESHOLD
+        and all(isinstance(x, datetime) for x in win)
+    ):
         sdt, edt = win
         s = max(0, int(((sdt - t0).total_seconds()) // 60))
         e = max(s + 1, int(((edt - t0).total_seconds()) // 60))
@@ -929,14 +1010,19 @@ def _to_minutes_window(win: Any, t0: datetime, horizon: int) -> tuple[int, int]:
     return 0, horizon
 
 
-def _build_distance_matrix_haversine(coords: List[Tuple[float, float]], avg_speed_kmh: float = 25) -> List[List[float]]:
+def _build_distance_matrix_haversine(
+    coords: List[Tuple[float, float]], avg_speed_kmh: float = 25
+) -> List[List[float]]:
     """Fallback Haversine (distances en SECONDES estim\u00e9es, vitesse moyenne ~25 km/h par d\u00e9faut)."""
     # Import centralisé depuis shared.geo_utils
     from shared.geo_utils import haversine_distance
 
     n = len(coords)
     if n < N_THRESHOLD:
-        logger.warning("[Dispatch] _build_distance_matrix_haversine: need at least 2 coordinates, got %s", n)
+        logger.warning(
+            "[Dispatch] _build_distance_matrix_haversine: need at least 2 coordinates, got %s",
+            n,
+        )
         return [[0.0] * max(n, 1) for _ in range(max(n, 1))]
 
     matrix = [[0.0] * n for _ in range(n)]
@@ -948,14 +1034,26 @@ def _build_distance_matrix_haversine(coords: List[Tuple[float, float]], avg_spee
                 matrix[i][j] = 0
                 continue
             try:
-                dist_km = haversine_distance(coords[i][0], coords[i][1], coords[j][0], coords[j][1])
+                dist_km = haversine_distance(
+                    coords[i][0], coords[i][1], coords[j][0], coords[j][1]
+                )
                 time_hr = dist_km / avg_speed_kmh
                 matrix[i][j] = time_hr * 3600  # sec
             except (IndexError, TypeError, ValueError) as e:
-                logger.warning("[Dispatch] Error calculating haversine distance for coords %s,%s: %s", i, j, e)
+                logger.warning(
+                    "[Dispatch] Error calculating haversine distance for coords %s,%s: %s",
+                    i,
+                    j,
+                    e,
+                )
                 matrix[i][j] = 3600  # 1 hour default fallback
 
-    logger.info("[Dispatch] Generated haversine matrix %sx%s with avg_speed=%s km/h", n, n, avg_speed_kmh)
+    logger.info(
+        "[Dispatch] Generated haversine matrix %sx%s with avg_speed=%s km/h",
+        n,
+        n,
+        avg_speed_kmh,
+    )
     return matrix
 
 
@@ -1067,7 +1165,9 @@ def build_vrptw_problem(
         )
 
     if getattr(settings.fairness, "reset_daily_load", False):
-        logger.info("[Dispatch] 🧹 reset_daily_load activé – remise à zéro des charges chauffeurs (run manuel)")
+        logger.info(
+            "[Dispatch] 🧹 reset_daily_load activé – remise à zéro des charges chauffeurs (run manuel)"
+        )
         fairness_counts = {int(driver_id): 0 for driver_id in fairness_counts}
 
     fairness_counts, fairness_baseline = baseline_and_cap_loads(fairness_counts)
@@ -1145,7 +1245,8 @@ def build_vrptw_problem(
         # Fallback \u00e0 30 min si la matrice a un probl\u00e8me inattendu.
         trip_duration_min = (
             time_matrix[p_node_idx][d_node_idx]
-            if p_node_idx < len(time_matrix) and d_node_idx < len(time_matrix[p_node_idx])
+            if p_node_idx < len(time_matrix)
+            and d_node_idx < len(time_matrix[p_node_idx])
             else 30
         )
 
@@ -1153,11 +1254,15 @@ def build_vrptw_problem(
         # - La contrainte de dur\u00e9e (trajet + buffer post-trip) est impos\u00e9e explicitement
         #   dans le solveur via pair_min_gaps.
         # ✅ Utiliser settings.service_times (configurables par le client)
-        pickup_service_time = max(int(getattr(settings.service_times, "pickup_service_min", 5)), 0)
+        pickup_service_time = max(
+            int(getattr(settings.service_times, "pickup_service_min", 5)), 0
+        )
 
         # Enregistrer les temps de service (pickup puis dropoff)
         service_times.append(int(pickup_service_time))
-        service_times.append(int(getattr(settings.service_times, "dropoff_service_min", 10)))
+        service_times.append(
+            int(getattr(settings.service_times, "dropoff_service_min", 10))
+        )
 
         # min_gap : trajet + buffer (et on ajoute la marge de service pickup +
         # 1 min pour \u00e9viter l'\u00e9galit\u00e9 stricte)
@@ -1177,7 +1282,9 @@ def build_vrptw_problem(
             )
 
         # Calcul des fen\u00eatres horaires (Time Windows)
-        scheduled_local = parse_local_naive(cast("Any", getattr(b, "scheduled_time", None))) or t0
+        scheduled_local = (
+            parse_local_naive(cast("Any", getattr(b, "scheduled_time", None))) or t0
+        )
         start_min_raw = int((scheduled_local - t0).total_seconds() // 60)
 
         # Fen\u00eatre du Pickup
@@ -1210,9 +1317,13 @@ def build_vrptw_problem(
         logger.error("[VRPTW] %s", error_msg)
         raise ValueError(error_msg)
 
-    booking_factors = [float(getattr(b, "_coord_quality_factor", 1.0) or 1.0) for b in bookings]
+    booking_factors = [
+        float(getattr(b, "_coord_quality_factor", 1.0) or 1.0) for b in bookings
+    ]
     booking_labels = [getattr(b, "_coord_quality_label", "original") for b in bookings]
-    driver_factors = [float(getattr(d, "_coord_quality_factor", 1.0) or 1.0) for d in drivers]
+    driver_factors = [
+        float(getattr(d, "_coord_quality_factor", 1.0) or 1.0) for d in drivers
+    ]
     driver_labels = [getattr(d, "_coord_quality", "live") for d in drivers]
     fallback_labels = {"company", "centroid", "configured", "default"}
 
@@ -1226,10 +1337,16 @@ def build_vrptw_problem(
         "min_driver_factor": min_driver_factor,
         "min_factor": min(min_booking_factor, min_driver_factor),
         "has_fallback": has_booking_fallback or has_driver_fallback,
-        "booking_fallback_labels": {label for label in booking_labels if label in fallback_labels},
-        "driver_fallback_labels": {label for label in driver_labels if label in fallback_labels},
+        "booking_fallback_labels": {
+            label for label in booking_labels if label in fallback_labels
+        },
+        "driver_fallback_labels": {
+            label for label in driver_labels if label in fallback_labels
+        },
     }
-    coord_quality_summary["low_quality"] = coord_quality_summary["min_factor"] < LOW_COORD_QUALITY_THRESHOLD
+    coord_quality_summary["low_quality"] = (
+        coord_quality_summary["min_factor"] < LOW_COORD_QUALITY_THRESHOLD
+    )
 
     return {
         "company_id": company.id,
@@ -1310,12 +1427,17 @@ def build_problem_data(
             logger.info(
                 "[Dispatch] Exclu %d bookings du dispatch (déjà assignés aux réguliers): %s",
                 original_count - len(bookings),
-                exclude_ids[:MAX_EXCLUDED_IDS_LOG] if len(exclude_ids) > MAX_EXCLUDED_IDS_LOG else exclude_ids,
+                exclude_ids[:MAX_EXCLUDED_IDS_LOG]
+                if len(exclude_ids) > MAX_EXCLUDED_IDS_LOG
+                else exclude_ids,
             )
 
     # Log the number of bookings found
     logger.info(
-        "[Dispatch] Found %s bookings for company %s for date %s", len(bookings), company_id, for_date or "today"
+        "[Dispatch] Found %s bookings for company %s for date %s",
+        len(bookings),
+        company_id,
+        for_date or "today",
     )
 
     # 2) Pool de chauffeurs (actifs & disponibles)
@@ -1326,17 +1448,32 @@ def build_problem_data(
         drivers = regs + (emgs if allow_emergency else [])
 
         # Log detailed information about the driver selection
-        logger.info("[Dispatch] Using %s regular drivers for company %s", len(regs), company_id)
+        logger.info(
+            "[Dispatch] Using %s regular drivers for company %s", len(regs), company_id
+        )
         if allow_emergency:
-            logger.info("[Dispatch] Also using %s emergency drivers for company %s", len(emgs), company_id)
+            logger.info(
+                "[Dispatch] Also using %s emergency drivers for company %s",
+                len(emgs),
+                company_id,
+            )
         else:
-            logger.info("[Dispatch] Not using emergency drivers (allow_emergency=False)")
+            logger.info(
+                "[Dispatch] Not using emergency drivers (allow_emergency=False)"
+            )
     else:
         drivers = get_available_drivers(company_id)
-        logger.info("[Dispatch] Using all %s drivers without priority (regular_first=False)", len(drivers))
+        logger.info(
+            "[Dispatch] Using all %s drivers without priority (regular_first=False)",
+            len(drivers),
+        )
 
     # Log the total number of drivers found
-    logger.info("[Dispatch] Total: %s available drivers for company %s", len(drivers), company_id)
+    logger.info(
+        "[Dispatch] Total: %s available drivers for company %s",
+        len(drivers),
+        company_id,
+    )
 
     # 3) Garde-fous : si rien \u00e0 traiter, on renvoie un dict vide
     #    Filtrer les bookings termin\u00e9s/annul\u00e9s avant enrichissement
@@ -1345,17 +1482,27 @@ def build_problem_data(
 
         BS = BookingStatus  # Alias local pour compatibilité
         completed_vals = set()
-        for name in ("COMPLETED", "RETURN_COMPLETED", "CANCELLED", "CANCELED", "REJECTED"):
+        for name in (
+            "COMPLETED",
+            "RETURN_COMPLETED",
+            "CANCELLED",
+            "CANCELED",
+            "REJECTED",
+        ):
             if hasattr(BS, name):
                 completed_vals.add(getattr(BS, name))
         if completed_vals:
-            bookings = [b for b in bookings if getattr(b, "status", None) not in completed_vals]
+            bookings = [
+                b for b in bookings if getattr(b, "status", None) not in completed_vals
+            ]
     except Exception:
         pass
 
     if not bookings or not drivers:
         reason = "no_bookings" if not bookings else "no_drivers"
-        logger.warning("[Dispatch] No dispatch possible for company %s: %s", company_id, reason)
+        logger.warning(
+            "[Dispatch] No dispatch possible for company %s: %s", company_id, reason
+        )
         return {
             "bookings": [],
             "drivers": [],
@@ -1423,7 +1570,9 @@ def build_problem_data(
     # Format: {driver_id: multiplier} ex: {"123": 1.5} pour permettre 50% de courses en plus
     driver_load_multipliers = {}
     if overrides:
-        logger.info("[Dispatch] 🔍 Overrides keys disponibles: %s", list(overrides.keys()))
+        logger.info(
+            "[Dispatch] 🔍 Overrides keys disponibles: %s", list(overrides.keys())
+        )
         if "driver_load_multipliers" in overrides:
             raw_multipliers = overrides["driver_load_multipliers"]
             logger.info(
@@ -1432,8 +1581,13 @@ def build_problem_data(
                 type(raw_multipliers).__name__,
             )
             try:
-                driver_load_multipliers = {int(k): float(v) for k, v in raw_multipliers.items()}
-                logger.info("[Dispatch] ✅ Multiplicateurs de charge par chauffeur: %s", driver_load_multipliers)
+                driver_load_multipliers = {
+                    int(k): float(v) for k, v in raw_multipliers.items()
+                }
+                logger.info(
+                    "[Dispatch] ✅ Multiplicateurs de charge par chauffeur: %s",
+                    driver_load_multipliers,
+                )
             except (ValueError, TypeError, AttributeError) as e:
                 logger.warning(
                     "[Dispatch] ⚠️ Erreur parsing driver_load_multipliers: %s (type: %s). Exception: %s",
@@ -1443,16 +1597,24 @@ def build_problem_data(
                     exc_info=True,
                 )
         else:
-            logger.debug("[Dispatch] driver_load_multipliers non présent dans overrides")
+            logger.debug(
+                "[Dispatch] driver_load_multipliers non présent dans overrides"
+            )
     problem["driver_load_multipliers"] = driver_load_multipliers
 
     # ⚡ Ajouter les coordonnées du bureau pour les chauffeurs d'urgence
     if company.latitude and company.longitude:
         problem["company_coords"] = (float(company.latitude), float(company.longitude))
-        logger.debug("[Dispatch] Coordonnées bureau ajoutées: (%s, %s)", company.latitude, company.longitude)
+        logger.debug(
+            "[Dispatch] Coordonnées bureau ajoutées: (%s, %s)",
+            company.latitude,
+            company.longitude,
+        )
     else:
         problem["company_coords"] = None
-        logger.warning("[Dispatch] Coordonnées bureau non disponibles pour company %s", company_id)
+        logger.warning(
+            "[Dispatch] Coordonnées bureau non disponibles pour company %s", company_id
+        )
 
     # ⚡ Ajouter le chauffeur préféré depuis overrides
     preferred_driver_id = None
@@ -1462,12 +1624,16 @@ def build_problem_data(
         logger.info(
             "[Dispatch] 🔍 Drivers disponibles (%d): %s (vérification preferred_driver_id)",
             len(drivers),
-            driver_ids[:MAX_DRIVER_IDS_IN_LOG] if len(driver_ids) > MAX_DRIVER_IDS_IN_LOG else driver_ids,
+            driver_ids[:MAX_DRIVER_IDS_IN_LOG]
+            if len(driver_ids) > MAX_DRIVER_IDS_IN_LOG
+            else driver_ids,
         )
         try:
             raw_value = overrides["preferred_driver_id"]
             logger.info(
-                "[Dispatch] 🔍 Valeur brute preferred_driver_id: %s (type: %s)", raw_value, type(raw_value).__name__
+                "[Dispatch] 🔍 Valeur brute preferred_driver_id: %s (type: %s)",
+                raw_value,
+                type(raw_value).__name__,
             )
             if raw_value is not None:
                 preferred_driver_id = int(raw_value)
@@ -1478,7 +1644,10 @@ def build_problem_data(
                     driver_ids,
                 )
                 if preferred_driver_id <= 0:
-                    logger.warning("[Dispatch] ⚠️ Chauffeur préféré ignoré: ID invalide (%s). Doit être > 0.", raw_value)
+                    logger.warning(
+                        "[Dispatch] ⚠️ Chauffeur préféré ignoré: ID invalide (%s). Doit être > 0.",
+                        raw_value,
+                    )
                     preferred_driver_id = None
                 # ⚡ Vérifier que le driver existe dans la liste des drivers disponibles
                 elif preferred_driver_id not in driver_ids:
@@ -1487,8 +1656,13 @@ def build_problem_data(
                         preferred_driver_id,
                         type(preferred_driver_id).__name__,
                         len(drivers),
-                        driver_ids[:MAX_DRIVER_IDS_IN_LOG] if len(driver_ids) > MAX_DRIVER_IDS_IN_LOG else driver_ids,
-                        [type(did).__name__ for did in driver_ids[:MAX_DRIVER_IDS_IN_LOG]]
+                        driver_ids[:MAX_DRIVER_IDS_IN_LOG]
+                        if len(driver_ids) > MAX_DRIVER_IDS_IN_LOG
+                        else driver_ids,
+                        [
+                            type(did).__name__
+                            for did in driver_ids[:MAX_DRIVER_IDS_IN_LOG]
+                        ]
                         if len(driver_ids) > MAX_DRIVER_IDS_IN_LOG
                         else [type(did).__name__ for did in driver_ids],
                     )
@@ -1513,7 +1687,8 @@ def build_problem_data(
             preferred_driver_id = None
     else:
         logger.debug(
-            "[Dispatch] Aucun chauffeur préféré dans overrides (keys: %s)", list(overrides.keys()) if overrides else []
+            "[Dispatch] Aucun chauffeur préféré dans overrides (keys: %s)",
+            list(overrides.keys()) if overrides else [],
         )
     problem["preferred_driver_id"] = preferred_driver_id
 
@@ -1523,7 +1698,9 @@ def build_problem_data(
 # ============================================================
 # 6\ufe0f\u20e3 S\u00e9lection des retours urgents (utilis\u00e9 par engine.run)
 # ============================================================
-def pick_urgent_returns(problem: Dict[str, Any], settings=DEFAULT_SETTINGS) -> list[int]:
+def pick_urgent_returns(
+    problem: Dict[str, Any], settings=DEFAULT_SETTINGS
+) -> list[int]:
     """Renvoie la liste des booking.id correspondant \u00e0 des *retours urgents* :
     - b.is_return == True
     - scheduled_time dans <= threshold minutes (ou d\u00e9j\u00e0 d\u00e9pass\u00e9e)
@@ -1533,7 +1710,11 @@ def pick_urgent_returns(problem: Dict[str, Any], settings=DEFAULT_SETTINGS) -> l
         return []
 
     try:
-        threshold = int(getattr(getattr(settings, "emergency", None), "return_urgent_threshold_min", 20))
+        threshold = int(
+            getattr(
+                getattr(settings, "emergency", None), "return_urgent_threshold_min", 20
+            )
+        )
     except Exception:
         threshold = 20
 
@@ -1578,7 +1759,10 @@ def acquire_dispatch_lock(company_id: int, day_str: str, ttl_sec: int = 60) -> b
                 _dispatch_locks[key] = lock
             return bool(got)
         except Exception:
-            logger.warning("[Dispatch] Redis lock failed; falling back to in-process lock.", exc_info=True)
+            logger.warning(
+                "[Dispatch] Redis lock failed; falling back to in-process lock.",
+                exc_info=True,
+            )
 
     # Fallback in-process
     lock = _dispatch_locks.get(key)
@@ -1606,14 +1790,18 @@ def release_dispatch_lock(company_id: int, day_str: str) -> None:
 # 8\ufe0f\u20e3 ETA & d\u00e9tection de retard (pour alertes temps r\u00e9el)
 # ============================================================
 def calculate_eta(
-    driver_position: Tuple[float, float], destination: Tuple[float, float], settings=DEFAULT_SETTINGS
+    driver_position: Tuple[float, float],
+    destination: Tuple[float, float],
+    settings=DEFAULT_SETTINGS,
 ) -> int:
     """Calcule un ETA (en secondes) chauffeur -> destination (pickup le plus souvent).
     Essaie OSRM si provider='osrm', sinon fallback Haversine via vitesse moyenne.
     ✅ OPTIMISÉ: Utilise route_info (via eta_seconds) au lieu de build_distance_matrix_osrm pour 2 points.
     """
     try:
-        provider = str(getattr(getattr(settings, "matrix", None), "provider", "haversine")).lower()
+        provider = str(
+            getattr(getattr(settings, "matrix", None), "provider", "haversine")
+        ).lower()
         if provider == "osrm":
             # ✅ OPTIMISATION: Utiliser eta_seconds qui utilise route_info (plus efficace pour 2 points)
             # Timeout réduit à 2-3s pour éviter les blocages dans /delays/live
@@ -1625,7 +1813,9 @@ def calculate_eta(
                 timeout=1,  # ✅ Timeout très court pour éviter les blocages (1s au lieu de 2s)
                 redis_client=_get_redis_from_settings(settings),
                 coord_precision=int(getattr(settings.matrix, "coord_precision", 5)),
-                avg_speed_kmh_fallback=float(getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25)),
+                avg_speed_kmh_fallback=float(
+                    getattr(getattr(settings, "matrix", None), "avg_speed_kmh", 25)
+                ),
             )
             return int(max(1, eta_sec))
     except Exception as e:
@@ -1651,7 +1841,9 @@ def detect_delay(
     """
     if buffer_minutes is None:
         try:
-            buffer_minutes = int(getattr(getattr(settings, "time", None), "buffer_min", 5))
+            buffer_minutes = int(
+                getattr(getattr(settings, "time", None), "buffer_min", 5)
+            )
         except Exception:
             buffer_minutes = 5
 
