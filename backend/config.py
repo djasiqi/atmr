@@ -45,7 +45,9 @@ def _get_secret_from_vault_or_env(
     if VAULT_AVAILABLE and _get_vault_client:
         try:
             vault = _get_vault_client()
-            value = vault.get_secret(vault_path, vault_key, env_fallback=env_key, default=default)
+            value = vault.get_secret(
+                vault_path, vault_key, env_fallback=env_key, default=default
+            )
             if value:
                 return value
         except Exception:
@@ -58,7 +60,9 @@ def _get_secret_from_vault_or_env(
         return value
 
     if required:
-        raise RuntimeError(f"Secret requis non trouvé: {env_key} (Vault path: {vault_path})")
+        raise RuntimeError(
+            f"Secret requis non trouvé: {env_key} (Vault path: {vault_path})"
+        )
 
     return None
 
@@ -104,7 +108,9 @@ class Config:
     }
 
     # --- JWT (délais par défaut, surclassables par env) ---
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_SECONDS", str(60 * 60))))
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(
+        seconds=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_SECONDS", str(60 * 60)))
+    )
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(
         seconds=int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES_SECONDS", str(30 * 24 * 3600)))
     )
@@ -212,7 +218,9 @@ class ProductionConfig(Config):
         env_key="DATABASE_URL",
         required=False,  # Pas requis si variables individuelles disponibles
     )
-    SQLALCHEMY_DATABASE_URI = _db_url_from_secret if _db_url_from_secret else _build_database_url_safe()
+    SQLALCHEMY_DATABASE_URI = (
+        _db_url_from_secret if _db_url_from_secret else _build_database_url_safe()
+    )
     # Validation explicite pour éviter les erreurs lors de l'initialisation Flask-SQLAlchemy
     if not SQLALCHEMY_DATABASE_URI:
         raise RuntimeError(
@@ -231,7 +239,9 @@ class ProductionConfig(Config):
     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "true").lower() == "true"
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
-    REMEMBER_COOKIE_SECURE = os.getenv("REMEMBER_COOKIE_SECURE", "true").lower() == "true"
+    REMEMBER_COOKIE_SECURE = (
+        os.getenv("REMEMBER_COOKIE_SECURE", "true").lower() == "true"
+    )
     REMEMBER_COOKIE_HTTPONLY = True
     REMEMBER_COOKIE_SAMESITE = os.getenv("REMEMBER_COOKIE_SAMESITE", "Lax")
 

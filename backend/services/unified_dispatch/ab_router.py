@@ -72,7 +72,9 @@ class ABRouter:
 
         return {"enable_rl_apply": True, "alpha": alpha, "company_id": company_id}
 
-    def should_apply_with_quality_check(self, company_id: int, projected_quality_score: float) -> bool:
+    def should_apply_with_quality_check(
+        self, company_id: int, projected_quality_score: float
+    ) -> bool:
         """Vérifie si RL peut être appliqué en tenant compte du quality_score prévisionnel.
 
         Args:
@@ -88,7 +90,9 @@ class ABRouter:
 
         # Vérifier le quality_score prévisionnel
         rl_config = getattr(self.settings, "rl", None)
-        min_quality_score = getattr(rl_config, "min_quality_score", 70.0) if rl_config else 70.0
+        min_quality_score = (
+            getattr(rl_config, "min_quality_score", 70.0) if rl_config else 70.0
+        )
 
         if projected_quality_score < min_quality_score:
             logger.warning(
@@ -102,7 +106,10 @@ class ABRouter:
         return True
 
     def should_apply_with_safety_guards(
-        self, company_id: int, projected_quality_score: float, min_pickup_minutes: float | None = None
+        self,
+        company_id: int,
+        projected_quality_score: float,
+        min_pickup_minutes: float | None = None,
     ) -> bool:
         """✅ B4: Vérifie avec tous les garde-fous (quality + pickup time).
 
@@ -120,7 +127,9 @@ class ABRouter:
 
         # Garde-fou 2: Quality score
         rl_config = getattr(self.settings, "rl", None)
-        min_quality_score = getattr(rl_config, "min_quality_score", 70.0) if rl_config else 70.0
+        min_quality_score = (
+            getattr(rl_config, "min_quality_score", 70.0) if rl_config else 70.0
+        )
 
         if projected_quality_score < min_quality_score:
             logger.warning(

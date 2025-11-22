@@ -35,7 +35,9 @@ planning_ns = Namespace("planning", description="Planning Chauffeurs")
 @planning_ns.route("/companies/me/planning/shifts")
 class ShiftsMe(Resource):
     @jwt_required()
-    @planning_ns.param("driver_id", "ID du chauffeur (optionnel, > 0)", type="integer", minimum=1)
+    @planning_ns.param(
+        "driver_id", "ID du chauffeur (optionnel, > 0)", type="integer", minimum=1
+    )
     def get(self):
         """Récupère les shifts (planning) de l'entreprise.
 
@@ -53,7 +55,9 @@ class ShiftsMe(Resource):
 
         args_dict = dict(request.args)
         try:
-            validated_args = validate_request(PlanningShiftsQuerySchema(), args_dict, strict=False)
+            validated_args = validate_request(
+                PlanningShiftsQuerySchema(), args_dict, strict=False
+            )
             driver_id = validated_args.get("driver_id")
         except ValidationError as e:
             return handle_validation_error(e)
@@ -62,7 +66,10 @@ class ShiftsMe(Resource):
         if driver_id:
             q = q.filter(DriverShift.driver_id == driver_id)
         # TODO: parse from/to as ISO
-        items = [serialize_shift(s) for s in q.order_by(DriverShift.start_local).limit(500).all()]
+        items = [
+            serialize_shift(s)
+            for s in q.order_by(DriverShift.start_local).limit(500).all()
+        ]
         return {"items": items, "total": len(items)}
 
     @jwt_required()
@@ -109,7 +116,9 @@ class ShiftDetailMe(Resource):
             status_code = 401
         else:
             s = db.session.get(DriverShift, shift_id)
-            if s is None or getattr(s, "company_id", None) != getattr(company, "id", None):
+            if s is None or getattr(s, "company_id", None) != getattr(
+                company, "id", None
+            ):
                 result = {"error": "not found"}
                 status_code = 404
             else:
@@ -225,7 +234,9 @@ class ShiftBreakDetail(Resource):
 @planning_ns.route("/companies/me/planning/unavailability")
 class Unavailability(Resource):
     @jwt_required()
-    @planning_ns.param("driver_id", "ID du chauffeur (optionnel, > 0)", type="integer", minimum=1)
+    @planning_ns.param(
+        "driver_id", "ID du chauffeur (optionnel, > 0)", type="integer", minimum=1
+    )
     def get(self):
         """Récupère les indisponibilités de l'entreprise.
 
@@ -243,12 +254,16 @@ class Unavailability(Resource):
 
         args_dict = dict(request.args)
         try:
-            validated_args = validate_request(PlanningUnavailabilityQuerySchema(), args_dict, strict=False)
+            validated_args = validate_request(
+                PlanningUnavailabilityQuerySchema(), args_dict, strict=False
+            )
             driver_id = validated_args.get("driver_id")
         except ValidationError as e:
             return handle_validation_error(e)
 
-        q = db.session.query(DriverUnavailability).filter(DriverUnavailability.company_id == company.id)
+        q = db.session.query(DriverUnavailability).filter(
+            DriverUnavailability.company_id == company.id
+        )
         if driver_id:
             q = q.filter(DriverUnavailability.driver_id == driver_id)
         items = [
@@ -307,7 +322,9 @@ class UnavailabilityDetail(Resource):
 @planning_ns.route("/companies/me/planning/weekly-template")
 class WeeklyTemplate(Resource):
     @jwt_required()
-    @planning_ns.param("driver_id", "ID du chauffeur (optionnel, > 0)", type="integer", minimum=1)
+    @planning_ns.param(
+        "driver_id", "ID du chauffeur (optionnel, > 0)", type="integer", minimum=1
+    )
     def get(self):
         """Récupère les templates hebdomadaires de l'entreprise.
 
@@ -325,12 +342,16 @@ class WeeklyTemplate(Resource):
 
         args_dict = dict(request.args)
         try:
-            validated_args = validate_request(PlanningWeeklyTemplateQuerySchema(), args_dict, strict=False)
+            validated_args = validate_request(
+                PlanningWeeklyTemplateQuerySchema(), args_dict, strict=False
+            )
             driver_id = validated_args.get("driver_id")
         except ValidationError as e:
             return handle_validation_error(e)
 
-        q = db.session.query(DriverWeeklyTemplate).filter(DriverWeeklyTemplate.company_id == company.id)
+        q = db.session.query(DriverWeeklyTemplate).filter(
+            DriverWeeklyTemplate.company_id == company.id
+        )
         if driver_id:
             q = q.filter(DriverWeeklyTemplate.driver_id == driver_id)
 
@@ -347,7 +368,9 @@ class WeeklyTemplate(Resource):
                 "effective_from": safe_isoformat(getattr(t, "effective_from", None)),
                 "effective_to": safe_isoformat(getattr(t, "effective_to", None)),
             }
-            for t in q.order_by(DriverWeeklyTemplate.driver_id, DriverWeeklyTemplate.weekday).all()
+            for t in q.order_by(
+                DriverWeeklyTemplate.driver_id, DriverWeeklyTemplate.weekday
+            ).all()
         ]
         return {"items": items, "total": len(items)}
 
@@ -365,7 +388,11 @@ class WeeklyTemplate(Resource):
             t.start_time = datetime.fromisoformat(data["start_time"]).time()
             t.end_time = datetime.fromisoformat(data["end_time"]).time()
             t.effective_from = date.fromisoformat(data["effective_from"])
-            t.effective_to = date.fromisoformat(data["effective_to"]) if data.get("effective_to") else None
+            t.effective_to = (
+                date.fromisoformat(data["effective_to"])
+                if data.get("effective_to")
+                else None
+            )
         except Exception:
             return {"error": "payload invalide"}, 400
         db.session.add(t)
@@ -393,7 +420,11 @@ class WeeklyTemplateDetail(Resource):
         if "effective_from" in data:
             t.effective_from = date.fromisoformat(data["effective_from"])
         if "effective_to" in data:
-            t.effective_to = date.fromisoformat(data["effective_to"]) if data["effective_to"] else None
+            t.effective_to = (
+                date.fromisoformat(data["effective_to"])
+                if data["effective_to"]
+                else None
+            )
         db.session.commit()
         return {"ok": True}
 
@@ -420,8 +451,12 @@ class WeeklyTemplateMaterialize(Resource):
         data = request.json or {}
         try:
             driver_id = int(data["driver_id"]) if data.get("driver_id") else None
-            from_date = date.fromisoformat(data["from_date"]) if data.get("from_date") else None
-            to_date = date.fromisoformat(data["to_date"]) if data.get("to_date") else None
+            from_date = (
+                date.fromisoformat(data["from_date"]) if data.get("from_date") else None
+            )
+            to_date = (
+                date.fromisoformat(data["to_date"]) if data.get("to_date") else None
+            )
         except Exception:
             return {"error": "payload invalide"}, 400
         if not (driver_id and from_date and to_date):

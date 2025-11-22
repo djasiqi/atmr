@@ -55,7 +55,9 @@ def retrain_dqn_model_task():
             RLFeedback.suggestion_state.isnot(None),  # Besoin de l'état
         ).all()
 
-        logger.info("[RL] %s feedbacks trouvés dans les 7 derniers jours", len(feedbacks))
+        logger.info(
+            "[RL] %s feedbacks trouvés dans les 7 derniers jours", len(feedbacks)
+        )
 
         if len(feedbacks) < MIN_FEEDBACKS_FOR_TRAINING:
             logger.warning(
@@ -91,7 +93,9 @@ def retrain_dqn_model_task():
                 }
             )
 
-        logger.info("[RL] %s échantillons valides pour l'entraînement", len(training_samples))
+        logger.info(
+            "[RL] %s échantillons valides pour l'entraînement", len(training_samples)
+        )
 
         if len(training_samples) < MIN_TRAINING_SAMPLES:
             logger.warning(
@@ -118,7 +122,10 @@ def retrain_dqn_model_task():
             try:
                 agent = ImprovedDQNAgent.load(filepath=model_path)  # type: ignore[call-arg]
             except FileNotFoundError:
-                logger.warning("[RL] ⚠️ Modèle %s introuvable. Création d'un nouveau modèle...", model_path)
+                logger.warning(
+                    "[RL] ⚠️ Modèle %s introuvable. Création d'un nouveau modèle...",
+                    model_path,
+                )
                 # Créer nouveau modèle
                 agent = ImprovedDQNAgent(
                     state_dim=19,  # Match avec suggestion_generator
@@ -127,7 +134,9 @@ def retrain_dqn_model_task():
                 )
 
             # Ré-entraîner avec les échantillons
-            logger.info("[RL] Ré-entraînement avec %s échantillons...", len(training_samples))
+            logger.info(
+                "[RL] Ré-entraînement avec %s échantillons...", len(training_samples)
+            )
 
             total_loss = 0
             for i, sample in enumerate(training_samples):
@@ -156,9 +165,13 @@ def retrain_dqn_model_task():
                     total_loss += loss
 
                 # MAGIC_VALUE_10: logging toujours activé
-                logger.debug("[RL] Échantillon %s/%s traité", i + 1, len(training_samples))
+                logger.debug(
+                    "[RL] Échantillon %s/%s traité", i + 1, len(training_samples)
+                )
 
-            avg_loss = total_loss / len(training_samples) if len(training_samples) > 0 else 0
+            avg_loss = (
+                total_loss / len(training_samples) if len(training_samples) > 0 else 0
+            )
 
             # Sauvegarder le modèle amélioré
             logger.info("[RL] Sauvegarde modèle amélioré vers %s...", model_path)
@@ -167,7 +180,9 @@ def retrain_dqn_model_task():
             # Statistiques
             positive_rewards = sum(1 for s in training_samples if s["reward"] > 0)
             negative_rewards = sum(1 for s in training_samples if s["reward"] < 0)
-            avg_reward = sum(s["reward"] for s in training_samples) / len(training_samples)
+            avg_reward = sum(s["reward"] for s in training_samples) / len(
+                training_samples
+            )
 
             result = {
                 "status": "success",
@@ -204,7 +219,11 @@ def retrain_dqn_model_task():
 
     except Exception as e:
         logger.exception("[RL] ❌ Erreur lors du ré-entraînement DQN")
-        return {"status": "error", "error": str(e), "timestamp": datetime.now(UTC).isoformat()}
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
 
 @celery.task(name="tasks.rl_cleanup_old_feedbacks")
@@ -239,7 +258,11 @@ def cleanup_old_feedbacks_task(days_to_keep=90):
 
         logger.info("[RL] ✅ %s feedbacks supprimés", to_delete)
 
-        return {"status": "success", "deleted_count": to_delete, "cutoff_date": cutoff.isoformat()}
+        return {
+            "status": "success",
+            "deleted_count": to_delete,
+            "cutoff_date": cutoff.isoformat(),
+        }
 
     except Exception as e:
         db.session.rollback()
@@ -273,11 +296,15 @@ def generate_weekly_report_task():
         rejected = len([f for f in feedbacks if f.action == "rejected"])
 
         # Statistiques métriques
-        metrics = RLSuggestionMetric.query.filter(RLSuggestionMetric.generated_at >= cutoff).all()
+        metrics = RLSuggestionMetric.query.filter(
+            RLSuggestionMetric.generated_at >= cutoff
+        ).all()
 
         total_suggestions = len(metrics)
         avg_confidence = (
-            sum(m.confidence for m in metrics) / total_suggestions if total_suggestions > TOTAL_SUGGESTIONS_ZERO else 0
+            sum(m.confidence for m in metrics) / total_suggestions
+            if total_suggestions > TOTAL_SUGGESTIONS_ZERO
+            else 0
         )
 
         # Précision (si données disponibles)

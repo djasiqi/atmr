@@ -22,12 +22,18 @@ class RLSuggestion(db.Model):
     __tablename__ = "rl_suggestions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    dispatch_run_id = Column(Integer, ForeignKey("dispatch_run.id"), nullable=False, index=True)
+    dispatch_run_id = Column(
+        Integer, ForeignKey("dispatch_run.id"), nullable=False, index=True
+    )
     booking_id = Column(Integer, ForeignKey("booking.id"), nullable=False, index=True)
     driver_id = Column(Integer, ForeignKey("driver.id"), nullable=False, index=True)
     score = Column(Float, nullable=False)
-    kpi_snapshot = Column(JSON, nullable=True, comment="Snapshot des KPIs au moment de la suggestion")
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow, index=True)
+    kpi_snapshot = Column(
+        JSON, nullable=True, comment="Snapshot des KPIs au moment de la suggestion"
+    )
+    created_at = Column(
+        TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow, index=True
+    )
 
     # Relations
     dispatch_run = relationship("DispatchRun", backref="rl_suggestions")

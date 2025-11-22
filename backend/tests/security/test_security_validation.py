@@ -53,7 +53,9 @@ class TestUploadValidation:
 
     def test_validate_file_size_invalid(self):
         """Test validation de taille invalide."""
-        is_valid, error = validate_file_size(3 * 1024 * 1024, 2 * 1024 * 1024)  # 3MB > 2MB
+        is_valid, error = validate_file_size(
+            3 * 1024 * 1024, 2 * 1024 * 1024
+        )  # 3MB > 2MB
         assert is_valid is False
         assert error is not None
         assert "trop volumineux" in error.lower()
@@ -270,8 +272,12 @@ class TestShellInjectionProtection:
         # (vérification statique via grep dans les tests précédents)
 
         # Test que subprocess.run avec liste est sécurisé
-        result = subprocess.run(["echo", "test"], capture_output=True, text=True, check=False)
-        assert result.returncode == 0 or result.returncode != 0  # Peu importe le code de retour
+        result = subprocess.run(
+            ["echo", "test"], capture_output=True, text=True, check=False
+        )
+        assert (
+            result.returncode == 0 or result.returncode != 0
+        )  # Peu importe le code de retour
         # L'important est qu'on utilise une liste, pas une chaîne avec shell=True
 
     def test_subprocess_list_arguments_safe(self):

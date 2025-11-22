@@ -10,8 +10,12 @@ from models import Booking, BookingStatus
 
 DEFAULT_STATUSES_FOR_COUNT = (
     BookingStatus.ASSIGNED,
-    BookingStatus.EN_ROUTE if hasattr(BookingStatus, "EN_ROUTE") else BookingStatus.ASSIGNED,
-    BookingStatus.IN_PROGRESS if hasattr(BookingStatus, "IN_PROGRESS") else BookingStatus.ASSIGNED,
+    BookingStatus.EN_ROUTE
+    if hasattr(BookingStatus, "EN_ROUTE")
+    else BookingStatus.ASSIGNED,
+    BookingStatus.IN_PROGRESS
+    if hasattr(BookingStatus, "IN_PROGRESS")
+    else BookingStatus.ASSIGNED,
 )
 
 

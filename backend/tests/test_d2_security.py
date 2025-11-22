@@ -42,8 +42,12 @@ class TestEncryptionService:
             # Chiffrer
             ciphertext = service.encrypt_field(plaintext)
 
-            assert ciphertext != plaintext, "Ciphertext doit être différent du plaintext"
-            assert len(ciphertext) > 0 if plaintext else True, "Ciphertext doit être non vide"
+            assert ciphertext != plaintext, (
+                "Ciphertext doit être différent du plaintext"
+            )
+            assert len(ciphertext) > 0 if plaintext else True, (
+                "Ciphertext doit être non vide"
+            )
 
             # Déchiffrer
             decrypted = service.decrypt_field(ciphertext)

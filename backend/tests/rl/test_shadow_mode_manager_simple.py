@@ -42,7 +42,11 @@ class TestShadowModeManagerSimple:
         context = {"booking_id": 1, "pickup_time": datetime.now(), "distance_km": 5.0}
 
         kpis = manager.log_decision_comparison(
-            company_id="1", booking_id="1", human_decision=human_decision, rl_decision=rl_decision, context=context
+            company_id="1",
+            booking_id="1",
+            human_decision=human_decision,
+            rl_decision=rl_decision,
+            context=context,
         )
 
         assert isinstance(kpis, dict)
@@ -395,7 +399,11 @@ class TestShadowModeManagerSimple:
 
         human_decision = {"eta_minutes": 20}
         rl_decision = {"eta_minutes": 15}
-        context = {"vehicle_type": "sedan", "vehicle_capacity": 4, "vehicle_fuel_type": "gasoline"}
+        context = {
+            "vehicle_type": "sedan",
+            "vehicle_capacity": 4,
+            "vehicle_fuel_type": "gasoline",
+        }
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
 
@@ -407,7 +415,11 @@ class TestShadowModeManagerSimple:
 
         human_decision = {"eta_minutes": 20}
         rl_decision = {"eta_minutes": 15}
-        context = {"driver_experience": "expert", "driver_rating": 4.8, "driver_availability": "high"}
+        context = {
+            "driver_experience": "expert",
+            "driver_rating": 4.8,
+            "driver_availability": "high",
+        }
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
 
@@ -419,7 +431,12 @@ class TestShadowModeManagerSimple:
 
         human_decision = {"eta_minutes": 20}
         rl_decision = {"eta_minutes": 15}
-        context = {"booking_id": 1, "pickup_time": datetime.now(), "booking_type": "standard", "priority": "normal"}
+        context = {
+            "booking_id": 1,
+            "pickup_time": datetime.now(),
+            "booking_type": "standard",
+            "priority": "normal",
+        }
 
         kpis = manager._calculate_kpis(human_decision, rl_decision, context)
 

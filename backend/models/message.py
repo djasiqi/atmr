@@ -32,15 +32,32 @@ from .enums import SenderRole
 class Message(db.Model):
     __tablename__ = "message"
     __table_args__ = (
-        Index("ix_msg_company_receiver_unread_ts", "company_id", "receiver_id", "is_read", "timestamp"),
-        CheckConstraint("sender_role IN ('DRIVER','COMPANY')", name="check_sender_role_valid"),
+        Index(
+            "ix_msg_company_receiver_unread_ts",
+            "company_id",
+            "receiver_id",
+            "is_read",
+            "timestamp",
+        ),
+        CheckConstraint(
+            "sender_role IN ('DRIVER','COMPANY')", name="check_sender_role_valid"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
-    sender_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True)
-    receiver_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True)
+    company_id = Column(
+        Integer,
+        ForeignKey("company.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sender_id = Column(
+        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    receiver_id = Column(
+        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     sender_role = Column(SAEnum(SenderRole, name="sender_role"), nullable=False)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -51,7 +68,9 @@ class Message(db.Model):
     pdf_filename = Column(sa.String(255), nullable=True)
     pdf_size = Column(Integer, nullable=True)
 
-    timestamp = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
+    timestamp = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), index=True
+    )
     is_read = Column(Boolean, nullable=False, default=False)
 
     # Relations
@@ -74,7 +93,9 @@ class Message(db.Model):
             sender_name = getattr(sender_user, "first_name", None)
         else:
             sender_name = getattr(company_obj, "name", None)
-        receiver_name = getattr(receiver_user, "first_name", None) if receiver_user else None
+        receiver_name = (
+            getattr(receiver_user, "first_name", None) if receiver_user else None
+        )
         return {
             "id": self.id,
             "company_id": self.company_id,
@@ -120,7 +141,9 @@ class Message(db.Model):
         if text is None:
             return None
         # ✅ Convertir en string et strip
-        text_str = text.strip() if isinstance(text, str) else str(text).strip() if text else ""
+        text_str = (
+            text.strip() if isinstance(text, str) else str(text).strip() if text else ""
+        )
         # ✅ Validation stricte : rejeter uniquement les chaînes vides (pas None)
         if text_str == "":
             msg = "Le contenu du message ne peut pas être vide."

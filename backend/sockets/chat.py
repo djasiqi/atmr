@@ -39,7 +39,9 @@ def _get_sid(fallback_request=None) -> str:
     if fallback_request is None:
         fallback_request = request
 
-    sid = getattr(fallback_request, "sid", None) or fallback_request.environ.get("socketio.sid")
+    sid = getattr(fallback_request, "sid", None) or fallback_request.environ.get(
+        "socketio.sid"
+    )
     return str(sid) if sid is not None else ""
 
 
@@ -109,7 +111,12 @@ def init_chat_socket(socketio: SocketIO):
                 join_room(driver_room)
 
                 emit("connected", {"message": "✅ Chauffeur connecté"})
-                logger.info("🔌 Driver %s -> rooms: %s, %s", driver.id, company_room, driver_room)
+                logger.info(
+                    "🔌 Driver %s -> rooms: %s, %s",
+                    driver.id,
+                    company_room,
+                    driver_room,
+                )
 
                 _SID_INDEX[_get_sid()] = {
                     "user_public_id": public_id,
@@ -157,7 +164,12 @@ def init_chat_socket(socketio: SocketIO):
             sid = _get_sid()
             sid_data = _SID_INDEX.get(sid, {})
             user_public_id = sid_data.get("user_public_id")
-            logger.info("📨 [CHAT] SID=%s, user_public_id=%s, sid_data=%s", sid, user_public_id, sid_data)
+            logger.info(
+                "📨 [CHAT] SID=%s, user_public_id=%s, sid_data=%s",
+                sid,
+                user_public_id,
+                sid_data,
+            )
 
             if not user_public_id:
                 logger.error("❌ [CHAT] Session JWT introuvable pour SID=%s", sid)
@@ -166,21 +178,37 @@ def init_chat_socket(socketio: SocketIO):
 
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user:
-                logger.error("❌ [CHAT] Utilisateur non trouvé pour public_id=%s", user_public_id)
+                logger.error(
+                    "❌ [CHAT] Utilisateur non trouvé pour public_id=%s", user_public_id
+                )
                 emit("error", {"error": "Utilisateur non reconnu."})
                 return
 
             # ✅ Anti-spam: vérifier le taux d'envoi (1 message/seconde)
             allowed, spam_error = can_send_message(user.id)
             if not allowed:
-                logger.warning("🚫 [CHAT] Anti-spam: Utilisateur %s - %s", user.id, spam_error)
-                emit("error", {"error": spam_error or "Trop de messages. Attendez 1 seconde."})
+                logger.warning(
+                    "🚫 [CHAT] Anti-spam: Utilisateur %s - %s", user.id, spam_error
+                )
+                emit(
+                    "error",
+                    {"error": spam_error or "Trop de messages. Attendez 1 seconde."},
+                )
                 return
 
             content_raw = data.get("content")
-            logger.info("📨 [CHAT] Content brut reçu: %s (type=%s)", content_raw, type(content_raw).__name__)
+            logger.info(
+                "📨 [CHAT] Content brut reçu: %s (type=%s)",
+                content_raw,
+                type(content_raw).__name__,
+            )
             content = (content_raw or "").strip() if content_raw else ""
-            logger.info("📨 [CHAT] Content après strip: '%s' (len=%d, bool=%s)", content, len(content), bool(content))
+            logger.info(
+                "📨 [CHAT] Content après strip: '%s' (len=%d, bool=%s)",
+                content,
+                len(content),
+                bool(content),
+            )
 
             # Support pour images et PDF
             image_url = data.get("image_url") or data.get("image")
@@ -192,20 +220,37 @@ def init_chat_socket(socketio: SocketIO):
             has_image = bool(image_url)
             has_pdf = bool(pdf_url)
             if has_image and has_pdf:
-                logger.error("❌ [CHAT] Limite: 1 fichier par message (image OU PDF, pas les deux)")
-                emit("error", {"error": "Limite: 1 fichier par message. Choisissez une image OU un PDF."})
+                logger.error(
+                    "❌ [CHAT] Limite: 1 fichier par message (image OU PDF, pas les deux)"
+                )
+                emit(
+                    "error",
+                    {
+                        "error": "Limite: 1 fichier par message. Choisissez une image OU un PDF."
+                    },
+                )
                 return
 
             # ✅ Validation : le message doit avoir au moins du contenu texte, une image ou un PDF
             has_content = bool(content)
             if not (has_content or has_image or has_pdf):
                 logger.error("❌ [CHAT] Message vide : ni contenu, ni image, ni PDF")
-                emit("error", {"error": "Le message doit contenir du texte, une image ou un PDF."})
+                emit(
+                    "error",
+                    {
+                        "error": "Le message doit contenir du texte, une image ou un PDF."
+                    },
+                )
                 return
 
             # ✅ Validation longueur message (si contenu texte présent)
             if has_content and len(content) > MAX_MESSAGE_LENGTH:
-                emit("error", {"error": f"Message trop long (max {MAX_MESSAGE_LENGTH} caractères)."})
+                emit(
+                    "error",
+                    {
+                        "error": f"Message trop long (max {MAX_MESSAGE_LENGTH} caractères)."
+                    },
+                )
                 return
 
             receiver_id = data.get("receiver_id")
@@ -231,7 +276,12 @@ def init_chat_socket(socketio: SocketIO):
                 sender_role = SenderRole.DRIVER
                 sender_id = user.id
                 company_obj = None
-                logger.info("📨 Chat driver: user_id=%s, driver_id=%s, company_id=%s", user.id, driver.id, company_id)
+                logger.info(
+                    "📨 Chat driver: user_id=%s, driver_id=%s, company_id=%s",
+                    user.id,
+                    driver.id,
+                    company_id,
+                )
             elif user.role == UserRole.company:
                 company_obj = Company.query.filter_by(user_id=user.id).first()
                 if not company_obj:
@@ -242,7 +292,9 @@ def init_chat_socket(socketio: SocketIO):
                 sender_role = SenderRole.COMPANY
                 # ✅ FIX: Ne jamais mettre sender_id=None pour l'entreprise
                 sender_id = user.id
-                logger.info("📨 Chat company: user_id=%s, company_id=%s", user.id, company_id)
+                logger.info(
+                    "📨 Chat company: user_id=%s, company_id=%s", user.id, company_id
+                )
             else:
                 emit("error", {"error": "Rôle non autorisé pour le chat."})
                 return
@@ -280,7 +332,9 @@ def init_chat_socket(socketio: SocketIO):
                     receiver_id=receiver_id,
                     company_id=company_id,
                     sender_role=sender_role,
-                    content=content_final if content_final else None,  # Permettre None si seulement image/PDF
+                    content=content_final
+                    if content_final
+                    else None,  # Permettre None si seulement image/PDF
                     timestamp=timestamp,
                     image_url=image_url if has_image else None,
                     pdf_url=pdf_url if has_pdf else None,
@@ -304,15 +358,24 @@ def init_chat_socket(socketio: SocketIO):
                 )
             except Exception as commit_err:
                 db.session.rollback()
-                logger.exception("❌ [CHAT] Erreur lors du commit du message: %s", commit_err)
-                emit("error", {"error": f"Erreur lors de la sauvegarde du message: {commit_err!s}"})
+                logger.exception(
+                    "❌ [CHAT] Erreur lors du commit du message: %s", commit_err
+                )
+                emit(
+                    "error",
+                    {
+                        "error": f"Erreur lors de la sauvegarde du message: {commit_err!s}"
+                    },
+                )
                 return
 
             payload = {
                 "id": message.id,
                 "sender_id": sender_id,
                 "receiver_id": receiver_id,
-                "receiver_name": message.receiver.first_name if message.receiver else None,
+                "receiver_name": message.receiver.first_name
+                if message.receiver
+                else None,
                 "sender_role": sender_role.value
                 if hasattr(sender_role, "value")
                 else str(sender_role),  # ✅ S'assurer que c'est une chaîne
@@ -322,7 +385,11 @@ def init_chat_socket(socketio: SocketIO):
                 "type": "chat",
                 "company_id": company_id,
                 # ✅ FIX: company_name disponible
-                "company_name": (company_obj.name if (sender_role == SenderRole.COMPANY and company_obj) else None),
+                "company_name": (
+                    company_obj.name
+                    if (sender_role == SenderRole.COMPANY and company_obj)
+                    else None
+                ),
                 "_localId": local_id,
                 # Support pour images et PDF
                 "image_url": image_url if has_image else None,
@@ -334,7 +401,9 @@ def init_chat_socket(socketio: SocketIO):
             room = f"company_{company_id}"
             # Pylance ne déclare pas kwarg 'room' sur emit -> cast en Any
             cast("Any", emit)("team_chat_message", payload, room=room)
-            logger.info("📨 Message émis dans %s par %s : %s", room, sender_role, content)
+            logger.info(
+                "📨 Message émis dans %s par %s : %s", room, sender_role, content
+            )
 
             # ✅ Si un receiver_id (driver) est fourni, notifier aussi sa room dédiée
             if receiver_id:
@@ -360,7 +429,9 @@ def init_chat_socket(socketio: SocketIO):
 
             # Diffuser l'indicateur de frappe à la room de l'entreprise
             room = f"company_{company_id}"
-            cast("Any", emit)("typing_start", {"user_id": user_public_id}, room=room, skip_sid=sid)
+            cast("Any", emit)(
+                "typing_start", {"user_id": user_public_id}, room=room, skip_sid=sid
+            )
             logger.debug("⌨️ typing_start de %s dans %s", user_public_id, room)
 
         except Exception as e:
@@ -380,7 +451,9 @@ def init_chat_socket(socketio: SocketIO):
 
             # Diffuser l'arrêt de frappe à la room de l'entreprise
             room = f"company_{company_id}"
-            cast("Any", emit)("typing_stop", {"user_id": user_public_id}, room=room, skip_sid=sid)
+            cast("Any", emit)(
+                "typing_stop", {"user_id": user_public_id}, room=room, skip_sid=sid
+            )
             logger.debug("⌨️ typing_stop de %s dans %s", user_public_id, room)
 
         except Exception as e:
@@ -400,7 +473,10 @@ def init_chat_socket(socketio: SocketIO):
 
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user or user.role != UserRole.driver:
-                emit("error", {"error": "Seuls les chauffeurs peuvent rejoindre cette room."})
+                emit(
+                    "error",
+                    {"error": "Seuls les chauffeurs peuvent rejoindre cette room."},
+                )
                 return
 
             driver = Driver.query.filter_by(user_id=user.id).first()
@@ -412,7 +488,12 @@ def init_chat_socket(socketio: SocketIO):
             join_room(driver_room)
             company_room = f"company_{driver.company_id}"
             join_room(company_room)
-            logger.info("✅ Driver %s joined rooms [%s, %s]", driver.id, driver_room, company_room)
+            logger.info(
+                "✅ Driver %s joined rooms [%s, %s]",
+                driver.id,
+                driver_room,
+                company_room,
+            )
             emit("joined_room", {"rooms": [driver_room, company_room]})
 
         except Exception as e:
@@ -435,7 +516,9 @@ def init_chat_socket(socketio: SocketIO):
             user_role = sid_info.get("role")
 
             if not user_public_id:
-                logger.warning("⛔ driver_location sans JWT public_id pour SID=%s", current_sid)
+                logger.warning(
+                    "⛔ driver_location sans JWT public_id pour SID=%s", current_sid
+                )
                 emit("error", {"error": "Session JWT introuvable"})
                 return
 
@@ -460,7 +543,10 @@ def init_chat_socket(socketio: SocketIO):
                     if driver:
                         logger.info("✅ Driver trouvé via payload: %s", driver.id)
                     else:
-                        logger.warning("⚠️ Driver introuvable via payload_driver_id=%s", candidate_id)
+                        logger.warning(
+                            "⚠️ Driver introuvable via payload_driver_id=%s",
+                            candidate_id,
+                        )
                 except (ValueError, TypeError):
                     logger.warning("⚠️ driver_id non convertible: %s", payload_driver_id)
 
@@ -475,8 +561,15 @@ def init_chat_socket(socketio: SocketIO):
             # Évite l'évaluation booléenne d'une colonne SQLA : on récupère un int ou None
             company_id_val = tcast("int | None", getattr(driver, "company_id", None))
             if (driver is None) or (company_id_val is None):
-                logger.error("❌ Driver introuvable: payload_driver_id=%s, user_id=%s", payload_driver_id, user_id)
-                emit("error", {"error": "Chauffeur introuvable ou non lié à une entreprise."})
+                logger.error(
+                    "❌ Driver introuvable: payload_driver_id=%s, user_id=%s",
+                    payload_driver_id,
+                    user_id,
+                )
+                emit(
+                    "error",
+                    {"error": "Chauffeur introuvable ou non lié à une entreprise."},
+                )
                 return
 
             latitude = data.get("latitude")
@@ -492,11 +585,16 @@ def init_chat_socket(socketio: SocketIO):
 
             # ✅ Validation bornes géographiques
             if not (-LAT_THRESHOLD <= lat <= LAT_THRESHOLD):
-                emit("error", {"error": "Latitude invalide (doit être entre -90 et 90)."})
+                emit(
+                    "error", {"error": "Latitude invalide (doit être entre -90 et 90)."}
+                )
                 return
 
             if not (-LON_THRESHOLD <= lon <= LON_THRESHOLD):
-                emit("error", {"error": "Longitude invalide (doit être entre -180 et 180)."})
+                emit(
+                    "error",
+                    {"error": "Longitude invalide (doit être entre -180 et 180)."},
+                )
                 return
 
             latitude, longitude = lat, lon
@@ -518,7 +616,11 @@ def init_chat_socket(socketio: SocketIO):
                 with suppress(Exception):
                     redis_client.expire(key, 24 * 3600)
             except Exception as e_redis:
-                logger.exception("❌ Erreur écriture Redis driver_location pour driver %s: %s", driver.id, e_redis)
+                logger.exception(
+                    "❌ Erreur écriture Redis driver_location pour driver %s: %s",
+                    driver.id,
+                    e_redis,
+                )
 
             try:
                 # 🔹 DB: stocker aussi sur le modèle Driver (fallback si Redis down)
@@ -528,7 +630,11 @@ def init_chat_socket(socketio: SocketIO):
                 db.session.commit()
             except Exception as e_db:
                 db.session.rollback()
-                logger.exception("❌ Erreur mise à jour DB driver_location pour driver %s: %s", driver.id, e_db)
+                logger.exception(
+                    "❌ Erreur mise à jour DB driver_location pour driver %s: %s",
+                    driver.id,
+                    e_db,
+                )
 
             # 7. Diffuser la position aux rooms de l'entreprise
             company_room = f"company_{company_id_val}"
@@ -536,14 +642,22 @@ def init_chat_socket(socketio: SocketIO):
                 "driver_location_update",
                 {
                     "driver_id": driver.id,
-                    "first_name": getattr(getattr(driver, "user", None), "first_name", None),
+                    "first_name": getattr(
+                        getattr(driver, "user", None), "first_name", None
+                    ),
                     "latitude": latitude,
                     "longitude": longitude,
                     "timestamp": now_iso,
                 },
                 room=company_room,
             )
-            logger.info("📡 Loc -> %s (driver %s) %s,%s", company_room, driver.id, latitude, longitude)
+            logger.info(
+                "📡 Loc -> %s (driver %s) %s,%s",
+                company_room,
+                driver.id,
+                latitude,
+                longitude,
+            )
 
         except Exception as e:
             logger.exception("❌ Erreur driver_location : %s", e)
@@ -557,7 +671,9 @@ def init_chat_socket(socketio: SocketIO):
         try:
             current_sid = _get_sid()
             logger.info(
-                "📍 driver_location_batch reçu, SID=%s, positions_count=%s", current_sid, len(data.get("positions", []))
+                "📍 driver_location_batch reçu, SID=%s, positions_count=%s",
+                current_sid,
+                len(data.get("positions", [])),
             )
 
             sid_info = _SID_INDEX.get(current_sid, {})
@@ -565,7 +681,10 @@ def init_chat_socket(socketio: SocketIO):
             user_role = sid_info.get("role")
 
             if not user_public_id:
-                logger.warning("⛔ driver_location_batch sans JWT public_id pour SID=%s", current_sid)
+                logger.warning(
+                    "⛔ driver_location_batch sans JWT public_id pour SID=%s",
+                    current_sid,
+                )
                 emit("error", {"error": "Session JWT introuvable"})
                 return
 
@@ -598,7 +717,10 @@ def init_chat_socket(socketio: SocketIO):
                     payload_driver_id,
                     user.id,
                 )
-                emit("error", {"error": "Chauffeur introuvable ou non lié à une entreprise."})
+                emit(
+                    "error",
+                    {"error": "Chauffeur introuvable ou non lié à une entreprise."},
+                )
                 return
 
             positions = data.get("positions", [])
@@ -633,7 +755,11 @@ def init_chat_socket(socketio: SocketIO):
                         )
                         redis_client.expire(key, 24 * 3600)
                     except Exception as e_redis:
-                        logger.exception("❌ Erreur Redis driver_location_batch pour driver %s: %s", driver.id, e_redis)
+                        logger.exception(
+                            "❌ Erreur Redis driver_location_batch pour driver %s: %s",
+                            driver.id,
+                            e_redis,
+                        )
 
                     # Persister dans DB (seulement la dernière position du batch)
                     if pos == positions[-1]:
@@ -644,14 +770,20 @@ def init_chat_socket(socketio: SocketIO):
                             db.session.commit()
                         except Exception as e_db:
                             db.session.rollback()
-                            logger.exception("❌ Erreur DB driver_location_batch pour driver %s: %s", driver.id, e_db)
+                            logger.exception(
+                                "❌ Erreur DB driver_location_batch pour driver %s: %s",
+                                driver.id,
+                                e_db,
+                            )
 
                     # Diffuser chaque position
                     cast("Any", emit)(
                         "driver_location_update",
                         {
                             "driver_id": driver.id,
-                            "first_name": getattr(getattr(driver, "user", None), "first_name", None),
+                            "first_name": getattr(
+                                getattr(driver, "user", None), "first_name", None
+                            ),
                             "latitude": latitude,
                             "longitude": longitude,
                             "timestamp": pos.get("timestamp") or now_iso,
@@ -662,7 +794,12 @@ def init_chat_socket(socketio: SocketIO):
                     logger.warning("⚠️ Position invalide dans batch: %s", e)
                     continue
 
-            logger.info("📡 Batch -> %s (driver %s) %s positions", company_room, driver.id, len(positions))
+            logger.info(
+                "📡 Batch -> %s (driver %s) %s positions",
+                company_room,
+                driver.id,
+                len(positions),
+            )
 
         except Exception as e:
             logger.exception("❌ Erreur driver_location_batch : %s", e)
@@ -700,7 +837,10 @@ def init_chat_socket(socketio: SocketIO):
             elif user_role == "driver":
                 driver = Driver.query.filter_by(user_id=user.id).first()
                 if not driver or not driver.company_id:
-                    emit("error", {"error": "Chauffeur ou entreprise associée introuvable."})
+                    emit(
+                        "error",
+                        {"error": "Chauffeur ou entreprise associée introuvable."},
+                    )
                     return
 
                 room = f"company_{driver.company_id}"
@@ -708,7 +848,10 @@ def init_chat_socket(socketio: SocketIO):
                 emit("joined_company", {"company_id": driver.company_id, "room": room})
                 logger.info("🚗 Driver %s joined company room: %s", driver.id, room)
             else:
-                emit("error", {"error": "Rôle non autorisé pour rejoindre une room entreprise."})
+                emit(
+                    "error",
+                    {"error": "Rôle non autorisé pour rejoindre une room entreprise."},
+                )
         except Exception as e:
             logger.exception("❌ Error in join_company: %s", e)
             emit("error", {"error": str(e)})
@@ -724,7 +867,10 @@ def init_chat_socket(socketio: SocketIO):
             company_id = company_info.get("company_id")
 
             if not user_public_id or user_role != "company":
-                emit("error", {"error": "Accès non autorisé pour la demande de localisation."})
+                emit(
+                    "error",
+                    {"error": "Accès non autorisé pour la demande de localisation."},
+                )
                 return
 
             if not company_id:
@@ -764,19 +910,26 @@ def init_chat_socket(socketio: SocketIO):
                             "driver_location_update",
                             {
                                 "driver_id": driver.id,
-                                "first_name": getattr(getattr(driver, "user", None), "first_name", None),
+                                "first_name": getattr(
+                                    getattr(driver, "user", None), "first_name", None
+                                ),
                                 "latitude": loc_data.get("lat"),
                                 "longitude": loc_data.get("lon"),
-                                "timestamp": loc_data.get("ts") or datetime.now(UTC).isoformat(),
+                                "timestamp": loc_data.get("ts")
+                                or datetime.now(UTC).isoformat(),
                             },
                         )
-                    elif (driver.latitude is not None) and (driver.longitude is not None):
+                    elif (driver.latitude is not None) and (
+                        driver.longitude is not None
+                    ):
                         # Fallback to DB if Redis doesnt have data
                         cast("Any", emit)(
                             "driver_location_update",
                             {
                                 "driver_id": driver.id,
-                                "first_name": getattr(getattr(driver, "user", None), "first_name", None),
+                                "first_name": getattr(
+                                    getattr(driver, "user", None), "first_name", None
+                                ),
                                 "latitude": driver.latitude,
                                 "longitude": driver.longitude,
                                 "timestamp": datetime.now(UTC).isoformat(),
@@ -785,9 +938,15 @@ def init_chat_socket(socketio: SocketIO):
                 except Exception as e:
                     # driver vient du for → devrait exister, mais on défend le log quand même
                     safe_id = getattr(driver, "id", None)
-                    logger.exception("❌ Error sending driver location for driver %s: %s", safe_id, e)
+                    logger.exception(
+                        "❌ Error sending driver location for driver %s: %s", safe_id, e
+                    )
 
-            logger.info("📡 Sent locations for %s drivers to company %s", len(drivers), company_id)
+            logger.info(
+                "📡 Sent locations for %s drivers to company %s",
+                len(drivers),
+                company_id,
+            )
 
         except Exception as e:
             logger.exception("❌ Error in get_driver_locations: %s", e)

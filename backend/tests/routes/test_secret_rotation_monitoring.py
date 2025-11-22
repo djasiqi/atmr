@@ -28,7 +28,9 @@ def sample_rotations(app, db_session):
     with app.app_context():
         record_rotation("jwt", "success", "prod", metadata={"next_rotation_days": 30})
         record_rotation("jwt", "error", "prod", error_message="Test error")
-        record_rotation("encryption", "success", "dev", metadata={"legacy_keys_count": 2})
+        record_rotation(
+            "encryption", "success", "dev", metadata={"legacy_keys_count": 2}
+        )
 
 
 class TestRotationHistoryEndpoint:
@@ -59,7 +61,9 @@ class TestRotationHistoryEndpoint:
             assert "per_page" in data
             assert len(data["rotations"]) > 0
 
-    def test_get_history_filter_by_type(self, app, client, admin_user, sample_rotations):
+    def test_get_history_filter_by_type(
+        self, app, client, admin_user, sample_rotations
+    ):
         """Test filtrage par type de secret."""
         with app.app_context():
             from flask_jwt_extended import create_access_token

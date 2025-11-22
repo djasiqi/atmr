@@ -83,7 +83,9 @@ class TestShadowModeManager:
         }
 
         # Test de la comparaison
-        kpis = shadow_manager.log_decision_comparison(company_id, booking_id, human_decision, rl_decision, context)
+        kpis = shadow_manager.log_decision_comparison(
+            company_id, booking_id, human_decision, rl_decision, context
+        )
 
         assert isinstance(kpis, dict)
         assert "eta_delta" in kpis
@@ -119,7 +121,9 @@ class TestShadowModeManager:
         }
 
         # Test du calcul des KPIs via log_decision_comparison
-        kpis = shadow_manager.log_decision_comparison(company_id, booking_id, human_decision, rl_decision, context)
+        kpis = shadow_manager.log_decision_comparison(
+            company_id, booking_id, human_decision, rl_decision, context
+        )
 
         assert isinstance(kpis, dict)
         assert "eta_delta" in kpis
@@ -157,7 +161,9 @@ class TestShadowModeManager:
         }
 
         # Test de la génération des raisons via log_decision_comparison
-        kpis = shadow_manager.log_decision_comparison(company_id, booking_id, human_decision, rl_decision, context)
+        kpis = shadow_manager.log_decision_comparison(
+            company_id, booking_id, human_decision, rl_decision, context
+        )
 
         assert isinstance(kpis, dict)
         assert "decision_reasons" in kpis
@@ -185,7 +191,9 @@ class TestShadowModeManager:
         }
 
         # Test de la vérification des contraintes via log_decision_comparison
-        kpis = shadow_manager.log_decision_comparison(company_id, booking_id, human_decision, rl_decision, context)
+        kpis = shadow_manager.log_decision_comparison(
+            company_id, booking_id, human_decision, rl_decision, context
+        )
 
         assert isinstance(kpis, dict)
         assert "constraint_violations" in kpis
@@ -217,7 +225,9 @@ class TestShadowModeManager:
         }
 
         # Test du calcul de l'impact via log_decision_comparison
-        kpis = shadow_manager.log_decision_comparison(company_id, booking_id, human_decision, rl_decision, context)
+        kpis = shadow_manager.log_decision_comparison(
+            company_id, booking_id, human_decision, rl_decision, context
+        )
 
         assert isinstance(kpis, dict)
         assert "performance_impact" in kpis
@@ -234,7 +244,11 @@ class TestShadowModeManager:
             shadow_manager.log_decision_comparison(
                 company_id,
                 f"booking_{i}",
-                {"driver_id": f"driver_{i}", "eta_minutes": 20 + i * 5, "delay_minutes": 5 + i},
+                {
+                    "driver_id": f"driver_{i}",
+                    "eta_minutes": 20 + i * 5,
+                    "delay_minutes": 5 + i,
+                },
                 {
                     "driver_id": f"driver_{i + 1}",
                     "eta_minutes": 15 + i * 3,
@@ -264,7 +278,11 @@ class TestShadowModeManager:
             shadow_manager.log_decision_comparison(
                 company_id,
                 f"booking_{i}",
-                {"driver_id": f"driver_{i}", "eta_minutes": 20 + i * 5, "delay_minutes": 5 + i},
+                {
+                    "driver_id": f"driver_{i}",
+                    "eta_minutes": 20 + i * 5,
+                    "delay_minutes": 5 + i,
+                },
                 {
                     "driver_id": f"driver_{i + 1}",
                     "eta_minutes": 15 + i * 3,
@@ -317,7 +335,12 @@ class TestShadowModeManager:
             company_id,
             "booking_1",
             {"driver_id": "driver_1", "eta_minutes": 20, "delay_minutes": 5},
-            {"driver_id": "driver_2", "eta_minutes": 15, "delay_minutes": 3, "confidence": 0.85},
+            {
+                "driver_id": "driver_2",
+                "eta_minutes": 15,
+                "delay_minutes": 3,
+                "confidence": 0.85,
+            },
             {},
         )
 
@@ -459,7 +482,11 @@ def run_shadow_mode_tests():
     print("\n📊 Résultats des tests du Shadow Mode:")
     print("  Tests exécutés: {total_tests}")
     print("  Tests réussis: {passed_tests}")
-    print("  Taux de succès: {passed_tests/total_tests*100" if total_tests > 0 else "  Taux de succès: 0%")
+    print(
+        "  Taux de succès: {passed_tests/total_tests*100"
+        if total_tests > 0
+        else "  Taux de succès: 0%"
+    )
 
     return passed_tests, total_tests
 

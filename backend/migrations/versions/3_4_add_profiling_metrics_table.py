@@ -22,20 +22,47 @@ def upgrade():
     op.create_table(
         "profiling_metrics",
         sa.Column("id", sa.BigInteger(), nullable=False),
-        sa.Column("profiling_date", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "profiling_date",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
         sa.Column("duration_seconds", sa.Float(), nullable=False),
         sa.Column("request_count", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("top_functions", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("system_metrics_before", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("system_metrics_after", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("total_stats", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "top_functions", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
+        sa.Column(
+            "system_metrics_before",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
+        sa.Column(
+            "system_metrics_after",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
+        sa.Column(
+            "total_stats", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
         sa.Column("report_text", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
 
     # Index pour performance
-    op.create_index("ix_profiling_metrics_profiling_date", "profiling_metrics", ["profiling_date"], unique=False)
+    op.create_index(
+        "ix_profiling_metrics_profiling_date",
+        "profiling_metrics",
+        ["profiling_date"],
+        unique=False,
+    )
 
 
 def downgrade():

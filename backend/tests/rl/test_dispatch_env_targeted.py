@@ -19,7 +19,15 @@ class TestDispatchEnvTargeted:
 
         # Simuler un environnement avec moins de drivers que prévu
         env.drivers = [{"id": 1, "available": True, "load": 2, "assigned": False}]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "assigned": False, "time_remaining": 30}]
+        env.bookings = [
+            {
+                "id": 1,
+                "priority": 3,
+                "time_window": 30,
+                "assigned": False,
+                "time_remaining": 30,
+            }
+        ]
 
         # Action qui pointe vers un driver inexistant (driver_idx >= len(drivers))
         action = 10  # driver_idx = 10 // 5 = 2, mais seulement 1 driver
@@ -118,7 +126,9 @@ class TestDispatchEnvTargeted:
 
     def test_step_episode_termination_exact_line(self):
         """Test step pour couvrir la ligne 310 exactement"""
-        env = DispatchEnv(num_drivers=3, max_bookings=5, simulation_hours=0.01)  # Très court
+        env = DispatchEnv(
+            num_drivers=3, max_bookings=5, simulation_hours=0.01
+        )  # Très court
         env.reset()
 
         # Avancer le temps pour déclencher la terminaison
@@ -140,7 +150,9 @@ class TestDispatchEnvTargeted:
         env.total_bookings = 10
         env.current_time = env.simulation_hours * 60 - 1
 
-        with patch.object(env, "_calculate_episode_bonus", return_value=50.0) as mock_bonus:
+        with patch.object(
+            env, "_calculate_episode_bonus", return_value=50.0
+        ) as mock_bonus:
             _obs, reward, terminated, _truncated, _info = env.step(0)
 
             # Vérifier que la ligne 310 est couverte (bonus ajouté)
@@ -177,7 +189,9 @@ class TestDispatchEnvTargeted:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        with patch.object(env, "_get_observation", return_value=np.array([1, 2, 3])) as mock_obs:
+        with patch.object(
+            env, "_get_observation", return_value=np.array([1, 2, 3])
+        ) as mock_obs:
             obs, _reward, _terminated, _truncated, _info = env.step(0)
 
             # Vérifier que la ligne 302 est couverte (observation générée)
@@ -213,7 +227,9 @@ class TestDispatchEnvTargeted:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        with patch.object(env, "_check_expired_bookings", return_value=-10.0) as mock_check:
+        with patch.object(
+            env, "_check_expired_bookings", return_value=-10.0
+        ) as mock_check:
             _obs, _reward, _terminated, _truncated, _info = env.step(0)
 
             # Vérifier que la ligne 296 est couverte (bookings expirés vérifiés)
@@ -313,7 +329,15 @@ class TestDispatchEnvTargeted:
 
         # Test 2: Action invalide (lignes 266-270)
         env.drivers = [{"id": 1, "available": True, "load": 2, "assigned": False}]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "assigned": False, "time_remaining": 30}]
+        env.bookings = [
+            {
+                "id": 1,
+                "priority": 3,
+                "time_window": 30,
+                "assigned": False,
+                "time_remaining": 30,
+            }
+        ]
 
         with patch("services.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(10)

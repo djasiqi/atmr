@@ -52,7 +52,9 @@ class TestHyperparameterTuner:
         config = tuner._suggest_hyperparameters(mock_trial)
 
         # Vérifier que les méthodes suggest sont appelées
-        assert mock_trial.suggest_float.call_count >= 5  # learning_rate, gamma, epsilon_*
+        assert (
+            mock_trial.suggest_float.call_count >= 5
+        )  # learning_rate, gamma, epsilon_*
         assert mock_trial.suggest_categorical.call_count >= 2  # batch_size, buffer_size
         assert mock_trial.suggest_int.call_count >= 2  # num_drivers, max_bookings
 
@@ -77,8 +79,27 @@ class TestHyperparameterTuner:
 
         # Mock trial avec valeurs spécifiques
         mock_trial = Mock()
-        mock_trial.suggest_float.side_effect = [0.001, 0.95, 0.9, 0.1, 0.995, 0.6, 0.4, 0.8, 0.005, 3, 0.99]
-        mock_trial.suggest_categorical.side_effect = [128, 100000, True, True, True, True]
+        mock_trial.suggest_float.side_effect = [
+            0.001,
+            0.95,
+            0.9,
+            0.1,
+            0.995,
+            0.6,
+            0.4,
+            0.8,
+            0.005,
+            3,
+            0.99,
+        ]
+        mock_trial.suggest_categorical.side_effect = [
+            128,
+            100000,
+            True,
+            True,
+            True,
+            True,
+        ]
         mock_trial.suggest_int.side_effect = [5, 15, 3]
 
         config = tuner._suggest_hyperparameters(mock_trial)
@@ -100,13 +121,34 @@ class TestHyperparameterTuner:
 
         # Mock trial
         mock_trial = Mock()
-        mock_trial.suggest_float.side_effect = [0.001, 0.95, 0.9, 0.1, 0.995, 0.6, 0.4, 0.8, 0.005, 3, 0.99]
-        mock_trial.suggest_categorical.side_effect = [128, 100000, True, True, True, True]
+        mock_trial.suggest_float.side_effect = [
+            0.001,
+            0.95,
+            0.9,
+            0.1,
+            0.995,
+            0.6,
+            0.4,
+            0.8,
+            0.005,
+            3,
+            0.99,
+        ]
+        mock_trial.suggest_categorical.side_effect = [
+            128,
+            100000,
+            True,
+            True,
+            True,
+            True,
+        ]
         mock_trial.suggest_int.side_effect = [3, 10, 3]
 
         with (
             patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
-            patch("services.rl.hyperparameter_tuner.ImprovedDQNAgent") as mock_agent_class,
+            patch(
+                "services.rl.hyperparameter_tuner.ImprovedDQNAgent"
+            ) as mock_agent_class,
         ):
             # Mock environment
             mock_env = Mock()
@@ -129,8 +171,14 @@ class TestHyperparameterTuner:
             mock_agent_class.assert_called_once()
 
             # Vérifier que l'entraînement et l'évaluation sont effectués
-            assert mock_env.reset.call_count >= tuner.n_training_episodes + tuner.n_eval_episodes
-            assert mock_env.step.call_count >= tuner.n_training_episodes + tuner.n_eval_episodes
+            assert (
+                mock_env.reset.call_count
+                >= tuner.n_training_episodes + tuner.n_eval_episodes
+            )
+            assert (
+                mock_env.step.call_count
+                >= tuner.n_training_episodes + tuner.n_eval_episodes
+            )
 
             # Vérifier que le reward est retourné
             assert isinstance(reward, float)
@@ -141,14 +189,35 @@ class TestHyperparameterTuner:
 
         # Mock trial avec pruning
         mock_trial = Mock()
-        mock_trial.suggest_float.side_effect = [0.001, 0.95, 0.9, 0.1, 0.995, 0.6, 0.4, 0.8, 0.005, 3, 0.99]
-        mock_trial.suggest_categorical.side_effect = [128, 100000, True, True, True, True]
+        mock_trial.suggest_float.side_effect = [
+            0.001,
+            0.95,
+            0.9,
+            0.1,
+            0.995,
+            0.6,
+            0.4,
+            0.8,
+            0.005,
+            3,
+            0.99,
+        ]
+        mock_trial.suggest_categorical.side_effect = [
+            128,
+            100000,
+            True,
+            True,
+            True,
+            True,
+        ]
         mock_trial.suggest_int.side_effect = [3, 10, 3]
         mock_trial.should_prune.return_value = True
 
         with (
             patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
-            patch("services.rl.hyperparameter_tuner.ImprovedDQNAgent") as mock_agent_class,
+            patch(
+                "services.rl.hyperparameter_tuner.ImprovedDQNAgent"
+            ) as mock_agent_class,
         ):
             # Mock environment
             mock_env = Mock()
@@ -318,7 +387,11 @@ class TestHyperparameterTuner:
         trials = []
         for i in range(3):
             trial = Mock()
-            trial.params = {"learning_rate": 0.001 + i * 0.0001, "gamma": 0.95, "batch_size": 128}
+            trial.params = {
+                "learning_rate": 0.001 + i * 0.0001,
+                "gamma": 0.95,
+                "batch_size": 128,
+            }
             trials.append(trial)
 
         result = tuner._analyze_triplet_gagnant(trials)
@@ -442,7 +515,11 @@ class TestHyperparameterTuner:
 
         # Mock trial states avec pruned
         for i, trial in enumerate(mock_study.trials):
-            trial.state = optuna.trial.TrialState.PRUNED if i % 2 == 0 else optuna.trial.TrialState.COMPLETE
+            trial.state = (
+                optuna.trial.TrialState.PRUNED
+                if i % 2 == 0
+                else optuna.trial.TrialState.COMPLETE
+            )
             trial.value = 100 - i * 10
             trial.number = i
             trial.params = {"learning_rate": 0.001}

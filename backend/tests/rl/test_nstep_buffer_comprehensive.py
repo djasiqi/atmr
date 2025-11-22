@@ -56,7 +56,9 @@ class TestNStepBufferComprehensive:
         """Test la gestion d'exception lors de l'ajout."""
         # Mock pour provoquer une exception dans _calculate_n_step_return
         with (
-            patch.object(buffer, "_calculate_n_step_return", side_effect=Exception("Test error")),
+            patch.object(
+                buffer, "_calculate_n_step_return", side_effect=Exception("Test error")
+            ),
             patch.object(buffer.logger, "error") as mock_error,
         ):
             state = np.array([1, 2, 3])
@@ -69,7 +71,9 @@ class TestNStepBufferComprehensive:
 
             # Vérifier que l'erreur est loggée
             mock_error.assert_called_once()
-            assert "[NStepBuffer] Erreur traitement N-step: Test error" in str(mock_error.call_args)
+            assert "[NStepBuffer] Erreur traitement N-step: Test error" in str(
+                mock_error.call_args
+            )
 
     def test_process_n_step_transitions_empty_buffer(self, buffer):
         """Test le traitement avec un buffer temporaire vide."""
@@ -80,19 +84,29 @@ class TestNStepBufferComprehensive:
         """Test la gestion d'exception lors du traitement."""
         # Ajouter une transition au buffer temporaire
         buffer.temp_buffer.append(
-            {"state": np.array([1, 2, 3]), "action": 0, "reward": 0.1, "next_state": np.array([2, 3, 4]), "done": False}
+            {
+                "state": np.array([1, 2, 3]),
+                "action": 0,
+                "reward": 0.1,
+                "next_state": np.array([2, 3, 4]),
+                "done": False,
+            }
         )
 
         # Mock pour provoquer une exception
         with (
-            patch.object(buffer, "_calculate_n_step_return", side_effect=Exception("Test error")),
+            patch.object(
+                buffer, "_calculate_n_step_return", side_effect=Exception("Test error")
+            ),
             patch.object(buffer.logger, "error") as mock_error,
         ):
             buffer._process_n_step_transitions()
 
             # Vérifier que l'erreur est loggée
             mock_error.assert_called_once()
-            assert "[NStepBuffer] Erreur traitement N-step: Test error" in str(mock_error.call_args)
+            assert "[NStepBuffer] Erreur traitement N-step: Test error" in str(
+                mock_error.call_args
+            )
 
     def test_calculate_n_step_return_normal(self, buffer):
         """Test le calcul normal du retour N-step."""
@@ -220,7 +234,9 @@ class TestNStepPrioritizedBufferComprehensive:
         if NStepPrioritizedBuffer is None:
             pytest.skip("NStepPrioritizedBuffer non disponible")
 
-        return NStepPrioritizedBuffer(capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_end=1)
+        return NStepPrioritizedBuffer(
+            capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_end=1
+        )
 
     def test_prioritized_buffer_initialization(self, prioritized_buffer):
         """Test l'initialisation du buffer priorisé."""
@@ -242,7 +258,9 @@ class TestNStepPrioritizedBufferComprehensive:
         done = True
         td_error = 0.5
 
-        prioritized_buffer.add_transition(state, action, reward, next_state, done, td_error=td_error)
+        prioritized_buffer.add_transition(
+            state, action, reward, next_state, done, td_error=td_error
+        )
 
         assert len(prioritized_buffer.buffer) == 1
         assert prioritized_buffer.priorities[0] > 0  # Priorité basée sur td_error
@@ -271,7 +289,9 @@ class TestNStepPrioritizedBufferComprehensive:
             done = i == 4
             td_error = i * 0.2  # Différentes priorités
 
-            prioritized_buffer.add_transition(state, action, reward, next_state, done, td_error)
+            prioritized_buffer.add_transition(
+                state, action, reward, next_state, done, td_error
+            )
 
         batch, weights, indices = prioritized_buffer.sample(3)
 
@@ -291,7 +311,9 @@ class TestNStepPrioritizedBufferComprehensive:
     def test_sample_prioritized_with_exception(self, prioritized_buffer):
         """Test la gestion d'exception lors de l'échantillonnage priorisé."""
         # Ajouter une transition
-        prioritized_buffer.add_transition(np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), True, td_error=0.5)
+        prioritized_buffer.add_transition(
+            np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), True, td_error=0.5
+        )
 
         # Mock pour provoquer une exception
         with (
@@ -311,7 +333,12 @@ class TestNStepPrioritizedBufferComprehensive:
         # Ajouter des transitions
         for i in range(3):
             prioritized_buffer.add_transition(
-                np.array([i, i + 1, i + 2]), i, i * 0.1, np.array([i + 1, i + 2, i + 3]), i == 2, td_error=i * 0.2
+                np.array([i, i + 1, i + 2]),
+                i,
+                i * 0.1,
+                np.array([i + 1, i + 2, i + 3]),
+                i == 2,
+                td_error=i * 0.2,
             )
 
         # Mettre à jour les priorités
@@ -328,7 +355,9 @@ class TestNStepPrioritizedBufferComprehensive:
     def test_clear_prioritized(self, prioritized_buffer):
         """Test le vidage du buffer priorisé."""
         # Ajouter des transitions
-        prioritized_buffer.add_transition(np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), True, td_error=0.5)
+        prioritized_buffer.add_transition(
+            np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), True, td_error=0.5
+        )
 
         prioritized_buffer.clear()
 
@@ -375,14 +404,20 @@ class TestNStepBufferEdgeCases:
         """Test les cas limites du calcul N-step."""
         # Test avec gamma = 0
         buffer.gamma = 0
-        buffer.temp_buffer = [{"reward": 0.1, "done": False}, {"reward": 0.2, "done": True}]
+        buffer.temp_buffer = [
+            {"reward": 0.1, "done": False},
+            {"reward": 0.2, "done": True},
+        ]
 
         n_step_return = buffer._calculate_n_step_return(0)
         assert n_step_return == 0.1  # Seulement la première récompense
 
     def test_n_step_calculation_with_nan_rewards(self, buffer):
         """Test le calcul avec des récompenses NaN."""
-        buffer.temp_buffer = [{"reward": float("nan"), "done": False}, {"reward": 0.2, "done": True}]
+        buffer.temp_buffer = [
+            {"reward": float("nan"), "done": False},
+            {"reward": 0.2, "done": True},
+        ]
 
         n_step_return = buffer._calculate_n_step_return(0)
         # Le calcul devrait gérer NaN et retourner une valeur valide
@@ -391,7 +426,10 @@ class TestNStepBufferEdgeCases:
 
     def test_n_step_calculation_with_inf_rewards(self, buffer):
         """Test le calcul avec des récompenses infinies."""
-        buffer.temp_buffer = [{"reward": float("inf"), "done": False}, {"reward": 0.2, "done": True}]
+        buffer.temp_buffer = [
+            {"reward": float("inf"), "done": False},
+            {"reward": 0.2, "done": True},
+        ]
 
         n_step_return = buffer._calculate_n_step_return(0)
         # Le calcul devrait gérer inf et retourner une valeur valide
@@ -426,7 +464,10 @@ class TestNStepBufferEdgeCases:
         """Test les valeurs limites de gamma."""
         # Test avec gamma = 1
         buffer.gamma = 1
-        buffer.temp_buffer = [{"reward": 0.1, "done": False}, {"reward": 0.2, "done": True}]
+        buffer.temp_buffer = [
+            {"reward": 0.1, "done": False},
+            {"reward": 0.2, "done": True},
+        ]
 
         n_step_return = buffer._calculate_n_step_return(0)
         expected = 0.1 + 1 * 0.2  # Pas de discount
@@ -445,7 +486,10 @@ class TestNStepBufferEdgeCases:
 
     def test_negative_rewards(self, buffer):
         """Test avec des récompenses négatives."""
-        buffer.temp_buffer = [{"reward": -0.1, "done": False}, {"reward": -0.2, "done": True}]
+        buffer.temp_buffer = [
+            {"reward": -0.1, "done": False},
+            {"reward": -0.2, "done": True},
+        ]
 
         n_step_return = buffer._calculate_n_step_return(0)
         assert n_step_return < 0
@@ -457,7 +501,10 @@ class TestNStepBufferEdgeCases:
         buffer.temp_buffer = [
             {"reward": 0.1, "done": False},
             {"reward": 0.2, "done": True},
-            {"reward": 0.3, "done": False},  # Cette transition ne devrait pas être utilisée
+            {
+                "reward": 0.3,
+                "done": False,
+            },  # Cette transition ne devrait pas être utilisée
         ]
 
         n_step_return = buffer._calculate_n_step_return(0)

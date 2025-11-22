@@ -14,14 +14,21 @@ class DriverProfileUpdateSchema(Schema):
     # Statut
     status = fields.Str(
         validate=validate.OneOf(
-            ["disponible", "hors service"], error="status doit être: 'disponible' ou 'hors service'"
+            ["disponible", "hors service"],
+            error="status doit être: 'disponible' ou 'hors service'",
         )
     )
 
     # HR champs
     contract_type = fields.Str(validate=validate.Length(max=50))
-    weekly_hours = fields.Int(validate=validate.Range(min=0, max=168, error="weekly_hours doit être entre 0 et 168"))
-    hourly_rate_cents = fields.Int(validate=validate.Range(min=0, error="hourly_rate_cents doit être >= 0"))
+    weekly_hours = fields.Int(
+        validate=validate.Range(
+            min=0, max=168, error="weekly_hours doit être entre 0 et 168"
+        )
+    )
+    hourly_rate_cents = fields.Int(
+        validate=validate.Range(min=0, error="hourly_rate_cents doit être >= 0")
+    )
 
     # Dates (format YYYY-MM-DD)
     # Note: fields.Date gère déjà le format ISO8601, pas besoin de Regexp
@@ -35,4 +42,6 @@ class DriverProfileUpdateSchema(Schema):
         fields.Str(validate=validate.Length(max=10)),
         validate=validate.Length(max=10, error="Maximum 10 catégories de permis"),
     )
-    trainings = fields.List(fields.Dict(), validate=validate.Length(max=50, error="Maximum 50 formations"))
+    trainings = fields.List(
+        fields.Dict(), validate=validate.Length(max=50, error="Maximum 50 formations")
+    )

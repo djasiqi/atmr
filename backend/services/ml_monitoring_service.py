@@ -75,7 +75,11 @@ class MLMonitoringService:
             db.session.add(prediction)
             db.session.commit()
 
-            logger.debug("[MLMonitoring] Logged prediction for booking %s: %s", booking_id, predicted_delay)
+            logger.debug(
+                "[MLMonitoring] Logged prediction for booking %s: %s",
+                booking_id,
+                predicted_delay,
+            )
 
             return prediction
 
@@ -96,7 +100,9 @@ class MLMonitoringService:
         try:
             # Récupérer la dernière prédiction pour ce booking
             prediction = (
-                MLPrediction.query.filter_by(booking_id=booking_id).order_by(MLPrediction.created_at.desc()).first()
+                MLPrediction.query.filter_by(booking_id=booking_id)
+                .order_by(MLPrediction.created_at.desc())
+                .first()
             )
 
             if prediction:
@@ -111,7 +117,9 @@ class MLMonitoringService:
                     prediction.prediction_error,
                 )
             else:
-                logger.warning("[MLMonitoring] No prediction found for booking %s", booking_id)
+                logger.warning(
+                    "[MLMonitoring] No prediction found for booking %s", booking_id
+                )
 
         except Exception as e:
             logger.error("[MLMonitoring] Failed to update actual delay: %s", e)
@@ -164,9 +172,15 @@ class MLMonitoringService:
             r2 = float(1 - (ss_res / ss_tot)) if ss_tot > 0 else 0.0
 
             # Autres métriques
-            accuracy_rate = sum(1 for p in predictions if p.is_accurate) / len(predictions)
+            accuracy_rate = sum(1 for p in predictions if p.is_accurate) / len(
+                predictions
+            )
             avg_confidence = float(np.mean([p.confidence for p in predictions]))
-            avg_time_ms = float(np.mean([p.prediction_time_ms for p in predictions if p.prediction_time_ms]))
+            avg_time_ms = float(
+                np.mean(
+                    [p.prediction_time_ms for p in predictions if p.prediction_time_ms]
+                )
+            )
 
             return {
                 "period_hours": hours,
@@ -198,7 +212,9 @@ class MLMonitoringService:
             daily_metrics = []
 
             for day_offset in range(days):
-                day_start = now_utc().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=day_offset)
+                day_start = now_utc().replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                ) - timedelta(days=day_offset)
                 day_end = day_start + timedelta(days=1)
 
                 # Prédictions de ce jour avec résultats réels
@@ -210,7 +226,9 @@ class MLMonitoringService:
                 )
 
                 if predictions:
-                    predicted = np.array([p.predicted_delay_minutes for p in predictions])
+                    predicted = np.array(
+                        [p.predicted_delay_minutes for p in predictions]
+                    )
                     actual = np.array([p.actual_delay_minutes for p in predictions])
                     errors = np.abs(predicted - actual)
 
@@ -226,7 +244,10 @@ class MLMonitoringService:
                             "count": len(predictions),
                             "mae": round(mae, 2),
                             "r2": round(r2, 4),
-                            "accuracy_rate": sum(1 for p in predictions if p.is_accurate) / len(predictions),
+                            "accuracy_rate": sum(
+                                1 for p in predictions if p.is_accurate
+                            )
+                            / len(predictions),
                         }
                     )
                 else:
@@ -258,7 +279,11 @@ class MLMonitoringService:
 
         """
         try:
-            predictions = MLPrediction.query.order_by(MLPrediction.created_at.desc()).limit(limit).all()
+            predictions = (
+                MLPrediction.query.order_by(MLPrediction.created_at.desc())
+                .limit(limit)
+                .all()
+            )
 
             return [p.to_dict() for p in predictions]
 

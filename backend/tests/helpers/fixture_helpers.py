@@ -58,7 +58,9 @@ def create_independent_fixture(
         return persisted_fixture(db_session, instance, model_class)
 
     instances = [factory_func(**factory_kwargs) for _ in range(count)]
-    return [persisted_fixture(db_session, instance, model_class) for instance in instances]
+    return [
+        persisted_fixture(db_session, instance, model_class) for instance in instances
+    ]
 
 
 def create_fixture_with_optional_dependency(
@@ -104,7 +106,9 @@ def create_fixture_with_optional_dependency(
     """
     # Créer la dépendance si nécessaire
     if dependency is None and dependency_factory is not None:
-        dependency = persisted_fixture(db_session, dependency_factory(), type(dependency))
+        dependency = persisted_fixture(
+            db_session, dependency_factory(), type(dependency)
+        )
 
     # Créer les objets
     if count == 1:
@@ -112,4 +116,6 @@ def create_fixture_with_optional_dependency(
         return persisted_fixture(db_session, instance, model_class)
 
     instances = [factory_func(dependency, **factory_kwargs) for _ in range(count)]
-    return [persisted_fixture(db_session, instance, model_class) for instance in instances]
+    return [
+        persisted_fixture(db_session, instance, model_class) for instance in instances
+    ]

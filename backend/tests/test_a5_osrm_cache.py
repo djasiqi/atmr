@@ -71,7 +71,9 @@ class TestOSrmCacheMetrics:
             increment_cache_miss()
 
         hit_rate = get_cache_hit_rate()
-        assert abs(hit_rate - 0.70) < 0.01, f"Hit-rate devrait être ~0.70, got {hit_rate}"
+        assert abs(hit_rate - 0.70) < 0.01, (
+            f"Hit-rate devrait être ~0.70, got {hit_rate}"
+        )
 
         logger.info("✅ Test: Hit-rate = 70% avec 7 hits / 3 misses")
 

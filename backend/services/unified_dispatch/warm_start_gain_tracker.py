@@ -41,7 +41,9 @@ class WarmStartGainTracker:
         self.avg_gain_pct: float = 0.0
         self.should_alert: bool = False  # True si gain < 10% sur 7j
 
-    def record_comparison(self, size: int, with_time: float, without_time: float) -> None:
+    def record_comparison(
+        self, size: int, with_time: float, without_time: float
+    ) -> None:
         """Enregistre une comparaison avec/sans warm-start."""
 
         if without_time == 0:
@@ -141,8 +143,16 @@ def measure_warm_start_gain(
 
     # Taille cible: 100-200 bookings
     if not (TARGET_SIZE_MIN <= size <= TARGET_SIZE_MAX):
-        logger.debug("[B5] Skipping gain measurement (size=%d not in %d-%d)", size, TARGET_SIZE_MIN, TARGET_SIZE_MAX)
-        return {"skipped": True, "reason": f"size={size} not in {TARGET_SIZE_MIN}-{TARGET_SIZE_MAX}"}
+        logger.debug(
+            "[B5] Skipping gain measurement (size=%d not in %d-%d)",
+            size,
+            TARGET_SIZE_MIN,
+            TARGET_SIZE_MAX,
+        )
+        return {
+            "skipped": True,
+            "reason": f"size={size} not in {TARGET_SIZE_MIN}-{TARGET_SIZE_MAX}",
+        }
 
     try:
         # Test 1: SANS warm-start

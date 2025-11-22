@@ -77,7 +77,9 @@ class TestActionMaskingEdges:
 
         # Tester get_valid_actions
         valid_actions = mock_env.get_valid_actions()
-        assert valid_actions == [0], f"Devrait retourner [0], a retourné {valid_actions}"
+        assert valid_actions == [0], (
+            f"Devrait retourner [0], a retourné {valid_actions}"
+        )
 
         # Tester le masque d'actions
         mask = mock_env._get_valid_actions_mask()
@@ -110,7 +112,9 @@ class TestActionMaskingEdges:
 
         # Vérifier qu'aucune action d'assignation n'est valide
         assignment_actions = [i for i in range(1, mock_env.action_space.n) if mask[i]]
-        assert len(assignment_actions) == 0, f"Pas d'actions d'assignation valides, trouvé {assignment_actions}"
+        assert len(assignment_actions) == 0, (
+            f"Pas d'actions d'assignation valides, trouvé {assignment_actions}"
+        )
 
         # Tester step avec action 0
         _state, _reward, _terminated, _truncated, info = mock_env.step(0)
@@ -136,7 +140,9 @@ class TestActionMaskingEdges:
 
         # Tester get_valid_actions
         valid_actions = mock_env.get_valid_actions()
-        assert valid_actions == [0], f"Devrait retourner [0], a retourné {valid_actions}"
+        assert valid_actions == [0], (
+            f"Devrait retourner [0], a retourné {valid_actions}"
+        )
 
         # Tester le masque d'actions
         mask = mock_env._get_valid_actions_mask()
@@ -144,17 +150,23 @@ class TestActionMaskingEdges:
 
         # Vérifier qu'aucune action d'assignation n'est valide
         assignment_actions = [i for i in range(1, mock_env.action_space.n) if mask[i]]
-        assert len(assignment_actions) == 0, f"Pas d'actions d'assignation valides, trouvé {assignment_actions}"
+        assert len(assignment_actions) == 0, (
+            f"Pas d'actions d'assignation valides, trouvé {assignment_actions}"
+        )
 
         logger.info("✅ Test 0 drivers/bookings disponibles réussi")
 
     def test_impossible_time_windows(self, mock_env):
         """Test avec fenêtres temporelles impossibles."""
         # ✅ FIX: Définir current_time pour que les fenêtres soient vraiment impossibles
-        mock_env.current_time = 10  # Temps actuel > 0 pour que time_window_end=0 soit expiré
+        mock_env.current_time = (
+            10  # Temps actuel > 0 pour que time_window_end=0 soit expiré
+        )
 
         # Créer des bookings avec des fenêtres temporelles impossibles
-        mock_env.drivers = [{"id": 0, "lat": 46.2, "lon": 6.1, "available": True, "load": 0}]
+        mock_env.drivers = [
+            {"id": 0, "lat": 46.2, "lon": 6.1, "available": True, "load": 0}
+        ]
         mock_env.bookings = [
             {
                 "id": 0,
@@ -192,7 +204,9 @@ class TestActionMaskingEdges:
     def test_index_out_of_range_protection(self, mock_env):
         """Test protection contre les index out of range."""
         # Créer une situation où l'index pourrait dépasser les limites
-        mock_env.drivers = [{"id": 0, "lat": 46.2, "lon": 6.1, "available": True, "load": 0}]
+        mock_env.drivers = [
+            {"id": 0, "lat": 46.2, "lon": 6.1, "available": True, "load": 0}
+        ]
         mock_env.bookings = [
             {
                 "id": 0,
@@ -209,9 +223,15 @@ class TestActionMaskingEdges:
         invalid_actions = [mock_env.action_space.n, mock_env.action_space.n + 1, -1]
 
         for invalid_action in invalid_actions:
-            _state, reward, _terminated, _truncated, info = mock_env.step(invalid_action)
-            assert reward < REWARD_ZERO, f"Action invalide {invalid_action} devrait avoir reward négatif"
-            assert info.get("invalid_action", False), f"Action {invalid_action} devrait être marquée invalide"
+            _state, reward, _terminated, _truncated, info = mock_env.step(
+                invalid_action
+            )
+            assert reward < REWARD_ZERO, (
+                f"Action invalide {invalid_action} devrait avoir reward négatif"
+            )
+            assert info.get("invalid_action", False), (
+                f"Action {invalid_action} devrait être marquée invalide"
+            )
 
         logger.info("✅ Test protection index out of range réussi")
 
@@ -228,12 +248,16 @@ class TestActionMaskingEdges:
             action = mock_agent.select_action(state, valid_actions=[])
 
             # Vérifier que l'action est 0 (wait)
-            assert action == ACTION_ZERO, f"Devrait retourner action ACTION_ZERO, a retourné {action}"
+            assert action == ACTION_ZERO, (
+                f"Devrait retourner action ACTION_ZERO, a retourné {action}"
+            )
 
             # Vérifier qu'un warning a été loggé
             mock_warning.assert_called()
             warning_call = mock_warning.call_args[0][0]
-            assert "valid_actions vide" in warning_call, "Devrait logger un warning sur valid_actions vide"
+            assert "valid_actions vide" in warning_call, (
+                "Devrait logger un warning sur valid_actions vide"
+            )
 
         logger.info("✅ Test agent fallback avec valid_actions vide réussi")
 
@@ -251,11 +275,17 @@ class TestActionMaskingEdges:
         for invalid_action in invalid_actions:
             # L'agent devrait gérer cela gracieusement
             try:
-                result_action = mock_agent.select_action(state, valid_actions=[invalid_action])
+                result_action = mock_agent.select_action(
+                    state, valid_actions=[invalid_action]
+                )
                 # Si pas d'erreur, vérifier que l'action est dans les limites
-                assert 0 <= result_action < mock_agent.action_dim, f"Action {result_action} hors limites"
+                assert 0 <= result_action < mock_agent.action_dim, (
+                    f"Action {result_action} hors limites"
+                )
             except Exception as e:
-                pytest.fail(f"Agent a échoué avec action invalide {invalid_action}: {e}")
+                pytest.fail(
+                    f"Agent a échoué avec action invalide {invalid_action}: {e}"
+                )
 
         logger.info("✅ Test agent avec actions invalides réussi")
 
@@ -271,7 +301,12 @@ class TestActionMaskingEdges:
         # Test avec différents scénarios limites
         test_scenarios = [
             {"drivers": [], "bookings": []},
-            {"drivers": [{"id": 0, "lat": 46.2, "lon": 6.1, "available": True, "load": 0}], "bookings": []},
+            {
+                "drivers": [
+                    {"id": 0, "lat": 46.2, "lon": 6.1, "available": True, "load": 0}
+                ],
+                "bookings": [],
+            },
             {
                 "drivers": [],
                 "bookings": [
@@ -299,11 +334,17 @@ class TestActionMaskingEdges:
             # Tester que l'agent peut sélectionner une action
             try:
                 action = mock_agent.select_action(state, valid_actions)
-                assert 0 <= action < mock_env.action_space.n, f"Scénario {i}: Action {action} hors limites"
+                assert 0 <= action < mock_env.action_space.n, (
+                    f"Scénario {i}: Action {action} hors limites"
+                )
 
                 # Tester que l'environnement peut traiter l'action
-                _next_state, _reward, _terminated, _truncated, info = mock_env.step(action)
-                assert not info.get("invalid_action", False), f"Scénario {i}: Action {action} marquée invalide"
+                _next_state, _reward, _terminated, _truncated, info = mock_env.step(
+                    action
+                )
+                assert not info.get("invalid_action", False), (
+                    f"Scénario {i}: Action {action} marquée invalide"
+                )
 
             except Exception as e:
                 pytest.fail(f"Scénario {i} a échoué: {e}")
@@ -319,7 +360,10 @@ def test_action_masking_performance():
     # Créer environnement et agent
     env = DispatchEnv(num_drivers=5, max_bookings=10, simulation_hours=1)
     agent = ImprovedDQNAgent(
-        state_dim=env.observation_space.shape[0], action_dim=env.action_space.n, learning_rate=0.0001, epsilon_start=0.1
+        state_dim=env.observation_space.shape[0],
+        action_dim=env.action_space.n,
+        learning_rate=0.0001,
+        epsilon_start=0.1,
     )
 
     # Simuler plusieurs épisodes
@@ -346,7 +390,9 @@ def test_action_masking_performance():
 
     # Calculer le pourcentage d'actions invalides
     invalid_percentage = (
-        (invalid_actions_count / total_actions) * 1 if total_actions > TOTAL_ACTIONS_ZERO else TOTAL_ACTIONS_ZERO
+        (invalid_actions_count / total_actions) * 1
+        if total_actions > TOTAL_ACTIONS_ZERO
+        else TOTAL_ACTIONS_ZERO
     )
 
     # Vérifier que le pourcentage est < EST_ONE%
@@ -354,7 +400,9 @@ def test_action_masking_performance():
         f"Pourcentage d'actions invalides trop élevé: {invalid_percentage}"
     )
 
-    logger.info("✅ Performance test réussi: %s%% d'actions invalides", invalid_percentage)
+    logger.info(
+        "✅ Performance test réussi: %s%% d'actions invalides", invalid_percentage
+    )
 
 
 if __name__ == "__main__":

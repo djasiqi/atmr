@@ -63,7 +63,9 @@ class DispatchRun(db.Model):
     __mapper_args__: ClassVar[Dict[str, Any]] = {"eager_defaults": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id: Mapped[int] = mapped_column(ForeignKey("company.id", ondelete="CASCADE"), index=True)
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("company.id", ondelete="CASCADE"), index=True
+    )
     day: Mapped[date] = mapped_column(Date, nullable=False)
 
     status: Mapped[DispatchStatus] = mapped_column(
@@ -81,11 +83,17 @@ class DispatchRun(db.Model):
         nullable=False,
     )
 
-    config: Mapped[Dict[str, Any] | None] = mapped_column(MutableDict.as_mutable(JSONB()))
-    metrics: Mapped[Dict[str, Any] | None] = mapped_column(MutableDict.as_mutable(JSONB()))
+    config: Mapped[Dict[str, Any] | None] = mapped_column(
+        MutableDict.as_mutable(JSONB())
+    )
+    metrics: Mapped[Dict[str, Any] | None] = mapped_column(
+        MutableDict.as_mutable(JSONB())
+    )
 
     # Relations
-    company: Mapped[Company] = relationship(back_populates="dispatch_runs", passive_deletes=True)
+    company: Mapped[Company] = relationship(
+        back_populates="dispatch_runs", passive_deletes=True
+    )
     assignments: Mapped[List[Assignment]] = relationship(
         back_populates="dispatch_run",
         cascade="all, delete-orphan",
@@ -179,9 +187,13 @@ class DispatchRun(db.Model):
 class Assignment(db.Model):
     __tablename__ = "assignment"
     __table_args__ = (
-        UniqueConstraint("dispatch_run_id", "booking_id", name="uq_assignment_run_booking"),
+        UniqueConstraint(
+            "dispatch_run_id", "booking_id", name="uq_assignment_run_booking"
+        ),
         Index("ix_assignment_driver_status", "driver_id", "status"),
-        CheckConstraint("delay_seconds >= DELAY_SECONDS_ZERO", name="ck_assignment_delay_nonneg"),
+        CheckConstraint(
+            "delay_seconds >= DELAY_SECONDS_ZERO", name="ck_assignment_delay_nonneg"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -189,30 +201,57 @@ class Assignment(db.Model):
     dispatch_run_id: Mapped[int | None] = mapped_column(
         ForeignKey("dispatch_run.id", ondelete="SET NULL"), index=True, nullable=True
     )
-    booking_id = Column(Integer, ForeignKey("booking.id", ondelete="CASCADE"), nullable=False, index=True)
-    driver_id = Column(Integer, ForeignKey("driver.id", ondelete="SET NULL"), nullable=True, index=True)
-
-    status = Column(
-        SAEnum(AssignmentStatus, name="assignment_status"), nullable=False, default=AssignmentStatus.SCHEDULED
+    booking_id = Column(
+        Integer,
+        ForeignKey("booking.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    driver_id = Column(
+        Integer, ForeignKey("driver.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
-    planned_pickup_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    planned_dropoff_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    actual_pickup_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    actual_dropoff_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    status = Column(
+        SAEnum(AssignmentStatus, name="assignment_status"),
+        nullable=False,
+        default=AssignmentStatus.SCHEDULED,
+    )
 
-    eta_pickup_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    eta_dropoff_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    planned_pickup_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    planned_dropoff_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    actual_pickup_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    actual_dropoff_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    eta_pickup_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    eta_dropoff_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     delay_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # ✅ B2: Explicabilité des décisions (top-3 alternatives & contributions)
-    decision_explanation: Mapped[Dict[str, Any] | None] = mapped_column(MutableDict.as_mutable(JSONB()), nullable=True)
+    decision_explanation: Mapped[Dict[str, Any] | None] = mapped_column(
+        MutableDict.as_mutable(JSONB()), nullable=True
+    )
 
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
     updated_at = Column(DateTime(timezone=True), onupdate=lambda: datetime.now(UTC))
 
     # Relations
-    dispatch_run: Mapped[DispatchRun | None] = relationship("DispatchRun", back_populates="assignments")
+    dispatch_run: Mapped[DispatchRun | None] = relationship(
+        "DispatchRun", back_populates="assignments"
+    )
     booking = relationship("Booking", backref="assignments", passive_deletes=True)
     driver = relationship("Driver", backref="assignments", passive_deletes=True)
 
@@ -303,16 +342,31 @@ class DriverStatus(db.Model):
     __tablename__ = "driver_status"
     __table_args__ = (
         Index("ix_driver_status_state_nextfree", "state", "next_free_at"),
-        CheckConstraint("latitude IS NULL OR (latitude BETWEEN -90 AND 90)", name="ck_driver_status_lat"),
-        CheckConstraint("longitude IS NULL OR (longitude BETWEEN -180 AND 180)", name="ck_driver_status_lon"),
         CheckConstraint(
-            "heading IS NULL OR (heading >= 0 AND heading <= HEADING_THRESHOLD)", name="ck_driver_status_heading"
+            "latitude IS NULL OR (latitude BETWEEN -90 AND 90)",
+            name="ck_driver_status_lat",
         ),
-        CheckConstraint("speed IS NULL OR speed >= SPEED_ZERO", name="ck_driver_status_speed"),
+        CheckConstraint(
+            "longitude IS NULL OR (longitude BETWEEN -180 AND 180)",
+            name="ck_driver_status_lon",
+        ),
+        CheckConstraint(
+            "heading IS NULL OR (heading >= 0 AND heading <= HEADING_THRESHOLD)",
+            name="ck_driver_status_heading",
+        ),
+        CheckConstraint(
+            "speed IS NULL OR speed >= SPEED_ZERO", name="ck_driver_status_speed"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    driver_id = Column(Integer, ForeignKey("driver.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    driver_id = Column(
+        Integer,
+        ForeignKey("driver.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
 
     state = Column(
         SAEnum(DriverState, name="driver_state"),
@@ -325,14 +379,22 @@ class DriverStatus(db.Model):
     longitude: Mapped[float] = mapped_column(Float, nullable=True)
     heading: Mapped[float] = mapped_column(Float, nullable=True)
     speed: Mapped[float] = mapped_column(Float, nullable=True)
-    next_free_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_free_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    current_assignment_id = Column(Integer, ForeignKey("assignment.id", ondelete="SET NULL"), nullable=True)
+    current_assignment_id = Column(
+        Integer, ForeignKey("assignment.id", ondelete="SET NULL"), nullable=True
+    )
 
-    last_update = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    last_update = Column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
 
     # Relations
-    driver = relationship("Driver", backref="status", uselist=False, passive_deletes=True)
+    driver = relationship(
+        "Driver", backref="status", uselist=False, passive_deletes=True
+    )
     current_assignment = relationship("Assignment", passive_deletes=True)
 
     @property
@@ -440,7 +502,13 @@ class DriverStatus(db.Model):
         self.next_free_at = next_free_at
         self.last_update = datetime.now(UTC)
 
-    def touch_location(self, lat: float, lon: float, heading: float | None = None, speed: float | None = None):
+    def touch_location(
+        self,
+        lat: float,
+        lon: float,
+        heading: float | None = None,
+        speed: float | None = None,
+    ):
         self.latitude = lat
         self.longitude = lon
         if heading is not None:
@@ -453,39 +521,71 @@ class DriverStatus(db.Model):
 class RealtimeEvent(db.Model):
     __tablename__ = "realtime_event"
     __table_args__ = (
-        Index("idx_realtime_event_company_type_time", "company_id", "event_type", "timestamp"),
-        Index("idx_realtime_event_entity_time", "entity_type", "entity_id", "timestamp"),
-        CheckConstraint("entity_id > ENTITY_ID_ZERO", name="ck_realtime_entity_id_positive"),
+        Index(
+            "idx_realtime_event_company_type_time",
+            "company_id",
+            "event_type",
+            "timestamp",
+        ),
+        Index(
+            "idx_realtime_event_entity_time", "entity_type", "entity_id", "timestamp"
+        ),
+        CheckConstraint(
+            "entity_id > ENTITY_ID_ZERO", name="ck_realtime_entity_id_positive"
+        ),
         Index("ix_realtime_event_data_gin", "data", postgresql_using="gin"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
+    company_id = Column(
+        Integer,
+        ForeignKey("company.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
-    event_type = Column(SAEnum(RealtimeEventType, name="realtime_event_type"), nullable=False)
-    entity_type = Column(SAEnum(RealtimeEntityType, name="realtime_entity_type"), nullable=False)
+    event_type = Column(
+        SAEnum(RealtimeEventType, name="realtime_event_type"), nullable=False
+    )
+    entity_type = Column(
+        SAEnum(RealtimeEntityType, name="realtime_entity_type"), nullable=False
+    )
 
     entity_id: Mapped[int] = mapped_column(Integer, nullable=False)
     data = Column(JSONB, nullable=True)
-    timestamp = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    timestamp = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
     company = relationship("Company", passive_deletes=True)
 
     @override
     def __repr__(self):
         et_any = getattr(self, "event_type", None)
-        et_str = et_any.value if isinstance(et_any, RealtimeEventType) else _as_str(et_any) or "?"
+        et_str = (
+            et_any.value
+            if isinstance(et_any, RealtimeEventType)
+            else _as_str(et_any) or "?"
+        )
         en_any = getattr(self, "entity_type", None)
-        en_str = en_any.value if isinstance(en_any, RealtimeEntityType) else _as_str(en_any) or "?"
+        en_str = (
+            en_any.value
+            if isinstance(en_any, RealtimeEntityType)
+            else _as_str(en_any) or "?"
+        )
         return f"<RealtimeEvent id={self.id} company={self.company_id} type={et_str} entity={en_str}:{self.entity_id}>"
 
     @property
     def serialize(self):
         et_any = getattr(self, "event_type", None)
-        et_str = et_any.value if isinstance(et_any, RealtimeEventType) else _as_str(et_any)
+        et_str = (
+            et_any.value if isinstance(et_any, RealtimeEventType) else _as_str(et_any)
+        )
 
         en_any = getattr(self, "entity_type", None)
-        en_str = en_any.value if isinstance(en_any, RealtimeEntityType) else _as_str(en_any)
+        en_str = (
+            en_any.value if isinstance(en_any, RealtimeEntityType) else _as_str(en_any)
+        )
 
         return {
             "id": self.id,
@@ -542,12 +642,19 @@ class DispatchMetrics(db.Model):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id: Mapped[int] = mapped_column(ForeignKey("company.id", ondelete="CASCADE"), index=True)
-    dispatch_run_id: Mapped[int] = mapped_column(ForeignKey("dispatch_run.id", ondelete="CASCADE"))
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("company.id", ondelete="CASCADE"), index=True
+    )
+    dispatch_run_id: Mapped[int] = mapped_column(
+        ForeignKey("dispatch_run.id", ondelete="CASCADE")
+    )
 
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now(), nullable=False
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+        nullable=False,
     )
 
     # Métriques de performance
@@ -557,24 +664,34 @@ class DispatchMetrics(db.Model):
     cancelled_bookings: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Métriques de retard
-    average_delay_minutes: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    average_delay_minutes: Mapped[float] = mapped_column(
+        Float, default=0.0, nullable=False
+    )
     max_delay_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_delay_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Métriques des chauffeurs
     total_drivers: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     active_drivers: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    avg_bookings_per_driver: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    avg_bookings_per_driver: Mapped[float] = mapped_column(
+        Float, default=0.0, nullable=False
+    )
 
     # Métriques d'optimisation
     total_distance_km: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
-    avg_distance_per_booking: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
-    suggestions_generated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    avg_distance_per_booking: Mapped[float] = mapped_column(
+        Float, default=0.0, nullable=False
+    )
+    suggestions_generated: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
     suggestions_applied: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     quality_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
 
-    extra_data: Mapped[Dict[str, Any] | None] = mapped_column(MutableDict.as_mutable(JSONB()), default=dict)
+    extra_data: Mapped[Dict[str, Any] | None] = mapped_column(
+        MutableDict.as_mutable(JSONB()), default=dict
+    )
 
     # Relations
     company: Mapped[Company] = relationship(back_populates="dispatch_metrics")
@@ -616,7 +733,9 @@ class DailyStats(db.Model):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id: Mapped[int] = mapped_column(ForeignKey("company.id", ondelete="CASCADE"), index=True)
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("company.id", ondelete="CASCADE"), index=True
+    )
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
 
     total_bookings: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -628,9 +747,14 @@ class DailyStats(db.Model):
     delay_trend: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now(), nullable=False
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+        nullable=False,
     )
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), onupdate=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), onupdate=lambda: datetime.now(UTC)
+    )
 
     # Relations
     company: Mapped[Company] = relationship(back_populates="daily_stats")

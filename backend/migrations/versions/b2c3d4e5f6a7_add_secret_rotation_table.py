@@ -24,19 +24,30 @@ def upgrade():
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("secret_type", sa.String(length=50), nullable=False),
         sa.Column("status", sa.String(length=20), nullable=False),
-        sa.Column("rotated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "rotated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
         sa.Column("environment", sa.String(length=20), nullable=False),
-        sa.Column("rotation_metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "rotation_metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("task_id", sa.String(length=255), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
 
     # Indexes pour performance et requêtes fréquentes
-    op.create_index("ix_secret_rotation_secret_type", "secret_rotation", ["secret_type"])
+    op.create_index(
+        "ix_secret_rotation_secret_type", "secret_rotation", ["secret_type"]
+    )
     op.create_index("ix_secret_rotation_status", "secret_rotation", ["status"])
     op.create_index("ix_secret_rotation_rotated_at", "secret_rotation", ["rotated_at"])
-    op.create_index("ix_secret_rotation_environment", "secret_rotation", ["environment"])
+    op.create_index(
+        "ix_secret_rotation_environment", "secret_rotation", ["environment"]
+    )
     op.create_index("ix_secret_rotation_task_id", "secret_rotation", ["task_id"])
 
 

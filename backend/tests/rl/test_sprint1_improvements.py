@@ -32,7 +32,9 @@ class TestPrioritizedReplayBuffer:
         high_priority_state = np.random.randn(10)
         low_priority_state = np.random.randn(10)
 
-        buffer.add(high_priority_state, 1, 10.0, high_priority_state, False, priority=10.0)
+        buffer.add(
+            high_priority_state, 1, 10.0, high_priority_state, False, priority=10.0
+        )
         buffer.add(low_priority_state, 2, 1.0, low_priority_state, False, priority=1.0)
 
         # Échantillonner plusieurs fois
@@ -131,9 +133,20 @@ class TestActionMasking:
         env.reset()
 
         # Créer un chauffeur et un booking
-        driver = {"available": True, "lat": 46.2044, "lon": 6.1432, "current_bookings": 0, "load": 0}
+        driver = {
+            "available": True,
+            "lat": 46.2044,
+            "lon": 6.1432,
+            "current_bookings": 0,
+            "load": 0,
+        }
 
-        booking = {"pickup_lat": 46.2044, "pickup_lon": 6.1432, "time_window_end": 30.0, "assigned": False}
+        booking = {
+            "pickup_lat": 46.2044,
+            "pickup_lon": 6.1432,
+            "time_window_end": 30.0,
+            "assigned": False,
+        }
 
         # Vérifier contrainte valide
         assert env._check_time_window_constraint(driver, booking)
@@ -156,7 +169,12 @@ class TestActionMasking:
             "load": 0,
         }
 
-        booking = {"pickup_lat": 46.2044, "pickup_lon": 6.1432, "time_window_end": 30.0, "assigned": False}
+        booking = {
+            "pickup_lat": 46.2044,
+            "pickup_lon": 6.1432,
+            "time_window_end": 30.0,
+            "assigned": False,
+        }
 
         # Vérifier que la contrainte est respectée
         assert not env._check_time_window_constraint(driver, booking)
@@ -194,7 +212,9 @@ class TestRewardInvariants:
                 _, reward, _, _, _ = env.step(action)
 
                 if reward > 0:  # Si assignation réussie
-                    assert reward >= 50.0  # Minimum pour assignation avec reward shaping
+                    assert (
+                        reward >= 50.0
+                    )  # Minimum pour assignation avec reward shaping
 
     def test_cancellation_penalty(self):
         """Test pénalité pour annulation."""
@@ -219,7 +239,9 @@ class TestRewardInvariants:
 
         # Test retard ALLER (0 tolérance)
         info_late_aller = {"is_late": True, "lateness_minutes": 10, "is_outbound": True}
-        reward_late_aller = reward_shaping._calculate_punctuality_reward(info_late_aller)
+        reward_late_aller = reward_shaping._calculate_punctuality_reward(
+            info_late_aller
+        )
         assert reward_late_aller < 0
 
         # Test retard RETOUR (tolérance progressive)
@@ -228,7 +250,9 @@ class TestRewardInvariants:
             "lateness_minutes": 10,  # Dans tolérance douce
             "is_outbound": False,
         }
-        reward_late_retour = reward_shaping._calculate_punctuality_reward(info_late_retour)
+        reward_late_retour = reward_shaping._calculate_punctuality_reward(
+            info_late_retour
+        )
         assert reward_late_retour == 0.0  # Neutre dans tolérance
 
     def test_distance_rewards(self):

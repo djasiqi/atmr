@@ -79,7 +79,9 @@ def upgrade():
         sa.Column("sequence", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("company_id", "year", "month", name="uq_company_year_month"),
+        sa.UniqueConstraint(
+            "company_id", "year", "month", name="uq_company_year_month"
+        ),
     )
     op.create_table(
         "invoices",
@@ -92,7 +94,9 @@ def upgrade():
         sa.Column("currency", sa.String(length=3), nullable=False),
         sa.Column("subtotal_amount", sa.Numeric(precision=10, scale=2), nullable=False),
         sa.Column("late_fee_amount", sa.Numeric(precision=10, scale=2), nullable=False),
-        sa.Column("reminder_fee_amount", sa.Numeric(precision=10, scale=2), nullable=False),
+        sa.Column(
+            "reminder_fee_amount", sa.Numeric(precision=10, scale=2), nullable=False
+        ),
         sa.Column("total_amount", sa.Numeric(precision=10, scale=2), nullable=False),
         sa.Column("amount_paid", sa.Numeric(precision=10, scale=2), nullable=False),
         sa.Column("balance_due", sa.Numeric(precision=10, scale=2), nullable=False),
@@ -101,8 +105,18 @@ def upgrade():
         sa.Column("sent_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("paid_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column(
             "status",
             postgresql.ENUM(
@@ -126,14 +140,26 @@ def upgrade():
         sa.ForeignKeyConstraint(["client_id"], ["client.id"]),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("company_id", "invoice_number", name="uq_company_invoice_number"),
+        sa.UniqueConstraint(
+            "company_id", "invoice_number", name="uq_company_invoice_number"
+        ),
     )
     with op.batch_alter_table("invoices", schema=None) as batch_op:
-        batch_op.create_index("ix_invoice_company_period", ["company_id", "period_year", "period_month"], unique=False)
+        batch_op.create_index(
+            "ix_invoice_company_period",
+            ["company_id", "period_year", "period_month"],
+            unique=False,
+        )
         batch_op.create_index("ix_invoice_due_date", ["due_date"], unique=False)
-        batch_op.create_index("ix_invoice_status", ["company_id", "status"], unique=False)
-        batch_op.create_index(batch_op.f("ix_invoices_client_id"), ["client_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_invoices_company_id"), ["company_id"], unique=False)
+        batch_op.create_index(
+            "ix_invoice_status", ["company_id", "status"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_invoices_client_id"), ["client_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_invoices_company_id"), ["company_id"], unique=False
+        )
 
     op.create_table(
         "invoice_lines",
@@ -141,7 +167,14 @@ def upgrade():
         sa.Column("invoice_id", sa.Integer(), nullable=False),
         sa.Column(
             "type",
-            postgresql.ENUM("RIDE", "LATE_FEE", "REMINDER_FEE", "CUSTOM", name="invoice_line_type", create_type=False),
+            postgresql.ENUM(
+                "RIDE",
+                "LATE_FEE",
+                "REMINDER_FEE",
+                "CUSTOM",
+                name="invoice_line_type",
+                create_type=False,
+            ),
             nullable=False,
         ),
         sa.Column("description", sa.String(length=500), nullable=False),
@@ -161,7 +194,14 @@ def upgrade():
         sa.Column("paid_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
             "method",
-            postgresql.ENUM("BANK_TRANSFER", "CASH", "CARD", "ADJUSTMENT", name="payment_method", create_type=False),
+            postgresql.ENUM(
+                "BANK_TRANSFER",
+                "CASH",
+                "CARD",
+                "ADJUSTMENT",
+                name="payment_method",
+                create_type=False,
+            ),
             nullable=False,
         ),
         sa.Column("reference", sa.String(length=100), nullable=True),
@@ -203,15 +243,34 @@ def downgrade():
     op.create_table(
         "invoice",
         sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
-        sa.Column("reference", sa.VARCHAR(length=32), autoincrement=False, nullable=False),
-        sa.Column("amount", sa.DOUBLE_PRECISION(precision=53), autoincrement=False, nullable=False),
+        sa.Column(
+            "reference", sa.VARCHAR(length=32), autoincrement=False, nullable=False
+        ),
+        sa.Column(
+            "amount",
+            sa.DOUBLE_PRECISION(precision=53),
+            autoincrement=False,
+            nullable=False,
+        ),
         sa.Column("user_id", sa.INTEGER(), autoincrement=False, nullable=False),
         sa.Column("booking_id", sa.INTEGER(), autoincrement=False, nullable=True),
         sa.Column("company_id", sa.INTEGER(), autoincrement=False, nullable=False),
         sa.Column("details", sa.TEXT(), autoincrement=False, nullable=True),
-        sa.Column("pdf_url", sa.VARCHAR(length=0.255), autoincrement=False, nullable=True),
-        sa.Column("due_date", postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True),
-        sa.Column("paid_at", postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True),
+        sa.Column(
+            "pdf_url", sa.VARCHAR(length=0.255), autoincrement=False, nullable=True
+        ),
+        sa.Column(
+            "due_date",
+            postgresql.TIMESTAMP(timezone=True),
+            autoincrement=False,
+            nullable=True,
+        ),
+        sa.Column(
+            "paid_at",
+            postgresql.TIMESTAMP(timezone=True),
+            autoincrement=False,
+            nullable=True,
+        ),
         sa.Column(
             "created_at",
             postgresql.TIMESTAMP(timezone=True),
@@ -233,18 +292,38 @@ def downgrade():
             autoincrement=False,
             nullable=False,
         ),
-        sa.CheckConstraint("amount > 0::double precision", name="chk_invoice_amount_positive"),
-        sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], name="fk_invoice_booking", ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["company_id"], ["company.id"], name="fk_invoice_company", ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["user_id"], ["user.id"], name="fk_invoice_user", ondelete="CASCADE"),
+        sa.CheckConstraint(
+            "amount > 0::double precision", name="chk_invoice_amount_positive"
+        ),
+        sa.ForeignKeyConstraint(
+            ["booking_id"],
+            ["booking.id"],
+            name="fk_invoice_booking",
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["company_id"],
+            ["company.id"],
+            name="fk_invoice_company",
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["user.id"], name="fk_invoice_user", ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id", name="invoice_pkey"),
         sa.UniqueConstraint("booking_id", name="uq_invoice_booking_one"),
     )
     with op.batch_alter_table("invoice", schema=None) as batch_op:
         batch_op.create_index("ix_invoice_user_id", ["user_id"], unique=False)
-        batch_op.create_index("ix_invoice_user_created", ["user_id", "created_at"], unique=False)
+        batch_op.create_index(
+            "ix_invoice_user_created", ["user_id", "created_at"], unique=False
+        )
         batch_op.create_index("ix_invoice_reference", ["reference"], unique=True)
-        batch_op.create_index("ix_invoice_company_status_due", ["company_id", "status", "due_date"], unique=False)
+        batch_op.create_index(
+            "ix_invoice_company_status_due",
+            ["company_id", "status", "due_date"],
+            unique=False,
+        )
         batch_op.create_index("ix_invoice_company_id", ["company_id"], unique=False)
         batch_op.create_index("ix_invoice_booking_id", ["booking_id"], unique=False)
 

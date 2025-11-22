@@ -55,7 +55,9 @@ def main():
                 response = input(f"Voulez-vous ajouter cette clé à {env_file}? (o/N): ")
                 if response.lower() == "o":
                     with env_file.open("a", encoding="utf-8") as env_file_write:
-                        env_file_write.write("\n# ✅ D2: Clé d'encryption maître (AES-256)\n")
+                        env_file_write.write(
+                            "\n# ✅ D2: Clé d'encryption maître (AES-256)\n"
+                        )
                         env_file_write.write(f"MASTER_ENCRYPTION_KEY={master_key}\n")
                     print(f"✅ Clé ajoutée à {env_file}")
     else:

@@ -29,7 +29,9 @@ class TestOSRMClientSHA256:
 
         # Simuler la génération de la clé de cache (comme dans get_distance_time_cached)
         # Note: ORIG_ZERO = 0 (index du premier élément)
-        origin_hash = hashlib.sha256(f"{origin[0]},{origin[1]}".encode()).hexdigest()[:8]
+        origin_hash = hashlib.sha256(f"{origin[0]},{origin[1]}".encode()).hexdigest()[
+            :8
+        ]
         dest_hash = hashlib.sha256(f"{dest[0]},{dest[1]}".encode()).hexdigest()[:8]
         cache_key = f"osrm:cache:{date_str}:{origin_hash}:{dest_hash}"
 
@@ -62,7 +64,9 @@ class TestOSRMClientSHA256:
         # Simuler la génération de la clé de cache (comme dans get_time_matrix_cached)
         origins_str = ",".join([f"{o[0]},{o[1]}" for o in origins])
         dests_str = ",".join([f"{d[0]},{d[1]}" for d in destinations])
-        matrix_hash = hashlib.sha256(f"{origins_str}|{dests_str}".encode()).hexdigest()[:16]
+        matrix_hash = hashlib.sha256(f"{origins_str}|{dests_str}".encode()).hexdigest()[
+            :16
+        ]
         cache_key = f"osrm:matrix:{date_str}:{matrix_hash}"
 
         # Vérifier que la clé contient le hash
@@ -126,7 +130,9 @@ class TestWebSocketACKSHA256:
         manager = WebSocketACKManager()
 
         # Appeler emit_with_ack sans message_id (sera généré)
-        message_id = manager.emit_with_ack(event=event, payload=payload, room=room, message_id=None)
+        message_id = manager.emit_with_ack(
+            event=event, payload=payload, room=room, message_id=None
+        )
 
         # Vérifier que message_id a été généré
         assert message_id is not None

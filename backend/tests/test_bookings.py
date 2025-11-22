@@ -58,7 +58,9 @@ def test_list_bookings_authenticated(client, auth_headers, sample_user):
     assert isinstance(data["bookings"], list)
 
 
-def test_list_bookings_pagination(client, auth_headers, db, sample_user, sample_client, sample_company):
+def test_list_bookings_pagination(
+    client, auth_headers, db, sample_user, sample_client, sample_company
+):
     """GET /bookings?page=1&per_page=10 renvoie pagination."""
     # Créer quelques bookings de test
     for i in range(15):
@@ -89,7 +91,9 @@ def test_list_bookings_pagination(client, auth_headers, db, sample_user, sample_
     assert "X-Page" in response.headers
 
 
-def test_get_booking_details(client, auth_headers, db, sample_user, sample_client, sample_company):
+def test_get_booking_details(
+    client, auth_headers, db, sample_user, sample_client, sample_company
+):
     """GET /bookings/<id> renvoie les détails d'une réservation."""
     booking = Booking(
         client_id=sample_client.id,

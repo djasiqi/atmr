@@ -53,7 +53,9 @@ class TestHyperparameterTuner:
         config = tuner._suggest_hyperparameters(mock_trial)
 
         # Vérifier que les méthodes suggest sont appelées
-        assert mock_trial.suggest_float.call_count >= 5  # learning_rate, gamma, epsilon_*
+        assert (
+            mock_trial.suggest_float.call_count >= 5
+        )  # learning_rate, gamma, epsilon_*
         assert mock_trial.suggest_categorical.call_count >= 2  # batch_size, buffer_size
         assert mock_trial.suggest_int.call_count >= 2  # num_drivers, max_bookings
 
@@ -107,7 +109,9 @@ class TestHyperparameterTuner:
 
         with (
             patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
-            patch("services.rl.hyperparameter_tuner.ImprovedDQNAgent") as mock_agent_class,
+            patch(
+                "services.rl.hyperparameter_tuner.ImprovedDQNAgent"
+            ) as mock_agent_class,
         ):
             # Mock environment
             mock_env = Mock()
@@ -130,8 +134,14 @@ class TestHyperparameterTuner:
             mock_agent_class.assert_called_once()
 
             # Vérifier que l'entraînement et l'évaluation sont effectués
-            assert mock_env.reset.call_count >= tuner.n_training_episodes + tuner.n_eval_episodes
-            assert mock_env.step.call_count >= tuner.n_training_episodes + tuner.n_eval_episodes
+            assert (
+                mock_env.reset.call_count
+                >= tuner.n_training_episodes + tuner.n_eval_episodes
+            )
+            assert (
+                mock_env.step.call_count
+                >= tuner.n_training_episodes + tuner.n_eval_episodes
+            )
 
             # Vérifier que le reward est retourné
             assert isinstance(reward, float)
@@ -149,7 +159,9 @@ class TestHyperparameterTuner:
 
         with (
             patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
-            patch("services.rl.hyperparameter_tuner.ImprovedDQNAgent") as mock_agent_class,
+            patch(
+                "services.rl.hyperparameter_tuner.ImprovedDQNAgent"
+            ) as mock_agent_class,
         ):
             # Mock environment
             mock_env = Mock()
@@ -271,7 +283,9 @@ class TestHyperparameterTuner:
         }
 
         with patch("builtins.open", patch("builtins.open", create=True)) as mock_file:
-            mock_file.return_value.__enter__.return_value.read.return_value = json.dumps(params_data)
+            mock_file.return_value.__enter__.return_value.read.return_value = (
+                json.dumps(params_data)
+            )
 
             params = tuner.load_best_params("test_params.json")
 
@@ -688,7 +702,9 @@ class TestHyperparameterTuner:
         tuner = HyperparameterTuner()
 
         with patch("builtins.open", patch("builtins.open", create=True)) as mock_file:
-            mock_file.return_value.__enter__.return_value.read.return_value = "invalid json"
+            mock_file.return_value.__enter__.return_value.read.return_value = (
+                "invalid json"
+            )
 
             # Vérifier qu'une exception est levée
             with pytest.raises(json.JSONDecodeError):

@@ -29,7 +29,10 @@ class TestSecurityMetricsAuth:
             # Vérifier que les métriques sont exposées (via generate_latest())
             metrics_output = generate_latest()
             assert b"security_login_attempts_total" in metrics_output
-            assert b'type="success"' in metrics_output or b'type="success"' in metrics_output
+            assert (
+                b'type="success"' in metrics_output
+                or b'type="success"' in metrics_output
+            )
             assert b"security_login_failures_total" in metrics_output
 
     def test_logout_metrics(self, app_context):
@@ -69,12 +72,17 @@ class TestSecurityMetricsSensitiveActions:
             security_sensitive_actions_total.labels(action_type="user_created").inc()
 
             # Simuler un changement de permissions
-            security_sensitive_actions_total.labels(action_type="permission_changed").inc()
+            security_sensitive_actions_total.labels(
+                action_type="permission_changed"
+            ).inc()
 
             # Vérifier que les métriques sont exposées
             metrics_output = generate_latest()
             assert b"security_sensitive_actions_total" in metrics_output
-            assert b"user_created" in metrics_output or b'action_type="user_created"' in metrics_output
+            assert (
+                b"user_created" in metrics_output
+                or b'action_type="user_created"' in metrics_output
+            )
 
     def test_permission_changes_metrics(self, app_context):
         """Vérifie que les métriques de changement de permissions sont correctement incrémentées."""

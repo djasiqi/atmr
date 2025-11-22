@@ -28,7 +28,12 @@ except ImportError:
 
 
 # Métriques Prometheus (créées uniquement si prometheus_client disponible)
-if PROMETHEUS_AVAILABLE and Histogram is not None and Counter is not None and Gauge is not None:
+if (
+    PROMETHEUS_AVAILABLE
+    and Histogram is not None
+    and Counter is not None
+    and Gauge is not None
+):
     REQUEST_LATENCY = Histogram(
         "http_request_duration_seconds",
         "HTTP request latency en secondes",
@@ -98,10 +103,14 @@ def prom_middleware(app: Flask) -> Flask:
 
         # Métriques Prometheus standards
         if REQUEST_LATENCY:
-            REQUEST_LATENCY.labels(method=request.method, endpoint=endpoint, status=resp.status_code).observe(duration)
+            REQUEST_LATENCY.labels(
+                method=request.method, endpoint=endpoint, status=resp.status_code
+            ).observe(duration)
 
         if REQUEST_COUNT:
-            REQUEST_COUNT.labels(method=request.method, endpoint=endpoint, status=resp.status_code).inc()
+            REQUEST_COUNT.labels(
+                method=request.method, endpoint=endpoint, status=resp.status_code
+            ).inc()
 
         # ✅ SLO: Enregistrer métriques SLO pour routes critiques
         try:
@@ -138,7 +147,9 @@ def prom_middleware(app: Flask) -> Flask:
 
         from flask import Response
 
-        return Response(generate_latest(), mimetype="text/plain; version=0.0.4; charset=utf-8")
+        return Response(
+            generate_latest(), mimetype="text/plain; version=0.0.4; charset=utf-8"
+        )
 
     return app
 

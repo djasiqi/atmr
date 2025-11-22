@@ -260,7 +260,10 @@ class AdvancedRewardShaping:
             return 15
 
         # Pénalité pour chauffeur EMERGENCY utilisé pour course normale
-        if info.get("driver_type") == "EMERGENCY" and info.get("booking_priority", 3) < HIGH_PRIORITY_THRESHOLD:
+        if (
+            info.get("driver_type") == "EMERGENCY"
+            and info.get("booking_priority", 3) < HIGH_PRIORITY_THRESHOLD
+        ):
             return -10
 
         return 0

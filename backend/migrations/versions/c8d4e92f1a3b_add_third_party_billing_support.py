@@ -21,14 +21,24 @@ def upgrade():
 
     # Ajouter le champ is_institution à la table client
     with op.batch_alter_table("client", schema=None) as batch_op:
-        batch_op.add_column(sa.Column("is_institution", sa.Boolean(), nullable=False, server_default="false"))
-        batch_op.add_column(sa.Column("institution_name", sa.String(length=200), nullable=True))
+        batch_op.add_column(
+            sa.Column(
+                "is_institution", sa.Boolean(), nullable=False, server_default="false"
+            )
+        )
+        batch_op.add_column(
+            sa.Column("institution_name", sa.String(length=200), nullable=True)
+        )
 
     # Ajouter le champ bill_to_client_id à la table invoices
     with op.batch_alter_table("invoices", schema=None) as batch_op:
         batch_op.add_column(sa.Column("bill_to_client_id", sa.Integer(), nullable=True))
-        batch_op.create_foreign_key("fk_invoices_bill_to_client", "client", ["bill_to_client_id"], ["id"])
-        batch_op.create_index("ix_invoices_bill_to_client_id", ["bill_to_client_id"], unique=False)
+        batch_op.create_foreign_key(
+            "fk_invoices_bill_to_client", "client", ["bill_to_client_id"], ["id"]
+        )
+        batch_op.create_index(
+            "ix_invoices_bill_to_client_id", ["bill_to_client_id"], unique=False
+        )
 
     # ### end Alembic commands ###
 

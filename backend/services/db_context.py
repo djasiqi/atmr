@@ -102,7 +102,9 @@ def db_transaction(
         if injector.enabled and injector.db_read_only and auto_commit:
             # Si on va committer (écriture), bloquer
             logger.warning("[CHAOS] DB read-only: transaction write blocked")
-            raise RuntimeError("Database is in read-only mode. Writes are temporarily disabled.")
+            raise RuntimeError(
+                "Database is in read-only mode. Writes are temporarily disabled."
+            )
     except ImportError:
         # Si module chaos non disponible, continuer normalement
         pass

@@ -57,8 +57,12 @@ def _log_purge_audit(
 
 
 # ✅ 3.3: Durées de rétention par défaut (en jours)
-DEFAULT_RETENTION_DAYS = int(os.getenv("GDPR_RETENTION_DAYS", "2555"))  # 7 ans = 7 * 365
-ANALYTICS_RETENTION_DAYS = int(os.getenv("GDPR_ANALYTICS_RETENTION_DAYS", "3650"))  # 10 ans
+DEFAULT_RETENTION_DAYS = int(
+    os.getenv("GDPR_RETENTION_DAYS", "2555")
+)  # 7 ans = 7 * 365
+ANALYTICS_RETENTION_DAYS = int(
+    os.getenv("GDPR_ANALYTICS_RETENTION_DAYS", "3650")
+)  # 10 ans
 EVENT_RETENTION_DAYS = int(os.getenv("GDPR_EVENT_RETENTION_DAYS", "2555"))  # 7 ans
 MESSAGE_RETENTION_DAYS = int(os.getenv("GDPR_MESSAGE_RETENTION_DAYS", "2555"))  # 7 ans
 
@@ -125,11 +129,17 @@ def purge_old_bookings(self: Task, retention_days: int | None = None) -> dict[st
                     )
                 except Exception as e:
                     errors.append({"booking_id": booking.id, "error": str(e)[:200]})
-                    logger.warning("[3.3 GDPR] Erreur suppression booking %d: %s", booking.id, e)
+                    logger.warning(
+                        "[3.3 GDPR] Erreur suppression booking %d: %s", booking.id, e
+                    )
 
             db.session.commit()
 
-            logger.info("[3.3 GDPR] ✅ Purge bookings terminée: %d supprimés, %d erreurs", deleted_count, len(errors))
+            logger.info(
+                "[3.3 GDPR] ✅ Purge bookings terminée: %d supprimés, %d erreurs",
+                deleted_count,
+                len(errors),
+            )
 
             # ✅ 3.3: Log audit pour traçabilité RGPD
             _log_purge_audit(
@@ -193,11 +203,17 @@ def purge_old_messages(self: Task, retention_days: int | None = None) -> dict[st
                     logger.debug("[3.3 GDPR] Message %d supprimé", message_id)
                 except Exception as e:
                     errors.append({"message_id": message.id, "error": str(e)[:200]})
-                    logger.warning("[3.3 GDPR] Erreur suppression message %d: %s", message.id, e)
+                    logger.warning(
+                        "[3.3 GDPR] Erreur suppression message %d: %s", message.id, e
+                    )
 
             db.session.commit()
 
-            logger.info("[3.3 GDPR] ✅ Purge messages terminée: %d supprimés, %d erreurs", deleted_count, len(errors))
+            logger.info(
+                "[3.3 GDPR] ✅ Purge messages terminée: %d supprimés, %d erreurs",
+                deleted_count,
+                len(errors),
+            )
 
             # ✅ 3.3: Log audit pour traçabilité RGPD
             _log_purge_audit(
@@ -224,7 +240,9 @@ def purge_old_messages(self: Task, retention_days: int | None = None) -> dict[st
 
 
 @celery.task(bind=True, name="tasks.purge_tasks.purge_old_realtime_events")
-def purge_old_realtime_events(self: Task, retention_days: int | None = None) -> dict[str, Any]:  # noqa: ARG001
+def purge_old_realtime_events(
+    self: Task, retention_days: int | None = None
+) -> dict[str, Any]:  # noqa: ARG001
     """✅ 3.3: Purge les événements temps réel anciens (> 7 ans par défaut).
 
     Args:
@@ -249,13 +267,16 @@ def purge_old_realtime_events(self: Task, retention_days: int | None = None) -> 
             )
 
             # Utiliser delete en bulk pour performance (évite N queries)
-            deleted_count = RealtimeEvent.query.filter(RealtimeEvent.timestamp < cutoff_date).delete(
-                synchronize_session=False
-            )
+            deleted_count = RealtimeEvent.query.filter(
+                RealtimeEvent.timestamp < cutoff_date
+            ).delete(synchronize_session=False)
 
             db.session.commit()
 
-            logger.info("[3.3 GDPR] ✅ Purge RealtimeEvent terminée: %d supprimés", deleted_count)
+            logger.info(
+                "[3.3 GDPR] ✅ Purge RealtimeEvent terminée: %d supprimés",
+                deleted_count,
+            )
 
             # ✅ 3.3: Log audit pour traçabilité RGPD
             _log_purge_audit(
@@ -282,7 +303,9 @@ def purge_old_realtime_events(self: Task, retention_days: int | None = None) -> 
 
 
 @celery.task(bind=True, name="tasks.purge_tasks.purge_old_autonomous_actions")
-def purge_old_autonomous_actions(self: Task, retention_days: int | None = None) -> dict[str, Any]:  # noqa: ARG001
+def purge_old_autonomous_actions(
+    self: Task, retention_days: int | None = None
+) -> dict[str, Any]:  # noqa: ARG001
     """✅ 3.3: Purge les actions autonomes anciennes (> 7 ans par défaut).
 
     Les actions reviewées peuvent être purgées, les non-reviewées sont conservées plus longtemps.
@@ -325,12 +348,16 @@ def purge_old_autonomous_actions(self: Task, retention_days: int | None = None) 
                     logger.debug("[3.3 GDPR] AutonomousAction %d supprimée", action_id)
                 except Exception as e:
                     errors.append({"action_id": action.id, "error": str(e)[:200]})
-                    logger.warning("[3.3 GDPR] Erreur suppression action %d: %s", action.id, e)
+                    logger.warning(
+                        "[3.3 GDPR] Erreur suppression action %d: %s", action.id, e
+                    )
 
             db.session.commit()
 
             logger.info(
-                "[3.3 GDPR] ✅ Purge AutonomousAction terminée: %d supprimées, %d erreurs", deleted_count, len(errors)
+                "[3.3 GDPR] ✅ Purge AutonomousAction terminée: %d supprimées, %d erreurs",
+                deleted_count,
+                len(errors),
             )
 
             # ✅ 3.3: Log audit pour traçabilité RGPD
@@ -358,7 +385,9 @@ def purge_old_autonomous_actions(self: Task, retention_days: int | None = None) 
 
 
 @celery.task(bind=True, name="tasks.purge_tasks.purge_old_task_failures")
-def purge_old_task_failures(self: Task, retention_days: int | None = None) -> dict[str, Any]:  # noqa: ARG001
+def purge_old_task_failures(
+    self: Task, retention_days: int | None = None
+) -> dict[str, Any]:  # noqa: ARG001
     """✅ 3.3: Purge les TaskFailure anciennes (> 7 ans par défaut).
 
     Args:
@@ -383,13 +412,15 @@ def purge_old_task_failures(self: Task, retention_days: int | None = None) -> di
             )
 
             # Bulk delete pour performance
-            deleted_count = TaskFailure.query.filter(TaskFailure.first_seen < cutoff_date).delete(
-                synchronize_session=False
-            )
+            deleted_count = TaskFailure.query.filter(
+                TaskFailure.first_seen < cutoff_date
+            ).delete(synchronize_session=False)
 
             db.session.commit()
 
-            logger.info("[3.3 GDPR] ✅ Purge TaskFailure terminée: %d supprimées", deleted_count)
+            logger.info(
+                "[3.3 GDPR] ✅ Purge TaskFailure terminée: %d supprimées", deleted_count
+            )
 
             # ✅ 3.3: Log audit pour traçabilité RGPD
             _log_purge_audit(
@@ -453,7 +484,11 @@ def purge_all_old_data(self: Task) -> dict[str, Any]:
                     results[model_name] = result
                     total_deleted += result.get("deleted_count", 0)
                     total_errors += len(result.get("errors", []))
-                    logger.info("[3.3 GDPR] %s: %d supprimés", model_name, result.get("deleted_count", 0))
+                    logger.info(
+                        "[3.3 GDPR] %s: %d supprimés",
+                        model_name,
+                        result.get("deleted_count", 0),
+                    )
                 except Exception as e:
                     logger.exception("[3.3 GDPR] Erreur purge %s: %s", model_name, e)
                     results[model_name] = {"status": "error", "error": str(e)[:500]}
@@ -464,7 +499,9 @@ def purge_all_old_data(self: Task) -> dict[str, Any]:
             "timestamp": datetime.now(UTC).isoformat(),
             "total_deleted": total_deleted,
             "total_errors": total_errors,
-            "models_purged": len([r for r in results.values() if r.get("status") == "success"]),
+            "models_purged": len(
+                [r for r in results.values() if r.get("status") == "success"]
+            ),
         }
 
         logger.info(
@@ -509,7 +546,9 @@ def purge_all_old_data(self: Task) -> dict[str, Any]:
 
 
 @celery.task(bind=True, name="tasks.purge_tasks.anonymize_old_user_data")
-def anonymize_old_user_data(self: Task, retention_days: int | None = None) -> dict[str, Any]:  # noqa: ARG001
+def anonymize_old_user_data(
+    self: Task, retention_days: int | None = None
+) -> dict[str, Any]:  # noqa: ARG001
     """✅ 3.3: Anonymise les données utilisateur anciennes (> 7 ans) au lieu de supprimer.
 
     Conformément RGPD, anonymise plutôt que supprimer pour préserver statistiques.
@@ -572,7 +611,9 @@ def anonymize_old_user_data(self: Task, retention_days: int | None = None) -> di
                     )
                 except Exception as e:
                     errors.append({"user_id": user.id, "error": str(e)[:200]})
-                    logger.warning("[3.3 GDPR] Erreur anonymisation utilisateur %d: %s", user.id, e)
+                    logger.warning(
+                        "[3.3 GDPR] Erreur anonymisation utilisateur %d: %s", user.id, e
+                    )
 
             db.session.commit()
 

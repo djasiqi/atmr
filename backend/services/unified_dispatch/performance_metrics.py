@@ -156,7 +156,9 @@ class DispatchMetricsCollector(object):
         super().__init__()
         self.company_id = company_id
         self.dispatch_run_id = dispatch_run_id
-        self.metrics = DispatchPerformanceMetrics(dispatch_run_id=dispatch_run_id, company_id=company_id)
+        self.metrics = DispatchPerformanceMetrics(
+            dispatch_run_id=dispatch_run_id, company_id=company_id
+        )
         self._timers: Dict[str, float] = {}
         self._start_times: Dict[str, float] = {}
 
@@ -207,7 +209,11 @@ class DispatchMetricsCollector(object):
             counter_name: Nom du compteur (ex: 'sql_queries', 'cache_hits')
             value: Valeur à ajouter (défaut: 1)
         """
-        attr_name = f"{counter_name}_count" if not counter_name.endswith("_count") else counter_name
+        attr_name = (
+            f"{counter_name}_count"
+            if not counter_name.endswith("_count")
+            else counter_name
+        )
 
         if hasattr(self.metrics, attr_name):
             current = getattr(self.metrics, attr_name)
@@ -222,7 +228,11 @@ class DispatchMetricsCollector(object):
             counter_name: Nom du compteur
             value: Nouvelle valeur
         """
-        attr_name = f"{counter_name}_count" if not counter_name.endswith("_count") else counter_name
+        attr_name = (
+            f"{counter_name}_count"
+            if not counter_name.endswith("_count")
+            else counter_name
+        )
 
         if hasattr(self.metrics, attr_name):
             setattr(self.metrics, attr_name, value)

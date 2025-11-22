@@ -104,7 +104,11 @@ class TestDriverVacationCreateSchema:
     def test_valid_vacation(self):
         """Test avec congé valide."""
         schema = DriverVacationCreateSchema()
-        data = {"start_date": "2025-06-01", "end_date": "2025-06-15", "vacation_type": "VACANCES"}
+        data = {
+            "start_date": "2025-06-01",
+            "end_date": "2025-06-15",
+            "vacation_type": "VACANCES",
+        }
         result = schema.load(data)
         assert result["start_date"] == "2025-06-01"
         assert result["end_date"] == "2025-06-15"
@@ -121,7 +125,11 @@ class TestDriverVacationCreateSchema:
     def test_invalid_vacation_type(self):
         """Test avec type de congé invalide."""
         schema = DriverVacationCreateSchema()
-        data = {"start_date": "2025-06-01", "end_date": "2025-06-15", "vacation_type": "INVALID"}
+        data = {
+            "start_date": "2025-06-01",
+            "end_date": "2025-06-15",
+            "vacation_type": "INVALID",
+        }
         with pytest.raises(ValidationError) as exc_info:
             schema.load(data)
         assert "vacation_type" in str(exc_info.value.messages)

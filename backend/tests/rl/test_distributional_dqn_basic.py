@@ -30,7 +30,13 @@ class TestC51Network:
 
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés."""
-        network = C51Network(state_dim=0.100, action_dim=50, n_atoms=21, hidden_sizes=[256, 256, 128], dropout_rate=0.2)
+        network = C51Network(
+            state_dim=0.100,
+            action_dim=50,
+            n_atoms=21,
+            hidden_sizes=[256, 256, 128],
+            dropout_rate=0.2,
+        )
 
         assert network.state_dim == 100
         assert network.action_dim == 50
@@ -191,7 +197,11 @@ class TestQRNetwork:
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés."""
         network = QRNetwork(
-            state_dim=0.100, action_dim=50, n_quantiles=21, hidden_sizes=[256, 256, 128], dropout_rate=0.2
+            state_dim=0.100,
+            action_dim=50,
+            n_quantiles=21,
+            hidden_sizes=[256, 256, 128],
+            dropout_rate=0.2,
         )
 
         assert network.state_dim == 100
@@ -374,7 +384,9 @@ class TestDistributionalLoss:
         next_states = torch.randn(batch_size, 62)
         dones = torch.zeros(batch_size, dtype=torch.bool)
 
-        loss = loss_fn.compute_loss(predictions, targets, actions, rewards, next_states, dones)
+        loss = loss_fn.compute_loss(
+            predictions, targets, actions, rewards, next_states, dones
+        )
 
         assert isinstance(loss, torch.Tensor)
         assert loss.requires_grad is True
@@ -396,7 +408,9 @@ class TestDistributionalLoss:
         next_states = torch.randn(batch_size, 62)
         dones = torch.ones(batch_size, dtype=torch.bool)  # Tous terminés
 
-        loss = loss_fn.compute_loss(predictions, targets, actions, rewards, next_states, dones)
+        loss = loss_fn.compute_loss(
+            predictions, targets, actions, rewards, next_states, dones
+        )
 
         assert isinstance(loss, torch.Tensor)
         assert loss.requires_grad is True
@@ -418,7 +432,9 @@ class TestDistributionalLoss:
         next_states = torch.randn(batch_size, 62)
         dones = torch.tensor([True, False, True, False, True], dtype=torch.bool)
 
-        loss = loss_fn.compute_loss(predictions, targets, actions, rewards, next_states, dones)
+        loss = loss_fn.compute_loss(
+            predictions, targets, actions, rewards, next_states, dones
+        )
 
         assert isinstance(loss, torch.Tensor)
         assert loss.requires_grad is True
@@ -440,7 +456,9 @@ class TestDistributionalLoss:
         next_states = torch.randn(batch_size, 62)
         dones = torch.zeros(batch_size, dtype=torch.bool)
 
-        loss = loss_fn.compute_loss(predictions, targets, actions, rewards, next_states, dones)
+        loss = loss_fn.compute_loss(
+            predictions, targets, actions, rewards, next_states, dones
+        )
 
         assert isinstance(loss, torch.Tensor)
         assert loss.requires_grad is True
@@ -462,7 +480,9 @@ class TestDistributionalLoss:
         next_states = torch.randn(batch_size, 62)
         dones = torch.zeros(batch_size, dtype=torch.bool)
 
-        loss = loss_fn.compute_loss(predictions, targets, actions, rewards, next_states, dones)
+        loss = loss_fn.compute_loss(
+            predictions, targets, actions, rewards, next_states, dones
+        )
 
         assert isinstance(loss, torch.Tensor)
         assert loss.requires_grad is True
@@ -484,7 +504,9 @@ class TestDistributionalLoss:
         next_states = torch.randn(batch_size, 62)
         dones = torch.zeros(batch_size, dtype=torch.bool)
 
-        loss = loss_fn.compute_loss(predictions, targets, actions, rewards, next_states, dones)
+        loss = loss_fn.compute_loss(
+            predictions, targets, actions, rewards, next_states, dones
+        )
 
         assert isinstance(loss, torch.Tensor)
         assert loss.requires_grad is True
@@ -574,7 +596,9 @@ class TestUncertaintyCapture:
         action_dim = 10
         n_atoms = 21
 
-        distributions = torch.zeros(batch_size, action_dim, n_atoms)  # Distributions zéro
+        distributions = torch.zeros(
+            batch_size, action_dim, n_atoms
+        )  # Distributions zéro
         actions = torch.randint(0, action_dim, (batch_size,))
 
         uncertainty_values = uncertainty.compute_uncertainty(distributions, actions)
@@ -592,7 +616,9 @@ class TestUncertaintyCapture:
         action_dim = 10
         n_atoms = 21
 
-        distributions = torch.randn(batch_size, action_dim, n_atoms) * 100  # Distributions importantes
+        distributions = (
+            torch.randn(batch_size, action_dim, n_atoms) * 100
+        )  # Distributions importantes
         actions = torch.randint(0, action_dim, (batch_size,))
 
         uncertainty_values = uncertainty.compute_uncertainty(distributions, actions)
@@ -610,7 +636,9 @@ class TestUncertaintyCapture:
         action_dim = 10
         n_atoms = 21
 
-        distributions = torch.randn(batch_size, action_dim, n_atoms) * -10  # Distributions négatives
+        distributions = (
+            torch.randn(batch_size, action_dim, n_atoms) * -10
+        )  # Distributions négatives
         actions = torch.randint(0, action_dim, (batch_size,))
 
         uncertainty_values = uncertainty.compute_uncertainty(distributions, actions)

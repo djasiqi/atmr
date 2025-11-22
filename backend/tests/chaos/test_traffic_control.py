@@ -34,7 +34,9 @@ class TestTrafficControlValidations:
         assert TrafficControlManager._validate_interface("") is False
         assert TrafficControlManager._validate_interface("eth0;rm -rf /") is False
         assert TrafficControlManager._validate_interface("eth 0") is False  # Espace
-        assert TrafficControlManager._validate_interface("eth0" * 5) is False  # Trop long
+        assert (
+            TrafficControlManager._validate_interface("eth0" * 5) is False
+        )  # Trop long
         assert TrafficControlManager._validate_interface(None) is False
         assert TrafficControlManager._validate_interface(123) is False
 

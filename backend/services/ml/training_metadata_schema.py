@@ -69,7 +69,11 @@ class TrainingMetadataSchema:
                 "tau": 0.0005,  # Soft update
                 "gradient_clipping": 1.0,
                 "optimizer": "adam",
-                "optimizer_params": {"betas": [0.9, 0.999], "eps": 1e-8, "weight_decay": 1e-4},
+                "optimizer_params": {
+                    "betas": [0.9, 0.999],
+                    "eps": 1e-8,
+                    "weight_decay": 1e-4,
+                },
             },
             "features_config": {
                 "state_features": [
@@ -89,7 +93,11 @@ class TrainingMetadataSchema:
                     "traffic_level",
                     "weather_condition",
                 ],
-                "action_features": ["assign_driver", "reject_booking", "delay_assignment"],
+                "action_features": [
+                    "assign_driver",
+                    "reject_booking",
+                    "delay_assignment",
+                ],
                 "feature_scaling": {
                     "method": "standard",  # standard, minmax, robust
                     "fit_on": "training_data",
@@ -112,7 +120,12 @@ class TrainingMetadataSchema:
                     "scale": [],
                     "feature_names": [],
                 },
-                "reward_scaler": {"type": "MinMaxScaler", "fitted": True, "min": 0.0, "scale": 1.0},
+                "reward_scaler": {
+                    "type": "MinMaxScaler",
+                    "fitted": True,
+                    "min": 0.0,
+                    "scale": 1.0,
+                },
                 "action_scaler": {"type": "None", "fitted": False},
             },
             "dataset_info": {
@@ -120,7 +133,11 @@ class TrainingMetadataSchema:
                     "file_path": "data/training/training_data_cleaned_final.json",
                     "num_samples": 0,
                     "date_range": {"start": "2024-0.1-0.1", "end": "2024-12-31"},
-                    "data_quality": {"missing_values": 0.0, "outliers": 0.0, "duplicates": 0.0},
+                    "data_quality": {
+                        "missing_values": 0.0,
+                        "outliers": 0.0,
+                        "duplicates": 0.0,
+                    },
                 },
                 "validation_data": {
                     "file_path": "data/validation/validation_data.json",
@@ -142,11 +159,24 @@ class TrainingMetadataSchema:
                 "pruner": "median",
                 "sampler": "tpe",
                 "hyperparameter_space": {
-                    "learning_rate": {"type": "float", "low": 1e-5, "high": 1e-2, "log": True},
-                    "batch_size": {"type": "categorical", "choices": [32, 64, 128, 256]},
+                    "learning_rate": {
+                        "type": "float",
+                        "low": 1e-5,
+                        "high": 1e-2,
+                        "log": True,
+                    },
+                    "batch_size": {
+                        "type": "categorical",
+                        "choices": [32, 64, 128, 256],
+                    },
                     "hidden_sizes": {
                         "type": "categorical",
-                        "choices": [[256, 128], [512, 256], [512, 256, 128], [1024, 512, 256]],
+                        "choices": [
+                            [256, 128],
+                            [512, 256],
+                            [512, 256, 128],
+                            [1024, 512, 256],
+                        ],
                     },
                     "gamma": {"type": "float", "low": 0.9, "high": 0.999, "log": False},
                 },
@@ -265,7 +295,9 @@ class TrainingMetadataSchema:
             and metadata["architecture_config"].get("use_distributional", False)
             and "distributional_config" not in metadata["architecture_config"]
         ):
-            issues.append("distributional_config manquant pour architecture distributionnelle")
+            issues.append(
+                "distributional_config manquant pour architecture distributionnelle"
+            )
 
         # Vérifier les métriques de performance
         if "performance_metrics" in metadata:
@@ -276,7 +308,9 @@ class TrainingMetadataSchema:
         return len(issues) == 0, issues
 
     @staticmethod
-    def update_metadata(metadata: Dict[str, Any], updates: Dict[str, Any], validate: bool = True) -> Dict[str, Any]:
+    def update_metadata(
+        metadata: Dict[str, Any], updates: Dict[str, Any], validate: bool = True
+    ) -> Dict[str, Any]:
         """Met à jour les métadonnées avec de nouvelles valeurs.
 
         Args:
@@ -289,10 +323,16 @@ class TrainingMetadataSchema:
 
         """
 
-        def deep_update(base_dict: Dict[str, Any], update_dict: Dict[str, Any]) -> Dict[str, Any]:
+        def deep_update(
+            base_dict: Dict[str, Any], update_dict: Dict[str, Any]
+        ) -> Dict[str, Any]:
             """Met à jour récursivement un dictionnaire."""
             for key, value in update_dict.items():
-                if key in base_dict and isinstance(base_dict[key], dict) and isinstance(value, dict):
+                if (
+                    key in base_dict
+                    and isinstance(base_dict[key], dict)
+                    and isinstance(value, dict)
+                ):
                     base_dict[key] = deep_update(base_dict[key], value)
                 else:
                     base_dict[key] = value
@@ -301,7 +341,9 @@ class TrainingMetadataSchema:
         updated_metadata = deep_update(metadata.copy(), updates)
 
         if validate:
-            is_valid, issues = TrainingMetadataSchema.validate_metadata(updated_metadata)
+            is_valid, issues = TrainingMetadataSchema.validate_metadata(
+                updated_metadata
+            )
             if not is_valid:
                 msg = f"Métadonnées invalides après mise à jour: {issues}"
                 raise ValueError(msg)
@@ -357,7 +399,9 @@ class TrainingMetadataSchema:
         return metadata
 
 
-def create_training_metadata(model_name: str, model_arch: str, version: str, **kwargs) -> Dict[str, Any]:
+def create_training_metadata(
+    model_name: str, model_arch: str, version: str, **kwargs
+) -> Dict[str, Any]:
     """Factory function pour créer des métadonnées de training.
 
     Args:

@@ -19,7 +19,10 @@ TOTAL_AMOUNT_ZERO = 0
 
 app_logger = logging.getLogger("app")
 
-clients_ns = Namespace("clients", description="Opérations liées aux profils clients et à leurs réservations")
+clients_ns = Namespace(
+    "clients",
+    description="Opérations liées aux profils clients et à leurs réservations",
+)
 
 # Modèle pour la mise à jour du profil client
 client_profile_model = clients_ns.model(
@@ -27,9 +30,14 @@ client_profile_model = clients_ns.model(
     {
         "first_name": fields.String(description="Prénom", min_length=1, max_length=100),
         "last_name": fields.String(description="Nom", min_length=1, max_length=100),
-        "phone": fields.String(description="Téléphone (format: +33123456789 ou 0123456789)", max_length=20),
+        "phone": fields.String(
+            description="Téléphone (format: +33123456789 ou 0123456789)", max_length=20
+        ),
         "address": fields.String(description="Adresse", min_length=1, max_length=500),
-        "birth_date": fields.String(description="Date de naissance (YYYY-MM-DD)", pattern="^\\d{4}-\\d{2}-\\d{2}$"),
+        "birth_date": fields.String(
+            description="Date de naissance (YYYY-MM-DD)",
+            pattern="^\\d{4}-\\d{2}-\\d{2}$",
+        ),
         "gender": fields.String(description="Genre", enum=["HOMME", "FEMME", "AUTRE"]),
     },
 )
@@ -39,7 +47,9 @@ booking_create_model = clients_ns.model(
     "BookingCreate",
     {
         "dropoff_location": fields.String(required=True, description="Lieu de dépose"),
-        "scheduled_time": fields.String(required=True, description="Date et heure prévue (format ISO 8601)"),
+        "scheduled_time": fields.String(
+            required=True, description="Date et heure prévue (format ISO 8601)"
+        ),
         "amount": fields.Float(description="Montant de la réservation", default=10),
     },
 )
@@ -56,10 +66,15 @@ class ManageClientProfile(Resource):
     def get(self, public_id):
         try:
             current_user_public_id = get_jwt_identity()
-            current_user = User.query.filter_by(public_id=current_user_public_id).one_or_none()
+            current_user = User.query.filter_by(
+                public_id=current_user_public_id
+            ).one_or_none()
             if not current_user:
                 return {"error": "User not found or invalid token"}, 401
-            if current_user.public_id != public_id and current_user.role != UserRole.admin:
+            if (
+                current_user.public_id != public_id
+                and current_user.role != UserRole.admin
+            ):
                 return {"error": "Unauthorized access"}, 403
             client = (
                 Client.query.options(joinedload(Client.user))
@@ -71,7 +86,9 @@ class ManageClientProfile(Resource):
                 return {"error": "Client profile not found"}, 404
             return cast("Any", client).serialize, 200
         except Exception as e:
-            app_logger.error("❌ ERREUR manage_client_profile GET: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR manage_client_profile GET: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
     @jwt_required()
@@ -81,12 +98,17 @@ class ManageClientProfile(Resource):
         try:
             # Validation initiale combinée
             current_user_public_id = get_jwt_identity()
-            current_user = User.query.filter_by(public_id=current_user_public_id).one_or_none()
+            current_user = User.query.filter_by(
+                public_id=current_user_public_id
+            ).one_or_none()
 
             if not current_user:
                 return {"error": "User not found or invalid token"}, 401
 
-            if current_user.public_id != public_id and current_user.role != UserRole.admin:
+            if (
+                current_user.public_id != public_id
+                and current_user.role != UserRole.admin
+            ):
                 return {"error": "Unauthorized access"}, 403
 
             client = (
@@ -111,7 +133,9 @@ class ManageClientProfile(Resource):
             )
 
             try:
-                validated_data = validate_request(ClientUpdateSchema(), data, strict=False)
+                validated_data = validate_request(
+                    ClientUpdateSchema(), data, strict=False
+                )
             except ValidationError as e:
                 return handle_validation_error(e)
 
@@ -127,7 +151,9 @@ class ManageClientProfile(Resource):
             if validated_data.get("birth_date"):
                 from datetime import datetime
 
-                client.user.birth_date = datetime.strptime(validated_data["birth_date"], "%Y-%m-%d").date()
+                client.user.birth_date = datetime.strptime(
+                    validated_data["birth_date"], "%Y-%m-%d"
+                ).date()
             if "gender" in validated_data:
                 client.user.gender = GenderEnum(validated_data["gender"])
 
@@ -136,7 +162,9 @@ class ManageClientProfile(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR manage_client_profile PUT: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR manage_client_profile PUT: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -160,11 +188,16 @@ class RecentBookings(Resource):
             if not client:
                 return {"error": "Client not found"}, 404
             bookings = (
-                Booking.query.filter_by(client_id=client.id).order_by(Booking.scheduled_time.desc()).limit(4).all()
+                Booking.query.filter_by(client_id=client.id)
+                .order_by(Booking.scheduled_time.desc())
+                .limit(4)
+                .all()
             )
             return [cast("Any", booking).serialize for booking in bookings], 200
         except Exception as e:
-            app_logger.error("❌ ERREUR recent_bookings: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR recent_bookings: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -187,10 +220,16 @@ class ClientBookings(Resource):
             )
             if not client:
                 return {"error": "Client profile not found"}, 404
-            bookings = Booking.query.filter_by(client_id=client.id).order_by(Booking.scheduled_time.desc()).all()
+            bookings = (
+                Booking.query.filter_by(client_id=client.id)
+                .order_by(Booking.scheduled_time.desc())
+                .all()
+            )
             return [cast("Any", booking).serialize for booking in bookings], 200
         except Exception as e:
-            app_logger.error("❌ ERREUR list_client_bookings: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR list_client_bookings: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
     @jwt_required()
@@ -222,7 +261,9 @@ class ClientBookings(Resource):
             )
 
             try:
-                validated_data = validate_request(BookingCreateSchema(), data, strict=False)
+                validated_data = validate_request(
+                    BookingCreateSchema(), data, strict=False
+                )
             except ValidationError as e:
                 return handle_validation_error(e)
 
@@ -252,11 +293,16 @@ class ClientBookings(Resource):
 
             db.session.add(new_booking)
             db.session.commit()
-            return {"message": "Booking created successfully", "booking": new_booking.serialize}, 201
+            return {
+                "message": "Booking created successfully",
+                "booking": new_booking.serialize,
+            }, 201
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR create_booking: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR create_booking: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -293,7 +339,9 @@ class GenerateQRBill(Resource):
                 return {"error": "Client profile not found"}, 403
             payments = getattr(client, "payments", []) or []
             total_amount = sum(
-                (getattr(p, "amount", 0) or 0) for p in payments if getattr(p, "status", None) == "pending"
+                (getattr(p, "amount", 0) or 0)
+                for p in payments
+                if getattr(p, "status", None) == "pending"
             )
             if total_amount <= TOTAL_AMOUNT_ZERO:
                 return {"error": "No pending payments to generate a QR bill"}, 400
@@ -303,7 +351,9 @@ class GenerateQRBill(Resource):
             return {"qr_code_url": qr_code_url}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR generate_qr_bill: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR generate_qr_bill: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -346,7 +396,9 @@ class DeleteAccount(Resource):
             return {"message": "Account deactivated successfully"}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR delete_account: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR delete_account: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -375,7 +427,9 @@ class ListPayments(Resource):
             return [cast("Any", payment).serialize for payment in payments], 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR list_payments: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR list_payments: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -395,10 +449,16 @@ class CancelBooking(Resource):
             user = User.query.filter_by(public_id=current_user_pub_id).one_or_none()
             if not user:
                 return {"error": "User not found"}, 404
-            client = Client.query.options(joinedload(Client.bookings)).filter_by(user_id=user.id).one_or_none()
+            client = (
+                Client.query.options(joinedload(Client.bookings))
+                .filter_by(user_id=user.id)
+                .one_or_none()
+            )
             if not client:
                 return {"error": "Client profile not found"}, 403
-            booking = Booking.query.filter_by(id=booking_id, client_id=client.id).one_or_none()
+            booking = Booking.query.filter_by(
+                id=booking_id, client_id=client.id
+            ).one_or_none()
             if not booking:
                 return {"error": "Booking not found"}, 404
             if booking.status != BookingStatus.PENDING:
@@ -408,7 +468,9 @@ class CancelBooking(Resource):
             return {"message": "Booking canceled successfully"}, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR cancel_booking: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR cancel_booking: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -479,13 +541,20 @@ class ResetPassword(Resource):
                 ),
             )
             mail.send(msg)
-            app_logger.info("✅ Mot de passe réinitialisé avec succès pour l'utilisateur %s", current_user.email)
+            app_logger.info(
+                "✅ Mot de passe réinitialisé avec succès pour l'utilisateur %s",
+                current_user.email,
+            )
 
-            return {"message": "Password reset successfully and confirmation email sent."}, 200
+            return {
+                "message": "Password reset successfully and confirmation email sent."
+            }, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            app_logger.error("❌ ERREUR reset_password: %s - %s", type(e).__name__, str(e))
+            app_logger.error(
+                "❌ ERREUR reset_password: %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -508,14 +577,20 @@ class ClientsList(Resource):
 
             # Requête sur le champ first_name et last_name
             clients = (
-                Client.query.join(User).filter(User.first_name.ilike(f"%{q}%") | User.last_name.ilike(f"%{q}%")).all()
+                Client.query.join(User)
+                .filter(
+                    User.first_name.ilike(f"%{q}%") | User.last_name.ilike(f"%{q}%")
+                )
+                .all()
             )
 
             # Sérialisation
             return [cast("Any", c).serialize for c in clients], 200
 
         except Exception as e:
-            app_logger.exception("❌ ERREUR clients GET / : %s - %s", type(e).__name__, str(e))
+            app_logger.exception(
+                "❌ ERREUR clients GET / : %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Une erreur serveur est survenue."}, 500
 
     @jwt_required()
@@ -528,7 +603,9 @@ class ClientsList(Resource):
                 "last_name": fields.String(required=True),
                 "email": fields.String(required=True),
                 "phone": fields.String(),
-                "address": fields.String(description="Adresse de domicile (sera géocodée automatiquement)"),
+                "address": fields.String(
+                    description="Adresse de domicile (sera géocodée automatiquement)"
+                ),
                 "billing_address": fields.String(
                     description="Adresse de facturation (optionnelle, sera géocodée automatiquement)"
                 ),
@@ -559,7 +636,10 @@ class ClientsList(Resource):
 
             # Créer l'utilisateur
             new_user = cast("Any", User)(
-                first_name=data["first_name"], last_name=data["last_name"], email=data["email"], role=UserRole.client
+                first_name=data["first_name"],
+                last_name=data["last_name"],
+                email=data["email"],
+                role=UserRole.client,
             )
             db.session.add(new_user)
             db.session.flush()  # récupère new_user.id
@@ -597,11 +677,16 @@ class ClientsList(Resource):
                     else:
                         # Sauvegarde l'adresse même sans coordonnées
                         new_client.domicile_address = main_address
-                        app_logger.warning("⚠️ Impossible de géocoder l'adresse de domicile: %s", main_address)
+                        app_logger.warning(
+                            "⚠️ Impossible de géocoder l'adresse de domicile: %s",
+                            main_address,
+                        )
                 except Exception as e:
                     # Sauvegarde l'adresse même en cas d'erreur
                     new_client.domicile_address = main_address
-                    app_logger.warning("⚠️ Erreur lors du géocodage de l'adresse de domicile: %s", e)
+                    app_logger.warning(
+                        "⚠️ Erreur lors du géocodage de l'adresse de domicile: %s", e
+                    )
 
             # Géocodage de l'adresse de facturation (si différente)
             billing_address = data.get("billing_address")
@@ -624,10 +709,15 @@ class ClientsList(Resource):
                         )
                     else:
                         new_client.billing_address = billing_address
-                        app_logger.warning("⚠️ Impossible de géocoder l'adresse de facturation: %s", billing_address)
+                        app_logger.warning(
+                            "⚠️ Impossible de géocoder l'adresse de facturation: %s",
+                            billing_address,
+                        )
                 except Exception as e:
                     new_client.billing_address = billing_address
-                    app_logger.warning("⚠️ Erreur lors du géocodage de l'adresse de facturation: %s", e)
+                    app_logger.warning(
+                        "⚠️ Erreur lors du géocodage de l'adresse de facturation: %s", e
+                    )
             elif main_address:
                 # Si pas d'adresse de facturation spécifique, copier depuis
                 # domicile
@@ -643,12 +733,17 @@ class ClientsList(Resource):
             db.session.commit()
 
             app_logger.info(
-                "✅ Client créé avec succès: %s %s (ID: %s)", data["first_name"], data["last_name"], new_client.id
+                "✅ Client créé avec succès: %s %s (ID: %s)",
+                data["first_name"],
+                data["last_name"],
+                new_client.id,
             )
 
             return new_client.serialize, 201
 
         except Exception as e:
             db.session.rollback()
-            app_logger.exception("❌ ERREUR clients POST / : %s - %s", type(e).__name__, str(e))
+            app_logger.exception(
+                "❌ ERREUR clients POST / : %s - %s", type(e).__name__, str(e)
+            )
             return {"error": "Impossible de créer le client."}, 500

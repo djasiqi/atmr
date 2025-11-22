@@ -110,8 +110,12 @@ def autocomplete_address(
                 {
                     "place_id": pred.get("place_id"),
                     "description": pred.get("description"),
-                    "main_text": pred.get("structured_formatting", {}).get("main_text", ""),
-                    "secondary_text": pred.get("structured_formatting", {}).get("secondary_text", ""),
+                    "main_text": pred.get("structured_formatting", {}).get(
+                        "main_text", ""
+                    ),
+                    "secondary_text": pred.get("structured_formatting", {}).get(
+                        "secondary_text", ""
+                    ),
                     "types": pred.get("types", []),
                 }
             )
@@ -159,7 +163,14 @@ def get_place_details(
 
     # Champs par défaut optimisés pour les adresses
     if fields is None:
-        fields = ["formatted_address", "geometry", "address_components", "place_id", "types", "name"]
+        fields = [
+            "formatted_address",
+            "geometry",
+            "address_components",
+            "place_id",
+            "types",
+            "name",
+        ]
 
     params = {
         "place_id": place_id,
@@ -198,7 +209,10 @@ def get_place_details(
 
 
 def geocode_address_google(
-    address: str, *, country: str | None = DEFAULT_COUNTRY, language: str = DEFAULT_LANGUAGE
+    address: str,
+    *,
+    country: str | None = DEFAULT_COUNTRY,
+    language: str = DEFAULT_LANGUAGE,
 ) -> Dict[str, Any] | None:
     """Géocode une adresse avec Google Geocoding API.
 
@@ -279,7 +293,9 @@ def geocode_address_google(
         raise GooglePlacesError(msg) from e
 
 
-def extract_address_components(address_components: List[Dict[str, Any]]) -> Dict[str, str]:
+def extract_address_components(
+    address_components: List[Dict[str, Any]],
+) -> Dict[str, str]:
     """Extrait les composants utiles d'une adresse Google.
 
     Args:
@@ -340,7 +356,9 @@ def geocode_and_validate(
     # Vérifier la précision de la géolocalisation
     location_type = result.get("location_type", "")
     if location_type not in ("ROOFTOP", "RANGE_INTERPOLATED", "GEOMETRIC_CENTER"):
-        app_logger.warning("⚠️ Géolocalisation imprécise (%s) pour: %s", location_type, address)
+        app_logger.warning(
+            "⚠️ Géolocalisation imprécise (%s) pour: %s", location_type, address
+        )
 
     # Extraire les composants
     components = extract_address_components(result.get("address_components", []))

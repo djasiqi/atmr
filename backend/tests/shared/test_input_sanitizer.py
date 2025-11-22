@@ -19,7 +19,10 @@ class TestEscapeHtml:
 
     def test_escape_basic_html(self):
         """Test échappement HTML basique."""
-        assert escape_html("<script>alert('xss')</script>") == "&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;"
+        assert (
+            escape_html("<script>alert('xss')</script>")
+            == "&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;"
+        )
 
     def test_escape_special_chars(self):
         """Test échappement caractères spéciaux."""

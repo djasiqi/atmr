@@ -121,14 +121,17 @@ class DispatchRunRequestSchema(Schema):
 
     for_date = fields.Str(
         required=True,
-        validate=validate.Regexp(ISO8601_DATE_REGEX, error="for_date doit être au format YYYY-MM-DD"),
+        validate=validate.Regexp(
+            ISO8601_DATE_REGEX, error="for_date doit être au format YYYY-MM-DD"
+        ),
     )
     regular_first = fields.Bool(load_default=True)
     allow_emergency = fields.Bool(allow_none=True, load_default=None)
     async_mode = fields.Bool(load_default=True, data_key="async")
     mode = fields.Str(
         validate=validate.OneOf(
-            ["auto", "heuristic_only", "solver_only"], error="mode invalide (auto|heuristic_only|solver_only)"
+            ["auto", "heuristic_only", "solver_only"],
+            error="mode invalide (auto|heuristic_only|solver_only)",
         ),
         allow_none=True,
     )
@@ -164,7 +167,9 @@ class DispatchRunSchema(Schema):
     total_time_seconds = fields.Float(allow_none=True)
 
     # Assignments (si demandés)
-    assignments = fields.Nested(AssignmentSchema, many=True, exclude=("dispatch_run",), allow_none=True)
+    assignments = fields.Nested(
+        AssignmentSchema, many=True, exclude=("dispatch_run",), allow_none=True
+    )
 
     class Meta:  # type: ignore
         ordered = True

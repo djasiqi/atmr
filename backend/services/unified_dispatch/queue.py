@@ -151,11 +151,17 @@ def get_status(company_id: int, for_date: str | None = None) -> Dict[str, Any]:
             if dispatch_run:
                 active_dispatch_run_id = dispatch_run.id
                 active_dispatch_status = (
-                    dispatch_run.status.value if hasattr(dispatch_run.status, "value") else str(dispatch_run.status)
+                    dispatch_run.status.value
+                    if hasattr(dispatch_run.status, "value")
+                    else str(dispatch_run.status)
                 )
 
                 # ✅ Compter les assignments pour ce DispatchRun
-                active_assignments_count = len(dispatch_run.assignments) if hasattr(dispatch_run, "assignments") else 0
+                active_assignments_count = (
+                    len(dispatch_run.assignments)
+                    if hasattr(dispatch_run, "assignments")
+                    else 0
+                )
 
                 logger.debug(
                     "[Queue] Found active DispatchRun id=%s status=%s assignments=%s for company=%s date=%s",
@@ -166,7 +172,9 @@ def get_status(company_id: int, for_date: str | None = None) -> Dict[str, Any]:
                     for_date,
                 )
         except Exception as e:
-            logger.exception("[Queue] Error fetching DispatchRun for date=%s: %s", for_date, e)
+            logger.exception(
+                "[Queue] Error fetching DispatchRun for date=%s: %s", for_date, e
+            )
 
     # Check Celery task status if we have a task_id
     celery_state = "UNKNOWN"
@@ -221,7 +229,9 @@ def get_status(company_id: int, for_date: str | None = None) -> Dict[str, Any]:
 
     # ✅ Utiliser le dispatch_run_id actif si disponible, sinon celui du dernier résultat
     dispatch_run_id = (
-        active_dispatch_run_id or last.get("dispatch_run_id") or (last.get("meta", {}) or {}).get("dispatch_run_id")
+        active_dispatch_run_id
+        or last.get("dispatch_run_id")
+        or (last.get("meta", {}) or {}).get("dispatch_run_id")
     )
 
     # ✅ Construire active_dispatch_run avec sérialisation des dates si dispatch_run existe
@@ -232,14 +242,22 @@ def get_status(company_id: int, for_date: str | None = None) -> Dict[str, Any]:
             "status": active_dispatch_status,
             "assignments_count": active_assignments_count,
             "day": dispatch_run.day.isoformat() if dispatch_run.day else None,
-            "created_at": _iso(_as_dt(dispatch_run.created_at)) if dispatch_run.created_at else None,
-            "started_at": _iso(_as_dt(dispatch_run.started_at)) if dispatch_run.started_at else None,
-            "completed_at": _iso(_as_dt(dispatch_run.completed_at)) if dispatch_run.completed_at else None,
+            "created_at": _iso(_as_dt(dispatch_run.created_at))
+            if dispatch_run.created_at
+            else None,
+            "started_at": _iso(_as_dt(dispatch_run.started_at))
+            if dispatch_run.started_at
+            else None,
+            "completed_at": _iso(_as_dt(dispatch_run.completed_at))
+            if dispatch_run.completed_at
+            else None,
         }
 
     # ✅ Sérialiser récursivement tous les objets datetime/date pour éviter les erreurs JSON
     serialized_last = _serialize_datetimes(last) if last else {}
-    serialized_meta = _serialize_datetimes(last.get("meta")) if last and last.get("meta") else None
+    serialized_meta = (
+        _serialize_datetimes(last.get("meta")) if last and last.get("meta") else None
+    )
 
     return {
         "is_running": bool(_RUNNING.get(company_id, False)),
@@ -269,7 +287,9 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
     mode = str((params or {}).get("mode", "auto")).strip().lower()
 
     logger.info(
-        "[Queue] trigger_job called for company_id=%s params_keys=%s", company_id, list(params.keys()) if params else []
+        "[Queue] trigger_job called for company_id=%s params_keys=%s",
+        company_id,
+        list(params.keys()) if params else [],
     )
 
     snapshot: Dict[str, Any] = {
@@ -281,7 +301,9 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(params.get("overrides"), dict):
         snapshot["overrides_keys"] = sorted(params["overrides"].keys())
     if isinstance(params.get("dispatch_overrides"), dict):
-        snapshot["dispatch_overrides_keys"] = sorted(params["dispatch_overrides"].keys())
+        snapshot["dispatch_overrides_keys"] = sorted(
+            params["dispatch_overrides"].keys()
+        )
     logger.info("[Queue] trigger_job params snapshot=%s", snapshot)
 
     # Créer le DispatchRun avec statut PENDING avant l'enfilage
@@ -294,21 +316,32 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
             try:
                 day_date = date.fromisoformat(for_date_str)
             except (ValueError, TypeError):
-                logger.warning("[Queue] Invalid for_date=%s, cannot create DispatchRun early", for_date_str)
+                logger.warning(
+                    "[Queue] Invalid for_date=%s, cannot create DispatchRun early",
+                    for_date_str,
+                )
                 day_date = None
         else:
             # Utiliser aujourd'hui par défaut
             day_date = datetime.now(UTC).date()
-            logger.warning("[Queue] No for_date in params, using today=%s for DispatchRun", day_date)
+            logger.warning(
+                "[Queue] No for_date in params, using today=%s for DispatchRun",
+                day_date,
+            )
 
         if day_date:
-            logger.info("[Queue] trigger_job: day_date=%s, attempting to create/reuse DispatchRun", day_date)
+            logger.info(
+                "[Queue] trigger_job: day_date=%s, attempting to create/reuse DispatchRun",
+                day_date,
+            )
             # Créer ou réutiliser le DispatchRun avec statut PENDING
             # Utiliser une transaction courte pour éviter les race conditions
             try:
                 # ✅ Flask/SQLAlchemy gère automatiquement les transactions - pas besoin de begin()
                 # Vérifier si un DispatchRun existe déjà pour cette date
-                existing_run = DispatchRun.query.filter_by(company_id=company_id, day=day_date).first()
+                existing_run = DispatchRun.query.filter_by(
+                    company_id=company_id, day=day_date
+                ).first()
 
                 if existing_run and existing_run.day != day_date:
                     existing_run = None
@@ -356,14 +389,18 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
 
                 # ✅ Commit explicite pour persister la transaction
                 db.session.commit()
-                logger.debug("[Queue] DispatchRun id=%s committed successfully", dispatch_run_id)
+                logger.debug(
+                    "[Queue] DispatchRun id=%s committed successfully", dispatch_run_id
+                )
             except IntegrityError as e:
                 # ✅ P2.2: Track métrique IntegrityError (race condition)
                 from services.unified_dispatch.error_metrics import (
                     track_integrity_error,
                 )
 
-                error_code = getattr(e.orig, "pgcode", None) if hasattr(e, "orig") else None
+                error_code = (
+                    getattr(e.orig, "pgcode", None) if hasattr(e, "orig") else None
+                )
                 track_integrity_error(
                     error_code=str(error_code) if error_code else "unknown",
                     company_id=company_id,
@@ -372,14 +409,21 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
 
                 # Race condition : un autre thread a créé le DispatchRun entre temps
                 db.session.rollback()
-                existing_run = DispatchRun.query.filter_by(company_id=company_id, day=day_date).first()
+                existing_run = DispatchRun.query.filter_by(
+                    company_id=company_id, day=day_date
+                ).first()
                 if existing_run and existing_run.day != day_date:
                     existing_run = None
                 if existing_run:
                     dispatch_run_id = existing_run.id
-                    logger.info("[Queue] Race condition: using existing DispatchRun id=%s", dispatch_run_id)
+                    logger.info(
+                        "[Queue] Race condition: using existing DispatchRun id=%s",
+                        dispatch_run_id,
+                    )
                 else:
-                    logger.error("[Queue] Failed to create/reuse DispatchRun after IntegrityError")
+                    logger.error(
+                        "[Queue] Failed to create/reuse DispatchRun after IntegrityError"
+                    )
             except Exception as e:
                 db.session.rollback()
                 logger.exception("[Queue] Failed to create DispatchRun early: %s", e)
@@ -408,7 +452,11 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
                         sorted(dispatch_defaults.keys()),
                     )
         except Exception as exc:
-            logger.warning("[Queue] Failed to load company dispatch_overrides for company_id=%s: %s", company_id, exc)
+            logger.warning(
+                "[Queue] Failed to load company dispatch_overrides for company_id=%s: %s",
+                company_id,
+                exc,
+            )
 
     # Passer le dispatch_run_id dans les params pour la tâche Celery
     if dispatch_run_id:
@@ -424,7 +472,12 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def trigger(company_id: int, reason: str = "generic", mode: str = "auto", params: Dict[str, Any] | None = None) -> None:
+def trigger(
+    company_id: int,
+    reason: str = "generic",
+    mode: str = "auto",
+    params: Dict[str, Any] | None = None,
+) -> None:
     """Appel léger depuis les routes ou services :
     - Empile la demande (pour debug),
     - Programme/relance un timer de coalescence,
@@ -501,9 +554,15 @@ def _try_run(st: CompanyDispatchState, mode: str) -> None:
 
     # Vérifier/renouveler le TTL si running
     now = datetime.now(UTC)
-    if st.running and st.last_start and now - st.last_start > timedelta(seconds=LOCK_TTL_SEC):
+    if (
+        st.running
+        and st.last_start
+        and now - st.last_start > timedelta(seconds=LOCK_TTL_SEC)
+    ):
         # On considère le run précédent comme bloqué (TTL expiré)
-        logger.warning("[Queue] TTL expired for company=%s, forcing unlock", st.company_id)
+        logger.warning(
+            "[Queue] TTL expired for company=%s, forcing unlock", st.company_id
+        )
         st.running = False
 
     # Essayer de prendre le lock
@@ -540,7 +599,9 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
     # globalement
     app = getattr(st, "app_ref", None) or _APP
     if app is None:
-        logger.error("[Queue] No Flask app available for company=%s; aborting run", company_id)
+        logger.error(
+            "[Queue] No Flask app available for company=%s; aborting run", company_id
+        )
         st.running = False
         st.last_start = None
         _RUNNING[company_id] = False
@@ -576,7 +637,10 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             dedup_key = f"dispatch:enqueued:{company_id}:{params_hash}"
 
             if not redis_client.setnx(dedup_key, 1):
-                logger.info("[Queue] Duplicate run ignored for company=%s (same params)", company_id)
+                logger.info(
+                    "[Queue] Duplicate run ignored for company=%s (same params)",
+                    company_id,
+                )
                 st.running = False
                 st.last_start = None
                 _RUNNING[company_id] = False
@@ -607,13 +671,19 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             st.last_task_id = task.id
             _CELERY_STATE[company_id] = task.state
 
-            logger.info("[Queue] Enqueued Celery task company=%s task_id=%s", company_id, task.id)
+            logger.info(
+                "[Queue] Enqueued Celery task company=%s task_id=%s",
+                company_id,
+                task.id,
+            )
 
             # Update state
             _PROGRESS[company_id] = 20
 
     except Exception as e:
-        logger.exception("[Queue] Failed to enqueue Celery task company=%s: %s", company_id, e)
+        logger.exception(
+            "[Queue] Failed to enqueue Celery task company=%s: %s", company_id, e
+        )
         st.running = False
         st.last_start = None
         _RUNNING[company_id] = False

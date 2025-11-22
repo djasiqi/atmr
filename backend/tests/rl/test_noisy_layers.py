@@ -105,7 +105,11 @@ class TestNoisyLinear:
         assert not torch.equal(layer.bias_epsilon, initial_bias_epsilon)
 
         # Vérifier que le bruit est factorisé
-        assert torch.allclose(layer.weight_epsilon.abs().sqrt(), layer.weight_epsilon.abs().sqrt(), atol=1e-6)
+        assert torch.allclose(
+            layer.weight_epsilon.abs().sqrt(),
+            layer.weight_epsilon.abs().sqrt(),
+            atol=1e-6,
+        )
 
     def test_noise_non_zero(self):
         """Teste que le bruit n'est pas zéro."""
@@ -181,7 +185,9 @@ class TestNoisyQNetwork:
 
     def test_noisy_q_network_initialization(self):
         """Teste l'initialisation de NoisyQNetwork."""
-        network = NoisyQNetwork(state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5)
+        network = NoisyQNetwork(
+            state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5
+        )
 
         assert network.state_size == 10
         assert network.action_size == 5
@@ -193,7 +199,9 @@ class TestNoisyQNetwork:
 
     def test_noisy_q_network_forward(self):
         """Teste le forward pass de NoisyQNetwork."""
-        network = NoisyQNetwork(state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5)
+        network = NoisyQNetwork(
+            state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5
+        )
 
         state = torch.randn(3, 10)
         q_values = network(state)
@@ -204,12 +212,19 @@ class TestNoisyQNetwork:
 
     def test_noise_reset_network(self):
         """Teste la réinitialisation du bruit pour tout le réseau."""
-        network = NoisyQNetwork(state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5)
+        network = NoisyQNetwork(
+            state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5
+        )
 
         # Capturer les bruits initiaux
         initial_noises = []
         for layer in network.layers:
-            initial_noises.append({"weight": layer.weight_epsilon.clone(), "bias": layer.bias_epsilon.clone()})
+            initial_noises.append(
+                {
+                    "weight": layer.weight_epsilon.clone(),
+                    "bias": layer.bias_epsilon.clone(),
+                }
+            )
 
         # Réinitialiser le bruit
         network.reset_noise()
@@ -221,7 +236,9 @@ class TestNoisyQNetwork:
 
     def test_noise_stats(self):
         """Teste les statistiques du bruit."""
-        network = NoisyQNetwork(state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5)
+        network = NoisyQNetwork(
+            state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5
+        )
 
         stats = network.get_noise_stats()
 
@@ -243,7 +260,9 @@ class TestNoisyDuelingQNetwork:
 
     def test_noisy_dueling_initialization(self):
         """Teste l'initialisation de NoisyDuelingQNetwork."""
-        network = NoisyDuelingQNetwork(state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5)
+        network = NoisyDuelingQNetwork(
+            state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5
+        )
 
         assert network.state_size == 10
         assert network.action_size == 5
@@ -255,7 +274,9 @@ class TestNoisyDuelingQNetwork:
 
     def test_noisy_dueling_forward(self):
         """Teste le forward pass de NoisyDuelingQNetwork."""
-        network = NoisyDuelingQNetwork(state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5)
+        network = NoisyDuelingQNetwork(
+            state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5
+        )
 
         state = torch.randn(3, 10)
         q_values = network(state)
@@ -266,7 +287,9 @@ class TestNoisyDuelingQNetwork:
 
     def test_dueling_aggregation(self):
         """Teste l'agrégation Dueling."""
-        network = NoisyDuelingQNetwork(state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5)
+        network = NoisyDuelingQNetwork(
+            state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5
+        )
 
         state = torch.randn(3, 10)
         q_values = network(state)
@@ -294,7 +317,9 @@ class TestNoisyImprovedQNetwork:
 
     def test_noisy_improved_initialization(self):
         """Teste l'initialisation de NoisyImprovedQNetwork."""
-        network = NoisyImprovedQNetwork(state_dim=10, action_dim=5, use_noisy=True, std_init=0.5)
+        network = NoisyImprovedQNetwork(
+            state_dim=10, action_dim=5, use_noisy=True, std_init=0.5
+        )
 
         assert network.state_dim == 10
         assert network.action_dim == 5
@@ -305,7 +330,9 @@ class TestNoisyImprovedQNetwork:
 
     def test_noisy_improved_forward(self):
         """Teste le forward pass de NoisyImprovedQNetwork."""
-        network = NoisyImprovedQNetwork(state_dim=10, action_dim=5, use_noisy=True, std_init=0.5)
+        network = NoisyImprovedQNetwork(
+            state_dim=10, action_dim=5, use_noisy=True, std_init=0.5
+        )
 
         state = torch.randn(3, 10)
         q_values = network(state)
@@ -316,7 +343,9 @@ class TestNoisyImprovedQNetwork:
 
     def test_fallback_to_standard(self):
         """Teste le fallback vers le réseau standard."""
-        network = NoisyImprovedQNetwork(state_dim=10, action_dim=5, use_noisy=False, std_init=0.5)
+        network = NoisyImprovedQNetwork(
+            state_dim=10, action_dim=5, use_noisy=False, std_init=0.5
+        )
 
         assert network.use_noisy is False
         # Le réseau interne devrait être ImprovedQNetwork
@@ -326,7 +355,9 @@ class TestNoisyImprovedQNetwork:
 
     def test_noise_control_methods(self):
         """Teste les méthodes de contrôle du bruit."""
-        network = NoisyImprovedQNetwork(state_dim=10, action_dim=5, use_noisy=True, std_init=0.5)
+        network = NoisyImprovedQNetwork(
+            state_dim=10, action_dim=5, use_noisy=True, std_init=0.5
+        )
 
         # Test reset_noise
         network.reset_noise()
@@ -342,7 +373,9 @@ class TestNoisyDuelingImprovedQNetwork:
 
     def test_noisy_dueling_improved_initialization(self):
         """Teste l'initialisation de NoisyDuelingImprovedQNetwork."""
-        network = NoisyDuelingImprovedQNetwork(state_dim=10, action_dim=5, use_noisy=True, std_init=0.5)
+        network = NoisyDuelingImprovedQNetwork(
+            state_dim=10, action_dim=5, use_noisy=True, std_init=0.5
+        )
 
         assert network.state_dim == 10
         assert network.action_dim == 5
@@ -353,7 +386,9 @@ class TestNoisyDuelingImprovedQNetwork:
 
     def test_noisy_dueling_improved_forward(self):
         """Teste le forward pass de NoisyDuelingImprovedQNetwork."""
-        network = NoisyDuelingImprovedQNetwork(state_dim=10, action_dim=5, use_noisy=True, std_init=0.5)
+        network = NoisyDuelingImprovedQNetwork(
+            state_dim=10, action_dim=5, use_noisy=True, std_init=0.5
+        )
 
         state = torch.randn(3, 10)
         q_values = network(state)
@@ -370,13 +405,21 @@ class TestFactoryFunctions:
         """Teste create_noisy_network."""
         # Test réseau Q standard
         q_network = create_noisy_network(
-            network_type="q", state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5
+            network_type="q",
+            state_size=10,
+            action_size=5,
+            hidden_sizes=[128, 64],
+            std_init=0.5,
         )
         assert isinstance(q_network, NoisyQNetwork)
 
         # Test réseau Dueling
         dueling_network = create_noisy_network(
-            network_type="dueling", state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5
+            network_type="dueling",
+            state_size=10,
+            action_size=5,
+            hidden_sizes=[128, 64],
+            std_init=0.5,
         )
         assert isinstance(dueling_network, NoisyDuelingQNetwork)
 
@@ -387,17 +430,23 @@ class TestFactoryFunctions:
     def test_create_q_network(self):
         """Teste create_q_network."""
         # Test réseau standard
-        standard_network = create_q_network(network_type="standard", state_dim=10, action_dim=5)
+        standard_network = create_q_network(
+            network_type="standard", state_dim=10, action_dim=5
+        )
         assert isinstance(standard_network, ImprovedQNetwork)
 
         # Test réseau Dueling
-        dueling_network = create_q_network(network_type="dueling", state_dim=10, action_dim=5)
+        dueling_network = create_q_network(
+            network_type="dueling", state_dim=10, action_dim=5
+        )
         from services.rl.improved_q_network import DuelingQNetwork
 
         assert isinstance(dueling_network, DuelingQNetwork)
 
         # Test réseau Noisy
-        noisy_network = create_q_network(network_type="noisy", state_dim=10, action_dim=5, use_noisy=True)
+        noisy_network = create_q_network(
+            network_type="noisy", state_dim=10, action_dim=5, use_noisy=True
+        )
         assert isinstance(noisy_network, NoisyImprovedQNetwork)
 
         # Test réseau Noisy Dueling
@@ -413,15 +462,25 @@ class TestComparisonFunctions:
     def test_compare_noisy_vs_standard(self):
         """Teste la comparaison entre réseaux avec et sans bruit."""
         # Créer les réseaux
-        noisy_network = NoisyQNetwork(state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5)
+        noisy_network = NoisyQNetwork(
+            state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5
+        )
 
-        standard_network = nn.Sequential(nn.Linear(10, 128), nn.ReLU(), nn.Linear(128, 64), nn.ReLU(), nn.Linear(64, 5))
+        standard_network = nn.Sequential(
+            nn.Linear(10, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 5),
+        )
 
         # État d'entrée
         state = torch.randn(1, 10)
 
         # Comparaison
-        comparison_stats = compare_noisy_vs_standard(noisy_network, standard_network, state, num_samples=5)
+        comparison_stats = compare_noisy_vs_standard(
+            noisy_network, standard_network, state, num_samples=5
+        )
 
         # Vérifier les statistiques
         assert "noisy_mean" in comparison_stats
@@ -442,7 +501,9 @@ class TestIntegration:
     def test_end_to_end_training_simulation(self):
         """Teste une simulation d'entraînement end-to-end."""
         # Créer le réseau
-        network = NoisyQNetwork(state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5)
+        network = NoisyQNetwork(
+            state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5
+        )
 
         # Optimiseur
         optimizer = torch.optim.Adam(network.parameters(), lr=0.0001)
@@ -475,7 +536,9 @@ class TestIntegration:
 
     def test_noise_reduction_over_time(self):
         """Teste que le bruit peut être réduit au fil du temps."""
-        network = NoisyQNetwork(state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5)
+        network = NoisyQNetwork(
+            state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5
+        )
 
         # Capturer les statistiques de bruit initiales
         _initial_stats = network.get_noise_stats()
@@ -499,7 +562,9 @@ class TestIntegration:
 
     def test_exploration_vs_exploitation(self):
         """Teste le compromis exploration/exploitation."""
-        network = NoisyQNetwork(state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5)
+        network = NoisyQNetwork(
+            state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5
+        )
 
         state = torch.randn(1, 10)
 

@@ -19,9 +19,25 @@ class TestDispatchEnvSimpleEffective:
 
         # Simuler un environnement avec moins de drivers que prévu
         env.drivers = [
-            {"id": 1, "available": True, "load": 2, "assigned": False, "idle_time": 0, "lat": 48.8566, "lon": 2.3522}
+            {
+                "id": 1,
+                "available": True,
+                "load": 2,
+                "assigned": False,
+                "idle_time": 0,
+                "lat": 48.8566,
+                "lon": 2.3522,
+            }
         ]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "assigned": False, "time_remaining": 30}]
+        env.bookings = [
+            {
+                "id": 1,
+                "priority": 3,
+                "time_window": 30,
+                "assigned": False,
+                "time_remaining": 30,
+            }
+        ]
 
         # Action qui pointe vers un driver inexistant (driver_idx >= len(drivers))
         action = 10  # driver_idx = 10 // 5 = 2, mais seulement 1 driver
@@ -133,7 +149,9 @@ class TestDispatchEnvSimpleEffective:
         env.reset()
 
         with patch("services.rl.dispatch_env.logging") as mock_logging:
-            distance = env._calculate_distance(float("nan"), float("nan"), float("nan"), float("nan"))
+            distance = env._calculate_distance(
+                float("nan"), float("nan"), float("nan"), float("nan")
+            )
 
             # Vérifier les lignes exactes 684-687
             assert isinstance(distance, float)
@@ -322,7 +340,9 @@ class TestDispatchEnvSimpleEffective:
 
     def test_step_episode_termination_simple(self):
         """Test step avec terminaison d'épisode - simple et efficace"""
-        env = DispatchEnv(num_drivers=3, max_bookings=5, simulation_hours=0.01)  # Très court
+        env = DispatchEnv(
+            num_drivers=3, max_bookings=5, simulation_hours=0.01
+        )  # Très court
         env.reset()
 
         # Avancer le temps pour déclencher la terminaison
@@ -344,7 +364,9 @@ class TestDispatchEnvSimpleEffective:
         env.total_bookings = 10
         env.current_time = env.simulation_hours * 60 - 1
 
-        with patch.object(env, "_calculate_episode_bonus", return_value=50.0) as mock_bonus:
+        with patch.object(
+            env, "_calculate_episode_bonus", return_value=50.0
+        ) as mock_bonus:
             _obs, reward, terminated, _truncated, _info = env.step(0)
 
             # Vérifier que la ligne 310 est couverte (bonus ajouté)
@@ -381,7 +403,9 @@ class TestDispatchEnvSimpleEffective:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        with patch.object(env, "_get_observation", return_value=np.array([1, 2, 3])) as mock_obs:
+        with patch.object(
+            env, "_get_observation", return_value=np.array([1, 2, 3])
+        ) as mock_obs:
             obs, _reward, _terminated, _truncated, _info = env.step(0)
 
             # Vérifier que la ligne 302 est couverte (observation générée)
@@ -417,7 +441,9 @@ class TestDispatchEnvSimpleEffective:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        with patch.object(env, "_check_expired_bookings", return_value=-10.0) as mock_check:
+        with patch.object(
+            env, "_check_expired_bookings", return_value=-10.0
+        ) as mock_check:
             _obs, _reward, _terminated, _truncated, _info = env.step(0)
 
             # Vérifier que la ligne 296 est couverte (bookings expirés vérifiés)
@@ -518,9 +544,25 @@ class TestDispatchEnvSimpleEffective:
 
         # Test 2: Action invalide (lignes 266-270)
         env.drivers = [
-            {"id": 1, "available": True, "load": 2, "assigned": False, "idle_time": 0, "lat": 48.8566, "lon": 2.3522}
+            {
+                "id": 1,
+                "available": True,
+                "load": 2,
+                "assigned": False,
+                "idle_time": 0,
+                "lat": 48.8566,
+                "lon": 2.3522,
+            }
         ]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "assigned": False, "time_remaining": 30}]
+        env.bookings = [
+            {
+                "id": 1,
+                "priority": 3,
+                "time_window": 30,
+                "assigned": False,
+                "time_remaining": 30,
+            }
+        ]
 
         with patch("services.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(10)

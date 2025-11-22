@@ -51,7 +51,12 @@ class FavoritePlace(db.Model):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True)
+    company_id = Column(
+        Integer,
+        ForeignKey("company.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     label: Mapped[str] = mapped_column(String(200), nullable=False)
     address: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -61,8 +66,15 @@ class FavoritePlace(db.Model):
 
     tags = Column(String(200))
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
     # Normalisation & validations
     @staticmethod
@@ -172,11 +184,21 @@ class MedicalEstablishment(db.Model):
     aliases: Mapped[str] = mapped_column(String(500), nullable=True)
     active = Column(Boolean, nullable=False, default=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
     services = relationship(
-        "MedicalService", backref="establishment", cascade="all, delete-orphan", passive_deletes=True
+        "MedicalService",
+        backref="establishment",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     def alias_list(self):
@@ -254,13 +276,20 @@ class MedicalService(db.Model):
     __tablename__ = "medical_service"
     __table_args__ = (
         UniqueConstraint("establishment_id", "name", name="uq_med_service_per_estab"),
-        CheckConstraint("lat IS NULL OR (lat BETWEEN -90 AND 90)", name="chk_med_service_lat"),
-        CheckConstraint("lon IS NULL OR (lon BETWEEN -180 AND 180)", name="chk_med_service_lon"),
+        CheckConstraint(
+            "lat IS NULL OR (lat BETWEEN -90 AND 90)", name="chk_med_service_lat"
+        ),
+        CheckConstraint(
+            "lon IS NULL OR (lon BETWEEN -180 AND 180)", name="chk_med_service_lon"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     establishment_id = Column(
-        Integer, ForeignKey("medical_establishment.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("medical_establishment.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     category = Column(String(50), nullable=False, default="Service")
@@ -281,8 +310,15 @@ class MedicalService(db.Model):
     lon: Mapped[float] = mapped_column(Float, nullable=True)
 
     active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
     def to_dict(self):
         return {

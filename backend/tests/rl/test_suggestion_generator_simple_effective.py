@@ -36,7 +36,9 @@ class TestRLSuggestionGeneratorSimple:
 
     def test_lazy_import_rl_failure(self):
         """Test import RL échoué"""
-        with patch("services.rl.suggestion_generator.ImprovedDQNAgent", side_effect=ImportError):
+        with patch(
+            "services.rl.suggestion_generator.ImprovedDQNAgent", side_effect=ImportError
+        ):
             generator = RLSuggestionGenerator()
             generator._lazy_import_rl()
 
@@ -69,7 +71,10 @@ class TestRLSuggestionGeneratorSimple:
         """Test chargement modèle échoué"""
         with (
             patch("services.rl.suggestion_generator.Path.exists", return_value=True),
-            patch("services.rl.suggestion_generator.torch.load", side_effect=Exception("Load error")),
+            patch(
+                "services.rl.suggestion_generator.torch.load",
+                side_effect=Exception("Load error"),
+            ),
         ):
             generator = RLSuggestionGenerator()
             generator._load_model()
@@ -86,7 +91,10 @@ class TestRLSuggestionGeneratorSimple:
 
     def test_generate_suggestions_with_model(self):
         """Test génération suggestions avec modèle"""
-        with patch.object(RLSuggestionGenerator, "_lazy_import_rl"), patch.object(RLSuggestionGenerator, "_load_model"):
+        with (
+            patch.object(RLSuggestionGenerator, "_lazy_import_rl"),
+            patch.object(RLSuggestionGenerator, "_load_model"),
+        ):
             mock_agent = Mock()
             mock_env = Mock()
             mock_env.reset.return_value = (np.array([0.1, 0.2]), {})
@@ -107,7 +115,9 @@ class TestRLSuggestionGeneratorSimple:
         generator = RLSuggestionGenerator()
         generator.agent = None
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -115,13 +125,19 @@ class TestRLSuggestionGeneratorSimple:
         """Test génération suggestions avec données vides"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
     def test_generate_suggestions_with_exception(self):
         """Test génération suggestions avec exception"""
-        with patch.object(RLSuggestionGenerator, "_lazy_import_rl", side_effect=Exception("Test error")):
+        with patch.object(
+            RLSuggestionGenerator,
+            "_lazy_import_rl",
+            side_effect=Exception("Test error"),
+        ):
             generator = RLSuggestionGenerator()
 
             suggestions = generator.generate_suggestions(
@@ -154,7 +170,9 @@ class TestRLSuggestionGeneratorSimple:
         """Test cas limite: bookings None"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -162,7 +180,9 @@ class TestRLSuggestionGeneratorSimple:
         """Test cas limite: état vide"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -170,7 +190,9 @@ class TestRLSuggestionGeneratorSimple:
         """Test cas limite: état None"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -207,7 +229,9 @@ class TestRLSuggestionGeneratorSimple:
         generator = RLSuggestionGenerator()
 
         # Test avec des données vides
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -215,7 +239,9 @@ class TestRLSuggestionGeneratorSimple:
         """Test cas limite: données suggestion None"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -223,7 +249,9 @@ class TestRLSuggestionGeneratorSimple:
         """Test cas limite: données heuristiques vides"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -231,7 +259,9 @@ class TestRLSuggestionGeneratorSimple:
         """Test cas limite: coordonnées invalides"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -239,7 +269,9 @@ class TestRLSuggestionGeneratorSimple:
         """Test cas limite: mêmes coordonnées"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -247,7 +279,9 @@ class TestRLSuggestionGeneratorSimple:
         """Test cas limite: métriques de performance"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -255,7 +289,9 @@ class TestRLSuggestionGeneratorSimple:
         """Test cas limite: utilisation mémoire"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -263,7 +299,9 @@ class TestRLSuggestionGeneratorSimple:
         """Test cas limite: accès concurrent"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -271,7 +309,9 @@ class TestRLSuggestionGeneratorSimple:
         """Test cas limite: gestion d'erreurs"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)
 
@@ -279,6 +319,8 @@ class TestRLSuggestionGeneratorSimple:
         """Test cas limite: cas limites multiples"""
         generator = RLSuggestionGenerator()
 
-        suggestions = generator.generate_suggestions(company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1")
+        suggestions = generator.generate_suggestions(
+            company_id=1, assignments=[], drivers=[], for_date="2024-0.1-0.1"
+        )
 
         assert isinstance(suggestions, list)

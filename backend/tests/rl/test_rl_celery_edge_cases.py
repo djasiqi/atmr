@@ -127,7 +127,9 @@ class TestRLCeleryErrorEdgeCases:
         # Mock d'une tâche qui échoue à cause du réseau
         with patch("services.tasks.rl_tasks.train_rl_model") as mock_task:
             mock_task.delay.return_value = Mock()
-            mock_task.delay.return_value.get.side_effect = ConnectionError("Network error")
+            mock_task.delay.return_value.get.side_effect = ConnectionError(
+                "Network error"
+            )
 
             result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
             with pytest.raises(ConnectionError, match="Network error"):
@@ -141,7 +143,9 @@ class TestRLCeleryErrorEdgeCases:
         # Mock d'une tâche qui échoue à cause de la base de données
         with patch("services.tasks.rl_tasks.train_rl_model") as mock_task:
             mock_task.delay.return_value = Mock()
-            mock_task.delay.return_value.get.side_effect = Exception("Database connection failed")
+            mock_task.delay.return_value.get.side_effect = Exception(
+                "Database connection failed"
+            )
 
             result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
             with pytest.raises(Exception, match="Database connection failed"):
@@ -176,7 +180,10 @@ class TestRLCeleryErrorEdgeCases:
         # Mock d'une tâche qui échoue puis réussit
         with patch("services.tasks.rl_tasks.train_rl_model") as mock_task:
             mock_task.delay.return_value = Mock()
-            mock_task.delay.return_value.get.side_effect = [Exception("Temporary failure"), {"status": "completed"}]
+            mock_task.delay.return_value.get.side_effect = [
+                Exception("Temporary failure"),
+                {"status": "completed"},
+            ]
 
             result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
             # Premier appel devrait échouer
@@ -278,7 +285,9 @@ class TestRLCeleryErrorEdgeCases:
         # Mock d'une tâche qui dépend d'autres services
         with patch("services.tasks.rl_tasks.train_rl_model") as mock_task:
             mock_task.delay.return_value = Mock()
-            mock_task.delay.return_value.get.side_effect = Exception("Dependency service unavailable")
+            mock_task.delay.return_value.get.side_effect = Exception(
+                "Dependency service unavailable"
+            )
 
             result = train_rl_model.delay(episodes=0.100, learning_rate=0.0001)
             # Les erreurs de dépendance sont attendues

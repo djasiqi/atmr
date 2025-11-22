@@ -305,7 +305,10 @@ class TestOptimalHyperparameters:
         """Test save_config"""
         config = {"test": "value", "learning_rate": 0.001}
 
-        with patch("pathlib.Path.mkdir") as mock_mkdir, patch("builtins.open", mock_open()) as mock_file:
+        with (
+            patch("pathlib.Path.mkdir") as mock_mkdir,
+            patch("builtins.open", mock_open()) as mock_file,
+        ):
             OptimalHyperparameters.save_config(config, "test_config.json")
 
             # Vérifier que le répertoire est créé
@@ -321,7 +324,9 @@ class TestOptimalHyperparameters:
         """Test load_config"""
         config_data = {"test": "value", "learning_rate": 0.001}
 
-        with patch("builtins.open", mock_open(read_data=json.dumps(config_data))) as mock_file:
+        with patch(
+            "builtins.open", mock_open(read_data=json.dumps(config_data))
+        ) as mock_file:
             config = OptimalHyperparameters.load_config("test_config.json")
 
             # Vérifier que le fichier est ouvert en lecture
@@ -465,7 +470,9 @@ class TestOptimalHyperparameters:
         """Test de l'exécution du module principal"""
         with (
             patch("services.rl.optimal_hyperparameters.logging.info") as mock_logging,
-            patch("services.rl.optimal_hyperparameters.OptimalHyperparameters.save_config") as mock_save,
+            patch(
+                "services.rl.optimal_hyperparameters.OptimalHyperparameters.save_config"
+            ) as mock_save,
         ):
             # Simuler l'exécution du module principal
             import services.rl.optimal_hyperparameters  # Import pour effet de bord
@@ -502,7 +509,12 @@ class TestOptimalHyperparameters:
         assert config2["punctuality_weight"] == 0.999
 
         # Vérifier que la configuration originale est affectée (même référence)
-        assert OptimalHyperparameters.REWARD_SHAPING_CONFIGS["default"]["punctuality_weight"] == 0.999
+        assert (
+            OptimalHyperparameters.REWARD_SHAPING_CONFIGS["default"][
+                "punctuality_weight"
+            ]
+            == 0.999
+        )
 
     def test_search_space_copy_behavior(self):
         """Test que get_optuna_search_space retourne une copie superficielle"""
@@ -516,7 +528,9 @@ class TestOptimalHyperparameters:
         assert search_space2["learning_rate"]["low"] == 0.999
 
         # Vérifier que la configuration originale est affectée (copie superficielle)
-        assert OptimalHyperparameters.OPTUNA_SEARCH_SPACE["learning_rate"]["low"] == 0.999
+        assert (
+            OptimalHyperparameters.OPTUNA_SEARCH_SPACE["learning_rate"]["low"] == 0.999
+        )
 
     def test_edge_case_empty_config(self):
         """Test validate_config avec configuration vide"""

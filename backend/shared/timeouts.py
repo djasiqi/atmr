@@ -131,14 +131,18 @@ def timeout(seconds: float) -> Callable[[Callable[..., T]], Callable[..., T]]:
 
             try:
                 # Attendre que le thread se termine ou que le timeout se produise
-                thread.join(timeout=seconds + 1)  # +1 pour laisser le temps au timer de se déclencher
+                thread.join(
+                    timeout=seconds + 1
+                )  # +1 pour laisser le temps au timer de se déclencher
 
                 # Arrêter le timer
                 timer.cancel()
 
                 # Vérifier si un timeout s'est produit
                 if timeout_occurred.is_set():
-                    raise TimeoutError(f"Function {func.__name__} timed out after {seconds}s")
+                    raise TimeoutError(
+                        f"Function {func.__name__} timed out after {seconds}s"
+                    )
 
                 # Vérifier s'il y a une exception à propager
                 if exception_container:

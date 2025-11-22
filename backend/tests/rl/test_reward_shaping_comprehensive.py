@@ -289,7 +289,9 @@ class TestRewardShapingComprehensive:
 
     def test_get_current_weights(self):
         """Test récupération des poids actuels"""
-        reward_shaping = AdvancedRewardShaping(punctuality_weight=2.0, distance_weight=1.5)
+        reward_shaping = AdvancedRewardShaping(
+            punctuality_weight=2.0, distance_weight=1.5
+        )
 
         weights = reward_shaping.get_current_weights()
 
@@ -306,7 +308,9 @@ class TestRewardShapingComprehensive:
         with patch("services.rl.reward_shaping.logger") as mock_logger:
             reward_shaping.reset()
 
-            mock_logger.debug.assert_called_once_with("[RewardShaping] Reset des statistiques")
+            mock_logger.debug.assert_called_once_with(
+                "[RewardShaping] Reset des statistiques"
+            )
 
 
 class TestRewardShapingConfigComprehensive:

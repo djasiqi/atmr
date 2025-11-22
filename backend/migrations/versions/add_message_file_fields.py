@@ -18,9 +18,13 @@ depends_on = None
 
 def upgrade():
     # Ajouter les colonnes pour les fichiers dans la table message
-    op.add_column("message", sa.Column("image_url", sa.String(length=500), nullable=True))
+    op.add_column(
+        "message", sa.Column("image_url", sa.String(length=500), nullable=True)
+    )
     op.add_column("message", sa.Column("pdf_url", sa.String(length=500), nullable=True))
-    op.add_column("message", sa.Column("pdf_filename", sa.String(length=255), nullable=True))
+    op.add_column(
+        "message", sa.Column("pdf_filename", sa.String(length=255), nullable=True)
+    )
     op.add_column("message", sa.Column("pdf_size", sa.Integer(), nullable=True))
 
 

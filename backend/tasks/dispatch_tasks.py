@@ -95,13 +95,21 @@ def run_dispatch_task(
                     existing_run.status = DispatchStatus.RUNNING
                     existing_run.started_at = datetime.now(UTC)
                     db.session.commit()
-                    logger.info("[Celery] Updated existing DispatchRun id=%s to RUNNING status", dispatch_run_id)
+                    logger.info(
+                        "[Celery] Updated existing DispatchRun id=%s to RUNNING status",
+                        dispatch_run_id,
+                    )
                 else:
                     logger.warning(
-                        "[Celery] DispatchRun id=%s not found, will be created by engine.run()", dispatch_run_id
+                        "[Celery] DispatchRun id=%s not found, will be created by engine.run()",
+                        dispatch_run_id,
                     )
             except Exception as e:
-                logger.exception("[Celery] Failed to update DispatchRun id=%s to RUNNING: %s", dispatch_run_id, e)
+                logger.exception(
+                    "[Celery] Failed to update DispatchRun id=%s to RUNNING: %s",
+                    dispatch_run_id,
+                    e,
+                )
                 # Continuer quand même, engine.run() créera le DispatchRun
 
         logger.info(
@@ -248,9 +256,17 @@ def run_dispatch_task(
                 pass
 
             # ✅ Détecter timeout Celery
-            is_timeout = isinstance(e, (TimeoutError,)) or "timeout" in str(e).lower() or "time limit" in str(e).lower()
+            is_timeout = (
+                isinstance(e, (TimeoutError,))
+                or "timeout" in str(e).lower()
+                or "time limit" in str(e).lower()
+            )
             if is_timeout:
-                logger.error("[Celery] ⏱️ TIMEOUT detected: task_id=%s elapsed=%.1fs", task_id, time.time() - start_time)
+                logger.error(
+                    "[Celery] ⏱️ TIMEOUT detected: task_id=%s elapsed=%.1fs",
+                    task_id,
+                    time.time() - start_time,
+                )
 
             # ✅ Marquer le DispatchRun comme FAILED si disponible
             failed_dispatch_run_id = dispatch_run_id
@@ -267,12 +283,23 @@ def run_dispatch_task(
                         if is_timeout:
                             failed_run.status = DispatchStatus.FAILED
                             failed_run.completed_at = datetime.now(UTC)
-                            failed_run.result = {"reason": "FAILED_TIMEOUT", "error": str(e)[:200]}
-                            logger.info("[Celery] Marked DispatchRun id=%s as FAILED_TIMEOUT", failed_dispatch_run_id)
+                            failed_run.result = {
+                                "reason": "FAILED_TIMEOUT",
+                                "error": str(e)[:200],
+                            }
+                            logger.info(
+                                "[Celery] Marked DispatchRun id=%s as FAILED_TIMEOUT",
+                                failed_dispatch_run_id,
+                            )
                         else:
-                            failed_run.mark_failed(reason=f"Task failed: {type(e).__name__}: {str(e)[:200]}")
+                            failed_run.mark_failed(
+                                reason=f"Task failed: {type(e).__name__}: {str(e)[:200]}"
+                            )
                         db.session.commit()
-                        logger.info("[Celery] Marked DispatchRun id=%s as FAILED", failed_dispatch_run_id)
+                        logger.info(
+                            "[Celery] Marked DispatchRun id=%s as FAILED",
+                            failed_dispatch_run_id,
+                        )
 
                         # ✅ Notifier via WebSocket même en cas d'échec
                         try:
@@ -282,7 +309,9 @@ def run_dispatch_task(
                                 notify_dispatch_run_completed,
                             )
 
-                            day_date = date_type.fromisoformat(for_date) if for_date else None
+                            day_date = (
+                                date_type.fromisoformat(for_date) if for_date else None
+                            )
                             date_str = day_date.isoformat() if day_date else None
                             notify_dispatch_run_completed(
                                 company_id,
@@ -291,12 +320,18 @@ def run_dispatch_task(
                                 date_str,
                             )
                             logger.info(
-                                "[Celery] Notified WebSocket of failed dispatch_run_id=%s", failed_dispatch_run_id
+                                "[Celery] Notified WebSocket of failed dispatch_run_id=%s",
+                                failed_dispatch_run_id,
                             )
                         except Exception as notify_err:
-                            logger.exception("[Celery] Failed to notify WebSocket of error: %s", notify_err)
+                            logger.exception(
+                                "[Celery] Failed to notify WebSocket of error: %s",
+                                notify_err,
+                            )
                 except Exception as mark_err:
-                    logger.exception("[Celery] Failed to mark DispatchRun as FAILED: %s", mark_err)
+                    logger.exception(
+                        "[Celery] Failed to mark DispatchRun as FAILED: %s", mark_err
+                    )
 
             logger.error(
                 "[Celery] Dispatch FAILED company_id=%s for_date=%s dispatch_run_id=%s type=%s msg=%s extra=%s\n%s",
@@ -321,9 +356,9 @@ def run_dispatch_task(
 
             # Décide si on retente (réseau/transient) ou si on renvoie un
             # résultat 'run_failed'
-            transient = isinstance(e, (sa_exc.OperationalError, sa_exc.DBAPIError)) and getattr(
-                e, "connection_invalidated", False
-            )
+            transient = isinstance(
+                e, (sa_exc.OperationalError, sa_exc.DBAPIError)
+            ) and getattr(e, "connection_invalidated", False)
 
             if transient:
                 with suppress(MaxRetriesExceededError):
@@ -361,7 +396,12 @@ def run_dispatch_task(
 def autorun_tick() -> Dict[str, Any]:
     start_time = time.time()
     today = datetime.now(UTC).strftime("%Y-%m-%d")
-    results: Dict[str, Any] = {"triggered": 0, "skipped": 0, "errors": 0, "companies": []}
+    results: Dict[str, Any] = {
+        "triggered": 0,
+        "skipped": 0,
+        "errors": 0,
+        "companies": [],
+    }
 
     # Défensif
     with suppress(Exception):
@@ -425,9 +465,13 @@ def autorun_tick() -> Dict[str, Any]:
                 with suppress(Exception):
                     db.session.rollback()
 
-                logger.exception("[Celery] Autorun error for company_id=%s: %s", company_id, e)
+                logger.exception(
+                    "[Celery] Autorun error for company_id=%s: %s", company_id, e
+                )
                 results["errors"] += 1
-                cast("list[Any]", results["companies"]).append({"company_id": company_id, "error": str(e)})
+                cast("list[Any]", results["companies"]).append(
+                    {"company_id": company_id, "error": str(e)}
+                )
 
     except Exception as e:
         with suppress(Exception):
@@ -556,7 +600,9 @@ def realtime_monitoring_tick() -> Dict[str, Any]:
 
             except Exception as e:
                 results["errors"] += 1
-                logger.exception("[RealtimeMonitoring] Error for company %s: %s", company_id, e)
+                logger.exception(
+                    "[RealtimeMonitoring] Error for company %s: %s", company_id, e
+                )
 
                 results["companies"].append({"company_id": company_id, "error": str(e)})
 
@@ -612,9 +658,14 @@ def ensure_agents_running(self) -> Dict[str, Any]:  # noqa: ARG001
     with app.app_context():
         try:
             # Récupérer toutes les entreprises en mode FULLY_AUTO
-            companies = Company.query.filter(Company.dispatch_mode == DispatchMode.FULLY_AUTO).all()
+            companies = Company.query.filter(
+                Company.dispatch_mode == DispatchMode.FULLY_AUTO
+            ).all()
 
-            logger.info("[AgentAutoStart] Vérification agents pour %d entreprise(s) en mode FULLY_AUTO", len(companies))
+            logger.info(
+                "[AgentAutoStart] Vérification agents pour %d entreprise(s) en mode FULLY_AUTO",
+                len(companies),
+            )
 
             for company in companies:
                 try:
@@ -627,13 +678,23 @@ def ensure_agents_running(self) -> Dict[str, Any]:  # noqa: ARG001
                     if not agent.state.running:
                         agent.start()
                         started_count += 1
-                        logger.info("[AgentAutoStart] ✅ Agent démarré pour company %s", company.id)
+                        logger.info(
+                            "[AgentAutoStart] ✅ Agent démarré pour company %s",
+                            company.id,
+                        )
                     else:
                         already_running_count += 1
-                        logger.debug("[AgentAutoStart] Agent déjà actif pour company %s", company.id)
+                        logger.debug(
+                            "[AgentAutoStart] Agent déjà actif pour company %s",
+                            company.id,
+                        )
                 except Exception as e:
                     error_count += 1
-                    logger.exception("[AgentAutoStart] ❌ Erreur démarrage agent pour company %s: %s", company.id, e)
+                    logger.exception(
+                        "[AgentAutoStart] ❌ Erreur démarrage agent pour company %s: %s",
+                        company.id,
+                        e,
+                    )
 
             logger.info(
                 "[AgentAutoStart] Résumé: %d démarrés, %d déjà actifs, %d erreurs",

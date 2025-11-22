@@ -32,9 +32,15 @@ class AutonomousAction(db.Model):
     id = db.Column(Integer, primary_key=True)
 
     # Identifiants
-    company_id = db.Column(Integer, db.ForeignKey("company.id"), nullable=False, index=True)
-    booking_id = db.Column(Integer, db.ForeignKey("booking.id"), nullable=True, index=True)
-    driver_id = db.Column(Integer, db.ForeignKey("driver.id"), nullable=True, index=True)
+    company_id = db.Column(
+        Integer, db.ForeignKey("company.id"), nullable=False, index=True
+    )
+    booking_id = db.Column(
+        Integer, db.ForeignKey("booking.id"), nullable=True, index=True
+    )
+    driver_id = db.Column(
+        Integer, db.ForeignKey("driver.id"), nullable=True, index=True
+    )
 
     # Type d'action
     action_type = db.Column(String(50), nullable=False, index=True)
@@ -77,7 +83,12 @@ class AutonomousAction(db.Model):
     admin_notes = db.Column(Text, nullable=True)
 
     # Métadonnées
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    created_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+    )
     updated_at = db.Column(
         db.DateTime,
         default=lambda: datetime.now(timezone.utc),
@@ -86,15 +97,19 @@ class AutonomousAction(db.Model):
     )
 
     # Relations
-    company = db.relationship("Company", backref=db.backref("autonomous_actions", lazy="dynamic"))
-    booking = db.relationship("Booking", backref=db.backref("autonomous_actions", lazy="dynamic"))
-    driver = db.relationship("Driver", backref=db.backref("autonomous_actions", lazy="dynamic"))
+    company = db.relationship(
+        "Company", backref=db.backref("autonomous_actions", lazy="dynamic")
+    )
+    booking = db.relationship(
+        "Booking", backref=db.backref("autonomous_actions", lazy="dynamic")
+    )
+    driver = db.relationship(
+        "Driver", backref=db.backref("autonomous_actions", lazy="dynamic")
+    )
 
     @override
     def __repr__(self) -> str:
-        return (
-            f"<AutonomousAction id={self.id} type={self.action_type} company={self.company_id} success={self.success}>"
-        )
+        return f"<AutonomousAction id={self.id} type={self.action_type} company={self.company_id} success={self.success}>"
 
     def to_dict(self) -> dict[str, Any]:
         """Convertit en dictionnaire pour API."""
@@ -120,7 +135,9 @@ class AutonomousAction(db.Model):
         }
 
     @classmethod
-    def count_actions_last_hour(cls, company_id: int, action_type: str | None = None) -> int:
+    def count_actions_last_hour(
+        cls, company_id: int, action_type: str | None = None
+    ) -> int:
         """Compte le nombre d'actions dans la dernière heure.
 
         Args:
@@ -149,7 +166,9 @@ class AutonomousAction(db.Model):
         return query.count()
 
     @classmethod
-    def count_actions_today(cls, company_id: int, action_type: str | None = None) -> int:
+    def count_actions_today(
+        cls, company_id: int, action_type: str | None = None
+    ) -> int:
         """Compte le nombre d'actions aujourd'hui.
 
         Args:
@@ -160,7 +179,9 @@ class AutonomousAction(db.Model):
             Nombre d'actions aujourd'hui
 
         """
-        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.now(timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
 
         query = cls.query.filter(
             cls.company_id == company_id,

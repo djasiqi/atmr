@@ -28,7 +28,11 @@ def company_fully_auto(db):
     config = {
         "auto_dispatch": {"enabled": True},
         "realtime_optimizer": {"enabled": True},
-        "auto_apply_rules": {"customer_notifications": True, "minor_time_adjustments": True, "reassignments": False},
+        "auto_apply_rules": {
+            "customer_notifications": True,
+            "minor_time_adjustments": True,
+            "reassignments": False,
+        },
         "safety_limits": {
             "max_auto_actions_per_hour": 5,
             "max_auto_actions_per_day": 20,
@@ -150,8 +154,12 @@ class TestAutonomousActionModel:
         db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         # Vérifier comptage par type
-        reassign_count = AutonomousAction.count_actions_last_hour(company_fully_auto.id, "reassign")
-        notify_count = AutonomousAction.count_actions_last_hour(company_fully_auto.id, "notify_customer")
+        reassign_count = AutonomousAction.count_actions_last_hour(
+            company_fully_auto.id, "reassign"
+        )
+        notify_count = AutonomousAction.count_actions_last_hour(
+            company_fully_auto.id, "notify_customer"
+        )
 
         assert reassign_count == 2
         assert notify_count == 1
@@ -194,7 +202,10 @@ class TestSafetyLimits:
         # Créer 5 actions (limite configurée)
         for i in range(5):
             action = AutonomousAction(
-                company_id=company_fully_auto.id, action_type="reassign", action_description=f"Action {i}", success=True
+                company_id=company_fully_auto.id,
+                action_type="reassign",
+                action_description=f"Action {i}",
+                success=True,
             )
             db.session.add(action)
         db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
@@ -297,7 +308,10 @@ class TestSafetyLimits:
         # Créer 5 actions pour l'autre entreprise
         for i in range(5):
             action = AutonomousAction(
-                company_id=other_company.id, action_type="reassign", action_description=f"Action {i}", success=True
+                company_id=other_company.id,
+                action_type="reassign",
+                action_description=f"Action {i}",
+                success=True,
             )
             db.session.add(action)
         db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
@@ -370,7 +384,10 @@ class TestSafetyLimitsIntegration:
 
         # Logger une action
         action = AutonomousAction(
-            company_id=company_fully_auto.id, action_type="reassign", action_description="Action 1", success=True
+            company_id=company_fully_auto.id,
+            action_type="reassign",
+            action_description="Action 1",
+            success=True,
         )
         db.session.add(action)
         db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
@@ -381,7 +398,10 @@ class TestSafetyLimitsIntegration:
 
         # Logger une deuxième action
         action2 = AutonomousAction(
-            company_id=company_fully_auto.id, action_type="reassign", action_description="Action 2", success=True
+            company_id=company_fully_auto.id,
+            action_type="reassign",
+            action_description="Action 2",
+            success=True,
         )
         db.session.add(action2)
         db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
@@ -428,7 +448,9 @@ class TestActionLogging:
         assert stats["errors"] == 0
 
         # Vérifier qu'une action a été loggée
-        actions = AutonomousAction.query.filter_by(company_id=company_fully_auto.id).all()
+        actions = AutonomousAction.query.filter_by(
+            company_id=company_fully_auto.id
+        ).all()
 
         assert len(actions) == 1
         assert actions[0].action_type == "reassign"
@@ -466,13 +488,17 @@ class TestActionLogging:
         assert stats["auto_applied"] == 0
 
         # Vérifier qu'une action échouée a été loggée
-        actions = AutonomousAction.query.filter_by(company_id=company_fully_auto.id, success=False).all()
+        actions = AutonomousAction.query.filter_by(
+            company_id=company_fully_auto.id, success=False
+        ).all()
 
         assert len(actions) == 1
         assert actions[0].error_message == "Test error message"
 
     @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
-    def test_action_blocked_by_limits_not_logged(self, mock_apply, db, company_fully_auto):
+    def test_action_blocked_by_limits_not_logged(
+        self, mock_apply, db, company_fully_auto
+    ):
         """Test qu'une action bloquée par les limites n'est pas loggée."""
 
         # Atteindre la limite

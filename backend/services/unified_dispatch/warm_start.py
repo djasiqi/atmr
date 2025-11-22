@@ -74,7 +74,9 @@ def create_routing_hints(
             routes[vehicle_index].append(d_index)
 
         logger.info(
-            "[WarmStart] Created hints for %d vehicles, %d total assignments", len(routes), len(heuristic_assignments)
+            "[WarmStart] Created hints for %d vehicles, %d total assignments",
+            len(routes),
+            len(heuristic_assignments),
         )
 
         return routes
@@ -84,7 +86,12 @@ def create_routing_hints(
         return {}
 
 
-def apply_warm_start(routing: Any, heuristic_assignments: List[Any], problem: Dict[str, Any], manager: Any) -> bool:
+def apply_warm_start(
+    routing: Any,
+    heuristic_assignments: List[Any],
+    problem: Dict[str, Any],
+    manager: Any,
+) -> bool:
     """Applique les hints de warm-start au solveur OR-Tools.
 
     Args:

@@ -174,10 +174,14 @@ class TestActionMasking:
         travel_time = 10  # minutes de trajet
 
         # Mock de la méthode de vérification
-        mock_env._check_time_window_constraint.return_value = booking_pickup_time - driver_current_time >= travel_time
+        mock_env._check_time_window_constraint.return_value = (
+            booking_pickup_time - driver_current_time >= travel_time
+        )
 
         # Test avec contrainte satisfaite
-        result = mock_env._check_time_window_constraint(booking_pickup_time, driver_current_time, travel_time)
+        result = mock_env._check_time_window_constraint(
+            booking_pickup_time, driver_current_time, travel_time
+        )
 
         assert isinstance(result, bool)
 
@@ -190,7 +194,9 @@ class TestActionMasking:
         # Mock de la méthode de calcul
         mock_env._calculate_travel_time.return_value = 45.5  # minutes
 
-        travel_time = mock_env._calculate_travel_time(driver_location, booking_pickup_location)
+        travel_time = mock_env._calculate_travel_time(
+            driver_location, booking_pickup_location
+        )
 
         assert isinstance(travel_time, (int, float))
         assert travel_time > 0
@@ -280,7 +286,9 @@ class TestActionMasking:
         masks = []
 
         for state in states:
-            mock_env._get_valid_actions_mask.return_value = np.random.choice([True, False], size=50, p=[0.4, 0.6])
+            mock_env._get_valid_actions_mask.return_value = np.random.choice(
+                [True, False], size=50, p=[0.4, 0.6]
+            )
             mask = mock_env._get_valid_actions_mask(state)
             masks.append(mask)
 
@@ -317,7 +325,9 @@ class TestActionMaskingIntegration:
         agent.select_action = select_action_with_mask
 
         # Mock de la génération de masque
-        env._get_valid_actions_mask.return_value = np.random.choice([True, False], size=50, p=[0.3, 0.7])
+        env._get_valid_actions_mask.return_value = np.random.choice(
+            [True, False], size=50, p=[0.3, 0.7]
+        )
 
         # Test de l'interaction
         state = np.random.rand(20)
@@ -411,7 +421,9 @@ class TestActionMaskingPerformance:
         env.num_bookings = 20
 
         # Mock de la génération de masque
-        env._get_valid_actions_mask.return_value = np.random.choice([True, False], size=0.200, p=[0.3, 0.7])
+        env._get_valid_actions_mask.return_value = np.random.choice(
+            [True, False], size=0.200, p=[0.3, 0.7]
+        )
 
         # Mesurer le temps pour 100 générations de masques
         num_iterations = 100
@@ -457,7 +469,9 @@ class TestActionMaskingPerformance:
         def cached_mask_generation(state):
             state_key = tuple(state)
             if state_key not in mask_cache:
-                mask_cache[state_key] = np.random.choice([True, False], size=50, p=[0.4, 0.6])
+                mask_cache[state_key] = np.random.choice(
+                    [True, False], size=50, p=[0.4, 0.6]
+                )
             return mask_cache[state_key]
 
         env._get_valid_actions_mask = cached_mask_generation
@@ -478,7 +492,11 @@ def run_action_masking_tests():
     print("🧪 Exécution des tests Action Masking")
 
     # Tests de base
-    test_classes = [TestActionMasking, TestActionMaskingIntegration, TestActionMaskingPerformance]
+    test_classes = [
+        TestActionMasking,
+        TestActionMaskingIntegration,
+        TestActionMaskingPerformance,
+    ]
 
     total_tests = 0
     passed_tests = 0
@@ -504,7 +522,11 @@ def run_action_masking_tests():
     print("\n📊 Résultats des tests Action Masking:")
     print("  Tests exécutés: {total_tests}")
     print("  Tests réussis: {passed_tests}")
-    print("  Taux de succès: {passed_tests/total_tests*100" if total_tests > 0 else "  Taux de succès: 0%")
+    print(
+        "  Taux de succès: {passed_tests/total_tests*100"
+        if total_tests > 0
+        else "  Taux de succès: 0%"
+    )
 
     return passed_tests, total_tests
 

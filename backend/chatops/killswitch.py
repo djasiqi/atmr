@@ -13,7 +13,9 @@ import os
 import sys
 from pathlib import Path
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # Fichier de flag pour le mode maintenance
@@ -98,7 +100,10 @@ def main():
     # Enable command
     enable_parser = subparsers.add_parser("enable", help="Enable maintenance mode")
     enable_parser.add_argument(
-        "--reason", type=str, default="Maintenance mode activated", help="Reason for enabling maintenance mode"
+        "--reason",
+        type=str,
+        default="Maintenance mode activated",
+        help="Reason for enabling maintenance mode",
     )
 
     # Disable command

@@ -246,7 +246,9 @@ class DuelingQNetwork(nn.Module):
         # Q-values finales
         return value + advantage - advantage_mean
 
-    def get_value_and_advantage(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def get_value_and_advantage(
+        self, x: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Retourne séparément la valeur d'état et l'avantage des actions.
 
         Args:
@@ -328,7 +330,10 @@ class NoisyImprovedQNetwork(nn.Module):
         else:
             # Fallback vers le réseau standard
             self.network = ImprovedQNetwork(
-                state_dim=state_dim, action_dim=action_dim, hidden_sizes=hidden_sizes, dropout_rates=dropout_rates
+                state_dim=state_dim,
+                action_dim=action_dim,
+                hidden_sizes=hidden_sizes,
+                dropout_rates=dropout_rates,
             )
 
     def forward(self, state: torch.Tensor) -> torch.Tensor:
@@ -487,11 +492,23 @@ def create_q_network(
         )
     if network_type.lower() == "noisy":
         return NoisyImprovedQNetwork(
-            state_dim, action_dim, hidden_sizes, dropout_rates, use_noisy=use_noisy, std_init=std_init, device=device
+            state_dim,
+            action_dim,
+            hidden_sizes,
+            dropout_rates,
+            use_noisy=use_noisy,
+            std_init=std_init,
+            device=device,
         )
     if network_type.lower() == "noisy_dueling":
         return NoisyDuelingImprovedQNetwork(
-            state_dim, action_dim, hidden_sizes, dropout_rates, use_noisy=use_noisy, std_init=std_init, device=device
+            state_dim,
+            action_dim,
+            hidden_sizes,
+            dropout_rates,
+            use_noisy=use_noisy,
+            std_init=std_init,
+            device=device,
         )
     msg = f"Type de réseau non supporté: {network_type}"
     raise ValueError(msg)

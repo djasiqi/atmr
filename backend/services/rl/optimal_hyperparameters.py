@@ -80,7 +80,10 @@ class OptimalHyperparameters:
         "epsilon_end": {"type": "float", "low": 0.1, "high": 0.1},
         "epsilon_decay": {"type": "float", "low": 0.99, "high": 0.999},
         # Buffer size
-        "buffer_size": {"type": "categorical", "choices": [50000, 100000, 200000, 500000]},
+        "buffer_size": {
+            "type": "categorical",
+            "choices": [50000, 100000, 200000, 500000],
+        },
         # Target update frequency
         "target_update_freq": {"type": "int", "low": 5, "high": 50},
         # PER parameters
@@ -92,7 +95,13 @@ class OptimalHyperparameters:
         # Network architecture
         "hidden_sizes": {
             "type": "categorical",
-            "choices": [[512, 256, 128], [1024, 512, 256], [1024, 512, 128], [512, 512, 256], [1024, 512, 256, 128]],
+            "choices": [
+                [512, 256, 128],
+                [1024, 512, 256],
+                [1024, 512, 128],
+                [512, 512, 256],
+                [1024, 512, 256, 128],
+            ],
         },
         "dropout": {"type": "float", "low": 0, "high": 0.5},
         # Environment parameters
@@ -210,7 +219,9 @@ class OptimalHyperparameters:
             Configuration de reward shaping
 
         """
-        return cls.REWARD_SHAPING_CONFIGS.get(profile, cls.REWARD_SHAPING_CONFIGS["default"])
+        return cls.REWARD_SHAPING_CONFIGS.get(
+            profile, cls.REWARD_SHAPING_CONFIGS["default"]
+        )
 
     @classmethod
     def get_optuna_search_space(cls) -> Dict[str, Any]:

@@ -34,7 +34,12 @@ class TestC51Network:
     def test_c51_network_creation(self):
         """Teste la création du réseau C51."""
         network = C51Network(
-            state_size=10, action_size=5, hidden_sizes=[128, 64], num_atoms=51, v_min=-10.0, v_max=10.0
+            state_size=10,
+            action_size=5,
+            hidden_sizes=[128, 64],
+            num_atoms=51,
+            v_min=-10.0,
+            v_max=10.0,
         )
 
         assert network.state_size == 10
@@ -79,7 +84,9 @@ class TestC51Network:
 
     def test_c51_support_values(self):
         """Teste les valeurs de support."""
-        network = C51Network(state_size=10, action_size=5, num_atoms=11, v_min=-5.0, v_max=5.0)
+        network = C51Network(
+            state_size=10, action_size=5, num_atoms=11, v_min=-5.0, v_max=5.0
+        )
 
         expected_z = torch.linspace(-5.0, 5.0, 11)
         assert torch.allclose(network.z, expected_z)
@@ -91,7 +98,9 @@ class TestQRNetwork:
 
     def test_qr_network_creation(self):
         """Teste la création du réseau QR-DQN."""
-        network = QRNetwork(state_size=10, action_size=5, hidden_sizes=[128, 64], num_quantiles=0.200)
+        network = QRNetwork(
+            state_size=10, action_size=5, hidden_sizes=[128, 64], num_quantiles=0.200
+        )
 
         assert network.state_size == 10
         assert network.action_size == 5
@@ -146,7 +155,9 @@ class TestDistributionalLoss:
         z = torch.linspace(-10.0, 10.0, num_atoms)
         delta_z = (10.0 - (-10.0)) / (num_atoms - 1)
 
-        loss = DistributionalLoss.c51_loss(logits, target_logits, actions, rewards, dones, 0.99, z, delta_z)
+        loss = DistributionalLoss.c51_loss(
+            logits, target_logits, actions, rewards, dones, 0.99, z, delta_z
+        )
 
         assert isinstance(loss, torch.Tensor)
         assert loss.dim() == 0  # Scalar
@@ -168,7 +179,9 @@ class TestDistributionalLoss:
 
         tau = torch.linspace(0.0, 1.0, num_quantiles)
 
-        loss = DistributionalLoss.quantile_loss(quantiles, target_quantiles, actions, rewards, dones, 0.99, tau)
+        loss = DistributionalLoss.quantile_loss(
+            quantiles, target_quantiles, actions, rewards, dones, 0.99, tau
+        )
 
         assert isinstance(loss, torch.Tensor)
         assert loss.dim() == 0  # Scalar
@@ -231,7 +244,11 @@ class TestUncertaintyCapture:
 
         # Ajouter des entrées à l'historique
         for i in range(5):
-            uncertainty = {"entropy": i * 0.1, "variance": i * 0.2, "confidence": 1.0 - i * 0.1}
+            uncertainty = {
+                "entropy": i * 0.1,
+                "variance": i * 0.2,
+                "confidence": 1.0 - i * 0.1,
+            }
             uncertainty_capture.update_uncertainty_history(uncertainty)
 
         assert len(uncertainty_capture.uncertainty_history) == 5
@@ -265,7 +282,11 @@ class TestFactoryFunctions:
     def test_create_distributional_network_c51(self):
         """Teste la création d'un réseau C51 via factory."""
         network = create_distributional_network(
-            network_type="c51", state_size=10, action_size=5, hidden_sizes=[128, 64], num_atoms=51
+            network_type="c51",
+            state_size=10,
+            action_size=5,
+            hidden_sizes=[128, 64],
+            num_atoms=51,
         )
 
         assert isinstance(network, C51Network)
@@ -275,7 +296,11 @@ class TestFactoryFunctions:
     def test_create_distributional_network_qr_dqn(self):
         """Teste la création d'un réseau QR-DQN via factory."""
         network = create_distributional_network(
-            network_type="qr_dqn", state_size=10, action_size=5, hidden_sizes=[128, 64], num_quantiles=0.200
+            network_type="qr_dqn",
+            state_size=10,
+            action_size=5,
+            hidden_sizes=[128, 64],
+            num_quantiles=0.200,
         )
 
         assert isinstance(network, QRNetwork)
@@ -284,8 +309,12 @@ class TestFactoryFunctions:
 
     def test_create_distributional_network_invalid_type(self):
         """Teste la création avec un type invalide."""
-        with pytest.raises(ValueError, match="Type de réseau distributionnel non supporté"):
-            create_distributional_network(network_type="invalid", state_size=10, action_size=5)
+        with pytest.raises(
+            ValueError, match="Type de réseau distributionnel non supporté"
+        ):
+            create_distributional_network(
+                network_type="invalid", state_size=10, action_size=5
+            )
 
 
 class TestComparisonFunctions:
@@ -336,7 +365,14 @@ class TestIntegration:
 
             logits = network(state)
             loss = DistributionalLoss.c51_loss(
-                logits, target_logits, actions, rewards, dones, 0.99, network.z, network.delta_z
+                logits,
+                target_logits,
+                actions,
+                rewards,
+                dones,
+                0.99,
+                network.z,
+                network.delta_z,
             )
 
             optimizer.zero_grad()

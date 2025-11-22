@@ -36,7 +36,9 @@ class TestDockerProduction:
                 content = f.read()
 
             # Vérifier les éléments clés du Dockerfile
-            assert "FROM python:3.11-slim" in content or "FROM python:3.10-slim" in content
+            assert (
+                "FROM python:3.11-slim" in content or "FROM python:3.10-slim" in content
+            )
             assert "RUN useradd" in content  # Création d'un utilisateur non-root
             assert "HEALTHCHECK" in content  # Healthcheck
             assert "COPY --chown" in content  # Changement de propriétaire
@@ -109,7 +111,11 @@ class TestDockerProduction:
     def test_security_configurations(self):
         """Test les configurations de sécurité."""
         # Vérifier les fichiers de sécurité
-        security_files = ["Dockerfile.production", "docker-compose.production.yml", "docker-entrypoint.sh"]
+        security_files = [
+            "Dockerfile.production",
+            "docker-compose.production.yml",
+            "docker-entrypoint.sh",
+        ]
 
         for file_path in security_files:
             if Path(file_path).exists():
@@ -118,8 +124,12 @@ class TestDockerProduction:
 
                 # Vérifier les bonnes pratiques de sécurité
                 assert "USER" in content or "user:" in content  # Utilisateur non-root
-                assert "RUN useradd" in content or "user: " in content  # Création d'utilisateur
-                assert "COPY --chown" in content or "chown" in content  # Permissions correctes
+                assert (
+                    "RUN useradd" in content or "user: " in content
+                )  # Création d'utilisateur
+                assert (
+                    "COPY --chown" in content or "chown" in content
+                )  # Permissions correctes
 
     def test_resource_limits(self):
         """Test les limites de ressources."""
@@ -251,7 +261,12 @@ class TestProductionServices:
     def test_health_check_functionality(self):
         """Test la fonctionnalité de health check."""
         # Test des health checks typiques
-        health_checks = ["database_connection", "redis_connection", "model_loading", "api_endpoints"]
+        health_checks = [
+            "database_connection",
+            "redis_connection",
+            "model_loading",
+            "api_endpoints",
+        ]
 
         for _check in health_checks:
             # Simuler un health check
@@ -320,7 +335,12 @@ class TestProductionServices:
     def test_performance_optimization(self):
         """Test les optimisations de performance."""
         # Test des optimisations typiques
-        optimizations = ["model_caching", "connection_pooling", "async_processing", "resource_optimization"]
+        optimizations = [
+            "model_caching",
+            "connection_pooling",
+            "async_processing",
+            "resource_optimization",
+        ]
 
         for _optimization in optimizations:
             # Simuler l'optimisation
@@ -330,7 +350,12 @@ class TestProductionServices:
     def test_scalability_configuration(self):
         """Test la configuration de scalabilité."""
         # Test des configurations de scalabilité
-        scalability_configs = ["horizontal_scaling", "vertical_scaling", "load_balancing", "auto_scaling"]
+        scalability_configs = [
+            "horizontal_scaling",
+            "vertical_scaling",
+            "load_balancing",
+            "auto_scaling",
+        ]
 
         for _config in scalability_configs:
             # Simuler la configuration
@@ -340,7 +365,12 @@ class TestProductionServices:
     def test_backup_and_recovery(self):
         """Test la sauvegarde et la récupération."""
         # Test des fonctionnalités de sauvegarde
-        backup_features = ["database_backup", "model_backup", "configuration_backup", "disaster_recovery"]
+        backup_features = [
+            "database_backup",
+            "model_backup",
+            "configuration_backup",
+            "disaster_recovery",
+        ]
 
         for _feature in backup_features:
             # Simuler la fonctionnalité
@@ -350,7 +380,12 @@ class TestProductionServices:
     def test_security_monitoring(self):
         """Test le monitoring de sécurité."""
         # Test des fonctionnalités de sécurité
-        security_features = ["access_logging", "intrusion_detection", "vulnerability_scanning", "security_auditing"]
+        security_features = [
+            "access_logging",
+            "intrusion_detection",
+            "vulnerability_scanning",
+            "security_auditing",
+        ]
 
         for _feature in security_features:
             # Simuler la fonctionnalité
@@ -389,7 +424,11 @@ def run_docker_production_tests():
     print("\n📊 Résultats des tests Docker et de production:")
     print("  Tests exécutés: {total_tests}")
     print("  Tests réussis: {passed_tests}")
-    print("  Taux de succès: {passed_tests/total_tests*100" if total_tests > 0 else "  Taux de succès: 0%")
+    print(
+        "  Taux de succès: {passed_tests/total_tests*100"
+        if total_tests > 0
+        else "  Taux de succès: 0%"
+    )
 
     return passed_tests, total_tests
 

@@ -33,11 +33,18 @@ class MetricsAggregator:
         try:
             # Récupérer toutes les métriques du jour
             metrics = DispatchMetrics.query.filter(
-                and_(DispatchMetrics.company_id == company_id, DispatchMetrics.date == day)
+                and_(
+                    DispatchMetrics.company_id == company_id,
+                    DispatchMetrics.date == day,
+                )
             ).all()
 
             if not metrics:
-                logger.warning("[Aggregator] No metrics found for company %s on %s", company_id, day)
+                logger.warning(
+                    "[Aggregator] No metrics found for company %s on %s",
+                    company_id,
+                    day,
+                )
                 return None
 
             # Agréger les métriques
@@ -45,25 +52,41 @@ class MetricsAggregator:
             on_time_total = sum(m.on_time_bookings for m in metrics)
 
             # Calculs de moyennes pondérées
-            delays = [m.average_delay_minutes for m in metrics if m.average_delay_minutes > 0]
+            delays = [
+                m.average_delay_minutes for m in metrics if m.average_delay_minutes > 0
+            ]
             quality_scores = [m.quality_score for m in metrics if m.quality_score > 0]
 
-            on_time_rate = (on_time_total / total_bookings * 100) if total_bookings > 0 else 0.0
+            on_time_rate = (
+                (on_time_total / total_bookings * 100) if total_bookings > 0 else 0.0
+            )
             avg_delay = sum(delays) / len(delays) if delays else 0.0
-            avg_quality = sum(quality_scores) / len(quality_scores) if quality_scores else 0.0
+            avg_quality = (
+                sum(quality_scores) / len(quality_scores) if quality_scores else 0.0
+            )
 
             # Calculer les tendances (vs jour précédent)
             previous_day = day - timedelta(days=1)
-            previous_stats = DailyStats.query.filter_by(company_id=company_id, date=previous_day).first()
+            previous_stats = DailyStats.query.filter_by(
+                company_id=company_id, date=previous_day
+            ).first()
 
             if previous_stats:
                 bookings_trend = (
-                    ((total_bookings - previous_stats.total_bookings) / previous_stats.total_bookings * 100)
+                    (
+                        (total_bookings - previous_stats.total_bookings)
+                        / previous_stats.total_bookings
+                        * 100
+                    )
                     if previous_stats.total_bookings > 0
                     else 0.0
                 )
                 delay_trend = (
-                    ((avg_delay - previous_stats.avg_delay) / previous_stats.avg_delay * 100)
+                    (
+                        (avg_delay - previous_stats.avg_delay)
+                        / previous_stats.avg_delay
+                        * 100
+                    )
                     if previous_stats.avg_delay > 0
                     else 0.0
                 )
@@ -72,7 +95,9 @@ class MetricsAggregator:
                 delay_trend = 0.0
 
             # Créer ou mettre à jour
-            daily_stats = DailyStats.query.filter_by(company_id=company_id, date=day).first()
+            daily_stats = DailyStats.query.filter_by(
+                company_id=company_id, date=day
+            ).first()
 
             if daily_stats:
                 # Mettre à jour
@@ -99,17 +124,24 @@ class MetricsAggregator:
             db.session.commit()
 
             logger.info(
-                "[Aggregator] Daily stats aggregated for %s: Quality=%.2f, Avg delay=%.2f", day, avg_quality, avg_delay
+                "[Aggregator] Daily stats aggregated for %s: Quality=%.2f, Avg delay=%.2f",
+                day,
+                avg_quality,
+                avg_delay,
             )
 
             return daily_stats
 
         except Exception as e:
-            logger.exception("[Aggregator] Failed to aggregate daily stats for %s: %s", day, e)
+            logger.exception(
+                "[Aggregator] Failed to aggregate daily stats for %s: %s", day, e
+            )
             db.session.rollback()
             return None
 
-    def get_period_analytics(self, company_id: int, start_date: date, end_date: date) -> Dict[str, Any]:
+    def get_period_analytics(
+        self, company_id: int, start_date: date, end_date: date
+    ) -> Dict[str, Any]:
         """Récupère les analytics pour une période donnée.
         Utilisé par l'API analytics pour générer les dashboards.
 
@@ -126,7 +158,9 @@ class MetricsAggregator:
             stats = (
                 DailyStats.query.filter(
                     and_(
-                        DailyStats.company_id == company_id, DailyStats.date >= start_date, DailyStats.date <= end_date
+                        DailyStats.company_id == company_id,
+                        DailyStats.date >= start_date,
+                        DailyStats.date <= end_date,
                     )
                 )
                 .order_by(DailyStats.date)
@@ -135,10 +169,17 @@ class MetricsAggregator:
 
             if not stats:
                 logger.warning(
-                    "[Aggregator] No stats found for company %s between %s and %s", company_id, start_date, end_date
+                    "[Aggregator] No stats found for company %s between %s and %s",
+                    company_id,
+                    start_date,
+                    end_date,
                 )
                 return {
-                    "period": {"start": start_date.isoformat(), "end": end_date.isoformat(), "days": 0},
+                    "period": {
+                        "start": start_date.isoformat(),
+                        "end": end_date.isoformat(),
+                        "days": 0,
+                    },
                     "summary": {
                         "total_bookings": 0,
                         "avg_on_time_rate": 0.0,
@@ -170,7 +211,11 @@ class MetricsAggregator:
             ]
 
             return {
-                "period": {"start": start_date.isoformat(), "end": end_date.isoformat(), "days": len(stats)},
+                "period": {
+                    "start": start_date.isoformat(),
+                    "end": end_date.isoformat(),
+                    "days": len(stats),
+                },
                 "summary": {
                     "total_bookings": total_bookings,
                     "avg_on_time_rate": round(avg_on_time_rate, 2),
@@ -184,7 +229,11 @@ class MetricsAggregator:
         except Exception as e:
             logger.exception("[Aggregator] Failed to get period analytics: %s", e)
             return {
-                "period": {"start": start_date.isoformat(), "end": end_date.isoformat(), "days": 0},
+                "period": {
+                    "start": start_date.isoformat(),
+                    "end": end_date.isoformat(),
+                    "days": 0,
+                },
                 "summary": {},
                 "trends": [],
                 "error": str(e),
@@ -210,8 +259,14 @@ class MetricsAggregator:
             worst_day = min(analytics["trends"], key=lambda x: x["quality_score"])
 
             analytics["insights"] = {
-                "best_day": {"date": best_day["date"], "quality_score": best_day["quality_score"]},
-                "worst_day": {"date": worst_day["date"], "quality_score": worst_day["quality_score"]},
+                "best_day": {
+                    "date": best_day["date"],
+                    "quality_score": best_day["quality_score"],
+                },
+                "worst_day": {
+                    "date": worst_day["date"],
+                    "quality_score": worst_day["quality_score"],
+                },
                 "total_courses": analytics["summary"]["total_bookings"],
                 "avg_punctuality": analytics["summary"]["avg_on_time_rate"],
             }
@@ -232,7 +287,9 @@ def aggregate_daily_stats(company_id: int, day: date) -> DailyStats | None:
     return _aggregator.aggregate_daily_stats(company_id, day)
 
 
-def get_period_analytics(company_id: int, start_date: date, end_date: date) -> Dict[str, Any]:
+def get_period_analytics(
+    company_id: int, start_date: date, end_date: date
+) -> Dict[str, Any]:
     """Helper function pour récupérer les analytics d'une période.
 
     Usage:

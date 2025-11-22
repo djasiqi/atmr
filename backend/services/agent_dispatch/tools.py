@@ -112,7 +112,11 @@ class AgentTools:
             )
             for booking in bookings:
                 assignment = next(
-                    (a for a in booking.assignments if a.status != AssignmentStatus.COMPLETED),
+                    (
+                        a
+                        for a in booking.assignments
+                        if a.status != AssignmentStatus.COMPLETED
+                    ),
                     None,
                 )
 
@@ -125,15 +129,27 @@ class AgentTools:
                         "job_id": int(booking.id),
                         "booking_id": int(booking.id),
                         "status": "unassigned" if not assignment else "assigned",
-                        "driver_id": int(assignment.driver_id) if assignment and assignment.driver_id else None,
-                        "scheduled_time": booking.scheduled_time.isoformat() if booking.scheduled_time else None,
+                        "driver_id": int(assignment.driver_id)
+                        if assignment and assignment.driver_id
+                        else None,
+                        "scheduled_time": booking.scheduled_time.isoformat()
+                        if booking.scheduled_time
+                        else None,
                         "pickup_location": {
-                            "lat": float(booking.pickup_lat) if booking.pickup_lat else None,
-                            "lon": float(booking.pickup_lon) if booking.pickup_lon else None,
+                            "lat": float(booking.pickup_lat)
+                            if booking.pickup_lat
+                            else None,
+                            "lon": float(booking.pickup_lon)
+                            if booking.pickup_lon
+                            else None,
                         },
                         "dropoff_location": {
-                            "lat": float(booking.dropoff_lat) if booking.dropoff_lat else None,
-                            "lon": float(booking.dropoff_lon) if booking.dropoff_lon else None,
+                            "lat": float(booking.dropoff_lat)
+                            if booking.dropoff_lat
+                            else None,
+                            "lon": float(booking.dropoff_lon)
+                            if booking.dropoff_lon
+                            else None,
                         },
                         "time_window": {
                             "start": None,  # Booking model n'a pas pickup_time_window_start
@@ -158,8 +174,12 @@ class AgentTools:
                         "name": d.user.full_name if d.user else "Unknown",
                         "available": d.is_available,
                         "current_location": {
-                            "lat": float(d.latitude) if d.latitude is not None else None,
-                            "lon": float(d.longitude) if d.longitude is not None else None,
+                            "lat": float(d.latitude)
+                            if d.latitude is not None
+                            else None,
+                            "lon": float(d.longitude)
+                            if d.longitude is not None
+                            else None,
                         },
                     }
                     for d in drivers
@@ -196,7 +216,9 @@ class AgentTools:
 
             # Test réel OSRM : faire un appel simple pour mesurer la latence
             osrm_url = os.getenv("UD_OSRM_URL", "http://osrm:5000")
-            test_coords = "6.12486,46.20896;6.14296,46.19603"  # Coordonnées de test (Genève)
+            test_coords = (
+                "6.12486,46.20896;6.14296,46.19603"  # Coordonnées de test (Genève)
+            )
 
             start = time.time()
             latency_ms = -1
@@ -215,7 +237,10 @@ class AgentTools:
                     test_successful = True
                     logger.debug("[AgentTools] OSRM health check OK: %dms", latency_ms)
                 else:
-                    logger.warning("[AgentTools] OSRM health check returned status %d", response.status_code)
+                    logger.warning(
+                        "[AgentTools] OSRM health check returned status %d",
+                        response.status_code,
+                    )
             except requests.exceptions.Timeout:
                 logger.warning("[AgentTools] OSRM health check timeout (>3s)")
                 latency_ms = -1
@@ -228,7 +253,9 @@ class AgentTools:
 
             # Si le test échoue et que le circuit breaker est CLOSED, on le considère comme suspect
             if not test_successful and cb_state == "CLOSED":
-                logger.warning("[AgentTools] OSRM test failed but circuit breaker is CLOSED - possible issue")
+                logger.warning(
+                    "[AgentTools] OSRM test failed but circuit breaker is CLOSED - possible issue"
+                )
 
             return {
                 "state": cb_state,
@@ -247,7 +274,9 @@ class AgentTools:
                 "test_successful": False,
             }
 
-    def log_action(self, kind: str, payload: Dict[str, Any], reasoning_brief: str) -> Dict[str, Any]:
+    def log_action(
+        self, kind: str, payload: Dict[str, Any], reasoning_brief: str
+    ) -> Dict[str, Any]:
         """Log une action pour audit.
 
         Args:
@@ -277,7 +306,9 @@ class AgentTools:
                 MAX_REASONING_LENGTH = 50
                 reasoning_len = len(reasoning_brief)
                 truncated_reasoning = (
-                    reasoning_brief[:MAX_REASONING_LENGTH] if reasoning_len > MAX_REASONING_LENGTH else reasoning_brief
+                    reasoning_brief[:MAX_REASONING_LENGTH]
+                    if reasoning_len > MAX_REASONING_LENGTH
+                    else reasoning_brief
                 )
                 logger.info(
                     "[AgentTools] 📝 Logged action: %s - %s",
@@ -406,7 +437,9 @@ class AgentTools:
             dispatch_settings = ud_settings.for_company(company)
             pickup_service_min = dispatch_settings.service_times.pickup_service_min
             dropoff_service_min = dispatch_settings.service_times.dropoff_service_min
-            min_transition_margin_min = dispatch_settings.service_times.min_transition_margin_min
+            min_transition_margin_min = (
+                dispatch_settings.service_times.min_transition_margin_min
+            )
         else:
             # Valeurs par défaut si company non trouvée
             pickup_service_min = 5
@@ -415,7 +448,9 @@ class AgentTools:
 
         # Vérifier conflit temporel avec autres assignments du driver
         # Utiliser une tolérance calculée : pickup + dropoff + marge transition
-        tolerance_minutes = pickup_service_min + dropoff_service_min + min_transition_margin_min
+        tolerance_minutes = (
+            pickup_service_min + dropoff_service_min + min_transition_margin_min
+        )
 
         has_conflict, conflict_msg = check_existing_assignment_conflict(
             driver_id=int(driver.id),
@@ -471,7 +506,12 @@ class AgentTools:
             booking_pickup_lat = getattr(booking, "pickup_lat", None)
             booking_pickup_lon = getattr(booking, "pickup_lon", None)
 
-            if existing_pickup_lat and existing_pickup_lon and existing_dropoff_lat and existing_dropoff_lon:
+            if (
+                existing_pickup_lat
+                and existing_pickup_lon
+                and existing_dropoff_lat
+                and existing_dropoff_lon
+            ):
                 trip_distance_km = haversine_distance(
                     float(existing_pickup_lat),
                     float(existing_pickup_lon),
@@ -484,7 +524,12 @@ class AgentTools:
                 trip_time_min = 20  # Estimation par défaut
 
             # Temps de trajet entre dropoff précédent et pickup suivant
-            if existing_dropoff_lat and existing_dropoff_lon and booking_pickup_lat and booking_pickup_lon:
+            if (
+                existing_dropoff_lat
+                and existing_dropoff_lon
+                and booking_pickup_lat
+                and booking_pickup_lon
+            ):
                 transition_distance_km = haversine_distance(
                     float(existing_dropoff_lat),
                     float(existing_dropoff_lon),
@@ -513,12 +558,16 @@ class AgentTools:
 
             # Calculer l'heure de début nécessaire pour la nouvelle course
             required_start_time = booking.scheduled_time - timedelta(
-                minutes=transition_time_min + pickup_service_min + min_transition_margin_min
+                minutes=transition_time_min
+                + pickup_service_min
+                + min_transition_margin_min
             )
 
             # Vérifier si on a assez de temps
             if existing_end_time > required_start_time:
-                time_gap = (required_start_time - existing_end_time).total_seconds() / 60
+                time_gap = (
+                    required_start_time - existing_end_time
+                ).total_seconds() / 60
                 return (
                     f"Conflit temporel avec course #{existing_booking.id} à {existing_booking.scheduled_time:%H:%M}. "
                     f"Temps nécessaire: {total_time_needed}min, écart disponible: {time_gap:.1f}min"
@@ -580,10 +629,13 @@ class AgentTools:
                                 preferred_driver_id = int(preferred_driver_id)
                                 # Vérifier que le chauffeur existe et appartient à la company
                                 driver = Driver.query.filter(
-                                    Driver.id == preferred_driver_id, Driver.company_id == self.company_id
+                                    Driver.id == preferred_driver_id,
+                                    Driver.company_id == self.company_id,
                                 ).first()
                                 if driver:
-                                    final_overrides["preferred_driver_id"] = preferred_driver_id
+                                    final_overrides["preferred_driver_id"] = (
+                                        preferred_driver_id
+                                    )
                                     driver_name = (
                                         getattr(driver.user, "full_name", None)
                                         or getattr(driver, "name", None)
@@ -617,15 +669,20 @@ class AgentTools:
 
                     # Récupérer driver_load_multipliers depuis dispatch_overrides
                     if "driver_load_multipliers" in dispatch_overrides:
-                        driver_load_multipliers = dispatch_overrides["driver_load_multipliers"]
+                        driver_load_multipliers = dispatch_overrides[
+                            "driver_load_multipliers"
+                        ]
                         if driver_load_multipliers:
                             # S'assurer que les clés sont des entiers et les valeurs des floats
                             try:
                                 if isinstance(driver_load_multipliers, dict):
                                     normalized_multipliers = {
-                                        int(k): float(v) for k, v in driver_load_multipliers.items()
+                                        int(k): float(v)
+                                        for k, v in driver_load_multipliers.items()
                                     }
-                                    final_overrides["driver_load_multipliers"] = normalized_multipliers
+                                    final_overrides["driver_load_multipliers"] = (
+                                        normalized_multipliers
+                                    )
                                     logger.info(
                                         "[AgentTools] ⚖️ Multiplicateurs de charge DÉTECTÉS et ACTIVÉS: %s",
                                         normalized_multipliers,
@@ -643,9 +700,13 @@ class AgentTools:
                                     e,
                                 )
                         else:
-                            logger.debug("[AgentTools] ℹ️ driver_load_multipliers est vide/None")
+                            logger.debug(
+                                "[AgentTools] ℹ️ driver_load_multipliers est vide/None"
+                            )
                     else:
-                        logger.debug("[AgentTools] ℹ️ Aucun driver_load_multipliers dans dispatch_overrides")
+                        logger.debug(
+                            "[AgentTools] ℹ️ Aucun driver_load_multipliers dans dispatch_overrides"
+                        )
 
                 # ⚠️ IMPORTANT: Ne PAS utiliser reset_existing=True pour éviter de réassigner toutes les courses
                 # L'agent doit seulement assigner les courses non assignées
@@ -653,7 +714,11 @@ class AgentTools:
                     logger.warning(
                         "[AgentTools] ⚠️ reset_existing ignoré dans overrides (agent ne doit pas réassigner toutes les courses)"
                     )
-                    final_overrides = {k: v for k, v in final_overrides.items() if k != "reset_existing"}
+                    final_overrides = {
+                        k: v
+                        for k, v in final_overrides.items()
+                        if k != "reset_existing"
+                    }
 
                 # 🚨 IMPORTANT: Les chauffeurs d'urgence ne sont utilisés qu'en dernier recours
                 # Le système engine.run() gère déjà les deux passes automatiquement :
@@ -674,7 +739,9 @@ class AgentTools:
                 else:
                     from services.unified_dispatch.data import get_bookings_for_dispatch
 
-                    all_bookings = get_bookings_for_dispatch(self.company_id, 1440)  # 24h
+                    all_bookings = get_bookings_for_dispatch(
+                        self.company_id, 1440
+                    )  # 24h
 
                 # Récupérer les assignments existants pour ces bookings
                 booking_ids = [b.id for b in all_bookings]
@@ -747,7 +814,9 @@ class AgentTools:
                             "[AgentTools] 🔄 Booking %s assigné à l'urgent %s (type: %s), inclus pour réassignation possible",
                             booking.id,
                             driver.id if driver else "unknown",
-                            getattr(driver, "driver_type", "UNKNOWN") if driver else "UNKNOWN",
+                            getattr(driver, "driver_type", "UNKNOWN")
+                            if driver
+                            else "UNKNOWN",
                         )
                     bookings_to_dispatch.append(booking)
 
@@ -774,7 +843,9 @@ class AgentTools:
                     "allow_emergency": True,  # Autoriser les urgences en dernier recours
                     # ⚠️ IMPORTANT: Exclure les bookings déjà assignés aux réguliers (sauf si force_reassign)
                     # Si force_reassign=True, on veut réassigner même les bookings déjà assignés
-                    "exclude_booking_ids": already_assigned_to_regular if not force_reassign else [],
+                    "exclude_booking_ids": already_assigned_to_regular
+                    if not force_reassign
+                    else [],
                 }
 
                 if strategy == "degraded_proximity":
@@ -823,12 +894,20 @@ class AgentTools:
                     booking_id = (
                         assignment.get("booking_id")
                         or assignment.get("booking", {}).get("id")
-                        or (assignment.get("booking") if isinstance(assignment.get("booking"), int) else None)
+                        or (
+                            assignment.get("booking")
+                            if isinstance(assignment.get("booking"), int)
+                            else None
+                        )
                     )
                     driver_id = (
                         assignment.get("driver_id")
                         or assignment.get("driver", {}).get("id")
-                        or (assignment.get("driver") if isinstance(assignment.get("driver"), int) else None)
+                        or (
+                            assignment.get("driver")
+                            if isinstance(assignment.get("driver"), int)
+                            else None
+                        )
                     )
 
                     logger.debug(
@@ -908,7 +987,9 @@ class AgentTools:
                 return {
                     "plan": plan,
                     "gains": {
-                        "total_gain_minutes": result.get("meta", {}).get("total_gain_minutes", 0),
+                        "total_gain_minutes": result.get("meta", {}).get(
+                            "total_gain_minutes", 0
+                        ),
                         "fairness_improved": True,
                     },
                 }

@@ -30,17 +30,36 @@ bookings_ns = Namespace("bookings", description="Opérations relatives aux rése
 booking_create_model = bookings_ns.model(
     "BookingCreate",
     {
-        "customer_name": fields.String(required=True, min_length=1, max_length=200, description="Nom du client"),
-        "pickup_location": fields.String(
-            required=True, min_length=1, max_length=500, description="Lieu de prise en charge"
+        "customer_name": fields.String(
+            required=True, min_length=1, max_length=200, description="Nom du client"
         ),
-        "dropoff_location": fields.String(required=True, min_length=1, max_length=500, description="Lieu de dépose"),
-        "scheduled_time": fields.String(required=True, description="ISO 8601 (ex: 2024-01-15T14:30:00)"),
-        "amount": fields.Float(required=True, min=0, description="Montant de la réservation"),
-        "medical_facility": fields.String(description="Établissement médical", default="", max_length=200),
-        "doctor_name": fields.String(description="Nom du médecin", default="", max_length=200),
-        "is_round_trip": fields.Boolean(description="Créer également un retour", default=False),
-        "return_time": fields.String(description="ISO 8601 pour l'heure de retour (optionnel)", default=None),
+        "pickup_location": fields.String(
+            required=True,
+            min_length=1,
+            max_length=500,
+            description="Lieu de prise en charge",
+        ),
+        "dropoff_location": fields.String(
+            required=True, min_length=1, max_length=500, description="Lieu de dépose"
+        ),
+        "scheduled_time": fields.String(
+            required=True, description="ISO 8601 (ex: 2024-01-15T14:30:00)"
+        ),
+        "amount": fields.Float(
+            required=True, min=0, description="Montant de la réservation"
+        ),
+        "medical_facility": fields.String(
+            description="Établissement médical", default="", max_length=200
+        ),
+        "doctor_name": fields.String(
+            description="Nom du médecin", default="", max_length=200
+        ),
+        "is_round_trip": fields.Boolean(
+            description="Créer également un retour", default=False
+        ),
+        "return_time": fields.String(
+            description="ISO 8601 pour l'heure de retour (optionnel)", default=None
+        ),
     },
 )
 
@@ -52,7 +71,9 @@ booking_update_model = bookings_ns.model(
         "dropoff_location": fields.String(min_length=1, max_length=500),
         "scheduled_time": fields.String(description="ISO 8601"),
         "amount": fields.Float(min=0),
-        "status": fields.String(enum=["pending", "confirmed", "in_progress", "completed", "cancelled"]),
+        "status": fields.String(
+            enum=["pending", "confirmed", "in_progress", "completed", "cancelled"]
+        ),
         "medical_facility": fields.String(max_length=200),
         "doctor_name": fields.String(max_length=200),
         "is_round_trip": fields.Boolean(),
@@ -86,7 +107,9 @@ def _queue_trigger(company_id: int | None, action: str) -> None:
 # Helper: construit les liens de pagination RFC 5988
 
 
-def _build_pagination_links(page: int, per_page: int, total: int, endpoint: str, **kwargs):
+def _build_pagination_links(
+    page: int, per_page: int, total: int, endpoint: str, **kwargs
+):
     """Construit les liens de pagination conformes RFC 5988.
 
     Returns:
@@ -170,7 +193,9 @@ def _check_booking_ownership(
     if user_role_value == UserRole.client.value:
         client = Client.query.filter_by(user_id=user.id).first()
         if not client:
-            app_logger.warning("⚠️ User %s has client role but no Client record", user.public_id)
+            app_logger.warning(
+                "⚠️ User %s has client role but no Client record", user.public_id
+            )
         elif client.id == booking.client_id:
             return True, None
         else:
@@ -199,7 +224,9 @@ def _check_booking_ownership(
 # =====================================================
 # Création d'une réservation pour un client
 # =====================================================
-def _validate_user_and_client(public_id: str) -> tuple[User | None, Client | None, tuple[dict[str, str], int] | None]:
+def _validate_user_and_client(
+    public_id: str,
+) -> tuple[User | None, Client | None, tuple[dict[str, str], int] | None]:
     """Valide utilisateur et client. Retourne (user, client, error_response)."""
     jwt_public_id = get_jwt_identity()
     user = User.query.filter_by(public_id=jwt_public_id).one_or_none()
@@ -208,7 +235,11 @@ def _validate_user_and_client(public_id: str) -> tuple[User | None, Client | Non
 
     client = Client.query.join(User).filter(User.public_id == public_id).one_or_none()
     if not client or client.user_id != user.id:
-        return None, None, ({"message": "Client non trouvé ou non associé à cet utilisateur"}, 403)
+        return (
+            None,
+            None,
+            ({"message": "Client non trouvé ou non associé à cet utilisateur"}, 403),
+        )
 
     return user, client, None
 
@@ -238,7 +269,9 @@ class CreateBooking(Resource):
                 return auth_error
             # Défense en profondeur : vérification explicite pour éviter AttributeError si None en production
             if user is None or client is None:
-                app_logger.error("[Bookings] user or client is None after validation (should not happen)")
+                app_logger.error(
+                    "[Bookings] user or client is None after validation (should not happen)"
+                )
                 return {"error": "Erreur interne d'authentification"}, 500
 
             # Horaire et distance
@@ -252,7 +285,8 @@ class CreateBooking(Resource):
 
             try:
                 duration_seconds, distance_meters = get_distance_duration(
-                    validated_data["pickup_location"], validated_data["dropoff_location"]
+                    validated_data["pickup_location"],
+                    validated_data["dropoff_location"],
                 )
             except Exception as e:
                 app_logger.error("Distance Matrix error: %s", e)
@@ -281,7 +315,9 @@ class CreateBooking(Resource):
             # Géocodage (best effort, pas bloquant)
             try:
                 # Géocoder l'adresse de départ
-                pickup_coords = geocode_address(validated_data["pickup_location"], country="CH")
+                pickup_coords = geocode_address(
+                    validated_data["pickup_location"], country="CH"
+                )
                 if pickup_coords:
                     new_booking.pickup_lat = pickup_coords.get("lat")
                     new_booking.pickup_lon = pickup_coords.get("lon")
@@ -293,11 +329,14 @@ class CreateBooking(Resource):
                     )
                 else:
                     app_logger.warning(
-                        "⚠️ Impossible de géocoder l'adresse de départ: %s", validated_data["pickup_location"]
+                        "⚠️ Impossible de géocoder l'adresse de départ: %s",
+                        validated_data["pickup_location"],
                     )
 
                 # Géocoder l'adresse d'arrivée
-                dropoff_coords = geocode_address(validated_data["dropoff_location"], country="CH")
+                dropoff_coords = geocode_address(
+                    validated_data["dropoff_location"], country="CH"
+                )
                 if dropoff_coords:
                     new_booking.dropoff_lat = dropoff_coords.get("lat")
                     new_booking.dropoff_lon = dropoff_coords.get("lon")
@@ -308,7 +347,10 @@ class CreateBooking(Resource):
                         dropoff_coords.get("lon"),
                     )
                 else:
-                    app_logger.warning("⚠️ Impossible de géocoder l'adresse d'arrivée: %s", data["dropoff_location"])
+                    app_logger.warning(
+                        "⚠️ Impossible de géocoder l'adresse d'arrivée: %s",
+                        data["dropoff_location"],
+                    )
             except Exception as e:
                 app_logger.warning("⚠️ Géocodage best-effort échoué: %s", e)
 
@@ -343,7 +385,10 @@ class CreateBooking(Resource):
             db.session.commit()
 
             # ⚠️ Pas de dispatch ici (PENDING seulement). L'entreprise acceptera -> ACCEPTED.
-            return {"message": "Réservation créée avec succès", "booking_id": getattr(new_booking, "id", None)}, 201
+            return {
+                "message": "Réservation créée avec succès",
+                "booking_id": getattr(new_booking, "id", None),
+            }, 201
 
         except Exception as e:
             db.session.rollback()
@@ -414,7 +459,9 @@ class BookingResource(Resource):
                 return error
 
             if booking.status != BookingStatus.PENDING:
-                return {"error": "Seules les réservations en attente peuvent être modifiées"}, 400
+                return {
+                    "error": "Seules les réservations en attente peuvent être modifiées"
+                }, 400
 
             data = request.get_json() or {}
 
@@ -428,7 +475,9 @@ class BookingResource(Resource):
             )
 
             try:
-                validated_data = validate_request(BookingUpdateSchema(), data, strict=False)
+                validated_data = validate_request(
+                    BookingUpdateSchema(), data, strict=False
+                )
             except ValidationError as e:
                 return handle_validation_error(e)
 
@@ -481,7 +530,9 @@ class BookingResource(Resource):
                 return error
 
             if booking.status not in {BookingStatus.PENDING, BookingStatus.ASSIGNED}:
-                return {"error": "Seules les réservations en attente ou confirmées peuvent être annulées"}, 400
+                return {
+                    "error": "Seules les réservations en attente ou confirmées peuvent être annulées"
+                }, 400
 
             company_id = booking.company_id
             booking.status = BookingStatus.CANCELED
@@ -560,7 +611,13 @@ def _get_client_bookings(
 class ListBookings(Resource):
     @jwt_required()
     @limiter.limit("300 per hour")  # ✅ 2.8: Rate limiting liste réservations
-    @bookings_ns.param("page", "Numéro de page (défaut: 1, min: 1)", type="integer", default=1, minimum=1)
+    @bookings_ns.param(
+        "page",
+        "Numéro de page (défaut: 1, min: 1)",
+        type="integer",
+        default=1,
+        minimum=1,
+    )
     @bookings_ns.param(
         "per_page",
         "Résultats par page (défaut: 100, min: 1, max: 500)",
@@ -575,8 +632,18 @@ class ListBookings(Resource):
         type="string",
         enum=["pending", "confirmed", "in_progress", "completed", "cancelled"],
     )
-    @bookings_ns.param("from_date", "Date de début (YYYY-MM-DD)", type="string", pattern="^\\d{4}-\\d{2}-\\d{2}$")
-    @bookings_ns.param("to_date", "Date de fin (YYYY-MM-DD)", type="string", pattern="^\\d{4}-\\d{2}-\\d{2}$")
+    @bookings_ns.param(
+        "from_date",
+        "Date de début (YYYY-MM-DD)",
+        type="string",
+        pattern="^\\d{4}-\\d{2}-\\d{2}$",
+    )
+    @bookings_ns.param(
+        "to_date",
+        "Date de fin (YYYY-MM-DD)",
+        type="string",
+        pattern="^\\d{4}-\\d{2}-\\d{2}$",
+    )
     def get(self):
         """Retourne les réservations (paginées).
 
@@ -604,7 +671,9 @@ class ListBookings(Resource):
 
             args_dict = dict(request.args)
             try:
-                validated_args = validate_request(BookingListSchema(), args_dict, strict=False)
+                validated_args = validate_request(
+                    BookingListSchema(), args_dict, strict=False
+                )
                 page = validated_args.get("page", 1)
                 per_page = validated_args.get("per_page", 100)
                 status_filter = validated_args.get("status")
@@ -616,7 +685,9 @@ class ListBookings(Resource):
                 return _get_admin_bookings(page, per_page, status_filter)
 
             if user.role == UserRole.client:
-                client_result = _get_client_bookings(user, page, per_page, status_filter)
+                client_result = _get_client_bookings(
+                    user, page, per_page, status_filter
+                )
                 return (
                     client_result
                     if client_result is not None

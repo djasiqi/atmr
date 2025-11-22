@@ -99,7 +99,11 @@ def validate_required_env_vars(config_name: str) -> None:
         has_db_config = (
             os.getenv("DATABASE_URL")
             or os.getenv("SQLALCHEMY_DATABASE_URI")
-            or (os.getenv("POSTGRES_USER") and os.getenv("POSTGRES_PASSWORD") and os.getenv("POSTGRES_DB"))
+            or (
+                os.getenv("POSTGRES_USER")
+                and os.getenv("POSTGRES_PASSWORD")
+                and os.getenv("POSTGRES_DB")
+            )
         )
         if not has_db_config:
             raise RuntimeError(
@@ -235,7 +239,9 @@ def create_app(config_name: str | None = None):
                                 return
                             instrument_sqlalchemy(db_engine)
                     except Exception as e:
-                        app.logger.warning("[2.9] Échec instrumentation DB différée: %s", e)
+                        app.logger.warning(
+                            "[2.9] Échec instrumentation DB différée: %s", e
+                        )
 
                 engine = None
 
@@ -300,7 +306,11 @@ def create_app(config_name: str | None = None):
     if config_name == "development":
         cors_origins: str | list[str] = "*"  # dev permissif
     else:
-        cors_origins = os.getenv("SOCKETIO_CORS_ORIGINS", "").split(",") if os.getenv("SOCKETIO_CORS_ORIGINS") else []
+        cors_origins = (
+            os.getenv("SOCKETIO_CORS_ORIGINS", "").split(",")
+            if os.getenv("SOCKETIO_CORS_ORIGINS")
+            else []
+        )
 
     if skip_socketio:
         app.logger.info("⏭️  Socket.IO désactivé (SKIP_SOCKETIO=1)")
@@ -308,13 +318,18 @@ def create_app(config_name: str | None = None):
         app.logger.info("🔧 [INIT] Configuration Socket.IO...")
         allowed_modes: set[str] = {"threading", "eventlet", "gevent", "gevent_uwsgi"}
         env_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet")
-        async_mode: AsyncMode = cast("AsyncMode", env_mode if env_mode in allowed_modes else "eventlet")
+        async_mode: AsyncMode = cast(
+            "AsyncMode", env_mode if env_mode in allowed_modes else "eventlet"
+        )
 
         sio_logger = config_name == "development"
         sio_engineio_logger = config_name == "development"
 
         allow_ws_upgrades = True
-        if config_name == "development" and os.getenv("SIO_DISABLE_UPGRADES", "true").lower() == "true":
+        if (
+            config_name == "development"
+            and os.getenv("SIO_DISABLE_UPGRADES", "true").lower() == "true"
+        ):
             allow_ws_upgrades = False
 
         # NB: pas de 'upgrade_timeout' (paramètre inexistant) ni 'cookie=True' (type incompatible)
@@ -367,7 +382,12 @@ def create_app(config_name: str | None = None):
     def _log_socketio_requests():  # pyright: ignore[reportUnusedFunction]
         p = request.path or ""
         if p.startswith("/socket.io"):
-            app.logger.debug("📡 SIO %s %s from %s", request.method, request.full_path, request.remote_addr)
+            app.logger.debug(
+                "📡 SIO %s %s from %s",
+                request.method,
+                request.full_path,
+                request.remote_addr,
+            )
 
     # ✅ D3: Killswitch / Maintenance mode
     @app.before_request
@@ -378,7 +398,12 @@ def create_app(config_name: str | None = None):
             # Permettre les healthchecks même en maintenance
             if request.path in ["/health", "/api/health"]:
                 return None
-            return jsonify({"error": "Service en maintenance", "message": "Merci de réessayer plus tard"}), 503
+            return jsonify(
+                {
+                    "error": "Service en maintenance",
+                    "message": "Merci de réessayer plus tard",
+                }
+            ), 503
 
         # Vérifier fichier flag (pour killswitch ChatOps)
         try:
@@ -392,7 +417,9 @@ def create_app(config_name: str | None = None):
                 # Permettre les healthchecks même en maintenance
                 if request.path in ["/health", "/api/health"]:
                     return None
-                return jsonify({"error": "Service en maintenance", "message": reason}), 503
+                return jsonify(
+                    {"error": "Service en maintenance", "message": reason}
+                ), 503
         except Exception:
             # Si erreur de lecture du flag, continuer normalement
             pass
@@ -419,7 +446,9 @@ def create_app(config_name: str | None = None):
 
             injector = get_chaos_injector()
             if injector.enabled and injector.db_read_only:
-                app.logger.warning("[CHAOS] DB read-only: blocking %s %s", request.method, request.path)
+                app.logger.warning(
+                    "[CHAOS] DB read-only: blocking %s %s", request.method, request.path
+                )
                 return jsonify(
                     {
                         "error": "Database is in read-only mode",
@@ -431,7 +460,9 @@ def create_app(config_name: str | None = None):
             pass
         except Exception:
             # En cas d'erreur inattendue, continuer (ne pas bloquer le système)
-            app.logger.warning("[CHAOS] Error checking DB read-only status", exc_info=True)
+            app.logger.warning(
+                "[CHAOS] Error checking DB read-only status", exc_info=True
+            )
 
         return None
 
@@ -448,7 +479,9 @@ def create_app(config_name: str | None = None):
     def handle_os_error(e: OSError):  # pyright: ignore[reportUnusedFunction]
         err = getattr(e, "errno", None)
         if err == BAD_FILE_DESCRIPTOR:  # Bad file descriptor
-            app.logger.warning("Socket error (Bad file descriptor) - connection may have been closed")
+            app.logger.warning(
+                "Socket error (Bad file descriptor) - connection may have been closed"
+            )
             return jsonify({"error": "Connection closed"}), 499
         raise e
 
@@ -479,7 +512,10 @@ def create_app(config_name: str | None = None):
         # Vérifier que le fichier existe
         if not candidate.exists():
             app.logger.warning(
-                "Fichier upload introuvable: %s (chemin résolu: %s, base: %s)", filename, candidate, base
+                "Fichier upload introuvable: %s (chemin résolu: %s, base: %s)",
+                filename,
+                candidate,
+                base,
             )
             raise NotFound
 
@@ -557,7 +593,11 @@ def create_app(config_name: str | None = None):
             remote = request.remote_addr or ""
             host = request.host or ""
             # Si c'est depuis localhost OU si le schéma est HTTP (pas HTTPS), retourner directement
-            if remote in ("127.0.0.1", "::1", "localhost") or request.scheme == "http" or "localhost" in host:
+            if (
+                remote in ("127.0.0.1", "::1", "localhost")
+                or request.scheme == "http"
+                or "localhost" in host
+            ):
                 # Retourner directement la réponse JSON sans passer par Talisman
                 return jsonify(
                     {
@@ -605,16 +645,24 @@ def create_app(config_name: str | None = None):
 
     # ✅ FIX: En mode testing, désactiver complètement Talisman pour éviter toute redirection 302
     # Talisman peut encore causer des redirections même avec force_https=False dans certains cas
-    if config_name == "testing" or app.config.get("TESTING", False) or os.getenv("FLASK_CONFIG") == "testing":
+    if (
+        config_name == "testing"
+        or app.config.get("TESTING", False)
+        or os.getenv("FLASK_CONFIG") == "testing"
+    ):
         # Ne pas initialiser Talisman en mode testing
         talisman = None
-        app.logger.info("[App] Talisman désactivé en mode testing pour éviter les redirections 302")
+        app.logger.info(
+            "[App] Talisman désactivé en mode testing pour éviter les redirections 302"
+        )
     else:
         talisman = Talisman(
             content_security_policy=csp,
             force_https=force_https,
             strict_transport_security=strict_transport_security,
-            strict_transport_security_max_age=31536000 if strict_transport_security else 0,  # 1 an
+            strict_transport_security_max_age=31536000
+            if strict_transport_security
+            else 0,  # 1 an
         )
         talisman.init_app(app)
 
@@ -659,10 +707,14 @@ def create_app(config_name: str | None = None):
         )
 
     # 7) Logging
-    app_log_level = getattr(logging, os.getenv("APP_LOG_LEVEL", "INFO").upper(), logging.INFO)
+    app_log_level = getattr(
+        logging, os.getenv("APP_LOG_LEVEL", "INFO").upper(), logging.INFO
+    )
     app.logger.setLevel(app_log_level)
     logging.getLogger("werkzeug").setLevel(
-        getattr(logging, os.getenv("WERKZEUG_LOG_LEVEL", "ERROR").upper(), logging.ERROR)
+        getattr(
+            logging, os.getenv("WERKZEUG_LOG_LEVEL", "ERROR").upper(), logging.ERROR
+        )
     )
 
     # ✅ Ajout filtre PII si activé
@@ -734,19 +786,29 @@ def create_app(config_name: str | None = None):
                 """Ajoute le header Deprecation sur les routes API v1."""
                 if request.path and request.path.startswith("/api/v1/"):
                     response.headers["Deprecation"] = 'version="v1"'
-                    response.headers["Sunset"] = "Wed, 01 Jan 2025 00:00:00 GMT"  # Date estimée de suppression
-                    response.headers["Link"] = '<https://docs.atmr.ch/api/v2>; rel="successor-version"'
+                    response.headers["Sunset"] = (
+                        "Wed, 01 Jan 2025 00:00:00 GMT"  # Date estimée de suppression
+                    )
+                    response.headers["Link"] = (
+                        '<https://docs.atmr.ch/api/v2>; rel="successor-version"'
+                    )
                 return response
 
             # ✅ 3.2: Ajouter header Deprecation sur routes legacy /api/* (si activées)
             @app.after_request
             def _add_deprecation_header_legacy(response):  # pyright: ignore[reportUnusedFunction]
                 """Ajoute le header Deprecation sur les routes API legacy."""
-                if request.path and request.path.startswith("/api/") and not request.path.startswith("/api/v"):
+                if (
+                    request.path
+                    and request.path.startswith("/api/")
+                    and not request.path.startswith("/api/v")
+                ):
                     # Route legacy (sans version)
                     response.headers["Deprecation"] = 'version="legacy"'
                     response.headers["Sunset"] = "Wed, 01 Jan 2025 00:00:00 GMT"
-                    response.headers["Link"] = '<https://docs.atmr.ch/api/v1>; rel="successor-version"'
+                    response.headers["Link"] = (
+                        '<https://docs.atmr.ch/api/v1>; rel="successor-version"'
+                    )
                 return response
 
             # ✅ 3.2: Shim générique pour /api[/vX]/auth/login si RESTX rate
@@ -754,7 +816,9 @@ def create_app(config_name: str | None = None):
             @app.before_request
             def _auth_login_shim_any_version():  # pyright: ignore[reportUnusedFunction]
                 p = request.path or ""
-                if request.method in ("POST", "OPTIONS") and re.fullmatch(r"/api(?:/v\d+)?/auth/login", p):
+                if request.method in ("POST", "OPTIONS") and re.fullmatch(
+                    r"/api(?:/v\d+)?/auth/login", p
+                ):
                     # Correspond à /api/auth/login (legacy), /api/v1/auth/login ou /api/v2/auth/login
                     if request.method == "OPTIONS":
                         return make_response("", 204)
@@ -793,21 +857,36 @@ def create_app(config_name: str | None = None):
                 path = request.path or "/"
                 if path == "/api" or path.startswith("/api/"):
                     return None
-                if path in {"/", "/health", "/config", "/docs", "/favicon.ico", "/robots.txt"} or path.startswith(
+                if path in {
+                    "/",
+                    "/health",
+                    "/config",
+                    "/docs",
+                    "/favicon.ico",
+                    "/robots.txt",
+                } or path.startswith(
                     ("/swaggerui/", "/static/", "/uploads/", "/socket.io")
                 ):
                     return None
 
                 current_app.logger.debug("Legacy shim: %s %s", request.method, path)
 
-                if any(path == f"/{p}" or path.startswith(f"/{p}/") for p in legacy_prefixes):
+                if any(
+                    path == f"/{p}" or path.startswith(f"/{p}/")
+                    for p in legacy_prefixes
+                ):
                     if request.method == "OPTIONS":
                         return make_response("", 204)
                     new_path = "/api" + path
                     environ = request.environ
                     environ["ORIGINAL_PATH_INFO"] = path
                     environ["PATH_INFO"] = new_path
-                    current_app.logger.info("Legacy shim internal reroute %s %s -> %s", request.method, path, new_path)
+                    current_app.logger.info(
+                        "Legacy shim internal reroute %s %s -> %s",
+                        request.method,
+                        path,
+                        new_path,
+                    )
                     return None
                 return None
 
@@ -872,7 +951,9 @@ def create_app(config_name: str | None = None):
                 return res.put()
             raise NotFound
 
-        @app.route("/api/v<int:version>/companies/me", methods=["GET", "PUT", "OPTIONS"])
+        @app.route(
+            "/api/v<int:version>/companies/me", methods=["GET", "PUT", "OPTIONS"]
+        )
         def _compat_companies_me_v(version: int):  # pyright: ignore[reportUnusedFunction]  # noqa: ARG001
             if request.method == "OPTIONS":
                 return make_response("", 204)
@@ -889,7 +970,9 @@ def create_app(config_name: str | None = None):
                 return make_response("", 204)
             return CompanyDriversList().get()
 
-        @app.route("/api/v<int:version>/companies/me/drivers", methods=["GET", "OPTIONS"])
+        @app.route(
+            "/api/v<int:version>/companies/me/drivers", methods=["GET", "OPTIONS"]
+        )
         def _compat_companies_me_drivers_v(version: int):  # pyright: ignore[reportUnusedFunction]  # noqa: ARG001
             if request.method == "OPTIONS":
                 return make_response("", 204)
@@ -917,13 +1000,17 @@ def create_app(config_name: str | None = None):
         def log_request_info(response):  # pyright: ignore[reportUnusedFunction]
             if request.path in noisy_paths and request.method in ("GET", "OPTIONS"):
                 return response
-            app.logger.debug("%s %s -> %s", request.method, request.path, response.status_code)
+            app.logger.debug(
+                "%s %s -> %s", request.method, request.path, response.status_code
+            )
             return response
 
         # JWT : handlers d'erreurs
         @jwt.expired_token_loader
         def expired_token_callback(_jwt_header, _jwt_payload):  # pyright: ignore[reportUnusedFunction]
-            return jsonify({"error": "token_expired", "message": "Signature has expired"}), 401
+            return jsonify(
+                {"error": "token_expired", "message": "Signature has expired"}
+            ), 401
 
         @jwt.invalid_token_loader
         def invalid_token_callback(error):  # pyright: ignore[reportUnusedFunction]
@@ -947,14 +1034,20 @@ def create_app(config_name: str | None = None):
 
             if isinstance(e, ExpiredSignatureError):
                 app.logger.warning("Token JWT expiré intercepté: %s", str(e))
-                return jsonify({"error": "token_expired", "message": "Signature has expired"}), 401
+                return jsonify(
+                    {"error": "token_expired", "message": "Signature has expired"}
+                ), 401
             if isinstance(e, InvalidTokenError):
                 app.logger.warning("Token JWT invalide intercepté: %s", str(e))
                 return jsonify({"error": "invalid_token", "message": str(e)}), 422
 
             # Pour toutes les autres exceptions
             app.logger.exception("Unhandled server error")
-            msg = str(e) if app.config.get("DEBUG") else "Une erreur interne est survenue."
+            msg = (
+                str(e)
+                if app.config.get("DEBUG")
+                else "Une erreur interne est survenue."
+            )
             return jsonify({"error": "server_error", "message": msg}), 500
 
     # Note: handler disconnect géré dans sockets/chat.py (pas de doublon)

@@ -111,7 +111,9 @@ class SafetyGuards:
 
             # Effectuer tous les checks de sécurité
             # Si rl_metadata est None, on ne vérifie pas les checks RL
-            checks = self._perform_safety_checks(metrics, has_rl_metadata=rl_metadata is not None)
+            checks = self._perform_safety_checks(
+                metrics, has_rl_metadata=rl_metadata is not None
+            )
 
             # Déterminer si le résultat est sûr
             is_safe = all(checks.values())
@@ -135,9 +137,15 @@ class SafetyGuards:
         except Exception as e:
             logger.error("[SafetyGuards] Erreur lors du check: %s", e)
             # En cas d'erreur, considérer comme dangereux
-            return False, {"is_safe": False, "error": str(e), "timestamp": datetime.now(UTC).isoformat()}
+            return False, {
+                "is_safe": False,
+                "error": str(e),
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
 
-    def _extract_metrics(self, dispatch_result: Dict[str, Any], rl_metadata: Dict[str, Any] | None) -> Dict[str, Any]:
+    def _extract_metrics(
+        self, dispatch_result: Dict[str, Any], rl_metadata: Dict[str, Any] | None
+    ) -> Dict[str, Any]:
         """Extrait et normalise les métriques du résultat de dispatch."""
         metrics = {}
 
@@ -179,7 +187,9 @@ class SafetyGuards:
 
         return metrics
 
-    def _perform_safety_checks(self, metrics: Dict[str, Any], has_rl_metadata: bool = True) -> Dict[str, bool]:
+    def _perform_safety_checks(
+        self, metrics: Dict[str, Any], has_rl_metadata: bool = True
+    ) -> Dict[str, bool]:
         """Effectue tous les checks de sécurité.
 
         Args:
@@ -189,40 +199,64 @@ class SafetyGuards:
         checks = {}
 
         # Check 1: Retards
-        checks["max_delay_ok"] = metrics["max_delay_minutes"] <= self.thresholds.max_delay_minutes
+        checks["max_delay_ok"] = (
+            metrics["max_delay_minutes"] <= self.thresholds.max_delay_minutes
+        )
 
         # Check 2: Actions invalides
-        checks["invalid_actions_ok"] = metrics["invalid_action_rate"] <= self.thresholds.invalid_action_rate
+        checks["invalid_actions_ok"] = (
+            metrics["invalid_action_rate"] <= self.thresholds.invalid_action_rate
+        )
 
         # Check 3: Taux de completion
-        checks["completion_rate_ok"] = metrics["completion_rate"] >= self.thresholds.min_completion_rate
+        checks["completion_rate_ok"] = (
+            metrics["completion_rate"] >= self.thresholds.min_completion_rate
+        )
 
         # Check 4: Charge des chauffeurs
-        checks["driver_load_ok"] = metrics["max_driver_load"] <= self.thresholds.max_driver_load
+        checks["driver_load_ok"] = (
+            metrics["max_driver_load"] <= self.thresholds.max_driver_load
+        )
 
         # Check 5: Utilisation des chauffeurs
         driver_utilization = (
-            metrics["avg_driver_load"] / max(1, metrics["max_driver_load"]) if metrics["max_driver_load"] > 0 else 1.0
+            metrics["avg_driver_load"] / max(1, metrics["max_driver_load"])
+            if metrics["max_driver_load"] > 0
+            else 1.0
         )
-        checks["driver_utilization_ok"] = driver_utilization >= self.thresholds.min_driver_utilization
+        checks["driver_utilization_ok"] = (
+            driver_utilization >= self.thresholds.min_driver_utilization
+        )
 
         # Check 6: Distances
-        checks["avg_distance_ok"] = metrics["avg_distance_km"] <= self.thresholds.max_avg_distance_km
-        checks["max_distance_ok"] = metrics["max_distance_km"] <= self.thresholds.max_single_distance_km
+        checks["avg_distance_ok"] = (
+            metrics["avg_distance_km"] <= self.thresholds.max_avg_distance_km
+        )
+        checks["max_distance_ok"] = (
+            metrics["max_distance_km"] <= self.thresholds.max_single_distance_km
+        )
 
         # Checks RL: seulement si rl_metadata est fourni
         if has_rl_metadata:
             # Check 7: Confiance RL
-            checks["rl_confidence_ok"] = metrics["rl_confidence"] >= self.thresholds.min_rl_confidence
+            checks["rl_confidence_ok"] = (
+                metrics["rl_confidence"] >= self.thresholds.min_rl_confidence
+            )
 
             # Check 8: Incertitude RL
-            checks["rl_uncertainty_ok"] = metrics["rl_uncertainty"] <= self.thresholds.max_uncertainty_threshold
+            checks["rl_uncertainty_ok"] = (
+                metrics["rl_uncertainty"] <= self.thresholds.max_uncertainty_threshold
+            )
 
             # Check 9: Temps de décision
-            checks["decision_time_ok"] = metrics["decision_time_ms"] <= self.thresholds.max_decision_time_ms
+            checks["decision_time_ok"] = (
+                metrics["decision_time_ms"] <= self.thresholds.max_decision_time_ms
+            )
 
             # Check 10: Longueur d'épisode
-            checks["episode_length_ok"] = metrics["episode_length"] >= self.thresholds.min_episode_length
+            checks["episode_length_ok"] = (
+                metrics["episode_length"] >= self.thresholds.min_episode_length
+            )
         else:
             # Pas d'implication RL → tous les checks RL passent
             checks["rl_confidence_ok"] = True
@@ -236,7 +270,9 @@ class SafetyGuards:
         """Log les violations détectées."""
         violations = [check_name for check_name, passed in checks.items() if not passed]
 
-        logger.warning("[SafetyGuards] ⚠️ Violations détectées: %s", ", ".join(violations))
+        logger.warning(
+            "[SafetyGuards] ⚠️ Violations détectées: %s", ", ".join(violations)
+        )
 
         # Log détaillé des métriques problématiques
         for violation in violations:
@@ -265,11 +301,15 @@ class SafetyGuards:
                     self.thresholds.min_rl_confidence,
                 )
 
-    def _record_violation(self, checks: Dict[str, bool], metrics: Dict[str, Any]) -> None:
+    def _record_violation(
+        self, checks: Dict[str, bool], metrics: Dict[str, Any]
+    ) -> None:
         """Enregistre la violation dans l'historique."""
         violation_record = {
             "timestamp": datetime.now(UTC),
-            "violations": [check_name for check_name, passed in checks.items() if not passed],
+            "violations": [
+                check_name for check_name, passed in checks.items() if not passed
+            ],
             "metrics": metrics.copy(),
             "severity": self._calculate_severity(checks, metrics),
         }
@@ -280,7 +320,9 @@ class SafetyGuards:
         if len(self.violation_history) > self.max_history_size:
             self.violation_history = self.violation_history[-self.max_history_size :]
 
-    def _calculate_severity(self, checks: Dict[str, bool], metrics: Dict[str, Any]) -> str:  # noqa: ARG002
+    def _calculate_severity(
+        self, checks: Dict[str, bool], metrics: Dict[str, Any]
+    ) -> str:  # noqa: ARG002
         """Calcule la sévérité de la violation."""
         violation_count = sum(1 for passed in checks.values() if not passed)
 
@@ -292,7 +334,9 @@ class SafetyGuards:
             return "MEDIUM"
         return "LOW"
 
-    def _update_performance_metrics(self, is_safe: bool, checks: Dict[str, bool]) -> None:
+    def _update_performance_metrics(
+        self, is_safe: bool, checks: Dict[str, bool]
+    ) -> None:
         """Met à jour les métriques de performance des guards."""
         # Cette méthode peut être étendue pour suivre les performances
         # des guards eux-mêmes (faux positifs, etc.)
@@ -309,18 +353,25 @@ class SafetyGuards:
         """
         # Vérifier les violations récentes (dernières 30 minutes)
         cutoff_time = datetime.now(UTC) - timedelta(minutes=30)
-        recent_violations_list = [v for v in self.violation_history if v["timestamp"] > cutoff_time]
+        recent_violations_list = [
+            v for v in self.violation_history if v["timestamp"] > cutoff_time
+        ]
 
         # Rollback si trop de violations récentes
         if len(recent_violations_list) >= recent_violations:
-            logger.warning("[SafetyGuards] 🚨 Rollback recommandé: %d violations récentes", len(recent_violations_list))
+            logger.warning(
+                "[SafetyGuards] 🚨 Rollback recommandé: %d violations récentes",
+                len(recent_violations_list),
+            )
             return True
 
         # Rollback si dernière violation était critique
         if recent_violations_list:
             last_violation = recent_violations_list[-1]
             if last_violation["severity"] == "CRITICAL":
-                logger.warning("[SafetyGuards] 🚨 Rollback recommandé: violation CRITIQUE")
+                logger.warning(
+                    "[SafetyGuards] 🚨 Rollback recommandé: violation CRITIQUE"
+                )
                 return True
 
         return False
@@ -329,15 +380,23 @@ class SafetyGuards:
         """Retourne le statut de santé des Safety Guards."""
         total_violations = len(self.violation_history)
         recent_violations = len(
-            [v for v in self.violation_history if v["timestamp"] > datetime.now(UTC) - timedelta(hours=24)]
+            [
+                v
+                for v in self.violation_history
+                if v["timestamp"] > datetime.now(UTC) - timedelta(hours=24)
+            ]
         )
 
         return {
-            "status": "healthy" if total_violations < TOTAL_VIOLATIONS_THRESHOLD else "degraded",
+            "status": "healthy"
+            if total_violations < TOTAL_VIOLATIONS_THRESHOLD
+            else "degraded",
             "total_violations": total_violations,
             "recent_violations_24h": recent_violations,
             "rollback_count": self.rollback_count,
-            "last_rollback": self.last_rollback_time.isoformat() if self.last_rollback_time else None,
+            "last_rollback": self.last_rollback_time.isoformat()
+            if self.last_rollback_time
+            else None,
             "thresholds": self.thresholds.__dict__,
             "timestamp": datetime.now(UTC).isoformat(),
         }

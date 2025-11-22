@@ -35,7 +35,9 @@ def cleanup_old_dlq_entries() -> dict[str, int | str]:
         threshold_date = datetime.now(UTC) - timedelta(days=DLQ_RETENTION_DAYS)
 
         # Récupérer les entrées à supprimer
-        old_failures = TaskFailure.query.filter(TaskFailure.first_seen < threshold_date).all()
+        old_failures = TaskFailure.query.filter(
+            TaskFailure.first_seen < threshold_date
+        ).all()
 
         deleted_count = len(old_failures)
 
@@ -53,7 +55,10 @@ def cleanup_old_dlq_entries() -> dict[str, int | str]:
                 DLQ_RETENTION_DAYS,
             )
         else:
-            logger.debug("[DLQ Cleanup] Aucune entrée à supprimer (seuil: %s)", threshold_date.isoformat())
+            logger.debug(
+                "[DLQ Cleanup] Aucune entrée à supprimer (seuil: %s)",
+                threshold_date.isoformat(),
+            )
 
         return {
             "deleted_count": deleted_count,

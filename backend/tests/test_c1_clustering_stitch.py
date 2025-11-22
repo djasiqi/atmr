@@ -34,7 +34,9 @@ class TestClusteringStitching:
                 self.latitude = lat
                 self.longitude = lon
 
-        bookings = [MockBooking(i, 45.5 + i * 0.01, -73.5 + i * 0.01) for i in range(150)]
+        bookings = [
+            MockBooking(i, 45.5 + i * 0.01, -73.5 + i * 0.01) for i in range(150)
+        ]
         drivers = [MockDriver(i, 45.5, -73.5) for i in range(20)]
 
         clustering = GeographicClustering(max_bookings_per_zone=50)
@@ -54,7 +56,10 @@ class TestClusteringStitching:
                 self.pickup_lat = lat
                 self.pickup_lon = lon
 
-        bookings = [MockBooking(i, 45.0 + (i % 50) * 0.1, -73.0 + (i // 50) * 0.1) for i in range(300)]
+        bookings = [
+            MockBooking(i, 45.0 + (i % 50) * 0.1, -73.0 + (i // 50) * 0.1)
+            for i in range(300)
+        ]
         drivers = []
 
         clustering = GeographicClustering(max_bookings_per_zone=100)
@@ -120,7 +125,9 @@ class TestClusteringStitching:
 
         assert improvements >= 0
 
-        logger.info("✅ Test: Stitching boundary bookings (%d improvements)", improvements)
+        logger.info(
+            "✅ Test: Stitching boundary bookings (%d improvements)", improvements
+        )
 
     def test_cluster_solve_stitch_300(self):
         """Test: 300 courses < 60s avec clustering + stitching."""
@@ -138,7 +145,10 @@ class TestClusteringStitching:
                 self.longitude = lon
 
         # Créer 300 bookings
-        bookings = [MockBooking(i, 45.0 + (i % 60) * 0.1, -73.0 + (i // 60) * 0.1) for i in range(300)]
+        bookings = [
+            MockBooking(i, 45.0 + (i % 60) * 0.1, -73.0 + (i // 60) * 0.1)
+            for i in range(300)
+        ]
 
         drivers = [MockDriver(i, 45.5, -73.5) for i in range(50)]
 
@@ -149,7 +159,11 @@ class TestClusteringStitching:
 
         # Simuler solve par zone (mock)
         zone_results = {
-            z.zone_id: {"assignments": list(range(len(z.bookings) - 5)), "unassigned": list(range(5))} for z in zones
+            z.zone_id: {
+                "assignments": list(range(len(z.bookings) - 5)),
+                "unassigned": list(range(5)),
+            }
+            for z in zones
         }
 
         # Stitch
@@ -182,7 +196,9 @@ class TestClusteringStitching:
                 self.pickup_lat = lat
                 self.pickup_lon = lon
 
-        bookings = [MockBooking(i, 45.0 + i * 0.01, -73.0 + i * 0.01) for i in range(200)]
+        bookings = [
+            MockBooking(i, 45.0 + i * 0.01, -73.0 + i * 0.01) for i in range(200)
+        ]
         drivers = []
 
         clustering = GeographicClustering(max_bookings_per_zone=50)
@@ -220,12 +236,17 @@ class TestClusteringStitching:
         zones = clustering.create_zones(bookings, drivers)
 
         # Simuler résultats
-        zone_results = {z.zone_id: {"assignments": list(range(len(z.bookings))), "unassigned": []} for z in zones}
+        zone_results = {
+            z.zone_id: {"assignments": list(range(len(z.bookings))), "unassigned": []}
+            for z in zones
+        }
 
         result = clustering.stitch_zones(zone_results, zones)
 
         # Valider contraintes globales
-        total_bookings_processed = len(result["assignments"]) + len(result["unassigned"])
+        total_bookings_processed = len(result["assignments"]) + len(
+            result["unassigned"]
+        )
 
         assert total_bookings_processed == 100, "Devrait traiter toutes les courses"
 

@@ -41,7 +41,9 @@ try:
     logger.info("[ETADelayModel] XGBoost disponible")
 except ImportError:
     xgb = None
-    logger.warning("[ETADelayModel] XGBoost non disponible. Installer avec: pip install xgboost")
+    logger.warning(
+        "[ETADelayModel] XGBoost non disponible. Installer avec: pip install xgboost"
+    )
 
 try:
     import lightgbm as lgb  # type: ignore[import-untyped]
@@ -50,7 +52,9 @@ try:
     logger.info("[ETADelayModel] LightGBM disponible")
 except ImportError:
     lgb = None
-    logger.warning("[ETADelayModel] LightGBM non disponible. Installer avec: pip install lightgbm")
+    logger.warning(
+        "[ETADelayModel] LightGBM non disponible. Installer avec: pip install lightgbm"
+    )
 
 try:
     from sklearn.metrics import mean_absolute_error, mean_squared_error, roc_auc_score
@@ -60,7 +64,9 @@ except ImportError:
     mean_squared_error = None
     roc_auc_score = None
     StandardScaler = None
-    logger.error("[ETADelayModel] scikit-learn requis. Installer avec: pip install scikit-learn")
+    logger.error(
+        "[ETADelayModel] scikit-learn requis. Installer avec: pip install scikit-learn"
+    )
 
 # Constantes
 DELAY_THRESHOLD_MINUTES = 5
@@ -149,7 +155,10 @@ class ETADelayModel:
             logger.info("[ETADelayModel] Aucun modèle pré-entraîné trouvé")
 
     def extract_features(
-        self, booking: Any, driver: Any | None = None, current_time: datetime | None = None
+        self,
+        booking: Any,
+        driver: Any | None = None,
+        current_time: datetime | None = None,
     ) -> Dict[str, float]:
         """Extrait les features pour prédiction.
 
@@ -173,15 +182,25 @@ class ETADelayModel:
         if current_time is None:
             current_time = datetime.now()
 
-        scheduled_time = getattr(booking, "scheduled_time", current_time) or current_time
+        scheduled_time = (
+            getattr(booking, "scheduled_time", current_time) or current_time
+        )
 
         # === Features temporelles ===
-        time_of_day = float(scheduled_time.hour if scheduled_time else current_time.hour)
-        day_of_week = float(scheduled_time.weekday() if scheduled_time else current_time.weekday())
+        time_of_day = float(
+            scheduled_time.hour if scheduled_time else current_time.hour
+        )
+        day_of_week = float(
+            scheduled_time.weekday() if scheduled_time else current_time.weekday()
+        )
         month = float(scheduled_time.month if scheduled_time else current_time.month)
         is_weekend = 1 if day_of_week >= WEEKEND_THRESHOLD else 0
-        is_morning_rush = 1 if MORNING_RUSH_START <= time_of_day <= MORNING_RUSH_END else 0
-        is_evening_rush = 1 if EVENING_RUSH_START <= time_of_day <= EVENING_RUSH_END else 0
+        is_morning_rush = (
+            1 if MORNING_RUSH_START <= time_of_day <= MORNING_RUSH_END else 0
+        )
+        is_evening_rush = (
+            1 if EVENING_RUSH_START <= time_of_day <= EVENING_RUSH_END else 0
+        )
 
         # Encodage cyclique
         hour_sin = np.sin(2 * np.pi * time_of_day / 24)
@@ -199,13 +218,17 @@ class ETADelayModel:
             dropoff_lon = float(getattr(booking, "dropoff_lon", 0) or 0)
 
             if all([pickup_lat, pickup_lon, dropoff_lat, dropoff_lon]):
-                distance_km = haversine_distance(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+                distance_km = haversine_distance(
+                    pickup_lat, pickup_lon, dropoff_lat, dropoff_lon
+                )
             else:
                 distance_km = float(getattr(booking, "distance_meters", 0) or 0) / 1000
         except Exception:
             distance_km = 0
 
-        duration_seconds = float(getattr(booking, "duration_seconds", 0) or distance_km * 420)  # ~7 min/km
+        duration_seconds = float(
+            getattr(booking, "duration_seconds", 0) or distance_km * 420
+        )  # ~7 min/km
 
         # === Features booking ===
         is_medical = 1 if getattr(booking, "medical_facility", None) else 0
@@ -245,10 +268,14 @@ class ETADelayModel:
 
                         for b in recent_bookings:
                             scheduled = getattr(b, "scheduled_time", None)
-                            actual_pickup = getattr(b, "actual_pickup_time", None) or getattr(b, "completed_at", None)
+                            actual_pickup = getattr(
+                                b, "actual_pickup_time", None
+                            ) or getattr(b, "completed_at", None)
 
                             if scheduled and actual_pickup:
-                                delay_seconds = (actual_pickup - scheduled).total_seconds()
+                                delay_seconds = (
+                                    actual_pickup - scheduled
+                                ).total_seconds()
                                 delay_minutes = delay_seconds / 60
                                 total_delays.append(abs(delay_minutes))
 
@@ -256,7 +283,9 @@ class ETADelayModel:
                                     on_time_count += 1
 
                         if total_delays:
-                            driver_punctuality_score = on_time_count / len(recent_bookings)
+                            driver_punctuality_score = on_time_count / len(
+                                recent_bookings
+                            )
                             avg_delay = np.mean(total_delays)
 
                             if avg_delay < DELAY_THRESHOLD_MINUTES:
@@ -286,7 +315,11 @@ class ETADelayModel:
 
             pickup_lat = float(getattr(booking, "pickup_lat", 0) or 0)
             pickup_lon = float(getattr(booking, "pickup_lon", 0) or 0)
-            weather_factor = get_weather_factor(pickup_lat, pickup_lon) if pickup_lat and pickup_lon else 0.5
+            weather_factor = (
+                get_weather_factor(pickup_lat, pickup_lon)
+                if pickup_lat and pickup_lon
+                else 0.5
+            )
         except Exception:
             weather_factor = 0.5
 
@@ -298,7 +331,9 @@ class ETADelayModel:
             window_start = getattr(booking, "window_start", None)
             window_end = getattr(booking, "window_end", None)
             window_margin = (
-                ((window_end - window_start).total_seconds() / 3600) if (window_start and window_end) else 0.5
+                ((window_end - window_start).total_seconds() / 3600)
+                if (window_start and window_end)
+                else 0.5
             )  # heures ou default 30 min
         except Exception:
             window_margin = 0.5
@@ -338,7 +373,10 @@ class ETADelayModel:
         }
 
     def predict(
-        self, booking: Any, driver: Any | None = None, current_time: datetime | None = None
+        self,
+        booking: Any,
+        driver: Any | None = None,
+        current_time: datetime | None = None,
     ) -> ETADelayPrediction:
         """Prédit le retard pour un booking.
 
@@ -370,16 +408,22 @@ class ETADelayModel:
 
             # Prédire probabilité de retard (classification)
             if self.classification_model:
-                prob_delay = float(self.classification_model.predict_proba(feature_df)[0][1])
+                prob_delay = float(
+                    self.classification_model.predict_proba(feature_df)[0][1]
+                )
             else:
                 # Fallback: probabilité basée sur retard prédit
                 prob_delay = min(1.0, max(0.0, predicted_delay / self.delay_threshold))
 
             # Confiance (basée sur variance des prédictions)
-            if self.model_type == "xgboost" and hasattr(self.regression_model, "get_booster"):
+            if self.model_type == "xgboost" and hasattr(
+                self.regression_model, "get_booster"
+            ):
                 try:
                     # XGBoost: contrib feature importance
-                    _ = self.regression_model.get_booster().get_score(importance_type="total_gain")
+                    _ = self.regression_model.get_booster().get_score(
+                        importance_type="total_gain"
+                    )
                     # TODO: utiliser feature importance pour calculer confidence
                     confidence = 0.8  # Placeholder
                 except Exception:
@@ -413,7 +457,9 @@ class ETADelayModel:
             logger.error("[ETADelayModel] Erreur prédiction: %s", e)
             return self._fallback_prediction(booking, driver)
 
-    def _fallback_prediction(self, booking: Any, _driver: Any | None) -> ETADelayPrediction:
+    def _fallback_prediction(
+        self, booking: Any, _driver: Any | None
+    ) -> ETADelayPrediction:
         """Prédiction de fallback en cas d'erreur."""
         # Estimation simple basée sur distance
         try:
@@ -425,7 +471,9 @@ class ETADelayModel:
             dropoff_lon = float(getattr(booking, "dropoff_lon", 0) or 0)
 
             if all([pickup_lat, pickup_lon, dropoff_lat, dropoff_lon]):
-                distance_km = haversine_distance(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+                distance_km = haversine_distance(
+                    pickup_lat, pickup_lon, dropoff_lat, dropoff_lon
+                )
                 predicted_delay = distance_km * 0.3  # Simplifié
             else:
                 predicted_delay = 3
@@ -442,7 +490,9 @@ class ETADelayModel:
             model_type="fallback",
         )
 
-    def _calculate_contributing_factors(self, features: Dict[str, float]) -> Dict[str, float]:
+    def _calculate_contributing_factors(
+        self, features: Dict[str, float]
+    ) -> Dict[str, float]:
         """Calcule les facteurs contributifs pour une prédiction."""
         # TODO: Implémenter analyse feature importance
         return {
@@ -476,7 +526,9 @@ class ETADelayModel:
             # 1 degré latitude ≈ 111 km
             zone_radius_deg = ZONE_RADIUS_KM / 111.0
             zone_radius_lat = zone_radius_deg  # km en latitude
-            zone_radius_lon = zone_radius_deg / np.cos(np.radians(pickup_lat))  # Ajusté pour longitude
+            zone_radius_lon = zone_radius_deg / np.cos(
+                np.radians(pickup_lat)
+            )  # Ajusté pour longitude
 
             lat_min = pickup_lat - zone_radius_lat
             lat_max = pickup_lat + zone_radius_lat
@@ -484,13 +536,17 @@ class ETADelayModel:
             lon_max = pickup_lon + zone_radius_lon
 
             # Compter bookings dans cette zone (7 derniers jours)
-            cutoff_date = datetime.now(timezone.utc) - timedelta(days=ZONE_DENSITY_LOOKBACK_DAYS)
+            cutoff_date = datetime.now(timezone.utc) - timedelta(
+                days=ZONE_DENSITY_LOOKBACK_DAYS
+            )
 
             bookings_in_zone = Booking.query.filter(
                 and_(
                     Booking.pickup_lat.between(lat_min, lat_max),
                     Booking.pickup_lon.between(lon_min, lon_max),
-                    Booking.status.in_([BookingStatus.COMPLETED, BookingStatus.ACCEPTED]),
+                    Booking.status.in_(
+                        [BookingStatus.COMPLETED, BookingStatus.ACCEPTED]
+                    ),
                     Booking.scheduled_time >= cutoff_date,
                 )
             ).count()
@@ -512,7 +568,9 @@ class ETADelayModel:
             logger.debug("[ETADelayModel] Erreur calcul zone density: %s", e)
             return 0.5  # Fallback: densité neutre
 
-    def train(self, training_data: List[Dict[str, Any]], save_model: bool = True) -> Dict[str, Any]:
+    def train(
+        self, training_data: List[Dict[str, Any]], save_model: bool = True
+    ) -> Dict[str, Any]:
         """Entraîne le modèle sur données historiques.
 
         Args:
@@ -523,7 +581,9 @@ class ETADelayModel:
             Métriques d'entraînement
         """
         if not XGBOOST_AVAILABLE and not LIGHTGBM_AVAILABLE:
-            raise ImportError("XGBoost ou LightGBM requis. Installer avec: pip install xgboost lightgbm")
+            raise ImportError(
+                "XGBoost ou LightGBM requis. Installer avec: pip install xgboost lightgbm"
+            )
 
         if not training_data:
             raise ValueError("Pas de données d'entraînement")
@@ -557,7 +617,9 @@ class ETADelayModel:
         y_class_array = np.array(y_classification)
 
         logger.info(
-            "[ETADelayModel] Entraînement sur %d échantillons avec %d features", len(X), len(self.feature_names)
+            "[ETADelayModel] Entraînement sur %d échantillons avec %d features",
+            len(X),
+            len(self.feature_names),
         )
 
         # Normaliser
@@ -569,23 +631,39 @@ class ETADelayModel:
         # Entraîner modèle
         if self.model_type == "xgboost" and XGBOOST_AVAILABLE and xgb is not None:
             self.regression_model = xgb.XGBRegressor(
-                n_estimators=100, max_depth=6, learning_rate=0.1, random_state=42, n_jobs=-1
+                n_estimators=100,
+                max_depth=6,
+                learning_rate=0.1,
+                random_state=42,
+                n_jobs=-1,
             )
             self.regression_model.fit(X_scaled, y_reg_array)
 
             self.classification_model = xgb.XGBClassifier(
-                n_estimators=100, max_depth=6, learning_rate=0.1, random_state=42, n_jobs=-1
+                n_estimators=100,
+                max_depth=6,
+                learning_rate=0.1,
+                random_state=42,
+                n_jobs=-1,
             )
             self.classification_model.fit(X_scaled, y_class_array)
 
         elif self.model_type == "lightgbm" and LIGHTGBM_AVAILABLE and lgb is not None:
             self.regression_model = lgb.LGBMRegressor(
-                n_estimators=100, max_depth=6, learning_rate=0.1, random_state=42, n_jobs=-1
+                n_estimators=100,
+                max_depth=6,
+                learning_rate=0.1,
+                random_state=42,
+                n_jobs=-1,
             )
             self.regression_model.fit(X_scaled, y_reg_array)
 
             self.classification_model = lgb.LGBMClassifier(
-                n_estimators=100, max_depth=6, learning_rate=0.1, random_state=42, n_jobs=-1
+                n_estimators=100,
+                max_depth=6,
+                learning_rate=0.1,
+                random_state=42,
+                n_jobs=-1,
             )
             self.classification_model.fit(X_scaled, y_class_array)
 
@@ -596,12 +674,18 @@ class ETADelayModel:
         train_score_reg = self.regression_model.score(X_scaled, y_reg_array)
 
         train_pred_class = self.classification_model.predict_proba(X_scaled)[:, 1]
-        if roc_auc_score is None or mean_absolute_error is None or mean_squared_error is None:
+        if (
+            roc_auc_score is None
+            or mean_absolute_error is None
+            or mean_squared_error is None
+        ):
             raise ImportError("scikit-learn requis pour les métriques")
         train_auc = roc_auc_score(y_class_array, train_pred_class)
 
         mae = mean_absolute_error(y_reg_array, self.regression_model.predict(X_scaled))
-        rmse = np.sqrt(mean_squared_error(y_reg_array, self.regression_model.predict(X_scaled)))
+        rmse = np.sqrt(
+            mean_squared_error(y_reg_array, self.regression_model.predict(X_scaled))
+        )
 
         metrics = {
             "samples_count": len(X),
@@ -651,7 +735,9 @@ class ETADelayModel:
             # Utilisation de joblib (recommandé pour scikit-learn) au lieu de pickle direct
             # joblib utilise pickle en interne mais avec des optimisations pour numpy/scipy
             # nosec B301: Modèles internes uniquement, provenant de sources de confiance
-            joblib.dump(model_data, f)  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+            joblib.dump(
+                model_data, f
+            )  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
 
         logger.info("[ETADelayModel] Modèle sauvegardé: %s", self.model_path)
 
@@ -665,7 +751,9 @@ class ETADelayModel:
                 # Utilisation de joblib (recommandé pour scikit-learn) au lieu de pickle direct
                 # joblib utilise pickle en interne mais avec des optimisations pour numpy/scipy
                 # nosec B301: Modèles internes uniquement, provenant de sources de confiance
-                model_data = joblib.load(f)  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                model_data = joblib.load(
+                    f
+                )  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
 
             self.regression_model = model_data["regression_model"]
             self.classification_model = model_data.get("classification_model", None)
@@ -673,7 +761,9 @@ class ETADelayModel:
             self.scaler_params = model_data.get("scaler_params", None)
             self.is_trained = model_data.get("is_trained", False)
             self.model_type = model_data.get("model_type", "xgboost")
-            self.delay_threshold = model_data.get("delay_threshold", DELAY_THRESHOLD_MINUTES)
+            self.delay_threshold = model_data.get(
+                "delay_threshold", DELAY_THRESHOLD_MINUTES
+            )
 
             logger.info(
                 "[ETADelayModel] Modèle chargé: %s (entraîné à: %s)",

@@ -35,13 +35,21 @@ def upgrade():
 
     # 2. Composite pour filtres company + status + date
     op.create_index(
-        "ix_booking_company_status_scheduled", "booking", ["company_id", "status", "scheduled_time"], unique=False
+        "ix_booking_company_status_scheduled",
+        "booking",
+        ["company_id", "status", "scheduled_time"],
+        unique=False,
     )
 
     # ========== INVOICE ==========
 
     # 3. Composite company + status + due_date (rapports factures en retard)
-    op.create_index("ix_invoice_company_status_due", "invoices", ["company_id", "status", "due_date"], unique=False)
+    op.create_index(
+        "ix_invoice_company_status_due",
+        "invoices",
+        ["company_id", "status", "due_date"],
+        unique=False,
+    )
 
     # ========== ASSIGNMENT ==========
 
@@ -68,7 +76,9 @@ def upgrade():
     # ========== REALTIME_EVENT ==========
 
     # 6. Timestamp pour requêtes historiques
-    op.create_index("ix_realtime_event_timestamp", "realtime_event", ["timestamp"], unique=False)
+    op.create_index(
+        "ix_realtime_event_timestamp", "realtime_event", ["timestamp"], unique=False
+    )
 
 
 def downgrade():

@@ -61,7 +61,9 @@ class ReportGenerator:
             "summary": self._generate_daily_summary(daily_data),
         }
 
-    def generate_weekly_report(self, company_id: int, week_start: date) -> Dict[str, Any]:
+    def generate_weekly_report(
+        self, company_id: int, week_start: date
+    ) -> Dict[str, Any]:
         """Génère un rapport hebdomadaire.
 
         Args:
@@ -104,7 +106,9 @@ class ReportGenerator:
             },
             "insights": analytics.get("insights", {}),
             "trends": analytics.get("trends", []),
-            "recommendations": self._generate_weekly_recommendations(analytics, insights),
+            "recommendations": self._generate_weekly_recommendations(
+                analytics, insights
+            ),
         }
 
     def _generate_daily_summary(self, daily_data: Dict[str, Any]) -> str:
@@ -153,7 +157,10 @@ class ReportGenerator:
 
         # Recommandations des insights
         for insight in insights:
-            if insight.get("priority") == "critical" or insight.get("priority") == "high":
+            if (
+                insight.get("priority") == "critical"
+                or insight.get("priority") == "high"
+            ):
                 recommendations.append(
                     {
                         "priority": insight.get("priority"),
@@ -173,7 +180,9 @@ class ReportGenerator:
 
         return recommendations
 
-    def generate_email_content(self, report: Dict[str, Any], report_type: str = "daily") -> Dict[str, str]:
+    def generate_email_content(
+        self, report: Dict[str, Any], report_type: str = "daily"
+    ) -> Dict[str, str]:
         """Génère le contenu d'un email à partir d'un rapport.
 
         Args:
@@ -267,7 +276,9 @@ class ReportGenerator:
         reco_html = ""
         for reco in recommendations[:5]:  # Limiter à 5
             priority = reco.get("priority", "low")
-            emoji = "🔴" if priority == "critical" else "⚠️" if priority == "high" else "ℹ️"
+            emoji = (
+                "🔴" if priority == "critical" else "⚠️" if priority == "high" else "ℹ️"
+            )
             reco_html += f"""
             <li style="margin-bottom: 10px;">
                 {emoji} <strong>{reco.get("title", "")}</strong><br>
@@ -346,6 +357,8 @@ def generate_weekly_report(company_id: int, week_start: date) -> Dict[str, Any]:
     return _report_generator.generate_weekly_report(company_id, week_start)
 
 
-def generate_email_content(report: Dict[str, Any], report_type: str = "daily") -> Dict[str, str]:
+def generate_email_content(
+    report: Dict[str, Any], report_type: str = "daily"
+) -> Dict[str, str]:
     """Helper function."""
     return _report_generator.generate_email_content(report, report_type)

@@ -223,7 +223,10 @@ class TestSQLInjectionBodyJSON:
         }
         response = client.post("/api/auth/login", json=data)
         # Doit retourner 400 pour email invalide (validation Marshmallow), pas d'erreur SQL
-        assert response.status_code in (400, 401)  # 400 = validation error, 401 = invalid credentials
+        assert response.status_code in (
+            400,
+            401,
+        )  # 400 = validation error, 401 = invalid credentials
         response_text = response.get_data(as_text=True).lower()
         assert "sql" not in response_text
 

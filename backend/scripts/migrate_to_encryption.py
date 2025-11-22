@@ -18,7 +18,9 @@ from models.client import Client
 from models.user import User
 from security.crypto import get_encryption_service
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -43,7 +45,12 @@ def migrate_users(dry_run: bool = False, batch_size: int = 100):
     # Traiter par chunks pour éviter la saturation mémoire
     while offset < total_count:
         # Charger un chunk d'utilisateurs
-        users = User.query.filter(User.encryption_migrated == False).offset(offset).limit(chunk_size).all()  # noqa: E712
+        users = (
+            User.query.filter(User.encryption_migrated == False)
+            .offset(offset)
+            .limit(chunk_size)
+            .all()
+        )  # noqa: E712
 
         if not users:
             break
@@ -112,7 +119,12 @@ def migrate_users(dry_run: bool = False, batch_size: int = 100):
             try:
                 db.session.flush()
                 db.session.commit()
-                logger.debug("Commit chunk %d-%d: %d utilisateurs", chunk_start, offset + len(users), batch_count)
+                logger.debug(
+                    "Commit chunk %d-%d: %d utilisateurs",
+                    chunk_start,
+                    offset + len(users),
+                    batch_count,
+                )
                 batch_count = 0
             except Exception as commit_error:
                 logger.error("Erreur commit chunk: %s", commit_error)
@@ -126,7 +138,10 @@ def migrate_users(dry_run: bool = False, batch_size: int = 100):
             # Réinitialiser la connexion périodiquement (tous les 3 chunks)
             if (offset // chunk_size) % 3 == 0:
                 db.session.close()
-                logger.debug("Session DB fermée/réinitialisée après chunk %d", offset + len(users))
+                logger.debug(
+                    "Session DB fermée/réinitialisée après chunk %d",
+                    offset + len(users),
+                )
         except Exception as expunge_error:
             logger.warning("Erreur expunge_all (ignorée): %s", expunge_error)
 
@@ -174,7 +189,12 @@ def migrate_clients(dry_run: bool = False, batch_size: int = 100):
     # Traiter par chunks pour éviter la saturation mémoire
     while offset < total_count:
         # Charger un chunk de clients
-        clients = Client.query.filter(Client.encryption_migrated == False).offset(offset).limit(chunk_size).all()  # noqa: E712
+        clients = (
+            Client.query.filter(Client.encryption_migrated == False)
+            .offset(offset)
+            .limit(chunk_size)
+            .all()
+        )  # noqa: E712
 
         if not clients:
             break
@@ -237,7 +257,12 @@ def migrate_clients(dry_run: bool = False, batch_size: int = 100):
             try:
                 db.session.flush()
                 db.session.commit()
-                logger.debug("Commit chunk %d-%d: %d clients", chunk_start, offset + len(clients), batch_count)
+                logger.debug(
+                    "Commit chunk %d-%d: %d clients",
+                    chunk_start,
+                    offset + len(clients),
+                    batch_count,
+                )
                 batch_count = 0
             except Exception as commit_error:
                 logger.error("Erreur commit chunk: %s", commit_error)
@@ -251,7 +276,10 @@ def migrate_clients(dry_run: bool = False, batch_size: int = 100):
             # Réinitialiser la connexion périodiquement (tous les 3 chunks)
             if (offset // chunk_size) % 3 == 0:
                 db.session.close()
-                logger.debug("Session DB fermée/réinitialisée après chunk %d", offset + len(clients))
+                logger.debug(
+                    "Session DB fermée/réinitialisée après chunk %d",
+                    offset + len(clients),
+                )
         except Exception as expunge_error:
             logger.warning("Erreur expunge_all (ignorée): %s", expunge_error)
 
@@ -279,15 +307,34 @@ def migrate_clients(dry_run: bool = False, batch_size: int = 100):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Migre les données existantes vers le chiffrement D2")
-    parser.add_argument("--dry-run", action="store_true", help="Test sans modifications (compte seulement)")
-    parser.add_argument("--batch-size", type=int, default=100, help="Taille du batch pour logging (défaut: 100)")
-    parser.add_argument("--users-only", action="store_true", help="Migrer uniquement les utilisateurs")
-    parser.add_argument("--clients-only", action="store_true", help="Migrer uniquement les clients")
+    parser = argparse.ArgumentParser(
+        description="Migre les données existantes vers le chiffrement D2"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Test sans modifications (compte seulement)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=100,
+        help="Taille du batch pour logging (défaut: 100)",
+    )
+    parser.add_argument(
+        "--users-only", action="store_true", help="Migrer uniquement les utilisateurs"
+    )
+    parser.add_argument(
+        "--clients-only", action="store_true", help="Migrer uniquement les clients"
+    )
 
     args = parser.parse_args()
 
-    logger.info("🚀 Démarrage du script de migration (dry_run=%s, batch_size=%d)", args.dry_run, args.batch_size)
+    logger.info(
+        "🚀 Démarrage du script de migration (dry_run=%s, batch_size=%d)",
+        args.dry_run,
+        args.batch_size,
+    )
 
     if args.dry_run:
         logger.info("🔍 Mode DRY-RUN : aucune modification ne sera effectuée")
@@ -296,7 +343,9 @@ def main():
     import os
 
     os.environ["SKIP_SOCKETIO"] = "true"
-    os.environ["SKIP_ROUTES_INIT"] = "true"  # Skip initialisation routes/handlers (évite blocage)
+    os.environ["SKIP_ROUTES_INIT"] = (
+        "true"  # Skip initialisation routes/handlers (évite blocage)
+    )
     os.environ["API_LEGACY_ENABLED"] = "false"  # Évite conflit /specs avec api_v1
 
     logger.info("🔧 Création de l'application Flask...")
@@ -306,7 +355,9 @@ def main():
         logger.debug("create_app() terminé avec succès")
         logger.info("✅ Application Flask créée, démarrage de la migration...")
     except SystemExit as e:
-        logger.error("❌ SystemExit détecté lors de la création de l'application: %s", e)
+        logger.error(
+            "❌ SystemExit détecté lors de la création de l'application: %s", e
+        )
         raise
     except KeyboardInterrupt:
         logger.info("⚠️ Interruption clavier lors de la création de l'application")
@@ -341,9 +392,14 @@ def main():
 
             logger.info("=" * 60)
             if args.dry_run:
-                logger.info("📊 DRY-RUN terminé : %d enregistrements seraient migrés", total_migrated)
+                logger.info(
+                    "📊 DRY-RUN terminé : %d enregistrements seraient migrés",
+                    total_migrated,
+                )
             else:
-                logger.info("✅ Migration terminée : %d enregistrements migrés", total_migrated)
+                logger.info(
+                    "✅ Migration terminée : %d enregistrements migrés", total_migrated
+                )
     except Exception as e:
         logger.exception("❌ Erreur lors de l'exécution de la migration: %s", e)
         raise
@@ -362,7 +418,9 @@ if __name__ == "__main__":
         logger.info("⚠️ Migration interrompue par l'utilisateur")
         sys.exit(1)
     except SystemExit as e:
-        logger.info("⚠️ SystemExit: code %s", e.code if hasattr(e, "code") else "inconnu")
+        logger.info(
+            "⚠️ SystemExit: code %s", e.code if hasattr(e, "code") else "inconnu"
+        )
         raise
     except Exception as e:
         logger.exception("❌ Erreur fatale lors de la migration: %s", e)

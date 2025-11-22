@@ -90,7 +90,9 @@ class WeatherService:
             weather_data = WeatherService._parse_weather_response(data)
 
             # Calculer weather_factor
-            weather_data["weather_factor"] = WeatherService._calculate_weather_factor(weather_data)
+            weather_data["weather_factor"] = WeatherService._calculate_weather_factor(
+                weather_data
+            )
 
             # Mettre en cache
             WeatherService._put_in_cache(cache_key, weather_data)
@@ -131,7 +133,9 @@ class WeatherService:
                 "temperature": main.get("temp", 15),
                 "feels_like": main.get("feels_like", 15),
                 "humidity": main.get("humidity", 50),
-                "main_condition": weather.get("main", "Clear"),  # Clear, Rain, Snow, etc.
+                "main_condition": weather.get(
+                    "main", "Clear"
+                ),  # Clear, Rain, Snow, etc.
                 "description": weather.get("description", ""),
                 "wind_speed": wind.get("speed", 0) * 3.6,  # m/s → km/h
                 "rain_1h": rain.get("1h", 0),  # mm

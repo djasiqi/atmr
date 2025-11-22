@@ -23,17 +23,30 @@ depends_on = None
 def upgrade():
     # ✅ PERF: Index pour rechercher les assignments par booking avec tri chronologique
     # Utilisé par: requêtes de tracking, historique des assignments
-    op.create_index("ix_assignment_booking_created", "assignment", ["booking_id", "created_at"], unique=False)
+    op.create_index(
+        "ix_assignment_booking_created",
+        "assignment",
+        ["booking_id", "created_at"],
+        unique=False,
+    )
 
     # ✅ PERF: Index composite pour filtrer assignments par dispatch_run et status
     # Utilisé par: affichage des résultats de dispatch, filtrage par statut
-    op.create_index("ix_assignment_dispatch_run_status", "assignment", ["dispatch_run_id", "status"], unique=False)
+    op.create_index(
+        "ix_assignment_dispatch_run_status",
+        "assignment",
+        ["dispatch_run_id", "status"],
+        unique=False,
+    )
 
     # ✅ PERF: Index composite optimisé pour requêtes booking
     # Remplace/complète les index existants pour queries multi-colonnes
     # Utilisé par: filtrage bookings par company, status et période
     op.create_index(
-        "ix_booking_status_scheduled_company", "booking", ["status", "scheduled_time", "company_id"], unique=False
+        "ix_booking_status_scheduled_company",
+        "booking",
+        ["status", "scheduled_time", "company_id"],
+        unique=False,
     )
 
 

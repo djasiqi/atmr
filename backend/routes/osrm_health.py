@@ -14,7 +14,9 @@ from services.unified_dispatch.osrm_cache_metrics import (
 logger = logging.getLogger(__name__)
 
 # Constantes pour éviter les valeurs magiques
-CACHE_HIT_RATE_DEGRADED_THRESHOLD = 0.5  # Seuil de hit rate pour considérer le cache comme dégradé
+CACHE_HIT_RATE_DEGRADED_THRESHOLD = (
+    0.5  # Seuil de hit rate pour considérer le cache comme dégradé
+)
 
 osrm_health_ns = Namespace("osrm", description="OSRM health and metrics", path="/osrm")
 
@@ -63,7 +65,10 @@ class OsrmHealth(Resource):
             status = "healthy"
             if cb_state == "OPEN":
                 status = "unhealthy"
-            elif cb_state == "HALF_OPEN" or cache_hit_rate < CACHE_HIT_RATE_DEGRADED_THRESHOLD:
+            elif (
+                cb_state == "HALF_OPEN"
+                or cache_hit_rate < CACHE_HIT_RATE_DEGRADED_THRESHOLD
+            ):
                 status = "degraded"
 
             # Timeout adaptatif config

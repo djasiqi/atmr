@@ -45,12 +45,17 @@ def _get_scoped_session(db_instance):
             engine = db_instance.session.get_bind()
 
         if engine is None:
-            logger.warning("[Apply] Impossible de créer scoped_session, utilisation de db.session")
+            logger.warning(
+                "[Apply] Impossible de créer scoped_session, utilisation de db.session"
+            )
             return db_instance.session
 
         return scoped_session(sessionmaker(bind=engine))
     except Exception as e:
-        logger.warning("[Apply] Erreur lors de la création de scoped_session: %s, utilisation de db.session", e)
+        logger.warning(
+            "[Apply] Erreur lors de la création de scoped_session: %s, utilisation de db.session",
+            e,
+        )
         # Dernier recours : utiliser la session principale
         return db_instance.session
 
@@ -152,7 +157,9 @@ def apply_assignments(
             db.session.commit()
         return result
     except Exception as e:
-        logger.exception("[Apply] Transaction failed for company_id=%s: %s", company_id, e)
+        logger.exception(
+            "[Apply] Transaction failed for company_id=%s: %s", company_id, e
+        )
         # Rollback automatique en cas d'erreur
         db.session.rollback()
         # ✅ FIX RC2: Expirer tous les objets après rollback pour forcer le rechargement
@@ -224,7 +231,9 @@ def _apply_assignments_inner(
     bookings_q = Booking.query.options(joinedload(Booking.driver)).filter(
         Booking.company_id == company_id, Booking.id.in_(booking_ids)
     )
-    drivers_q = Driver.query.filter(Driver.company_id == company_id, Driver.id.in_(driver_ids))
+    drivers_q = Driver.query.filter(
+        Driver.company_id == company_id, Driver.id.in_(driver_ids)
+    )
 
     # ✅ A2: Lock doux en lecture (read=True pour lock non-bloquant)
     dialect_name = db.session.bind.dialect.name if db.session.bind else ""
@@ -236,8 +245,12 @@ def _apply_assignments_inner(
         use_skip_locked = os.getenv("UD_APPLY_SKIP_LOCKED", "false").lower() == "true"
         # ✅ A2: Lock doux en lecture (lock partagé pour idempotence)
         # Note: avec_for_update(read=True) est un lock partagé PostgreSQL
-        bookings_q = bookings_q.with_for_update(nowait=False, of=Booking, skip_locked=use_skip_locked)
-        drivers_q = drivers_q.with_for_update(nowait=False, of=Driver, skip_locked=use_skip_locked)
+        bookings_q = bookings_q.with_for_update(
+            nowait=False, of=Booking, skip_locked=use_skip_locked
+        )
+        drivers_q = drivers_q.with_for_update(
+            nowait=False, of=Driver, skip_locked=use_skip_locked
+        )
 
     bookings = bookings_q.all()
     drivers = drivers_q.all()
@@ -266,7 +279,11 @@ def _apply_assignments_inner(
             # Essayer de flush la session pour voir les objets en attente
             db.session.flush()
             # ✅ FIX: Utiliser filter au lieu de filter_by pour plus de flexibilité
-            b = db.session.query(Booking).filter(Booking.id == b_id, Booking.company_id == company_id).first()
+            b = (
+                db.session.query(Booking)
+                .filter(Booking.id == b_id, Booking.company_id == company_id)
+                .first()
+            )
         if b is None:
             # ✅ FIX RC4: Logger plus d'infos pour debug
             logger.warning(
@@ -278,7 +295,11 @@ def _apply_assignments_inner(
             skipped[b_id] = "booking_not_found_or_wrong_company"
             continue
 
-        if b.status not in (BookingStatus.PENDING, BookingStatus.ACCEPTED, BookingStatus.ASSIGNED):
+        if b.status not in (
+            BookingStatus.PENDING,
+            BookingStatus.ACCEPTED,
+            BookingStatus.ASSIGNED,
+        ):
             skipped[b_id] = f"status_is_{b.status}"
             continue
 
@@ -302,7 +323,9 @@ def _apply_assignments_inner(
             "estimated_pickup_arrival": _aget(a, "estimated_pickup_arrival"),
             "estimated_dropoff_arrival": _aget(a, "estimated_dropoff_arrival"),
             # Priorité au dispatch_run_id passé en param
-            "dispatch_run_id": dispatch_run_id if dispatch_run_id is not None else _aget(a, "dispatch_run_id"),
+            "dispatch_run_id": dispatch_run_id
+            if dispatch_run_id is not None
+            else _aget(a, "dispatch_run_id"),
         }
 
         b_any = cast("Any", b)
@@ -310,7 +333,9 @@ def _apply_assignments_inner(
 
         cur_driver_id_raw = getattr(b_any, "driver_id", None)
         try:
-            cur_driver_id: int | None = int(cur_driver_id_raw) if cur_driver_id_raw is not None else None
+            cur_driver_id: int | None = (
+                int(cur_driver_id_raw) if cur_driver_id_raw is not None else None
+            )
         except Exception:
             cur_driver_id = None
 
@@ -321,7 +346,12 @@ def _apply_assignments_inner(
             skipped[b_id] = "already_assigned_same_driver"
             continue
 
-        if is_assigned and (cur_driver_id is not None) and (cur_driver_id != d_id) and (not allow_reassign):
+        if (
+            is_assigned
+            and (cur_driver_id is not None)
+            and (cur_driver_id != d_id)
+            and (not allow_reassign)
+        ):
             conflicts.append(b_id)
             skipped[b_id] = "reassign_blocked"
             continue
@@ -354,12 +384,16 @@ def _apply_assignments_inner(
             # Upsert côté Assignment (y compris ETA si fournies)
             if desired_assignments:
                 target_bids = list(desired_assignments.keys())
-                existing = Assignment.query.filter(Assignment.booking_id.in_(target_bids)).all()
+                existing = Assignment.query.filter(
+                    Assignment.booking_id.in_(target_bids)
+                ).all()
                 by_booking: Dict[int, Assignment] = {}
                 for a0 in existing:
                     cur = by_booking.get(a0.booking_id)
                     if cur is None or (
-                        hasattr(a0, "created_at") and hasattr(cur, "created_at") and a0.created_at > cur.created_at
+                        hasattr(a0, "created_at")
+                        and hasattr(cur, "created_at")
+                        and a0.created_at > cur.created_at
                     ):
                         by_booking[a0.booking_id] = a0
 
@@ -380,8 +414,12 @@ def _apply_assignments_inner(
                         }
 
                         # ETA optionnels
-                        eta_pu = payload.get("estimated_pickup_arrival") or payload.get("eta_pickup_at")
-                        eta_do = payload.get("estimated_dropoff_arrival") or payload.get("eta_dropoff_at")
+                        eta_pu = payload.get("estimated_pickup_arrival") or payload.get(
+                            "eta_pickup_at"
+                        )
+                        eta_do = payload.get(
+                            "estimated_dropoff_arrival"
+                        ) or payload.get("eta_dropoff_at")
                         if eta_pu is not None:
                             new_assignment["eta_pickup_at"] = eta_pu
                         if eta_do is not None:
@@ -403,8 +441,12 @@ def _apply_assignments_inner(
                         }
 
                         # ETA optionnels
-                        eta_pu = payload.get("estimated_pickup_arrival") or payload.get("eta_pickup_at")
-                        eta_do = payload.get("estimated_dropoff_arrival") or payload.get("eta_dropoff_at")
+                        eta_pu = payload.get("estimated_pickup_arrival") or payload.get(
+                            "eta_pickup_at"
+                        )
+                        eta_do = payload.get(
+                            "estimated_dropoff_arrival"
+                        ) or payload.get("eta_dropoff_at")
                         if eta_pu is not None:
                             update_assignment["eta_pickup_at"] = eta_pu
                         if eta_do is not None:
@@ -430,15 +472,22 @@ def _apply_assignments_inner(
                                 stmt = (
                                     insert(Assignment)
                                     .values(**assignment)
-                                    .on_conflict_do_nothing(constraint="uq_assignment_run_booking")
+                                    .on_conflict_do_nothing(
+                                        constraint="uq_assignment_run_booking"
+                                    )
                                 )
                                 db.session.execute(stmt)
                             except Exception as conflict_err:
                                 # ✅ A2: Compter les conflits de contrainte unique
-                                if "unique" in str(conflict_err).lower() or "uq_assignment" in str(conflict_err):
+                                if "unique" in str(
+                                    conflict_err
+                                ).lower() or "uq_assignment" in str(conflict_err):
                                     conflicts_count += 1
                                     increment_db_conflict_counter()
-                                    logger.debug("[Apply] Conflit unique ignoré (idempotence): %s", conflict_err)
+                                    logger.debug(
+                                        "[Apply] Conflit unique ignoré (idempotence): %s",
+                                        conflict_err,
+                                    )
                                 else:
                                     raise
 
@@ -449,24 +498,42 @@ def _apply_assignments_inner(
                                 conflicts_count,
                             )
                         else:
-                            logger.info("[Apply] UPSERT inserted %d new assignments", len(new_assignments))
+                            logger.info(
+                                "[Apply] UPSERT inserted %d new assignments",
+                                len(new_assignments),
+                            )
                     except Exception as upsert_err:
                         # Fallback sur bulk_insert si ON CONFLICT non supporté
-                        logger.warning("[Apply] ON CONFLICT not supported, falling back to bulk_insert: %s", upsert_err)
-                        db.session.bulk_insert_mappings(cast("Any", Assignment), new_assignments)
+                        logger.warning(
+                            "[Apply] ON CONFLICT not supported, falling back to bulk_insert: %s",
+                            upsert_err,
+                        )
+                        db.session.bulk_insert_mappings(
+                            cast("Any", Assignment), new_assignments
+                        )
 
                 if update_assignments:
-                    db.session.bulk_update_mappings(cast("Any", Assignment), update_assignments)
-                    logger.info("[Apply] Bulk updated %d existing assignments", len(update_assignments))
+                    db.session.bulk_update_mappings(
+                        cast("Any", Assignment), update_assignments
+                    )
+                    logger.info(
+                        "[Apply] Bulk updated %d existing assignments",
+                        len(update_assignments),
+                    )
             else:
-                logger.info("[Apply] No desired assignments to upsert (company_id=%s)", company_id)
+                logger.info(
+                    "[Apply] No desired assignments to upsert (company_id=%s)",
+                    company_id,
+                )
 
         # ✅ Commit le savepoint interne (begin_nested)
         # La transaction principale sera commitée par apply_assignments()
         db.session.commit()
 
     except Exception:
-        logger.exception("[Apply] DB error while applying assignments (company_id=%s)", company_id)
+        logger.exception(
+            "[Apply] DB error while applying assignments (company_id=%s)", company_id
+        )
         # Rollback du savepoint en cas d'erreur
         # La transaction principale sera rollbackée par apply_assignments()
         db.session.rollback()
@@ -474,10 +541,17 @@ def _apply_assignments_inner(
         db.session.expire_all()
         raise  # Propager l'erreur pour que apply_assignments() gère le rollback global
     if dispatch_run_id:
-        logger.info("[Apply] Linked %d assignments to dispatch_run_id=%s", len(desired_assignments), dispatch_run_id)
+        logger.info(
+            "[Apply] Linked %d assignments to dispatch_run_id=%s",
+            len(desired_assignments),
+            dispatch_run_id,
+        )
 
     if not updates:
-        logger.info("[Apply] No booking updates (company_id=%s) - assignments/ETA refreshed only.", company_id)
+        logger.info(
+            "[Apply] No booking updates (company_id=%s) - assignments/ETA refreshed only.",
+            company_id,
+        )
 
     result = {
         "applied": applied_ids,
@@ -489,8 +563,12 @@ def _apply_assignments_inner(
     if skipped:
         for skipped_id, reason in skipped.items():
             booking_obj = booking_map.get(skipped_id)
-            scheduled_time = getattr(booking_obj, "scheduled_time", None) if booking_obj else None
-            time_confirmed = getattr(booking_obj, "time_confirmed", None) if booking_obj else None
+            scheduled_time = (
+                getattr(booking_obj, "scheduled_time", None) if booking_obj else None
+            )
+            time_confirmed = (
+                getattr(booking_obj, "time_confirmed", None) if booking_obj else None
+            )
             is_return = getattr(booking_obj, "is_return", None) if booking_obj else None
             logger.warning(
                 "[Apply] Skipped booking_id=%s reason=%s scheduled_time=%s time_confirmed=%s is_return=%s",
@@ -524,7 +602,10 @@ def _apply_assignments_inner(
             session = _get_scoped_session(db)
             try:
                 notif_bookings = {
-                    b.id: b for b in session.query(Booking).filter(Booking.id.in_(notif_booking_ids)).all()
+                    b.id: b
+                    for b in session.query(Booking)
+                    .filter(Booking.id.in_(notif_booking_ids))
+                    .all()
                 }
 
                 from services.notification_service import notify_driver_new_booking
@@ -544,5 +625,7 @@ def _apply_assignments_inner(
             finally:
                 session.close()
     except Exception:
-        logger.exception("[Apply] driver notifications failed (company_id=%s)", company_id)
+        logger.exception(
+            "[Apply] driver notifications failed (company_id=%s)", company_id
+        )
     return result

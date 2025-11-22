@@ -27,7 +27,10 @@ class TestRLLogger:
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés."""
         logger = RLLogger(
-            redis_key_prefix="custom:rl", max_redis_logs=0.1000, enable_db_logging=False, enable_redis_logging=False
+            redis_key_prefix="custom:rl",
+            max_redis_logs=0.1000,
+            enable_db_logging=False,
+            enable_redis_logging=False,
         )
 
         assert logger.redis_key_prefix == "custom:rl"
@@ -106,7 +109,9 @@ class TestRLLogger:
         reward = 1.5
 
         # Test sans erreur
-        result = logger.log_decision(state=state, action=action, q_values=q_values, reward=reward)
+        result = logger.log_decision(
+            state=state, action=action, q_values=q_values, reward=reward
+        )
 
         assert result is True
 
@@ -121,7 +126,13 @@ class TestRLLogger:
         reward = 1.5
         metadata = {"test": "data", "version": "1.0"}
 
-        result = logger.log_decision(state=state, action=action, q_values=q_values, reward=reward, metadata=metadata)
+        result = logger.log_decision(
+            state=state,
+            action=action,
+            q_values=q_values,
+            reward=reward,
+            metadata=metadata,
+        )
 
         assert result is True
 
@@ -137,7 +148,11 @@ class TestRLLogger:
         constraints = {"max_delay": 30, "capacity": 4}
 
         result = logger.log_decision(
-            state=state, action=action, q_values=q_values, reward=reward, constraints=constraints
+            state=state,
+            action=action,
+            q_values=q_values,
+            reward=reward,
+            constraints=constraints,
         )
 
         assert result is True
@@ -154,7 +169,11 @@ class TestRLLogger:
         latency_ms = 25.5
 
         result = logger.log_decision(
-            state=state, action=action, q_values=q_values, reward=reward, latency_ms=latency_ms
+            state=state,
+            action=action,
+            q_values=q_values,
+            reward=reward,
+            latency_ms=latency_ms,
         )
 
         assert result is True
@@ -169,7 +188,9 @@ class TestRLLogger:
         q_values = np.array([0.1])
         reward = 0.0
 
-        result = logger.log_decision(state=state, action=action, q_values=q_values, reward=reward)
+        result = logger.log_decision(
+            state=state, action=action, q_values=q_values, reward=reward
+        )
 
         assert result is True
 
@@ -183,7 +204,9 @@ class TestRLLogger:
         q_values = np.random.rand(100)
         reward = 100.0
 
-        result = logger.log_decision(state=state, action=action, q_values=q_values, reward=reward)
+        result = logger.log_decision(
+            state=state, action=action, q_values=q_values, reward=reward
+        )
 
         assert result is True
 
@@ -197,7 +220,9 @@ class TestRLLogger:
         q_values = np.array([0.1, np.nan, 0.9, 0.3])
         reward = np.nan
 
-        result = logger.log_decision(state=state, action=action, q_values=q_values, reward=reward)
+        result = logger.log_decision(
+            state=state, action=action, q_values=q_values, reward=reward
+        )
 
         assert result is True
 
@@ -211,7 +236,9 @@ class TestRLLogger:
         q_values = np.array([0.1, np.inf, 0.9, 0.3])
         reward = np.inf
 
-        result = logger.log_decision(state=state, action=action, q_values=q_values, reward=reward)
+        result = logger.log_decision(
+            state=state, action=action, q_values=q_values, reward=reward
+        )
 
         assert result is True
 
@@ -225,7 +252,9 @@ class TestRLLogger:
         q_values = np.array([-0.1, -0.2, -0.9, -0.3])
         reward = -10.0
 
-        result = logger.log_decision(state=state, action=action, q_values=q_values, reward=reward)
+        result = logger.log_decision(
+            state=state, action=action, q_values=q_values, reward=reward
+        )
 
         assert result is True
 

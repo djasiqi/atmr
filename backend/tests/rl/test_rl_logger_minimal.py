@@ -22,7 +22,10 @@ class TestRLLoggerMinimal:
     def test_init_with_custom_params(self):
         """Test initialisation avec paramètres personnalisés"""
         logger = RLLogger(
-            redis_key_prefix="custom_prefix", max_redis_logs=0.500, enable_db_logging=False, enable_redis_logging=False
+            redis_key_prefix="custom_prefix",
+            max_redis_logs=0.500,
+            enable_db_logging=False,
+            enable_redis_logging=False,
         )
 
         assert logger.redis_key_prefix == "custom_prefix"
@@ -70,7 +73,16 @@ class TestRLLoggerMinimal:
 
         # Mock les méthodes de logging pour éviter les erreurs DB/Redis
         with patch.object(logger, "_log_to_redis"), patch.object(logger, "_log_to_db"):
-            logger.log_decision(state, action, q_values, reward, latency_ms, model_version, constraints, metadata)
+            logger.log_decision(
+                state,
+                action,
+                q_values,
+                reward,
+                latency_ms,
+                model_version,
+                constraints,
+                metadata,
+            )
 
             # Vérifier que les méthodes ont été appelées
             logger._log_to_redis.assert_called_once()
@@ -91,7 +103,16 @@ class TestRLLoggerMinimal:
 
         # Mock les méthodes de logging
         with patch.object(logger, "_log_to_redis"), patch.object(logger, "_log_to_db"):
-            logger.log_decision(state, action, q_values, reward, latency_ms, model_version, constraints, metadata)
+            logger.log_decision(
+                state,
+                action,
+                q_values,
+                reward,
+                latency_ms,
+                model_version,
+                constraints,
+                metadata,
+            )
 
             # Devrait fonctionner sans erreur
             logger._log_to_redis.assert_called_once()
@@ -112,7 +133,16 @@ class TestRLLoggerMinimal:
 
         # Mock les méthodes de logging
         with patch.object(logger, "_log_to_redis"), patch.object(logger, "_log_to_db"):
-            logger.log_decision(state, action, q_values, reward, latency_ms, model_version, constraints, metadata)
+            logger.log_decision(
+                state,
+                action,
+                q_values,
+                reward,
+                latency_ms,
+                model_version,
+                constraints,
+                metadata,
+            )
 
             # Devrait fonctionner sans erreur
             logger._log_to_redis.assert_called_once()
@@ -133,7 +163,16 @@ class TestRLLoggerMinimal:
 
         # Mock les méthodes de logging
         with patch.object(logger, "_log_to_redis"), patch.object(logger, "_log_to_db"):
-            logger.log_decision(state, action, q_values, reward, latency_ms, model_version, constraints, metadata)
+            logger.log_decision(
+                state,
+                action,
+                q_values,
+                reward,
+                latency_ms,
+                model_version,
+                constraints,
+                metadata,
+            )
 
             # Devrait fonctionner sans erreur
             logger._log_to_redis.assert_called_once()
@@ -154,7 +193,16 @@ class TestRLLoggerMinimal:
 
         # Mock les méthodes de logging
         with patch.object(logger, "_log_to_redis"), patch.object(logger, "_log_to_db"):
-            logger.log_decision(state, action, q_values, reward, latency_ms, model_version, constraints, metadata)
+            logger.log_decision(
+                state,
+                action,
+                q_values,
+                reward,
+                latency_ms,
+                model_version,
+                constraints,
+                metadata,
+            )
 
             # Devrait fonctionner sans erreur
             logger._log_to_redis.assert_called_once()
@@ -175,7 +223,16 @@ class TestRLLoggerMinimal:
 
         # Mock les méthodes de logging
         with patch.object(logger, "_log_to_redis"), patch.object(logger, "_log_to_db"):
-            logger.log_decision(state, action, q_values, reward, latency_ms, model_version, constraints, metadata)
+            logger.log_decision(
+                state,
+                action,
+                q_values,
+                reward,
+                latency_ms,
+                model_version,
+                constraints,
+                metadata,
+            )
 
             # Devrait fonctionner sans erreur
             logger._log_to_redis.assert_called_once()
@@ -196,7 +253,16 @@ class TestRLLoggerMinimal:
 
         # Mock les méthodes de logging
         with patch.object(logger, "_log_to_redis"), patch.object(logger, "_log_to_db"):
-            logger.log_decision(state, action, q_values, reward, latency_ms, model_version, constraints, metadata)
+            logger.log_decision(
+                state,
+                action,
+                q_values,
+                reward,
+                latency_ms,
+                model_version,
+                constraints,
+                metadata,
+            )
 
             # Devrait fonctionner sans erreur
             logger._log_to_redis.assert_called_once()
@@ -250,7 +316,16 @@ class TestRLLoggerMinimal:
             patch.object(logger, "_log_to_db", side_effect=Exception("DB error")),
         ):
             # Devrait gérer l'exception sans planter
-            logger.log_decision(state, action, q_values, reward, latency_ms, model_version, constraints, metadata)
+            logger.log_decision(
+                state,
+                action,
+                q_values,
+                reward,
+                latency_ms,
+                model_version,
+                constraints,
+                metadata,
+            )
 
             # Les méthodes devraient avoir été appelées malgré l'exception
             logger._log_to_redis.assert_called_once()
@@ -270,8 +345,20 @@ class TestRLLoggerMinimal:
         metadata = {}
 
         # Mock les méthodes pour vérifier qu'elles ne sont pas appelées
-        with patch.object(logger, "_log_to_redis") as mock_redis, patch.object(logger, "_log_to_db") as mock_db:
-            logger.log_decision(state, action, q_values, reward, latency_ms, model_version, constraints, metadata)
+        with (
+            patch.object(logger, "_log_to_redis") as mock_redis,
+            patch.object(logger, "_log_to_db") as mock_db,
+        ):
+            logger.log_decision(
+                state,
+                action,
+                q_values,
+                reward,
+                latency_ms,
+                model_version,
+                constraints,
+                metadata,
+            )
 
             # Les méthodes ne devraient pas être appelées
             mock_redis.assert_not_called()

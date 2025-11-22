@@ -304,7 +304,9 @@ class TestImprovedDQNAgent:
         agent.epsilon = 0.0
 
         # Mock pour provoquer une exception
-        with patch.object(agent.q_network, "forward", side_effect=Exception("Network error")):
+        with patch.object(
+            agent.q_network, "forward", side_effect=Exception("Network error")
+        ):
             state = np.random.rand(agent.state_dim)
 
             # L'exception devrait être propagée car elle n'est pas gérée dans select_action

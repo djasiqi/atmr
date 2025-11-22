@@ -41,11 +41,17 @@ class Invoice(db.Model):
     __tablename__ = "invoices"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id: Mapped[int] = mapped_column(ForeignKey("company.id"), nullable=False, index=True)
-    client_id: Mapped[int] = mapped_column(ForeignKey("client.id"), nullable=False, index=True)
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("company.id"), nullable=False, index=True
+    )
+    client_id: Mapped[int] = mapped_column(
+        ForeignKey("client.id"), nullable=False, index=True
+    )
 
     # Facturation tierce (Third-Party Billing)
-    bill_to_client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("client.id"), nullable=True, index=True)
+    bill_to_client_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("client.id"), nullable=True, index=True
+    )
 
     # Période de facturation
     period_month: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-12
@@ -56,30 +62,65 @@ class Invoice(db.Model):
     currency = Column(String(3), default="CHF", nullable=False)
 
     # Montants
-    subtotal_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
-    late_fee_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
-    reminder_fee_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
-    vat_total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    subtotal_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )
+    late_fee_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )
+    reminder_fee_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )
+    vat_total_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )
     vat_breakdown = Column(JSONB, nullable=True)
-    total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
-    amount_paid: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
-    balance_due: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    total_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )
+    amount_paid: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )
+    balance_due: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )
 
     # Dates clés
     issued_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=False)
-    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    due_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    paid_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
     # Statut
-    status = Column(SAEnum(InvoiceStatus, name="invoice_status"), nullable=False, default=InvoiceStatus.DRAFT)
+    status = Column(
+        SAEnum(InvoiceStatus, name="invoice_status"),
+        nullable=False,
+        default=InvoiceStatus.DRAFT,
+    )
 
     # Rappels
     reminder_level = Column(Integer, nullable=False, default=0)  # 0 = aucun, 1, 2, 3
-    last_reminder_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_reminder_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Artifacts
     pdf_url: Mapped[str] = mapped_column(String(500), nullable=True)
@@ -88,15 +129,27 @@ class Invoice(db.Model):
 
     # Relations
     company = relationship("Company", backref="invoices")
-    client = relationship("Client", foreign_keys=[client_id], backref="service_invoices")
-    bill_to_client = relationship("Client", foreign_keys=[bill_to_client_id], backref="billing_invoices")
-    lines = relationship("InvoiceLine", back_populates="invoice", cascade="all, delete-orphan")
-    payments = relationship("InvoicePayment", back_populates="invoice", cascade="all, delete-orphan")
-    reminders = relationship("InvoiceReminder", back_populates="invoice", cascade="all, delete-orphan")
+    client = relationship(
+        "Client", foreign_keys=[client_id], backref="service_invoices"
+    )
+    bill_to_client = relationship(
+        "Client", foreign_keys=[bill_to_client_id], backref="billing_invoices"
+    )
+    lines = relationship(
+        "InvoiceLine", back_populates="invoice", cascade="all, delete-orphan"
+    )
+    payments = relationship(
+        "InvoicePayment", back_populates="invoice", cascade="all, delete-orphan"
+    )
+    reminders = relationship(
+        "InvoiceReminder", back_populates="invoice", cascade="all, delete-orphan"
+    )
 
     # Index et contraintes
     __table_args__ = (
-        UniqueConstraint("company_id", "invoice_number", name="uq_company_invoice_number"),
+        UniqueConstraint(
+            "company_id", "invoice_number", name="uq_company_invoice_number"
+        ),
         Index("ix_invoice_company_period", "company_id", "period_year", "period_month"),
         Index("ix_invoice_status", "company_id", "status"),
         Index("ix_invoice_due_date", "due_date"),
@@ -112,7 +165,11 @@ class Invoice(db.Model):
     @property
     def is_overdue(self):
         """Vérifie si la facture est en retard."""
-        return self.balance_due > 0 and self.due_date is not None and datetime.now(UTC) > self.due_date
+        return (
+            self.balance_due > 0
+            and self.due_date is not None
+            and datetime.now(UTC) > self.due_date
+        )
 
     def update_balance(self):
         """Met à jour le solde et le statut basé sur les paiements."""
@@ -189,8 +246,12 @@ class Invoice(db.Model):
                 "username": getattr(self.client.user, "username", "")
                 if hasattr(self.client, "user") and self.client.user
                 else "",
-                "is_institution": _as_bool(self.client.is_institution) if self.client else False,
-                "institution_name": self.client.institution_name if self.client else None,
+                "is_institution": _as_bool(self.client.is_institution)
+                if self.client
+                else False,
+                "institution_name": self.client.institution_name
+                if self.client
+                else None,
             }
             if self.client
             else None,
@@ -212,9 +273,15 @@ class Invoice(db.Model):
             }
             if self.bill_to_client
             else None,
-            "lines": [line.to_dict() for line in self.lines] if hasattr(self, "lines") else [],
-            "payments": [payment.to_dict() for payment in self.payments] if hasattr(self, "payments") else [],
-            "reminders": [reminder.to_dict() for reminder in self.reminders] if hasattr(self, "reminders") else [],
+            "lines": [line.to_dict() for line in self.lines]
+            if hasattr(self, "lines")
+            else [],
+            "payments": [payment.to_dict() for payment in self.payments]
+            if hasattr(self, "payments")
+            else [],
+            "reminders": [reminder.to_dict() for reminder in self.reminders]
+            if hasattr(self, "reminders")
+            else [],
         }
 
 
@@ -226,22 +293,36 @@ class InvoiceLine(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), nullable=False)
 
-    type: Mapped[InvoiceLineType] = mapped_column(SAEnum(InvoiceLineType, name="invoice_line_type"), nullable=False)
+    type: Mapped[InvoiceLineType] = mapped_column(
+        SAEnum(InvoiceLineType, name="invoice_line_type"), nullable=False
+    )
     description: Mapped[str] = mapped_column(String(500), nullable=False)
     qty: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=1)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     vat_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
-    vat_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
-    total_with_vat: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    vat_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )
+    total_with_vat: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )
     adjustment_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Optionnel : tracer la source (réservation)
-    reservation_id = Column(Integer, ForeignKey("booking.id", name="fk_invoice_line_reservation"), nullable=True)
+    reservation_id = Column(
+        Integer,
+        ForeignKey("booking.id", name="fk_invoice_line_reservation"),
+        nullable=True,
+    )
 
     # Relations
     invoice = relationship("Invoice", back_populates="lines")
-    reservation = relationship("Booking", foreign_keys=[reservation_id], backref="invoice_lines_for_reservation")
+    reservation = relationship(
+        "Booking",
+        foreign_keys=[reservation_id],
+        backref="invoice_lines_for_reservation",
+    )
 
     @override
     def __repr__(self):
@@ -276,7 +357,11 @@ class InvoicePayment(db.Model):
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     paid_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
     method = Column(
-        SAEnum(PaymentMethod, name="payment_method", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        SAEnum(
+            PaymentMethod,
+            name="payment_method",
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
     )
     reference: Mapped[str] = mapped_column(String(100), nullable=True)
@@ -309,9 +394,13 @@ class InvoiceReminder(db.Model):
     invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), nullable=False)
 
     level: Mapped[int] = mapped_column(Integer, nullable=False)  # 1, 2, 3
-    added_fee: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    added_fee: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )
     generated_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     pdf_url: Mapped[str] = mapped_column(String(500), nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -342,16 +431,30 @@ class CompanyBillingSettings(db.Model):
     __tablename__ = "company_billing_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id: Mapped[int] = mapped_column(ForeignKey("company.id"), nullable=False, unique=True)
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("company.id"), nullable=False, unique=True
+    )
 
     # Délais et frais
-    payment_terms_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=10)
-    overdue_fee: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True, default=15)
-    reminder1_fee: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True, default=0)
-    reminder2_fee: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True, default=40)
-    reminder3_fee: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True, default=0)
+    payment_terms_days: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, default=10
+    )
+    overdue_fee: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True, default=15
+    )
+    reminder1_fee: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True, default=0
+    )
+    reminder2_fee: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True, default=40
+    )
+    reminder3_fee: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True, default=0
+    )
     vat_applicable = Column(Boolean, nullable=False, default=True)
-    vat_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True, default=Decimal("7.7"))
+    vat_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(5, 2), nullable=True, default=Decimal("7.7")
+    )
     vat_label: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     vat_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
@@ -371,7 +474,9 @@ class CompanyBillingSettings(db.Model):
     email_sender: Mapped[str] = mapped_column(String(200), nullable=True)
 
     # Format de numérotation
-    invoice_number_format = Column(String(50), nullable=False, default="{PREFIX}-{YYYY}-{MM}-{SEQ4}")
+    invoice_number_format = Column(
+        String(50), nullable=False, default="{PREFIX}-{YYYY}-{MM}-{SEQ4}"
+    )
     invoice_prefix = Column(String(10), nullable=False, default="EM")
 
     # Informations bancaires
@@ -402,10 +507,18 @@ class CompanyBillingSettings(db.Model):
             "id": self.id,
             "company_id": self.company_id,
             "payment_terms_days": self.payment_terms_days,
-            "overdue_fee": float(self.overdue_fee) if self.overdue_fee is not None else None,
-            "reminder1_fee": float(self.reminder1_fee) if self.reminder1_fee is not None else None,
-            "reminder2_fee": float(self.reminder2_fee) if self.reminder2_fee is not None else None,
-            "reminder3_fee": float(self.reminder3_fee) if self.reminder3_fee is not None else None,
+            "overdue_fee": float(self.overdue_fee)
+            if self.overdue_fee is not None
+            else None,
+            "reminder1_fee": float(self.reminder1_fee)
+            if self.reminder1_fee is not None
+            else None,
+            "reminder2_fee": float(self.reminder2_fee)
+            if self.reminder2_fee is not None
+            else None,
+            "reminder3_fee": float(self.reminder3_fee)
+            if self.reminder3_fee is not None
+            else None,
             "reminder_schedule_days": self.reminder_schedule_days,
             "auto_reminders_enabled": self.auto_reminders_enabled,
             "email_sender": self.email_sender,
@@ -433,7 +546,9 @@ class InvoiceSequence(db.Model):
     __tablename__ = "invoice_sequences"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id: Mapped[int] = mapped_column(Integer, ForeignKey("company.id"), nullable=False)
+    company_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("company.id"), nullable=False
+    )
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     month: Mapped[int] = mapped_column(Integer, nullable=False)
     sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -442,7 +557,9 @@ class InvoiceSequence(db.Model):
     company = relationship("Company", backref="invoice_sequences")
 
     # Contrainte d'unicité
-    __table_args__ = (UniqueConstraint("company_id", "year", "month", name="uq_company_year_month"),)
+    __table_args__ = (
+        UniqueConstraint("company_id", "year", "month", name="uq_company_year_month"),
+    )
 
     @override
     def __repr__(self):

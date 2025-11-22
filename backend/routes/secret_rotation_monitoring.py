@@ -35,7 +35,9 @@ rotation_item_model = secret_rotation_ns.model(
     "RotationItem",
     {
         "id": fields.Integer(description="ID de la rotation"),
-        "secret_type": fields.String(description="Type de secret (jwt, encryption, flask_secret_key)"),
+        "secret_type": fields.String(
+            description="Type de secret (jwt, encryption, flask_secret_key)"
+        ),
         "status": fields.String(description="Statut (success, error, skipped)"),
         "rotated_at": fields.String(description="Date de rotation (ISO 8601)"),
         "environment": fields.String(description="Environnement (dev, prod, testing)"),
@@ -48,7 +50,9 @@ rotation_item_model = secret_rotation_ns.model(
 rotation_history_model = secret_rotation_ns.model(
     "RotationHistory",
     {
-        "rotations": fields.List(fields.Nested(rotation_item_model), description="Liste des rotations"),
+        "rotations": fields.List(
+            fields.Nested(rotation_item_model), description="Liste des rotations"
+        ),
         "total": fields.Integer(description="Nombre total de rotations"),
         "page": fields.Integer(description="Page actuelle (basé sur offset)"),
         "per_page": fields.Integer(description="Nombre d'éléments par page"),
@@ -62,8 +66,12 @@ rotation_stats_model = secret_rotation_ns.model(
         "success_count": fields.Integer(description="Nombre de rotations réussies"),
         "error_count": fields.Integer(description="Nombre d'erreurs"),
         "skipped_count": fields.Integer(description="Nombre de rotations ignorées"),
-        "by_type": fields.Raw(description="Statistiques par type de secret (jwt, encryption, flask_secret_key)"),
-        "last_rotations": fields.Raw(description="Date de dernière rotation par type (ISO 8601)"),
+        "by_type": fields.Raw(
+            description="Statistiques par type de secret (jwt, encryption, flask_secret_key)"
+        ),
+        "last_rotations": fields.Raw(
+            description="Date de dernière rotation par type (ISO 8601)"
+        ),
     },
 )
 
@@ -71,9 +79,14 @@ last_rotation_model = secret_rotation_ns.model(
     "LastRotation",
     {
         "secret_type": fields.String(description="Type de secret"),
-        "rotation": fields.Nested(rotation_item_model, allow_null=True, description="Dernière rotation ou null"),
+        "rotation": fields.Nested(
+            rotation_item_model,
+            allow_null=True,
+            description="Dernière rotation ou null",
+        ),
         "days_since_last": fields.Integer(
-            allow_null=True, description="Nombre de jours depuis la dernière rotation réussie"
+            allow_null=True,
+            description="Nombre de jours depuis la dernière rotation réussie",
         ),
     },
 )
@@ -144,8 +157,13 @@ class RotationHistory(Resource):
             }, 200
 
         except Exception as e:
-            logger.exception("[SecretRotationAPI] Erreur récupération historique: %s", e)
-            return {"error": "Erreur lors de la récupération de l'historique", "details": str(e)}, 500
+            logger.exception(
+                "[SecretRotationAPI] Erreur récupération historique: %s", e
+            )
+            return {
+                "error": "Erreur lors de la récupération de l'historique",
+                "details": str(e),
+            }, 500
 
 
 @secret_rotation_ns.route("/stats")
@@ -165,8 +183,13 @@ class RotationStats(Resource):
             return stats, 200
 
         except Exception as e:
-            logger.exception("[SecretRotationAPI] Erreur récupération statistiques: %s", e)
-            return {"error": "Erreur lors de la récupération des statistiques", "details": str(e)}, 500
+            logger.exception(
+                "[SecretRotationAPI] Erreur récupération statistiques: %s", e
+            )
+            return {
+                "error": "Erreur lors de la récupération des statistiques",
+                "details": str(e),
+            }, 500
 
 
 @secret_rotation_ns.route("/last")
@@ -178,7 +201,9 @@ class LastRotation(Resource):
             "environment": "Filtrer par environnement (dev, prod, testing)",
         },
     )
-    @secret_rotation_ns.response(200, "Succès", fields.List(fields.Nested(last_rotation_model)))
+    @secret_rotation_ns.response(
+        200, "Succès", fields.List(fields.Nested(last_rotation_model))
+    )
     @secret_rotation_ns.response(401, "Non autorisé")
     @secret_rotation_ns.response(403, "Accès refusé (admin uniquement)")
     @jwt_required()
@@ -192,7 +217,9 @@ class LastRotation(Resource):
             if secret_type:
                 # Retourner pour un type spécifique
                 last = get_last_rotation(secret_type, environment=environment)
-                days_since = get_days_since_last_rotation(secret_type, environment=environment)
+                days_since = get_days_since_last_rotation(
+                    secret_type, environment=environment
+                )
 
                 return [
                     {
@@ -219,5 +246,10 @@ class LastRotation(Resource):
             return result, 200
 
         except Exception as e:
-            logger.exception("[SecretRotationAPI] Erreur récupération dernière rotation: %s", e)
-            return {"error": "Erreur lors de la récupération de la dernière rotation", "details": str(e)}, 500
+            logger.exception(
+                "[SecretRotationAPI] Erreur récupération dernière rotation: %s", e
+            )
+            return {
+                "error": "Erreur lors de la récupération de la dernière rotation",
+                "details": str(e),
+            }, 500

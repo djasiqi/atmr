@@ -76,13 +76,22 @@ class Company(db.Model):
     billing_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     user_id = Column(
-        Integer, ForeignKey("user.id", ondelete="CASCADE", name="fk_company_user"), nullable=False, index=True
+        Integer,
+        ForeignKey("user.id", ondelete="CASCADE", name="fk_company_user"),
+        nullable=False,
+        index=True,
     )
     is_approved = Column(Boolean, nullable=False, server_default="false")
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     service_area: Mapped[str] = mapped_column(String(200), nullable=True)
-    max_daily_bookings: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, server_default="50")
-    accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    max_daily_bookings: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, server_default="50"
+    )
+    accepted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     dispatch_enabled = Column(Boolean, nullable=False, server_default="false")
     is_partner = Column(Boolean, nullable=False, server_default="false")
     logo_url: Mapped[str] = mapped_column(String(255), nullable=True)
@@ -96,7 +105,9 @@ class Company(db.Model):
         index=True,
         comment="Mode de fonctionnement du dispatch: manual, semi_auto, fully_auto",
     )
-    autonomous_config = Column(Text, nullable=True, comment="Configuration JSON pour le dispatch autonome")
+    autonomous_config = Column(
+        Text, nullable=True, comment="Configuration JSON pour le dispatch autonome"
+    )
 
     # Relations
     user = relationship("User", back_populates="company", passive_deletes=True)
@@ -116,18 +127,35 @@ class Company(db.Model):
     )
     drivers = relationship("Driver", back_populates="company", passive_deletes=True)
     dispatch_runs: Mapped[List[DispatchRun]] = relationship(
-        "DispatchRun", back_populates="company", cascade="all, delete-orphan", passive_deletes=True
+        "DispatchRun",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     dispatch_metrics: Mapped[List[DispatchMetrics]] = relationship(
-        "DispatchMetrics", back_populates="company", cascade="all, delete-orphan", passive_deletes=True
+        "DispatchMetrics",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     daily_stats: Mapped[List[DailyStats]] = relationship(
-        "DailyStats", back_populates="company", cascade="all, delete-orphan", passive_deletes=True
+        "DailyStats",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     bookings = relationship(
-        "Booking", back_populates="company", foreign_keys="Booking.company_id", passive_deletes=True
+        "Booking",
+        back_populates="company",
+        foreign_keys="Booking.company_id",
+        passive_deletes=True,
     )
-    vehicles = relationship("Vehicle", back_populates="company", cascade="all, delete-orphan", passive_deletes=True)
+    vehicles = relationship(
+        "Vehicle",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     @property
     def serialize(self):
@@ -158,9 +186,13 @@ class Company(db.Model):
             "user_id": self.user_id,
             "service_area": self.service_area,
             "max_daily_bookings": self.max_daily_bookings,
-            "created_at": created_dt.isoformat() if isinstance(created_dt, datetime) else None,
+            "created_at": created_dt.isoformat()
+            if isinstance(created_dt, datetime)
+            else None,
             "dispatch_enabled": _as_bool(self.dispatch_enabled),
-            "accepted_at": accepted_dt.isoformat() if isinstance(accepted_dt, datetime) else None,
+            "accepted_at": accepted_dt.isoformat()
+            if isinstance(accepted_dt, datetime)
+            else None,
             "vehicles": [v.serialize for v in self.vehicles],
         }
 
@@ -189,7 +221,12 @@ class Company(db.Model):
         if not value:
             return value
         v = value.replace(" ", "").upper()
-        if len(v) < IBAN_MIN_LENGTH or len(v) > IBAN_MAX_LENGTH or not v[:2].isalpha() or not v[2:4].isdigit():
+        if (
+            len(v) < IBAN_MIN_LENGTH
+            or len(v) > IBAN_MAX_LENGTH
+            or not v[:2].isalpha()
+            or not v[2:4].isdigit()
+        ):
             msg = "IBAN invalide (format)."
             raise ValueError(msg)
         rearranged = v[4:] + v[:4]
@@ -211,7 +248,11 @@ class Company(db.Model):
         if not value:
             return value
         v = value.strip().upper()
-        if not re.match(r"^CHE[- ]?\d{3}\.\d{3}\.\d{3}(\s*TVA)?$|^CHE[- ]?\d{9}(\s*TVA)?$", v, flags=re.IGNORECASE):
+        if not re.match(
+            r"^CHE[- ]?\d{3}\.\d{3}\.\d{3}(\s*TVA)?$|^CHE[- ]?\d{9}(\s*TVA)?$",
+            v,
+            flags=re.IGNORECASE,
+        ):
             msg = "IDE/UID suisse invalide (ex: CHE-123.456789)."
             raise ValueError(msg)
         digits = re.sub(r"\D", "", v)[:9]
@@ -293,10 +334,16 @@ class Company(db.Model):
                 stored_config = json.loads(config_value)
                 # Deep merge récursif
 
-                def deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+                def deep_merge(
+                    base: Dict[str, Any], override: Dict[str, Any]
+                ) -> Dict[str, Any]:
                     result = base.copy()
                     for key, value in override.items():
-                        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                        if (
+                            key in result
+                            and isinstance(result[key], dict)
+                            and isinstance(value, dict)
+                        ):
                             result[key] = deep_merge(result[key], value)
                         else:
                             result[key] = value
@@ -305,7 +352,11 @@ class Company(db.Model):
                 return deep_merge(default_config, stored_config)
             except (json.JSONDecodeError, TypeError, AttributeError) as err:
                 # Si la config est invalide, retourner la config par défaut
-                logger.warning("[Company] Invalid autonomous_config for company %s: %s", self.id, err)
+                logger.warning(
+                    "[Company] Invalid autonomous_config for company %s: %s",
+                    self.id,
+                    err,
+                )
                 return default_config
 
         return default_config

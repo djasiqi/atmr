@@ -29,7 +29,9 @@ Analyse les tendances et génère des recommandations.
 logger = logging.getLogger(__name__)
 
 
-def generate_insights(company_id: int, analytics: Dict[str, Any]) -> List[Dict[str, Any]]:
+def generate_insights(
+    company_id: int, analytics: Dict[str, Any]
+) -> List[Dict[str, Any]]:
     """Génère des insights intelligents basés sur les analytics.
 
     Args:
@@ -193,7 +195,9 @@ def generate_insights(company_id: int, analytics: Dict[str, Any]) -> List[Dict[s
             }
         )
 
-    logger.info("[Insights] Generated %s insights for company %s", len(insights), company_id)
+    logger.info(
+        "[Insights] Generated %s insights for company %s", len(insights), company_id
+    )
 
     return insights
 
@@ -213,20 +217,41 @@ def detect_patterns(company_id: int, lookback_days: int = 30) -> Dict[str, Any]:
     start_date = end_date - timedelta(days=lookback_days)
 
     stats = DailyStats.query.filter(
-        and_(DailyStats.company_id == company_id, DailyStats.date >= start_date, DailyStats.date <= end_date)
+        and_(
+            DailyStats.company_id == company_id,
+            DailyStats.date >= start_date,
+            DailyStats.date <= end_date,
+        )
     ).all()
 
     if not stats:
-        return {"patterns": [], "message": "Pas assez de données pour détecter des patterns"}
+        return {
+            "patterns": [],
+            "message": "Pas assez de données pour détecter des patterns",
+        }
 
     # Grouper par jour de la semaine (0=lundi, 6=dimanche)
     by_weekday = {i: [] for i in range(7)}
     for s in stats:
         weekday = s.date.weekday()
-        by_weekday[weekday].append({"delay": s.avg_delay, "on_time_rate": s.on_time_rate, "bookings": s.total_bookings})
+        by_weekday[weekday].append(
+            {
+                "delay": s.avg_delay,
+                "on_time_rate": s.on_time_rate,
+                "bookings": s.total_bookings,
+            }
+        )
 
     # Calculer les moyennes par jour
-    weekday_names = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+    weekday_names = [
+        "Lundi",
+        "Mardi",
+        "Mercredi",
+        "Jeudi",
+        "Vendredi",
+        "Samedi",
+        "Dimanche",
+    ]
     weekday_analysis = []
 
     for weekday, data in by_weekday.items():

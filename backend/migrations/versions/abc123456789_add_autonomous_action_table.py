@@ -62,11 +62,36 @@ def upgrade():
     )
 
     # Index pour performance (rate limiting, queries fréquentes)
-    op.create_index("ix_autonomous_action_company_id", "autonomous_action", ["company_id"], unique=False)
-    op.create_index("ix_autonomous_action_booking_id", "autonomous_action", ["booking_id"], unique=False)
-    op.create_index("ix_autonomous_action_driver_id", "autonomous_action", ["driver_id"], unique=False)
-    op.create_index("ix_autonomous_action_action_type", "autonomous_action", ["action_type"], unique=False)
-    op.create_index("ix_autonomous_action_created_at", "autonomous_action", ["created_at"], unique=False)
+    op.create_index(
+        "ix_autonomous_action_company_id",
+        "autonomous_action",
+        ["company_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_autonomous_action_booking_id",
+        "autonomous_action",
+        ["booking_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_autonomous_action_driver_id",
+        "autonomous_action",
+        ["driver_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_autonomous_action_action_type",
+        "autonomous_action",
+        ["action_type"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_autonomous_action_created_at",
+        "autonomous_action",
+        ["created_at"],
+        unique=False,
+    )
 
     # Index composite pour rate limiting (comptage par heure/jour)
     op.create_index(
@@ -78,14 +103,19 @@ def upgrade():
 
     # Index composite pour audit par type et date
     op.create_index(
-        "ix_autonomous_action_type_created", "autonomous_action", ["action_type", "created_at"], unique=False
+        "ix_autonomous_action_type_created",
+        "autonomous_action",
+        ["action_type", "created_at"],
+        unique=False,
     )
 
 
 def downgrade():
     # Supprimer index
     op.drop_index("ix_autonomous_action_type_created", table_name="autonomous_action")
-    op.drop_index("ix_autonomous_action_company_created", table_name="autonomous_action")
+    op.drop_index(
+        "ix_autonomous_action_company_created", table_name="autonomous_action"
+    )
     op.drop_index("ix_autonomous_action_created_at", table_name="autonomous_action")
     op.drop_index("ix_autonomous_action_action_type", table_name="autonomous_action")
     op.drop_index("ix_autonomous_action_driver_id", table_name="autonomous_action")

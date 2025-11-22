@@ -36,7 +36,9 @@ class TestABRouter:
         assert router.bucket_size == 10
 
         # Tester routing pour 100 companies
-        routed = sum(1 for company_id in range(100) if router.should_apply_rl(company_id))
+        routed = sum(
+            1 for company_id in range(100) if router.should_apply_rl(company_id)
+        )
 
         assert 8 <= routed <= 12, f"Devrait router ~10% mais got {routed}%"
 
@@ -58,7 +60,9 @@ class TestABRouter:
             assert router.bucket_size == 50
 
             # Tester routing pour 100 companies
-            routed = sum(1 for company_id in range(100) if router.should_apply_rl(company_id))
+            routed = sum(
+                1 for company_id in range(100) if router.should_apply_rl(company_id)
+            )
 
             assert 48 <= routed <= 52, f"Devrait router ~50% mais got {routed}%"
 
@@ -96,11 +100,15 @@ class TestABRouter:
         router = ABRouter(MockSettings())
 
         # Quality OK → autoriser
-        should_apply = router.should_apply_with_safety_guards(company_id=1, projected_quality_score=75.0)
+        should_apply = router.should_apply_with_safety_guards(
+            company_id=1, projected_quality_score=75.0
+        )
         assert should_apply is True
 
         # Quality bas → bloquer
-        should_apply = router.should_apply_with_safety_guards(company_id=1, projected_quality_score=65.0)
+        should_apply = router.should_apply_with_safety_guards(
+            company_id=1, projected_quality_score=65.0
+        )
         assert should_apply is False
 
         logger.info("✅ Test: Garde-fou quality score")
@@ -136,7 +144,11 @@ class TestRLGainTracking:
     def test_evaluate_rl_gain(self):
         """Test: Évaluer gain RL vs heuristique."""
 
-        heuristic_result = {"quality_score": 70.0, "assignment_rate": 80.0, "pooling_rate": 15.0}
+        heuristic_result = {
+            "quality_score": 70.0,
+            "assignment_rate": 80.0,
+            "pooling_rate": 15.0,
+        }
 
         rl_result = {
             "quality_score": 75.0,  # +5pts
@@ -144,7 +156,9 @@ class TestRLGainTracking:
             "pooling_rate": 18.0,
         }
 
-        ab_result = evaluate_rl_gain(company_id=1, heuristic_result=heuristic_result, rl_result=rl_result)
+        ab_result = evaluate_rl_gain(
+            company_id=1, heuristic_result=heuristic_result, rl_result=rl_result
+        )
 
         assert ab_result.delta_quality == 5.0
         assert ab_result.delta_assignment == 5.0
@@ -158,7 +172,9 @@ class TestRLGainTracking:
         heuristic_result = {"quality_score": 70.0}
         rl_result = {"quality_score": 72.0}  # +2pts seulement
 
-        ab_result = evaluate_rl_gain(company_id=1, heuristic_result=heuristic_result, rl_result=rl_result)
+        ab_result = evaluate_rl_gain(
+            company_id=1, heuristic_result=heuristic_result, rl_result=rl_result
+        )
 
         assert ab_result.delta_quality == 2.0
         assert ab_result.gain_detected is False  # +2pts < 3pts

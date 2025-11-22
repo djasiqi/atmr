@@ -45,7 +45,9 @@ class CentralizedLogHandler(logging.Handler):
         """
         super().__init__(level)
         self.endpoint = endpoint or os.getenv("LOG_CENTRALIZATION_ENDPOINT")
-        self.log_type = log_type or os.getenv("LOG_CENTRALIZATION_TYPE", "elasticsearch").lower()
+        self.log_type = (
+            log_type or os.getenv("LOG_CENTRALIZATION_TYPE", "elasticsearch").lower()
+        )
         self.timeout = timeout
         self.enabled = bool(self.endpoint)
 
@@ -167,7 +169,12 @@ class CentralizedLogHandler(logging.Handler):
         }
 
         # Convertir timestamp en nanosecondes (Loki utilise nanosecondes)
-        timestamp_ns = int(datetime.fromisoformat(log_data["@timestamp"].replace("Z", "+00:00")).timestamp() * 1e9)
+        timestamp_ns = int(
+            datetime.fromisoformat(
+                log_data["@timestamp"].replace("Z", "+00:00")
+            ).timestamp()
+            * 1e9
+        )
 
         # Format Loki push API
         loki_data = {
@@ -215,7 +222,9 @@ def setup_centralized_logging(app) -> None:
     """
     endpoint = os.getenv("LOG_CENTRALIZATION_ENDPOINT")
     if not endpoint:
-        app.logger.debug("[Centralized Logging] Désactivé (LOG_CENTRALIZATION_ENDPOINT non configuré)")
+        app.logger.debug(
+            "[Centralized Logging] Désactivé (LOG_CENTRALIZATION_ENDPOINT non configuré)"
+        )
         return
 
     log_type = os.getenv("LOG_CENTRALIZATION_TYPE", "elasticsearch").lower()

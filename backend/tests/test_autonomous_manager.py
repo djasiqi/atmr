@@ -198,7 +198,9 @@ class TestCanAutoApplySuggestion:
         company = CompanyFactory(dispatch_mode=DispatchMode.FULLY_AUTO)
         manager = AutonomousDispatchManager(company.id)
 
-        suggestion = create_test_suggestion(action="adjust_time", additional_data={"delay_minutes": 5})
+        suggestion = create_test_suggestion(
+            action="adjust_time", additional_data={"delay_minutes": 5}
+        )
 
         # Configurer
         manager.config["safety_limits"]["require_approval_delay_minutes"] = 15
@@ -213,7 +215,9 @@ class TestCanAutoApplySuggestion:
         company = CompanyFactory(dispatch_mode=DispatchMode.FULLY_AUTO)
         manager = AutonomousDispatchManager(company.id)
 
-        suggestion = create_test_suggestion(action="adjust_time", additional_data={"delay_minutes": 30})
+        suggestion = create_test_suggestion(
+            action="adjust_time", additional_data={"delay_minutes": 30}
+        )
 
         # Configurer
         manager.config["safety_limits"]["require_approval_delay_minutes"] = 15
@@ -286,7 +290,9 @@ class TestShouldTriggerReoptimization:
 
         manager.config["re_optimize_triggers"]["driver_became_unavailable"] = True
 
-        result = manager.should_trigger_reoptimization("driver_unavailable", {"driver_id": 123})
+        result = manager.should_trigger_reoptimization(
+            "driver_unavailable", {"driver_id": 123}
+        )
 
         assert result is True, "Driver unavailable devrait déclencher reoptimization"
 
@@ -296,15 +302,21 @@ class TestShouldTriggerReoptimization:
         manager = AutonomousDispatchManager(company.id)
 
         # Threshold = 10 min de gain minimum
-        manager.config["re_optimize_triggers"]["better_driver_available_gain_minutes"] = 10
+        manager.config["re_optimize_triggers"][
+            "better_driver_available_gain_minutes"
+        ] = 10
 
         # Gain de 15 min
-        result = manager.should_trigger_reoptimization("better_driver_available", {"gain_minutes": 15})
+        result = manager.should_trigger_reoptimization(
+            "better_driver_available", {"gain_minutes": 15}
+        )
 
         assert result is True, "Gain suffisant devrait déclencher reoptimization"
 
         # Gain de 5 min
-        result = manager.should_trigger_reoptimization("better_driver_available", {"gain_minutes": 5})
+        result = manager.should_trigger_reoptimization(
+            "better_driver_available", {"gain_minutes": 5}
+        )
 
         assert result is False, "Gain insuffisant ne devrait pas déclencher"
 
@@ -374,7 +386,9 @@ class TestProcessOpportunities:
 
         stats = manager.process_opportunities([opportunity], dry_run=True)
 
-        assert stats["manual_required"] == 1, "En SEMI_AUTO, devrait nécessiter validation"
+        assert stats["manual_required"] == 1, (
+            "En SEMI_AUTO, devrait nécessiter validation"
+        )
         assert stats["auto_applied"] == 0
 
     @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")

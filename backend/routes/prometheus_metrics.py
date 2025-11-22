@@ -48,7 +48,9 @@ class PrometheusMetrics(Resource):
 
                 # Construire les métriques SLO au format Prometheus
                 slo_metrics = []
-                slo_metrics.append("# HELP dispatch_slo_breaches_total Total SLO breaches detected")
+                slo_metrics.append(
+                    "# HELP dispatch_slo_breaches_total Total SLO breaches detected"
+                )
                 slo_metrics.append("# TYPE dispatch_slo_breaches_total counter")
                 slo_metrics.append(
                     f'dispatch_slo_breaches_total{{window_minutes="{slo_tracker.window_minutes}"}} {breach_summary["breach_count"]}'
@@ -59,22 +61,32 @@ class PrometheusMetrics(Resource):
                 )
                 slo_metrics.append("# TYPE dispatch_slo_breach_severity gauge")
                 severity_value = (
-                    0 if breach_summary["severity"] == "info" else (1 if breach_summary["severity"] == "warning" else 2)
+                    0
+                    if breach_summary["severity"] == "info"
+                    else (1 if breach_summary["severity"] == "warning" else 2)
                 )
                 slo_metrics.append(
                     f'dispatch_slo_breach_severity{{severity="{breach_summary["severity"]}"}} {severity_value}'
                 )
                 slo_metrics.append("")
-                slo_metrics.append("# HELP dispatch_slo_should_alert Whether to page oncall (0=no, 1=yes)")
+                slo_metrics.append(
+                    "# HELP dispatch_slo_should_alert Whether to page oncall (0=no, 1=yes)"
+                )
                 slo_metrics.append("# TYPE dispatch_slo_should_alert gauge")
-                slo_metrics.append(f"dispatch_slo_should_alert {1 if breach_summary['should_alert'] else 0}")
+                slo_metrics.append(
+                    f"dispatch_slo_should_alert {1 if breach_summary['should_alert'] else 0}"
+                )
 
                 # Ajouter les métriques par type de breach
                 for breach_type, count in breach_summary.get("by_type", {}).items():
                     slo_metrics.append("")
-                    slo_metrics.append("# HELP dispatch_slo_breaches_by_type SLO breaches by breach type")
+                    slo_metrics.append(
+                        "# HELP dispatch_slo_breaches_by_type SLO breaches by breach type"
+                    )
                     slo_metrics.append("# TYPE dispatch_slo_breaches_by_type counter")
-                    slo_metrics.append(f'dispatch_slo_breaches_by_type{{type="{breach_type}"}} {count}')
+                    slo_metrics.append(
+                        f'dispatch_slo_breaches_by_type{{type="{breach_type}"}} {count}'
+                    )
 
                 # Combiner toutes les métriques
                 slo_metrics_str = "\n".join(slo_metrics)
@@ -86,7 +98,13 @@ class PrometheusMetrics(Resource):
                 # generate_latest() retourne toujours bytes
                 metrics_output_str = metrics_output.decode("utf-8")
 
-                full_metrics = metrics_output_str + "\n" + slo_metrics_str + "\n" + rotation_metrics
+                full_metrics = (
+                    metrics_output_str
+                    + "\n"
+                    + slo_metrics_str
+                    + "\n"
+                    + rotation_metrics
+                )
 
                 # Utiliser make_response pour éviter la sérialisation JSON de Flask-RESTX
                 response = make_response(full_metrics, 200)
@@ -95,7 +113,9 @@ class PrometheusMetrics(Resource):
 
             except ImportError:
                 # Fallback si prometheus_client non disponible
-                logger.warning("[PrometheusMetrics] prometheus_client non disponible, export SLO uniquement")
+                logger.warning(
+                    "[PrometheusMetrics] prometheus_client non disponible, export SLO uniquement"
+                )
                 current_time = time.time()
                 return self._export_slo_only(current_time)
 
@@ -124,9 +144,13 @@ class PrometheusMetrics(Resource):
 
         for breach_type, count in breach_summary.get("by_type", {}).items():
             lines.append("")
-            lines.append("# HELP dispatch_slo_breaches_by_type SLO breaches by breach type")
+            lines.append(
+                "# HELP dispatch_slo_breaches_by_type SLO breaches by breach type"
+            )
             lines.append("# TYPE dispatch_slo_breaches_by_type counter")
-            lines.append(f'dispatch_slo_breaches_by_type{{type="{breach_type}"}} {count}')
+            lines.append(
+                f'dispatch_slo_breaches_by_type{{type="{breach_type}"}} {count}'
+            )
 
         content = "\n".join(lines)
 
@@ -152,14 +176,18 @@ class PrometheusMetrics(Resource):
             lines = []
 
             # Counter: Total rotations par type et status
-            lines.append("# HELP vault_rotation_total Total secret rotations by type and status")
+            lines.append(
+                "# HELP vault_rotation_total Total secret rotations by type and status"
+            )
             lines.append("# TYPE vault_rotation_total counter")
 
             for secret_type, type_stats in stats.get("by_type", {}).items():
                 for status in ["success", "error", "skipped"]:
                     count = type_stats.get(status, 0)
                     if count > 0:
-                        lines.append(f'vault_rotation_total{{secret_type="{secret_type}",status="{status}"}} {count}')
+                        lines.append(
+                            f'vault_rotation_total{{secret_type="{secret_type}",status="{status}"}} {count}'
+                        )
 
             lines.append("")
 
@@ -169,12 +197,16 @@ class PrometheusMetrics(Resource):
             )
             lines.append("# TYPE vault_rotation_last_success_timestamp gauge")
 
-            for secret_type, last_rotation_iso in stats.get("last_rotations", {}).items():
+            for secret_type, last_rotation_iso in stats.get(
+                "last_rotations", {}
+            ).items():
                 if last_rotation_iso:
                     try:
                         from datetime import datetime
 
-                        last_dt = datetime.fromisoformat(last_rotation_iso.replace("Z", "+00:00"))
+                        last_dt = datetime.fromisoformat(
+                            last_rotation_iso.replace("Z", "+00:00")
+                        )
                         timestamp = int(last_dt.timestamp())
                         lines.append(
                             f'vault_rotation_last_success_timestamp{{secret_type="{secret_type}"}} {timestamp}'
@@ -185,16 +217,22 @@ class PrometheusMetrics(Resource):
             lines.append("")
 
             # Gauge: Jours depuis dernière rotation réussie par type
-            lines.append("# HELP vault_rotation_days_since_last Days since last successful rotation")
+            lines.append(
+                "# HELP vault_rotation_days_since_last Days since last successful rotation"
+            )
             lines.append("# TYPE vault_rotation_days_since_last gauge")
 
             for secret_type in ["jwt", "encryption", "flask_secret_key"]:
                 days = get_days_since_last_rotation(secret_type)
                 if days is not None:
-                    lines.append(f'vault_rotation_days_since_last{{secret_type="{secret_type}"}} {days}')
+                    lines.append(
+                        f'vault_rotation_days_since_last{{secret_type="{secret_type}"}} {days}'
+                    )
 
             return "\n".join(lines)
 
         except Exception as e:
-            logger.warning("[PrometheusMetrics] Erreur génération métriques rotations: %s", e)
+            logger.warning(
+                "[PrometheusMetrics] Erreur génération métriques rotations: %s", e
+            )
             return ""

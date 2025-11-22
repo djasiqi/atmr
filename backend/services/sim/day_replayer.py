@@ -102,7 +102,12 @@ class DayReplayer:
             policy_results = []
 
             for iteration in range(n_iterations):
-                logger.debug("[DayReplayer] Policy %s, iteration %d/%d", policy, iteration + 1, n_iterations)
+                logger.debug(
+                    "[DayReplayer] Policy %s, iteration %d/%d",
+                    policy,
+                    iteration + 1,
+                    n_iterations,
+                )
 
                 # Créer problème avec variabilité stochastique
                 problem = self._create_problem_with_noise(bookings, drivers, iteration)
@@ -126,7 +131,9 @@ class DayReplayer:
         self.results = results
         return results
 
-    def _create_problem_with_noise(self, bookings: List[Any], drivers: List[Any], iteration: int) -> Dict[str, Any]:
+    def _create_problem_with_noise(
+        self, bookings: List[Any], drivers: List[Any], iteration: int
+    ) -> Dict[str, Any]:
         """Crée un problème avec bruit stochastique.
 
         Args:
@@ -224,7 +231,10 @@ class DayReplayer:
 
             # Convertir HeuristicAssignment en dict
             assignments = result.assignments if result else []
-            return [{"driver_id": a.driver_id, "booking_id": a.booking_id} for a in assignments]
+            return [
+                {"driver_id": a.driver_id, "booking_id": a.booking_id}
+                for a in assignments
+            ]
         except Exception as e:
             logger.error("[DayReplayer] Erreur heuristique: %s", e)
             return []
@@ -240,7 +250,10 @@ class DayReplayer:
 
             # Convertir SolverAssignment en dict
             assignments = result.assignments if result else []
-            return [{"driver_id": a.driver_id, "booking_id": a.booking_id} for a in assignments]
+            return [
+                {"driver_id": a.driver_id, "booking_id": a.booking_id}
+                for a in assignments
+            ]
         except Exception as e:
             logger.error("[DayReplayer] Erreur solver: %s", e)
             return []
@@ -251,7 +264,9 @@ class DayReplayer:
         logger.warning("[DayReplayer] RL policy non implémentée, fallback heuristique")
         return self._run_heuristic(problem)
 
-    def _aggregate_results(self, results: List[SimulationResult], policy_name: str) -> SimulationResult:
+    def _aggregate_results(
+        self, results: List[SimulationResult], policy_name: str
+    ) -> SimulationResult:
         """Agrège plusieurs résultats en un seul."""
         avg_assignments = np.mean([r.assignments_count for r in results])
         avg_unassigned = np.mean([r.unassigned_count for r in results])
@@ -283,7 +298,9 @@ try:
     )
 except ImportError:
     # Fallback si imports échouent
-    def calculate_efficiency_score(assignments: List[Dict[str, Any]], _problem: Dict[str, Any] | None = None) -> float:
+    def calculate_efficiency_score(
+        assignments: List[Dict[str, Any]], _problem: Dict[str, Any] | None = None
+    ) -> float:
         return 1.0 / (1.0 + len(assignments))
 
     def calculate_fairness_score(assignments: List[Dict[str, Any]]) -> float:  # noqa: ARG001

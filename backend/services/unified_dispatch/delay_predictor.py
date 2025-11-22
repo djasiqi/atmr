@@ -54,8 +54,12 @@ class DelayPrediction:
             "predicted_delay_minutes": self.predicted_delay_minutes,
             "severity": self.severity,
             "confidence": self.confidence,
-            "scheduled_time": self.scheduled_time.isoformat() if self.scheduled_time else None,
-            "estimated_arrival": self.estimated_arrival.isoformat() if self.estimated_arrival else None,
+            "scheduled_time": self.scheduled_time.isoformat()
+            if self.scheduled_time
+            else None,
+            "estimated_arrival": self.estimated_arrival.isoformat()
+            if self.estimated_arrival
+            else None,
             "current_eta": self.current_eta.isoformat() if self.current_eta else None,
         }
 
@@ -144,7 +148,9 @@ class DelayPredictor:
                 continue
 
             # Calculer la prédiction de retard
-            prediction = self._predict_single_delay(booking, driver, assignment, problem)
+            prediction = self._predict_single_delay(
+                booking, driver, assignment, problem
+            )
 
             if prediction:
                 predictions.append(prediction)
@@ -181,18 +187,33 @@ class DelayPredictor:
             if not estimated_pickup:
                 # Fallback: calculer depuis les coordonnées
                 driver_pos = (
-                    getattr(driver, "current_lat", getattr(driver, "latitude", 46.2044)),
-                    getattr(driver, "current_lon", getattr(driver, "longitude", 6.1432)),
+                    getattr(
+                        driver, "current_lat", getattr(driver, "latitude", 46.2044)
+                    ),
+                    getattr(
+                        driver, "current_lon", getattr(driver, "longitude", 6.1432)
+                    ),
                 )
-                pickup_pos = (getattr(booking, "pickup_lat", 46.2044), getattr(booking, "pickup_lon", 6.1432))
+                pickup_pos = (
+                    getattr(booking, "pickup_lat", 46.2044),
+                    getattr(booking, "pickup_lon", 6.1432),
+                )
 
-                eta_seconds = calculate_eta(driver_pos, pickup_pos, settings=self.settings)
+                eta_seconds = calculate_eta(
+                    driver_pos, pickup_pos, settings=self.settings
+                )
                 estimated_pickup = now_local() + timedelta(seconds=eta_seconds)
 
             # Calculer le retard
-            scheduled_dt = scheduled_time if isinstance(scheduled_time, datetime) else now_local()
+            scheduled_dt = (
+                scheduled_time if isinstance(scheduled_time, datetime) else now_local()
+            )
 
-            estimated_dt = estimated_pickup if isinstance(estimated_pickup, datetime) else now_local()
+            estimated_dt = (
+                estimated_pickup
+                if isinstance(estimated_pickup, datetime)
+                else now_local()
+            )
 
             delay_seconds = (estimated_dt - scheduled_dt).total_seconds()
             delay_minutes = int(delay_seconds / 60)
@@ -215,7 +236,9 @@ class DelayPredictor:
 
         except Exception as e:
             logger.warning(
-                "[DelayPredictor] Failed to predict delay for booking %s: %s", getattr(booking, "id", None), e
+                "[DelayPredictor] Failed to predict delay for booking %s: %s",
+                getattr(booking, "id", None),
+                e,
             )
             return None
 
@@ -231,17 +254,23 @@ class DelayPredictor:
             return "high"
         return "critical"
 
-    def _calculate_confidence(self, booking: Booking, driver: Driver, problem: Dict[str, Any]) -> float:
+    def _calculate_confidence(
+        self, booking: Booking, driver: Driver, problem: Dict[str, Any]
+    ) -> float:
         """Calcule la confiance de la prédiction basée sur la qualité des données.
         Retourne un score entre 0 et 1.
         """
         confidence = 1
 
         # Réduire si coordonnées manquantes ou par défaut
-        if not getattr(booking, "pickup_lat", None) or not getattr(booking, "pickup_lon", None):
+        if not getattr(booking, "pickup_lat", None) or not getattr(
+            booking, "pickup_lon", None
+        ):
             confidence -= 0.3
 
-        if not getattr(driver, "latitude", None) or not getattr(driver, "longitude", None):
+        if not getattr(driver, "latitude", None) or not getattr(
+            driver, "longitude", None
+        ):
             confidence -= 0.2
 
         # Position du chauffeur récente ?
@@ -274,7 +303,11 @@ class DelayPredictor:
             )
 
         total = len(predictions)
-        delayed = [p for p in predictions if p.predicted_delay_minutes > PREDICTED_DELAY_MINUTES_THRESHOLD]
+        delayed = [
+            p
+            for p in predictions
+            if p.predicted_delay_minutes > PREDICTED_DELAY_MINUTES_THRESHOLD
+        ]
         on_time = total - len(delayed)
 
         delay_values = [p.predicted_delay_minutes for p in predictions]
@@ -291,7 +324,9 @@ class DelayPredictor:
             recommendations=[],  # Sera rempli par _generate_recommendations
         )
 
-    def _generate_recommendations(self, analysis: DelayAnalysis, problem: Dict[str, Any]) -> List[str]:
+    def _generate_recommendations(
+        self, analysis: DelayAnalysis, problem: Dict[str, Any]
+    ) -> List[str]:
         """Génère des recommandations basées sur l'analyse."""
         recommendations = []
 

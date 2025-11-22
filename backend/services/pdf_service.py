@@ -58,7 +58,9 @@ class PDFService:
                 f.write(pdf_content)
 
             # ✅ URL dynamique depuis config
-            pdf_base_url = current_app.config.get("PDF_BASE_URL", "http://localhost:5000")
+            pdf_base_url = current_app.config.get(
+                "PDF_BASE_URL", "http://localhost:5000"
+            )
             uploads_base = current_app.config.get("UPLOADS_PUBLIC_BASE", "/uploads")
 
             pdf_url = f"{pdf_base_url}{uploads_base}/invoices/{filename}"
@@ -67,7 +69,9 @@ class PDFService:
             return pdf_url
 
         except Exception as e:
-            app_logger.error("Erreur lors de la génération du PDF de facture: %s", str(e))
+            app_logger.error(
+                "Erreur lors de la génération du PDF de facture: %s", str(e)
+            )
             raise
 
     def generate_reminder_pdf(self, invoice, level):
@@ -94,16 +98,16 @@ class PDFService:
             pdf_content = self._create_reminder_pdf_content(invoice, level)
 
             # Sauvegarder le fichier
-            filename = (
-                f"reminder_{invoice.invoice_number}_level{level}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
-            )
+            filename = f"reminder_{invoice.invoice_number}_level{level}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
             filepath = Path(self.invoices_dir, filename)
 
             with filepath.open("wb") as f:
                 f.write(pdf_content)
 
             # ✅ URL dynamique
-            pdf_base_url = current_app.config.get("PDF_BASE_URL", "http://localhost:5000")
+            pdf_base_url = current_app.config.get(
+                "PDF_BASE_URL", "http://localhost:5000"
+            )
             uploads_base = current_app.config.get("UPLOADS_PUBLIC_BASE", "/uploads")
             pdf_url = f"{pdf_base_url}{uploads_base}/invoices/{filename}"
 
@@ -111,13 +115,17 @@ class PDFService:
             return pdf_url
 
         except Exception as e:
-            app_logger.error("Erreur lors de la génération du PDF de rappel: %s", str(e))
+            app_logger.error(
+                "Erreur lors de la génération du PDF de rappel: %s", str(e)
+            )
             raise
 
     def _create_invoice_pdf_content(self, invoice):
         """Crée le contenu PDF d'une facture selon la variante de template sélectionnée."""
         # Récupérer la variante de template depuis les paramètres de facturation
-        billing_settings = CompanyBillingSettings.query.filter_by(company_id=invoice.company_id).first()
+        billing_settings = CompanyBillingSettings.query.filter_by(
+            company_id=invoice.company_id
+        ).first()
         template_variant = "standard"  # Par défaut
         if billing_settings and billing_settings.pdf_template_variant:
             template_variant = billing_settings.pdf_template_variant.lower()
@@ -151,7 +159,12 @@ class PDFService:
 
         buffer = BytesIO()
         doc = SimpleDocTemplate(
-            buffer, pagesize=A4, topMargin=2 * cm, bottomMargin=2 * cm, leftMargin=2 * cm, rightMargin=2 * cm
+            buffer,
+            pagesize=A4,
+            topMargin=2 * cm,
+            bottomMargin=2 * cm,
+            leftMargin=2 * cm,
+            rightMargin=2 * cm,
         )
 
         # Styles basés sur le design de référence
@@ -198,7 +211,9 @@ class PDFService:
                 if logo_url.startswith(("http://", "https://")):
                     # Pour les URLs externes, on ne peut pas les charger directement dans ReportLab
                     # On pourrait télécharger l'image, mais pour l'instant on ignore
-                    app_logger.info("Logo externe détecté (non supporté pour PDF): %s", logo_url)
+                    app_logger.info(
+                        "Logo externe détecté (non supporté pour PDF): %s", logo_url
+                    )
                     logo_path = None
                 else:
                     # Logo stocké localement : nettoyer le chemin
@@ -238,14 +253,23 @@ class PDFService:
                                     drawing.scale(scale_x, scale_y)
                                 logo_img = drawing
                             else:
-                                app_logger.warning("Impossible de convertir le SVG en drawing: %s", logo_path)
+                                app_logger.warning(
+                                    "Impossible de convertir le SVG en drawing: %s",
+                                    logo_path,
+                                )
                         except Exception as svg_error:
-                            app_logger.error("Erreur lors de la conversion SVG: %s - %s", logo_path, str(svg_error))
+                            app_logger.error(
+                                "Erreur lors de la conversion SVG: %s - %s",
+                                logo_path,
+                                str(svg_error),
+                            )
                             # En cas d'erreur, on continue sans logo plutôt que de faire échouer la génération
                             logo_img = None
                     else:
                         # Pour les autres formats (PNG, JPG, etc.), utiliser Image directement
-                        logo_img = Image(logo_path, width=logo_width, height=logo_height)
+                        logo_img = Image(
+                            logo_path, width=logo_width, height=logo_height
+                        )
             except Exception as e:
                 app_logger.warning("Impossible de charger le logo: %s", e)
 
@@ -253,14 +277,20 @@ class PDFService:
         company_name = company.name or "Emmenez Moi"
         company_address = company.address or "Route de Chevrens 145, 1247 Anières"
         company_phone = company.contact_phone or "0225120203"
-        company_email = company.billing_email or company.contact_email or "info@casa-famiglia.ch"
+        company_email = (
+            company.billing_email or company.contact_email or "info@casa-famiglia.ch"
+        )
         company_uid = company.uid_ide or "CHE-27348.653"
 
         # === LOGO ET COORDONNÉES ENTREPRISE (GAUCHE) ===
         if logo_img:
             # Vérifier si c'est un drawing (SVG converti) en vérifiant la présence d'attributs spécifiques
             # Les drawings de svglib ont des attributs width, height et une méthode scale
-            is_drawing = hasattr(logo_img, "width") and hasattr(logo_img, "height") and hasattr(logo_img, "scale")
+            is_drawing = (
+                hasattr(logo_img, "width")
+                and hasattr(logo_img, "height")
+                and hasattr(logo_img, "scale")
+            )
 
             if is_drawing:
                 # Pour les drawings SVG, créer un tableau pour l'alignement
@@ -284,11 +314,17 @@ class PDFService:
                 from reportlab.lib.styles import ParagraphStyle
 
                 logo_style = ParagraphStyle(
-                    "LogoStyle", parent=styles["Normal"], alignment=TA_LEFT, leftIndent=0, rightIndent=0, spaceAfter=8
+                    "LogoStyle",
+                    parent=styles["Normal"],
+                    alignment=TA_LEFT,
+                    leftIndent=0,
+                    rightIndent=0,
+                    spaceAfter=8,
                 )
                 # Créer un Paragraph avec le logo
                 logo_para = Paragraph(
-                    f'<img src="{logo_path}" width="{logo_width}" height="{logo_height}"/>', logo_style
+                    f'<img src="{logo_path}" width="{logo_width}" height="{logo_height}"/>',
+                    logo_style,
                 )
                 story.append(logo_para)
 
@@ -315,7 +351,9 @@ class PDFService:
             if institution and institution.is_institution:
                 billed_to_name = institution.institution_name or "Institution"
                 billed_to_address = (
-                    institution.billing_address or institution.contact_address or "Adresse non renseignée"
+                    institution.billing_address
+                    or institution.contact_address
+                    or "Adresse non renseignée"
                 )
             else:
                 # Fallback si l'institution n'est pas trouvée
@@ -343,7 +381,12 @@ class PDFService:
                     billed_to_address = f"{street_address}\n{client.domicile_zip} {client.domicile_city} Suisse"
                 else:
                     billed_to_address = street_address
-            elif hasattr(client, "user") and client.user and hasattr(client.user, "address") and client.user.address:
+            elif (
+                hasattr(client, "user")
+                and client.user
+                and hasattr(client.user, "address")
+                and client.user.address
+            ):
                 billed_to_address = client.user.address
 
         # Informations de facturation alignées à droite
@@ -410,7 +453,9 @@ class PDFService:
             return "\n".join(lines[:3])  # Maximum 3 lignes avec \n au lieu de <br/>
 
         # Vérifier si c'est une facturation tierce pour ajouter la colonne "Patient"
-        is_third_party = invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id
+        is_third_party = (
+            invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id
+        )
 
         # En-têtes du tableau
         if is_third_party:
@@ -429,7 +474,11 @@ class PDFService:
 
                 if booking:
                     # Récupérer la vraie date de la course
-                    date_str = booking.scheduled_time.strftime("%d/%m/%Y") if booking.scheduled_time else ""
+                    date_str = (
+                        booking.scheduled_time.strftime("%d/%m/%Y")
+                        if booking.scheduled_time
+                        else ""
+                    )
 
                     # Nom du patient (pour facturation tierce)
                     patient_name = ""
@@ -441,20 +490,25 @@ class PDFService:
                         )
                         # Tronquer si trop long
                         if len(patient_name) > MAX_PATIENT_NAME_LENGTH:
-                            patient_name = patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
+                            patient_name = (
+                                patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
+                            )
 
                     # Supprimer le mot "Trajet" et nettoyer les adresses
                     departure = format_address_for_table(
                         booking.pickup_location, max_length=20 if is_third_party else 25
                     )
                     arrival = format_address_for_table(
-                        booking.dropoff_location, max_length=20 if is_third_party else 25
+                        booking.dropoff_location,
+                        max_length=20 if is_third_party else 25,
                     )
                     amount = f"{line.line_total:.2f}"
 
                     # Construire la ligne selon le type de facturation
                     if is_third_party:
-                        table_data.append([date_str, patient_name, departure, arrival, amount])
+                        table_data.append(
+                            [date_str, patient_name, departure, arrival, amount]
+                        )
                     else:
                         table_data.append([date_str, departure, arrival, amount])
                 else:
@@ -463,14 +517,20 @@ class PDFService:
                     desc = line.description
                     if " → " in desc:
                         parts = desc.split(" → ")
-                        departure = format_address_for_table(parts[0], max_length=20 if is_third_party else 25)
+                        departure = format_address_for_table(
+                            parts[0], max_length=20 if is_third_party else 25
+                        )
                         arrival = (
-                            format_address_for_table(parts[1], max_length=20 if is_third_party else 25)
+                            format_address_for_table(
+                                parts[1], max_length=20 if is_third_party else 25
+                            )
                             if len(parts) > 1
                             else ""
                         )
                     else:
-                        departure = format_address_for_table(desc, max_length=20 if is_third_party else 25)
+                        departure = format_address_for_table(
+                            desc, max_length=20 if is_third_party else 25
+                        )
                         arrival = ""
                     amount = f"{line.line_total:.2f}"
 
@@ -482,7 +542,9 @@ class PDFService:
             else:
                 # Pour les autres types de lignes, utiliser la description
                 date_str = ""
-                departure = format_address_for_table(line.description, max_length=20 if is_third_party else 25)
+                departure = format_address_for_table(
+                    line.description, max_length=20 if is_third_party else 25
+                )
                 arrival = ""
                 amount = f"{line.line_total:.2f}"
 
@@ -494,9 +556,13 @@ class PDFService:
 
         # Adapter les largeurs de colonnes selon le type de facturation
         if is_third_party:
-            services_table = Table(table_data, colWidths=[2 * cm, 3 * cm, 4.5 * cm, 4.5 * cm, 2.5 * cm])
+            services_table = Table(
+                table_data, colWidths=[2 * cm, 3 * cm, 4.5 * cm, 4.5 * cm, 2.5 * cm]
+            )
         else:
-            services_table = Table(table_data, colWidths=[2.5 * cm, 6 * cm, 6 * cm, 2.5 * cm])
+            services_table = Table(
+                table_data, colWidths=[2.5 * cm, 6 * cm, 6 * cm, 2.5 * cm]
+            )
         services_table.setStyle(
             TableStyle(
                 [
@@ -563,7 +629,9 @@ class PDFService:
                 total_data = [
                     ["", "", "", "TOTAL :", f"{total_amount:.2f}"],
                 ]
-            total_table = Table(total_data, colWidths=[2 * cm, 3 * cm, 4.5 * cm, 2 * cm, 2.5 * cm])
+            total_table = Table(
+                total_data, colWidths=[2 * cm, 3 * cm, 4.5 * cm, 2 * cm, 2.5 * cm]
+            )
         else:
             if vat_is_applicable:
                 total_data = [
@@ -575,13 +643,20 @@ class PDFService:
                 total_data = [
                     ["", "", "TOTAL :", f"{total_amount:.2f}"],
                 ]
-            total_table = Table(total_data, colWidths=[2.5 * cm, 6 * cm, 2.5 * cm, 2.5 * cm])
+            total_table = Table(
+                total_data, colWidths=[2.5 * cm, 6 * cm, 2.5 * cm, 2.5 * cm]
+            )
 
         # Style du tableau du total
         if is_third_party:
             style_rules = [
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                ("ALIGN", (3, 0), (4, -1), "RIGHT"),  # Labels et montants alignés à droite
+                (
+                    "ALIGN",
+                    (3, 0),
+                    (4, -1),
+                    "RIGHT",
+                ),  # Labels et montants alignés à droite
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                 ("TOPPADDING", (0, 0), (-1, -1), 6),
@@ -601,7 +676,12 @@ class PDFService:
         else:
             style_rules = [
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                ("ALIGN", (2, 0), (3, -1), "RIGHT"),  # Labels et montants alignés à droite
+                (
+                    "ALIGN",
+                    (2, 0),
+                    (3, -1),
+                    "RIGHT",
+                ),  # Labels et montants alignés à droite
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                 ("TOPPADDING", (0, 0), (-1, -1), 6),
@@ -701,7 +781,12 @@ class PDFService:
                         TableStyle(
                             [
                                 ("ALIGN", (0, 0), (0, 0), "LEFT"),  # QR-Bill à gauche
-                                ("ALIGN", (1, 0), (1, 0), "LEFT"),  # Colonne vide à droite
+                                (
+                                    "ALIGN",
+                                    (1, 0),
+                                    (1, 0),
+                                    "LEFT",
+                                ),  # Colonne vide à droite
                                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                                 ("BACKGROUND", (0, 0), (-1, -1), colors.white),
                                 ("LEFTPADDING", (0, 0), (-1, -1), 0),
@@ -715,7 +800,11 @@ class PDFService:
                     # Ajouter le QR-Bill centré au PDF sur la deuxième page
                     story.append(qr_table)
             else:
-                story.append(Paragraph("QR-Bill non disponible - IBAN non configuré", normal_style))
+                story.append(
+                    Paragraph(
+                        "QR-Bill non disponible - IBAN non configuré", normal_style
+                    )
+                )
 
         except Exception as e:
             app_logger.warning("Impossible de générer le QR-Bill: %s", e)
@@ -748,7 +837,12 @@ class PDFService:
 
         buffer = BytesIO()
         doc = SimpleDocTemplate(
-            buffer, pagesize=A4, topMargin=1.5 * cm, bottomMargin=1.5 * cm, leftMargin=1.5 * cm, rightMargin=1.5 * cm
+            buffer,
+            pagesize=A4,
+            topMargin=1.5 * cm,
+            bottomMargin=1.5 * cm,
+            leftMargin=1.5 * cm,
+            rightMargin=1.5 * cm,
         )
 
         styles = getSampleStyleSheet()
@@ -808,8 +902,14 @@ class PDFService:
         story.append(Spacer(1, 15))
 
         # === TABLEAU SIMPLIFIÉ (DATE + MONTANT SEULEMENT) ===
-        is_third_party = invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id
-        table_data = [["Date", "Patient", "Montant"]] if is_third_party else [["Date", "Montant"]]
+        is_third_party = (
+            invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id
+        )
+        table_data = (
+            [["Date", "Patient", "Montant"]]
+            if is_third_party
+            else [["Date", "Montant"]]
+        )
 
         for line in invoice.lines:
             if line.type == InvoiceLineType.RIDE and line.reservation_id:
@@ -817,7 +917,11 @@ class PDFService:
 
                 booking = Booking.query.get(line.reservation_id)
                 if booking:
-                    date_str = booking.scheduled_time.strftime("%d/%m/%Y") if booking.scheduled_time else ""
+                    date_str = (
+                        booking.scheduled_time.strftime("%d/%m/%Y")
+                        if booking.scheduled_time
+                        else ""
+                    )
                     amount = f"{line.line_total:.2f}"
                     if is_third_party:
                         patient_name = (
@@ -826,7 +930,9 @@ class PDFService:
                             or "Patient"
                         )
                         if len(patient_name) > MAX_PATIENT_NAME_LENGTH:
-                            patient_name = patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
+                            patient_name = (
+                                patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
+                            )
                         table_data.append([date_str, patient_name, amount])
                     else:
                         table_data.append([date_str, amount])
@@ -942,7 +1048,12 @@ class PDFService:
 
         buffer = BytesIO()
         doc = SimpleDocTemplate(
-            buffer, pagesize=A4, topMargin=2 * cm, bottomMargin=2 * cm, leftMargin=2 * cm, rightMargin=2 * cm
+            buffer,
+            pagesize=A4,
+            topMargin=2 * cm,
+            bottomMargin=2 * cm,
+            leftMargin=2 * cm,
+            rightMargin=2 * cm,
         )
 
         styles = getSampleStyleSheet()
@@ -1011,12 +1122,18 @@ class PDFService:
                             except Exception:
                                 pass
                         else:
-                            logo_img = Image(logo_path, width=logo_width, height=logo_height)
+                            logo_img = Image(
+                                logo_path, width=logo_width, height=logo_height
+                            )
             except Exception:
                 pass
 
         if logo_img:
-            is_drawing = hasattr(logo_img, "width") and hasattr(logo_img, "height") and hasattr(logo_img, "scale")
+            is_drawing = (
+                hasattr(logo_img, "width")
+                and hasattr(logo_img, "height")
+                and hasattr(logo_img, "scale")
+            )
             if is_drawing:
                 logo_table = Table([[logo_img]], colWidths=[logo_width])
                 logo_table.setStyle(
@@ -1031,10 +1148,16 @@ class PDFService:
                 story.append(logo_table)
             else:
                 logo_style = ParagraphStyle(
-                    "LogoStyle", parent=styles["Normal"], alignment=TA_LEFT, leftIndent=0, rightIndent=0, spaceAfter=8
+                    "LogoStyle",
+                    parent=styles["Normal"],
+                    alignment=TA_LEFT,
+                    leftIndent=0,
+                    rightIndent=0,
+                    spaceAfter=8,
                 )
                 logo_para = Paragraph(
-                    f'<img src="{logo_path}" width="{logo_width}" height="{logo_height}"/>', logo_style
+                    f'<img src="{logo_path}" width="{logo_width}" height="{logo_height}"/>',
+                    logo_style,
                 )
                 story.append(logo_para)
 
@@ -1042,7 +1165,9 @@ class PDFService:
         company_name = company.name or "Emmenez Moi"
         company_address = company.address or "Route de Chevrens 145, 1247 Anières"
         company_phone = company.contact_phone or "0225120203"
-        company_email = company.billing_email or company.contact_email or "info@casa-famiglia.ch"
+        company_email = (
+            company.billing_email or company.contact_email or "info@casa-famiglia.ch"
+        )
         company_uid = company.uid_ide or "CHE-27348.653"
         company_info_detailed = f"""
         <b>{company_name}</b><br/>
@@ -1062,7 +1187,9 @@ class PDFService:
             if institution and institution.is_institution:
                 billed_to_name = institution.institution_name or "Institution"
                 billed_to_address = (
-                    institution.billing_address or institution.contact_address or "Adresse non renseignée"
+                    institution.billing_address
+                    or institution.contact_address
+                    or "Adresse non renseignée"
                 )
             else:
                 billed_to_name = "Institution"
@@ -1109,7 +1236,9 @@ class PDFService:
         story.append(Spacer(1, 20))
 
         # === TABLEAU DÉTAILLÉ AVEC NOTES ===
-        is_third_party = invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id
+        is_third_party = (
+            invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id
+        )
         if is_third_party:
             table_data = [["Date", "Patient", "Départ", "Arrivée", "Note", "Montant"]]
         else:
@@ -1147,9 +1276,17 @@ class PDFService:
 
                 booking = Booking.query.get(line.reservation_id)
                 if booking:
-                    date_str = booking.scheduled_time.strftime("%d/%m/%Y") if booking.scheduled_time else ""
-                    departure = format_address_for_table(booking.pickup_location, max_length=18)
-                    arrival = format_address_for_table(booking.dropoff_location, max_length=18)
+                    date_str = (
+                        booking.scheduled_time.strftime("%d/%m/%Y")
+                        if booking.scheduled_time
+                        else ""
+                    )
+                    departure = format_address_for_table(
+                        booking.pickup_location, max_length=18
+                    )
+                    arrival = format_address_for_table(
+                        booking.dropoff_location, max_length=18
+                    )
                     note = line.note or ""
                     amount = f"{line.line_total:.2f}"
                     if is_third_party:
@@ -1159,8 +1296,12 @@ class PDFService:
                             or "Patient"
                         )
                         if len(patient_name) > MAX_PATIENT_NAME_LENGTH:
-                            patient_name = patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
-                        table_data.append([date_str, patient_name, departure, arrival, note, amount])
+                            patient_name = (
+                                patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
+                            )
+                        table_data.append(
+                            [date_str, patient_name, departure, arrival, note, amount]
+                        )
                     else:
                         table_data.append([date_str, departure, arrival, note, amount])
                 else:
@@ -1174,14 +1315,21 @@ class PDFService:
                 note = line.note or ""
                 amount = f"{line.line_total:.2f}"
                 if is_third_party:
-                    table_data.append(["", "N/A", line.description[:30], "", note, amount])
+                    table_data.append(
+                        ["", "N/A", line.description[:30], "", note, amount]
+                    )
                 else:
                     table_data.append(["", line.description[:30], "", note, amount])
 
         if is_third_party:
-            services_table = Table(table_data, colWidths=[2 * cm, 2.5 * cm, 3 * cm, 3 * cm, 2.5 * cm, 2 * cm])
+            services_table = Table(
+                table_data,
+                colWidths=[2 * cm, 2.5 * cm, 3 * cm, 3 * cm, 2.5 * cm, 2 * cm],
+            )
         else:
-            services_table = Table(table_data, colWidths=[2.5 * cm, 4 * cm, 4 * cm, 2.5 * cm, 2.5 * cm])
+            services_table = Table(
+                table_data, colWidths=[2.5 * cm, 4 * cm, 4 * cm, 2.5 * cm, 2.5 * cm]
+            )
         services_table.setStyle(
             TableStyle(
                 [
@@ -1214,7 +1362,9 @@ class PDFService:
             vat_is_applicable = True
 
         total_separator = Table([[""]], colWidths=[16 * cm])
-        total_separator.setStyle(TableStyle([("LINEBELOW", (0, 0), (0, 0), 1, colors.black)]))
+        total_separator.setStyle(
+            TableStyle([("LINEBELOW", (0, 0), (0, 0), 1, colors.black)])
+        )
         story.append(total_separator)
         story.append(Spacer(1, 8))
 
@@ -1222,12 +1372,22 @@ class PDFService:
             if vat_is_applicable:
                 total_data = [
                     ["", "", "", "", "Sous-total :", f"{subtotal_amount:.2f}"],
-                    ["", "", "", "", f"{vat_label_display} :", f"{vat_total_amount:.2f}"],
+                    [
+                        "",
+                        "",
+                        "",
+                        "",
+                        f"{vat_label_display} :",
+                        f"{vat_total_amount:.2f}",
+                    ],
                     ["", "", "", "", "TOTAL :", f"{total_amount:.2f}"],
                 ]
             else:
                 total_data = [["", "", "", "", "TOTAL :", f"{total_amount:.2f}"]]
-            total_table = Table(total_data, colWidths=[2 * cm, 2.5 * cm, 3 * cm, 3 * cm, 2.5 * cm, 2 * cm])
+            total_table = Table(
+                total_data,
+                colWidths=[2 * cm, 2.5 * cm, 3 * cm, 3 * cm, 2.5 * cm, 2 * cm],
+            )
         else:
             if vat_is_applicable:
                 total_data = [
@@ -1237,7 +1397,9 @@ class PDFService:
                 ]
             else:
                 total_data = [["", "", "", "TOTAL :", f"{total_amount:.2f}"]]
-            total_table = Table(total_data, colWidths=[2.5 * cm, 4 * cm, 4 * cm, 2.5 * cm, 2.5 * cm])
+            total_table = Table(
+                total_data, colWidths=[2.5 * cm, 4 * cm, 4 * cm, 2.5 * cm, 2.5 * cm]
+            )
 
         if is_third_party:
             style_rules = [
@@ -1406,19 +1568,34 @@ class PDFService:
         # Informations créancier
         left_section.append(Paragraph("Konto / Zahlbar an", label_style))
         left_section.append(Paragraph(billing_settings.iban, value_style))
-        left_section.append(Paragraph(invoice.company.name or "Emmenez Moi", normal_style))
-        left_section.append(Paragraph(invoice.company.address or "Route de Chevrens 145", normal_style))
+        left_section.append(
+            Paragraph(invoice.company.name or "Emmenez Moi", normal_style)
+        )
+        left_section.append(
+            Paragraph(invoice.company.address or "Route de Chevrens 145", normal_style)
+        )
         left_section.append(Paragraph("1247 Anières", normal_style))
         left_section.append(Spacer(1, 8))
 
         # Informations débiteur
         left_section.append(Paragraph("Zahlbar durch", label_style))
         left_section.append(
-            Paragraph(f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}", normal_style)
+            Paragraph(
+                f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}",
+                normal_style,
+            )
         )
-        left_section.append(Paragraph(invoice.client.domicile_address or "Adresse non renseignée", normal_style))
         left_section.append(
-            Paragraph(f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}", normal_style)
+            Paragraph(
+                invoice.client.domicile_address or "Adresse non renseignée",
+                normal_style,
+            )
+        )
+        left_section.append(
+            Paragraph(
+                f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}",
+                normal_style,
+            )
         )
         left_section.append(Spacer(1, 8))
 
@@ -1438,7 +1615,10 @@ class PDFService:
         # Annahmestelle
         left_section.append(
             Paragraph(
-                "Annahmestelle", ParagraphStyle("Center", parent=styles["Normal"], fontSize=8, alignment=TA_CENTER)
+                "Annahmestelle",
+                ParagraphStyle(
+                    "Center", parent=styles["Normal"], fontSize=8, alignment=TA_CENTER
+                ),
             )
         )
 
@@ -1451,8 +1631,12 @@ class PDFService:
         # Informations créancier
         right_section.append(Paragraph("Konto / Zahlbar an", label_style))
         right_section.append(Paragraph(billing_settings.iban, value_style))
-        right_section.append(Paragraph(invoice.company.name or "Emmenez Moi", normal_style))
-        right_section.append(Paragraph(invoice.company.address or "Route de Chevrens 145", normal_style))
+        right_section.append(
+            Paragraph(invoice.company.name or "Emmenez Moi", normal_style)
+        )
+        right_section.append(
+            Paragraph(invoice.company.address or "Route de Chevrens 145", normal_style)
+        )
         right_section.append(Paragraph("1247 Anières", normal_style))
         right_section.append(Spacer(1, 8))
 
@@ -1463,11 +1647,22 @@ class PDFService:
         # Informations débiteur
         right_section.append(Paragraph("Zahlbar durch", label_style))
         right_section.append(
-            Paragraph(f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}", normal_style)
+            Paragraph(
+                f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}",
+                normal_style,
+            )
         )
-        right_section.append(Paragraph(invoice.client.domicile_address or "Adresse non renseignée", normal_style))
         right_section.append(
-            Paragraph(f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}", normal_style)
+            Paragraph(
+                invoice.client.domicile_address or "Adresse non renseignée",
+                normal_style,
+            )
+        )
+        right_section.append(
+            Paragraph(
+                f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}",
+                normal_style,
+            )
         )
         right_section.append(Spacer(1, 8))
 
@@ -1485,7 +1680,12 @@ class PDFService:
 
         # === LIGNE DE COUPE ===
         cut_line = [
-            Paragraph("✂", ParagraphStyle("CutLine", parent=styles["Normal"], fontSize=12, alignment=TA_CENTER))
+            Paragraph(
+                "✂",
+                ParagraphStyle(
+                    "CutLine", parent=styles["Normal"], fontSize=12, alignment=TA_CENTER
+                ),
+            )
         ]
 
         # Retourner les données du tableau
@@ -1552,8 +1752,14 @@ class PDFService:
         # Konto / Zahlbar an
         left_content.append(Paragraph("Konto / Zahlbar an", label_style))
         left_content.append(Paragraph(billing_settings.iban, value_style))
-        left_content.append(Paragraph(invoice.company.name or "Emmenez Moi", normal_text_style))
-        left_content.append(Paragraph(invoice.company.address or "Route de Chevrens 145", normal_text_style))
+        left_content.append(
+            Paragraph(invoice.company.name or "Emmenez Moi", normal_text_style)
+        )
+        left_content.append(
+            Paragraph(
+                invoice.company.address or "Route de Chevrens 145", normal_text_style
+            )
+        )
         left_content.append(Paragraph("1247 Anières", normal_text_style))
         left_content.append(Spacer(1, 6))
 
@@ -1561,12 +1767,21 @@ class PDFService:
         left_content.append(Paragraph("Zahlbar durch", label_style))
         left_content.append(
             Paragraph(
-                f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}", normal_text_style
+                f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}",
+                normal_text_style,
             )
         )
-        left_content.append(Paragraph(invoice.client.domicile_address or "Adresse non renseignée", normal_text_style))
         left_content.append(
-            Paragraph(f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}", normal_text_style)
+            Paragraph(
+                invoice.client.domicile_address or "Adresse non renseignée",
+                normal_text_style,
+            )
+        )
+        left_content.append(
+            Paragraph(
+                f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}",
+                normal_text_style,
+            )
         )
         left_content.append(Spacer(1, 6))
 
@@ -1586,7 +1801,10 @@ class PDFService:
         # Annahmestelle
         left_content.append(
             Paragraph(
-                "Annahmestelle", ParagraphStyle("Center", parent=styles["Normal"], fontSize=7, alignment=TA_CENTER)
+                "Annahmestelle",
+                ParagraphStyle(
+                    "Center", parent=styles["Normal"], fontSize=7, alignment=TA_CENTER
+                ),
             )
         )
 
@@ -1598,8 +1816,14 @@ class PDFService:
         # Konto / Zahlbar an
         right_content.append(Paragraph("Konto / Zahlbar an", label_style))
         right_content.append(Paragraph(billing_settings.iban, value_style))
-        right_content.append(Paragraph(invoice.company.name or "Emmenez Moi", normal_text_style))
-        right_content.append(Paragraph(invoice.company.address or "Route de Chevrens 145", normal_text_style))
+        right_content.append(
+            Paragraph(invoice.company.name or "Emmenez Moi", normal_text_style)
+        )
+        right_content.append(
+            Paragraph(
+                invoice.company.address or "Route de Chevrens 145", normal_text_style
+            )
+        )
         right_content.append(Paragraph("1247 Anières", normal_text_style))
         right_content.append(Spacer(1, 6))
 
@@ -1611,12 +1835,21 @@ class PDFService:
         right_content.append(Paragraph("Zahlbar durch", label_style))
         right_content.append(
             Paragraph(
-                f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}", normal_text_style
+                f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}",
+                normal_text_style,
             )
         )
-        right_content.append(Paragraph(invoice.client.domicile_address or "Adresse non renseignée", normal_text_style))
         right_content.append(
-            Paragraph(f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}", normal_text_style)
+            Paragraph(
+                invoice.client.domicile_address or "Adresse non renseignée",
+                normal_text_style,
+            )
+        )
+        right_content.append(
+            Paragraph(
+                f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}",
+                normal_text_style,
+            )
         )
         right_content.append(Spacer(1, 6))
 
@@ -1678,7 +1911,9 @@ class PDFService:
         )
 
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2 * cm, bottomMargin=2 * cm)
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4, topMargin=2 * cm, bottomMargin=2 * cm
+        )
 
         # Styles
         styles = getSampleStyleSheet()
@@ -1731,14 +1966,18 @@ class PDFService:
         # Informations du client
         client = invoice.client
         client_name = (
-            f"{client.user.first_name or ''} {client.user.last_name or ''}".strip() or client.user.username or "Client"
+            f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
+            or client.user.username
+            or "Client"
         )
 
         story.append(Paragraph(f"Cher/Chère {client_name},", styles["Normal"]))
         story.append(Spacer(1, 20))
 
         # Message selon le niveau
-        billing_settings = CompanyBillingSettings.query.filter_by(company_id=invoice.company_id).first()
+        billing_settings = CompanyBillingSettings.query.filter_by(
+            company_id=invoice.company_id
+        ).first()
 
         if level == LEVEL_ONE:
             if billing_settings and billing_settings.reminder1template:
@@ -1760,7 +1999,9 @@ class PDFService:
 
         # Informations bancaires
         if billing_settings and billing_settings.iban:
-            banking_info = f"Paiement par virement bancaire : IBAN : {billing_settings.iban}"
+            banking_info = (
+                f"Paiement par virement bancaire : IBAN : {billing_settings.iban}"
+            )
             story.append(Paragraph(banking_info, styles["Normal"]))
 
         # Générer le PDF

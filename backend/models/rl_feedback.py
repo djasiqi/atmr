@@ -44,11 +44,15 @@ class RLFeedback(db.Model):
     action: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     # Raison du rejet (optionnel)
     feedback_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Qui a donné le feedback
+    user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # Qui a donné le feedback
 
     # Dates
     created_at = Column(DateTime, nullable=False, default=func.now(), index=True)
-    suggestion_generated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    suggestion_generated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
 
     # Résultats réels (si appliqué)
     # {gain_minutes, was_better, satisfaction}
@@ -59,7 +63,9 @@ class RLFeedback(db.Model):
     # Contexte pour ré-entraînement
     # État DQN au moment de la suggestion
     suggestion_state = Column(JSON, nullable=True)
-    suggestion_action: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Action DQN choisie
+    suggestion_action: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # Action DQN choisie
     suggestion_confidence = Column(Float, nullable=True)  # Confiance de la suggestion
 
     # Métadonnées
@@ -79,7 +85,9 @@ class RLFeedback(db.Model):
             "action": self.action,
             "feedback_reason": self.feedback_reason,
             "user_id": self.user_id,
-            "created_at": created_at_val.isoformat() if created_at_val is not None else None,
+            "created_at": created_at_val.isoformat()
+            if created_at_val is not None
+            else None,
             "was_successful": self.was_successful,
             "actual_gain_minutes": self.actual_gain_minutes,
             "actual_outcome": self.actual_outcome,

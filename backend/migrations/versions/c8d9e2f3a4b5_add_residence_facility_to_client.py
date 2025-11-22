@@ -18,7 +18,9 @@ depends_on = None
 
 def upgrade():
     # Ajouter la colonne residence_facility à la table client
-    op.add_column("client", sa.Column("residence_facility", sa.String(length=200), nullable=True))
+    op.add_column(
+        "client", sa.Column("residence_facility", sa.String(length=200), nullable=True)
+    )
 
 
 def downgrade():

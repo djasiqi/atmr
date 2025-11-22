@@ -130,7 +130,10 @@ class TestWebSocketEventEdgeCases:
     def test_websocket_message_validation_error(self, mock_socketio):
         """Test erreur de validation de message WebSocket."""
         # Créer un message invalide
-        invalid_message = {"invalid_field": "invalid_value", "another_invalid_field": 123}
+        invalid_message = {
+            "invalid_field": "invalid_value",
+            "another_invalid_field": 123,
+        }
 
         # Mock d'une erreur de validation
         mock_socketio.emit.side_effect = ValueError("Invalid message format")
@@ -152,7 +155,9 @@ class TestWebSocketEventEdgeCases:
         # Tester l'envoi de message à une salle
         message = {"status": "training", "episode": 100}
         mock_socketio.emit_to_room("rl_training_room", "rl_update", message)
-        mock_socketio.emit_to_room.assert_called_once_with("rl_training_room", "rl_update", message)
+        mock_socketio.emit_to_room.assert_called_once_with(
+            "rl_training_room", "rl_update", message
+        )
 
         # Tester la sortie d'une salle
         mock_socketio.leave_room("rl_training_room")
@@ -180,15 +185,21 @@ class TestWebSocketEventEdgeCases:
     def test_websocket_event_manager_error_handling(self, mock_rl_event_manager):
         """Test gestion d'erreurs du gestionnaire d'événements RL."""
         # Mock d'erreurs
-        mock_rl_event_manager.emit_training_update.side_effect = Exception("Emit failed")
-        mock_rl_event_manager.emit_evaluation_update.side_effect = Exception("Emit failed")
+        mock_rl_event_manager.emit_training_update.side_effect = Exception(
+            "Emit failed"
+        )
+        mock_rl_event_manager.emit_evaluation_update.side_effect = Exception(
+            "Emit failed"
+        )
 
         # Tester la gestion d'erreurs
         with pytest.raises(Exception, match="Emit failed"):
             mock_rl_event_manager.emit_training_update({"episode": 100, "reward": 0.5})
 
         with pytest.raises(Exception, match="Emit failed"):
-            mock_rl_event_manager.emit_evaluation_update({"accuracy": 0.95, "f1_score": 0.92})
+            mock_rl_event_manager.emit_evaluation_update(
+                {"accuracy": 0.95, "f1_score": 0.92}
+            )
 
     def test_websocket_event_manager_performance(self, mock_rl_event_manager):
         """Test performance du gestionnaire d'événements RL."""
@@ -230,11 +241,15 @@ class TestWebSocketEventEdgeCases:
 
         def emit_training_events():
             for i in range(100):
-                mock_rl_event_manager.emit_training_update({"episode": i, "reward": 0.5})
+                mock_rl_event_manager.emit_training_update(
+                    {"episode": i, "reward": 0.5}
+                )
 
         def emit_evaluation_events():
             for _i in range(100):
-                mock_rl_event_manager.emit_evaluation_update({"accuracy": 0.95, "f1_score": 0.92})
+                mock_rl_event_manager.emit_evaluation_update(
+                    {"accuracy": 0.95, "f1_score": 0.92}
+                )
 
         # Lancer les threads
         thread1 = threading.Thread(target=emit_training_events)

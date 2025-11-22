@@ -26,8 +26,13 @@ class TestLazyImport:
             mock_dispatch_env = Mock()
 
             with (
-                patch("services.rl.suggestion_generator.improved_dqn_agent", mock_dqn_agent),
-                patch("services.rl.suggestion_generator.dispatch_env", mock_dispatch_env),
+                patch(
+                    "services.rl.suggestion_generator.improved_dqn_agent",
+                    mock_dqn_agent,
+                ),
+                patch(
+                    "services.rl.suggestion_generator.dispatch_env", mock_dispatch_env
+                ),
             ):
                 _lazy_import_rl()
 
@@ -41,7 +46,10 @@ class TestLazyImport:
         with (
             patch("services.rl.suggestion_generator._dqn_agent", None),
             patch("services.rl.suggestion_generator._dispatch_env", None),
-            patch("services.rl.suggestion_generator.improved_dqn_agent", side_effect=ImportError("Module not found")),
+            patch(
+                "services.rl.suggestion_generator.improved_dqn_agent",
+                side_effect=ImportError("Module not found"),
+            ),
             pytest.raises(ImportError),
         ):
             _lazy_import_rl()
@@ -93,8 +101,13 @@ class TestRLSuggestionGenerator:
         mock_env = Mock()
 
         with (
-            patch("services.rl.suggestion_generator.ImprovedDQNAgent", return_value=mock_agent),
-            patch("services.rl.suggestion_generator.DispatchEnv", return_value=mock_env),
+            patch(
+                "services.rl.suggestion_generator.ImprovedDQNAgent",
+                return_value=mock_agent,
+            ),
+            patch(
+                "services.rl.suggestion_generator.DispatchEnv", return_value=mock_env
+            ),
             patch("torch.load", return_value={"state_dict": {}}),
         ):
             generator = RLSuggestionGenerator()
@@ -131,7 +144,10 @@ class TestRLSuggestionGenerator:
         drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": True}]
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=assignments, drivers=drivers, for_date="2024-0.1-0.1"
+            company_id=1,
+            assignments=assignments,
+            drivers=drivers,
+            for_date="2024-0.1-0.1",
         )
 
         # Devrait retourner des suggestions basiques
@@ -160,7 +176,10 @@ class TestRLSuggestionGenerator:
         drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": True}]
 
         suggestions = generator.generate_suggestions(
-            company_id=1, assignments=assignments, drivers=drivers, for_date="2024-0.1-0.1"
+            company_id=1,
+            assignments=assignments,
+            drivers=drivers,
+            for_date="2024-0.1-0.1",
         )
 
         assert isinstance(suggestions, list)
@@ -252,7 +271,12 @@ class TestRLSuggestionGenerator:
         """Test formatage des suggestions."""
         generator = RLSuggestionGenerator()
 
-        suggestion = {"booking_id": 1, "driver_id": 2, "confidence": 0.8, "reason": "Optimization"}
+        suggestion = {
+            "booking_id": 1,
+            "driver_id": 2,
+            "confidence": 0.8,
+            "reason": "Optimization",
+        }
 
         formatted = generator._format_suggestion(suggestion)
 
@@ -382,7 +406,9 @@ class TestRLSuggestionGenerator:
         drivers = [{"id": 1, "lat": 46.2, "lon": 6.1, "available": True}]
 
         # Test avec seuil de confiance élevé
-        suggestions = generator.generate_suggestions(bookings, drivers, confidence_threshold=0.8)
+        suggestions = generator.generate_suggestions(
+            bookings, drivers, confidence_threshold=0.8
+        )
 
         assert isinstance(suggestions, list)
         # Devrait avoir moins de suggestions avec un seuil élevé
@@ -392,11 +418,22 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         bookings = [
-            {"id": i, "pickup_lat": 46.2 + i * 0.1, "pickup_lon": 6.1 + i * 0.1, "assigned": False} for i in range(10)
+            {
+                "id": i,
+                "pickup_lat": 46.2 + i * 0.1,
+                "pickup_lon": 6.1 + i * 0.1,
+                "assigned": False,
+            }
+            for i in range(10)
         ]
-        drivers = [{"id": i, "lat": 46.2 + i * 0.1, "lon": 6.1 + i * 0.1, "available": True} for i in range(10)]
+        drivers = [
+            {"id": i, "lat": 46.2 + i * 0.1, "lon": 6.1 + i * 0.1, "available": True}
+            for i in range(10)
+        ]
 
-        suggestions = generator.generate_suggestions(bookings, drivers, max_suggestions=3)
+        suggestions = generator.generate_suggestions(
+            bookings, drivers, max_suggestions=3
+        )
 
         assert isinstance(suggestions, list)
         assert len(suggestions) <= 3

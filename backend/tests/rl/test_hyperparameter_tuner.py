@@ -71,7 +71,9 @@ class TestHyperparameterTunerSanity:
             assert 0.90 <= config["gamma"] <= 0.999, "gamma hors bornes"
             assert 0.7 <= config["epsilon_start"] <= 1.0, "epsilon_start hors bornes"
             assert 0.01 <= config["epsilon_end"] <= 0.1, "epsilon_end hors bornes"
-            assert 0.990 <= config["epsilon_decay"] <= 0.999, "epsilon_decay hors bornes"
+            assert 0.990 <= config["epsilon_decay"] <= 0.999, (
+                "epsilon_decay hors bornes"
+            )
             assert 0.4 <= config["alpha"] <= 0.8, "alpha hors bornes"
             assert 0.3 <= config["beta_start"] <= 0.6, "beta_start hors bornes"
             assert 0.8 <= config["beta_end"] <= 1.0, "beta_end hors bornes"
@@ -79,16 +81,26 @@ class TestHyperparameterTunerSanity:
             assert 0.0001 <= config["tau"] <= 0.01, "tau hors bornes"
 
             # Vérifier les bornes des paramètres entiers
-            assert 5 <= config["target_update_freq"] <= 50, "target_update_freq hors bornes"
+            assert 5 <= config["target_update_freq"] <= 50, (
+                "target_update_freq hors bornes"
+            )
             assert 2 <= config["n_step"] <= 5, "n_step hors bornes"
             assert 5 <= config["num_drivers"] <= 20, "num_drivers hors bornes"
             assert 10 <= config["max_bookings"] <= 50, "max_bookings hors bornes"
 
             # Vérifier les choix catégoriques
-            assert config["batch_size"] in [32, 64, 128, 256], "batch_size choix invalide"
-            assert config["buffer_size"] in [50000, 100000, 200000, 500000], "buffer_size choix invalide"
-            assert config["use_double_dqn"] in [True, False], "use_double_dqn choix invalide"
-            assert config["use_prioritized_replay"] in [True, False], "use_prioritized_replay choix invalide"
+            assert config["batch_size"] in [32, 64, 128, 256], (
+                "batch_size choix invalide"
+            )
+            assert config["buffer_size"] in [50000, 100000, 200000, 500000], (
+                "buffer_size choix invalide"
+            )
+            assert config["use_double_dqn"] in [True, False], (
+                "use_double_dqn choix invalide"
+            )
+            assert config["use_prioritized_replay"] in [True, False], (
+                "use_prioritized_replay choix invalide"
+            )
             assert config["use_n_step"] in [True, False], "use_n_step choix invalide"
             assert config["use_dueling"] in [True, False], "use_dueling choix invalide"
 
@@ -105,7 +117,11 @@ class TestHyperparameterTunerSanity:
             config = tuner._suggest_hyperparameters(trial)
 
             # Vérifier si le triplet gagnant est présent
-            if config["use_prioritized_replay"] and config["use_n_step"] and config["use_dueling"]:
+            if (
+                config["use_prioritized_replay"]
+                and config["use_n_step"]
+                and config["use_dueling"]
+            ):
                 triplet_found = True
                 break
 
@@ -174,21 +190,36 @@ class TestHyperparameterTunerSanity:
 
         # Trial avec triplet gagnant
         trial1 = optuna.trial.create_trial(
-            params={"use_prioritized_replay": True, "use_n_step": True, "use_dueling": True, "learning_rate": 0.0001},
+            params={
+                "use_prioritized_replay": True,
+                "use_n_step": True,
+                "use_dueling": True,
+                "learning_rate": 0.0001,
+            },
             value=0.6000,
         )
         mock_trials.append(trial1)
 
         # Trial avec seulement PER
         trial2 = optuna.trial.create_trial(
-            params={"use_prioritized_replay": True, "use_n_step": False, "use_dueling": False, "learning_rate": 0.0001},
+            params={
+                "use_prioritized_replay": True,
+                "use_n_step": False,
+                "use_dueling": False,
+                "learning_rate": 0.0001,
+            },
             value=0.5500,
         )
         mock_trials.append(trial2)
 
         # Trial avec seulement N-step
         trial3 = optuna.trial.create_trial(
-            params={"use_prioritized_replay": False, "use_n_step": True, "use_dueling": False, "learning_rate": 0.0001},
+            params={
+                "use_prioritized_replay": False,
+                "use_n_step": True,
+                "use_dueling": False,
+                "learning_rate": 0.0001,
+            },
             value=0.5200,
         )
         mock_trials.append(trial3)
@@ -209,11 +240,15 @@ class TestHyperparameterTunerSanity:
         mock_trials = []
 
         # Trial avec Double DQN activé
-        trial1 = optuna.trial.create_trial(params={"use_double_dqn": True, "learning_rate": 0.0001}, value=0.6000)
+        trial1 = optuna.trial.create_trial(
+            params={"use_double_dqn": True, "learning_rate": 0.0001}, value=0.6000
+        )
         mock_trials.append(trial1)
 
         # Trial avec Double DQN désactivé
-        trial2 = optuna.trial.create_trial(params={"use_double_dqn": False, "learning_rate": 0.0001}, value=0.5000)
+        trial2 = optuna.trial.create_trial(
+            params={"use_double_dqn": False, "learning_rate": 0.0001}, value=0.5000
+        )
         mock_trials.append(trial2)
 
         # Analyser l'importance des features
@@ -229,7 +264,10 @@ class TestHyperparameterTunerSanity:
     def test_tuner_initialization(self):
         """Test l'initialisation du tuner."""
         tuner = HyperparameterTuner(
-            n_trials=0.100, n_training_episodes=0.300, n_eval_episodes=30, study_name="test_study"
+            n_trials=0.100,
+            n_training_episodes=0.300,
+            n_eval_episodes=30,
+            study_name="test_study",
         )
 
         assert tuner.n_trials == 100

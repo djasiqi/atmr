@@ -15,7 +15,10 @@ def mock_osrm(monkeypatch):
 
     def fake_table(*args, **kwargs):
         # Retourne une matrice 3x3 factice (durées en secondes)
-        return {"code": "Ok", "durations": [[0, 600, 1200], [600, 0, 800], [1200, 800, 0]]}
+        return {
+            "code": "Ok",
+            "durations": [[0, 600, 1200], [600, 0, 800], [1200, 800, 0]],
+        }
 
     monkeypatch.setattr("services.osrm_client._table", fake_table)
     return fake_table
@@ -75,7 +78,9 @@ def test_dispatch_requires_auth(client):
     assert response.status_code == 401
 
 
-def test_create_booking_for_dispatch(client, auth_headers, db, sample_user, sample_client, sample_company):
+def test_create_booking_for_dispatch(
+    client, auth_headers, db, sample_user, sample_client, sample_company
+):
     """Créer des bookings en attente pour dispatch."""
     # Créer 2 bookings PENDING
     for i in range(2):

@@ -31,7 +31,9 @@ def upgrade():
         sa.Column("expected_gain_minutes", sa.Integer(), server_default="0"),
         sa.Column("q_value", sa.Float(), nullable=True),
         sa.Column("source", sa.String(length=50), nullable=False),
-        sa.Column("generated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "generated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+        ),
         sa.Column("applied_at", sa.DateTime(), nullable=True),
         sa.Column("rejected_at", sa.DateTime(), nullable=True),
         sa.Column("actual_gain_minutes", sa.Integer(), nullable=True),
@@ -42,16 +44,36 @@ def upgrade():
     )
 
     # Créer index pour performance
-    op.create_index("ix_rl_suggestion_metrics_company_id", "rl_suggestion_metrics", ["company_id"])
-    op.create_index("ix_rl_suggestion_metrics_suggestion_id", "rl_suggestion_metrics", ["suggestion_id"])
-    op.create_index("ix_rl_suggestion_metrics_booking_id", "rl_suggestion_metrics", ["booking_id"])
-    op.create_index("ix_rl_suggestion_metrics_generated_at", "rl_suggestion_metrics", ["generated_at"])
+    op.create_index(
+        "ix_rl_suggestion_metrics_company_id", "rl_suggestion_metrics", ["company_id"]
+    )
+    op.create_index(
+        "ix_rl_suggestion_metrics_suggestion_id",
+        "rl_suggestion_metrics",
+        ["suggestion_id"],
+    )
+    op.create_index(
+        "ix_rl_suggestion_metrics_booking_id", "rl_suggestion_metrics", ["booking_id"]
+    )
+    op.create_index(
+        "ix_rl_suggestion_metrics_generated_at",
+        "rl_suggestion_metrics",
+        ["generated_at"],
+    )
 
 
 def downgrade():
     """Supprimer la table rl_suggestion_metrics."""
-    op.drop_index("ix_rl_suggestion_metrics_generated_at", table_name="rl_suggestion_metrics")
-    op.drop_index("ix_rl_suggestion_metrics_booking_id", table_name="rl_suggestion_metrics")
-    op.drop_index("ix_rl_suggestion_metrics_suggestion_id", table_name="rl_suggestion_metrics")
-    op.drop_index("ix_rl_suggestion_metrics_company_id", table_name="rl_suggestion_metrics")
+    op.drop_index(
+        "ix_rl_suggestion_metrics_generated_at", table_name="rl_suggestion_metrics"
+    )
+    op.drop_index(
+        "ix_rl_suggestion_metrics_booking_id", table_name="rl_suggestion_metrics"
+    )
+    op.drop_index(
+        "ix_rl_suggestion_metrics_suggestion_id", table_name="rl_suggestion_metrics"
+    )
+    op.drop_index(
+        "ix_rl_suggestion_metrics_company_id", table_name="rl_suggestion_metrics"
+    )
     op.drop_table("rl_suggestion_metrics")

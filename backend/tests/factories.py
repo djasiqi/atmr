@@ -43,7 +43,9 @@ class SQLAlchemyModelFactory(factory.alchemy.SQLAlchemyModelFactory):
     class Meta:
         abstract = True
         sqlalchemy_session = db.session
-        sqlalchemy_session_persistence = "flush"  # Use flush instead of commit to work with savepoints
+        sqlalchemy_session_persistence = (
+            "flush"  # Use flush instead of commit to work with savepoints
+        )
 
 
 # ========== USER & COMPANY ==========
@@ -56,14 +58,20 @@ class UserFactory(SQLAlchemyModelFactory):
         model = User
 
     username = factory.LazyAttribute(lambda _: f"user_{uuid.uuid4().hex[:8]}")
-    email = factory.LazyAttribute(lambda _: f"test_{uuid.uuid4().hex[:12]}@atmr-test.ch")
+    email = factory.LazyAttribute(
+        lambda _: f"test_{uuid.uuid4().hex[:12]}@atmr-test.ch"
+    )
     password = factory.LazyFunction(
         lambda: "$2b$12$KIXabcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJK"  # Hash bcrypt fake
     )
     first_name = factory.LazyAttribute(lambda _: fake.first_name())
     last_name = factory.LazyAttribute(lambda _: fake.last_name())
-    phone = factory.LazyAttribute(lambda _: f"+41{fake.numerify('##########')}")  # Format suisse valide
-    role = fuzzy.FuzzyChoice([UserRole.ADMIN, UserRole.CLIENT, UserRole.DRIVER, UserRole.COMPANY])
+    phone = factory.LazyAttribute(
+        lambda _: f"+41{fake.numerify('##########')}"
+    )  # Format suisse valide
+    role = fuzzy.FuzzyChoice(
+        [UserRole.ADMIN, UserRole.CLIENT, UserRole.DRIVER, UserRole.COMPANY]
+    )
     created_at = factory.LazyFunction(datetime.utcnow)
 
 
@@ -82,7 +90,9 @@ class CompanyFactory(SQLAlchemyModelFactory):
     contact_phone = factory.LazyAttribute(lambda _: fake.phone_number()[:20])
 
     iban = factory.LazyAttribute(lambda _: fake.iban())
-    uid_ide = factory.LazyAttribute(lambda _: f"CHE-{fake.random_number(digits=9, fix_len=True)}")
+    uid_ide = factory.LazyAttribute(
+        lambda _: f"CHE-{fake.random_number(digits=9, fix_len=True)}"
+    )
     billing_email = factory.LazyAttribute(lambda _: fake.email())
 
     user = factory.SubFactory(UserFactory, role=UserRole.ADMIN)
@@ -103,9 +113,13 @@ class ClientFactory(SQLAlchemyModelFactory):
         model = Client
 
     user = factory.SubFactory(UserFactory, role=UserRole.CLIENT)
-    company = factory.SubFactory(CompanyFactory)  # Toujours créer une company pour éviter NULL company_id
+    company = factory.SubFactory(
+        CompanyFactory
+    )  # Toujours créer une company pour éviter NULL company_id
 
-    billing_address = factory.LazyAttribute(lambda _: fake.address().replace("\n", ", ")[:255])
+    billing_address = factory.LazyAttribute(
+        lambda _: fake.address().replace("\n", ", ")[:255]
+    )
     contact_email = factory.LazyAttribute(lambda _: fake.email())
     contact_phone = factory.LazyAttribute(lambda _: f"+41{fake.numerify('##########')}")
 
@@ -120,18 +134,26 @@ class DriverFactory(SQLAlchemyModelFactory):
         model = Driver
 
     user = factory.SubFactory(UserFactory, role=UserRole.DRIVER)
-    company = factory.SubFactory(CompanyFactory)  # Toujours créer une company pour éviter NULL company_id
+    company = factory.SubFactory(
+        CompanyFactory
+    )  # Toujours créer une company pour éviter NULL company_id
 
     vehicle_assigned = factory.LazyAttribute(lambda _: fake.word().capitalize())
     brand = factory.LazyAttribute(lambda _: fake.company()[:100])
-    license_plate = factory.LazyAttribute(lambda _: f"{fake.lexify('??')}-{fake.numerify('####')}")
+    license_plate = factory.LazyAttribute(
+        lambda _: f"{fake.lexify('??')}-{fake.numerify('####')}"
+    )
 
     is_active = True
     is_available = True
     driver_type = DriverType.REGULAR
 
-    latitude = factory.LazyAttribute(lambda _: 46.2 + (fake.random.random() - 0.5) * 0.2)  # Genève area
-    longitude = factory.LazyAttribute(lambda _: 6.1 + (fake.random.random() - 0.5) * 0.2)
+    latitude = factory.LazyAttribute(
+        lambda _: 46.2 + (fake.random.random() - 0.5) * 0.2
+    )  # Genève area
+    longitude = factory.LazyAttribute(
+        lambda _: 6.1 + (fake.random.random() - 0.5) * 0.2
+    )
     last_position_update = factory.LazyFunction(datetime.utcnow)
 
     contract_type = "CDI"
@@ -150,7 +172,9 @@ class VehicleFactory(SQLAlchemyModelFactory):
 
     brand = factory.LazyAttribute(lambda _: fake.company()[:50])
     model = factory.LazyAttribute(lambda _: fake.word().capitalize()[:50])
-    license_plate = factory.LazyAttribute(lambda _: f"{fake.lexify('??')}-{fake.numerify('####')}")
+    license_plate = factory.LazyAttribute(
+        lambda _: f"{fake.lexify('??')}-{fake.numerify('####')}"
+    )
     year = factory.LazyAttribute(lambda _: fake.random_int(min=2010, max=2025))
 
     capacity_passengers = fuzzy.FuzzyInteger(4, 8)
@@ -172,26 +196,46 @@ class BookingFactory(SQLAlchemyModelFactory):
 
     customer_name = factory.LazyAttribute(lambda _: fake.name())
 
-    pickup_location = factory.LazyAttribute(lambda _: fake.address().replace("\n", ", ")[:200])
-    pickup_lat = factory.LazyAttribute(lambda _: 46.2 + (fake.random.random() - 0.5) * 0.2)
-    pickup_lon = factory.LazyAttribute(lambda _: 6.1 + (fake.random.random() - 0.5) * 0.2)
+    pickup_location = factory.LazyAttribute(
+        lambda _: fake.address().replace("\n", ", ")[:200]
+    )
+    pickup_lat = factory.LazyAttribute(
+        lambda _: 46.2 + (fake.random.random() - 0.5) * 0.2
+    )
+    pickup_lon = factory.LazyAttribute(
+        lambda _: 6.1 + (fake.random.random() - 0.5) * 0.2
+    )
 
-    dropoff_location = factory.LazyAttribute(lambda _: fake.address().replace("\n", ", ")[:200])
-    dropoff_lat = factory.LazyAttribute(lambda _: 46.2 + (fake.random.random() - 0.5) * 0.2)
-    dropoff_lon = factory.LazyAttribute(lambda _: 6.1 + (fake.random.random() - 0.5) * 0.2)
+    dropoff_location = factory.LazyAttribute(
+        lambda _: fake.address().replace("\n", ", ")[:200]
+    )
+    dropoff_lat = factory.LazyAttribute(
+        lambda _: 46.2 + (fake.random.random() - 0.5) * 0.2
+    )
+    dropoff_lon = factory.LazyAttribute(
+        lambda _: 6.1 + (fake.random.random() - 0.5) * 0.2
+    )
 
     booking_type = "standard"
-    scheduled_time = factory.LazyFunction(lambda: datetime.utcnow() + timedelta(hours=2))
+    scheduled_time = factory.LazyFunction(
+        lambda: datetime.utcnow() + timedelta(hours=2)
+    )
 
     amount = factory.LazyAttribute(lambda _: round(fake.random.uniform(50.0, 200.0), 2))
     status = BookingStatus.PENDING
 
     client = factory.SubFactory(ClientFactory)
     company = factory.SubFactory(CompanyFactory)
-    user_id = factory.LazyAttribute(lambda obj: obj.client.user.id if obj.client else None)
+    user_id = factory.LazyAttribute(
+        lambda obj: obj.client.user.id if obj.client else None
+    )
 
-    duration_seconds = factory.LazyAttribute(lambda _: fake.random_int(min=600, max=3600))
-    distance_meters = factory.LazyAttribute(lambda _: fake.random_int(min=1000, max=50000))
+    duration_seconds = factory.LazyAttribute(
+        lambda _: fake.random_int(min=600, max=3600)
+    )
+    distance_meters = factory.LazyAttribute(
+        lambda _: fake.random_int(min=1000, max=50000)
+    )
 
     wheelchair_client_has = False
     wheelchair_need = False
@@ -215,10 +259,14 @@ class AssignmentFactory(SQLAlchemyModelFactory):
     status = AssignmentStatus.SCHEDULED
 
     planned_pickup_at = factory.LazyAttribute(
-        lambda obj: obj.booking.scheduled_time if obj.booking else datetime.utcnow() + timedelta(hours=1)
+        lambda obj: obj.booking.scheduled_time
+        if obj.booking
+        else datetime.utcnow() + timedelta(hours=1)
     )
     planned_dropoff_at = factory.LazyAttribute(
-        lambda obj: obj.planned_pickup_at + timedelta(minutes=30) if obj.planned_pickup_at else None
+        lambda obj: obj.planned_pickup_at + timedelta(minutes=30)
+        if obj.planned_pickup_at
+        else None
     )
 
     created_at = factory.LazyFunction(datetime.utcnow)
@@ -257,8 +305,12 @@ class InvoiceFactory(SQLAlchemyModelFactory):
     invoice_date = factory.LazyFunction(date.today)
     due_date = factory.LazyAttribute(lambda obj: obj.invoice_date + timedelta(days=30))
 
-    total_amount = factory.LazyAttribute(lambda _: round(fake.random.uniform(100.0, 1000.0), 2))
-    tax_amount = factory.LazyAttribute(lambda obj: round(obj.total_amount * 0.077, 2))  # TVA 7.7%
+    total_amount = factory.LazyAttribute(
+        lambda _: round(fake.random.uniform(100.0, 1000.0), 2)
+    )
+    tax_amount = factory.LazyAttribute(
+        lambda obj: round(obj.total_amount * 0.077, 2)
+    )  # TVA 7.7%
 
     status = "pending"
     currency = "CHF"
@@ -279,13 +331,21 @@ class MLPredictionFactory(SQLAlchemyModelFactory):
     driver = factory.SubFactory(DriverFactory)
     request_id = factory.LazyAttribute(lambda _: f"req_{fake.uuid4()[:8]}")
 
-    predicted_delay_minutes = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.0, 15.0), 2))
-    confidence = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.5, 0.95), 3))
+    predicted_delay_minutes = factory.LazyAttribute(
+        lambda _: round(fake.random.uniform(0.0, 15.0), 2)
+    )
+    confidence = factory.LazyAttribute(
+        lambda _: round(fake.random.uniform(0.5, 0.95), 3)
+    )
     risk_level = fuzzy.FuzzyChoice(["low", "medium", "high"])
-    contributing_factors = factory.LazyAttribute(lambda _: '{"distance_x_weather": 0.42, "traffic_x_weather": 0.35}')
+    contributing_factors = factory.LazyAttribute(
+        lambda _: '{"distance_x_weather": 0.42, "traffic_x_weather": 0.35}'
+    )
 
     model_version = "v1.0"
-    prediction_time_ms = factory.LazyAttribute(lambda _: round(fake.random.uniform(50.0, 500.0), 1))
+    prediction_time_ms = factory.LazyAttribute(
+        lambda _: round(fake.random.uniform(50.0, 500.0), 1)
+    )
     feature_flag_enabled = True
     traffic_percentage = 10
 
@@ -314,22 +374,38 @@ class AutonomousActionFactory(SQLAlchemyModelFactory):
         model = AutonomousAction
 
     company = factory.SubFactory(CompanyFactory)  # REQUIRED: company_id NOT NULL
-    booking = factory.SubFactory(BookingFactory)  # Optionnel mais créé par défaut pour éviter FK errors
+    booking = factory.SubFactory(
+        BookingFactory
+    )  # Optionnel mais créé par défaut pour éviter FK errors
     driver = factory.LazyAttribute(
-        lambda obj: obj.booking.driver_id if obj.booking and hasattr(obj.booking, "driver_id") else None
+        lambda obj: obj.booking.driver_id
+        if obj.booking and hasattr(obj.booking, "driver_id")
+        else None
     )
 
-    action_type = fuzzy.FuzzyChoice(["reassign", "adjust_time", "notify_customer", "redistribute", "reoptimize"])
-    action_description = factory.LazyAttribute(lambda obj: f"Action {obj.action_type} for booking {obj.booking_id}")
+    action_type = fuzzy.FuzzyChoice(
+        ["reassign", "adjust_time", "notify_customer", "redistribute", "reoptimize"]
+    )
+    action_description = factory.LazyAttribute(
+        lambda obj: f"Action {obj.action_type} for booking {obj.booking_id}"
+    )
     action_data = factory.LazyAttribute(lambda _: '{"before": {}, "after": {}}')
 
     success = True
     error_message = None
-    execution_time_ms = factory.LazyAttribute(lambda _: round(fake.random.uniform(10.0, 500.0), 2))
-    confidence_score = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.5, 0.95), 3))
-    expected_improvement_minutes = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.0, 15.0), 2))
+    execution_time_ms = factory.LazyAttribute(
+        lambda _: round(fake.random.uniform(10.0, 500.0), 2)
+    )
+    confidence_score = factory.LazyAttribute(
+        lambda _: round(fake.random.uniform(0.5, 0.95), 3)
+    )
+    expected_improvement_minutes = factory.LazyAttribute(
+        lambda _: round(fake.random.uniform(0.0, 15.0), 2)
+    )
 
-    trigger_source = fuzzy.FuzzyChoice(["autorun_scheduler", "realtime_optimizer", "ml_prediction", "manual_trigger"])
+    trigger_source = fuzzy.FuzzyChoice(
+        ["autorun_scheduler", "realtime_optimizer", "ml_prediction", "manual_trigger"]
+    )
 
     reviewed_by_admin = False
     reviewed_at = None
@@ -338,18 +414,36 @@ class AutonomousActionFactory(SQLAlchemyModelFactory):
     created_at = factory.LazyFunction(datetime.utcnow)
     updated_at = factory.LazyFunction(datetime.utcnow)
 
-    ml_delay_minutes = factory.LazyAttribute(lambda _: round(fake.random.uniform(3.0, 10.0), 2))
-    ml_confidence = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.5, 0.9), 3))
+    ml_delay_minutes = factory.LazyAttribute(
+        lambda _: round(fake.random.uniform(3.0, 10.0), 2)
+    )
+    ml_confidence = factory.LazyAttribute(
+        lambda _: round(fake.random.uniform(0.5, 0.9), 3)
+    )
     ml_risk_level = fuzzy.FuzzyChoice(["low", "medium", "high"])
-    ml_prediction_time_ms = factory.LazyAttribute(lambda _: round(fake.random.uniform(100.0, 900.0), 1))
-    ml_weather_factor = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.0, 1.0), 2))
+    ml_prediction_time_ms = factory.LazyAttribute(
+        lambda _: round(fake.random.uniform(100.0, 900.0), 1)
+    )
+    ml_weather_factor = factory.LazyAttribute(
+        lambda _: round(fake.random.uniform(0.0, 1.0), 2)
+    )
 
-    heuristic_delay_minutes = factory.LazyAttribute(lambda _: round(fake.random.uniform(5.0, 12.0), 2))
-    heuristic_prediction_time_ms = factory.LazyAttribute(lambda _: round(fake.random.uniform(0.0, 1.0), 1))
+    heuristic_delay_minutes = factory.LazyAttribute(
+        lambda _: round(fake.random.uniform(5.0, 12.0), 2)
+    )
+    heuristic_prediction_time_ms = factory.LazyAttribute(
+        lambda _: round(fake.random.uniform(0.0, 1.0), 1)
+    )
 
-    difference_minutes = factory.LazyAttribute(lambda obj: abs(obj.ml_delay_minutes - obj.heuristic_delay_minutes))
-    ml_faster = factory.LazyAttribute(lambda obj: obj.ml_prediction_time_ms < obj.heuristic_prediction_time_ms)
-    speed_advantage_ms = factory.LazyAttribute(lambda obj: obj.heuristic_prediction_time_ms - obj.ml_prediction_time_ms)
+    difference_minutes = factory.LazyAttribute(
+        lambda obj: abs(obj.ml_delay_minutes - obj.heuristic_delay_minutes)
+    )
+    ml_faster = factory.LazyAttribute(
+        lambda obj: obj.ml_prediction_time_ms < obj.heuristic_prediction_time_ms
+    )
+    speed_advantage_ms = factory.LazyAttribute(
+        lambda obj: obj.heuristic_prediction_time_ms - obj.ml_prediction_time_ms
+    )
 
     created_at = factory.LazyFunction(datetime.utcnow)
     updated_at = factory.LazyFunction(datetime.utcnow)
@@ -405,7 +499,10 @@ def create_driver_with_position(
 
 
 def create_assignment_with_booking_driver(
-    booking: Any | None = None, driver: Any | None = None, company: Any | None = None, **kwargs: Any
+    booking: Any | None = None,
+    driver: Any | None = None,
+    company: Any | None = None,
+    **kwargs: Any,
 ) -> Assignment:
     """Crée un assignment avec booking et driver spécifiques."""
     if company is None:
@@ -421,7 +518,10 @@ def create_assignment_with_booking_driver(
 
 
 def create_dispatch_scenario(
-    company: Any | None = None, num_bookings: int = 5, num_drivers: int = 3, dispatch_day: date | None = None
+    company: Any | None = None,
+    num_bookings: int = 5,
+    num_drivers: int = 3,
+    dispatch_day: date | None = None,
 ) -> dict[str, Any]:
     """
     Crée un scénario de dispatch complet pour tests.
@@ -435,20 +535,26 @@ def create_dispatch_scenario(
         dispatch_day = date.today()
 
     # Créer drivers
-    drivers = [create_driver_with_position(company=company, is_available=True) for _ in range(num_drivers)]
+    drivers = [
+        create_driver_with_position(company=company, is_available=True)
+        for _ in range(num_drivers)
+    ]
 
     # Créer bookings
     bookings = [
         create_booking_with_coordinates(
             company=company,
-            scheduled_time=datetime.combine(dispatch_day, datetime.min.time()) + timedelta(hours=8 + i),
+            scheduled_time=datetime.combine(dispatch_day, datetime.min.time())
+            + timedelta(hours=8 + i),
             status=BookingStatus.PENDING,
         )
         for i in range(num_bookings)
     ]
 
     # Créer dispatch run
-    dispatch_run = DispatchRunFactory(company=company, day=dispatch_day, status=DispatchStatus.PENDING)
+    dispatch_run = DispatchRunFactory(
+        company=company, day=dispatch_day, status=DispatchStatus.PENDING
+    )
 
     db.session.flush()  # Use flush instead of commit to work with savepoints
 

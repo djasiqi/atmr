@@ -59,7 +59,10 @@ class TestShadowModeManager(unittest.TestCase):
             "avg_distance": 12.0,
             "avg_load": 0.65,
             "vehicle_capacity": 4,
-            "driver_performance": {"driver_rl": {"rating": 4.5}, "driver_human": {"rating": 4.2}},
+            "driver_performance": {
+                "driver_rl": {"rating": 4.5},
+                "driver_human": {"rating": 4.2},
+            },
         }
 
     def tearDown(self):
@@ -118,7 +121,9 @@ class TestShadowModeManager(unittest.TestCase):
 
     def test_calculate_kpis(self):
         """Test le calcul des KPIs."""
-        kpis = self.manager._calculate_kpis(self.human_decision, self.rl_decision, self.context)
+        kpis = self.manager._calculate_kpis(
+            self.human_decision, self.rl_decision, self.context
+        )
 
         # Test ETA delta
         assert kpis["eta_delta"] == -3
@@ -163,7 +168,9 @@ class TestShadowModeManager(unittest.TestCase):
     def test_check_constraint_violations(self):
         """Test la vérification des violations de contraintes."""
         # Test sans violations
-        violations = self.manager._check_constraint_violations(self.rl_decision, self.context)
+        violations = self.manager._check_constraint_violations(
+            self.rl_decision, self.context
+        )
         assert len(violations) == 0
 
         # Test avec violations
@@ -173,7 +180,9 @@ class TestShadowModeManager(unittest.TestCase):
         rl_decision_with_violations["passenger_count"] = 6
         rl_decision_with_violations["in_service_area"] = False
 
-        violations = self.manager._check_constraint_violations(rl_decision_with_violations, self.context)
+        violations = self.manager._check_constraint_violations(
+            rl_decision_with_violations, self.context
+        )
 
         assert len(violations) == 4
         assert "Fenêtre horaire non respectée" in violations
@@ -183,7 +192,9 @@ class TestShadowModeManager(unittest.TestCase):
 
     def test_calculate_performance_impact(self):
         """Test le calcul de l'impact sur la performance."""
-        impact = self.manager._calculate_performance_impact(self.human_decision, self.rl_decision, self.context)
+        impact = self.manager._calculate_performance_impact(
+            self.human_decision, self.rl_decision, self.context
+        )
 
         assert isinstance(impact, dict)
         assert "eta_improvement" in impact
@@ -252,7 +263,9 @@ class TestShadowModeManager(unittest.TestCase):
         )
 
         # Décision d'hier pour test_company (ajouter directement aux métadonnées)
-        yesterday_timestamp = datetime.combine(yesterday, datetime.min.time()).replace(tzinfo=UTC)
+        yesterday_timestamp = datetime.combine(yesterday, datetime.min.time()).replace(
+            tzinfo=UTC
+        )
         self.manager.decision_metadata["timestamp"].append(yesterday_timestamp)
         self.manager.decision_metadata["company_id"].append(self.test_company_id)
         self.manager.decision_metadata["booking_id"].append("booking_yesterday")
@@ -262,7 +275,9 @@ class TestShadowModeManager(unittest.TestCase):
         self.manager.decision_metadata["context"].append(self.context)
 
         # Filtrer pour aujourd'hui
-        filtered_data = self.manager._filter_data_by_company_and_date(self.test_company_id, today)
+        filtered_data = self.manager._filter_data_by_company_and_date(
+            self.test_company_id, today
+        )
 
         assert len(filtered_data["decisions"]) == 1
         assert filtered_data["decisions"][0]["booking_id"] == "booking_today"
@@ -272,9 +287,18 @@ class TestShadowModeManager(unittest.TestCase):
         # Créer des données de test
         company_data = {
             "decisions": [
-                {"human_decision": {"driver_id": "h1"}, "rl_decision": {"driver_id": "r1"}},
-                {"human_decision": {"driver_id": "h2"}, "rl_decision": {"driver_id": "h2"}},  # Accord
-                {"human_decision": {"driver_id": "h3"}, "rl_decision": {"driver_id": "r3"}},
+                {
+                    "human_decision": {"driver_id": "h1"},
+                    "rl_decision": {"driver_id": "r1"},
+                },
+                {
+                    "human_decision": {"driver_id": "h2"},
+                    "rl_decision": {"driver_id": "h2"},
+                },  # Accord
+                {
+                    "human_decision": {"driver_id": "h3"},
+                    "rl_decision": {"driver_id": "r3"},
+                },
             ],
             "kpis": [
                 {"eta_delta": -2, "delay_delta": -1, "rl_confidence": 0.8},
@@ -298,8 +322,14 @@ class TestShadowModeManager(unittest.TestCase):
         """Test la génération du résumé KPIs."""
         company_data = {
             "decisions": [
-                {"human_decision": {"driver_id": "h1"}, "rl_decision": {"driver_id": "r1"}},
-                {"human_decision": {"driver_id": "h2"}, "rl_decision": {"driver_id": "r2"}},
+                {
+                    "human_decision": {"driver_id": "h1"},
+                    "rl_decision": {"driver_id": "r1"},
+                },
+                {
+                    "human_decision": {"driver_id": "h2"},
+                    "rl_decision": {"driver_id": "r2"},
+                },
             ],
             "kpis": [
                 {
@@ -332,8 +362,14 @@ class TestShadowModeManager(unittest.TestCase):
         """Test la génération des insights principaux."""
         company_data = {
             "decisions": [
-                {"human_decision": {"driver_id": "h1"}, "rl_decision": {"driver_id": "r1"}},
-                {"human_decision": {"driver_id": "h2"}, "rl_decision": {"driver_id": "h2"}},  # Accord
+                {
+                    "human_decision": {"driver_id": "h1"},
+                    "rl_decision": {"driver_id": "r1"},
+                },
+                {
+                    "human_decision": {"driver_id": "h2"},
+                    "rl_decision": {"driver_id": "h2"},
+                },  # Accord
             ],
             "kpis": [
                 {"eta_delta": -5, "rl_confidence": 0.9},  # RL beaucoup meilleur
@@ -352,12 +388,21 @@ class TestShadowModeManager(unittest.TestCase):
         """Test la génération des recommandations."""
         company_data = {
             "decisions": [
-                {"human_decision": {"driver_id": "h1"}, "rl_decision": {"driver_id": "r1"}},
-                {"human_decision": {"driver_id": "h2"}, "rl_decision": {"driver_id": "r2"}},
+                {
+                    "human_decision": {"driver_id": "h1"},
+                    "rl_decision": {"driver_id": "r1"},
+                },
+                {
+                    "human_decision": {"driver_id": "h2"},
+                    "rl_decision": {"driver_id": "r2"},
+                },
             ],
             "kpis": [
                 {"eta_delta": -6, "constraint_violations": []},  # RL excellent
-                {"eta_delta": 0, "constraint_violations": ["Violation test"]},  # Avec violation
+                {
+                    "eta_delta": 0,
+                    "constraint_violations": ["Violation test"],
+                },  # Avec violation
             ],
         }
 
@@ -459,20 +504,44 @@ class TestShadowModeIntegration(unittest.TestCase):
         decisions_data = [
             {
                 "booking_id": "booking_1",
-                "human_decision": {"driver_id": "h1", "eta_minutes": 30, "delay_minutes": 10},
-                "rl_decision": {"driver_id": "r1", "eta_minutes": 25, "delay_minutes": 5},
+                "human_decision": {
+                    "driver_id": "h1",
+                    "eta_minutes": 30,
+                    "delay_minutes": 10,
+                },
+                "rl_decision": {
+                    "driver_id": "r1",
+                    "eta_minutes": 25,
+                    "delay_minutes": 5,
+                },
                 "context": {"avg_eta": 28},
             },
             {
                 "booking_id": "booking_2",
-                "human_decision": {"driver_id": "h2", "eta_minutes": 20, "delay_minutes": 0},
-                "rl_decision": {"driver_id": "h2", "eta_minutes": 20, "delay_minutes": 0},  # Accord
+                "human_decision": {
+                    "driver_id": "h2",
+                    "eta_minutes": 20,
+                    "delay_minutes": 0,
+                },
+                "rl_decision": {
+                    "driver_id": "h2",
+                    "eta_minutes": 20,
+                    "delay_minutes": 0,
+                },  # Accord
                 "context": {"avg_eta": 28},
             },
             {
                 "booking_id": "booking_3",
-                "human_decision": {"driver_id": "h3", "eta_minutes": 35, "delay_minutes": 15},
-                "rl_decision": {"driver_id": "r3", "eta_minutes": 28, "delay_minutes": 8},
+                "human_decision": {
+                    "driver_id": "h3",
+                    "eta_minutes": 35,
+                    "delay_minutes": 15,
+                },
+                "rl_decision": {
+                    "driver_id": "r3",
+                    "eta_minutes": 28,
+                    "delay_minutes": 8,
+                },
                 "context": {"avg_eta": 28},
             },
         ]

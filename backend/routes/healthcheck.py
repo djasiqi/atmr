@@ -40,7 +40,9 @@ def readiness():
         ready = False
 
     status_code = 200 if ready else 503
-    return jsonify({"status": "ready" if ready else "not_ready", "checks": checks}), status_code
+    return jsonify(
+        {"status": "ready" if ready else "not_ready", "checks": checks}
+    ), status_code
 
 
 @healthcheck_bp.route("/health/detailed")

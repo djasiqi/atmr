@@ -506,7 +506,9 @@ class TestDuelingInitializationEdgeCases:
 
             # Vérifier que le paramètre n'est pas entièrement zéro
             if param.numel() > 0:  # Seulement si le paramètre a des éléments
-                assert not torch.allclose(param, torch.zeros_like(param)), f"Paramètre {name} est entièrement zéro"
+                assert not torch.allclose(param, torch.zeros_like(param)), (
+                    f"Paramètre {name} est entièrement zéro"
+                )
             assert not torch.isnan(param).any()
             assert not torch.isinf(param).any()
 

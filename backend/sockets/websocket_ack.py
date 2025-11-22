@@ -51,7 +51,14 @@ class WebSocketACKManager:
         self.pending_messages: Dict[str, PendingMessage] = {}
         self.acknowledged: List[str] = []
 
-    def emit_with_ack(self, event: str, payload: Dict[str, Any], room: str, *, message_id: str | None = None) -> str:
+    def emit_with_ack(
+        self,
+        event: str,
+        payload: Dict[str, Any],
+        room: str,
+        *,
+        message_id: str | None = None,
+    ) -> str:
         """Émet un message avec ACK obligatoire.
 
         Args:
@@ -72,14 +79,18 @@ class WebSocketACKManager:
         payload_with_id = {**payload, "_message_id": message_id}
 
         # Créer message pending
-        pending = PendingMessage(message_id=message_id, event=event, payload=payload_with_id, room=room)
+        pending = PendingMessage(
+            message_id=message_id, event=event, payload=payload_with_id, room=room
+        )
 
         self.pending_messages[message_id] = pending
 
         # Émettre le message
         try:
             socketio.emit(event, payload_with_id, to=room)
-            logger.info("[C3] Emitted message %s to room %s (event=%s)", message_id, room, event)
+            logger.info(
+                "[C3] Emitted message %s to room %s (event=%s)", message_id, room, event
+            )
         except Exception as e:
             logger.error("[C3] Failed to emit message %s: %s", message_id, e)
 
@@ -104,12 +115,19 @@ class WebSocketACKManager:
         pending = self.pending_messages.pop(message_id)
 
         # Calculer temps de livraison
-        delivery_time = (datetime.now() - pending.first_sent).total_seconds() if pending.first_sent else 0.0
+        delivery_time = (
+            (datetime.now() - pending.first_sent).total_seconds()
+            if pending.first_sent
+            else 0.0
+        )
 
         self.acknowledged.append(message_id)
 
         logger.info(
-            "[C3] ACK received for %s (delivery: %.3fs, retries=%d)", message_id, delivery_time, pending.retries
+            "[C3] ACK received for %s (delivery: %.3fs, retries=%d)",
+            message_id,
+            delivery_time,
+            pending.retries,
         )
 
         return True
@@ -132,7 +150,12 @@ class WebSocketACKManager:
         pending.retries += 1
         pending.last_sent = datetime.now()
 
-        logger.debug("[C3] Scheduled retry %d for %s (backoff=%dms)", pending.retries, message_id, backoff_ms)
+        logger.debug(
+            "[C3] Scheduled retry %d for %s (backoff=%dms)",
+            pending.retries,
+            message_id,
+            backoff_ms,
+        )
 
 
 # Singleton global
@@ -149,7 +172,9 @@ def reset_ack_manager() -> None:
     _global_ack_manager.__init__()
 
 
-def emit_with_ack(event: str, payload: Dict[str, Any], room: str, *, message_id: str | None = None) -> str:
+def emit_with_ack(
+    event: str, payload: Dict[str, Any], room: str, *, message_id: str | None = None
+) -> str:
     """✅ C3: Helper pour émettre avec ACK."""
     manager = get_ack_manager()
     return manager.emit_with_ack(event, payload, room, message_id=message_id)

@@ -19,7 +19,15 @@ class TestDispatchEnvEdgeCases:
 
         # Simuler un environnement avec moins de drivers que prévu
         env.drivers = [{"id": 1, "available": True, "load": 2, "assigned": False}]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "assigned": False, "time_remaining": 30}]
+        env.bookings = [
+            {
+                "id": 1,
+                "priority": 3,
+                "time_window": 30,
+                "assigned": False,
+                "time_remaining": 30,
+            }
+        ]
 
         # Action qui pointe vers un driver inexistant (driver_idx >= len(drivers))
         action = 10  # driver_idx = 10 // 5 = 2, mais seulement 1 driver
@@ -40,7 +48,15 @@ class TestDispatchEnvEdgeCases:
 
         # Simuler un environnement avec moins de bookings que prévu
         env.drivers = [{"id": 1, "available": True, "load": 2, "assigned": False}]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "assigned": False, "time_remaining": 30}]
+        env.bookings = [
+            {
+                "id": 1,
+                "priority": 3,
+                "time_window": 30,
+                "assigned": False,
+                "time_remaining": 30,
+            }
+        ]
 
         # Action qui pointe vers un booking inexistant (booking_idx >= len(bookings))
         action = 3  # driver_idx = 0, booking_idx = 3, mais seulement 1 booking
@@ -61,7 +77,15 @@ class TestDispatchEnvEdgeCases:
 
         # Simuler un booking déjà assigné
         env.drivers = [{"id": 1, "available": True, "load": 2, "assigned": False}]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30, "assigned": True, "time_remaining": 30}]
+        env.bookings = [
+            {
+                "id": 1,
+                "priority": 3,
+                "time_window": 30,
+                "assigned": True,
+                "time_remaining": 30,
+            }
+        ]
 
         # Action pour assigner le booking déjà assigné
         action = 1  # driver_idx = 0, booking_idx = 0
@@ -117,7 +141,9 @@ class TestDispatchEnvEdgeCases:
 
     def test_step_episode_termination(self):
         """Test step avec terminaison d'épisode"""
-        env = DispatchEnv(num_drivers=3, max_bookings=5, simulation_hours=0.1)  # 6 minutes
+        env = DispatchEnv(
+            num_drivers=3, max_bookings=5, simulation_hours=0.1
+        )  # 6 minutes
         env.reset()
 
         # Avancer le temps pour déclencher la terminaison
@@ -140,7 +166,9 @@ class TestDispatchEnvEdgeCases:
         env.total_bookings = 10
         env.current_time = 5  # Juste avant la limite
 
-        with patch.object(env, "_calculate_episode_bonus", return_value=50.0) as mock_bonus:
+        with patch.object(
+            env, "_calculate_episode_bonus", return_value=50.0
+        ) as mock_bonus:
             _obs, reward, terminated, _truncated, _info = env.step(0)
 
             assert terminated is True
@@ -186,7 +214,9 @@ class TestDispatchEnvEdgeCases:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        with patch.object(env, "_check_expired_bookings", return_value=-10.0) as mock_check:
+        with patch.object(
+            env, "_check_expired_bookings", return_value=-10.0
+        ) as mock_check:
             _obs, _reward, _terminated, _truncated, _info = env.step(0)
 
             mock_check.assert_called()
@@ -206,7 +236,9 @@ class TestDispatchEnvEdgeCases:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        with patch.object(env, "_get_observation", return_value=np.array([1, 2, 3])) as mock_obs:
+        with patch.object(
+            env, "_get_observation", return_value=np.array([1, 2, 3])
+        ) as mock_obs:
             obs, _reward, _terminated, _truncated, _info = env.step(0)
 
             assert isinstance(obs, np.ndarray)
@@ -280,7 +312,9 @@ class TestDispatchEnvEdgeCases:
         env.reset()
 
         # Mock pour provoquer une exception
-        with patch.object(env, "_get_observation", side_effect=Exception("Observation error")):
+        with patch.object(
+            env, "_get_observation", side_effect=Exception("Observation error")
+        ):
             obs, reward, terminated, truncated, info = env.step(0)
 
             assert isinstance(obs, np.ndarray)

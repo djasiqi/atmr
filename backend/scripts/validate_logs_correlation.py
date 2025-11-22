@@ -97,7 +97,11 @@ def validate_recent_dispatches(hours: int = 24) -> Dict[str, Any]:
 
     try:
         cutoff_time = datetime.now(UTC) - timedelta(hours=hours)
-        recent_runs = DispatchRun.query.filter(DispatchRun.created_at >= cutoff_time).limit(10).all()
+        recent_runs = (
+            DispatchRun.query.filter(DispatchRun.created_at >= cutoff_time)
+            .limit(10)
+            .all()
+        )
 
         results["dispatches_found"] = len(recent_runs)
 
@@ -134,7 +138,9 @@ def generate_correlation_report() -> str:
         for validation in recent_results["validation_results"][:5]:  # Limiter à 5
             print(f"  DispatchRun {validation['dispatch_run_id']}:")
             print(f"    - Logs analysés: {validation['logs_analyzed']}")
-            print(f"    - Avec dispatch_run_id: {validation['logs_with_dispatch_run_id']}")
+            print(
+                f"    - Avec dispatch_run_id: {validation['logs_with_dispatch_run_id']}"
+            )
             print(f"    - Avec trace_id: {validation['logs_with_trace_id']}")
             print(f"    - Taux corrélation: {validation['correlation_rate']:.1f}%")
 

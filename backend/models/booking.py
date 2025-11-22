@@ -56,10 +56,22 @@ Extrait depuis models.py (lignes ~1294-1642).
 class Booking(db.Model):
     __tablename__ = "booking"
     __table_args__ = (
-        CheckConstraint("pickup_lat IS NULL OR (pickup_lat BETWEEN -90 AND 90)", name="chk_booking_pickup_lat"),
-        CheckConstraint("pickup_lon IS NULL OR (pickup_lon BETWEEN -180 AND 180)", name="chk_booking_pickup_lon"),
-        CheckConstraint("dropoff_lat IS NULL OR (dropoff_lat BETWEEN -90 AND 90)", name="chk_booking_drop_lat"),
-        CheckConstraint("dropoff_lon IS NULL OR (dropoff_lon BETWEEN -180 AND 180)", name="chk_booking_drop_lon"),
+        CheckConstraint(
+            "pickup_lat IS NULL OR (pickup_lat BETWEEN -90 AND 90)",
+            name="chk_booking_pickup_lat",
+        ),
+        CheckConstraint(
+            "pickup_lon IS NULL OR (pickup_lon BETWEEN -180 AND 180)",
+            name="chk_booking_pickup_lon",
+        ),
+        CheckConstraint(
+            "dropoff_lat IS NULL OR (dropoff_lat BETWEEN -90 AND 90)",
+            name="chk_booking_drop_lat",
+        ),
+        CheckConstraint(
+            "dropoff_lon IS NULL OR (dropoff_lon BETWEEN -180 AND 180)",
+            name="chk_booking_drop_lon",
+        ),
         Index("ix_booking_company_scheduled", "company_id", "scheduled_time"),
         Index("ix_booking_status_scheduled", "status", "scheduled_time"),
         Index("ix_booking_driver_status", "driver_id", "status"),
@@ -71,7 +83,9 @@ class Booking(db.Model):
     dropoff_location: Mapped[str] = mapped_column(String(200), nullable=False)
     booking_type = Column(String(200), nullable=False, server_default="standard")
 
-    scheduled_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False), nullable=True)
+    scheduled_time: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=False), nullable=True
+    )
 
     amount: Mapped[float] = mapped_column(Float, nullable=False)
     status = Column(
@@ -83,22 +97,36 @@ class Booking(db.Model):
     )
 
     user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
-    rejected_by = Column(JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb"))
+    rejected_by = Column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
 
     duration_seconds = Column(Integer)
     distance_meters = Column(Integer)
 
-    client_id = Column(Integer, ForeignKey("client.id", ondelete="CASCADE"), nullable=False, index=True)
-    company_id = Column(Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=True, index=True)
-    driver_id = Column(Integer, ForeignKey("driver.id", ondelete="SET NULL"), nullable=True, index=True)
+    client_id = Column(
+        Integer, ForeignKey("client.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    company_id = Column(
+        Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    driver_id = Column(
+        Integer, ForeignKey("driver.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     is_round_trip = Column(Boolean, nullable=False, server_default=text("false"))
     is_return = Column(Boolean, nullable=False, server_default=text("false"))
 
-    boarded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    boarded_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    parent_booking_id = Column(Integer, ForeignKey("booking.id", ondelete="SET NULL"), nullable=True)
+    parent_booking_id = Column(
+        Integer, ForeignKey("booking.id", ondelete="SET NULL"), nullable=True
+    )
 
     medical_facility = Column(String(200))
     doctor_name = Column(String(200))
@@ -107,7 +135,9 @@ class Booking(db.Model):
     is_urgent = Column(Boolean, nullable=False, server_default=text("false"))
     time_confirmed = Column(Boolean, nullable=False, server_default=text("true"))
 
-    wheelchair_client_has = Column(Boolean, nullable=False, server_default=text("false"))
+    wheelchair_client_has = Column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     wheelchair_need = Column(Boolean, nullable=False, server_default=text("false"))
 
     pickup_lat = Column(Float)
@@ -115,25 +145,43 @@ class Booking(db.Model):
     dropoff_lat = Column(Float)
     dropoff_lon = Column(Float)
 
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
     billed_to_type = Column(String(50), nullable=False, server_default="patient")
-    billed_to_company_id = Column(Integer, ForeignKey("company.id", ondelete="SET NULL"), nullable=True)
+    billed_to_company_id = Column(
+        Integer, ForeignKey("company.id", ondelete="SET NULL"), nullable=True
+    )
     billed_to_contact = Column(String(120))
 
     invoice_line_id = Column(
         Integer,
-        ForeignKey("invoice_lines.id", ondelete="SET NULL", name="fk_booking_invoice_line"),
+        ForeignKey(
+            "invoice_lines.id", ondelete="SET NULL", name="fk_booking_invoice_line"
+        ),
         nullable=True,
         index=True,
     )
 
     # Relations
     client = relationship("Client", back_populates="bookings", passive_deletes=True)
-    company = relationship("Company", back_populates="bookings", foreign_keys=[company_id], passive_deletes=True)
+    company = relationship(
+        "Company",
+        back_populates="bookings",
+        foreign_keys=[company_id],
+        passive_deletes=True,
+    )
     driver = relationship("Driver", back_populates="bookings", passive_deletes=True)
-    payments = relationship("Payment", back_populates="booking", passive_deletes=True, lazy=True)
+    payments = relationship(
+        "Payment", back_populates="booking", passive_deletes=True, lazy=True
+    )
 
     billed_to_company = relationship("Company", foreign_keys=[billed_to_company_id])
     invoice_line = relationship(
@@ -145,7 +193,11 @@ class Booking(db.Model):
     )
 
     return_trip = relationship(
-        "Booking", backref="original_booking", remote_side=[id], foreign_keys=[parent_booking_id], uselist=False
+        "Booking",
+        backref="original_booking",
+        remote_side=[id],
+        foreign_keys=[parent_booking_id],
+        uselist=False,
     )
 
     # Propriétés
@@ -177,13 +229,17 @@ class Booking(db.Model):
         cli = getattr(self, "client", None)
         if cli and getattr(cli, "user", None):
             u = cli.user
-            full = f"{(u.first_name or '').strip()} {(u.last_name or '').strip()}".strip()
+            full = (
+                f"{(u.first_name or '').strip()} {(u.last_name or '').strip()}".strip()
+            )
             return {
                 "type": "patient",
                 "name": full or (u.username or "Client"),
                 "address": getattr(cli, "billing_address", None),
-                "email": getattr(cli, "contact_email", None) or getattr(u, "email", None),
-                "phone": getattr(cli, "contact_phone", None) or getattr(u, "phone", None),
+                "email": getattr(cli, "contact_email", None)
+                or getattr(u, "email", None),
+                "phone": getattr(cli, "contact_phone", None)
+                or getattr(u, "phone", None),
                 "client_id": cli.id,
             }
         return {"type": "patient", "name": self.customer_full_name}
@@ -196,9 +252,15 @@ class Booking(db.Model):
         boarded_dt = _as_dt(self.boarded_at)
         completed_dt = _as_dt(self.completed_at)
 
-        date_local, time_local = split_date_time_local(scheduled_dt) if scheduled_dt else (None, None)
-        created_loc = to_geneva_local(created_dt) if isinstance(created_dt, datetime) else None
-        updated_loc = to_geneva_local(updated_dt) if isinstance(updated_dt, datetime) else None
+        date_local, time_local = (
+            split_date_time_local(scheduled_dt) if scheduled_dt else (None, None)
+        )
+        created_loc = (
+            to_geneva_local(created_dt) if isinstance(created_dt, datetime) else None
+        )
+        updated_loc = (
+            to_geneva_local(updated_dt) if isinstance(updated_dt, datetime) else None
+        )
 
         amt = _as_float(self.amount)
         status_val = cast("BookingStatus", self.status)
@@ -246,8 +308,12 @@ class Booking(db.Model):
             "notes_medical": self.notes_medical or "Aucune note",
             "wheelchair_client_has": _as_bool(self.wheelchair_client_has),
             "wheelchair_need": _as_bool(self.wheelchair_need),
-            "created_at": created_loc.strftime("%d/%m/%Y %H:%M") if created_loc else "Non spécifié",
-            "updated_at": updated_loc.strftime("%d/%m/%Y %H:%M") if updated_loc else "Non spécifié",
+            "created_at": created_loc.strftime("%d/%m/%Y %H:%M")
+            if created_loc
+            else "Non spécifié",
+            "updated_at": updated_loc.strftime("%d/%m/%Y %H:%M")
+            if updated_loc
+            else "Non spécifié",
             "rejected_by": self.rejected_by,
             "is_round_trip": _as_bool(self.is_round_trip),
             "is_return": _as_bool(self.is_return),
@@ -255,14 +321,20 @@ class Booking(db.Model):
             "time_confirmed": _as_bool(self.time_confirmed),
             "has_return": self.return_trip is not None,
             "boarded_at": iso_utc_z(to_utc_from_db(boarded_dt)) if boarded_dt else None,
-            "completed_at": iso_utc_z(to_utc_from_db(completed_dt)) if completed_dt else None,
+            "completed_at": iso_utc_z(to_utc_from_db(completed_dt))
+            if completed_dt
+            else None,
             "duree_minutes": (
-                int((completed_dt - boarded_dt).total_seconds() // 60) if (completed_dt and boarded_dt) else None
+                int((completed_dt - boarded_dt).total_seconds() // 60)
+                if (completed_dt and boarded_dt)
+                else None
             ),
             "duration_in_minutes": self.duration_in_minutes,
             "billing": {
                 "billed_to_type": (_as_str(self.billed_to_type) or "patient"),
-                "billed_to_company": self.billed_to_company.serialize if self.billed_to_company else None,
+                "billed_to_company": self.billed_to_company.serialize
+                if self.billed_to_company
+                else None,
                 "billed_to_contact": self.billed_to_contact,
             },
             "patient_name": _as_str(self.customer_name),
@@ -384,7 +456,9 @@ class Booking(db.Model):
     def is_assignable(self) -> bool:
         st = _as_dt(self.scheduled_time)
         status_val = cast("BookingStatus", self.status)
-        return (status_val in (BookingStatus.PENDING, BookingStatus.ACCEPTED)) and bool(st and st > now_local())
+        return (status_val in (BookingStatus.PENDING, BookingStatus.ACCEPTED)) and bool(
+            st and st > now_local()
+        )
 
     def assign_driver(self, driver_id: int):
         if not self.is_assignable():
@@ -407,7 +481,11 @@ class Booking(db.Model):
 
     @staticmethod
     def _enforce_billing_exclusive(_mapper, _connection, target: Booking) -> None:
-        btype = (_as_str(getattr(target, "billed_to_type", None)) or "patient").strip().lower()
+        btype = (
+            (_as_str(getattr(target, "billed_to_type", None)) or "patient")
+            .strip()
+            .lower()
+        )
         if btype == "patient":
             target.billed_to_company_id = None
             return

@@ -50,7 +50,12 @@ class ParetoFront:
         self.solutions: List[ParetoSolution] = []
         self.next_id = 0
 
-    def add_solution(self, assignments: List[Dict[str, Any]], efficiency_score: float, fairness_score: float) -> bool:
+    def add_solution(
+        self,
+        assignments: List[Dict[str, Any]],
+        efficiency_score: float,
+        fairness_score: float,
+    ) -> bool:
         """Ajoute une solution au front Pareto si non-dominée.
 
         Args:
@@ -73,11 +78,15 @@ class ParetoFront:
         dominated_by = self._find_dominating(new_solution)
 
         if dominated_by:
-            logger.debug("[ParetoFront] Solution %d dominée, ignorée", new_solution.solution_id)
+            logger.debug(
+                "[ParetoFront] Solution %d dominée, ignorée", new_solution.solution_id
+            )
             return False
 
         # Retirer les solutions dominées par la nouvelle
-        self.solutions = [s for s in self.solutions if not self._is_dominated(s, new_solution)]
+        self.solutions = [
+            s for s in self.solutions if not self._is_dominated(s, new_solution)
+        ]
 
         # Ajouter la nouvelle solution
         self.solutions.append(new_solution)
@@ -117,7 +126,8 @@ class ParetoFront:
         for solution in self.solutions:
             # Score agrégé: trade-off équité/efficacité
             aggregated_score = (
-                (1 - fairness_weight) * (1 / (1 + solution.efficiency_score))  # Maximiser efficacité
+                (1 - fairness_weight)
+                * (1 / (1 + solution.efficiency_score))  # Maximiser efficacité
                 + fairness_weight * solution.fairness_score  # Maximiser équité
             )
 
@@ -157,7 +167,10 @@ class ParetoFront:
         return (
             (better_efficiency and other.fairness_score > solution.fairness_score)
             or (better_fairness and other.efficiency_score < solution.efficiency_score)
-        ) and (other.efficiency_score <= solution.efficiency_score and other.fairness_score >= solution.fairness_score)
+        ) and (
+            other.efficiency_score <= solution.efficiency_score
+            and other.fairness_score >= solution.fairness_score
+        )
 
     def _find_dominating(self, solution: ParetoSolution) -> ParetoSolution | None:
         """Trouve une solution dominante dans le front.
@@ -189,10 +202,17 @@ class ParetoFront:
         scored = []
         for i, sol in enumerate(self.solutions):
             # Distance à la solution moyenne
-            avg_eff = sum(s.efficiency_score for s in self.solutions) / len(self.solutions)
-            avg_fair = sum(s.fairness_score for s in self.solutions) / len(self.solutions)
+            avg_eff = sum(s.efficiency_score for s in self.solutions) / len(
+                self.solutions
+            )
+            avg_fair = sum(s.fairness_score for s in self.solutions) / len(
+                self.solutions
+            )
 
-            diversity = ((sol.efficiency_score - avg_eff) ** 2 + (sol.fairness_score - avg_fair) ** 2) ** 0.5
+            diversity = (
+                (sol.efficiency_score - avg_eff) ** 2
+                + (sol.fairness_score - avg_fair) ** 2
+            ) ** 0.5
 
             scored.append((diversity, i, sol))
 
@@ -211,7 +231,9 @@ class ParetoFront:
         self.next_id = 0
 
 
-def calculate_efficiency_score(assignments: List[Dict[str, Any]], _problem: Dict[str, Any] | None = None) -> float:
+def calculate_efficiency_score(
+    assignments: List[Dict[str, Any]], _problem: Dict[str, Any] | None = None
+) -> float:
     """Calcule le score d'efficacité (distance totale).
 
     Args:

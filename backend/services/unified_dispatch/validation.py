@@ -48,7 +48,8 @@ def validate_no_temporal_conflicts(
         # Trier par scheduled_time
         # Utiliser datetime(1900, 1, 1) comme fallback au lieu de datetime.min
         sorted_assignments = sorted(
-            driver_assignments, key=lambda a: a.get("scheduled_time") or datetime(1900, 1, 1, tzinfo=UTC)
+            driver_assignments,
+            key=lambda a: a.get("scheduled_time") or datetime(1900, 1, 1, tzinfo=UTC),
         )
 
         # Vérifier overlaps
@@ -64,14 +65,18 @@ def validate_no_temporal_conflicts(
 
             # Convertir en datetime si c'est des strings
             if isinstance(current_time, str):
-                current_time = datetime.fromisoformat(current_time.replace("Z", "+00:00"))
+                current_time = datetime.fromisoformat(
+                    current_time.replace("Z", "+00:00")
+                )
             if isinstance(next_time, str):
                 next_time = datetime.fromisoformat(next_time.replace("Z", "+00:00"))
 
             # Calculer fin estimée de la course actuelle
             # Durée estimée = temps de service + trajet moyen
             estimated_duration_minutes = estimate_trip_duration(current)
-            current_end = current_time + timedelta(minutes=estimated_duration_minutes + tolerance_minutes)
+            current_end = current_time + timedelta(
+                minutes=estimated_duration_minutes + tolerance_minutes
+            )
 
             # Conflit si next_time < current_end
             if next_time < current_end:
@@ -87,7 +92,9 @@ def validate_no_temporal_conflicts(
     return (len(errors) == 0, errors)
 
 
-def validate_no_duplicate_times(assignments: List[Dict[str, Any]], max_same_time: int = 1) -> Tuple[bool, List[str]]:
+def validate_no_duplicate_times(
+    assignments: List[Dict[str, Any]], max_same_time: int = 1
+) -> Tuple[bool, List[str]]:
     """Vérifie qu'aucun chauffeur n'a plusieurs courses exactement au même moment.
 
     Args:
@@ -112,7 +119,9 @@ def validate_no_duplicate_times(assignments: List[Dict[str, Any]], max_same_time
 
         # Convertir en datetime
         if isinstance(scheduled_time, str):
-            scheduled_time = datetime.fromisoformat(scheduled_time.replace("Z", "+00:00"))
+            scheduled_time = datetime.fromisoformat(
+                scheduled_time.replace("Z", "+00:00")
+            )
 
         # Arrondir à la minute pour regrouper (ignorer secondes)
         scheduled_time = scheduled_time.replace(second=0, microsecond=0)
@@ -193,7 +202,9 @@ def validate_driver_capacity(
     return (len(errors) == 0, errors)
 
 
-def validate_assignments(assignments: List[Dict[str, Any]], strict: bool = False) -> Dict[str, Any]:
+def validate_assignments(
+    assignments: List[Dict[str, Any]], strict: bool = False
+) -> Dict[str, Any]:
     """Validation complète des assignations.
 
     Args:
@@ -218,7 +229,9 @@ def validate_assignments(assignments: List[Dict[str, Any]], strict: bool = False
         errors.extend(dup_errors)
 
     # 2. Vérifier chevauchements temporels (CRITIQUE)
-    is_valid_temp, temp_errors = validate_no_temporal_conflicts(assignments, tolerance_minutes=30)
+    is_valid_temp, temp_errors = validate_no_temporal_conflicts(
+        assignments, tolerance_minutes=30
+    )
     if not is_valid_temp:
         if strict:
             errors.extend(temp_errors)
@@ -226,7 +239,9 @@ def validate_assignments(assignments: List[Dict[str, Any]], strict: bool = False
             warnings.extend(temp_errors)
 
     # 3. Vérifier capacité chauffeurs (WARNING)
-    is_valid_cap, cap_errors = validate_driver_capacity(assignments, max_bookings_per_driver=10)
+    is_valid_cap, cap_errors = validate_driver_capacity(
+        assignments, max_bookings_per_driver=10
+    )
     if not is_valid_cap:
         warnings.extend(cap_errors)
 
@@ -237,16 +252,26 @@ def validate_assignments(assignments: List[Dict[str, Any]], strict: bool = False
     stats = {
         "total_assignments": total_assignments,
         "drivers_used": drivers_used,
-        "avg_per_driver": round(total_assignments / drivers_used, 1) if drivers_used > 0 else 0,
+        "avg_per_driver": round(total_assignments / drivers_used, 1)
+        if drivers_used > 0
+        else 0,
         "critical_errors": len([e for e in errors if "🔴" in e]),
         "warnings": len(warnings),
     }
 
-    return {"valid": len(errors) == 0, "errors": errors, "warnings": warnings, "stats": stats}
+    return {
+        "valid": len(errors) == 0,
+        "errors": errors,
+        "warnings": warnings,
+        "stats": stats,
+    }
 
 
 def check_existing_assignment_conflict(
-    driver_id: int, scheduled_time: datetime, booking_id: int | None = None, tolerance_minutes: int = 30
+    driver_id: int,
+    scheduled_time: datetime,
+    booking_id: int | None = None,
+    tolerance_minutes: int = 30,
 ) -> Tuple[bool, str | None]:
     """Vérifie si une nouvelle assignation créerait un conflit avec les assignations existantes.
     Utilisé lors d'assignation manuelle ou réassignation.
@@ -295,14 +320,17 @@ def check_existing_assignment_conflict(
         # Durée moyenne course (pickup 5 + trajet 20 + dropoff 10)
         estimated_duration = 35
         time_start = existing_time - timedelta(minutes=tolerance_minutes)
-        time_end = existing_time + timedelta(minutes=estimated_duration + tolerance_minutes)
+        time_end = existing_time + timedelta(
+            minutes=estimated_duration + tolerance_minutes
+        )
 
         # Vérifier si conflit
         if time_start <= scheduled_time <= time_end:
             time_diff = abs((scheduled_time - existing_time).total_seconds() / 60)
             return (
                 True,
-                f"Conflit avec course #{booking.id} à {existing_time:%H:%M} " + f"(écart: {time_diff:.1f}min)",
+                f"Conflit avec course #{booking.id} à {existing_time:%H:%M} "
+                + f"(écart: {time_diff:.1f}min)",
             )
 
     return (False, None)

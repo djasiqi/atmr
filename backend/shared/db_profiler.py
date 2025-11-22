@@ -56,7 +56,9 @@ class DBProfiler:
         """Configure les event listeners SQLAlchemy pour profiler les requêtes."""
 
         @sqlalchemy_event.listens_for(Engine, "before_cursor_execute")
-        def receive_before_cursor_execute(_conn, _cursor, statement, _parameters, context, _executemany):  # pyright: ignore[reportUnusedFunction]
+        def receive_before_cursor_execute(
+            _conn, _cursor, statement, _parameters, context, _executemany
+        ):  # pyright: ignore[reportUnusedFunction]
             """Capture le début d'exécution d'une requête."""
             if not self.enabled:
                 return
@@ -70,7 +72,9 @@ class DBProfiler:
             context._query_start_time = time.time()
 
         @sqlalchemy_event.listens_for(Engine, "after_cursor_execute")
-        def receive_after_cursor_execute(_conn, _cursor, statement, _parameters, context, _executemany):  # pyright: ignore[reportUnusedFunction]
+        def receive_after_cursor_execute(
+            _conn, _cursor, statement, _parameters, context, _executemany
+        ):  # pyright: ignore[reportUnusedFunction]
             """Capture la fin d'exécution d'une requête."""
             if not self.enabled:
                 return
@@ -85,7 +89,11 @@ class DBProfiler:
 
                 # Détecter requêtes lentes (> 1 seconde)
                 if duration > (SLOW_QUERY_THRESHOLD_MS / 1000):
-                    logger.warning("[DB Profiler] ⚠️ Requête lente détectée (%.2fs): %s...", duration, statement[:100])
+                    logger.warning(
+                        "[DB Profiler] ⚠️ Requête lente détectée (%.2fs): %s...",
+                        duration,
+                        statement[:100],
+                    )
 
     def reset(self):
         """Réinitialise les statistiques de profiling."""
@@ -142,7 +150,11 @@ class DBProfiler:
         # Si une requête apparaît > threshold fois, suspecter N+1
         for pattern, count in query_patterns.items():
             if count >= threshold:
-                logger.warning("[DB Profiler] 🚨 Pattern N+1 suspecté: '%s' exécutée %d fois", pattern[:100], count)
+                logger.warning(
+                    "[DB Profiler] 🚨 Pattern N+1 suspecté: '%s' exécutée %d fois",
+                    pattern[:100],
+                    count,
+                )
                 return True
 
         return False
@@ -187,7 +199,9 @@ class DBProfiler:
         lines.append("")
 
         if not self.enabled:
-            lines.append("⚠️ Profiling désactivé (set ENABLE_DB_PROFILING=true to enable)")
+            lines.append(
+                "⚠️ Profiling désactivé (set ENABLE_DB_PROFILING=true to enable)"
+            )
             return "\n".join(lines)
 
         lines.append(f"Nombre total de requêtes: {stats['query_count']}")
@@ -199,11 +213,15 @@ class DBProfiler:
 
         # Avertissement si trop de requêtes
         if stats["query_count"] > N_PLUS_1_REPORT_THRESHOLD:
-            lines.append(f"⚠️ ATTENTION: {stats['query_count']} requêtes détectées (suspect N+1?)")
+            lines.append(
+                f"⚠️ ATTENTION: {stats['query_count']} requêtes détectées (suspect N+1?)"
+            )
 
         # Avertissement si requêtes lentes
         if stats["max_time_ms"] > SLOW_QUERY_THRESHOLD_MS:
-            lines.append(f"⚠️ ATTENTION: Requête lente détectée ({stats['max_time_ms']}ms)")
+            lines.append(
+                f"⚠️ ATTENTION: Requête lente détectée ({stats['max_time_ms']}ms)"
+            )
 
         # Dernières requêtes
         if stats["queries"]:
@@ -214,7 +232,9 @@ class DBProfiler:
         n_plus_1_detected = self.detect_n_plus_1()
         if n_plus_1_detected:
             lines.append("")
-            lines.append("🚨 PATTERN N+1 SUSPECTÉ - Action recommandée: vérifier eager loading")
+            lines.append(
+                "🚨 PATTERN N+1 SUSPECTÉ - Action recommandée: vérifier eager loading"
+            )
 
         lines.append("=" * 80)
 
@@ -278,4 +298,6 @@ def profile_db_context(context_name: str = "request"):
 
             # Détecter N+1
             if profiler.detect_n_plus_1():
-                logger.error("[DB Profiler] 🚨 N+1 détecté dans contexte '%s'!", context_name)
+                logger.error(
+                    "[DB Profiler] 🚨 N+1 détecté dans contexte '%s'!", context_name
+                )

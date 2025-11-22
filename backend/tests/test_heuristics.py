@@ -29,7 +29,12 @@ class TestHeuristicsPooling:
         company = CompanyFactory()
         base_time = datetime.utcnow() + timedelta(hours=2)
 
-        booking1 = BookingFactory(company=company, pickup_lat=46.2044, pickup_lon=6.1432, scheduled_time=base_time)
+        booking1 = BookingFactory(
+            company=company,
+            pickup_lat=46.2044,
+            pickup_lon=6.1432,
+            scheduled_time=base_time,
+        )
         booking2 = BookingFactory(
             company=company,
             pickup_lat=46.2045,  # Très proche (100m)
@@ -43,7 +48,9 @@ class TestHeuristicsPooling:
         settings.pooling.pickup_distance_m = 500
 
         result = _can_be_pooled(booking1, booking2, settings)
-        assert result is True, "Les courses avec même pickup et temps proche devraient être poolables"
+        assert result is True, (
+            "Les courses avec même pickup et temps proche devraient être poolables"
+        )
 
     def test_can_be_pooled_disabled(self, db):
         """Test pooling désactivé."""
@@ -73,7 +80,9 @@ class TestHeuristicsPooling:
         settings.pooling.time_tolerance_min = 15  # Max 15 min
 
         result = _can_be_pooled(booking1, booking2, settings)
-        assert result is False, "Courses avec temps trop différent ne devraient pas être poolables"
+        assert result is False, (
+            "Courses avec temps trop différent ne devraient pas être poolables"
+        )
 
 
 class TestHeuristicsScoring:
@@ -105,7 +114,9 @@ class TestHeuristicsScoring:
     def test_score_driver_for_booking_basic(self, db):
         """Test calcul score de base."""
         company = CompanyFactory()
-        driver = DriverFactory(company=company, latitude=46.2044, longitude=6.1432, is_available=True)
+        driver = DriverFactory(
+            company=company, latitude=46.2044, longitude=6.1432, is_available=True
+        )
         booking = BookingFactory(
             company=company,
             pickup_lat=46.2100,  # ~500m de distance
@@ -118,7 +129,11 @@ class TestHeuristicsScoring:
         settings = Settings()
 
         score, breakdown, times = _score_driver_for_booking(
-            b=booking, d=driver, driver_window=driver_window, settings=settings, fairness_counts=fairness_counts
+            b=booking,
+            d=driver,
+            driver_window=driver_window,
+            settings=settings,
+            fairness_counts=fairness_counts,
         )
 
         assert isinstance(score, float), "Score devrait être un float"
@@ -151,7 +166,9 @@ class TestHeuristicsAssignment:
     def test_assign_single_booking_driver(self, db):
         """Test assign simple : 1 booking, 1 driver."""
         company = CompanyFactory()
-        driver = DriverFactory(company=company, latitude=46.2044, longitude=6.1432, is_available=True)
+        driver = DriverFactory(
+            company=company, latitude=46.2044, longitude=6.1432, is_available=True
+        )
         booking = BookingFactory(
             company=company,
             pickup_lat=46.2100,
@@ -230,7 +247,12 @@ class TestHeuristicsAssignment:
 def test_heuristic_assignment_to_dict():
     """Test sérialisation HeuristicAssignment."""
     assignment = HeuristicAssignment(
-        booking_id=1, driver_id=2, score=0.95, reason="regular_scoring", estimated_start_min=30, estimated_finish_min=60
+        booking_id=1,
+        driver_id=2,
+        score=0.95,
+        reason="regular_scoring",
+        estimated_start_min=30,
+        estimated_finish_min=60,
     )
 
     result = assignment.to_dict()
@@ -248,11 +270,18 @@ def test_heuristic_result_structure():
     """Test structure HeuristicResult."""
     assignments = [
         HeuristicAssignment(
-            booking_id=1, driver_id=2, score=0.9, reason="test", estimated_start_min=10, estimated_finish_min=20
+            booking_id=1,
+            driver_id=2,
+            score=0.9,
+            reason="test",
+            estimated_start_min=10,
+            estimated_finish_min=20,
         )
     ]
 
-    result = HeuristicResult(assignments=assignments, unassigned_booking_ids=[3, 4], debug={"test": "data"})
+    result = HeuristicResult(
+        assignments=assignments, unassigned_booking_ids=[3, 4], debug={"test": "data"}
+    )
 
     assert len(result.assignments) == 1
     assert result.unassigned_booking_ids == [3, 4]
@@ -265,7 +294,9 @@ class TestHeuristicsAssignUrgent:
     def test_assign_urgent_with_urgent_bookings(self, db):
         """Test assign_urgent avec courses urgentes."""
         company = CompanyFactory()
-        driver = DriverFactory(company=company, latitude=46.2044, longitude=6.1432, is_available=True)
+        driver = DriverFactory(
+            company=company, latitude=46.2044, longitude=6.1432, is_available=True
+        )
 
         # Course urgente
         booking_urgent = BookingFactory(
@@ -340,7 +371,9 @@ class TestHeuristicsHelpers:
 
         # Course marquée comme retour
         booking_return = BookingFactory(
-            company=company, is_return=True, scheduled_time=datetime.utcnow() + timedelta(hours=1)
+            company=company,
+            is_return=True,
+            scheduled_time=datetime.utcnow() + timedelta(hours=1),
         )
 
         settings = Settings()
@@ -408,7 +441,12 @@ class TestHeuristicsHelpers:
         """Test extraction coordonnées booking (pickup + dropoff)."""
         from services.unified_dispatch.heuristics import _booking_coords
 
-        booking = BookingFactory(pickup_lat=46.2044, pickup_lon=6.1432, dropoff_lat=46.2100, dropoff_lon=6.1500)
+        booking = BookingFactory(
+            pickup_lat=46.2044,
+            pickup_lon=6.1432,
+            dropoff_lat=46.2100,
+            dropoff_lon=6.1500,
+        )
 
         pickup, dropoff = _booking_coords(booking)
 
@@ -425,13 +463,17 @@ class TestHeuristicsHelpers:
         # Booking avec driver assigné
         company = CompanyFactory()
         driver = DriverFactory(company=company)
-        booking_assigned = BookingFactory(company=company, driver_id=driver.id, status=BookingStatus.ASSIGNED)
+        booking_assigned = BookingFactory(
+            company=company, driver_id=driver.id, status=BookingStatus.ASSIGNED
+        )
 
         result = _is_booking_assigned(booking_assigned)
         assert result is True, "Booking avec driver devrait être assigné"
 
         # Booking sans driver
-        booking_unassigned = BookingFactory(company=company, driver_id=None, status=BookingStatus.PENDING)
+        booking_unassigned = BookingFactory(
+            company=company, driver_id=None, status=BookingStatus.PENDING
+        )
         result2 = _is_booking_assigned(booking_unassigned)
         assert result2 is False, "Booking sans driver ne devrait pas être assigné"
 
@@ -474,7 +516,9 @@ class TestHeuristicsAssignWithDriverWindows:
     def test_assign_with_driver_windows(self, db):
         """Test assign avec fenêtres de travail chauffeurs."""
         company = CompanyFactory()
-        driver = DriverFactory(company=company, latitude=46.2044, longitude=6.1432, is_available=True)
+        driver = DriverFactory(
+            company=company, latitude=46.2044, longitude=6.1432, is_available=True
+        )
         booking = BookingFactory(
             company=company,
             pickup_lat=46.2100,
@@ -506,8 +550,12 @@ class TestHeuristicsAssignWithDriverWindows:
         """Test assign avec équilibrage de charge entre drivers."""
         company = CompanyFactory()
 
-        driver1 = DriverFactory(company=company, latitude=46.2000, longitude=6.1000, is_available=True)
-        driver2 = DriverFactory(company=company, latitude=46.2200, longitude=6.1600, is_available=True)
+        driver1 = DriverFactory(
+            company=company, latitude=46.2000, longitude=6.1000, is_available=True
+        )
+        driver2 = DriverFactory(
+            company=company, latitude=46.2200, longitude=6.1600, is_available=True
+        )
 
         booking1 = BookingFactory(
             company=company,
@@ -551,7 +599,12 @@ class TestHeuristicsAssignWithDriverWindows:
 
         # Deux bookings poolables (même pickup, même heure)
         base_time = datetime.utcnow() + timedelta(hours=2)
-        booking1 = BookingFactory(company=company, pickup_lat=46.2044, pickup_lon=6.1432, scheduled_time=base_time)
+        booking1 = BookingFactory(
+            company=company,
+            pickup_lat=46.2044,
+            pickup_lon=6.1432,
+            scheduled_time=base_time,
+        )
         booking2 = BookingFactory(
             company=company,
             pickup_lat=46.2045,  # Très proche

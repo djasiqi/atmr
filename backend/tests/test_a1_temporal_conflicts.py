@@ -73,7 +73,9 @@ def settings_with_safety():
 class TestTemporalConflicts:
     """Tests pour la prévention des conflits temporels."""
 
-    def test_no_driver_double_assignment(self, mock_booking, mock_driver, settings_with_safety):
+    def test_no_driver_double_assignment(
+        self, mock_booking, mock_driver, settings_with_safety
+    ):
         """Test: 2 bookings à 25 min d'intervalle → 2e refus."""
 
         # Créer 2 courses avec 25 min d'écart
@@ -361,6 +363,6 @@ class TestTemporalConflicts:
         else:
             logger.info("✅ Course correctement refusée (busy_until strict)")
 
-        assert len(result.assignments) == 0 or all(a.booking_id == 1 for a in result.assignments), (
-            "Soit 0 courses (refusée), soit course 1 (après ajustement)"
-        )
+        assert len(result.assignments) == 0 or all(
+            a.booking_id == 1 for a in result.assignments
+        ), "Soit 0 courses (refusée), soit course 1 (après ajustement)"

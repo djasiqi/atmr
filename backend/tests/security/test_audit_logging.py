@@ -72,7 +72,10 @@ class TestAuditLoggingAuth:
                     user_type="unknown",
                     result_status="failure",
                     result_message="Email ou mot de passe invalide",
-                    action_details={"email": "test@example.com", "reason": "invalid_credentials"},
+                    action_details={
+                        "email": "test@example.com",
+                        "reason": "invalid_credentials",
+                    },
                     ip_address=request.remote_addr,
                     user_agent=request.headers.get("User-Agent"),
                 )
@@ -163,7 +166,11 @@ class TestAuditLoggingSensitiveActions:
                 # Vérifier que l'audit log existe
                 assert audit_log is not None
                 assert audit_log.action_type == "user_created"
-                assert audit_log.company_id == sample_company.id if sample_company else None
+                assert (
+                    audit_log.company_id == sample_company.id
+                    if sample_company
+                    else None
+                )
 
     def test_permission_changed_logged(self, app_context, db, sample_user):
         """Vérifie que le changement de permission est loggé."""

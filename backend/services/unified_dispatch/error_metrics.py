@@ -29,7 +29,10 @@ if PROMETHEUS_AVAILABLE and Counter is not None:
     DISPATCH_ERRORS_TOTAL = Counter(
         "dispatch_errors_total",
         "Nombre total d'erreurs de dispatch",
-        ["error_type", "company_id"],  # error_type: "company_not_found", "fk_violation", etc.
+        [
+            "error_type",
+            "company_id",
+        ],  # error_type: "company_not_found", "fk_violation", etc.
     )
 
     DISPATCH_COMPANY_NOT_FOUND_TOTAL = Counter(
@@ -41,25 +44,37 @@ if PROMETHEUS_AVAILABLE and Counter is not None:
     DISPATCH_FK_VIOLATION_TOTAL = Counter(
         "dispatch_fk_violation_total",
         "Nombre total de violations de contrainte ForeignKey",
-        ["fk_constraint", "company_id"],  # fk_constraint: "company_id", "driver_id", etc.
+        [
+            "fk_constraint",
+            "company_id",
+        ],  # fk_constraint: "company_id", "driver_id", etc.
     )
 
     DISPATCH_INTEGRITY_ERROR_TOTAL = Counter(
         "dispatch_integrity_error_total",
         "Nombre total d'erreurs d'intégrité DB (IntegrityError)",
-        ["error_code", "company_id"],  # error_code: "23503" (FK), "23505" (unique), etc.
+        [
+            "error_code",
+            "company_id",
+        ],  # error_code: "23503" (FK), "23505" (unique), etc.
     )
 
     # ✅ FIX: Initialiser les métriques avec 0.0 pour qu'elles apparaissent même si jamais incrémentées
     try:
-        DISPATCH_ERRORS_TOTAL.labels(error_type="company_not_found", company_id="0").inc(0)
+        DISPATCH_ERRORS_TOTAL.labels(
+            error_type="company_not_found", company_id="0"
+        ).inc(0)
         DISPATCH_ERRORS_TOTAL.labels(error_type="fk_violation", company_id="0").inc(0)
         DISPATCH_COMPANY_NOT_FOUND_TOTAL.labels(company_id="0").inc(0)
-        DISPATCH_FK_VIOLATION_TOTAL.labels(fk_constraint="company_id", company_id="0").inc(0)
+        DISPATCH_FK_VIOLATION_TOTAL.labels(
+            fk_constraint="company_id", company_id="0"
+        ).inc(0)
         DISPATCH_INTEGRITY_ERROR_TOTAL.labels(error_code="23503", company_id="0").inc(0)
     except Exception as e:
         # Ignorer les erreurs d'initialisation (peut échouer si Prometheus non configuré)
-        logger.debug("[Dispatch Error Metrics] Failed to initialize metrics with 0.0: %s", e)
+        logger.debug(
+            "[Dispatch Error Metrics] Failed to initialize metrics with 0.0: %s", e
+        )
 else:
     DISPATCH_ERRORS_TOTAL = None
     DISPATCH_COMPANY_NOT_FOUND_TOTAL = None
@@ -67,7 +82,9 @@ else:
     DISPATCH_INTEGRITY_ERROR_TOTAL = None
 
 
-def track_company_not_found(company_id: int, dispatch_run_id: int | None = None) -> None:
+def track_company_not_found(
+    company_id: int, dispatch_run_id: int | None = None
+) -> None:
     """Track une erreur CompanyNotFoundError.
 
     Args:
@@ -78,7 +95,9 @@ def track_company_not_found(company_id: int, dispatch_run_id: int | None = None)
         DISPATCH_COMPANY_NOT_FOUND_TOTAL.labels(company_id=str(company_id)).inc()
 
     if DISPATCH_ERRORS_TOTAL is not None:
-        DISPATCH_ERRORS_TOTAL.labels(error_type="company_not_found", company_id=str(company_id)).inc()
+        DISPATCH_ERRORS_TOTAL.labels(
+            error_type="company_not_found", company_id=str(company_id)
+        ).inc()
 
     logger.debug(
         "[Dispatch Error Metrics] CompanyNotFoundError tracked: company_id=%s, dispatch_run_id=%s",
@@ -102,10 +121,14 @@ def track_fk_violation(
     company_id_str = str(company_id) if company_id is not None else "unknown"
 
     if DISPATCH_FK_VIOLATION_TOTAL is not None:
-        DISPATCH_FK_VIOLATION_TOTAL.labels(fk_constraint=fk_constraint, company_id=company_id_str).inc()
+        DISPATCH_FK_VIOLATION_TOTAL.labels(
+            fk_constraint=fk_constraint, company_id=company_id_str
+        ).inc()
 
     if DISPATCH_ERRORS_TOTAL is not None:
-        DISPATCH_ERRORS_TOTAL.labels(error_type="fk_violation", company_id=company_id_str).inc()
+        DISPATCH_ERRORS_TOTAL.labels(
+            error_type="fk_violation", company_id=company_id_str
+        ).inc()
 
     logger.debug(
         "[Dispatch Error Metrics] FK violation tracked: fk_constraint=%s, company_id=%s, dispatch_run_id=%s",
@@ -130,7 +153,9 @@ def track_integrity_error(
     company_id_str = str(company_id) if company_id is not None else "unknown"
 
     if DISPATCH_INTEGRITY_ERROR_TOTAL is not None:
-        DISPATCH_INTEGRITY_ERROR_TOTAL.labels(error_code=error_code, company_id=company_id_str).inc()
+        DISPATCH_INTEGRITY_ERROR_TOTAL.labels(
+            error_code=error_code, company_id=company_id_str
+        ).inc()
 
     # Détecter le type d'erreur basé sur le code
     error_type = "unknown"
@@ -143,7 +168,9 @@ def track_integrity_error(
         error_type = "not_null_violation"
 
     if DISPATCH_ERRORS_TOTAL is not None:
-        DISPATCH_ERRORS_TOTAL.labels(error_type=error_type, company_id=company_id_str).inc()
+        DISPATCH_ERRORS_TOTAL.labels(
+            error_type=error_type, company_id=company_id_str
+        ).inc()
 
     logger.debug(
         "[Dispatch Error Metrics] IntegrityError tracked: error_code=%s, company_id=%s, dispatch_run_id=%s",
@@ -168,7 +195,9 @@ def track_dispatch_error(
     company_id_str = str(company_id) if company_id is not None else "unknown"
 
     if DISPATCH_ERRORS_TOTAL is not None:
-        DISPATCH_ERRORS_TOTAL.labels(error_type=error_type, company_id=company_id_str).inc()
+        DISPATCH_ERRORS_TOTAL.labels(
+            error_type=error_type, company_id=company_id_str
+        ).inc()
 
     logger.debug(
         "[Dispatch Error Metrics] Dispatch error tracked: error_type=%s, company_id=%s, dispatch_run_id=%s",

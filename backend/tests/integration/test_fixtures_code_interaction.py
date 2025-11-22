@@ -39,7 +39,9 @@ class TestFixturesCodeInteraction:
         )
 
         # Vérifier que engine.run() a pu trouver la company et créer un DispatchRun
-        dispatch_run_id = result.get("dispatch_run_id") or result.get("meta", {}).get("dispatch_run_id")
+        dispatch_run_id = result.get("dispatch_run_id") or result.get("meta", {}).get(
+            "dispatch_run_id"
+        )
         assert dispatch_run_id is not None, (
             f"DispatchRun doit être créé. Company doit être visible dans le code métier. "
             f"Résultat: {result.get('meta', {})}"
@@ -47,8 +49,12 @@ class TestFixturesCodeInteraction:
 
         # Vérifier que le DispatchRun existe en DB
         dispatch_run = DispatchRun.query.get(dispatch_run_id)
-        assert dispatch_run is not None, f"DispatchRun {dispatch_run_id} doit exister en DB"
-        assert dispatch_run.company_id == company.id, "DispatchRun doit appartenir à la company"
+        assert dispatch_run is not None, (
+            f"DispatchRun {dispatch_run_id} doit exister en DB"
+        )
+        assert dispatch_run.company_id == company.id, (
+            "DispatchRun doit appartenir à la company"
+        )
 
         print("✅ Test : Fixture commitée visible dans code métier OK")
 
@@ -77,7 +83,9 @@ class TestFixturesCodeInteraction:
         assert company_reloaded.id == company_id, "Company doit avoir le même ID"
 
         # Vérifier que engine.run() a pu créer un DispatchRun
-        dispatch_run_id = result.get("dispatch_run_id") or result.get("meta", {}).get("dispatch_run_id")
+        dispatch_run_id = result.get("dispatch_run_id") or result.get("meta", {}).get(
+            "dispatch_run_id"
+        )
         assert dispatch_run_id is not None, "DispatchRun doit être créé"
 
         print("✅ Test : Rollback défensif n'affecte pas fixtures commitées OK")
@@ -106,18 +114,28 @@ class TestFixturesCodeInteraction:
         )
 
         # Vérifier que les deux appels ont créé des DispatchRun distincts
-        dispatch_run_id1 = result1.get("dispatch_run_id") or result1.get("meta", {}).get("dispatch_run_id")
-        dispatch_run_id2 = result2.get("dispatch_run_id") or result2.get("meta", {}).get("dispatch_run_id")
+        dispatch_run_id1 = result1.get("dispatch_run_id") or result1.get(
+            "meta", {}
+        ).get("dispatch_run_id")
+        dispatch_run_id2 = result2.get("dispatch_run_id") or result2.get(
+            "meta", {}
+        ).get("dispatch_run_id")
 
         assert dispatch_run_id1 is not None, "Premier DispatchRun doit être créé"
         assert dispatch_run_id2 is not None, "Deuxième DispatchRun doit être créé"
-        assert dispatch_run_id1 != dispatch_run_id2, "Les deux DispatchRun doivent être distincts"
+        assert dispatch_run_id1 != dispatch_run_id2, (
+            "Les deux DispatchRun doivent être distincts"
+        )
 
         # Vérifier que la company est toujours visible (isolation préservée)
         company_reloaded = db.session.query(Company).get(company.id)
-        assert company_reloaded is not None, "Company doit rester visible (isolation préservée)"
+        assert company_reloaded is not None, (
+            "Company doit rester visible (isolation préservée)"
+        )
 
-        print("✅ Test : Transactions code métier n'affectent pas isolation fixtures OK")
+        print(
+            "✅ Test : Transactions code métier n'affectent pas isolation fixtures OK"
+        )
 
     def test_nested_savepoint_with_code_metier(self, db):
         """✅ Test : Les savepoints imbriqués fonctionnent correctement avec le code métier.
@@ -138,8 +156,12 @@ class TestFixturesCodeInteraction:
             )
 
             # Vérifier que engine.run() a pu créer un DispatchRun
-            dispatch_run_id = result.get("dispatch_run_id") or result.get("meta", {}).get("dispatch_run_id")
-            assert dispatch_run_id is not None, "DispatchRun doit être créé dans le savepoint imbriqué"
+            dispatch_run_id = result.get("dispatch_run_id") or result.get(
+                "meta", {}
+            ).get("dispatch_run_id")
+            assert dispatch_run_id is not None, (
+                "DispatchRun doit être créé dans le savepoint imbriqué"
+            )
 
             # Vérifier que le DispatchRun existe
             dispatch_run = DispatchRun.query.get(dispatch_run_id)
@@ -156,7 +178,9 @@ class TestFixturesCodeInteraction:
 
         # La company doit toujours exister (créée dans le savepoint principal)
         company_reloaded = db.session.query(Company).get(company.id)
-        assert company_reloaded is not None, "Company doit toujours exister (savepoint principal)"
+        assert company_reloaded is not None, (
+            "Company doit toujours exister (savepoint principal)"
+        )
 
         print("✅ Test : Savepoints imbriqués avec code métier OK")
 
@@ -175,7 +199,9 @@ class TestFixturesCodeInteraction:
         with ensure_committed(db):
             # Vérifier que la company est commitée
             company_reloaded = db.session.query(Company).get(company.id)
-            assert company_reloaded is not None, "Company doit être visible après ensure_committed()"
+            assert company_reloaded is not None, (
+                "Company doit être visible après ensure_committed()"
+            )
 
             # Appeler engine.run() qui fait un rollback défensif
             result = engine.run(
@@ -185,7 +211,9 @@ class TestFixturesCodeInteraction:
             )
 
             # Vérifier que engine.run() a pu créer un DispatchRun
-            dispatch_run_id = result.get("dispatch_run_id") or result.get("meta", {}).get("dispatch_run_id")
+            dispatch_run_id = result.get("dispatch_run_id") or result.get(
+                "meta", {}
+            ).get("dispatch_run_id")
             assert dispatch_run_id is not None, (
                 "DispatchRun doit être créé. ensure_committed() doit garantir la persistance"
             )

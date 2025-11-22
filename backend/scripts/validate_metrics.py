@@ -64,7 +64,11 @@ def parse_prometheus_metrics(content: str) -> Dict[str, Dict[str, Any]]:
                     current_metric = match.group(1)
                     current_type = match.group(2)
                     if current_metric not in metrics:
-                        metrics[current_metric] = {"type": current_type, "help": "", "samples": []}
+                        metrics[current_metric] = {
+                            "type": current_type,
+                            "help": "",
+                            "samples": [],
+                        }
                     else:
                         metrics[current_metric]["type"] = current_type
             elif line.startswith("# HELP"):
@@ -74,7 +78,11 @@ def parse_prometheus_metrics(content: str) -> Dict[str, Dict[str, Any]]:
                     current_metric = match.group(1)
                     current_help = match.group(2)
                     if current_metric not in metrics:
-                        metrics[current_metric] = {"type": "", "help": current_help, "samples": []}
+                        metrics[current_metric] = {
+                            "type": "",
+                            "help": current_help,
+                            "samples": [],
+                        }
                     else:
                         metrics[current_metric]["help"] = current_help
         # Ligne de métrique: metric_name{labels} value
@@ -103,17 +111,23 @@ def validate_metrics_format(content: str) -> List[str]:
 
     # Vérifier que les métriques sont bien formatées
     lines = content.split("\n")
-    metric_lines = [line for line in lines if line.strip() and not line.strip().startswith("#")]
+    metric_lines = [
+        line for line in lines if line.strip() and not line.strip().startswith("#")
+    ]
 
     for metric_line in metric_lines:
         # Format attendu: metric_name{labels} value ou metric_name value
-        if not re.match(r"^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^}]*\})?\s+[0-9.+-eE]+", metric_line):
+        if not re.match(
+            r"^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^}]*\})?\s+[0-9.+-eE]+", metric_line
+        ):
             errors.append(f"Ligne de métrique mal formatée: {metric_line[:100]}")
 
     return errors
 
 
-def validate_metrics_endpoint(base_url: str = "http://localhost:5000") -> Dict[str, Any]:
+def validate_metrics_endpoint(
+    base_url: str = "http://localhost:5000",
+) -> Dict[str, Any]:
     """Valide l'endpoint /api/v1/prometheus/metrics."""
     results = {
         "endpoint": f"{base_url}/api/v1/prometheus/metrics",
@@ -149,10 +163,14 @@ def validate_metrics_endpoint(base_url: str = "http://localhost:5000") -> Dict[s
                 if found_type == metric_type or metric_name in content:
                     results["metrics_found"][metric_name] = {
                         "type": found_type,
-                        "samples_count": len(parsed_metrics[metric_name].get("samples", [])),
+                        "samples_count": len(
+                            parsed_metrics[metric_name].get("samples", [])
+                        ),
                     }
                 else:
-                    results["metrics_missing"].append(f"{metric_name} (type mismatch: {found_type} != {metric_type})")
+                    results["metrics_missing"].append(
+                        f"{metric_name} (type mismatch: {found_type} != {metric_type})"
+                    )
             else:
                 # Vérifier si la métrique existe mais avec un préfixe ou suffixe
                 found = False
@@ -166,7 +184,9 @@ def validate_metrics_endpoint(base_url: str = "http://localhost:5000") -> Dict[s
                         break
                 if not found and metric_name in content:
                     # Métrique présente mais non parsée correctement
-                    results["metrics_found"][metric_name] = {"status": "present_in_content"}
+                    results["metrics_found"][metric_name] = {
+                        "status": "present_in_content"
+                    }
                 elif not found:
                     results["metrics_missing"].append(metric_name)
 
@@ -181,7 +201,9 @@ def validate_metrics_endpoint(base_url: str = "http://localhost:5000") -> Dict[s
     return results
 
 
-def validate_osrm_health_endpoint(base_url: str = "http://localhost:5000") -> Dict[str, Any]:
+def validate_osrm_health_endpoint(
+    base_url: str = "http://localhost:5000",
+) -> Dict[str, Any]:
     """Valide l'endpoint /api/v1/osrm/health."""
     results = {
         "endpoint": f"{base_url}/api/v1/osrm/health",
@@ -238,7 +260,9 @@ def generate_report() -> str:
             print(f"   Erreur: {error}")
 
     print()
-    print(f"Métriques trouvées: {len(metrics_results['metrics_found'])}/{metrics_results['total_metrics_expected']}")
+    print(
+        f"Métriques trouvées: {len(metrics_results['metrics_found'])}/{metrics_results['total_metrics_expected']}"
+    )
     for metric_name, info in metrics_results["metrics_found"].items():
         print(f"  ✅ {metric_name}: {info}")
 
@@ -256,7 +280,9 @@ def generate_report() -> str:
     if health_results["accessible"]:
         print(f"✅ Endpoint accessible (status: {health_results['status_code']})")
         if health_results.get("response"):
-            print(f"   Status OSRM: {health_results['response'].get('status', 'unknown')}")
+            print(
+                f"   Status OSRM: {health_results['response'].get('status', 'unknown')}"
+            )
             print(
                 f"   Circuit Breaker: {health_results['response'].get('circuit_breaker', {}).get('state', 'unknown')}"
             )

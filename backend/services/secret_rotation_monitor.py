@@ -83,7 +83,9 @@ def record_rotation(
 
     except Exception as e:
         db.session.rollback()
-        logger.exception("[SecretRotationMonitor] ❌ Erreur enregistrement rotation: %s", e)
+        logger.exception(
+            "[SecretRotationMonitor] ❌ Erreur enregistrement rotation: %s", e
+        )
         raise
 
 
@@ -120,12 +122,19 @@ def get_rotation_history(
         total = query.count()
 
         # Appliquer pagination et tri
-        rotations = query.order_by(SecretRotation.rotated_at.desc()).limit(limit).offset(offset).all()
+        rotations = (
+            query.order_by(SecretRotation.rotated_at.desc())
+            .limit(limit)
+            .offset(offset)
+            .all()
+        )
 
         return rotations, total
 
     except Exception as e:
-        logger.exception("[SecretRotationMonitor] ❌ Erreur récupération historique: %s", e)
+        logger.exception(
+            "[SecretRotationMonitor] ❌ Erreur récupération historique: %s", e
+        )
         raise
 
 
@@ -138,19 +147,33 @@ def get_rotation_stats() -> dict[str, Any]:
     try:
         # Statistiques globales
         total_rotations = SecretRotation.query.count()
-        success_count = SecretRotation.query.filter(SecretRotation.status == STATUS_SUCCESS).count()
-        error_count = SecretRotation.query.filter(SecretRotation.status == STATUS_ERROR).count()
-        skipped_count = SecretRotation.query.filter(SecretRotation.status == STATUS_SKIPPED).count()
+        success_count = SecretRotation.query.filter(
+            SecretRotation.status == STATUS_SUCCESS
+        ).count()
+        error_count = SecretRotation.query.filter(
+            SecretRotation.status == STATUS_ERROR
+        ).count()
+        skipped_count = SecretRotation.query.filter(
+            SecretRotation.status == STATUS_SKIPPED
+        ).count()
 
         # Statistiques par type
         by_type: dict[str, dict[str, int]] = {}
         for secret_type in SECRET_TYPES:
-            type_query = SecretRotation.query.filter(SecretRotation.secret_type == secret_type)
+            type_query = SecretRotation.query.filter(
+                SecretRotation.secret_type == secret_type
+            )
             by_type[secret_type] = {
                 "total": type_query.count(),
-                "success": type_query.filter(SecretRotation.status == STATUS_SUCCESS).count(),
-                "error": type_query.filter(SecretRotation.status == STATUS_ERROR).count(),
-                "skipped": type_query.filter(SecretRotation.status == STATUS_SKIPPED).count(),
+                "success": type_query.filter(
+                    SecretRotation.status == STATUS_SUCCESS
+                ).count(),
+                "error": type_query.filter(
+                    SecretRotation.status == STATUS_ERROR
+                ).count(),
+                "skipped": type_query.filter(
+                    SecretRotation.status == STATUS_SKIPPED
+                ).count(),
             }
 
         # Dernières rotations par type
@@ -177,7 +200,9 @@ def get_rotation_stats() -> dict[str, Any]:
         raise
 
 
-def get_last_rotation(secret_type: str, environment: str | None = None) -> SecretRotation | None:
+def get_last_rotation(
+    secret_type: str, environment: str | None = None
+) -> SecretRotation | None:
     """Récupère la dernière rotation pour un type de secret donné.
 
     Args:
@@ -196,11 +221,15 @@ def get_last_rotation(secret_type: str, environment: str | None = None) -> Secre
         return query.order_by(SecretRotation.rotated_at.desc()).first()
 
     except Exception as e:
-        logger.exception("[SecretRotationMonitor] ❌ Erreur récupération dernière rotation: %s", e)
+        logger.exception(
+            "[SecretRotationMonitor] ❌ Erreur récupération dernière rotation: %s", e
+        )
         raise
 
 
-def get_days_since_last_rotation(secret_type: str, environment: str | None = None) -> int | None:
+def get_days_since_last_rotation(
+    secret_type: str, environment: str | None = None
+) -> int | None:
     """Calcule le nombre de jours depuis la dernière rotation réussie.
 
     Args:
@@ -212,7 +241,8 @@ def get_days_since_last_rotation(secret_type: str, environment: str | None = Non
     """
     try:
         query = SecretRotation.query.filter(
-            SecretRotation.secret_type == secret_type, SecretRotation.status == STATUS_SUCCESS
+            SecretRotation.secret_type == secret_type,
+            SecretRotation.status == STATUS_SUCCESS,
         )
 
         if environment:
@@ -227,5 +257,8 @@ def get_days_since_last_rotation(secret_type: str, environment: str | None = Non
         return delta.days
 
     except Exception as e:
-        logger.exception("[SecretRotationMonitor] ❌ Erreur calcul jours depuis dernière rotation: %s", e)
+        logger.exception(
+            "[SecretRotationMonitor] ❌ Erreur calcul jours depuis dernière rotation: %s",
+            e,
+        )
         return None

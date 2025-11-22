@@ -16,7 +16,9 @@ class ABTestingService:
     """Service pour comparer ML vs Heuristique."""
 
     @staticmethod
-    def run_ab_test(booking: Any, driver: Any, current_time: datetime | None = None) -> dict[str, Any]:
+    def run_ab_test(
+        booking: Any, driver: Any, current_time: datetime | None = None
+    ) -> dict[str, Any]:
         """Exécute test A/B : ML vs Heuristique.
 
         Args:
@@ -31,16 +33,22 @@ class ABTestingService:
         if current_time is None:
             current_time = datetime.now(timezone.utc)
 
-        logger.info("[AB Test] Running for booking %s, driver %s", booking.id, driver.id)
+        logger.info(
+            "[AB Test] Running for booking %s, driver %s", booking.id, driver.id
+        )
 
         # 1. Prédiction ML
         ml_start = time.time()
-        ml_prediction = ABTestingService._run_ml_prediction(booking, driver, current_time)
+        ml_prediction = ABTestingService._run_ml_prediction(
+            booking, driver, current_time
+        )
         ml_time = (time.time() - ml_start) * 1000  # ms
 
         # 2. Prédiction Heuristique
         heuristic_start = time.time()
-        heuristic_prediction = ABTestingService._run_heuristic_prediction(booking, driver)
+        heuristic_prediction = ABTestingService._run_heuristic_prediction(
+            booking, driver
+        )
         heuristic_time = (time.time() - heuristic_start) * 1000  # ms
 
         # 3. Comparaison
@@ -58,7 +66,9 @@ class ABTestingService:
             "heuristic_delay_minutes": heuristic_prediction["delay_minutes"],
             "heuristic_prediction_time_ms": heuristic_time,
             # Comparaison
-            "difference_minutes": abs(ml_prediction["delay_minutes"] - heuristic_prediction["delay_minutes"]),
+            "difference_minutes": abs(
+                ml_prediction["delay_minutes"] - heuristic_prediction["delay_minutes"]
+            ),
             "ml_faster": ml_time < heuristic_time,
             "speed_advantage_ms": heuristic_time - ml_time,
         }
@@ -73,7 +83,9 @@ class ABTestingService:
         return result
 
     @staticmethod
-    def _run_ml_prediction(booking: Any, driver: Any, current_time: datetime) -> dict[str, Any]:
+    def _run_ml_prediction(
+        booking: Any, driver: Any, current_time: datetime
+    ) -> dict[str, Any]:
         """Exécute prédiction ML."""
         try:
             from services.unified_dispatch.ml_predictor import get_ml_predictor
@@ -85,7 +97,9 @@ class ABTestingService:
                 "delay_minutes": prediction.predicted_delay_minutes,
                 "confidence": prediction.confidence,
                 "risk_level": prediction.risk_level,
-                "weather_factor": prediction.contributing_factors.get("weather_factor", 0.5),
+                "weather_factor": prediction.contributing_factors.get(
+                    "weather_factor", 0.5
+                ),
             }
         except Exception as e:
             logger.error("[AB Test] ML prediction failed: %s", e)
@@ -111,7 +125,9 @@ class ABTestingService:
             if not all([pickup_lat, pickup_lon, dropoff_lat, dropoff_lon]):
                 return {"delay_minutes": 5}
 
-            distance_km = haversine_distance(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+            distance_km = haversine_distance(
+                pickup_lat, pickup_lon, dropoff_lat, dropoff_lon
+            )
 
             # Heuristique simple : 0.5 min/km + buffer 3 min
             delay_minutes = (distance_km * 0.5) + 3
@@ -166,8 +182,16 @@ class ABTestingService:
         }
 
         logger.info("[AB Test] Metrics calculated for %s tests", n)
-        logger.info("  ML avg: %s min (%sms)", metrics["ml_avg_delay"], metrics["ml_avg_time_ms"])
-        logger.info("  Heuristic avg: %s min (%sms)", metrics["heuristic_avg_delay"], metrics["heuristic_avg_time_ms"])
+        logger.info(
+            "  ML avg: %s min (%sms)",
+            metrics["ml_avg_delay"],
+            metrics["ml_avg_time_ms"],
+        )
+        logger.info(
+            "  Heuristic avg: %s min (%sms)",
+            metrics["heuristic_avg_delay"],
+            metrics["heuristic_avg_time_ms"],
+        )
         logger.info("  ML faster: %s%%", metrics["ml_faster_percentage"])
 
         return metrics
@@ -202,13 +226,22 @@ def run_batch_ab_tests(booking_ids: list[int], driver_ids: list[int]) -> dict[st
             driver = Driver.query.get(driver_id)
 
             if not booking or not driver:
-                logger.warning("[AB Test] Skipping: booking %s or driver %s not found", booking_id, driver_id)
+                logger.warning(
+                    "[AB Test] Skipping: booking %s or driver %s not found",
+                    booking_id,
+                    driver_id,
+                )
                 continue
 
             result = ABTestingService.run_ab_test(booking, driver, current_time)
             results.append(result)
         except Exception as e:
-            logger.error("[AB Test] Failed for booking %s, driver %s: %s", booking_id, driver_id, e)
+            logger.error(
+                "[AB Test] Failed for booking %s, driver %s: %s",
+                booking_id,
+                driver_id,
+                e,
+            )
 
     metrics = ABTestingService.calculate_metrics(results)
 

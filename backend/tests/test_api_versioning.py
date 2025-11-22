@@ -42,17 +42,23 @@ class TestAPIVersioning:
         response = client.get("/api/v1/companies/me", headers=auth_headers)
 
         # Vérifier header Deprecation
-        assert "Deprecation" in response.headers, "Header Deprecation doit être présent sur routes v1"
+        assert "Deprecation" in response.headers, (
+            "Header Deprecation doit être présent sur routes v1"
+        )
         assert response.headers["Deprecation"] == 'version="v1"', (
             f"Header Deprecation doit être 'version=\"v1\"', reçu: {response.headers['Deprecation']}"
         )
 
         # Vérifier header Sunset
-        assert "Sunset" in response.headers, "Header Sunset doit être présent sur routes v1"
+        assert "Sunset" in response.headers, (
+            "Header Sunset doit être présent sur routes v1"
+        )
 
         # Vérifier header Link
         assert "Link" in response.headers, "Header Link doit être présent sur routes v1"
-        assert "successor-version" in response.headers["Link"], "Header Link doit contenir 'successor-version'"
+        assert "successor-version" in response.headers["Link"], (
+            "Header Link doit contenir 'successor-version'"
+        )
 
     def test_v2_endpoint_available(self, client):
         """Test que les endpoints v2 sont prêts (peuvent retourner 404 mais sont montés)."""
@@ -60,9 +66,13 @@ class TestAPIVersioning:
         # Un endpoint inexistant doit retourner 404, pas 404 de route Flask
         response = client.get("/api/v2/nonexistent", headers={})
         # L'API v2 doit être montée, donc une route inexistante retourne 404 JSON de Flask-RESTx
-        assert response.status_code == 404, f"Endpoint /api/v2/* doit être monté (status: {response.status_code})"
+        assert response.status_code == 404, (
+            f"Endpoint /api/v2/* doit être monté (status: {response.status_code})"
+        )
         # La réponse doit être JSON (Flask-RESTx)
-        assert response.is_json or response.status_code == 404, "Réponse v2 doit être JSON (Flask-RESTx)"
+        assert response.is_json or response.status_code == 404, (
+            "Réponse v2 doit être JSON (Flask-RESTx)"
+        )
 
     def test_legacy_api_if_enabled(self, client, auth_headers):
         """Test que les routes legacy sont disponibles si activées."""
@@ -80,14 +90,18 @@ class TestAPIVersioning:
 
             # Vérifier header Deprecation sur legacy
             if response.status_code != 404:
-                assert "Deprecation" in response.headers, "Header Deprecation doit être présent sur routes legacy"
+                assert "Deprecation" in response.headers, (
+                    "Header Deprecation doit être présent sur routes legacy"
+                )
                 assert 'version="legacy"' in response.headers["Deprecation"], (
                     "Header Deprecation legacy doit contenir 'version=\"legacy\"'"
                 )
         else:
             # Legacy désactivée: peut retourner 404
             # (normal si pas de route legacy montée)
-            assert response.status_code in (404, 403), "Route legacy doit être absente si désactivée"
+            assert response.status_code in (404, 403), (
+                "Route legacy doit être absente si désactivée"
+            )
 
     def test_versioning_swagger_docs(self, client):
         """Test que la documentation Swagger est disponible pour chaque version."""
@@ -118,7 +132,11 @@ class TestAPIVersioning:
         response_v2 = client.get("/api/v2/companies/me", headers=auth_headers)
 
         # V1 doit retourner quelque chose (200, 404 avec data, 403)
-        assert response_v1.status_code != 500, "v1 ne doit pas retourner 500 (route montée)"
+        assert response_v1.status_code != 500, (
+            "v1 ne doit pas retourner 500 (route montée)"
+        )
 
         # V2 peut retourner 404 (vide pour l'instant)
-        assert response_v2.status_code in (404, 500), "v2 doit retourner 404 (vide pour l'instant)"
+        assert response_v2.status_code in (404, 500), (
+            "v2 doit retourner 404 (vide pour l'instant)"
+        )

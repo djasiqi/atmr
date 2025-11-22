@@ -67,7 +67,9 @@ def verify_all_settings(company_id: int = 1):
 
     time_limit_settings = getattr(settings.solver, "time_limit_sec", None)
     max_bookings_settings = getattr(settings.solver, "max_bookings_per_driver", None)
-    unassigned_penalty_settings = getattr(settings.solver, "unassigned_penalty_base", None)
+    unassigned_penalty_settings = getattr(
+        settings.solver, "unassigned_penalty_base", None
+    )
 
     print("   Temps limite (secondes):")
     print(
@@ -150,9 +152,13 @@ def verify_all_settings(company_id: int = 1):
     print("-" * 80)
     emergency_db = dispatch_overrides.get("emergency", {})
     allow_emergency_db = emergency_db.get("allow_emergency_drivers")
-    emergency_penalty_db = emergency_db.get("emergency_penalty") or emergency_db.get("emergency_per_stop_penalty")
+    emergency_penalty_db = emergency_db.get("emergency_penalty") or emergency_db.get(
+        "emergency_per_stop_penalty"
+    )
 
-    allow_emergency_settings = getattr(settings.emergency, "allow_emergency_drivers", None)
+    allow_emergency_settings = getattr(
+        settings.emergency, "allow_emergency_drivers", None
+    )
     emergency_penalty_settings = getattr(settings.emergency, "emergency_penalty", None)
 
     print("   Autoriser chauffeurs d'urgence:")
@@ -174,7 +180,9 @@ def verify_all_settings(company_id: int = 1):
     driver_load_multipliers_db = dispatch_overrides.get("driver_load_multipliers", {})
 
     print("   Chauffeur préféré:")
-    print(f"     DB: {preferred_driver_db} {'✅' if preferred_driver_db else '⚠️  Non configuré'}")
+    print(
+        f"     DB: {preferred_driver_db} {'✅' if preferred_driver_db else '⚠️  Non configuré'}"
+    )
     if preferred_driver_db and preferred_driver_db in driver_load_multipliers_db:
         multiplier = driver_load_multipliers_db[preferred_driver_db]
         print("   Multiplicateur de charge:")
@@ -186,7 +194,9 @@ def verify_all_settings(company_id: int = 1):
     print("=" * 80)
     print("✅ Paramètres vérifiés depuis: autonomous_config.dispatch_overrides")
     print("✅ Settings calculés via: for_company(company)")
-    print("\n💡 Note: Les valeurs par défaut sont utilisées si non configurées dans la DB")
+    print(
+        "\n💡 Note: Les valeurs par défaut sont utilisées si non configurées dans la DB"
+    )
 
     print("\n" + "=" * 80)
     print("✅ Vérification terminée")

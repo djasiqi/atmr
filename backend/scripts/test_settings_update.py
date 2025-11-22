@@ -64,7 +64,9 @@ def test_settings_update():
         db.session.add(company)
         db.session.commit()
 
-        print(f"   ✅ Modifié emergency_penalty: {original_emergency} → {new_emergency}")
+        print(
+            f"   ✅ Modifié emergency_penalty: {original_emergency} → {new_emergency}"
+        )
         print(f"   ✅ Modifié proximity: {original_proximity} → {new_proximity}")
 
         # 3. Recharger depuis la DB (simuler un nouveau dispatch)
@@ -86,14 +88,20 @@ def test_settings_update():
         print("\n4️⃣ Vérification")
         print("-" * 80)
         if emergency_penalty2 == new_emergency:
-            print(f"   ✅ emergency_penalty correctement récupéré: {emergency_penalty2}")
+            print(
+                f"   ✅ emergency_penalty correctement récupéré: {emergency_penalty2}"
+            )
         else:
-            print(f"   ❌ emergency_penalty NON récupéré: attendu {new_emergency}, obtenu {emergency_penalty2}")
+            print(
+                f"   ❌ emergency_penalty NON récupéré: attendu {new_emergency}, obtenu {emergency_penalty2}"
+            )
 
         if proximity2 == new_proximity:
             print(f"   ✅ proximity correctement récupéré: {proximity2}")
         else:
-            print(f"   ❌ proximity NON récupéré: attendu {new_proximity}, obtenu {proximity2}")
+            print(
+                f"   ❌ proximity NON récupéré: attendu {new_proximity}, obtenu {proximity2}"
+            )
 
         # 5. Restaurer les valeurs originales
         print("\n5️⃣ Restauration des valeurs originales")

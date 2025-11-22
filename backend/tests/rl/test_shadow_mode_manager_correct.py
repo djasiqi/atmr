@@ -43,7 +43,11 @@ class TestShadowModeManagerCorrect:
         context = {"booking_id": 1, "pickup_time": datetime.now(), "distance_km": 5.0}
 
         kpis = manager.log_decision_comparison(
-            company_id="1", booking_id="1", human_decision=human_decision, rl_decision=rl_decision, context=context
+            company_id="1",
+            booking_id="1",
+            human_decision=human_decision,
+            rl_decision=rl_decision,
+            context=context,
         )
 
         assert isinstance(kpis, dict)
@@ -64,7 +68,11 @@ class TestShadowModeManagerCorrect:
         context = {"booking_id": 1, "pickup_time": datetime.now(), "distance_km": 5.0}
 
         kpis = manager.log_decision_comparison(
-            company_id="1", booking_id="1", human_decision=human_decision, rl_decision=rl_decision, context=context
+            company_id="1",
+            booking_id="1",
+            human_decision=human_decision,
+            rl_decision=rl_decision,
+            context=context,
         )
 
         assert isinstance(kpis, dict)

@@ -33,15 +33,24 @@ def upgrade():
         sa.Column("quality_score", sa.Float(), nullable=False),
         sa.Column("bookings_trend", sa.Float(), nullable=False),
         sa.Column("delay_trend", sa.Float(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("company_id", "date", name="uq_daily_stats_company_date"),
     )
     with op.batch_alter_table("daily_stats", schema=None) as batch_op:
-        batch_op.create_index("ix_daily_stats_company_date", ["company_id", "date"], unique=False)
-        batch_op.create_index(batch_op.f("ix_daily_stats_company_id"), ["company_id"], unique=False)
+        batch_op.create_index(
+            "ix_daily_stats_company_date", ["company_id", "date"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_daily_stats_company_id"), ["company_id"], unique=False
+        )
         batch_op.create_index(batch_op.f("ix_daily_stats_date"), ["date"], unique=False)
 
     op.create_table(
@@ -50,7 +59,12 @@ def upgrade():
         sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("dispatch_run_id", sa.Integer(), nullable=False),
         sa.Column("date", sa.Date(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("total_bookings", sa.Integer(), nullable=False),
         sa.Column("on_time_bookings", sa.Integer(), nullable=False),
         sa.Column("delayed_bookings", sa.Integer(), nullable=False),
@@ -68,14 +82,24 @@ def upgrade():
         sa.Column("quality_score", sa.Float(), nullable=False),
         sa.Column("extra_data", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["dispatch_run_id"], ["dispatch_run.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["dispatch_run_id"], ["dispatch_run.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("dispatch_metrics", schema=None) as batch_op:
-        batch_op.create_index("ix_dispatch_metrics_company_date", ["company_id", "date"], unique=False)
-        batch_op.create_index(batch_op.f("ix_dispatch_metrics_company_id"), ["company_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_dispatch_metrics_date"), ["date"], unique=False)
-        batch_op.create_index("ix_dispatch_metrics_dispatch_run", ["dispatch_run_id"], unique=False)
+        batch_op.create_index(
+            "ix_dispatch_metrics_company_date", ["company_id", "date"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_dispatch_metrics_company_id"), ["company_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_dispatch_metrics_date"), ["date"], unique=False
+        )
+        batch_op.create_index(
+            "ix_dispatch_metrics_dispatch_run", ["dispatch_run_id"], unique=False
+        )
 
     booking_columns = {col["name"] for col in inspector.get_columns("booking")}
 
@@ -122,7 +146,10 @@ def downgrade():
 
     with op.batch_alter_table("booking", schema=None) as batch_op:
         batch_op.alter_column(
-            "time_confirmed", existing_type=sa.BOOLEAN(), nullable=True, existing_server_default=sa.text("true")
+            "time_confirmed",
+            existing_type=sa.BOOLEAN(),
+            nullable=True,
+            existing_server_default=sa.text("true"),
         )
 
     with op.batch_alter_table("dispatch_metrics", schema=None) as batch_op:

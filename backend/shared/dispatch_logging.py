@@ -36,7 +36,9 @@ class DispatchLoggerAdapter(logging.LoggerAdapter[logging.Logger]):
     """Adapter de logger qui ajoute automatiquement dispatch_run_id et company_id au contexte."""
 
     @override
-    def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> tuple[str, MutableMapping[str, Any]]:
+    def process(
+        self, msg: str, kwargs: MutableMapping[str, Any]
+    ) -> tuple[str, MutableMapping[str, Any]]:
         """Ajoute dispatch_run_id et company_id au contexte des logs."""
         # Récupérer les valeurs depuis context vars
         dispatch_run_id = _dispatch_run_id.get()
@@ -79,7 +81,9 @@ class DispatchLoggerAdapter(logging.LoggerAdapter[logging.Logger]):
         return msg, kwargs
 
 
-def set_dispatch_context(dispatch_run_id: int | None = None, company_id: int | None = None) -> None:
+def set_dispatch_context(
+    dispatch_run_id: int | None = None, company_id: int | None = None
+) -> None:
     """Définit le contexte dispatch pour les logs suivants.
 
     Args:
@@ -117,7 +121,11 @@ def get_dispatch_logger(
         import inspect
 
         frame = inspect.currentframe()
-        name = frame.f_back.f_globals.get("__name__", "root") if frame and frame.f_back else "root"
+        name = (
+            frame.f_back.f_globals.get("__name__", "root")
+            if frame and frame.f_back
+            else "root"
+        )
 
     # À ce point, name est toujours une string (pas None)
     assert name is not None, "name should never be None at this point"

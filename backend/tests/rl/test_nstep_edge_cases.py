@@ -106,7 +106,13 @@ class TestNStepEndEpisodeEdgeCases:
             (np.array([10, 11, 12]), 0, 0.3, np.array([11, 12, 13]), False),
             (np.array([11, 12, 13]), 1, 0.4, np.array([12, 13, 14]), False),
             (np.array([12, 13, 14]), 2, 0.5, np.array([13, 14, 15]), False),
-            (np.array([13, 14, 15]), 3, 0.6, np.array([14, 15, 16]), True),  # Fin épisode 2
+            (
+                np.array([13, 14, 15]),
+                3,
+                0.6,
+                np.array([14, 15, 16]),
+                True,
+            ),  # Fin épisode 2
         ]
 
         # Ajouter les transitions
@@ -125,7 +131,13 @@ class TestNStepEndEpisodeEdgeCases:
         transitions = [
             (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
             (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
-            (np.array([3, 4, 5]), 2, 0.0, np.array([4, 5, 6]), True),  # Récompense zéro + fin
+            (
+                np.array([3, 4, 5]),
+                2,
+                0.0,
+                np.array([4, 5, 6]),
+                True,
+            ),  # Récompense zéro + fin
         ]
 
         # Ajouter les transitions
@@ -141,7 +153,13 @@ class TestNStepEndEpisodeEdgeCases:
         transitions = [
             (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
             (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
-            (np.array([3, 4, 5]), 2, -0.5, np.array([4, 5, 6]), True),  # Récompense négative + fin
+            (
+                np.array([3, 4, 5]),
+                2,
+                -0.5,
+                np.array([4, 5, 6]),
+                True,
+            ),  # Récompense négative + fin
         ]
 
         # Ajouter les transitions
@@ -157,7 +175,13 @@ class TestNStepEndEpisodeEdgeCases:
         transitions = [
             (np.array([1, 2, 3]), 0, 0.1, np.array([2, 3, 4]), False),
             (np.array([2, 3, 4]), 1, 0.2, np.array([3, 4, 5]), False),
-            (np.array([3, 4, 5]), 2, 10.0, np.array([4, 5, 6]), True),  # Grande récompense + fin
+            (
+                np.array([3, 4, 5]),
+                2,
+                10.0,
+                np.array([4, 5, 6]),
+                True,
+            ),  # Grande récompense + fin
         ]
 
         # Ajouter les transitions
@@ -182,7 +206,13 @@ class TestNStepEndEpisodeEdgeCases:
         # Ajouter un épisode qui se termine
         transitions = [
             (np.array([98, 99, 100]), 0, 0.1, np.array([99, 100, 101]), False),
-            (np.array([99, 100, 101]), 1, 0.2, np.array([100, 101, 102]), True),  # Fin d'épisode
+            (
+                np.array([99, 100, 101]),
+                1,
+                0.2,
+                np.array([100, 101, 102]),
+                True,
+            ),  # Fin d'épisode
         ]
 
         for state, action, reward, next_state, done in transitions:
@@ -313,7 +343,14 @@ class TestNStepPrioritizedEdgeCases:
         if NStepPrioritizedBuffer is None:
             pytest.skip("NStepPrioritizedBuffer non disponible")
 
-        return NStepPrioritizedBuffer(capacity=0.100, n_step=3, gamma=0.99, alpha=0.6, beta_start=0.4, beta_end=1.0)
+        return NStepPrioritizedBuffer(
+            capacity=0.100,
+            n_step=3,
+            gamma=0.99,
+            alpha=0.6,
+            beta_start=0.4,
+            beta_end=1.0,
+        )
 
     def test_n_step_prioritized_end_episode(self, n_step_prioritized_buffer):
         """Test buffer N-step priorisé avec fin d'épisode."""
@@ -365,7 +402,9 @@ class TestNStepPrioritizedEdgeCases:
             assert not np.isnan(weight)
             assert not np.isinf(weight)
 
-    def test_n_step_prioritized_end_episode_priority_update(self, n_step_prioritized_buffer):
+    def test_n_step_prioritized_end_episode_priority_update(
+        self, n_step_prioritized_buffer
+    ):
         """Test mise à jour priorité avec fin d'épisode."""
         # Créer un épisode
         transitions = [

@@ -34,7 +34,11 @@ def test_client_validation_email_required():
 
     # Test unitaire du modèle - utiliser un email unique pour cohérence
     unique_suffix = str(uuid.uuid4())[:8]
-    user = User(username=f"testclient_{unique_suffix}", email=f"client_{unique_suffix}@test.com", role=UserRole.client)
+    user = User(
+        username=f"testclient_{unique_suffix}",
+        email=f"client_{unique_suffix}@test.com",
+        role=UserRole.client,
+    )
 
     # Email est requis
     assert user.email is not None
@@ -79,7 +83,9 @@ def test_client_toggle_active(db, sample_client):
     assert client_obj.is_active == new_status
 
 
-def test_company_clients_pagination(client, auth_headers, db, sample_company, sample_user):
+def test_company_clients_pagination(
+    client, auth_headers, db, sample_company, sample_user
+):
     """GET /companies/me/clients?page=1&per_page=5 renvoie pagination."""
     from ext import bcrypt
     from models import ClientType
@@ -111,7 +117,9 @@ def test_company_clients_pagination(client, auth_headers, db, sample_company, sa
     db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
     # Test page 1 avec 5 résultats par page
-    response = client.get("/api/companies/me/clients?page=1&per_page=5", headers=auth_headers)
+    response = client.get(
+        "/api/companies/me/clients?page=1&per_page=5", headers=auth_headers
+    )
     assert response.status_code == 200
     data = response.get_json()
 
@@ -131,7 +139,9 @@ def test_company_clients_pagination(client, auth_headers, db, sample_company, sa
     assert 'rel="next"' in response.headers["Link"]
 
     # Test page 2
-    response2 = client.get("/api/companies/me/clients?page=2&per_page=5", headers=auth_headers)
+    response2 = client.get(
+        "/api/companies/me/clients?page=2&per_page=5", headers=auth_headers
+    )
     assert response2.status_code == 200
     data2 = response2.get_json()
 
@@ -195,7 +205,10 @@ def test_company_clients_search_pagination(client, auth_headers, db, sample_comp
     db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
     # Recherche "ClientSearch" paginée
-    response = client.get("/api/companies/me/clients?search=ClientSearch&page=1&per_page=3", headers=auth_headers)
+    response = client.get(
+        "/api/companies/me/clients?search=ClientSearch&page=1&per_page=3",
+        headers=auth_headers,
+    )
     assert response.status_code == 200
     data = response.get_json()
 

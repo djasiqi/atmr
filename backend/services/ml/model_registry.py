@@ -183,7 +183,9 @@ class ModelRegistry:
 
         """
         # Générer le nom de fichier
-        model_filename = f"{metadata.model_name}_{metadata.model_arch}_{metadata.version}.pth"
+        model_filename = (
+            f"{metadata.model_name}_{metadata.model_arch}_{metadata.version}.pth"
+        )
         model_path = self.models_path / model_filename
 
         # Sauvegarder le modèle
@@ -194,7 +196,9 @@ class ModelRegistry:
         metadata.checksum = self._calculate_checksum(model_path)
 
         # Sauvegarder les métadonnées
-        metadata_filename = f"{metadata.model_name}_{metadata.model_arch}_{metadata.version}.json"
+        metadata_filename = (
+            f"{metadata.model_name}_{metadata.model_arch}_{metadata.version}.json"
+        )
         metadata_path = self.metadata_path / metadata_filename
 
         with metadata_path.open("w", encoding="utf-8") as f:
@@ -218,7 +222,9 @@ class ModelRegistry:
         )
 
         # Trier par date de création (plus récent en premier)
-        self.registry["models"][model_key].sort(key=lambda x: x["created_at"], reverse=True)
+        self.registry["models"][model_key].sort(
+            key=lambda x: x["created_at"], reverse=True
+        )
 
         self._save_registry()
 
@@ -234,7 +240,9 @@ class ModelRegistry:
                 hash_sha256.update(chunk)
         return hash_sha256.hexdigest()
 
-    def get_model_versions(self, model_name: str, model_arch: str) -> List[Dict[str, Any]]:
+    def get_model_versions(
+        self, model_name: str, model_arch: str
+    ) -> List[Dict[str, Any]]:
         """Obtient toutes les versions d'un modèle.
 
         Args:
@@ -248,7 +256,9 @@ class ModelRegistry:
         model_key = f"{model_name}_{model_arch}"
         return self.registry["models"].get(model_key, [])
 
-    def get_latest_model(self, model_name: str, model_arch: str) -> Dict[str, Any] | None:
+    def get_latest_model(
+        self, model_name: str, model_arch: str
+    ) -> Dict[str, Any] | None:
         """Obtient la dernière version d'un modèle.
 
         Args:
@@ -263,7 +273,12 @@ class ModelRegistry:
         return versions[0] if versions else None
 
     def promote_model(
-        self, model_name: str, model_arch: str, version: str, kpi_thresholds: Dict[str, float], force: bool = False
+        self,
+        model_name: str,
+        model_arch: str,
+        version: str,
+        kpi_thresholds: Dict[str, float],
+        force: bool = False,
     ) -> bool:
         """Promouvoit un modèle vers la production (canary promotion).
 
@@ -300,7 +315,9 @@ class ModelRegistry:
         metadata = ModelMetadata.from_dict(metadata_data)
 
         # Valider les KPIs si pas forcé
-        if not force and not self._validate_kpis(metadata.performance_metrics, kpi_thresholds):
+        if not force and not self._validate_kpis(
+            metadata.performance_metrics, kpi_thresholds
+        ):
             return False
 
         # Créer le lien symbolique vers le modèle actuel
@@ -338,7 +355,9 @@ class ModelRegistry:
 
         return True
 
-    def _validate_kpis(self, performance_metrics: Dict[str, float], thresholds: Dict[str, float]) -> bool:
+    def _validate_kpis(
+        self, performance_metrics: Dict[str, float], thresholds: Dict[str, float]
+    ) -> bool:
         """Valide que les métriques de performance respectent les seuils.
 
         Args:
@@ -375,7 +394,9 @@ class ModelRegistry:
 
         return True
 
-    def rollback_model(self, model_name: str, model_arch: str, target_version: str | None = None) -> bool:
+    def rollback_model(
+        self, model_name: str, model_arch: str, target_version: str | None = None
+    ) -> bool:
         """Effectue un rollback vers une version précédente.
 
         Args:
@@ -413,9 +434,13 @@ class ModelRegistry:
             return False
 
         # Promouvoir la version cible
-        return self.promote_model(model_name, model_arch, target_version, kpi_thresholds={}, force=True)
+        return self.promote_model(
+            model_name, model_arch, target_version, kpi_thresholds={}, force=True
+        )
 
-    def get_current_model(self, model_name: str, model_arch: str) -> Dict[str, Any] | None:
+    def get_current_model(
+        self, model_name: str, model_arch: str
+    ) -> Dict[str, Any] | None:
         """Obtient le modèle actuellement en production.
 
         Args:
@@ -453,7 +478,9 @@ class ModelRegistry:
         """
         return self.registry["promotion_history"]
 
-    def cleanup_old_versions(self, model_name: str, model_arch: str, keep_versions: int = 5):
+    def cleanup_old_versions(
+        self, model_name: str, model_arch: str, keep_versions: int = 5
+    ):
         """Nettoie les anciennes versions d'un modèle.
 
         Args:
@@ -502,7 +529,11 @@ class ModelPromotionValidator:
         self.registry = registry
 
     def validate_model_for_promotion(
-        self, model_name: str, model_arch: str, version: str, kpi_thresholds: Dict[str, float]
+        self,
+        model_name: str,
+        model_arch: str,
+        version: str,
+        kpi_thresholds: Dict[str, float],
     ) -> Tuple[bool, List[str]]:
         """Valide qu'un modèle peut être promu.
 
@@ -527,7 +558,9 @@ class ModelPromotionValidator:
                 break
 
         if not target_model:
-            issues.append(f"Modèle {model_name}_{model_arch} version {version} non trouvé")
+            issues.append(
+                f"Modèle {model_name}_{model_arch} version {version} non trouvé"
+            )
             return False, issues
 
         # Charger les métadonnées
@@ -542,11 +575,17 @@ class ModelPromotionValidator:
         metadata = ModelMetadata.from_dict(metadata_data)
 
         # Valider les KPIs
-        if not self.registry._validate_kpis(metadata.performance_metrics, kpi_thresholds):
-            issues.append("Les métriques de performance ne respectent pas les seuils KPI")
+        if not self.registry._validate_kpis(
+            metadata.performance_metrics, kpi_thresholds
+        ):
+            issues.append(
+                "Les métriques de performance ne respectent pas les seuils KPI"
+            )
 
         # Vérifier la taille du modèle
-        if metadata.model_size_mb and metadata.model_size_mb > MODEL_SIZE_MB_THRESHOLD:  # 1GB
+        if (
+            metadata.model_size_mb and metadata.model_size_mb > MODEL_SIZE_MB_THRESHOLD
+        ):  # 1GB
             issues.append(f"Modèle trop volumineux: {metadata.model_size_mb:.1f} MB")
 
         # Vérifier l'âge du modèle

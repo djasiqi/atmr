@@ -32,7 +32,9 @@ class TestDispatchEnvComprehensive:
     def test_init_with_reward_shaping_success(self):
         """Test initialisation avec reward shaping réussi"""
         with (
-            patch("services.rl.reward_shaping.AdvancedRewardShaping") as mock_reward_shaping,
+            patch(
+                "services.rl.reward_shaping.AdvancedRewardShaping"
+            ) as mock_reward_shaping,
             patch("services.rl.reward_shaping.RewardShapingConfig") as mock_config,
         ):
             mock_config.get_profile.return_value = {"punctuality_weight": 1.0}
@@ -45,7 +47,10 @@ class TestDispatchEnvComprehensive:
 
     def test_init_with_reward_shaping_failure(self):
         """Test initialisation avec reward shaping en échec"""
-        with patch("services.rl.reward_shaping.AdvancedRewardShaping", side_effect=Exception("Import error")):
+        with patch(
+            "services.rl.reward_shaping.AdvancedRewardShaping",
+            side_effect=Exception("Import error"),
+        ):
             env = DispatchEnv(num_drivers=3, max_bookings=5, reward_profile="DEFAULT")
 
             assert env.reward_shaping is None
@@ -100,7 +105,9 @@ class TestDispatchEnvComprehensive:
         env.reset()
 
         # Action invalide (hors limites) - utiliser une action dans les limites mais invalide
-        obs, reward, terminated, truncated, info = env.step(15)  # Action dans les limites mais peut-être invalide
+        obs, reward, terminated, truncated, info = env.step(
+            15
+        )  # Action dans les limites mais peut-être invalide
 
         assert isinstance(obs, np.ndarray)
         assert isinstance(reward, float)
@@ -146,7 +153,10 @@ class TestDispatchEnvComprehensive:
             {"id": 2, "available": True, "load": 1},
             {"id": 3, "available": False, "load": 5},
         ]
-        env.bookings = [{"id": 1, "priority": 3, "time_window": 30}, {"id": 2, "priority": 1, "time_window": 15}]
+        env.bookings = [
+            {"id": 1, "priority": 3, "time_window": 30},
+            {"id": 2, "priority": 1, "time_window": 15},
+        ]
 
         valid_actions = env.get_valid_actions()
 
@@ -178,7 +188,10 @@ class TestDispatchEnvComprehensive:
         env.reset()
 
         # Simuler des chauffeurs disponibles mais pas de bookings
-        env.drivers = [{"id": 1, "available": True, "load": 2}, {"id": 2, "available": True, "load": 1}]
+        env.drivers = [
+            {"id": 1, "available": True, "load": 2},
+            {"id": 2, "available": True, "load": 1},
+        ]
         env.bookings = []
 
         valid_actions = env.get_valid_actions()
@@ -372,7 +385,9 @@ class TestDispatchEnvComprehensive:
         env.reset()
 
         # Mock pour provoquer une exception dans une méthode interne
-        with patch.object(env, "_get_valid_actions_mask", side_effect=Exception("State error")):
+        with patch.object(
+            env, "_get_valid_actions_mask", side_effect=Exception("State error")
+        ):
             obs, reward, terminated, truncated, info = env.step(0)
 
             assert isinstance(obs, np.ndarray)
@@ -386,7 +401,9 @@ class TestDispatchEnvComprehensive:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
 
         # Mock pour provoquer une exception dans une méthode interne
-        with patch.object(env, "_get_valid_actions_mask", side_effect=Exception("Booking error")):
+        with patch.object(
+            env, "_get_valid_actions_mask", side_effect=Exception("Booking error")
+        ):
             state, info = env.reset()
 
             assert isinstance(state, np.ndarray)
@@ -398,7 +415,9 @@ class TestDispatchEnvComprehensive:
         env.reset()
 
         # Mock pour provoquer une exception
-        with patch.object(env, "_get_valid_actions_mask", side_effect=Exception("Validation error")):
+        with patch.object(
+            env, "_get_valid_actions_mask", side_effect=Exception("Validation error")
+        ):
             valid_actions = env.get_valid_actions()
 
             assert isinstance(valid_actions, list)
@@ -477,7 +496,9 @@ class TestDispatchEnvComprehensive:
         assert isinstance(state, np.ndarray)
         assert len(state) == 1 * 4 + 1 * 4 + 2  # 10 dimensions
 
-        obs, reward, _terminated, _truncated, _info = env.step(1)  # Assigner booking 0 à driver 0
+        obs, reward, _terminated, _truncated, _info = env.step(
+            1
+        )  # Assigner booking 0 à driver 0
         assert isinstance(obs, np.ndarray)
         assert isinstance(reward, float)
 

@@ -120,7 +120,11 @@ class TestFeatureFlagsAPI:
 
     def test_enable_ml(self, client, auth_headers):
         """Test endpoint POST /api/feature-flags/ml/enable."""
-        response = client.post("/api/feature-flags/ml/enable", json={"percentage": 25}, headers=auth_headers)
+        response = client.post(
+            "/api/feature-flags/ml/enable",
+            json={"percentage": 25},
+            headers=auth_headers,
+        )
 
         assert response.status_code == 200
         data = response.get_json()
@@ -147,7 +151,11 @@ class TestFeatureFlagsAPI:
 
     def test_set_percentage(self, client, auth_headers):
         """Test endpoint POST /api/feature-flags/ml/percentage."""
-        response = client.post("/api/feature-flags/ml/percentage", json={"percentage": 75}, headers=auth_headers)
+        response = client.post(
+            "/api/feature-flags/ml/percentage",
+            json={"percentage": 75},
+            headers=auth_headers,
+        )
 
         assert response.status_code == 200
         data = response.get_json()
@@ -175,7 +183,11 @@ class TestFeatureFlagsAPI:
     def test_reset_stats(self, client, auth_headers):
         """Test endpoint POST /api/feature-flags/reset-stats."""
         # D'abord créer des stats
-        client.post("/api/feature-flags/ml/enable", json={"percentage": 100}, headers=auth_headers)
+        client.post(
+            "/api/feature-flags/ml/enable",
+            json={"percentage": 100},
+            headers=auth_headers,
+        )
 
         # Reset
         response = client.post("/api/feature-flags/reset-stats", headers=auth_headers)

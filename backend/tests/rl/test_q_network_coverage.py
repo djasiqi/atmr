@@ -71,7 +71,9 @@ class TestImprovedQNetworkCoverage:
 
     def test_forward_with_different_parameters(self):
         """Test forward avec différents paramètres"""
-        network = ImprovedQNetwork(state_dim=0.100, action_dim=20, hidden_sizes=[128, 64], dropout_rate=0.3)
+        network = ImprovedQNetwork(
+            state_dim=0.100, action_dim=20, hidden_sizes=[128, 64], dropout_rate=0.3
+        )
 
         state = torch.randn(100)
         output = network(state)
@@ -98,7 +100,9 @@ class TestImprovedQNetworkCoverage:
         network1 = ImprovedQNetwork(state_dim=62, action_dim=51, hidden_sizes=[64])
 
         # Architecture complexe
-        network2 = ImprovedQNetwork(state_dim=62, action_dim=51, hidden_sizes=[128, 64, 32])
+        network2 = ImprovedQNetwork(
+            state_dim=62, action_dim=51, hidden_sizes=[128, 64, 32]
+        )
 
         state = torch.randn(62)
         output1 = network1(state)
@@ -248,12 +252,20 @@ class TestDuelingQNetworkCoverage:
         """Test forward avec différentes architectures"""
         # Architecture simple
         network1 = DuelingQNetwork(
-            state_dim=62, action_dim=51, shared_hidden_sizes=[64], value_hidden_size=32, advantage_hidden_size=16
+            state_dim=62,
+            action_dim=51,
+            shared_hidden_sizes=[64],
+            value_hidden_size=32,
+            advantage_hidden_size=16,
         )
 
         # Architecture complexe
         network2 = DuelingQNetwork(
-            state_dim=62, action_dim=51, shared_hidden_sizes=[128, 64], value_hidden_size=64, advantage_hidden_size=32
+            state_dim=62,
+            action_dim=51,
+            shared_hidden_sizes=[128, 64],
+            value_hidden_size=64,
+            advantage_hidden_size=32,
         )
 
         state = torch.randn(62)

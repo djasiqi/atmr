@@ -45,7 +45,9 @@ security_logout_total = Counter(
 security_sensitive_actions_total = Counter(
     "security_sensitive_actions_total",
     "Nombre total d'actions sensibles",
-    ["action_type"],  # action_type: "user_created", "user_updated", "permission_changed", etc.
+    [
+        "action_type"
+    ],  # action_type: "user_created", "user_updated", "permission_changed", etc.
 )
 
 # Compteur des changements de permissions

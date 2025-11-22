@@ -29,7 +29,9 @@ class RegisterSchema(Schema):
     phone = fields.Str(load_default=None, validate=validate.Length(max=20))
     address = fields.Str(load_default=None, validate=validate.Length(max=500))
     birth_date = fields.Date(load_default=None)
-    gender = fields.Str(load_default=None, validate=validate.OneOf(["male", "female", "other"]))
+    gender = fields.Str(
+        load_default=None, validate=validate.OneOf(["male", "female", "other"])
+    )
     profile_image = fields.Str(load_default=None)
 
 

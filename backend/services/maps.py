@@ -47,8 +47,14 @@ def get_distance_duration(
     Accepte adresse string OU tuple (lat, lon) en entrée.
     Fallback Haversine si la clé API manque ou si l'API renvoie une erreur.
     """
-    pick_is_coord = isinstance(pickup_address, (list, tuple)) and len(pickup_address) == COORD_PAIR_LENGTH
-    drop_is_coord = isinstance(dropoff_address, (list, tuple)) and len(dropoff_address) == COORD_PAIR_LENGTH
+    pick_is_coord = (
+        isinstance(pickup_address, (list, tuple))
+        and len(pickup_address) == COORD_PAIR_LENGTH
+    )
+    drop_is_coord = (
+        isinstance(dropoff_address, (list, tuple))
+        and len(dropoff_address) == COORD_PAIR_LENGTH
+    )
 
     if not GOOGLE_MAPS_API_KEY:
         if pick_is_coord and drop_is_coord:
@@ -68,7 +74,9 @@ def get_distance_duration(
         "region": region,
     }
     if departure_time is not None:
-        params["departure_time"] = str(int(departure_time))  # <- string pour calmer Pylance
+        params["departure_time"] = str(
+            int(departure_time)
+        )  # <- string pour calmer Pylance
         params["traffic_model"] = traffic_model
 
     try:
@@ -96,13 +104,17 @@ def get_distance_duration(
         raise
 
 
-def geocode_address(address: str, *, country: str | None = None, language: str = "fr") -> Dict[str, float] | None:
+def geocode_address(
+    address: str, *, country: str | None = None, language: str = "fr"
+) -> Dict[str, float] | None:
     """Géocode une adresse → {'lat': float, 'lon': float} | None.
     - country: code ISO (ex: "CH") pour biaiser la recherche
     - language: "fr" par défaut.
     """
     if not GOOGLE_MAPS_API_KEY:
-        app_logger.warning("⚠️ Clé API Google Maps manquante, utilisation de Nominatim (OSM).")
+        app_logger.warning(
+            "⚠️ Clé API Google Maps manquante, utilisation de Nominatim (OSM)."
+        )
         return geocode_address_nominatim(address, country=country)
 
     address = (address or "").strip()
@@ -125,18 +137,24 @@ def geocode_address(address: str, *, country: str | None = None, language: str =
         data = resp.json()
 
         if data.get("status") != "OK" or not data.get("results"):
-            app_logger.warning("⚠️ Aucune coordonnée trouvée pour : '%s' (country=%s)", address, country)
+            app_logger.warning(
+                "⚠️ Aucune coordonnée trouvée pour : '%s' (country=%s)", address, country
+            )
             return None
 
         loc = data["results"][0]["geometry"]["location"]
         return {"lat": float(loc["lat"]), "lon": float(loc["lng"])}
 
     except requests.RequestException as e:
-        app_logger.error("❌ Erreur API Google Maps pour '%s' (country=%s): %s", address, country, e)
+        app_logger.error(
+            "❌ Erreur API Google Maps pour '%s' (country=%s): %s", address, country, e
+        )
         return None
 
 
-def geocode_address_nominatim(address: str, *, country: str | None = None) -> Dict[str, float] | None:
+def geocode_address_nominatim(
+    address: str, *, country: str | None = None
+) -> Dict[str, float] | None:
     """Géocode une adresse avec Nominatim (OpenStreetMap) → {'lat': float, 'lon': float} | None.
     - country: code ISO (ex: "CH") pour biaiser la recherche.
     """
@@ -168,7 +186,9 @@ def geocode_address_nominatim(address: str, *, country: str | None = None) -> Di
         data = resp.json()
 
         if not data or len(data) == 0:
-            app_logger.warning("⚠️ Nominatim: Aucune coordonnée trouvée pour '%s'", address)
+            app_logger.warning(
+                "⚠️ Nominatim: Aucune coordonnée trouvée pour '%s'", address
+            )
             return None
 
         result = data[0]
@@ -187,7 +207,11 @@ UD_MATRIX_RATE_LIMIT = float(os.getenv("UD_MATRIX_RATE_LIMIT", "8"))
 UD_MATRIX_CACHE_TTL = int(os.getenv("UD_MATRIX_CACHE_TTL_SEC", "300"))
 UD_MATRIX_GRID_ROUND = int(os.getenv("UD_MATRIX_GRID_ROUND", "50"))
 UD_MATRIX_CACHE_MAX_PAIRS = int(os.getenv("UD_MATRIX_CACHE_MAX_PAIRS", "100000"))
-UD_MATRIX_CACHE_USE_REDIS = os.getenv("UD_MATRIX_CACHE_USE_REDIS", "0") in ("1", "true", "True")
+UD_MATRIX_CACHE_USE_REDIS = os.getenv("UD_MATRIX_CACHE_USE_REDIS", "0") in (
+    "1",
+    "true",
+    "True",
+)
 UD_MATRIX_INFLIGHT_TTL_S = int(os.getenv("UD_MATRIX_INFLIGHT_TTL_S", "10"))
 REDIS_URL = os.getenv("REDIS_URL", "")
 
@@ -206,7 +230,13 @@ def _singleflight(key: str, fn):
     with _INFLIGHT_LOCK:
         ent = _INFLIGHT.get(key)
         if not ent:
-            ent = {"evt": threading.Event(), "res": None, "err": None, "leader": True, "ts": time.time()}
+            ent = {
+                "evt": threading.Event(),
+                "res": None,
+                "err": None,
+                "leader": True,
+                "ts": time.time(),
+            }
             _INFLIGHT[key] = ent
         else:
             ent["leader"] = False
@@ -219,7 +249,10 @@ def _singleflight(key: str, fn):
             ent["evt"].set()
             with _INFLIGHT_LOCK:
                 for k, v in list(_INFLIGHT.items()):
-                    if v["evt"].is_set() and (time.time() - v.get("ts", 0)) > UD_MATRIX_INFLIGHT_TTL_S:
+                    if (
+                        v["evt"].is_set()
+                        and (time.time() - v.get("ts", 0)) > UD_MATRIX_INFLIGHT_TTL_S
+                    ):
                         _INFLIGHT.pop(k, None)
     else:
         ent["evt"].wait()
@@ -264,7 +297,9 @@ def _get_redis():
         return None
 
 
-def _haversine_seconds(a: Tuple[float, float], b: Tuple[float, float], avg_kmh: float = 40.0) -> int:
+def _haversine_seconds(
+    a: Tuple[float, float], b: Tuple[float, float], avg_kmh: float = 40.0
+) -> int:
     # Import centralisé depuis shared.geo_utils
     from shared.geo_utils import haversine_seconds
 
@@ -278,7 +313,9 @@ def _round_coord(coord: Tuple[float, float], meters: int) -> Tuple[float, float]
     """Arrondit une coordonnée sur une grille (≃meters) pour mieux hit le cache."""
     lat, lon = float(coord[0]), float(coord[1])
     dlat = meters / 111_320.0
-    dlon = meters / (111_320.0 * max(0.1, math.cos(math.radians(max(-89.9, min(89.9, lat))))))
+    dlon = meters / (
+        111_320.0 * max(0.1, math.cos(math.radians(max(-89.9, min(89.9, lat)))))
+    )
     return (round(lat / dlat) * dlat, round(lon / dlon) * dlon)
 
 
@@ -330,7 +367,10 @@ def _dm_request(
         params["traffic_model"] = traffic_model
 
     inflight_key = hashlib.sha256(
-        json.dumps({"o": origins, "d": dests, "p": params}, sort_keys=True).encode("utf-8"), usedforsecurity=False
+        json.dumps({"o": origins, "d": dests, "p": params}, sort_keys=True).encode(
+            "utf-8"
+        ),
+        usedforsecurity=False,
     ).hexdigest()
 
     def _do() -> List[List[int | None]]:
@@ -350,7 +390,9 @@ def _dm_request(
                 row_vals: List[int | None] = []
                 for el in r.get("elements", []):
                     if el.get("status") == "OK":
-                        dur = (el.get("duration_in_traffic") or el.get("duration") or {}).get("value", 0)
+                        dur = (
+                            el.get("duration_in_traffic") or el.get("duration") or {}
+                        ).get("value", 0)
                         row_vals.append(int(dur))
                     else:
                         row_vals.append(None)
@@ -369,19 +411,26 @@ def _dm_request(
                 base_delay_ms=retry_backoff_ms,
             )
         except Exception as e:
-            app_logger.warning("⚠️ DistanceMatrix request error (final après retries): %s", e)
+            app_logger.warning(
+                "⚠️ DistanceMatrix request error (final après retries): %s", e
+            )
             # Retourner matrice vide en cas d'échec définitif
             return [[None for _ in dests] for _ in origins]
 
     start = time.time()
     res = cast("List[List[int | None]]", _singleflight(inflight_key, _do))
     app_logger.info(
-        "[GDM] table_fetch o=%s d=%s duration_ms=%s", len(origins), len(dests), int((time.time() - start) * 1000)
+        "[GDM] table_fetch o=%s d=%s duration_ms=%s",
+        len(origins),
+        len(dests),
+        int((time.time() - start) * 1000),
     )
     return res
 
 
-def _all_cached(block_o_idx: List[int], block_d_idx: List[int], qcoords: List[Tuple[float, float]]) -> bool:
+def _all_cached(
+    block_o_idx: List[int], block_d_idx: List[int], qcoords: List[Tuple[float, float]]
+) -> bool:
     now = time.time()
     r = _get_redis()
     for i in block_o_idx:
@@ -408,7 +457,9 @@ def _all_cached(block_o_idx: List[int], block_d_idx: List[int], qcoords: List[Tu
     return True
 
 
-def _fill_from_cache(matrix: List[List[int]], block_o_idx: List[int], block_d_idx: List[int], qcoords):
+def _fill_from_cache(
+    matrix: List[List[int]], block_o_idx: List[int], block_d_idx: List[int], qcoords
+):
     now = time.time()
     r = _get_redis()
     for i in block_o_idx:
@@ -434,7 +485,10 @@ def _fill_from_cache(matrix: List[List[int]], block_o_idx: List[int], block_d_id
 
 
 def _update_cache_from_block(
-    block: List[List[int | None]], block_o_idx: List[int], block_d_idx: List[int], qcoords: List[Tuple[float, float]]
+    block: List[List[int | None]],
+    block_o_idx: List[int],
+    block_d_idx: List[int],
+    qcoords: List[Tuple[float, float]],
 ) -> None:
     expires = time.time() + UD_MATRIX_CACHE_TTL
     r = _get_redis()
@@ -449,7 +503,11 @@ def _update_cache_from_block(
                     try:
                         dj = qcoords[j]
                         key = f"gdm:{UD_MATRIX_GRID_ROUND}:{oi[0]},{oi[1]},{dj[0]},{dj[1]}"
-                        r.setex(key, UD_MATRIX_CACHE_TTL, int(dur).to_bytes(4, "big", signed=False))
+                        r.setex(
+                            key,
+                            UD_MATRIX_CACHE_TTL,
+                            int(dur).to_bytes(4, "big", signed=False),
+                        )
                     except Exception:
                         pass
                 else:
@@ -495,7 +553,11 @@ def build_distance_matrix_google(
     o_ranges = [list(range(s, min(s + o_block, n))) for s in range(0, n, o_block)]
     d_ranges = [list(range(s, min(s + d_block, n))) for s in range(0, n, d_block)]
 
-    effective_rate = UD_MATRIX_RATE_LIMIT if rate_limit_per_sec is None else float(rate_limit_per_sec)
+    effective_rate = (
+        UD_MATRIX_RATE_LIMIT
+        if rate_limit_per_sec is None
+        else float(rate_limit_per_sec)
+    )
 
     for o_idx in o_ranges:
         origins = [_to_str(coords[i]) for i in o_idx]

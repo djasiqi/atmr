@@ -46,7 +46,11 @@ def test_sanitize_log_data_string():
 
 def test_sanitize_log_data_dict():
     """Sanitize masque PII dans les dicts récursivement."""
-    data = {"name": "John", "email": "john@example.com", "nested": {"phone": "+41791234567"}}
+    data = {
+        "name": "John",
+        "email": "john@example.com",
+        "nested": {"phone": "+41791234567"},
+    }
     sanitized = sanitize_log_data(data)
 
     assert sanitized["name"] == "John"

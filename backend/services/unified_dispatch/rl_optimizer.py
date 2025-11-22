@@ -110,7 +110,9 @@ class RLDispatchOptimizer:
 
             # nosec B506: Les checkpoints contiennent optimizer state et config, pas seulement des poids
             # Les modèles proviennent de sources internes de confiance uniquement
-            checkpoint = torch.load(str(self.model_path), map_location="cpu", weights_only=False)
+            checkpoint = torch.load(
+                str(self.model_path), map_location="cpu", weights_only=False
+            )
 
             config = checkpoint.get("config", {})
             state_dim = int(config.get("state_dim", 166))
@@ -187,7 +189,9 @@ class RLDispatchOptimizer:
 
         """
         if not self.is_available():
-            logger.warning("[RLOptimizer] Modèle non disponible, retour assignations originales")
+            logger.warning(
+                "[RLOptimizer] Modèle non disponible, retour assignations originales"
+            )
             return initial_assignments
 
         if not initial_assignments:
@@ -195,10 +199,10 @@ class RLDispatchOptimizer:
             return []
 
         disable_reason: Optional[str] = None
-        if matrix_quality and (matrix_quality.get("fallback_used") or matrix_quality.get("has_large_value")):
-            disable_reason = (
-                f"matrix fallback={matrix_quality.get('fallback_used')} max={matrix_quality.get('max_entry')}"
-            )
+        if matrix_quality and (
+            matrix_quality.get("fallback_used") or matrix_quality.get("has_large_value")
+        ):
+            disable_reason = f"matrix fallback={matrix_quality.get('fallback_used')} max={matrix_quality.get('max_entry')}"
 
         if disable_reason is None and coord_quality:
             min_factor = coord_quality.get("min_factor", 1.0)
@@ -218,8 +222,14 @@ class RLDispatchOptimizer:
                 except (TypeError, ValueError):
                     return 1.0
 
-            booking_factors = [safe_float(getattr(b, "_coord_quality_factor", 1.0) or 1.0) for b in bookings]
-            driver_factors = [safe_float(getattr(d, "_coord_quality_factor", 1.0) or 1.0) for d in drivers]
+            booking_factors = [
+                safe_float(getattr(b, "_coord_quality_factor", 1.0) or 1.0)
+                for b in bookings
+            ]
+            driver_factors = [
+                safe_float(getattr(d, "_coord_quality_factor", 1.0) or 1.0)
+                for d in drivers
+            ]
             combined = booking_factors + driver_factors
             min_factor = min(combined) if combined else 1.0
             if min_factor < COORD_QUALITY_THRESHOLD:
@@ -251,7 +261,10 @@ class RLDispatchOptimizer:
 
         # Si déjà optimal (gap ≤1), pas besoin d'optimiser
         if initial_gap <= 1:
-            logger.info("[RLOptimizer] ✅ Déjà optimal (gap=%d), pas d'optimisation", initial_gap)
+            logger.info(
+                "[RLOptimizer] ✅ Déjà optimal (gap=%d), pas d'optimisation",
+                initial_gap,
+            )
             return initial_assignments
 
         # Créer environnement de simulation (utiliser les dimensions du modèle)
@@ -263,7 +276,9 @@ class RLDispatchOptimizer:
         driver_indices = self._select_driver_indices(drivers, initial_assignments)
         booking_indices = self._select_booking_indices(bookings)
         if not driver_indices or not booking_indices:
-            logger.info("[RLOptimizer] ⏭️ RL désactivé (aucun sous-ensemble exploitable)")
+            logger.info(
+                "[RLOptimizer] ⏭️ RL désactivé (aucun sous-ensemble exploitable)"
+            )
             return initial_assignments
 
         self._driver_index_map = driver_indices
@@ -345,7 +360,9 @@ class RLDispatchOptimizer:
             booking_slot = (action - 1) // driver_capacity
             driver_slot = (action - 1) % driver_capacity
 
-            if driver_slot >= len(self._driver_index_map) or booking_slot >= len(self._booking_index_map):
+            if driver_slot >= len(self._driver_index_map) or booking_slot >= len(
+                self._booking_index_map
+            ):
                 logger.debug(
                     "[RLOptimizer] Action ignorée (slot driver=%s booking=%s hors sous-ensemble)",
                     driver_slot,
@@ -360,7 +377,9 @@ class RLDispatchOptimizer:
             new_driver_id = drivers[driver_idx].id
 
             # Trouver l'assignation actuelle
-            assignment = next((a for a in optimized if a["booking_id"] == booking_id), None)
+            assignment = next(
+                (a for a in optimized if a["booking_id"] == booking_id), None
+            )
             if not assignment:
                 continue
 
@@ -433,7 +452,9 @@ class RLDispatchOptimizer:
 
                 # Métriques finales
                 final_loads = self._calculate_loads(optimized, drivers)
-                gap_improvement = self._calculate_gap(initial_assignments, drivers) - final_gap
+                gap_improvement = (
+                    self._calculate_gap(initial_assignments, drivers) - final_gap
+                )
 
                 constraints = {
                     "max_swaps": self.max_swaps,
@@ -477,7 +498,9 @@ class RLDispatchOptimizer:
                 "avg_delay_minutes": 0,
                 "completion_rate": len(optimized) / len(bookings) if bookings else 1.0,
                 "invalid_action_rate": 0.0,  # Pas d'actions invalides en mode exploitation
-                "driver_loads": list(self._calculate_loads(optimized, drivers).values()),
+                "driver_loads": list(
+                    self._calculate_loads(optimized, drivers).values()
+                ),
                 "avg_distance_km": 0,  # À calculer
                 "max_distance_km": 0,
                 "total_distance_km": 0,
@@ -489,13 +512,16 @@ class RLDispatchOptimizer:
                 "uncertainty": 0.15,
                 "decision_time_ms": 35,
                 "q_value_variance": 0.1,
-                "episode_length": improvements + 1,  # Longueur basée sur les améliorations
+                "episode_length": improvements
+                + 1,  # Longueur basée sur les améliorations
                 "swaps_performed": improvements,
                 "gap_improvement": initial_gap - final_gap,
             }
 
             # Vérifier la sécurité
-            is_safe, _safety_result = safety_guards.check_dispatch_result(dispatch_metrics, rl_metadata)
+            is_safe, _safety_result = safety_guards.check_dispatch_result(
+                dispatch_metrics, rl_metadata
+            )
 
             if not is_safe:
                 logger.warning(
@@ -505,7 +531,9 @@ class RLDispatchOptimizer:
                 # Rollback vers assignations initiales
                 optimized = initial_assignments.copy()
 
-                logger.info("[RLOptimizer] ✅ Rollback vers assignations initiales effectué")
+                logger.info(
+                    "[RLOptimizer] ✅ Rollback vers assignations initiales effectué"
+                )
             else:
                 logger.info("[RLOptimizer] ✅ Safety Guards: Optimisation RL validée")
 
@@ -515,14 +543,18 @@ class RLDispatchOptimizer:
 
         return optimized
 
-    def _calculate_gap(self, assignments: List[Dict[str, Any]], drivers: List[Any]) -> int:
+    def _calculate_gap(
+        self, assignments: List[Dict[str, Any]], drivers: List[Any]
+    ) -> int:
         """Calcule l'écart de charge max-min."""
         loads = self._calculate_loads(assignments, drivers)
         if not loads:
             return 0
         return max(loads.values()) - min(loads.values())
 
-    def _calculate_loads(self, assignments: List[Dict[str, Any]], drivers: List[Any]) -> Dict[int, int]:
+    def _calculate_loads(
+        self, assignments: List[Dict[str, Any]], drivers: List[Any]
+    ) -> Dict[int, int]:
         """Compte le nombre d'assignations par chauffeur."""
         loads = {d.id: 0 for d in drivers}
         for a in assignments:
@@ -559,21 +591,29 @@ class RLDispatchOptimizer:
         _obs, _ = self.env.reset()
 
         if driver_indices is None:
-            driver_indices = self._driver_index_map or list(range(min(len(drivers), self.env.num_drivers)))
+            driver_indices = self._driver_index_map or list(
+                range(min(len(drivers), self.env.num_drivers))
+            )
         if booking_indices is None:
-            booking_indices = self._booking_index_map or list(range(min(len(bookings), self.env.max_bookings)))
+            booking_indices = self._booking_index_map or list(
+                range(min(len(bookings), self.env.max_bookings))
+            )
 
         driver_subset = [drivers[idx] for idx in driver_indices]
         booking_subset = [bookings[idx] for idx in booking_indices]
 
         self.env.set_active_counts(len(driver_subset), len(booking_subset))
 
-        assignment_map = {assignment["booking_id"]: assignment for assignment in assignments}
+        assignment_map = {
+            assignment["booking_id"]: assignment for assignment in assignments
+        }
 
         self.env.bookings = []
         for booking in booking_subset:
             booking_id = getattr(booking, "id", None)
-            assignment = assignment_map.get(int(booking_id)) if booking_id is not None else None
+            assignment = (
+                assignment_map.get(int(booking_id)) if booking_id is not None else None
+            )
             scheduled = getattr(booking, "scheduled_time", None)
             time_remaining = 60.0
             if scheduled is not None:
@@ -589,12 +629,18 @@ class RLDispatchOptimizer:
             self.env.bookings.append(
                 {
                     "id": booking_id,
-                    "pickup_lat": getattr(booking, "pickup_lat", self.env.bureau_lat) or self.env.bureau_lat,
-                    "pickup_lon": getattr(booking, "pickup_lon", self.env.bureau_lon) or self.env.bureau_lon,
-                    "dropoff_lat": getattr(booking, "dropoff_lat", self.env.bureau_lat) or self.env.bureau_lat,
-                    "dropoff_lon": getattr(booking, "dropoff_lon", self.env.bureau_lon) or self.env.bureau_lon,
+                    "pickup_lat": getattr(booking, "pickup_lat", self.env.bureau_lat)
+                    or self.env.bureau_lat,
+                    "pickup_lon": getattr(booking, "pickup_lon", self.env.bureau_lon)
+                    or self.env.bureau_lon,
+                    "dropoff_lat": getattr(booking, "dropoff_lat", self.env.bureau_lat)
+                    or self.env.bureau_lat,
+                    "dropoff_lon": getattr(booking, "dropoff_lon", self.env.bureau_lon)
+                    or self.env.bureau_lon,
                     "priority": getattr(booking, "priority", 3) or 3,
-                    "time_window_end": getattr(booking, "time_window_end", self.env.current_time + 60),
+                    "time_window_end": getattr(
+                        booking, "time_window_end", self.env.current_time + 60
+                    ),
                     "time_remaining": time_remaining,
                     "created_at": getattr(booking, "created_at", self.env.current_time),
                     "assigned": assignment is not None,
@@ -608,8 +654,16 @@ class RLDispatchOptimizer:
             if idx < len(driver_subset):
                 actual = driver_subset[idx]
                 actual_id = getattr(actual, "id", idx)
-                current_lat = getattr(actual, "current_lat", getattr(actual, "latitude", self.env.bureau_lat))
-                current_lon = getattr(actual, "current_lon", getattr(actual, "longitude", self.env.bureau_lon))
+                current_lat = getattr(
+                    actual,
+                    "current_lat",
+                    getattr(actual, "latitude", self.env.bureau_lat),
+                )
+                current_lon = getattr(
+                    actual,
+                    "current_lon",
+                    getattr(actual, "longitude", self.env.bureau_lon),
+                )
                 driver_state["id"] = actual_id
                 driver_state["available"] = bool(getattr(actual, "is_available", True))
                 driver_state["load"] = driver_loads.get(actual_id, 0)
@@ -617,8 +671,12 @@ class RLDispatchOptimizer:
                 driver_state["lat"] = current_lat or self.env.bureau_lat
                 driver_state["lon"] = current_lon or self.env.bureau_lon
                 driver_state["type"] = getattr(actual, "driver_type", "REGULAR")
-                driver_state["home_lat"] = getattr(actual, "home_lat", self.env.bureau_lat)
-                driver_state["home_lon"] = getattr(actual, "home_lon", self.env.bureau_lon)
+                driver_state["home_lat"] = getattr(
+                    actual, "home_lat", self.env.bureau_lat
+                )
+                driver_state["home_lon"] = getattr(
+                    actual, "home_lon", self.env.bureau_lon
+                )
             else:
                 driver_state["id"] = -1
                 driver_state["available"] = False
@@ -646,7 +704,10 @@ class RLDispatchOptimizer:
         loads = self._calculate_loads(assignments, drivers)
         sorted_indices = sorted(
             range(len(drivers)),
-            key=lambda idx: (-loads.get(drivers[idx].id, 0), getattr(drivers[idx], "id", 0)),
+            key=lambda idx: (
+                -loads.get(drivers[idx].id, 0),
+                getattr(drivers[idx], "id", 0),
+            ),
         )
         selected = sorted_indices[:capacity]
         logger.info(
@@ -674,5 +735,7 @@ class RLDispatchOptimizer:
 
         sorted_indices = sorted(range(len(bookings)), key=booking_sort_key)
         selected = sorted_indices[:capacity]
-        logger.info("[RLOptimizer] Limitation RL à %d/%d bookings", len(selected), len(bookings))
+        logger.info(
+            "[RLOptimizer] Limitation RL à %d/%d bookings", len(selected), len(bookings)
+        )
         return selected

@@ -24,23 +24,32 @@ def upgrade():
 
     with op.batch_alter_table("assignment", schema=None) as batch_op:
         batch_op.drop_index("ix_assignment_booking_created")
-        batch_op.drop_index("ix_assignment_dispatch_run", postgresql_where="(dispatch_run_id IS NOT NULL)")
+        batch_op.drop_index(
+            "ix_assignment_dispatch_run",
+            postgresql_where="(dispatch_run_id IS NOT NULL)",
+        )
         batch_op.drop_index("ix_assignment_dispatch_run_status")
 
     with op.batch_alter_table("autonomous_action", schema=None) as batch_op:
-        batch_op.alter_column("reviewed_by_admin", existing_type=sa.BOOLEAN(), nullable=True)
+        batch_op.alter_column(
+            "reviewed_by_admin", existing_type=sa.BOOLEAN(), nullable=True
+        )
         batch_op.drop_index("ix_autonomous_action_company_created")
         batch_op.drop_index("ix_autonomous_action_type_created")
 
     with op.batch_alter_table("booking", schema=None) as batch_op:
         batch_op.drop_index("ix_booking_company_status_scheduled")
-        batch_op.drop_index("ix_booking_invoice_line", postgresql_where="(invoice_line_id IS NOT NULL)")
+        batch_op.drop_index(
+            "ix_booking_invoice_line", postgresql_where="(invoice_line_id IS NOT NULL)"
+        )
         batch_op.drop_index("ix_booking_status_scheduled_company")
 
     with op.batch_alter_table("company", schema=None) as batch_op:
         batch_op.alter_column(
             "dispatch_mode",
-            existing_type=postgresql.ENUM("MANUAL", "SEMI_AUTO", "FULLY_AUTO", name="dispatchmode"),
+            existing_type=postgresql.ENUM(
+                "MANUAL", "SEMI_AUTO", "FULLY_AUTO", name="dispatchmode"
+            ),
             comment="Mode de fonctionnement du dispatch: manual, semi_auto, fully_auto",
             existing_nullable=False,
             existing_server_default=sa.text("'SEMI_AUTO'::dispatchmode"),
@@ -54,7 +63,10 @@ def upgrade():
     #            existing_nullable=True)
 
     with op.batch_alter_table("driver_status", schema=None) as batch_op:
-        batch_op.drop_index("ix_driver_status_assignment", postgresql_where="(current_assignment_id IS NOT NULL)")
+        batch_op.drop_index(
+            "ix_driver_status_assignment",
+            postgresql_where="(current_assignment_id IS NOT NULL)",
+        )
 
     with op.batch_alter_table("driver_vacations", schema=None) as batch_op:
         batch_op.alter_column("start_date", existing_type=sa.DATE(), nullable=True)
@@ -64,15 +76,23 @@ def upgrade():
         batch_op.alter_column("effective_from", existing_type=sa.DATE(), nullable=True)
 
     with op.batch_alter_table("favorite_place", schema=None) as batch_op:
-        batch_op.alter_column("lat", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=True)
-        batch_op.alter_column("lon", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=True)
+        batch_op.alter_column(
+            "lat", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=True
+        )
+        batch_op.alter_column(
+            "lon", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=True
+        )
 
     with op.batch_alter_table("invoices", schema=None) as batch_op:
         batch_op.drop_index("ix_invoice_company_status_due")
 
     with op.batch_alter_table("medical_establishment", schema=None) as batch_op:
-        batch_op.alter_column("lat", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=True)
-        batch_op.alter_column("lon", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=True)
+        batch_op.alter_column(
+            "lat", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=True
+        )
+        batch_op.alter_column(
+            "lon", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=True
+        )
 
     with op.batch_alter_table("message", schema=None) as batch_op:
         batch_op.alter_column("content", existing_type=sa.TEXT(), nullable=True)
@@ -84,13 +104,24 @@ def upgrade():
         batch_op.drop_index("ix_realtime_event_timestamp")
 
     with op.batch_alter_table("rl_suggestion_metrics", schema=None) as batch_op:
-        batch_op.alter_column("confidence", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=True)
         batch_op.alter_column(
-            "expected_gain_minutes", existing_type=sa.INTEGER(), nullable=False, existing_server_default=sa.text("0")
+            "confidence", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=True
         )
-        batch_op.drop_constraint("rl_suggestion_metrics_suggestion_id_key", type_="unique")
+        batch_op.alter_column(
+            "expected_gain_minutes",
+            existing_type=sa.INTEGER(),
+            nullable=False,
+            existing_server_default=sa.text("0"),
+        )
+        batch_op.drop_constraint(
+            "rl_suggestion_metrics_suggestion_id_key", type_="unique"
+        )
         batch_op.drop_index("ix_rl_suggestion_metrics_suggestion_id")
-        batch_op.create_index(batch_op.f("ix_rl_suggestion_metrics_suggestion_id"), ["suggestion_id"], unique=True)
+        batch_op.create_index(
+            batch_op.f("ix_rl_suggestion_metrics_suggestion_id"),
+            ["suggestion_id"],
+            unique=True,
+        )
 
     # ### end Alembic commands ###
 
@@ -99,34 +130,63 @@ def downgrade():
     # ### commands auto generated by Alembic - please adjust! ###
     with op.batch_alter_table("rl_suggestion_metrics", schema=None) as batch_op:
         batch_op.drop_index(batch_op.f("ix_rl_suggestion_metrics_suggestion_id"))
-        batch_op.create_index("ix_rl_suggestion_metrics_suggestion_id", ["suggestion_id"], unique=False)
+        batch_op.create_index(
+            "ix_rl_suggestion_metrics_suggestion_id", ["suggestion_id"], unique=False
+        )
         batch_op.create_unique_constraint(
-            "rl_suggestion_metrics_suggestion_id_key", ["suggestion_id"], postgresql_nulls_not_distinct=False
+            "rl_suggestion_metrics_suggestion_id_key",
+            ["suggestion_id"],
+            postgresql_nulls_not_distinct=False,
         )
         batch_op.alter_column(
-            "expected_gain_minutes", existing_type=sa.INTEGER(), nullable=True, existing_server_default=sa.text("0")
+            "expected_gain_minutes",
+            existing_type=sa.INTEGER(),
+            nullable=True,
+            existing_server_default=sa.text("0"),
         )
-        batch_op.alter_column("confidence", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=False)
+        batch_op.alter_column(
+            "confidence",
+            existing_type=sa.DOUBLE_PRECISION(precision=53),
+            nullable=False,
+        )
 
     with op.batch_alter_table("realtime_event", schema=None) as batch_op:
-        batch_op.create_index("ix_realtime_event_timestamp", ["timestamp"], unique=False)
+        batch_op.create_index(
+            "ix_realtime_event_timestamp", ["timestamp"], unique=False
+        )
 
     with op.batch_alter_table("ml_prediction", schema=None) as batch_op:
-        batch_op.create_index("ix_ml_prediction_created_actual", ["created_at", "actual_delay_minutes"], unique=False)
+        batch_op.create_index(
+            "ix_ml_prediction_created_actual",
+            ["created_at", "actual_delay_minutes"],
+            unique=False,
+        )
 
     with op.batch_alter_table("message", schema=None) as batch_op:
         batch_op.alter_column("content", existing_type=sa.TEXT(), nullable=False)
 
     with op.batch_alter_table("medical_establishment", schema=None) as batch_op:
-        batch_op.alter_column("lon", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=False)
-        batch_op.alter_column("lat", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=False)
+        batch_op.alter_column(
+            "lon", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=False
+        )
+        batch_op.alter_column(
+            "lat", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=False
+        )
 
     with op.batch_alter_table("invoices", schema=None) as batch_op:
-        batch_op.create_index("ix_invoice_company_status_due", ["company_id", "status", "due_date"], unique=False)
+        batch_op.create_index(
+            "ix_invoice_company_status_due",
+            ["company_id", "status", "due_date"],
+            unique=False,
+        )
 
     with op.batch_alter_table("favorite_place", schema=None) as batch_op:
-        batch_op.alter_column("lon", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=False)
-        batch_op.alter_column("lat", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=False)
+        batch_op.alter_column(
+            "lon", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=False
+        )
+        batch_op.alter_column(
+            "lat", existing_type=sa.DOUBLE_PRECISION(precision=53), nullable=False
+        )
 
     with op.batch_alter_table("driver_weekly_template", schema=None) as batch_op:
         batch_op.alter_column("effective_from", existing_type=sa.DATE(), nullable=False)
@@ -153,7 +213,9 @@ def downgrade():
     with op.batch_alter_table("company", schema=None) as batch_op:
         batch_op.alter_column(
             "dispatch_mode",
-            existing_type=postgresql.ENUM("MANUAL", "SEMI_AUTO", "FULLY_AUTO", name="dispatchmode"),
+            existing_type=postgresql.ENUM(
+                "MANUAL", "SEMI_AUTO", "FULLY_AUTO", name="dispatchmode"
+            ),
             comment=None,
             existing_comment="Mode de fonctionnement du dispatch: manual, semi_auto, fully_auto",
             existing_nullable=False,
@@ -162,7 +224,9 @@ def downgrade():
 
     with op.batch_alter_table("booking", schema=None) as batch_op:
         batch_op.create_index(
-            "ix_booking_status_scheduled_company", ["status", "scheduled_time", "company_id"], unique=False
+            "ix_booking_status_scheduled_company",
+            ["status", "scheduled_time", "company_id"],
+            unique=False,
         )
         batch_op.create_index(
             "ix_booking_invoice_line",
@@ -171,27 +235,47 @@ def downgrade():
             postgresql_where="(invoice_line_id IS NOT NULL)",
         )
         batch_op.create_index(
-            "ix_booking_company_status_scheduled", ["company_id", "status", "scheduled_time"], unique=False
+            "ix_booking_company_status_scheduled",
+            ["company_id", "status", "scheduled_time"],
+            unique=False,
         )
 
     with op.batch_alter_table("autonomous_action", schema=None) as batch_op:
-        batch_op.create_index("ix_autonomous_action_type_created", ["action_type", "created_at"], unique=False)
         batch_op.create_index(
-            "ix_autonomous_action_company_created", ["company_id", "created_at", "success"], unique=False
+            "ix_autonomous_action_type_created",
+            ["action_type", "created_at"],
+            unique=False,
         )
-        batch_op.alter_column("reviewed_by_admin", existing_type=sa.BOOLEAN(), nullable=False)
+        batch_op.create_index(
+            "ix_autonomous_action_company_created",
+            ["company_id", "created_at", "success"],
+            unique=False,
+        )
+        batch_op.alter_column(
+            "reviewed_by_admin", existing_type=sa.BOOLEAN(), nullable=False
+        )
 
     with op.batch_alter_table("assignment", schema=None) as batch_op:
-        batch_op.create_index("ix_assignment_dispatch_run_status", ["dispatch_run_id", "status"], unique=False)
+        batch_op.create_index(
+            "ix_assignment_dispatch_run_status",
+            ["dispatch_run_id", "status"],
+            unique=False,
+        )
         batch_op.create_index(
             "ix_assignment_dispatch_run",
             ["dispatch_run_id"],
             unique=False,
             postgresql_where="(dispatch_run_id IS NOT NULL)",
         )
-        batch_op.create_index("ix_assignment_booking_created", ["booking_id", "created_at"], unique=False)
+        batch_op.create_index(
+            "ix_assignment_booking_created", ["booking_id", "created_at"], unique=False
+        )
 
     with op.batch_alter_table("ab_test_result", schema=None) as batch_op:
-        batch_op.create_index("ix_ab_test_result_timestamp_winner", ["test_timestamp", "ml_winner"], unique=False)
+        batch_op.create_index(
+            "ix_ab_test_result_timestamp_winner",
+            ["test_timestamp", "ml_winner"],
+            unique=False,
+        )
 
     # ### end Alembic commands ###

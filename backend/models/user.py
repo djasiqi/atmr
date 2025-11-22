@@ -42,7 +42,13 @@ class User(db.Model):
     __tablename__ = "user"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    public_id = Column(String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False, index=True)
+    public_id = Column(
+        String(36),
+        default=lambda: str(uuid.uuid4()),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
     username = Column(String(100), nullable=False, unique=True, index=True)
     first_name: Mapped[str] = mapped_column(String(100), nullable=True)
     last_name: Mapped[str] = mapped_column(String(100), nullable=True)
@@ -52,7 +58,9 @@ class User(db.Model):
     phone: Mapped[str] = mapped_column(String(255), nullable=True)
     address: Mapped[str] = mapped_column(String(200), nullable=True)
     birth_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    gender: Mapped[GenderEnum] = mapped_column(SAEnum(GenderEnum, name="gender"), nullable=True)
+    gender: Mapped[GenderEnum] = mapped_column(
+        SAEnum(GenderEnum, name="gender"), nullable=True
+    )
     profile_image: Mapped[str] = mapped_column(String(255), nullable=True)
 
     password: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -82,12 +90,22 @@ class User(db.Model):
     __table_args__ = (Index("idx_public_id", "public_id"),)
 
     # ✅ Relations bidirectionnelles avec suppression en cascade
-    clients = relationship("Client", back_populates="user", cascade="all, delete-orphan")
+    clients = relationship(
+        "Client", back_populates="user", cascade="all, delete-orphan"
+    )
     driver = relationship(
-        "Driver", back_populates="user", uselist=False, cascade="all, delete-orphan", passive_deletes=True
+        "Driver",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     company = relationship(
-        "Company", back_populates="user", uselist=False, cascade="all, delete-orphan", passive_deletes=True
+        "Company",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     # 🔒 Gestion des mots de passe
@@ -281,7 +299,9 @@ class User(db.Model):
             from security.crypto import get_encryption_service
 
             if value:
-                self.first_name_encrypted = get_encryption_service().encrypt_field(value)
+                self.first_name_encrypted = get_encryption_service().encrypt_field(
+                    value
+                )
                 self.encryption_migrated = True
             else:
                 self.first_name_encrypted = None
@@ -364,7 +384,9 @@ class User(db.Model):
             "last_name": self.last_name or "Non spécifié",
             "phone": self.phone or "Non spécifié",
             "address": self.address or "Non spécifié",
-            "birth_date": (self.birth_date.strftime("%Y-%m-%d") if self.birth_date else None),
+            "birth_date": (
+                self.birth_date.strftime("%Y-%m-%d") if self.birth_date else None
+            ),
             "gender": (self.gender.value if self.gender else "Non spécifié"),
             "profile_image": self.profile_image or None,
             "role": (role_val.value if role_val else str(role_val)),

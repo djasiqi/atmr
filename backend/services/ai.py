@@ -16,8 +16,16 @@ logger = logging.getLogger(__name__)
 # Config (aligne avec .env)
 # =========================
 # Priorité aux variables déjà présentes dans ton .env
-OSRM_BASE_URL = os.getenv("UD_OSRM_BASE_URL") or os.getenv("OSRM_URL") or "https://router.project-osrm.org"
-PHOTON_BASE_URL = os.getenv("PHOTON_BASE_URL") or os.getenv("PHOTON_URL") or "https://photon.komoot.io"
+OSRM_BASE_URL = (
+    os.getenv("UD_OSRM_BASE_URL")
+    or os.getenv("OSRM_URL")
+    or "https://router.project-osrm.org"
+)
+PHOTON_BASE_URL = (
+    os.getenv("PHOTON_BASE_URL")
+    or os.getenv("PHOTON_URL")
+    or "https://photon.komoot.io"
+)
 OSRM_TIMEOUT = int(os.getenv("UD_OSRM_TIMEOUT_SEC") or 12)
 
 # Constantes pour éviter les valeurs magiques
@@ -56,7 +64,12 @@ def geocode_address(address: str):
 def osrm_route(lat1, lon1, lat2, lon2):
     try:
         url = f"{OSRM_BASE_URL}/route/v1/driving/{lon1},{lat1};{lon2},{lat2}"
-        params = {"overview": "full", "geometries": "polyline", "alternatives": "false", "steps": "false"}
+        params = {
+            "overview": "full",
+            "geometries": "polyline",
+            "alternatives": "false",
+            "steps": "false",
+        }
         r = requests.get(url, params=params, timeout=OSRM_TIMEOUT)
         r.raise_for_status()
         data = r.json()

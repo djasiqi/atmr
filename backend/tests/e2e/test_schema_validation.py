@@ -43,7 +43,10 @@ class TestSchemaValidationE2E:
 
     def test_login_valid_schema(self, client, sample_user):
         """Test POST /api/v1/auth/login avec payload valide."""
-        response = client.post("/api/v1/auth/login", json={"email": sample_user.email, "password": "password123"})
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": sample_user.email, "password": "password123"},
+        )
 
         # ✅ FIX: Vérifier que le client n'est pas redirigé (302 inattendu)
         if response.status_code == 302:
@@ -51,7 +54,9 @@ class TestSchemaValidationE2E:
             location = response.headers.get("Location", "")
             if location.endswith("/login"):
                 # Redirection vers login = erreur d'authentification (devrait être 401)
-                pytest.fail(f"Redirection 302 vers /login inattendue (devrait être 401 ou 400). Location: {location}")
+                pytest.fail(
+                    f"Redirection 302 vers /login inattendue (devrait être 401 ou 400). Location: {location}"
+                )
             elif location.endswith("/"):
                 # Redirection après login = OK, mais devrait être 200 avec token
                 pytest.fail(
@@ -64,7 +69,12 @@ class TestSchemaValidationE2E:
             f"Status code inattendu: {response.status_code}. Response: {response.get_data(as_text=True)[:200]}"
         )
         data = response.get_json() or {}
-        assert ("token" in data) or ("message" in data) or ("errors" in data) or ("error" in data)
+        assert (
+            ("token" in data)
+            or ("message" in data)
+            or ("errors" in data)
+            or ("error" in data)
+        )
 
     def test_login_invalid_schema(self, client):
         """Test POST /api/v1/auth/login avec payload invalide (email manquant)."""
@@ -73,13 +83,20 @@ class TestSchemaValidationE2E:
         # ✅ FIX: Vérifier que le client n'est pas redirigé (302 inattendu)
         if response.status_code == 302:
             location = response.headers.get("Location", "")
-            pytest.fail(f"Redirection 302 inattendue pour payload invalide (devrait être 400). Location: {location}")
+            pytest.fail(
+                f"Redirection 302 inattendue pour payload invalide (devrait être 400). Location: {location}"
+            )
 
         assert response.status_code in [400, 404, 500], (
             f"Status code inattendu: {response.status_code}. Response: {response.get_data(as_text=True)[:200]}"
         )
         data = response.get_json() or {}
-        assert ("message" in data) or ("errors" in data) or ("error" in data) or (response.status_code == 404)
+        assert (
+            ("message" in data)
+            or ("errors" in data)
+            or ("error" in data)
+            or (response.status_code == 404)
+        )
 
     def test_register_valid_schema(self, client, db):
         """Test POST /api/v1/auth/register avec payload valide."""
@@ -100,7 +117,9 @@ class TestSchemaValidationE2E:
         # ✅ FIX: Vérifier que le client n'est pas redirigé (302 inattendu)
         if response.status_code == 302:
             location = response.headers.get("Location", "")
-            pytest.fail(f"Redirection 302 inattendue pour register (devrait être 200/201 ou 400). Location: {location}")
+            pytest.fail(
+                f"Redirection 302 inattendue pour register (devrait être 200/201 ou 400). Location: {location}"
+            )
 
         assert response.status_code in [200, 201, 400, 404, 500], (
             f"Status code inattendu: {response.status_code}. Response: {response.get_data(as_text=True)[:200]}"
@@ -128,11 +147,18 @@ class TestSchemaValidationE2E:
         )
         assert response.status_code in [400, 404, 500]
         data = response.get_json() or {}
-        assert ("message" in data) or ("errors" in data) or ("error" in data) or (response.status_code == 404)
+        assert (
+            ("message" in data)
+            or ("errors" in data)
+            or ("error" in data)
+            or (response.status_code == 404)
+        )
 
     # ========== BOOKINGS ENDPOINTS ==========
 
-    def test_create_booking_valid_schema(self, client, auth_headers, sample_user, db, sample_company):
+    def test_create_booking_valid_schema(
+        self, client, auth_headers, sample_user, db, sample_company
+    ):
         """Test POST /api/v1/clients/<id>/bookings avec payload valide."""
         from models import Client, User
 
@@ -145,13 +171,19 @@ class TestSchemaValidationE2E:
         from ext import bcrypt
 
         password_hash = bcrypt.generate_password_hash("password123")
-        client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        client_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(client_user)
         db.session.flush()
 
         test_client = Client()
         test_client.user_id = client_user.id
-        test_client.company_id = sample_company.id  # Utiliser sample_company pour garantir company_id non-None
+        test_client.company_id = (
+            sample_company.id
+        )  # Utiliser sample_company pour garantir company_id non-None
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
@@ -166,7 +198,9 @@ class TestSchemaValidationE2E:
             "aud": "atmr-api",
         }
         with client.application.app_context():
-            client_token = create_access_token(identity=str(client_user.public_id), additional_claims=client_claims)
+            client_token = create_access_token(
+                identity=str(client_user.public_id), additional_claims=client_claims
+            )
         client_headers = {"Authorization": f"Bearer {client_token}"}
 
         future_time = (datetime.now(UTC) + timedelta(days=1)).isoformat()
@@ -184,7 +218,9 @@ class TestSchemaValidationE2E:
         )
         assert response.status_code in [201, 400, 404, 500]  # 400 si géocodage échoue
 
-    def test_create_booking_invalid_schema(self, client, auth_headers, sample_user, db, sample_company):
+    def test_create_booking_invalid_schema(
+        self, client, auth_headers, sample_user, db, sample_company
+    ):
         """Test POST /api/v1/clients/<id>/bookings avec payload invalide (champs manquants)."""
         from models import Client, User
 
@@ -196,13 +232,19 @@ class TestSchemaValidationE2E:
         from ext import bcrypt
 
         password_hash = bcrypt.generate_password_hash("password123")
-        client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        client_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(client_user)
         db.session.flush()
 
         test_client = Client()
         test_client.user_id = client_user.id
-        test_client.company_id = sample_company.id  # Utiliser sample_company pour garantir company_id non-None
+        test_client.company_id = (
+            sample_company.id
+        )  # Utiliser sample_company pour garantir company_id non-None
         test_client.client_type = "PRIVATE"
         db.session.add(test_client)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
@@ -216,7 +258,9 @@ class TestSchemaValidationE2E:
             "aud": "atmr-api",
         }
         with client.application.app_context():
-            client_token = create_access_token(identity=str(client_user.public_id), additional_claims=client_claims)
+            client_token = create_access_token(
+                identity=str(client_user.public_id), additional_claims=client_claims
+            )
         client_headers = {"Authorization": f"Bearer {client_token}"}
 
         response = client.post(
@@ -233,8 +277,14 @@ class TestSchemaValidationE2E:
 
     def test_list_bookings_valid_query_params(self, authenticated_client):
         """Test GET /api/bookings avec query params valides."""
-        response = authenticated_client.get("/api/v1/bookings?page=1&per_page=20&status=PENDING")
-        assert response.status_code in [200, 400, 403]  # 400 si validation stricte des params
+        response = authenticated_client.get(
+            "/api/v1/bookings?page=1&per_page=20&status=PENDING"
+        )
+        assert response.status_code in [
+            200,
+            400,
+            403,
+        ]  # 400 si validation stricte des params
 
     def test_list_bookings_invalid_query_params(self, authenticated_client):
         """Test GET /api/bookings avec query params invalides (per_page trop élevé)."""
@@ -256,7 +306,11 @@ class TestSchemaValidationE2E:
         client_user.role = UserRole.client
         client_user.public_id = str(uuid.uuid4())
         password_hash = bcrypt.generate_password_hash("password123")
-        client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        client_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(client_user)
         db.session.flush()
 
@@ -300,7 +354,9 @@ class TestSchemaValidationE2E:
             "aud": "atmr-api",
         }
         with client.application.app_context():
-            client_token = create_access_token(identity=str(client_user.public_id), additional_claims=client_claims)
+            client_token = create_access_token(
+                identity=str(client_user.public_id), additional_claims=client_claims
+            )
         client_headers = {"Authorization": f"Bearer {client_token}"}
 
         # Test mise à jour valide
@@ -339,7 +395,11 @@ class TestSchemaValidationE2E:
         client_user.role = UserRole.client
         client_user.public_id = str(uuid.uuid4())
         password_hash = bcrypt.generate_password_hash("password123")
-        client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        client_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(client_user)
         db.session.flush()
 
@@ -382,23 +442,33 @@ class TestSchemaValidationE2E:
             "aud": "atmr-api",
         }
         with client.application.app_context():
-            client_token = create_access_token(identity=str(client_user.public_id), additional_claims=client_claims)
+            client_token = create_access_token(
+                identity=str(client_user.public_id), additional_claims=client_claims
+            )
         client_headers = {"Authorization": f"Bearer {client_token}"}
 
         # Test avec format date invalide (scheduled_time)
         response = client.put(
-            f"/api/v1/bookings/{booking.id}", json={"scheduled_time": "invalid-date-format"}, headers=client_headers
+            f"/api/v1/bookings/{booking.id}",
+            json={"scheduled_time": "invalid-date-format"},
+            headers=client_headers,
         )
         assert response.status_code in [400, 500]
         data = response.get_json() or {}
         assert ("message" in data) or ("errors" in data) or ("error" in data)
         # Vérifier que l'erreur mentionne scheduled_time
         error_str = str(data).lower()
-        assert "scheduled_time" in error_str or "date" in error_str or "format" in error_str
+        assert (
+            "scheduled_time" in error_str
+            or "date" in error_str
+            or "format" in error_str
+        )
 
         # Test avec statut invalide
         response = client.put(
-            f"/api/v1/bookings/{booking.id}", json={"status": "invalid_status"}, headers=client_headers
+            f"/api/v1/bookings/{booking.id}",
+            json={"status": "invalid_status"},
+            headers=client_headers,
         )
         assert response.status_code in [400, 500]
         data = response.get_json() or {}
@@ -408,7 +478,11 @@ class TestSchemaValidationE2E:
         assert "status" in error_str or "errors" in error_str
 
         # Test avec amount négatif
-        response = client.put(f"/api/v1/bookings/{booking.id}", json={"amount": -10.0}, headers=client_headers)
+        response = client.put(
+            f"/api/v1/bookings/{booking.id}",
+            json={"amount": -10.0},
+            headers=client_headers,
+        )
         assert response.status_code in [400, 500]
         data = response.get_json() or {}
         assert "message" in data or "errors" in data
@@ -427,7 +501,11 @@ class TestSchemaValidationE2E:
         client_user.role = UserRole.client
         client_user.public_id = str(uuid.uuid4())
         password_hash = bcrypt.generate_password_hash("password123")
-        client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        client_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(client_user)
         db.session.flush()
 
@@ -452,7 +530,9 @@ class TestSchemaValidationE2E:
             "aud": "atmr-api",
         }
         with client.application.app_context():
-            company_token = create_access_token(identity=str(company_user.public_id), additional_claims=company_claims)
+            company_token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=company_claims
+            )
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
         # Test création réservation manuelle valide
@@ -468,7 +548,9 @@ class TestSchemaValidationE2E:
                 "customer_last_name": "Dupont",
                 "customer_email": "jean.dupont@example.com",
                 "is_round_trip": True,
-                "return_time": (datetime.now(UTC) + timedelta(days=1, hours=2)).isoformat(),
+                "return_time": (
+                    datetime.now(UTC) + timedelta(days=1, hours=2)
+                ).isoformat(),
                 "amount": 75.0,
                 "billed_to_type": "patient",
                 "medical_facility": "Hôpital Cantonal",
@@ -496,7 +578,11 @@ class TestSchemaValidationE2E:
         client_user.role = UserRole.client
         client_user.public_id = str(uuid.uuid4())
         password_hash = bcrypt.generate_password_hash("password123")
-        client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        client_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(client_user)
         db.session.flush()
 
@@ -520,7 +606,9 @@ class TestSchemaValidationE2E:
             "aud": "atmr-api",
         }
         with client.application.app_context():
-            company_token = create_access_token(identity=str(company_user.public_id), additional_claims=company_claims)
+            company_token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=company_claims
+            )
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
         # Test avec client_id manquant (requis)
@@ -559,7 +647,11 @@ class TestSchemaValidationE2E:
             data = data[0]
         assert "message" in data or "errors" in data
         error_str = str(data).lower()
-        assert "scheduled_time" in error_str or "date" in error_str or "format" in error_str
+        assert (
+            "scheduled_time" in error_str
+            or "date" in error_str
+            or "format" in error_str
+        )
 
         # Test avec billed_to_type invalide (enum)
         future_time = (datetime.now(UTC) + timedelta(days=1)).isoformat()
@@ -624,7 +716,10 @@ class TestSchemaValidationE2E:
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
 
-        login_response = client.post("/api/auth/login", json={"email": company_user.email, "password": "password123"})
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": company_user.email, "password": "password123"},
+        )
         company_token = login_response.get_json()["token"]
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
@@ -651,7 +746,10 @@ class TestSchemaValidationE2E:
 
         company_token = create_access_token(
             identity=str(company_user.public_id),
-            additional_claims={"role": UserRole.company.value, "company_id": sample_company.id},
+            additional_claims={
+                "role": UserRole.company.value,
+                "company_id": sample_company.id,
+            },
             expires_delta=timedelta(hours=1),
         )
         company_headers = {"Authorization": f"Bearer {company_token}"}
@@ -687,7 +785,10 @@ class TestSchemaValidationE2E:
 
         company_token = create_access_token(
             identity=str(company_user.public_id),
-            additional_claims={"role": UserRole.company.value, "company_id": sample_company.id},
+            additional_claims={
+                "role": UserRole.company.value,
+                "company_id": sample_company.id,
+            },
             expires_delta=timedelta(hours=1),
         )
         company_headers = {"Authorization": f"Bearer {company_token}"}
@@ -724,33 +825,50 @@ class TestSchemaValidationE2E:
 
         company_token = create_access_token(
             identity=str(company_user.public_id),
-            additional_claims={"role": UserRole.company.value, "company_id": sample_company.id},
+            additional_claims={
+                "role": UserRole.company.value,
+                "company_id": sample_company.id,
+            },
             expires_delta=timedelta(hours=1),
         )
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
         # Test avec client_type manquant (requis)
         response = client.post(
-            "/api/v1/companies/me/clients", json={"first_name": "Jean", "last_name": "Dupont"}, headers=company_headers
+            "/api/v1/companies/me/clients",
+            json={"first_name": "Jean", "last_name": "Dupont"},
+            headers=company_headers,
         )
         assert response.status_code in [400, 429, 500]
         data = response.get_json() if response.status_code != 429 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
-        assert ("message" in data) or ("errors" in data) or ("error" in data) or response.status_code == 429
+        assert (
+            ("message" in data)
+            or ("errors" in data)
+            or ("error" in data)
+            or response.status_code == 429
+        )
         error_str = str(data).lower()
         if response.status_code != 429:
             assert "client_type" in error_str or "errors" in error_str
 
         # Test avec client_type invalide
         response = client.post(
-            "/api/v1/companies/me/clients", json={"client_type": "INVALID_TYPE"}, headers=company_headers
+            "/api/v1/companies/me/clients",
+            json={"client_type": "INVALID_TYPE"},
+            headers=company_headers,
         )
         assert response.status_code in [400, 429, 500]
         data = response.get_json() if response.status_code != 429 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
-        assert ("message" in data) or ("errors" in data) or ("error" in data) or response.status_code == 429
+        assert (
+            ("message" in data)
+            or ("errors" in data)
+            or ("error" in data)
+            or response.status_code == 429
+        )
 
         # Test SELF_SERVICE sans email (requis pour ce type)
         response = client.post(
@@ -778,7 +896,12 @@ class TestSchemaValidationE2E:
         data = response.get_json() if response.status_code != 429 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
-        assert ("message" in data) or ("errors" in data) or ("error" in data) or response.status_code == 429
+        assert (
+            ("message" in data)
+            or ("errors" in data)
+            or ("error" in data)
+            or response.status_code == 429
+        )
 
         # Test avec email invalide
         response = client.post(
@@ -843,7 +966,11 @@ class TestSchemaValidationE2E:
         client_user.role = UserRole.client
         client_user.public_id = str(uuid.uuid4())
         password_hash = bcrypt.generate_password_hash("password123")
-        client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        client_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(client_user)
         db.session.flush()
 
@@ -884,7 +1011,10 @@ class TestSchemaValidationE2E:
 
         client_token = create_access_token(
             identity=str(client_user.public_id),
-            additional_claims={"role": client_user.role.value, "user_id": client_user.id},
+            additional_claims={
+                "role": client_user.role.value,
+                "user_id": client_user.id,
+            },
             expires_delta=timedelta(hours=1),
         )
         client_headers = {"Authorization": f"Bearer {client_token}"}
@@ -905,7 +1035,9 @@ class TestSchemaValidationE2E:
 
         # Test avec champs optionnels seulement (amount et method requis)
         response = client.post(
-            f"/api/v1/payments/booking/{booking.id}", json={"amount": 75.5, "method": "paypal"}, headers=client_headers
+            f"/api/v1/payments/booking/{booking.id}",
+            json={"amount": 75.5, "method": "paypal"},
+            headers=client_headers,
         )
         assert response.status_code in [200, 201, 400, 500]
         data = response.get_json() or {}
@@ -929,7 +1061,11 @@ class TestSchemaValidationE2E:
         client_user.role = UserRole.client
         client_user.public_id = str(uuid.uuid4())
         password_hash = bcrypt.generate_password_hash("password123")
-        client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        client_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(client_user)
         db.session.flush()
 
@@ -968,7 +1104,10 @@ class TestSchemaValidationE2E:
 
         client_token = create_access_token(
             identity=str(client_user.public_id),
-            additional_claims={"role": client_user.role.value, "user_id": client_user.id},
+            additional_claims={
+                "role": client_user.role.value,
+                "user_id": client_user.id,
+            },
             expires_delta=timedelta(hours=1),
         )
         client_headers = {"Authorization": f"Bearer {client_token}"}
@@ -1079,7 +1218,11 @@ class TestSchemaValidationE2E:
         client_user.role = UserRole.client
         client_user.public_id = str(uuid.uuid4())
         password_hash = bcrypt.generate_password_hash("password123")
-        client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        client_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(client_user)
         db.session.flush()
 
@@ -1140,28 +1283,44 @@ class TestSchemaValidationE2E:
 
         # Test mise à jour status à "completed"
         response = client.put(
-            f"/api/v1/payments/{test_payment_id}", json={"status": "completed"}, headers=admin_headers
+            f"/api/v1/payments/{test_payment_id}",
+            json={"status": "completed"},
+            headers=admin_headers,
         )
         assert response.status_code in [200, 404]
         data = response.get_json() or {}
         if response.status_code == 200:
             assert "message" in data
-            assert "completed" in data["message"].lower() or "updated" in data["message"].lower()
+            assert (
+                "completed" in data["message"].lower()
+                or "updated" in data["message"].lower()
+            )
         else:
             assert "error" in data
 
         # Test mise à jour status à "failed"
-        response = client.put(f"/api/v1/payments/{test_payment_id}", json={"status": "failed"}, headers=admin_headers)
+        response = client.put(
+            f"/api/v1/payments/{test_payment_id}",
+            json={"status": "failed"},
+            headers=admin_headers,
+        )
         assert response.status_code in [200, 404]
         data = response.get_json() or {}
         if response.status_code == 200:
             assert "message" in data
-            assert "failed" in data["message"].lower() or "updated" in data["message"].lower()
+            assert (
+                "failed" in data["message"].lower()
+                or "updated" in data["message"].lower()
+            )
         else:
             assert "error" in data
 
         # Test mise à jour status à "pending"
-        response = client.put(f"/api/v1/payments/{test_payment_id}", json={"status": "pending"}, headers=admin_headers)
+        response = client.put(
+            f"/api/v1/payments/{test_payment_id}",
+            json={"status": "pending"},
+            headers=admin_headers,
+        )
         assert response.status_code in [200, 404]
         data = response.get_json() or {}
         if response.status_code == 200:
@@ -1183,7 +1342,11 @@ class TestSchemaValidationE2E:
         client_user.role = UserRole.client
         client_user.public_id = str(uuid.uuid4())
         password_hash = bcrypt.generate_password_hash("password123")
-        client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        client_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(client_user)
         db.session.flush()
 
@@ -1243,7 +1406,9 @@ class TestSchemaValidationE2E:
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
         # Test avec status manquant (requis)
-        response = client.put(f"/api/v1/payments/{test_payment_id}", json={}, headers=admin_headers)
+        response = client.put(
+            f"/api/v1/payments/{test_payment_id}", json={}, headers=admin_headers
+        )
         assert response.status_code in [400, 404]
         data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -1254,7 +1419,9 @@ class TestSchemaValidationE2E:
 
         # Test avec status invalide (pas dans ["pending", "completed", "failed"])
         response = client.put(
-            f"/api/v1/payments/{test_payment_id}", json={"status": "INVALID_STATUS"}, headers=admin_headers
+            f"/api/v1/payments/{test_payment_id}",
+            json={"status": "INVALID_STATUS"},
+            headers=admin_headers,
         )
         assert response.status_code in [400, 404]
         data = response.get_json() or {}
@@ -1279,7 +1446,11 @@ class TestSchemaValidationE2E:
         assert "message" in data or "errors" in data
 
         # Test avec status vide
-        response = client.put(f"/api/v1/payments/{test_payment_id}", json={"status": ""}, headers=admin_headers)
+        response = client.put(
+            f"/api/v1/payments/{test_payment_id}",
+            json={"status": ""},
+            headers=admin_headers,
+        )
         assert response.status_code in [400, 404]
         data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -1300,7 +1471,11 @@ class TestSchemaValidationE2E:
         client_user.first_name = "Original"
         client_user.last_name = "Name"
         password_hash = bcrypt.generate_password_hash("password123")
-        client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        client_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(client_user)
         db.session.flush()
 
@@ -1362,7 +1537,9 @@ class TestSchemaValidationE2E:
         assert "message" in data
 
         # Test mise à jour vide (tous les champs sont optionnels)
-        response = client.put(f"/api/v1/clients/{client_user.public_id}", json={}, headers=client_headers)
+        response = client.put(
+            f"/api/v1/clients/{client_user.public_id}", json={}, headers=client_headers
+        )
         assert response.status_code == 200
         data = response.get_json() or {}
         assert "message" in data
@@ -1379,7 +1556,11 @@ class TestSchemaValidationE2E:
         client_user.role = UserRole.client
         client_user.public_id = str(uuid.uuid4())
         password_hash = bcrypt.generate_password_hash("password123")
-        client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        client_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(client_user)
         db.session.flush()
 
@@ -1522,7 +1703,11 @@ class TestSchemaValidationE2E:
         driver_user.first_name = "Original"
         driver_user.last_name = "Driver"
         password_hash = bcrypt.generate_password_hash("password123")
-        driver_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        driver_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(driver_user)
         db.session.flush()
 
@@ -1538,9 +1723,16 @@ class TestSchemaValidationE2E:
         # Authentification: générer un JWT direct (éviter dépendance login)
         from flask_jwt_extended import create_access_token
 
-        claims = {"role": UserRole.driver.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+        claims = {
+            "role": UserRole.driver.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            driver_token = create_access_token(identity=str(driver_user.public_id), additional_claims=claims)
+            driver_token = create_access_token(
+                identity=str(driver_user.public_id), additional_claims=claims
+            )
         driver_headers = {"Authorization": f"Bearer {driver_token}"}
 
         # Test mise à jour avec tous les champs
@@ -1580,7 +1772,9 @@ class TestSchemaValidationE2E:
         assert "message" in data
 
         # Test mise à jour vide (tous les champs sont optionnels)
-        response = client.put("/api/v1/driver/me/profile", json={}, headers=driver_headers)
+        response = client.put(
+            "/api/v1/driver/me/profile", json={}, headers=driver_headers
+        )
         assert response.status_code == 200
         data = response.get_json() or {}
         assert "message" in data
@@ -1597,7 +1791,11 @@ class TestSchemaValidationE2E:
         driver_user.role = UserRole.driver
         driver_user.public_id = str(uuid.uuid4())
         password_hash = bcrypt.generate_password_hash("password123")
-        driver_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        driver_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(driver_user)
         db.session.flush()
 
@@ -1609,9 +1807,16 @@ class TestSchemaValidationE2E:
 
         from flask_jwt_extended import create_access_token
 
-        claims = {"role": UserRole.driver.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+        claims = {
+            "role": UserRole.driver.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            driver_token = create_access_token(identity=str(driver_user.public_id), additional_claims=claims)
+            driver_token = create_access_token(
+                identity=str(driver_user.public_id), additional_claims=claims
+            )
         driver_headers = {"Authorization": f"Bearer {driver_token}"}
 
         # Test avec first_name trop long (> 100)
@@ -1643,7 +1848,11 @@ class TestSchemaValidationE2E:
         assert "message" in data or "errors" in data
 
         # Test avec status invalide (pas dans ["disponible", "hors service"])
-        response = client.put("/api/v1/driver/me/profile", json={"status": "INVALID"}, headers=driver_headers)
+        response = client.put(
+            "/api/v1/driver/me/profile",
+            json={"status": "INVALID"},
+            headers=driver_headers,
+        )
         assert response.status_code == 400
         data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -1749,7 +1958,10 @@ class TestSchemaValidationE2E:
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
 
-        login_response = client.post("/api/auth/login", json={"email": company_user.email, "password": "password123"})
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": company_user.email, "password": "password123"},
+        )
         company_token = login_response.get_json()["token"]
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
@@ -1791,7 +2003,9 @@ class TestSchemaValidationE2E:
 
         # Test mise à jour vide (tous les champs sont optionnels)
         response = client.put(
-            f"/api/v1/invoices/companies/{sample_company.id}/billing-settings", json={}, headers=company_headers
+            f"/api/v1/invoices/companies/{sample_company.id}/billing-settings",
+            json={},
+            headers=company_headers,
         )
         assert response.status_code == 200
 
@@ -1810,7 +2024,10 @@ class TestSchemaValidationE2E:
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
 
-        login_response = client.post("/api/auth/login", json={"email": company_user.email, "password": "password123"})
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": company_user.email, "password": "password123"},
+        )
         company_token = login_response.get_json()["token"]
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
@@ -2010,7 +2227,11 @@ class TestSchemaValidationE2E:
         client_user.role = UserRole.client
         client_user.public_id = str(uuid.uuid4())
         password_hash = bcrypt.generate_password_hash("password123")
-        client_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        client_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(client_user)
         db.session.flush()
 
@@ -2026,7 +2247,10 @@ class TestSchemaValidationE2E:
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
 
-        login_response = client.post("/api/auth/login", json={"email": company_user.email, "password": "password123"})
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": company_user.email, "password": "password123"},
+        )
         company_token = login_response.get_json()["token"]
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
@@ -2034,7 +2258,11 @@ class TestSchemaValidationE2E:
         current_date = datetime.now(UTC)
         response = client.post(
             f"/api/v1/invoices/companies/{sample_company.id}/invoices/generate",
-            json={"client_id": test_client.id, "period_year": current_date.year, "period_month": current_date.month},
+            json={
+                "client_id": test_client.id,
+                "period_year": current_date.year,
+                "period_month": current_date.month,
+            },
             headers=company_headers,
         )
         # Peut être 201 (succès) ou 400/404 si pas de réservations ou erreur DB
@@ -2043,7 +2271,11 @@ class TestSchemaValidationE2E:
         # Test génération avec client_ids (facturation groupée)
         response = client.post(
             f"/api/v1/invoices/companies/{sample_company.id}/invoices/generate",
-            json={"client_ids": [test_client.id], "period_year": current_date.year, "period_month": current_date.month},
+            json={
+                "client_ids": [test_client.id],
+                "period_year": current_date.year,
+                "period_month": current_date.month,
+            },
             headers=company_headers,
         )
         assert response.status_code in [201, 400, 404]
@@ -2123,7 +2355,9 @@ class TestSchemaValidationE2E:
             "aud": "atmr-api",
         }
         with client.application.app_context():
-            company_token = create_access_token(identity=str(company_user.public_id), additional_claims=company_claims)
+            company_token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=company_claims
+            )
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
         current_date = datetime.now(UTC)
@@ -2317,7 +2551,8 @@ class TestSchemaValidationE2E:
     def test_update_company_invalid_schema(self, authenticated_client):
         """Test PUT /api/companies/me avec payload invalide (IBAN invalide)."""
         response = authenticated_client.put(
-            "/api/companies/me", json={"name": "Updated Company", "iban": "INVALID-IBAN"}
+            "/api/companies/me",
+            json={"name": "Updated Company", "iban": "INVALID-IBAN"},
         )
         assert response.status_code == 400
         data = response.get_json() or {}
@@ -2358,7 +2593,9 @@ class TestSchemaValidationE2E:
 
     def test_medical_establishments_valid_query(self, authenticated_client):
         """Test GET /api/medical/establishments avec query params valides."""
-        response = authenticated_client.get("/api/v1/medical/establishments?q=hospital&limit=10")
+        response = authenticated_client.get(
+            "/api/v1/medical/establishments?q=hospital&limit=10"
+        )
         assert response.status_code == 200
 
     def test_medical_establishments_invalid_query(self, authenticated_client):
@@ -2379,7 +2616,9 @@ class TestSchemaValidationE2E:
 
     def test_medical_services_valid_query(self, authenticated_client):
         """Test GET /api/medical/services avec query params valides."""
-        response = authenticated_client.get("/api/v1/medical/services?establishment_id=1&q=cardio")
+        response = authenticated_client.get(
+            "/api/v1/medical/services?establishment_id=1&q=cardio"
+        )
         assert response.status_code in [200, 404]  # 404 si établissement introuvable
 
     def test_medical_services_invalid_query(self, authenticated_client):
@@ -2399,19 +2638,25 @@ class TestSchemaValidationE2E:
 
     def test_analytics_dashboard_invalid_query(self, authenticated_client):
         """Test GET /api/analytics/dashboard avec query params invalides (period invalide)."""
-        response = authenticated_client.get("/api/v1/analytics/dashboard?period=invalid")
+        response = authenticated_client.get(
+            "/api/v1/analytics/dashboard?period=invalid"
+        )
         assert response.status_code == 400
         data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
     def test_analytics_insights_valid_query(self, authenticated_client):
         """Test GET /api/analytics/insights avec query params valides."""
-        response = authenticated_client.get("/api/v1/analytics/insights?lookback_days=30")
+        response = authenticated_client.get(
+            "/api/v1/analytics/insights?lookback_days=30"
+        )
         assert response.status_code in [200, 404]
 
     def test_analytics_insights_invalid_query(self, authenticated_client):
         """Test GET /api/analytics/insights avec query params invalides (lookback_days trop élevé)."""
-        response = authenticated_client.get("/api/v1/analytics/insights?lookback_days=400")
+        response = authenticated_client.get(
+            "/api/v1/analytics/insights?lookback_days=400"
+        )
         assert response.status_code == 400
         data = response.get_json() or {}
         assert "message" in data or "errors" in data
@@ -2438,7 +2683,9 @@ class TestSchemaValidationE2E:
 
         # Test avec week_start spécifié
         week_start = date.today() - timedelta(days=7)
-        response = authenticated_client.get(f"/api/v1/analytics/weekly-summary?week_start={week_start.isoformat()}")
+        response = authenticated_client.get(
+            f"/api/v1/analytics/weekly-summary?week_start={week_start.isoformat()}"
+        )
         # Peut être 200 (succès) ou 404 (pas de company) ou 500 (erreur serveur)
         assert response.status_code in [200, 404, 500]
 
@@ -2464,7 +2711,12 @@ class TestSchemaValidationE2E:
         assert "message" in data or "errors" in data
         # Vérifier que l'erreur mentionne week_start ou format date
         error_str = str(data).lower()
-        assert "week_start" in error_str or "date" in error_str or "format" in error_str or "errors" in error_str
+        assert (
+            "week_start" in error_str
+            or "date" in error_str
+            or "format" in error_str
+            or "errors" in error_str
+        )
 
         # Test avec format date invalide (pas ISO8601)
         response = authenticated_client.get(
@@ -2477,7 +2729,9 @@ class TestSchemaValidationE2E:
         assert "message" in data or "errors" in data
 
         # Test avec date mal formée
-        response = authenticated_client.get("/api/v1/analytics/weekly-summary?week_start=invalid-date")
+        response = authenticated_client.get(
+            "/api/v1/analytics/weekly-summary?week_start=invalid-date"
+        )
         assert response.status_code == 400
         data = response.get_json() or {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -2488,12 +2742,16 @@ class TestSchemaValidationE2E:
 
     def test_planning_shifts_valid_query(self, authenticated_client):
         """Test GET /api/planning/companies/me/planning/shifts avec query params valides."""
-        response = authenticated_client.get("/api/v1/planning/companies/me/planning/shifts?driver_id=1")
+        response = authenticated_client.get(
+            "/api/v1/planning/companies/me/planning/shifts?driver_id=1"
+        )
         assert response.status_code in [200, 401]  # 401 si pas autorisé
 
     def test_planning_shifts_invalid_query(self, authenticated_client):
         """Test GET /api/planning/companies/me/planning/shifts avec query params invalides (driver_id négatif)."""
-        response = authenticated_client.get("/api/v1/planning/companies/me/planning/shifts?driver_id=-1")
+        response = authenticated_client.get(
+            "/api/v1/planning/companies/me/planning/shifts?driver_id=-1"
+        )
         assert response.status_code == 400
         data = response.get_json() or {}
         assert "message" in data or "errors" in data
@@ -2501,7 +2759,9 @@ class TestSchemaValidationE2E:
     def test_planning_unavailability_valid_query(self, authenticated_client):
         """✅ Test E2E GET /api/planning/companies/me/planning/unavailability avec PlanningUnavailabilityQuerySchema valide."""
         # Test avec driver_id spécifié
-        response = authenticated_client.get("/api/v1/planning/companies/me/planning/unavailability?driver_id=1")
+        response = authenticated_client.get(
+            "/api/v1/planning/companies/me/planning/unavailability?driver_id=1"
+        )
         # Peut être 200 (succès) ou 401 (pas autorisé)
         assert response.status_code in [200, 401]
 
@@ -2511,7 +2771,9 @@ class TestSchemaValidationE2E:
             assert "items" in data or "total" in data
 
         # Test sans driver_id (optionnel)
-        response = authenticated_client.get("/api/v1/planning/companies/me/planning/unavailability")
+        response = authenticated_client.get(
+            "/api/v1/planning/companies/me/planning/unavailability"
+        )
         assert response.status_code in [200, 401]
 
         # Si succès, vérifier la structure
@@ -2522,7 +2784,9 @@ class TestSchemaValidationE2E:
     def test_planning_unavailability_invalid_query(self, authenticated_client):
         """✅ Test E2E GET /api/planning/companies/me/planning/unavailability avec PlanningUnavailabilityQuerySchema invalide."""
         # Test avec driver_id négatif (< 1)
-        response = authenticated_client.get("/api/v1/planning/companies/me/planning/unavailability?driver_id=-1")
+        response = authenticated_client.get(
+            "/api/v1/planning/companies/me/planning/unavailability?driver_id=-1"
+        )
         assert response.status_code == 400
         data = response.get_json() or {}
         assert "message" in data or "errors" in data
@@ -2531,13 +2795,17 @@ class TestSchemaValidationE2E:
         assert "driver_id" in error_str or "errors" in error_str
 
         # Test avec driver_id = 0 (invalide, doit être >= 1)
-        response = authenticated_client.get("/api/v1/planning/companies/me/planning/unavailability?driver_id=0")
+        response = authenticated_client.get(
+            "/api/v1/planning/companies/me/planning/unavailability?driver_id=0"
+        )
         assert response.status_code == 400
         data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
         # Test avec driver_id non numérique (string)
-        response = authenticated_client.get("/api/v1/planning/companies/me/planning/unavailability?driver_id=abc")
+        response = authenticated_client.get(
+            "/api/v1/planning/companies/me/planning/unavailability?driver_id=abc"
+        )
         assert response.status_code == 400
         data = response.get_json() or {}
         assert "message" in data or "errors" in data
@@ -2545,7 +2813,9 @@ class TestSchemaValidationE2E:
     def test_planning_weekly_template_valid_query(self, authenticated_client):
         """✅ Test E2E GET /api/planning/companies/me/planning/weekly-template avec PlanningWeeklyTemplateQuerySchema valide."""
         # Test avec driver_id spécifié
-        response = authenticated_client.get("/api/v1/planning/companies/me/planning/weekly-template?driver_id=1")
+        response = authenticated_client.get(
+            "/api/v1/planning/companies/me/planning/weekly-template?driver_id=1"
+        )
         # Peut être 200 (succès) ou 401 (pas autorisé)
         assert response.status_code in [200, 401]
 
@@ -2555,7 +2825,9 @@ class TestSchemaValidationE2E:
             assert "items" in data or "total" in data
 
         # Test sans driver_id (optionnel)
-        response = authenticated_client.get("/api/v1/planning/companies/me/planning/weekly-template")
+        response = authenticated_client.get(
+            "/api/v1/planning/companies/me/planning/weekly-template"
+        )
         assert response.status_code in [200, 401]
 
         # Si succès, vérifier la structure
@@ -2566,7 +2838,9 @@ class TestSchemaValidationE2E:
     def test_planning_weekly_template_invalid_query(self, authenticated_client):
         """✅ Test E2E GET /api/planning/companies/me/planning/weekly-template avec PlanningWeeklyTemplateQuerySchema invalide."""
         # Test avec driver_id négatif (< 1)
-        response = authenticated_client.get("/api/v1/planning/companies/me/planning/weekly-template?driver_id=-1")
+        response = authenticated_client.get(
+            "/api/v1/planning/companies/me/planning/weekly-template?driver_id=-1"
+        )
         assert response.status_code == 400
         data = response.get_json() or {}
         assert "message" in data or "errors" in data
@@ -2575,13 +2849,17 @@ class TestSchemaValidationE2E:
         assert "driver_id" in error_str or "errors" in error_str
 
         # Test avec driver_id = 0 (invalide, doit être >= 1)
-        response = authenticated_client.get("/api/v1/planning/companies/me/planning/weekly-template?driver_id=0")
+        response = authenticated_client.get(
+            "/api/v1/planning/companies/me/planning/weekly-template?driver_id=0"
+        )
         assert response.status_code == 400
         data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
         # Test avec driver_id non numérique (string)
-        response = authenticated_client.get("/api/v1/planning/companies/me/planning/weekly-template?driver_id=abc")
+        response = authenticated_client.get(
+            "/api/v1/planning/companies/me/planning/weekly-template?driver_id=abc"
+        )
         assert response.status_code == 400
         data = response.get_json() or {}
         assert "message" in data or "errors" in data
@@ -2606,9 +2884,16 @@ class TestSchemaValidationE2E:
         # Auth admin via JWT
         from flask_jwt_extended import create_access_token
 
-        admin_claims = {"role": UserRole.admin.value, "company_id": None, "driver_id": None, "aud": "atmr-api"}
+        admin_claims = {
+            "role": UserRole.admin.value,
+            "company_id": None,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            admin_token = create_access_token(identity=str(admin_user.public_id), additional_claims=admin_claims)
+            admin_token = create_access_token(
+                identity=str(admin_user.public_id), additional_claims=admin_claims
+            )
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
         # Créer un user à modifier
@@ -2643,13 +2928,22 @@ class TestSchemaValidationE2E:
 
         from flask_jwt_extended import create_access_token
 
-        admin_claims = {"role": UserRole.admin.value, "company_id": None, "driver_id": None, "aud": "atmr-api"}
+        admin_claims = {
+            "role": UserRole.admin.value,
+            "company_id": None,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            admin_token = create_access_token(identity=str(admin_user.public_id), additional_claims=admin_claims)
+            admin_token = create_access_token(
+                identity=str(admin_user.public_id), additional_claims=admin_claims
+            )
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
         response = client.put(
-            f"/api/v1/admin/users/{admin_user.id}/role", json={"role": "invalid_role"}, headers=admin_headers
+            f"/api/v1/admin/users/{admin_user.id}/role",
+            json={"role": "invalid_role"},
+            headers=admin_headers,
         )
         assert response.status_code == 400
         data = response.get_json() or {}
@@ -2670,7 +2964,11 @@ class TestSchemaValidationE2E:
         admin_user.role = UserRole.admin
         admin_user.public_id = str(uuid.uuid4())
         password_hash = bcrypt.generate_password_hash("password123")
-        admin_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        admin_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(admin_user)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
@@ -2684,7 +2982,9 @@ class TestSchemaValidationE2E:
             "aud": "atmr-api",
         }
         with client.application.app_context():
-            token = create_access_token(identity=str(admin_user.public_id), additional_claims=claims)
+            token = create_access_token(
+                identity=str(admin_user.public_id), additional_claims=claims
+            )
         headers = {"Authorization": f"Bearer {token}"}
 
         # Créer une company dédiée à ce test
@@ -2738,7 +3038,11 @@ class TestSchemaValidationE2E:
         admin_user.role = UserRole.admin
         admin_user.public_id = str(uuid.uuid4())
         password_hash = bcrypt.generate_password_hash("password123")
-        admin_user.password = password_hash.decode("utf-8") if isinstance(password_hash, bytes) else password_hash
+        admin_user.password = (
+            password_hash.decode("utf-8")
+            if isinstance(password_hash, bytes)
+            else password_hash
+        )
         db.session.add(admin_user)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
@@ -2751,7 +3055,9 @@ class TestSchemaValidationE2E:
             "aud": "atmr-api",
         }
         with client.application.app_context():
-            token = create_access_token(identity=str(admin_user.public_id), additional_claims=claims)
+            token = create_access_token(
+                identity=str(admin_user.public_id), additional_claims=claims
+            )
         headers = {"Authorization": f"Bearer {token}"}
 
         # Créer une company dédiée à ce test
@@ -2981,14 +3287,25 @@ class TestCompaniesReservationActions:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
 
-        claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+        claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
+            token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=claims
+            )
         return {"Authorization": f"Bearer {token}"}
 
     def test_company_reservation_accept(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.post("/api/v1/companies/me/reservations/999999/accept", json={"note": "ok"}, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/reservations/999999/accept",
+            json={"note": "ok"},
+            headers=headers,
+        )
         assert resp.status_code in [200, 400, 404]
         data = resp.get_json() or {}
         assert isinstance(data, dict)
@@ -2996,7 +3313,9 @@ class TestCompaniesReservationActions:
     def test_company_reservation_reject(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
         resp = client.post(
-            "/api/v1/companies/me/reservations/999999/reject", json={"reason": "indisponible"}, headers=headers
+            "/api/v1/companies/me/reservations/999999/reject",
+            json={"reason": "indisponible"},
+            headers=headers,
         )
         assert resp.status_code in [200, 400, 404]
         data = resp.get_json() or {}
@@ -3005,7 +3324,11 @@ class TestCompaniesReservationActions:
     def test_company_reservation_assign(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
         # driver_id requis côté schéma, ici on force un invalide pour 400/404
-        resp = client.post("/api/v1/companies/me/reservations/999999/assign", json={"driver_id": 0}, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/reservations/999999/assign",
+            json={"driver_id": 0},
+            headers=headers,
+        )
         assert resp.status_code in [200, 400, 404]
         data = resp.get_json() or {}
         assert isinstance(data, dict)
@@ -3013,7 +3336,9 @@ class TestCompaniesReservationActions:
     def test_company_reservation_complete(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
         resp = client.post(
-            "/api/v1/companies/me/reservations/999999/complete", json={"status": "done"}, headers=headers
+            "/api/v1/companies/me/reservations/999999/complete",
+            json={"status": "done"},
+            headers=headers,
         )
         assert resp.status_code in [200, 400, 404]
         data = resp.get_json() or {}
@@ -3032,9 +3357,16 @@ class TestCompaniesVehicles:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
 
-        claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+        claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
+            token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=claims
+            )
         return {"Authorization": f"Bearer {token}"}
 
     def test_company_vehicles_list(self, client, db, sample_company):
@@ -3063,7 +3395,9 @@ class TestCompaniesVehicles:
 
     def test_company_vehicle_update_invalid(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.put("/api/v1/companies/me/vehicles/999999", json={}, headers=headers)
+        resp = client.put(
+            "/api/v1/companies/me/vehicles/999999", json={}, headers=headers
+        )
         assert resp.status_code in [200, 400, 404]
         _ = resp.get_json() if resp.is_json else None
 
@@ -3085,14 +3419,23 @@ class TestCompaniesDriverVacations:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
 
-        claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+        claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
+            token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=claims
+            )
         return {"Authorization": f"Bearer {token}"}
 
     def test_company_driver_vacations_get(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.get("/api/v1/companies/me/drivers/999999/vacations", headers=headers)
+        resp = client.get(
+            "/api/v1/companies/me/drivers/999999/vacations", headers=headers
+        )
         assert resp.status_code in [200, 404]
         _ = resp.get_json() if resp.is_json else None
 
@@ -3104,7 +3447,11 @@ class TestCompaniesDriverVacations:
             # "end_date": "2025-01-10",   # requis normalement
             "reason": "annual"
         }
-        resp = client.post("/api/v1/companies/me/drivers/999999/vacations", json=payload, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/drivers/999999/vacations",
+            json=payload,
+            headers=headers,
+        )
         assert resp.status_code in [400, 404]
         data = resp.get_json() or {}
         assert isinstance(data, (dict, list))
@@ -3122,9 +3469,16 @@ class TestCompaniesClients:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
 
-        claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+        claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
+            token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=claims
+            )
         return {"Authorization": f"Bearer {token}"}
 
     def test_company_clients_list(self, client, db, sample_company):
@@ -3140,7 +3494,9 @@ class TestCompaniesClients:
             # "user_id": 1,
             # "client_type": "PRIVATE",
         }
-        resp = client.post("/api/v1/companies/me/clients", json=payload, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/clients", json=payload, headers=headers
+        )
         assert resp.status_code in [400, 429]
         data = resp.get_json() if resp.status_code != 429 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -3156,7 +3512,9 @@ class TestCompaniesClients:
 
     def test_company_client_update_invalid(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.put("/api/v1/companies/me/clients/999999", json={}, headers=headers)
+        resp = client.put(
+            "/api/v1/companies/me/clients/999999", json={}, headers=headers
+        )
         assert resp.status_code in [200, 400, 404]
         _ = resp.get_json() if resp.is_json else None
 
@@ -3178,12 +3536,21 @@ class TestCompaniesManualReservations:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
 
-        claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+        claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
+            token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=claims
+            )
         return {"Authorization": f"Bearer {token}"}
 
-    def test_company_manual_reservation_create_invalid(self, client, db, sample_company):
+    def test_company_manual_reservation_create_invalid(
+        self, client, db, sample_company
+    ):
         headers = self._company_headers(client, db, sample_company)
         # Données minimales manquantes pour forcer la validation à échouer
         payload = {
@@ -3192,7 +3559,9 @@ class TestCompaniesManualReservations:
             # "origin": {"address": "..."},
             # "destination": {"address": "..."},
         }
-        resp = client.post("/api/v1/companies/me/reservations/manual", json=payload, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/reservations/manual", json=payload, headers=headers
+        )
         assert resp.status_code in [400, 404, 429]
         data = resp.get_json() if resp.status_code != 429 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -3202,19 +3571,33 @@ class TestCompaniesManualReservations:
 
     def test_company_reservation_schedule_invalid(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.post("/api/v1/companies/me/reservations/999999/schedule", json={}, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/reservations/999999/schedule",
+            json={},
+            headers=headers,
+        )
         assert resp.status_code in [200, 400, 404, 405]
         _ = resp.get_json() if resp.is_json else None
 
     def test_company_reservation_dispatch_now_invalid(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.post("/api/v1/companies/me/reservations/999999/dispatch-now", json={}, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/reservations/999999/dispatch-now",
+            json={},
+            headers=headers,
+        )
         assert resp.status_code in [200, 400, 404]
         _ = resp.get_json() if resp.is_json else None
 
-    def test_company_reservation_trigger_return_invalid(self, client, db, sample_company):
+    def test_company_reservation_trigger_return_invalid(
+        self, client, db, sample_company
+    ):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.post("/api/v1/companies/me/reservations/999999/trigger-return", json={}, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/reservations/999999/trigger-return",
+            json={},
+            headers=headers,
+        )
         assert resp.status_code in [200, 400, 404]
         _ = resp.get_json() if resp.is_json else None
 
@@ -3231,21 +3614,32 @@ class TestCompaniesDriverExtras:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
 
-        claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+        claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
+            token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=claims
+            )
         return {"Authorization": f"Bearer {token}"}
 
     def test_company_driver_completed_trips(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.get("/api/v1/companies/me/drivers/999999/completed-trips", headers=headers)
+        resp = client.get(
+            "/api/v1/companies/me/drivers/999999/completed-trips", headers=headers
+        )
         assert resp.status_code in [200, 404, 405]
         _ = resp.get_json() if resp.is_json else None
 
     def test_company_driver_toggle_type_invalid(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
         # Payload invalide/missing pour déclencher 400 ou 404
-        resp = client.post("/api/v1/companies/me/drivers/999999/toggle-type", json={}, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/drivers/999999/toggle-type", json={}, headers=headers
+        )
         assert resp.status_code in [200, 400, 404, 405]
         _ = resp.get_json() if resp.is_json else None
 
@@ -3262,9 +3656,16 @@ class TestCompaniesInvoicesAndLogo:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
 
-        claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+        claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
+            token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=claims
+            )
         return {"Authorization": f"Bearer {token}"}
 
     def test_company_me_invoices_list(self, client, db, sample_company):
@@ -3276,7 +3677,9 @@ class TestCompaniesInvoicesAndLogo:
     def test_company_me_logo_upload_invalid(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
         # Pas de fichier multipart -> devrait échouer
-        resp = client.post("/api/v1/companies/me/logo", json={"logo": "not-a-file"}, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/logo", json={"logo": "not-a-file"}, headers=headers
+        )
         assert resp.status_code in [400, 404, 405, 415]
         _ = resp.get_json() if resp.is_json else None
 
@@ -3293,15 +3696,24 @@ class TestCompaniesMisc:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
 
-        claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+        claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
+            token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=claims
+            )
         return {"Authorization": f"Bearer {token}"}
 
     def test_company_drivers_create_invalid(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
         # Payload vide -> 400 attendu (ou 429 RL)
-        resp = client.post("/api/v1/companies/me/drivers/create", json={}, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/drivers/create", json={}, headers=headers
+        )
         assert resp.status_code in [400, 404, 405, 429]
         data = resp.get_json() if resp.status_code != 429 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -3311,7 +3723,9 @@ class TestCompaniesMisc:
 
     def test_company_client_reservations_list(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.get("/api/v1/companies/me/clients/999999/reservations", headers=headers)
+        resp = client.get(
+            "/api/v1/companies/me/clients/999999/reservations", headers=headers
+        )
         assert resp.status_code in [200, 404, 405]
         _ = resp.get_json() if resp.is_json else None
 
@@ -3335,9 +3749,16 @@ class TestCompaniesReservationById:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
 
-        claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+        claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
+            token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=claims
+            )
         return {"Authorization": f"Bearer {token}"}
 
     def test_company_reservation_get_invalid(self, client, db, sample_company):
@@ -3348,7 +3769,9 @@ class TestCompaniesReservationById:
 
     def test_company_reservation_delete_invalid(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.delete("/api/v1/companies/me/reservations/999999", headers=headers)
+        resp = client.delete(
+            "/api/v1/companies/me/reservations/999999", headers=headers
+        )
         assert resp.status_code in [200, 404, 405]
 
 
@@ -3364,9 +3787,16 @@ class TestCompaniesAssignedReservations:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
 
-        claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+        claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
+            token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=claims
+            )
         return {"Authorization": f"Bearer {token}"}
 
     def test_company_assigned_reservations_list(self, client, db, sample_company):
@@ -3388,9 +3818,16 @@ class TestCompaniesDriverById:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
 
-        claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+        claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
+            token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=claims
+            )
         return {"Authorization": f"Bearer {token}"}
 
     def test_company_driver_get_invalid(self, client, db, sample_company):
@@ -3401,7 +3838,9 @@ class TestCompaniesDriverById:
 
     def test_company_driver_update_invalid(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.put("/api/v1/companies/me/drivers/999999", json={}, headers=headers)
+        resp = client.put(
+            "/api/v1/companies/me/drivers/999999", json={}, headers=headers
+        )
         assert resp.status_code in [200, 400, 404, 405]
         _ = resp.get_json() if resp.is_json else None
 
@@ -3423,9 +3862,16 @@ class TestCompaniesDispatch:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
         from flask_jwt_extended import create_access_token
 
-        claims = {"role": UserRole.company.value, "company_id": sample_company.id, "driver_id": None, "aud": "atmr-api"}
+        claims = {
+            "role": UserRole.company.value,
+            "company_id": sample_company.id,
+            "driver_id": None,
+            "aud": "atmr-api",
+        }
         with client.application.app_context():
-            token = create_access_token(identity=str(company_user.public_id), additional_claims=claims)
+            token = create_access_token(
+                identity=str(company_user.public_id), additional_claims=claims
+            )
         return {"Authorization": f"Bearer {token}"}
 
     def test_company_dispatch_status(self, client, db, sample_company):
@@ -3436,12 +3882,16 @@ class TestCompaniesDispatch:
 
     def test_company_dispatch_activate(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.post("/api/v1/companies/me/dispatch/activate", json={}, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/dispatch/activate", json={}, headers=headers
+        )
         assert resp.status_code in [200, 400, 404]
         _ = resp.get_json() if resp.is_json else None
 
     def test_company_dispatch_deactivate(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        resp = client.post("/api/v1/companies/me/dispatch/deactivate", json={}, headers=headers)
+        resp = client.post(
+            "/api/v1/companies/me/dispatch/deactivate", json={}, headers=headers
+        )
         assert resp.status_code in [200, 400, 404]
         _ = resp.get_json() if resp.is_json else None

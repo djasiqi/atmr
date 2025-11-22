@@ -71,7 +71,9 @@ class VaultClient:
 
         # Détection automatique : utiliser Vault si VAULT_ADDR est défini
         if use_vault is None:
-            use_vault = bool(os.getenv(USE_VAULT_ENV, "").lower() == "true" or self.vault_addr)
+            use_vault = bool(
+                os.getenv(USE_VAULT_ENV, "").lower() == "true" or self.vault_addr
+            )
 
         self.use_vault = use_vault and HVAC_AVAILABLE
         self.cache_ttl = cache_ttl
@@ -79,9 +81,13 @@ class VaultClient:
 
         if self.use_vault:
             self._init_client()
-            logger.info("[4.1 Vault] Client Vault initialisé (addr=%s)", self.vault_addr)
+            logger.info(
+                "[4.1 Vault] Client Vault initialisé (addr=%s)", self.vault_addr
+            )
         else:
-            logger.info("[4.1 Vault] Vault désactivé, utilisation des variables d'environnement")
+            logger.info(
+                "[4.1 Vault] Vault désactivé, utilisation des variables d'environnement"
+            )
 
     def _init_client(self) -> None:
         """Initialise le client hvac."""
@@ -100,10 +106,14 @@ class VaultClient:
                 self._client.token = self.vault_token
             elif self.role_id and self.secret_id:
                 # AppRole (production)
-                response = self._client.auth.approle.login(role_id=self.role_id, secret_id=self.secret_id)
+                response = self._client.auth.approle.login(
+                    role_id=self.role_id, secret_id=self.secret_id
+                )
                 self._client.token = response["auth"]["client_token"]
             else:
-                logger.warning("[4.1 Vault] Aucune authentification configurée, désactivation")
+                logger.warning(
+                    "[4.1 Vault] Aucune authentification configurée, désactivation"
+                )
                 self.use_vault = False
                 return
 
@@ -114,7 +124,9 @@ class VaultClient:
             logger.debug("[4.1 Vault] Authentification Vault réussie")
 
         except Exception as e:
-            logger.warning("[4.1 Vault] Erreur initialisation client: %s, fallback .env", e)
+            logger.warning(
+                "[4.1 Vault] Erreur initialisation client: %s, fallback .env", e
+            )
             self.use_vault = False
             self._client = None
 
@@ -155,10 +167,14 @@ class VaultClient:
             try:
                 # KV v2 path format: secret/data/path
                 vault_path = (
-                    f"atmr/data/{path}" if not path.startswith("atmr/") else f"{path.replace('atmr/', 'atmr/data/')}"
+                    f"atmr/data/{path}"
+                    if not path.startswith("atmr/")
+                    else f"{path.replace('atmr/', 'atmr/data/')}"
                 )
 
-                response = self._client.secrets.kv.v2.read_secret_version(path=vault_path)
+                response = self._client.secrets.kv.v2.read_secret_version(
+                    path=vault_path
+                )
                 value = response["data"]["data"].get(key)
 
                 if value:
@@ -173,13 +189,17 @@ class VaultClient:
                     return value
 
             except Exception as e:
-                logger.warning("[4.1 Vault] Erreur lecture secret %s: %s, fallback .env", path, e)
+                logger.warning(
+                    "[4.1 Vault] Erreur lecture secret %s: %s, fallback .env", path, e
+                )
 
         # Fallback vers variable d'environnement
         if env_fallback:
             value = os.getenv(env_fallback)
             if value:
-                logger.debug("[4.1 Vault] Secret récupéré depuis .env: %s", env_fallback)
+                logger.debug(
+                    "[4.1 Vault] Secret récupéré depuis .env: %s", env_fallback
+                )
                 return value
 
         # Valeur par défaut
@@ -187,7 +207,12 @@ class VaultClient:
             logger.debug("[4.1 Vault] Utilisation valeur par défaut pour: %s", path)
             return default
 
-        logger.warning("[4.1 Vault] Secret non trouvé: %s (path=%s, key=%s)", env_fallback or path, path, key)
+        logger.warning(
+            "[4.1 Vault] Secret non trouvé: %s (path=%s, key=%s)",
+            env_fallback or path,
+            path,
+            key,
+        )
         return None
 
     def get_secret_required(
@@ -211,7 +236,9 @@ class VaultClient:
         """
         value = self.get_secret(path, key, env_fallback=env_fallback)
         if value is None:
-            raise RuntimeError(f"Secret requis non trouvé: {path}:{key} (env: {env_fallback})")
+            raise RuntimeError(
+                f"Secret requis non trouvé: {path}:{key} (env: {env_fallback})"
+            )
         return value
 
     def get_database_credentials(self, role: str = "atmr-db-role") -> dict[str, str]:

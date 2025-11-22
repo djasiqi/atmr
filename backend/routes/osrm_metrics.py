@@ -12,7 +12,10 @@ from services.osrm_client import _osrm_circuit_breaker
 
 logger = logging.getLogger(__name__)
 
-ns_osrm_metrics = Namespace("osrm-metrics", description="Métriques et état du client OSRM (timeouts, circuit-breaker)")
+ns_osrm_metrics = Namespace(
+    "osrm-metrics",
+    description="Métriques et état du client OSRM (timeouts, circuit-breaker)",
+)
 
 
 @ns_osrm_metrics.route("/status")
@@ -67,4 +70,6 @@ class OsrmReset(Resource):
             cb.last_failure_time = None
             cb.state = "CLOSED"
         logger.warning("[OSRM] Circuit-breaker réinitialisé manuellement via API")
-        return jsonify({"status": "ok", "message": "Circuit-breaker reset to CLOSED state"})
+        return jsonify(
+            {"status": "ok", "message": "Circuit-breaker reset to CLOSED state"}
+        )

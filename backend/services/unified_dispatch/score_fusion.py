@@ -9,7 +9,9 @@ from typing import Any, Dict, Tuple
 logger = logging.getLogger(__name__)
 
 
-def fuse_scores(heuristic_score: float, rl_score: float, alpha: float) -> Tuple[float, Dict[str, Any]]:
+def fuse_scores(
+    heuristic_score: float, rl_score: float, alpha: float
+) -> Tuple[float, Dict[str, Any]]:
     """Fusionne les scores heuristique et RL.
 
     Args:
@@ -26,7 +28,12 @@ def fuse_scores(heuristic_score: float, rl_score: float, alpha: float) -> Tuple[
     # Fusion linéaire
     final_score = (1 - alpha) * heuristic_score + alpha * rl_score_normalized
 
-    breakdown = {"heuristic": heuristic_score, "rl": rl_score_normalized, "alpha": alpha, "final": final_score}
+    breakdown = {
+        "heuristic": heuristic_score,
+        "rl": rl_score_normalized,
+        "alpha": alpha,
+        "final": final_score,
+    }
 
     logger.debug(
         "[ScoreFusion] heur=%.2f, rl=%.2f, alpha=%.2f → final=%.2f",
@@ -39,7 +46,9 @@ def fuse_scores(heuristic_score: float, rl_score: float, alpha: float) -> Tuple[
     return final_score, breakdown
 
 
-def should_use_rl_score(enable_rl: bool, enable_rl_apply: bool, has_rl_score: bool) -> bool:
+def should_use_rl_score(
+    enable_rl: bool, enable_rl_apply: bool, has_rl_score: bool
+) -> bool:
     """Détermine si le score RL doit être utilisé.
 
     Args:

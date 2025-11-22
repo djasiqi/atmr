@@ -25,10 +25,22 @@ def upgrade():
         sa.Column("driver_id", sa.Integer(), nullable=False),
         sa.Column("start_local", sa.DateTime(), nullable=False),
         sa.Column("end_local", sa.DateTime(), nullable=False),
-        sa.Column("timezone", sa.String(length=64), nullable=False, server_default="Europe/Zurich"),
+        sa.Column(
+            "timezone",
+            sa.String(length=64),
+            nullable=False,
+            server_default="Europe/Zurich",
+        ),
         sa.Column(
             "type",
-            sa.Enum("regular", "standby", "replacement", "training", "maintenance", name="shift_type"),
+            sa.Enum(
+                "regular",
+                "standby",
+                "replacement",
+                "training",
+                "maintenance",
+                name="shift_type",
+            ),
             server_default="regular",
             nullable=False,
         ),
@@ -47,25 +59,53 @@ def upgrade():
         sa.Column("notes_employee", sa.Text(), nullable=True),
         sa.Column("created_by_user_id", sa.Integer(), nullable=True),
         sa.Column("updated_by_user_id", sa.Integer(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("version", sa.Integer(), server_default="1", nullable=False),
-        sa.Column("compliance_flags", sa.JSON(), server_default=sa.text("'[]'"), nullable=False),
+        sa.Column(
+            "compliance_flags",
+            sa.JSON(),
+            server_default=sa.text("'[]'"),
+            nullable=False,
+        ),
         sa.CheckConstraint("end_local > start_local", name="ck_shift_time_order"),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["created_by_user_id"], ["user.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["updated_by_user_id"], ["user.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["created_by_user_id"], ["user.id"], ondelete="SET NULL"
+        ),
+        sa.ForeignKeyConstraint(
+            ["updated_by_user_id"], ["user.id"], ondelete="SET NULL"
+        ),
         sa.ForeignKeyConstraint(["driver_id"], ["driver.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["vehicle_id"], ["vehicle.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("driver_shift", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_driver_shift_company_id"), ["company_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_driver_shift_driver_id"), ["driver_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_driver_shift_end_local"), ["end_local"], unique=False)
-        batch_op.create_index(batch_op.f("ix_driver_shift_start_local"), ["start_local"], unique=False)
-        batch_op.create_index("ix_shift_company_driver_start", ["company_id", "driver_id", "start_local"], unique=False)
-        batch_op.create_index(batch_op.f("ix_driver_shift_vehicle_id"), ["vehicle_id"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_driver_shift_company_id"), ["company_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_driver_shift_driver_id"), ["driver_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_driver_shift_end_local"), ["end_local"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_driver_shift_start_local"), ["start_local"], unique=False
+        )
+        batch_op.create_index(
+            "ix_shift_company_driver_start",
+            ["company_id", "driver_id", "start_local"],
+            unique=False,
+        )
+        batch_op.create_index(
+            batch_op.f("ix_driver_shift_vehicle_id"), ["vehicle_id"], unique=False
+        )
 
     op.create_table(
         "driver_unavailability",
@@ -76,7 +116,14 @@ def upgrade():
         sa.Column("end_local", sa.DateTime(), nullable=False),
         sa.Column(
             "reason",
-            sa.Enum("vacation", "sick", "break", "personal", "other", name="unavailability_reason"),
+            sa.Enum(
+                "vacation",
+                "sick",
+                "break",
+                "personal",
+                "other",
+                name="unavailability_reason",
+            ),
             server_default="other",
             nullable=False,
         ),
@@ -87,11 +134,31 @@ def upgrade():
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("driver_unavailability", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_driver_unavailability_company_id"), ["company_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_driver_unavailability_driver_id"), ["driver_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_driver_unavailability_end_local"), ["end_local"], unique=False)
-        batch_op.create_index(batch_op.f("ix_driver_unavailability_start_local"), ["start_local"], unique=False)
-        batch_op.create_index("ix_unav_company_driver_start", ["company_id", "driver_id", "start_local"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_driver_unavailability_company_id"),
+            ["company_id"],
+            unique=False,
+        )
+        batch_op.create_index(
+            batch_op.f("ix_driver_unavailability_driver_id"),
+            ["driver_id"],
+            unique=False,
+        )
+        batch_op.create_index(
+            batch_op.f("ix_driver_unavailability_end_local"),
+            ["end_local"],
+            unique=False,
+        )
+        batch_op.create_index(
+            batch_op.f("ix_driver_unavailability_start_local"),
+            ["start_local"],
+            unique=False,
+        )
+        batch_op.create_index(
+            "ix_unav_company_driver_start",
+            ["company_id", "driver_id", "start_local"],
+            unique=False,
+        )
 
     op.create_table(
         "driver_weekly_template",
@@ -104,15 +171,29 @@ def upgrade():
         sa.Column("effective_from", sa.Date(), nullable=False),
         sa.Column("effective_to", sa.Date(), nullable=True),
         sa.CheckConstraint("end_time > start_time", name="ck_tpl_time_order"),
-        sa.CheckConstraint("weekday >= 0 AND weekday <= 6", name="ck_tpl_weekday_range"),
+        sa.CheckConstraint(
+            "weekday >= 0 AND weekday <= 6", name="ck_tpl_weekday_range"
+        ),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["driver_id"], ["driver.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("driver_weekly_template", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_driver_weekly_template_company_id"), ["company_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_driver_weekly_template_driver_id"), ["driver_id"], unique=False)
-        batch_op.create_index("ix_tpl_company_driver_weekday", ["company_id", "driver_id", "weekday"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_driver_weekly_template_company_id"),
+            ["company_id"],
+            unique=False,
+        )
+        batch_op.create_index(
+            batch_op.f("ix_driver_weekly_template_driver_id"),
+            ["driver_id"],
+            unique=False,
+        )
+        batch_op.create_index(
+            "ix_tpl_company_driver_weekday",
+            ["company_id", "driver_id", "weekday"],
+            unique=False,
+        )
 
     op.create_table(
         "driver_break",
@@ -121,16 +202,25 @@ def upgrade():
         sa.Column("start_local", sa.DateTime(), nullable=False),
         sa.Column("end_local", sa.DateTime(), nullable=False),
         sa.Column(
-            "type", sa.Enum("mandatory", "optional", name="break_type"), server_default="mandatory", nullable=False
+            "type",
+            sa.Enum("mandatory", "optional", name="break_type"),
+            server_default="mandatory",
+            nullable=False,
         ),
         sa.CheckConstraint("end_local > start_local", name="ck_break_time_order"),
         sa.ForeignKeyConstraint(["shift_id"], ["driver_shift.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("driver_break", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_driver_break_end_local"), ["end_local"], unique=False)
-        batch_op.create_index(batch_op.f("ix_driver_break_shift_id"), ["shift_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_driver_break_start_local"), ["start_local"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_driver_break_end_local"), ["end_local"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_driver_break_shift_id"), ["shift_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_driver_break_start_local"), ["start_local"], unique=False
+        )
 
     # Preferences
     op.create_table(
@@ -138,25 +228,47 @@ def upgrade():
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("driver_id", sa.Integer(), nullable=False),
-        sa.Column("mornings_pref", sa.Boolean(), server_default="false", nullable=False),
-        sa.Column("evenings_pref", sa.Boolean(), server_default="false", nullable=False),
-        sa.Column("forbidden_windows", sa.JSON(), server_default=sa.text("'[]'"), nullable=False),
-        sa.Column("weekend_rotation_weight", sa.Integer(), server_default="0", nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "mornings_pref", sa.Boolean(), server_default="false", nullable=False
+        ),
+        sa.Column(
+            "evenings_pref", sa.Boolean(), server_default="false", nullable=False
+        ),
+        sa.Column(
+            "forbidden_windows",
+            sa.JSON(),
+            server_default=sa.text("'[]'"),
+            nullable=False,
+        ),
+        sa.Column(
+            "weekend_rotation_weight", sa.Integer(), server_default="0", nullable=False
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["driver_id"], ["driver.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("driver_preference", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_driver_preference_company_id"), ["company_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_driver_preference_driver_id"), ["driver_id"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_driver_preference_company_id"), ["company_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_driver_preference_driver_id"), ["driver_id"], unique=False
+        )
 
     # Company settings
     op.create_table(
         "company_planning_settings",
         sa.Column("company_id", sa.Integer(), nullable=False),
-        sa.Column("settings", sa.JSON(), server_default=sa.text("'{}'"), nullable=False),
+        sa.Column(
+            "settings", sa.JSON(), server_default=sa.text("'{}'"), nullable=False
+        ),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("company_id"),
     )

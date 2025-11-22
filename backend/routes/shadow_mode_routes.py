@@ -242,7 +242,9 @@ def toggle_shadow_mode_session():
     new_count = max(current - 1, 0)
     _set_count_in_store(new_count)
     _set_state_in_store(new_count > 0)
-    return jsonify({"status": "deactivated", "active": new_count > 0, "count": new_count}), 200
+    return jsonify(
+        {"status": "deactivated", "active": new_count > 0, "count": new_count}
+    ), 200
 
 
 @reports_ns.route("/daily/<string:company_id>")
@@ -351,7 +353,10 @@ class KPIMetrics(Resource):
             summary = shadow_manager.get_company_summary(company_id, days)
 
             if summary.get("total_decisions", 0) == 0:
-                return {"company_id": company_id, "message": "Aucune donnée disponible pour cette période"}, 200
+                return {
+                    "company_id": company_id,
+                    "message": "Aucune donnée disponible pour cette période",
+                }, 200
 
             # Filtrer par métrique si spécifiée
             if metric:
@@ -362,13 +367,22 @@ class KPIMetrics(Resource):
                 metric_data = []
                 for i in range(days):
                     date = start_date + timedelta(days=i)
-                    company_data = shadow_manager._filter_data_by_company_and_date(company_id, date)
+                    company_data = shadow_manager._filter_data_by_company_and_date(
+                        company_id, date
+                    )
 
                     for kpi in company_data["kpis"]:
                         if metric in kpi:
-                            metric_data.append({"date": date.isoformat(), "value": kpi[metric]})
+                            metric_data.append(
+                                {"date": date.isoformat(), "value": kpi[metric]}
+                            )
 
-                return {"company_id": company_id, "metric": metric, "period_days": days, "data": metric_data}, 200
+                return {
+                    "company_id": company_id,
+                    "metric": metric,
+                    "period_days": days,
+                    "data": metric_data,
+                }, 200
 
             # Retourner toutes les métriques
             return {
@@ -424,14 +438,26 @@ class ExportData(Resource):
                             "company_id": report["company_id"],
                             "date": report["date"],
                             "total_decisions": report["total_decisions"],
-                            "agreement_rate": report.get("statistics", {}).get("agreement_rate", 0),
-                            "avg_eta_delta": report.get("statistics", {}).get("eta_delta", {}).get("mean", 0),
-                            "avg_delay_delta": report.get("statistics", {}).get("delay_delta", {}).get("mean", 0),
-                            "rl_confidence": report.get("statistics", {}).get("rl_confidence", {}).get("mean", 0),
+                            "agreement_rate": report.get("statistics", {}).get(
+                                "agreement_rate", 0
+                            ),
+                            "avg_eta_delta": report.get("statistics", {})
+                            .get("eta_delta", {})
+                            .get("mean", 0),
+                            "avg_delay_delta": report.get("statistics", {})
+                            .get("delay_delta", {})
+                            .get("mean", 0),
+                            "rl_confidence": report.get("statistics", {})
+                            .get("rl_confidence", {})
+                            .get("mean", 0),
                         }
                     )
 
-                return {"format": "csv", "data": csv_data, "message": "Données prêtes pour conversion CSV"}, 200
+                return {
+                    "format": "csv",
+                    "data": csv_data,
+                    "message": "Données prêtes pour conversion CSV",
+                }, 200
 
             if export_format == "both":
                 return {
@@ -463,12 +489,24 @@ class ExportData(Resource):
                     "company_id": report["company_id"],
                     "date": report["date"],
                     "total_decisions": report["total_decisions"],
-                    "agreement_rate": report.get("statistics", {}).get("agreement_rate", 0),
-                    "avg_eta_delta": report.get("statistics", {}).get("eta_delta", {}).get("mean", 0),
-                    "avg_delay_delta": report.get("statistics", {}).get("delay_delta", {}).get("mean", 0),
-                    "rl_confidence": report.get("statistics", {}).get("rl_confidence", {}).get("mean", 0),
-                    "eta_improvement_rate": report.get("kpis_summary", {}).get("eta_improvement_rate", 0),
-                    "violation_rate": report.get("kpis_summary", {}).get("violation_rate", 0),
+                    "agreement_rate": report.get("statistics", {}).get(
+                        "agreement_rate", 0
+                    ),
+                    "avg_eta_delta": report.get("statistics", {})
+                    .get("eta_delta", {})
+                    .get("mean", 0),
+                    "avg_delay_delta": report.get("statistics", {})
+                    .get("delay_delta", {})
+                    .get("mean", 0),
+                    "rl_confidence": report.get("statistics", {})
+                    .get("rl_confidence", {})
+                    .get("mean", 0),
+                    "eta_improvement_rate": report.get("kpis_summary", {}).get(
+                        "eta_improvement_rate", 0
+                    ),
+                    "violation_rate": report.get("kpis_summary", {}).get(
+                        "violation_rate", 0
+                    ),
                 }
             )
         return csv_data
@@ -508,10 +546,14 @@ def list_companies():
                 }
             )
 
-        return jsonify({"companies": company_stats, "total_companies": len(companies)}), 200
+        return jsonify(
+            {"companies": company_stats, "total_companies": len(companies)}
+        ), 200
 
     except Exception as e:
-        return jsonify({"error": f"Erreur lors de la récupération des entreprises: {e}"}), 500
+        return jsonify(
+            {"error": f"Erreur lors de la récupération des entreprises: {e}"}
+        ), 500
 
 
 def register_shadow_mode_routes(app):

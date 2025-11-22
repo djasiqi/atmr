@@ -24,9 +24,15 @@ def upgrade():
     with op.batch_alter_table("booking", schema=None) as batch_op:
         batch_op.add_column(sa.Column("invoice_line_id", sa.Integer(), nullable=True))
         batch_op.create_foreign_key(
-            "fk_booking_invoice_line", "invoice_lines", ["invoice_line_id"], ["id"], ondelete="SET NULL"
+            "fk_booking_invoice_line",
+            "invoice_lines",
+            ["invoice_line_id"],
+            ["id"],
+            ondelete="SET NULL",
         )
-        batch_op.create_index("ix_booking_invoice_line_id", ["invoice_line_id"], unique=False)
+        batch_op.create_index(
+            "ix_booking_invoice_line_id", ["invoice_line_id"], unique=False
+        )
 
     # ### end Alembic commands ###
 

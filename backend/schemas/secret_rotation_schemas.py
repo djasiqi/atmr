@@ -10,7 +10,9 @@ class SecretRotationMonitoringQuerySchema(LimitOffsetQuerySchema):
 
     secret_type = fields.Str(
         load_default=None,
-        validate=validate.Length(max=50, error="secret_type doit faire max 50 caractères"),
+        validate=validate.Length(
+            max=50, error="secret_type doit faire max 50 caractères"
+        ),
         allow_none=True,
     )
     status = fields.Str(
@@ -20,7 +22,9 @@ class SecretRotationMonitoringQuerySchema(LimitOffsetQuerySchema):
     )
     environment = fields.Str(
         load_default=None,
-        validate=validate.Length(max=50, error="environment doit faire max 50 caractères"),
+        validate=validate.Length(
+            max=50, error="environment doit faire max 50 caractères"
+        ),
         allow_none=True,
     )
 

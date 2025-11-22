@@ -48,13 +48,17 @@ class RLGainTracker:
         self.gains_history.append(result)
 
         # Recalculer median gain (14 derniers jours)
-        recent_gains = [r.delta_quality for r in self.gains_history[-14:] if r.gain_detected]
+        recent_gains = [
+            r.delta_quality for r in self.gains_history[-14:] if r.gain_detected
+        ]
 
         if recent_gains:
             sorted_gains = sorted(recent_gains)
             n = len(sorted_gains)
             self.median_gain = (
-                sorted_gains[n // 2] if n % 2 == 1 else (sorted_gains[n // 2 - 1] + sorted_gains[n // 2]) / 2
+                sorted_gains[n // 2]
+                if n % 2 == 1
+                else (sorted_gains[n // 2 - 1] + sorted_gains[n // 2]) / 2
             )
 
             # ✅ B4: Augmenter rollout si gain médian >= seuil minimum
@@ -74,7 +78,9 @@ def get_or_create_rl_tracker(company_id: int) -> RLGainTracker:
     return RLGainTracker(company_id=company_id, gains_history=[])
 
 
-def evaluate_rl_gain(company_id: int, heuristic_result: Any, rl_result: Any) -> RLABResult:
+def evaluate_rl_gain(
+    company_id: int, heuristic_result: Any, rl_result: Any
+) -> RLABResult:
     """Évalue le gain RL vs heuristique.
 
     Args:

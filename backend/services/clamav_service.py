@@ -58,7 +58,9 @@ def scan_bytes(file_bytes: bytes) -> tuple[bool, Optional[str]]:
         # Analyse du résultat
         if "FOUND" in result:
             # Virus détecté
-            virus_name = result.split("FOUND")[0].strip() if "FOUND" in result else "Unknown"
+            virus_name = (
+                result.split("FOUND")[0].strip() if "FOUND" in result else "Unknown"
+            )
             logger.warning("🦠 ClamAV: Virus détecté - %s", virus_name)
             return False, f"Fichier infecté détecté: {virus_name}"
 

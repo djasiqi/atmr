@@ -116,7 +116,11 @@ class TestShadowModeManager:
         """Test enregistrement de comparaison avec retard."""
         manager = ShadowModeManager()
 
-        human_decision = {"driver_id": "driver_1", "eta_minutes": 15, "delay_minutes": 5}
+        human_decision = {
+            "driver_id": "driver_1",
+            "eta_minutes": 15,
+            "delay_minutes": 5,
+        }
         rl_decision = {"driver_id": "driver_2", "eta_minutes": 12, "delay_minutes": 2}
         context = {"booking_id": "booking_4", "company_id": "company_4"}
 
@@ -182,8 +186,14 @@ class TestShadowModeManager:
         """Test enregistrement de comparaison avec valeurs None."""
         manager = ShadowModeManager()
 
-        human_decision = {"driver_id": None, "eta_minutes": 0}  # Utiliser 0 au lieu de None
-        rl_decision = {"driver_id": None, "eta_minutes": 0}  # Utiliser 0 au lieu de None
+        human_decision = {
+            "driver_id": None,
+            "eta_minutes": 0,
+        }  # Utiliser 0 au lieu de None
+        rl_decision = {
+            "driver_id": None,
+            "eta_minutes": 0,
+        }  # Utiliser 0 au lieu de None
         context = {"booking_id": "booking_9", "company_id": "company_9"}
 
         kpis = manager.log_decision_comparison(
@@ -206,7 +216,11 @@ class TestShadowModeManager:
 
         # Mock pour lever une exception
         with (
-            patch.object(manager, "_calculate_kpis", side_effect=Exception("KPI calculation error")),
+            patch.object(
+                manager,
+                "_calculate_kpis",
+                side_effect=Exception("KPI calculation error"),
+            ),
             pytest.raises(Exception, match="KPI calculation error"),
         ):
             manager.log_decision_comparison(

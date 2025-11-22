@@ -67,8 +67,20 @@ class TestDriverSchema:
     def test_serialize_drivers_multiple(self):
         """Sérialisation liste de drivers."""
         data = [
-            {"id": 1, "first_name": "Jean", "last_name": "Dupont", "is_available": True, "is_active": True},
-            {"id": 2, "first_name": "Marie", "last_name": "Martin", "is_available": False, "is_active": True},
+            {
+                "id": 1,
+                "first_name": "Jean",
+                "last_name": "Dupont",
+                "is_available": True,
+                "is_active": True,
+            },
+            {
+                "id": 2,
+                "first_name": "Marie",
+                "last_name": "Martin",
+                "is_available": False,
+                "is_active": True,
+            },
         ]
 
         result = cast("list[dict[str, Any]]", drivers_schema.dump(data))
@@ -345,7 +357,9 @@ class TestDispatchResultSchema:
             "quality_score": 90.0,
             "solver_time_seconds": 8.5,
             "total_time_seconds": 12.0,
-            "suggestions": [{"action": "notify", "assignment_id": 1, "priority": "low"}],
+            "suggestions": [
+                {"action": "notify", "assignment_id": 1, "priority": "low"}
+            ],
         }
 
         result = cast("dict[str, Any]", dispatch_result_schema.dump(data))

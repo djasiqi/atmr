@@ -144,7 +144,10 @@ class TestDispatchProfiler:
 
         # Vérifier que les temps sont > 0
         assert profiler.function_times["test_stage_1"] > 0
-        assert profiler.function_times["test_stage_2"] > profiler.function_times["test_stage_1"]
+        assert (
+            profiler.function_times["test_stage_2"]
+            > profiler.function_times["test_stage_1"]
+        )
 
         logger.info("✅ Test: Temps de stages trackés")
 

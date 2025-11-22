@@ -48,11 +48,18 @@ class Client(db.Model):
         UniqueConstraint("user_id", "company_id", name="uq_user_company"),
         Index("ix_client_company_active", "company_id", "is_active"),
         Index("ix_client_company_user", "company_id", "user_id"),
-        Index("uq_client_user_no_company", "user_id", unique=True, postgresql_where=text("company_id IS NULL")),
+        Index(
+            "uq_client_user_no_company",
+            "user_id",
+            unique=True,
+            postgresql_where=text("company_id IS NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     company_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("company.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -66,8 +73,12 @@ class Client(db.Model):
 
     # Coordonnées de facturation/contacts
     billing_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    billing_lat: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 7), nullable=True)
-    billing_lon: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 7), nullable=True)
+    billing_lat: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 7), nullable=True
+    )
+    billing_lon: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 7), nullable=True
+    )
     contact_email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
@@ -75,8 +86,12 @@ class Client(db.Model):
     domicile_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     domicile_zip: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     domicile_city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    domicile_lat: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 7), nullable=True)
-    domicile_lon: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 7), nullable=True)
+    domicile_lat: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 7), nullable=True
+    )
+    domicile_lon: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 7), nullable=True
+    )
 
     # Accès logement
     door_code: Mapped[str] = mapped_column(String(50), nullable=True)
@@ -88,8 +103,12 @@ class Client(db.Model):
     gp_phone: Mapped[str] = mapped_column(String(50), nullable=True)
 
     # Préférences de facturation par défaut
-    default_billed_to_type = Column(String(50), nullable=False, server_default="patient")
-    default_billed_to_company_id = Column(Integer, ForeignKey("company.id", ondelete="SET NULL"), nullable=True)
+    default_billed_to_type = Column(
+        String(50), nullable=False, server_default="patient"
+    )
+    default_billed_to_company_id = Column(
+        Integer, ForeignKey("company.id", ondelete="SET NULL"), nullable=True
+    )
     default_billed_to_contact: Mapped[str] = mapped_column(String(120), nullable=True)
 
     # Support institutions
@@ -101,31 +120,51 @@ class Client(db.Model):
     residence_facility: Mapped[str] = mapped_column(String(200), nullable=True)
 
     # Tarif préférentiel
-    preferential_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    preferential_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )
 
     is_active = Column(Boolean, nullable=False, server_default="true")
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
     # ✅ D2: Colonnes chiffrées
     contact_phone_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     gp_name_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     gp_phone_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    billing_address_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    billing_address_encrypted: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )
     encryption_migrated = Column(Boolean, default=False, nullable=False)
 
     # Relations
     user = relationship("User", back_populates="clients", passive_deletes=True)
-    company = relationship("Company", back_populates="clients", foreign_keys=[company_id], passive_deletes=True)
-    default_billed_to_company = relationship(
-        "Company", back_populates="billed_clients", foreign_keys=[default_billed_to_company_id]
+    company = relationship(
+        "Company",
+        back_populates="clients",
+        foreign_keys=[company_id],
+        passive_deletes=True,
     )
-    bookings = relationship("Booking", back_populates="client", passive_deletes=True, lazy=True)
-    payments = relationship("Payment", back_populates="client", passive_deletes=True, lazy=True)
+    default_billed_to_company = relationship(
+        "Company",
+        back_populates="billed_clients",
+        foreign_keys=[default_billed_to_company_id],
+    )
+    bookings = relationship(
+        "Booking", back_populates="client", passive_deletes=True, lazy=True
+    )
+    payments = relationship(
+        "Payment", back_populates="client", passive_deletes=True, lazy=True
+    )
 
     # Validators
     @validates("contact_email")
     def validate_contact_email(self, _key: str, email: Optional[str]) -> Optional[str]:
-        if cast("ClientType", self.client_type) == ClientType.SELF_SERVICE and not email:
+        if (
+            cast("ClientType", self.client_type) == ClientType.SELF_SERVICE
+            and not email
+        ):
             msg = "L'email est requis pour les clients self-service."
             raise ValueError(msg)
         if email:
@@ -137,7 +176,9 @@ class Client(db.Model):
         return email
 
     @validates("billing_address")
-    def validate_billing_address(self, _key: str, value: Optional[str]) -> Optional[str]:
+    def validate_billing_address(
+        self, _key: str, value: Optional[str]
+    ) -> Optional[str]:
         cid = _as_int(getattr(self, "company_id", None))
         if cid > CID_ZERO and (not value or not str(value).strip()):
             # Si pas d'adresse de facturation, utiliser l'adresse de domicile
@@ -196,7 +237,9 @@ class Client(db.Model):
             from security.crypto import get_encryption_service
 
             if value:
-                self.contact_phone_encrypted = get_encryption_service().encrypt_field(value)
+                self.contact_phone_encrypted = get_encryption_service().encrypt_field(
+                    value
+                )
                 self.encryption_migrated = True
                 self.contact_phone = None  # Ancienne colonne dépréciée
             else:
@@ -293,7 +336,9 @@ class Client(db.Model):
             from security.crypto import get_encryption_service
 
             if value:
-                self.billing_address_encrypted = get_encryption_service().encrypt_field(value)
+                self.billing_address_encrypted = get_encryption_service().encrypt_field(
+                    value
+                )
                 self.encryption_migrated = True
             else:
                 self.billing_address_encrypted = None
@@ -308,7 +353,9 @@ class Client(db.Model):
         last_name = getattr(user, "last_name", "") or ""
         username = getattr(user, "username", "") or ""
         phone_user = getattr(user, "phone", "") or ""
-        full_name = f"{first_name} {last_name}".strip() or username or "Nom non renseigné"
+        full_name = (
+            f"{first_name} {last_name}".strip() or username or "Nom non renseigné"
+        )
 
         return {
             "id": self.id,
@@ -319,16 +366,24 @@ class Client(db.Model):
             "client_type": self.client_type.value,
             "company_id": self.company_id,
             "billing_address": self.billing_address,
-            "billing_lat": float(self.billing_lat) if self.billing_lat is not None else None,
-            "billing_lon": float(self.billing_lon) if self.billing_lon is not None else None,
+            "billing_lat": float(self.billing_lat)
+            if self.billing_lat is not None
+            else None,
+            "billing_lon": float(self.billing_lon)
+            if self.billing_lon is not None
+            else None,
             "contact_email": self.contact_email,
             "phone": self.contact_phone or phone_user,
             "domicile": {
                 "address": self.domicile_address,
                 "zip": self.domicile_zip,
                 "city": self.domicile_city,
-                "lat": float(self.domicile_lat) if self.domicile_lat is not None else None,
-                "lon": float(self.domicile_lon) if self.domicile_lon is not None else None,
+                "lat": float(self.domicile_lat)
+                if self.domicile_lat is not None
+                else None,
+                "lon": float(self.domicile_lon)
+                if self.domicile_lon is not None
+                else None,
             },
             "access": {
                 "door_code": self.door_code,
@@ -342,14 +397,18 @@ class Client(db.Model):
             "default_billing": {
                 "billed_to_type": (self.default_billed_to_type or "patient"),
                 "billed_to_company": (
-                    self.default_billed_to_company.serialize if self.default_billed_to_company else None
+                    self.default_billed_to_company.serialize
+                    if self.default_billed_to_company
+                    else None
                 ),
                 "billed_to_contact": self.default_billed_to_contact,
             },
             "is_institution": _as_bool(self.is_institution),
             "institution_name": self.institution_name,
             "residence_facility": self.residence_facility,
-            "preferential_rate": float(self.preferential_rate) if self.preferential_rate is not None else None,
+            "preferential_rate": float(self.preferential_rate)
+            if self.preferential_rate is not None
+            else None,
             "is_active": _as_bool(self.is_active),
             "created_at": _iso(self.created_at),
         }
