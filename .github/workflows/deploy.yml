@@ -1,12 +1,25 @@
 # yaml-language-server: disable
 name: Build & Deploy
 
+# ⏸️ Workflow suspendu temporairement - focus sur lint
+on:
+  workflow_dispatch:  # Seulement déclenchement manuel autorisé
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - "backend/**"
+  #     - "docker-compose.yml"
+  #     - "docker-compose.production.yml"
+  #     - "pyrightconfig.json"
+  #     - "package.json"
+  #     - "package-lock.json"
+  #     - "prometheus/**"
+  #     - "vault/**"
+
 permissions:
   actions: write
   contents: read
   security-events: write
-
-on:
   push:
     branches: [main]
     paths:
