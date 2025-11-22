@@ -11,10 +11,17 @@ from schemas.analytics_schemas import (
     AnalyticsWeeklySummaryQuerySchema,
 )
 from schemas.auth_schemas import LoginSchema, RegisterSchema
-from schemas.booking_schemas import BookingCreateSchema, BookingListSchema, BookingUpdateSchema
+from schemas.booking_schemas import (
+    BookingCreateSchema,
+    BookingListSchema,
+    BookingUpdateSchema,
+)
 from schemas.company_schemas import ClientCreateSchema, ManualBookingCreateSchema
 from schemas.invoice_schemas import BillingSettingsUpdateSchema, InvoiceGenerateSchema
-from schemas.medical_schemas import MedicalEstablishmentQuerySchema, MedicalServiceQuerySchema
+from schemas.medical_schemas import (
+    MedicalEstablishmentQuerySchema,
+    MedicalServiceQuerySchema,
+)
 from schemas.payment_schemas import PaymentCreateSchema, PaymentStatusUpdateSchema
 from schemas.planning_schemas import (
     PlanningShiftsQuerySchema,
@@ -67,7 +74,11 @@ class TestRegisterSchema:
 
     def test_valid_register(self):
         """Test validation inscription valide."""
-        data = {"username": "testuser", "email": "test@example.com", "password": "password123"}
+        data = {
+            "username": "testuser",
+            "email": "test@example.com",
+            "password": "password123",
+        }
         result = validate_request(RegisterSchema(), data)
         assert result["username"] == "testuser"
         assert result["email"] == "test@example.com"
