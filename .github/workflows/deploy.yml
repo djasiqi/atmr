@@ -3,7 +3,7 @@ name: Build & Deploy
 
 # ⏸️ Workflow suspendu temporairement - focus sur lint
 on:
-  workflow_dispatch:  # Seulement déclenchement manuel autorisé
+  workflow_dispatch: # Seulement déclenchement manuel autorisé
   # push:
   #   branches: [main]
   #   paths:

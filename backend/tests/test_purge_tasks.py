@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime, timedelta
 
-
 from tasks.purge_tasks import (
     DEFAULT_RETENTION_DAYS,
     anonymize_old_user_data,

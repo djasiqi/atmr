@@ -5,7 +5,6 @@ Tests minimaux pour RLSuggestionGenerator - Version corrigée
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
-
 from services.rl.suggestion_generator import RLSuggestionGenerator
 
 

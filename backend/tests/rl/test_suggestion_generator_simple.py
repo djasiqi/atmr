@@ -5,7 +5,6 @@ Tests simplifiés pour RLSuggestionGenerator
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-
 from services.rl.suggestion_generator import RLSuggestionGenerator
 
 

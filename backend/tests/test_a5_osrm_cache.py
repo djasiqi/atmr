@@ -7,7 +7,6 @@ Teste que le cache OSRM fonctionne et que les métriques hit-rate sont correctes
 
 import logging
 
-
 from services.unified_dispatch.osrm_cache_metrics import (
     check_cache_alert,
     get_cache_hit_rate,

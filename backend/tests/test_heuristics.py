@@ -6,7 +6,6 @@ Coverage cible : 70%+
 
 from datetime import datetime, timedelta
 
-
 from models import BookingStatus
 from services.unified_dispatch.heuristics import (
     HeuristicAssignment,
