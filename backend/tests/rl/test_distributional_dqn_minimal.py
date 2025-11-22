@@ -4,7 +4,12 @@ Tests minimaux pour distributional_dqn.py - Version corrigée
 
 import torch
 
-from services.rl.distributional_dqn import C51Network, DistributionalLoss, QRNetwork, UncertaintyCapture
+from services.rl.distributional_dqn import (
+    C51Network,
+    DistributionalLoss,
+    QRNetwork,
+    UncertaintyCapture,
+)
 
 
 class TestDistributionalDQNMinimal:

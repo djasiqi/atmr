@@ -32,7 +32,14 @@ from typing_extensions import override
 from ext import db
 
 from .base import _as_bool, _as_int
-from .enums import BreakType, DriverType, ShiftStatus, ShiftType, UnavailabilityReason, VacationType
+from .enums import (
+    BreakType,
+    DriverType,
+    ShiftStatus,
+    ShiftType,
+    UnavailabilityReason,
+    VacationType,
+)
 
 WEEKDAY_ZERO = 0
 WEEKDAY_THRESHOLD = 6

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Any, List, Tuple, cast
+from typing import Any, List, Tuple
 
 from models import Booking
 from models.dispatch import Assignment
@@ -24,7 +24,9 @@ class AssignmentValidator:
         """
         super().__init__()
         self.settings = settings
-        self.min_minutes_before_pickup = getattr(settings.rl, "min_minutes_before_pickup", 10)
+        self.min_minutes_before_pickup = getattr(
+            settings.rl, "min_minutes_before_pickup", 10
+        )
 
     def validate_assignments(
         self, assignments: List[Assignment], bookings: List[Booking], drivers: List[Any]
@@ -48,15 +50,17 @@ class AssignmentValidator:
         # Vérifier chaque assignation
         for assignment in assignments:
             try:
-                booking_id = int(cast("Any", assignment.booking_id))
-                driver_id = int(cast("Any", assignment.driver_id))
+                booking_id = int(assignment.booking_id)
+                driver_id = int(assignment.driver_id)
             except (ValueError, TypeError):
                 continue
             booking = bookings_dict.get(booking_id)
             driver = drivers_dict.get(driver_id)
 
             if not booking or not driver:
-                violations.append(f"Assignment {assignment.id}: booking or driver not found")
+                violations.append(
+                    f"Assignment {assignment.id}: booking or driver not found"
+                )
                 continue
 
             # Vérifier min_minutes_before_pickup

@@ -5,7 +5,14 @@ Tests pour le masquage PII dans les logs (CWE-778).
 import logging
 from io import StringIO
 
-from shared.logging_utils import PIIFilter, mask_email, mask_gps_coords, mask_iban, mask_phone, sanitize_log_data
+from shared.logging_utils import (
+    PIIFilter,
+    mask_email,
+    mask_gps_coords,
+    mask_iban,
+    mask_phone,
+    sanitize_log_data,
+)
 
 
 def test_mask_email():

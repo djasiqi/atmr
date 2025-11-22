@@ -288,16 +288,16 @@ class DispatchMetricsCollector:
             # Utiliser driver_id directement (SQLAlchemy gère les types)
 
             if driver_id not in driver_times:
-                driver_times[driver_id] = []  # type: ignore
+                driver_times[driver_id] = []
 
             # Vérifier si un autre booking du même chauffeur est à moins de
             # 10min
-            for existing_time in driver_times[driver_id]:  # type: ignore
+            for existing_time in driver_times[driver_id]:
                 if abs((scheduled_time - existing_time).total_seconds()) <= POOLING_WINDOW_SECONDS:  # 10min
                     pooled += 1
                     break
 
-            driver_times[driver_id].append(scheduled_time)  # type: ignore
+            driver_times[driver_id].append(scheduled_time)
 
         return pooled
 
@@ -346,7 +346,7 @@ class DispatchMetricsCollector:
 
         for assignment in assignments:
             driver_id = assignment.driver_id
-            driver_counts[driver_id] = driver_counts.get(driver_id, 0) + 1  # type: ignore
+            driver_counts[driver_id] = driver_counts.get(driver_id, 0) + 1
 
         if not driver_counts:
             return {
@@ -424,7 +424,7 @@ class DispatchMetricsCollector:
         bookings_map = {b.id: b for b in all_bookings}
 
         for assignment in assignments:
-            booking = bookings_map.get(assignment.booking_id)  # type: ignore
+            booking = bookings_map.get(assignment.booking_id)
             if booking:
                 # Distance en km
                 distance_m = getattr(booking, "distance_meters", 0) or 0

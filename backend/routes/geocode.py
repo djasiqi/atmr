@@ -11,14 +11,25 @@ from flask_restx import Namespace, Resource
 from sqlalchemy import func
 
 from models import FavoritePlace
-from services.google_places import GooglePlacesError, autocomplete_address, geocode_address_google, get_place_details
+from services.google_places import (
+    GooglePlacesError,
+    autocomplete_address,
+    geocode_address_google,
+    get_place_details,
+)
 
-geocode_ns = Namespace("geocode", description="Autocomplete & géocodage avec Google Places API")
+geocode_ns = Namespace(
+    "geocode", description="Autocomplete & géocodage avec Google Places API"
+)
 
 # Configuration
 # Fallback si Google API indisponible
 PHOTON = os.getenv("PHOTON_BASE_URL", "https://photon.komoot.io")
-USE_GOOGLE_PLACES = os.getenv("USE_GOOGLE_PLACES", "true").lower() in ("true", "1", "yes")
+USE_GOOGLE_PLACES = os.getenv("USE_GOOGLE_PLACES", "true").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 # Constantes pour éviter les valeurs magiques
 MIN_COORDINATES_COUNT = 2
@@ -26,7 +37,12 @@ MIN_QUERY_LENGTH = 2
 
 # Biais géographique Genève (approx)
 GENEVA_CENTER: Tuple[float, float] = (46.2044, 6.1432)  # (lat, lon)
-GENEVA_BBOX: Tuple[float, float, float, float] = (6.02, 46.16, 6.27, 46.28)  # (minLon, minLat, maxLon, maxLat)
+GENEVA_BBOX: Tuple[float, float, float, float] = (
+    6.02,
+    46.16,
+    6.27,
+    46.28,
+)  # (minLon, minLat, maxLon, maxLat)
 
 # ===== Aliases canoniques (regex précompilées) =====
 ALIASES: List[Dict[str, Any]] = [
@@ -62,10 +78,14 @@ def match_alias(q: str) -> Dict[str, Any] | None:
 
 def looks_like_hospital(q: str) -> bool:
     t = (q or "").lower()
-    return any(w in t for w in ("hug", "hopital", "hôpital", "hospital", "clinique", "urgenc"))
+    return any(
+        w in t for w in ("hug", "hopital", "hôpital", "hospital", "clinique", "urgenc")
+    )
 
 
-def photon_query(q: str, lat: float, lon: float, limit: int, hospital_hint: bool) -> Dict[str, Any]:
+def photon_query(
+    q: str, lat: float, lon: float, limit: int, hospital_hint: bool
+) -> Dict[str, Any]:
     # Typer correctement params pour satisfaire mypy
     params: dict[str, str | int | float] = {
         "q": q,
@@ -101,7 +121,9 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
             country = props.get("country")
 
             # Construire l'adresse complète avec numéro et rue
-            street_with_number = " ".join(x for x in [street, housenumber] if x) if street else None
+            street_with_number = (
+                " ".join(x for x in [street, housenumber] if x) if street else None
+            )
 
             # Construire le label : nom OU adresse complète OU au moins la
             # ville
@@ -136,13 +158,18 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
             continue
 
     # Priorise les adresses avec n° + label pertinent
-    out.sort(key=lambda r: (r.get("housenumber") is None, (r.get("label") or "").lower()))
+    out.sort(
+        key=lambda r: (r.get("housenumber") is None, (r.get("label") or "").lower())
+    )
     return out
 
 
 @geocode_ns.route("/aliases")
 class GeocodeAliases(Resource):
-    @geocode_ns.doc(security=None, params={"q": "Texte à rechercher (ex: HUG, hôpital cantonal, ... )"})
+    @geocode_ns.doc(
+        security=None,
+        params={"q": "Texte à rechercher (ex: HUG, hôpital cantonal, ... )"},
+    )
     def get(self):
         q = request.args.get("q", "")
         hit = match_alias(q)
@@ -215,9 +242,10 @@ class GeocodeAutocomplete(Resource):
                 like_q = f"%{q.lower()}%"
                 favs = (
                     FavoritePlace.query.filter(
-                        cast("Any", FavoritePlace.company_id) == int(company_id), _like_ci(FavoritePlace.label, like_q)
+                        FavoritePlace.company_id == int(company_id),
+                        _like_ci(FavoritePlace.label, like_q),
                     )
-                    .order_by(cast("Any", FavoritePlace.label).asc())
+                    .order_by(FavoritePlace.label.asc())
                     .limit(6)
                     .all()
                 )
@@ -239,7 +267,9 @@ class GeocodeAutocomplete(Resource):
         if USE_GOOGLE_PLACES:
             try:
                 # Appel à Google Places Autocomplete
-                google_results = autocomplete_address(q, location={"lat": lat, "lng": lon}, limit=limit)
+                google_results = autocomplete_address(
+                    q, location={"lat": lat, "lng": lon}, limit=limit
+                )
 
                 for pred in google_results:
                     # Pour chaque prédiction, on peut optionnellement récupérer les coordonnées
@@ -261,17 +291,31 @@ class GeocodeAutocomplete(Resource):
                         }
                     )
             except GooglePlacesError as e:
-                current_app.logger.warning("⚠️ Google Places API error, falling back to Photon: %s", e)
+                current_app.logger.warning(
+                    "⚠️ Google Places API error, falling back to Photon: %s", e
+                )
                 # Fallback vers Photon si Google échoue
                 try:
-                    ph = photon_query(q, lat=0.0, lon=0.0, limit=limit, hospital_hint=looks_like_hospital(q))
+                    ph = photon_query(
+                        q,
+                        lat=0.0,
+                        lon=0.0,
+                        limit=limit,
+                        hospital_hint=looks_like_hospital(q),
+                    )
                     results.extend(normalize_photon(ph))
                 except Exception as e2:
                     current_app.logger.warning("Photon autocomplete error: %s", e2)
         else:
             # 3) Photon (biais Genève + hint hôpital) - mode fallback
             try:
-                ph = photon_query(q, lat=0.0, lon=0.0, limit=limit, hospital_hint=looks_like_hospital(q))
+                ph = photon_query(
+                    q,
+                    lat=0.0,
+                    lon=0.0,
+                    limit=limit,
+                    hospital_hint=looks_like_hospital(q),
+                )
                 results.extend(normalize_photon(ph))
             except Exception as e:
                 current_app.logger.warning("Photon autocomplete error: %s", e)

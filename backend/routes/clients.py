@@ -105,7 +105,10 @@ class ManageClientProfile(Resource):
             from marshmallow import ValidationError
 
             from schemas.client_schemas import ClientUpdateSchema
-            from schemas.validation_utils import handle_validation_error, validate_request
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
             try:
                 validated_data = validate_request(ClientUpdateSchema(), data, strict=False)
@@ -213,7 +216,10 @@ class ClientBookings(Resource):
             from marshmallow import ValidationError
 
             from schemas.booking_schemas import BookingCreateSchema
-            from schemas.validation_utils import handle_validation_error, validate_request
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
             try:
                 validated_data = validate_request(BookingCreateSchema(), data, strict=False)

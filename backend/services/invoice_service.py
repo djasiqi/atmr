@@ -684,7 +684,7 @@ class InvoiceService:
         """Traite les rappels automatiques pour une entreprise."""
         try:
             billing_settings = self._get_billing_settings(company_id)
-            schedule_days: dict[str, int] = dict(billing_settings.reminder_schedule_days or {})  # type: ignore[arg-type]
+            schedule_days: dict[str, int] = dict(billing_settings.reminder_schedule_days or {})
 
             # Factures éligibles pour le 1er rappel
             if "1" in schedule_days:

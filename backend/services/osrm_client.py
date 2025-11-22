@@ -912,7 +912,9 @@ _osrm_circuit_breaker = CircuitBreaker(failure_threshold=5, timeout_duration=60)
 
 # ✅ Import métriques Prometheus pour circuit breaker
 try:
-    from services.unified_dispatch.dispatch_prometheus_metrics import record_circuit_breaker_state
+    from services.unified_dispatch.dispatch_prometheus_metrics import (
+        record_circuit_breaker_state,
+    )
 
     PROMETHEUS_METRICS_AVAILABLE = True
 except ImportError:

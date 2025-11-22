@@ -2,7 +2,11 @@
 
 from marshmallow import Schema, fields, validate
 
-from schemas.query_schemas import DateRangeQuerySchema, FilterQuerySchema, PaginationQuerySchema
+from schemas.query_schemas import (
+    DateRangeQuerySchema,
+    FilterQuerySchema,
+    PaginationQuerySchema,
+)
 
 
 class UserRoleUpdateSchema(Schema):

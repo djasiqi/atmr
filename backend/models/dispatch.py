@@ -27,7 +27,13 @@ from typing_extensions import override
 from ext import db
 
 from .base import _as_dt, _as_int, _as_str, _coerce_enum, _iso
-from .enums import AssignmentStatus, DispatchStatus, DriverState, RealtimeEntityType, RealtimeEventType
+from .enums import (
+    AssignmentStatus,
+    DispatchStatus,
+    DriverState,
+    RealtimeEntityType,
+    RealtimeEventType,
+)
 
 V_ZERO = 0
 DELAY_SECONDS_ZERO = 0

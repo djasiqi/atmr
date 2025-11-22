@@ -116,8 +116,8 @@ def generate_monthly_invoices():
         companies_with_clients = (
             db.session.query(Company)
             .join(Client)
-            .filter(  # type: ignore[arg-type]
-                Client.is_active  # type: ignore[operator]
+            .filter(
+                Client.is_active
             )
             .distinct()
             .all()
@@ -130,7 +130,7 @@ def generate_monthly_invoices():
                 # Récupérer les clients actifs de cette entreprise
                 active_clients = (
                     db.session.query(Client)
-                    .filter(  # type: ignore[arg-type]
+                    .filter(
                         Client.company_id == company.id, Client.is_active
                     )
                     .all()
@@ -196,7 +196,7 @@ def cleanup_old_invoices():
         old_paid_invoices = (
             db.session.query(Invoice)
             .filter(
-                Invoice.status == InvoiceStatus.PAID,  # type: ignore[operator]
+                Invoice.status == InvoiceStatus.PAID,
                 Invoice.paid_at < cutoff_date,
             )
             .all()
@@ -264,7 +264,7 @@ def send_invoice_summary():
                 )
                 total_paid = sum(invoice.amount_paid for invoice in invoices)
                 total_balance = sum(invoice.balance_due for invoice in invoices)
-                overdue_count = len([inv for inv in invoices if inv.status == InvoiceStatus.OVERDUE])  # type: ignore[comparison-overlap]
+                overdue_count = len([inv for inv in invoices if inv.status == InvoiceStatus.OVERDUE])
 
                 # Envoyer le résumé
                 notification_service.send_monthly_invoice_summary(

@@ -31,7 +31,11 @@ def rotate_encryption_keys(self: Task) -> dict[str, Any]:  # noqa: ARG001
     try:
         app = get_flask_app()
         with app.app_context():
-            from security.crypto import DEFAULT_KEY_LENGTH, get_encryption_service, rotate_to_new_key
+            from security.crypto import (
+                DEFAULT_KEY_LENGTH,
+                get_encryption_service,
+                rotate_to_new_key,
+            )
 
             logger.info("[2.5] Début rotation clés de chiffrement...")
 

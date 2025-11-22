@@ -11,7 +11,17 @@ import uuid
 from datetime import date
 from typing import Optional, cast
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Index, Integer, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates

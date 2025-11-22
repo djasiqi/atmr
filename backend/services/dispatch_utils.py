@@ -46,7 +46,7 @@ def count_assigned_bookings_for_day(
     day_start_utc = _to_utc(local_day_start)
     next_day_start_utc = _to_utc(next_day_start)
 
-    stmt = select(Booking.driver_id, func.count())  # type: ignore[arg-type]
+    stmt = select(Booking.driver_id, func.count())
     stmt = stmt.where(
         and_(
             Booking.company_id == company_id,

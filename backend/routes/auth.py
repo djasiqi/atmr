@@ -3,7 +3,12 @@ from typing import cast
 
 import sentry_sdk  # CORRECTION : Importer directement
 from flask import current_app, make_response, request
-from flask_jwt_extended import create_access_token, create_refresh_token, get_jwt_identity, jwt_required
+from flask_jwt_extended import (
+    create_access_token,
+    create_refresh_token,
+    get_jwt_identity,
+    jwt_required,
+)
 from flask_mail import Message
 from flask_restx import Namespace, Resource, fields
 from itsdangerous import URLSafeTimedSerializer

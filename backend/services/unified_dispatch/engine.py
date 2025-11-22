@@ -13,8 +13,20 @@ from typing import TYPE_CHECKING, Any, Dict, List, cast
 from sqlalchemy.exc import IntegrityError
 
 from ext import db
-from models import Assignment, Booking, BookingStatus, Company, DispatchRun, DispatchStatus, Driver, DriverType
-from services.notification_service import notify_booking_assigned, notify_dispatch_run_completed
+from models import (
+    Assignment,
+    Booking,
+    BookingStatus,
+    Company,
+    DispatchRun,
+    DispatchStatus,
+    Driver,
+    DriverType,
+)
+from services.notification_service import (
+    notify_booking_assigned,
+    notify_dispatch_run_completed,
+)
 from services.safety_guards import get_safety_guards
 from services.unified_dispatch import data, heuristics, performance_metrics, solver
 from services.unified_dispatch import settings as ud_settings
@@ -1046,7 +1058,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     # 🧠 Optimisation RL (si modèle disponible) - ⚡ SAUF en mode rapide
                     if mode == "auto" and not is_fast_mode and len(final_assignments) > 0:
                         try:
-                            from services.unified_dispatch.rl_optimizer import RLDispatchOptimizer
+                            from services.unified_dispatch.rl_optimizer import (
+                                RLDispatchOptimizer,
+                            )
 
                             logger.info("[Engine] 🧠 Tentative d'optimisation RL des assignations...")
 
@@ -1139,7 +1153,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                                         # Import conditionnel pour éviter les
                                         # erreurs si le module n'existe pas
                                         try:
-                                            from services.notification_service import NotificationService
+                                            from services.notification_service import (
+                                                NotificationService,
+                                            )
 
                                             notification_service = NotificationService()
                                         except ImportError:
@@ -1702,7 +1718,9 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 
         # 11) Collecter les métriques de qualité du dispatch
         try:
-            from services.unified_dispatch.dispatch_metrics import collect_dispatch_metrics as collect_quality_metrics
+            from services.unified_dispatch.dispatch_metrics import (
+                collect_dispatch_metrics as collect_quality_metrics,
+            )
 
             if drid is not None:
                 quality_metrics = collect_quality_metrics(

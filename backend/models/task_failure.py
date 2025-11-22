@@ -7,6 +7,7 @@ from typing import Any, Dict
 
 from sqlalchemy import Column, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
+from typing_extensions import override
 
 from ext import db
 
@@ -30,9 +31,14 @@ class TaskFailure(db.Model):
     kwargs = Column(JSONB, nullable=True)
 
     # Timestamps
-    first_seen = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    first_seen = Column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
     last_seen = Column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     # Compteur d'échecs
@@ -63,5 +69,6 @@ class TaskFailure(db.Model):
             "dispatch_run_id": self.dispatch_run_id,
         }
 
-    def __repr__(self):
+    @override
+    def __repr__(self) -> str:
         return f"<TaskFailure task_id={self.task_id} task_name={self.task_name} failures={self.failure_count}>"

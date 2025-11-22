@@ -16,8 +16,8 @@ def serialize_shift(shift: DriverShift) -> Dict[str, Any]:
         "id": shift.id,
         "company_id": shift.company_id,
         "driver_id": shift.driver_id,
-        "start_local": shift.start_local.isoformat() if shift.start_local is not None else None,  # type: ignore[operator]
-        "end_local": shift.end_local.isoformat() if shift.end_local is not None else None,  # type: ignore[operator]
+        "start_local": shift.start_local.isoformat() if shift.start_local is not None else None,
+        "end_local": shift.end_local.isoformat() if shift.end_local is not None else None,
         "timezone": getattr(shift, "timezone", "Europe/Zurich"),
         "type": getattr(shift.type, "value", str(shift.type)).lower(),
         "status": getattr(shift.status, "value", str(shift.status)).lower(),
@@ -30,8 +30,8 @@ def serialize_shift(shift: DriverShift) -> Dict[str, Any]:
         "notes_employee": getattr(shift, "notes_employee", None),
         "created_by_user_id": shift.created_by_user_id,
         "updated_by_user_id": getattr(shift, "updated_by_user_id", None),
-        "created_at": shift.created_at.isoformat() if shift.created_at else None,  # type: ignore[operator]
-        "updated_at": shift.updated_at.isoformat() if shift.updated_at else None,  # type: ignore[operator]
+        "created_at": shift.created_at.isoformat() if shift.created_at else None,
+        "updated_at": shift.updated_at.isoformat() if shift.updated_at else None,
         "version": getattr(shift, "version", 1),
         # placeholders for future enrichment
         "breaks": [],

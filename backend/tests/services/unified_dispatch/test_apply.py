@@ -9,7 +9,12 @@ from sqlalchemy.exc import IntegrityError
 
 from models import Assignment, Booking, BookingStatus
 from services.unified_dispatch.apply import apply_assignments
-from tests.factories import BookingFactory, CompanyFactory, DispatchRunFactory, DriverFactory
+from tests.factories import (
+    BookingFactory,
+    CompanyFactory,
+    DispatchRunFactory,
+    DriverFactory,
+)
 
 
 @pytest.fixture(autouse=True)

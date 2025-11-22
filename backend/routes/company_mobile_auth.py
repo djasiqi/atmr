@@ -33,7 +33,9 @@ MFA_CHALLENGE_PREFIX = "company_mobile:mfa:challenge:"
 DEFAULT_SCOPES = ["enterprise.dispatch:read", "enterprise.dispatch:write"]
 
 
-company_mobile_auth_ns = Namespace("company_mobile_auth", description="Authentification mobile entreprise (dispatch)")
+company_mobile_auth_ns = Namespace(
+    "company_mobile_auth", description="Authentification mobile entreprise (dispatch)"
+)
 
 
 # ====== Modèles Swagger ======
@@ -46,7 +48,9 @@ login_model = company_mobile_auth_ns.model(
             enum=["password", "oidc"],
             description="Méthode d'authentification (password ou oidc)",
         ),
-        "email": fields.String(description="Email entreprise (pour login/mot de passe)"),
+        "email": fields.String(
+            description="Email entreprise (pour login/mot de passe)"
+        ),
         "password": fields.String(description="Mot de passe (si method=password)"),
         "id_token": fields.String(description="ID token OIDC (si method=oidc)"),
         "provider": fields.String(description="Identifiant fournisseur OIDC/SAML"),
@@ -58,7 +62,9 @@ login_model = company_mobile_auth_ns.model(
 mfa_verify_model = company_mobile_auth_ns.model(
     "EnterpriseMobileMfaVerify",
     {
-        "challenge_id": fields.String(required=True, description="Identifiant du challenge MFA"),
+        "challenge_id": fields.String(
+            required=True, description="Identifiant du challenge MFA"
+        ),
         "code": fields.String(required=True, description="Code TOTP à 6 chiffres"),
         "device_id": fields.String(description="Identifiant appareil (optionnel)"),
     },
@@ -67,14 +73,18 @@ mfa_verify_model = company_mobile_auth_ns.model(
 refresh_model = company_mobile_auth_ns.model(
     "EnterpriseMobileRefresh",
     {
-        "refresh_token": fields.String(required=True, description="Refresh token valide"),
+        "refresh_token": fields.String(
+            required=True, description="Refresh token valide"
+        ),
     },
 )
 
 
 # ====== Schemas Marshmallow ======
 class EnterpriseLoginSchema(Schema):
-    method = ma_fields.String(load_default="password", validate=validate.OneOf(["password", "oidc"]))
+    method = ma_fields.String(
+        load_default="password", validate=validate.OneOf(["password", "oidc"])
+    )
     email = ma_fields.Email(load_default=None)
     password = ma_fields.String(load_default=None)
     id_token = ma_fields.String(load_default=None)
@@ -132,7 +142,7 @@ def _verify_totp_code(company: Company | None, code: str) -> bool:
         )
         return False
     try:
-        import pyotp
+        import pyotp  # type: ignore[reportMissingImports]
     except ImportError:  # pragma: no cover - dépendance optionnelle
         logger.error(
             "[AUTH][Enterprise] pyotp requis pour vérifier le code MFA (company_id=%s)",
@@ -225,7 +235,9 @@ def _store_mfa_challenge(
             json.dumps(payload),
         )
     else:  # pragma: no cover - fallback
-        logger.warning("[AUTH][Enterprise] Redis indisponible, impossible de stocker le challenge MFA.")
+        logger.warning(
+            "[AUTH][Enterprise] Redis indisponible, impossible de stocker le challenge MFA."
+        )
     return challenge_id
 
 
@@ -239,7 +251,9 @@ def _consume_mfa_challenge(challenge_id: str) -> Optional[Dict[str, Any]]:
         return None
     redis_client.delete(key)
     try:
-        return json.loads(data)
+        # Convert bytes to str if necessary
+        data_str = data.decode("utf-8") if isinstance(data, bytes) else str(data)
+        return json.loads(data_str)
     except (ValueError, TypeError):
         logger.error("[AUTH][Enterprise] Challenge MFA corrompu (%s).", challenge_id)
         return None
@@ -257,11 +271,15 @@ def _find_company_user_by_email(email: str) -> Tuple[Optional[User], Optional[Co
     return user, company
 
 
-def _handle_oidc_login(id_token: str, provider: Optional[str]) -> Tuple[Optional[User], Optional[Company]]:
+def _handle_oidc_login(
+    id_token: str, provider: Optional[str]
+) -> Tuple[Optional[User], Optional[Company]]:
     if not id_token:
         raise ValueError("Token OIDC manquant.")
     try:
-        decoded = jwt.decode(id_token, options={"verify_signature": False, "verify_aud": False})
+        decoded = jwt.decode(
+            id_token, options={"verify_signature": False, "verify_aud": False}
+        )
     except jwt.PyJWTError as exc:  # pragma: no cover - dépend du token fourni
         logger.warning("[AUTH][Enterprise] Echec décodage token OIDC: %s", exc)
         raise ValueError("ID token invalide.") from exc
@@ -294,7 +312,9 @@ class EnterpriseMobileLogin(Resource):
         except ValidationError as exc:
             return {"error": "Paramètres invalides", "details": exc.messages}, 400
 
-        method = data["method"]
+        # Type assertion: load() returns a dict
+        assert isinstance(data, dict), "Schema load should return a dict"
+        method: str = data["method"]
         email = data.get("email")
         password = data.get("password")
         id_token = data.get("id_token")
@@ -312,11 +332,14 @@ class EnterpriseMobileLogin(Resource):
                 user, company = _find_company_user_by_email(email)
                 if not user or not company or not user.check_password(password):
                     error_response = ({"error": "Identifiants invalides."}, 401)
-        else:  # method == "oidc"
-            try:
-                user, company = _handle_oidc_login(id_token, data.get("provider"))
-            except ValueError as exc:
-                error_response = ({"error": str(exc)}, 401)
+        elif method == "oidc":
+            if not id_token:
+                error_response = ({"error": "ID token requis pour OIDC."}, 400)
+            else:
+                try:
+                    user, company = _handle_oidc_login(id_token, data.get("provider"))
+                except ValueError as exc:
+                    error_response = ({"error": str(exc)}, 401)
 
         if error_response:
             return error_response
@@ -355,6 +378,8 @@ class EnterpriseMobileMfaVerify(Resource):
         except ValidationError as exc:
             return {"error": "Paramètres invalides", "details": exc.messages}, 400
 
+        # Type assertion: load() returns a dict
+        assert isinstance(data, dict), "Schema load should return a dict"
         challenge = _consume_mfa_challenge(str(data["challenge_id"]))
         if not challenge:
             return {"error": "Challenge MFA expiré ou invalide."}, 410
@@ -389,6 +414,8 @@ class EnterpriseMobileRefresh(Resource):
         except ValidationError as exc:
             return {"error": "Paramètres invalides", "details": exc.messages}, 400
 
+        # Type assertion: load() returns a dict
+        assert isinstance(data, dict), "Schema load should return a dict"
         try:
             decoded = jwt.decode(
                 data["refresh_token"],
