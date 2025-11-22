@@ -2004,7 +2004,7 @@ class TestAnalyticsInsightsQuerySchema:
         """✅ Test validation avec valeur par défaut (lookback_days=30)."""
         data = {}
         result = validate_request(AnalyticsInsightsQuerySchema(), data, strict=False)
-        assert result["lookback_days"] == 30  # noqa: E501
+        assert result["lookback_days"] == 30
 
     def test_valid_query_with_lookback_days(self):
         """✅ Test validation avec lookback_days spécifié."""
