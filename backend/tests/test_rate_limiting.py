@@ -4,8 +4,6 @@ Vérifie que les limites sont respectées et que HTTP 429 est retourné.
 """
 
 
-
-
 class TestRateLimitingBookings:
     """Tests rate limiting pour les endpoints bookings."""
 

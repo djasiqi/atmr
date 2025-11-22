@@ -1,7 +1,5 @@
 """Tests finaux pour suggestion_generator.py"""
 
-
-
 from services.rl.suggestion_generator import RLSuggestionGenerator
 
 

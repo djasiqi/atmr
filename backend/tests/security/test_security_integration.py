@@ -4,7 +4,6 @@ Valide que toutes les protections de sécurité fonctionnent ensemble dans des s
 """
 
 
-
 class TestCombinedAttackScenarios:
     """Tests pour des scénarios d'attaque combinés."""
 

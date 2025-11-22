@@ -37,7 +37,6 @@ class VaultClientError(Exception):
     """Exception levée lors d'erreurs avec Vault."""
 
 
-
 class VaultClient:
     """✅ 4.1: Client Vault avec cache et fallback .env.
 

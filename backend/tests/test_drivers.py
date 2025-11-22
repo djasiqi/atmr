@@ -2,7 +2,6 @@
 Tests pour les routes drivers (disponibilité, assignations).
 """
 
-
 from models import Driver, UserRole
 
 

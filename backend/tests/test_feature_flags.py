@@ -1,7 +1,6 @@
 """Tests pour le système de feature flags ML."""
 
 
-
 class TestFeatureFlags:
     """Tests du système de feature flags."""
 

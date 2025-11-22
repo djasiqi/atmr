@@ -3,7 +3,6 @@
 Tests pour distributional_dqn.py - couverture de base
 """
 
-
 import pytest
 import torch
 

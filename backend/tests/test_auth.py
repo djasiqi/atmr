@@ -3,8 +3,6 @@ Tests pour les routes d'authentification.
 """
 
 
-
-
 def test_login_success(client, sample_user):
     """Login avec credentials valides renvoie un token."""
     response = client.post("/api/auth/login", json={"email": "test@example.com", "password": "password123"})
