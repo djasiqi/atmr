@@ -5,7 +5,6 @@ Tests ultra-simples pour améliorer la couverture - Version fonctionnelle
 from unittest.mock import patch
 
 
-
 class TestSimpleCoverage:
     """Tests ultra-simples pour améliorer la couverture"""
 

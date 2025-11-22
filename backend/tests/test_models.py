@@ -2,7 +2,6 @@
 Tests unitaires des modèles (sans DB complète).
 """
 
-
 from models.enums import BookingStatus, PaymentStatus, UserRole
 
 

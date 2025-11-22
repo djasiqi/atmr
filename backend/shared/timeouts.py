@@ -54,7 +54,6 @@ class TimeoutError(Exception):  # noqa: A001
     """
 
 
-
 def timeout(seconds: float) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Décorateur pour ajouter un timeout à une fonction.
 

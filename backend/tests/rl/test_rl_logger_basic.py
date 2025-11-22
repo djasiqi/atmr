@@ -3,7 +3,6 @@
 Tests pour rl_logger.py - couverture de base
 """
 
-
 import numpy as np
 
 from services.rl.rl_logger import RLLogger

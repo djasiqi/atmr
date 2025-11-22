@@ -1,7 +1,6 @@
 """Tests pour le service météo."""
 
 
-
 class TestWeatherService:
     """Tests du service météo."""
 

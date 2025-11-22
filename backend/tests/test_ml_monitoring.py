@@ -1,7 +1,6 @@
 # pyright: reportAttributeAccessIssue=false
 """Tests pour le service de monitoring ML."""
 
-
 import pytest
 
 

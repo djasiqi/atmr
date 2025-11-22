@@ -4,7 +4,6 @@ Valide la protection CSRF si activée, et vérifie la configuration CORS.
 """
 
 
-
 class TestCSRFConfiguration:
     """Tests pour vérifier la configuration CSRF."""
 

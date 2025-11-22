@@ -3,7 +3,6 @@
 Tests pour noisy_networks.py - couverture de base
 """
 
-
 import pytest
 import torch
 

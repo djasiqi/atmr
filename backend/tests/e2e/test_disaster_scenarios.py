@@ -7,7 +7,7 @@ Scénarios testés :
 - Réseau mobile flaky
 """
 
-import logging 
+import logging
 import os
 import time
 

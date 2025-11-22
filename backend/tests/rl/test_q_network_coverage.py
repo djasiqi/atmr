@@ -2,7 +2,6 @@
 Tests supplémentaires pour améliorer la couverture de improved_q_network.py
 """
 
-
 import pytest
 import torch
 

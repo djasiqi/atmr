@@ -3,7 +3,6 @@
 Tests supplémentaires pour couvrir les lignes manquantes dans n_step_buffer.py
 """
 
-
 import numpy as np
 
 from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer

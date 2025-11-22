@@ -5,7 +5,6 @@ Tests des utilitaires (timezone, helpers).
 from datetime import UTC, datetime
 
 
-
 def test_time_utils_import():
     """Les helpers time_utils s'importent correctement."""
     from shared.time_utils import iso_utc_z, now_local, to_utc_from_db

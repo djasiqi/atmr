@@ -1,6 +1,5 @@
 """Tests unitaires pour les endpoints de monitoring des rotations de secrets."""
 
-
 import pytest
 
 from ext import db
