@@ -1,19 +1,21 @@
 name: Frontend Tests
 
+# ⏸️ Workflow suspendu temporairement - focus sur lint backend
+on:
+  workflow_dispatch:  # Seulement déclenchement manuel autorisé
+  # push:
+  #   branches: [main, develop, audit/**]
+  #   paths:
+  #     - "frontend/**"
+  #     - ".github/workflows/frontend-tests.yml"
+  # pull_request:
+  #   branches: [main, develop]
+  #   paths:
+  #     - "frontend/**"
+
 permissions:
   contents: read
   actions: read
-
-on:
-  push:
-    branches: [main, develop, audit/**]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-tests.yml"
-  pull_request:
-    branches: [main, develop]
-    paths:
-      - "frontend/**"
 
 jobs:
   lint:

@@ -1,11 +1,12 @@
 name: Build Android Operations App
 
+# ⏸️ Workflow suspendu temporairement - focus sur lint backend
+on:
+  workflow_dispatch:  # Déjà en mode manuel uniquement, pas de changement nécessaire
+
 permissions:
   contents: read
   actions: read
-
-on:
-  workflow_dispatch:
 
 jobs:
   setup:
