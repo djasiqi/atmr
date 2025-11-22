@@ -40,6 +40,8 @@ jobs:
       POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
       MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
