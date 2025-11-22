@@ -2074,7 +2074,8 @@ class TestAnalyticsWeeklySummaryQuerySchema:
         # Le format YYYY-MM-DD sera validé mais la date est logiquement invalide
         # Marshmallow ne valide que le format, pas la logique de la date
         result = validate_request(AnalyticsWeeklySummaryQuerySchema(), data, strict=False)
-        assert result["week_start"] == "2024-02-30"  # Format correct, logique incorrecte (géré par route)
+        # Format correct, logique incorrecte (géré par route)
+        assert result["week_start"] == "2024-02-30"
 
 
 class TestAnalyticsExportQuerySchema:
@@ -2646,15 +2647,17 @@ class TestAutonomousActionReviewSchema:
 
     def test_notes_empty_string(self):
         """✅ Test validation notes vide (chaîne vide autorisée car optionnel)."""
-        # Notes vide string (valide car optionnel, mais peut être rejeté par validation Length si min > 0)
-        # Le schéma n'a pas de min, donc "" devrait être accepté (mais peut être rejeté par Length si min=1 implicite)
+        # Notes vide string (valide car optionnel, mais peut être rejeté
+        # par validation Length si min > 0)
+        # Le schéma n'a pas de min, donc "" devrait être accepté
+        # (mais peut être rejeté par Length si min=1 implicite)
         # Testons avec une chaîne vide
         data = {"notes": ""}
         # Marshmallow Length par défaut pourrait rejeter "" si min n'est pas spécifié
         # Mais allow_none=True devrait permettre None, pas ""
         # Testons quand même
         result = validate_request(AutonomousActionReviewSchema(), data, strict=False)
-        # Soit accepte "", soit le rejette - les deux sont acceptables selon la logique métier
+        # Soit accepte "", soit le rejette - les deux sont acceptables
         # Pour ce test, on vérifie juste qu'il n'y a pas d'exception inattendue
         assert "notes" in result
 
@@ -2679,7 +2682,8 @@ class TestAutonomousActionReviewSchema:
         assert result["notes"] == multiline_notes
 
         # Notes avec plusieurs lignes longues (mais < 1000 caractères au total)
-        # Chaque ligne fait ~110 caractères (avec "Ligne X: "), donc 9 lignes = ~990 caractères
+        # Chaque ligne fait ~110 caractères (avec "Ligne X: ")
+        # donc 9 lignes = ~990 caractères
         long_multiline = "\n".join([f"Ligne {i}: {'a' * 100}" for i in range(9)])
         data = {"notes": long_multiline}
         result = validate_request(AutonomousActionReviewSchema(), data, strict=False)
