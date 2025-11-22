@@ -9,7 +9,18 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from typing_extensions import override
 

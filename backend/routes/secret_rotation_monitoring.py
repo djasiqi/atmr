@@ -102,8 +102,13 @@ class RotationHistory(Resource):
             # ✅ 2.4: Validation Marshmallow des query parameters
             from marshmallow import ValidationError
 
-            from schemas.secret_rotation_schemas import SecretRotationMonitoringQuerySchema
-            from schemas.validation_utils import handle_validation_error, validate_query_params
+            from schemas.secret_rotation_schemas import (
+                SecretRotationMonitoringQuerySchema,
+            )
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_query_params,
+            )
 
             try:
                 validated_params = validate_query_params(

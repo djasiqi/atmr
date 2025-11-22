@@ -63,7 +63,10 @@ class AnalyticsDashboard(Resource):
             from marshmallow import ValidationError
 
             from schemas.analytics_schemas import AnalyticsDashboardQuerySchema
-            from schemas.validation_utils import handle_validation_error, validate_request
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
             args_dict = dict(request.args)
             try:
@@ -137,7 +140,10 @@ class AnalyticsInsights(Resource):
             from marshmallow import ValidationError
 
             from schemas.analytics_schemas import AnalyticsInsightsQuerySchema
-            from schemas.validation_utils import handle_validation_error, validate_request
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
             args_dict = dict(request.args)
             try:
@@ -180,7 +186,10 @@ class WeeklySummary(Resource):
             from marshmallow import ValidationError
 
             from schemas.analytics_schemas import AnalyticsWeeklySummaryQuerySchema
-            from schemas.validation_utils import handle_validation_error, validate_request
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
             args_dict = dict(request.args)
             try:
@@ -241,7 +250,10 @@ class ExportAnalytics(Resource):
             from marshmallow import ValidationError
 
             from schemas.analytics_schemas import AnalyticsExportQuerySchema
-            from schemas.validation_utils import handle_validation_error, validate_request
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
             args_dict = dict(request.args)
             try:

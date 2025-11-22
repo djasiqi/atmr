@@ -25,7 +25,14 @@ from .base import (
 from .booking import Booking
 from .client import Client
 from .company import Company
-from .dispatch import Assignment, DailyStats, DispatchMetrics, DispatchRun, DriverStatus, RealtimeEvent
+from .dispatch import (
+    Assignment,
+    DailyStats,
+    DispatchMetrics,
+    DispatchRun,
+    DriverStatus,
+    RealtimeEvent,
+)
 from .driver import (
     CompanyPlanningSettings,
     Driver,
@@ -60,7 +67,14 @@ from .enums import (
     UserRole,
     VacationType,
 )
-from .invoice import CompanyBillingSettings, Invoice, InvoiceLine, InvoicePayment, InvoiceReminder, InvoiceSequence
+from .invoice import (
+    CompanyBillingSettings,
+    Invoice,
+    InvoiceLine,
+    InvoicePayment,
+    InvoiceReminder,
+    InvoiceSequence,
+)
 from .medical import FavoritePlace, MedicalEstablishment, MedicalService
 from .message import Message
 from .ml_prediction import MLPrediction

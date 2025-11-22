@@ -19,8 +19,15 @@ from torch import nn
 backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from services.ml.model_registry import ModelMetadata, ModelPromotionValidator, create_model_registry
-from services.ml.training_metadata_schema import TrainingMetadataSchema, create_training_metadata
+from services.ml.model_registry import (
+    ModelMetadata,
+    ModelPromotionValidator,
+    create_model_registry,
+)
+from services.ml.training_metadata_schema import (
+    TrainingMetadataSchema,
+    create_training_metadata,
+)
 
 
 class TestModelMetadata:

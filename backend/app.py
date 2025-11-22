@@ -27,7 +27,14 @@ except ImportError:  # pragma: no cover
 # --- Imports de libs tiers (tous en haut pour Ruff E402) ---
 import sentry_sdk
 from dotenv import load_dotenv
-from flask import Flask, current_app, jsonify, make_response, request, send_from_directory
+from flask import (
+    Flask,
+    current_app,
+    jsonify,
+    make_response,
+    request,
+    send_from_directory,
+)
 from flask_cors import CORS
 from flask_talisman import Talisman
 from sentry_sdk.integrations.flask import FlaskIntegration

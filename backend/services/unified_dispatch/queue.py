@@ -359,7 +359,9 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
                 logger.debug("[Queue] DispatchRun id=%s committed successfully", dispatch_run_id)
             except IntegrityError as e:
                 # ✅ P2.2: Track métrique IntegrityError (race condition)
-                from services.unified_dispatch.error_metrics import track_integrity_error
+                from services.unified_dispatch.error_metrics import (
+                    track_integrity_error,
+                )
 
                 error_code = getattr(e.orig, "pgcode", None) if hasattr(e, "orig") else None
                 track_integrity_error(

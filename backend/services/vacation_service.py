@@ -5,7 +5,9 @@ from typing import Any, cast
 from ext import db
 from models import DriverVacation
 
-from .holidays_service import is_holiday_in_geneva  # par ex. un module qui wrap python-holidays
+from .holidays_service import (
+    is_holiday_in_geneva,  # par ex. un module qui wrap python-holidays
+)
 
 DEFAULT_ANNUAL_VACATION_DAYS = 20
 # 0=Lundi, 1=Mardi, 2=Mercredi, 3=Jeudi, 4=Vendredi, 5=Samedi, 6=Dimanche

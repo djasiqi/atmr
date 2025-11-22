@@ -363,7 +363,10 @@ class CompanyBillingSettingsResource(Resource):
             from marshmallow import ValidationError
 
             from schemas.invoice_schemas import BillingSettingsUpdateSchema
-            from schemas.validation_utils import handle_validation_error, validate_request
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
             try:
                 validated_data = validate_request(BillingSettingsUpdateSchema(), data, strict=False)
@@ -558,7 +561,10 @@ class GenerateInvoice(Resource):
                 from marshmallow import ValidationError
 
                 from schemas.invoice_schemas import InvoiceGenerateSchema
-                from schemas.validation_utils import handle_validation_error, validate_request
+                from schemas.validation_utils import (
+                    handle_validation_error,
+                    validate_request,
+                )
 
                 try:
                     validated_data = validate_request(InvoiceGenerateSchema(), data, strict=False)

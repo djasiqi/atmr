@@ -6,7 +6,10 @@ import time
 from flask import Response, make_response
 from flask_restx import Namespace, Resource
 
-from services.secret_rotation_monitor import get_days_since_last_rotation, get_rotation_stats
+from services.secret_rotation_monitor import (
+    get_days_since_last_rotation,
+    get_rotation_stats,
+)
 from services.unified_dispatch.slo import get_slo_tracker
 
 logger = logging.getLogger(__name__)

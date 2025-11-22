@@ -422,7 +422,10 @@ class BookingResource(Resource):
             from marshmallow import ValidationError
 
             from schemas.booking_schemas import BookingUpdateSchema
-            from schemas.validation_utils import handle_validation_error, validate_request
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
             try:
                 validated_data = validate_request(BookingUpdateSchema(), data, strict=False)
@@ -594,7 +597,10 @@ class ListBookings(Resource):
             from marshmallow import ValidationError
 
             from schemas.booking_schemas import BookingListSchema
-            from schemas.validation_utils import handle_validation_error, validate_request
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
             args_dict = dict(request.args)
             try:

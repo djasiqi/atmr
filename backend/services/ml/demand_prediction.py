@@ -234,7 +234,7 @@ class DemandPredictor:
 
             bookings = Booking.query.filter(
                 and_(
-                    Booking.status == BookingStatus.COMPLETED,  # type: ignore[arg-type]
+                    Booking.status == BookingStatus.COMPLETED,
                     Booking.completed_at >= cutoff_date,
                 )
             ).all()

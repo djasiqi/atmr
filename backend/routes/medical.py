@@ -10,19 +10,35 @@ from models import MedicalEstablishment, MedicalService, db
 
 # --- Namespace et Parsers ---
 
-medical_ns = Namespace("medical", description="Recherche d'établissements et services médicaux")
+medical_ns = Namespace(
+    "medical", description="Recherche d'établissements et services médicaux"
+)
 
 # Parser pour l'endpoint /establishments
 establishments_parser = reqparse.RequestParser()
-establishments_parser.add_argument("q", type=str, required=False, help="Texte à rechercher", location="args")
-establishments_parser.add_argument("limit", type=int, default=8, help="Nombre max de résultats", location="args")
+establishments_parser.add_argument(
+    "q", type=str, required=False, help="Texte à rechercher", location="args"
+)
+establishments_parser.add_argument(
+    "limit", type=int, default=8, help="Nombre max de résultats", location="args"
+)
 
 # Parser pour l'endpoint /services
 services_parser = reqparse.RequestParser()
 services_parser.add_argument(
-    "establishment_id", type=int, required=True, help="ID de l'établissement est requis", location="args"
+    "establishment_id",
+    type=int,
+    required=True,
+    help="ID de l'établissement est requis",
+    location="args",
 )
-services_parser.add_argument("q", type=str, required=False, help="Texte pour filtrer les services", location="args")
+services_parser.add_argument(
+    "q",
+    type=str,
+    required=False,
+    help="Texte pour filtrer les services",
+    location="args",
+)
 
 
 def _like_ci(col: Any, like_query: str):
@@ -45,7 +61,9 @@ class Establishments(Resource):
 
         args_dict = dict(request.args)
         try:
-            validated_args = validate_request(MedicalEstablishmentQuerySchema(), args_dict, strict=False)
+            validated_args = validate_request(
+                MedicalEstablishmentQuerySchema(), args_dict, strict=False
+            )
             q = (validated_args.get("q") or "").strip()
             limit = validated_args.get("limit", 8)
         except Exception:
@@ -73,7 +91,11 @@ class Establishments(Resource):
                 )
             )
 
-        rows = qr.order_by(cast("Any", MedicalEstablishment.display_name).asc()).limit(limit).all()
+        rows = (
+            qr.order_by(cast("Any", MedicalEstablishment.display_name).asc())
+            .limit(limit)
+            .all()
+        )
 
         items: list[dict[str, Any]] = []
         for r in rows:
@@ -119,9 +141,14 @@ class Services(Resource):
                 q = (args.get("q") or "").strip()
             except Exception:
                 # Si reqparse échoue aussi, retourner 400
-                return {"error": "establishment_id is required", "message": str(fallback_err)}, 400
+                return {
+                    "error": "establishment_id is required",
+                    "message": str(fallback_err),
+                }, 400
 
-        query = db.session.query(MedicalService).filter(cast("Any", MedicalService.establishment_id) == estab_id)
+        query = db.session.query(MedicalService).filter(
+            MedicalService.establishment_id == estab_id
+        )
 
         # active = True si la colonne existe
         svc_active_col = getattr(MedicalService, "active", None)
@@ -137,9 +164,16 @@ class Services(Resource):
                 )
             )
 
-        rows = query.order_by(cast("Any", MedicalService.category).asc(), cast("Any", MedicalService.name).asc()).all()
+        rows = query.order_by(
+            MedicalService.category.asc(), MedicalService.name.asc()
+        ).all()
 
-        current_app.logger.info("✅ Found %s services for establishment %s with query '%s'", len(rows), estab_id, q)
+        current_app.logger.info(
+            "✅ Found %s services for establishment %s with query '%s'",
+            len(rows),
+            estab_id,
+            q,
+        )
 
         result = [
             {
@@ -147,7 +181,9 @@ class Services(Resource):
                 "establishment_id": r.establishment_id,
                 "category": getattr(r, "category", None),
                 "name": getattr(r, "name", None),
-                "active": True if svc_active_col is None else bool(getattr(r, "active", True)),
+                "active": True
+                if svc_active_col is None
+                else bool(getattr(r, "active", True)),
             }
             for r in rows
         ]

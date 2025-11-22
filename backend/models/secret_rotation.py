@@ -48,7 +48,12 @@ class SecretRotation(db.Model):
     """
 
     # Timestamp de la rotation
-    rotated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC), index=True)
+    rotated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        index=True,
+    )
 
     # Environnement
     environment = Column(String(20), nullable=False, index=True)
@@ -78,13 +83,15 @@ class SecretRotation(db.Model):
 
     def to_dict(self) -> dict[str, Any]:
         """Convertit en dictionnaire pour export API."""
-        # Type: ignore car rotated_at est nullable=False mais peut être None avant commit
-        rotated_at_value: datetime | None = self.rotated_at  # type: ignore[assignment]
+        # rotated_at est nullable=False mais peut être None avant commit
+        rotated_at_value: datetime | None = self.rotated_at
         return {
             "id": self.id,
             "secret_type": self.secret_type,
             "status": self.status,
-            "rotated_at": rotated_at_value.isoformat() if rotated_at_value is not None else None,
+            "rotated_at": rotated_at_value.isoformat()
+            if rotated_at_value is not None
+            else None,
             "environment": self.environment,
             "metadata": self.rotation_metadata,
             "error_message": self.error_message,

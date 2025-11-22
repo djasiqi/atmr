@@ -52,7 +52,9 @@ def _lazy_import_rl():
     if _dqn_agent is None:
         try:
             from services.rl import dispatch_env, improved_dqn_agent
-            from services.rl.improved_dqn_agent import ImprovedDQNAgent as _ImprovedDQNAgent
+            from services.rl.improved_dqn_agent import (
+                ImprovedDQNAgent as _ImprovedDQNAgent,
+            )
 
             _dqn_agent = improved_dqn_agent
             _dispatch_env = dispatch_env

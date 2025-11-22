@@ -201,7 +201,7 @@ class DelayMLPredictor(object):
                 Booking.query.filter(
                     and_(
                         Booking.driver_id == driver_id,
-                        Booking.status == BookingStatus.COMPLETED,  # type: ignore[arg-type]
+                        Booking.status == BookingStatus.COMPLETED,
                         Booking.completed_at >= cutoff_date,
                     )
                 )

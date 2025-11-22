@@ -19,7 +19,9 @@ F = TypeVar("F", bound=Callable[..., Any])
 logger = logging.getLogger(__name__)
 
 
-def _parse_ip_whitelist(whitelist_str: str) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+def _parse_ip_whitelist(
+    whitelist_str: str,
+) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
     """Parse une chaîne de whitelist IP (séparée par des virgules).
 
     Args:
@@ -72,7 +74,10 @@ def _get_client_ip() -> str | None:
     return request.environ.get("REMOTE_ADDR")
 
 
-def _is_ip_allowed(client_ip: str, allowed_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network]) -> bool:
+def _is_ip_allowed(
+    client_ip: str,
+    allowed_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network],
+) -> bool:
     """Vérifie si l'IP du client est dans un des réseaux autorisés.
 
     Args:
@@ -123,9 +128,14 @@ def ip_whitelist_required(
             # Si pas de whitelist configurée, autoriser l'accès (fail-open pour développement)
             if not whitelist_str:
                 if os.getenv("FLASK_ENV") == "production":
-                    logger.warning("[IP Whitelist] ⚠️ Pas de whitelist configurée en production pour %s", request.path)
+                    logger.warning(
+                        "[IP Whitelist] ⚠️ Pas de whitelist configurée en production pour %s",
+                        request.path,
+                    )
                 else:
-                    logger.debug("[IP Whitelist] Pas de whitelist configurée, accès autorisé (dev)")
+                    logger.debug(
+                        "[IP Whitelist] Pas de whitelist configurée, accès autorisé (dev)"
+                    )
                 return fn(*args, **kwargs)
 
             # Parser la whitelist
@@ -146,11 +156,15 @@ def ip_whitelist_required(
                 logger.warning("[IP Whitelist] Impossible de déterminer l'IP du client")
                 abort(403, description="Accès non autorisé (IP non déterminable)")
 
+            # Type assertion: client_ip is guaranteed to be str after the check above
+            assert client_ip is not None, "client_ip should not be None after check"
+            client_ip_str: str = client_ip
+
             # Vérifier si l'IP est autorisée
-            if not _is_ip_allowed(client_ip, allowed_networks):
+            if not _is_ip_allowed(client_ip_str, allowed_networks):
                 logger.warning(
                     "[IP Whitelist] ⛔ Accès refusé depuis IP: %s pour %s %s",
-                    client_ip,
+                    client_ip_str,
                     request.method,
                     request.path,
                 )
@@ -164,7 +178,10 @@ def ip_whitelist_required(
                         if user_identity:
                             # user_identity peut être un string (public_id) ou un int
                             # On essaie de le convertir en int si possible
-                            if isinstance(user_identity, str) and user_identity.isdigit():
+                            if (
+                                isinstance(user_identity, str)
+                                and user_identity.isdigit()
+                            ):
                                 user_id = int(user_identity)
                             elif isinstance(user_identity, int):
                                 user_id = user_identity
@@ -173,7 +190,7 @@ def ip_whitelist_required(
                         pass
 
                     send_ip_whitelist_alert(
-                        client_ip=client_ip,
+                        client_ip=client_ip_str,
                         endpoint=request.path,
                         method=request.method,
                         user_agent=request.headers.get("User-Agent"),
@@ -181,11 +198,15 @@ def ip_whitelist_required(
                     )
                 except Exception as e:
                     # Ne pas faire échouer la requête si l'alerte échoue
-                    logger.exception("[IP Whitelist] Erreur lors de l'envoi d'alerte: %s", e)
+                    logger.exception(
+                        "[IP Whitelist] Erreur lors de l'envoi d'alerte: %s", e
+                    )
 
                 abort(403, description="Accès non autorisé (IP non autorisée)")
 
-            logger.debug("[IP Whitelist] ✅ Accès autorisé depuis IP: %s", client_ip)
+            logger.debug(
+                "[IP Whitelist] ✅ Accès autorisé depuis IP: %s", client_ip_str
+            )
             return fn(*args, **kwargs)
 
         return cast(F, wrapper)

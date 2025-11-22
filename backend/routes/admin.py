@@ -263,7 +263,10 @@ class UpdateUserRole(Resource):
             from marshmallow import ValidationError
 
             from schemas.admin_schemas import UserRoleUpdateSchema
-            from schemas.validation_utils import handle_validation_error, validate_request
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
             try:
                 validated_data = validate_request(UserRoleUpdateSchema(), data)
@@ -441,7 +444,10 @@ class AutonomousActionsList(Resource):
             from marshmallow import ValidationError
 
             from schemas.admin_schemas import AutonomousActionsListQuerySchema
-            from schemas.validation_utils import handle_validation_error, validate_query_params
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_query_params,
+            )
 
             try:
                 validated_params = validate_query_params(AutonomousActionsListQuerySchema(), request.args, strict=False)
@@ -673,7 +679,10 @@ class AutonomousActionReview(Resource):
             from marshmallow import ValidationError
 
             from schemas.admin_schemas import AutonomousActionReviewSchema
-            from schemas.validation_utils import handle_validation_error, validate_request
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
             try:
                 validated_data = validate_request(AutonomousActionReviewSchema(), data, strict=False)

@@ -22,11 +22,23 @@ from marshmallow import INCLUDE, Schema, validate
 from marshmallow import fields as ma_fields
 
 from ext import db, limiter, role_required
-from models import Assignment, AssignmentStatus, Booking, BookingStatus, Client, Company, DispatchRun, Driver, UserRole
+from models import (
+    Assignment,
+    AssignmentStatus,
+    Booking,
+    BookingStatus,
+    Client,
+    Company,
+    DispatchRun,
+    Driver,
+    UserRole,
+)
 from routes.companies import get_company_from_token
 from services.unified_dispatch import data
 from services.unified_dispatch.queue import get_status, trigger_job
-from services.unified_dispatch.reactive_suggestions import generate_reactive_suggestions as generate_suggestions
+from services.unified_dispatch.reactive_suggestions import (
+    generate_reactive_suggestions as generate_suggestions,
+)
 from services.unified_dispatch.realtime_optimizer import (
     check_opportunities_manual,
     get_optimizer_for_company,
@@ -1221,7 +1233,9 @@ class ReassignResource(Resource):
 
             # ✅ VALIDATION : Vérifier conflit temporel AVANT assignation
             if booking and booking.scheduled_time:
-                from services.unified_dispatch.validation import check_existing_assignment_conflict
+                from services.unified_dispatch.validation import (
+                    check_existing_assignment_conflict,
+                )
 
                 has_conflict, conflict_msg = check_existing_assignment_conflict(
                     driver_id=new_driver_id,
@@ -2268,7 +2282,9 @@ class RealtimeDashboardResource(Resource):
             # 1. Métriques de qualité du dernier dispatch
             quality_metrics = None
             try:
-                from services.unified_dispatch.dispatch_metrics import DispatchMetricsCollector
+                from services.unified_dispatch.dispatch_metrics import (
+                    DispatchMetricsCollector,
+                )
 
                 collector = DispatchMetricsCollector(company_id)
                 metrics = collector.collect_for_date(date_str)
@@ -2582,7 +2598,9 @@ class AutonomousStatusResource(Resource):
             manager = get_manager_for_company(company_id)
 
             # Vérifier si le RealtimeOptimizer tourne actuellement
-            from services.unified_dispatch.realtime_optimizer import get_optimizer_for_company
+            from services.unified_dispatch.realtime_optimizer import (
+                get_optimizer_for_company,
+            )
 
             optimizer = get_optimizer_for_company(company_id)
             optimizer_running = optimizer.get_status() if optimizer else {"running": False}
@@ -2636,7 +2654,9 @@ class AutonomousTestResource(Resource):
 
         try:
             # Récupérer les opportunités actuelles
-            from services.unified_dispatch.realtime_optimizer import check_opportunities_manual
+            from services.unified_dispatch.realtime_optimizer import (
+                check_opportunities_manual,
+            )
 
             opportunities = check_opportunities_manual(company_id=company_id, for_date=date_str, app=None)
 
@@ -2832,7 +2852,9 @@ class RLDispatchSuggestions(Resource):
                                 result = {"suggestions": [], "message": "Aucun conducteur disponible"}
                             else:
                                 # Utiliser le générateur RL pour créer des suggestions
-                                from services.rl.suggestion_generator import get_suggestion_generator
+                                from services.rl.suggestion_generator import (
+                                    get_suggestion_generator,
+                                )
 
                                 generator = get_suggestion_generator()
                                 all_suggestions = generator.generate_suggestions(
@@ -3642,7 +3664,9 @@ class PrometheusMetricsResource(Resource):
             and "dispatch_run" in local_vars
         ):
             try:
-                from services.unified_dispatch.performance_metrics import DispatchPerformanceMetrics
+                from services.unified_dispatch.performance_metrics import (
+                    DispatchPerformanceMetrics,
+                )
 
                 perf_metrics = local_vars["perf_metrics"]
                 dispatch_run = local_vars["dispatch_run"]

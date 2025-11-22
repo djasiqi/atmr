@@ -25,7 +25,7 @@ bcrypt = Bcrypt()
 migrate = Migrate()
 
 # Redis
-REDIS_URL = os.getenv("REDIS_URL") or "redis://redis:6379/0"
+REDIS_URL = os.getenv("REDIS_URL", default="redis://redis:6379/0")
 
 try:
     redis_client = redis.Redis.from_url(REDIS_URL)
@@ -39,7 +39,7 @@ except Exception:
 # Active la file Redis si disponible (scaling multi-workers).
 # Typage strict de async_mode pour contenter Pylance/pyright.
 AsyncMode = Literal["threading", "eventlet", "gevent", "gevent_uwsgi"]
-_env_async = (os.getenv("SOCKETIO_ASYNC_MODE") or "eventlet").strip().lower()
+_env_async = os.getenv("SOCKETIO_ASYNC_MODE", default="eventlet").strip().lower()
 _allowed_modes = {"threading", "eventlet", "gevent", "gevent_uwsgi"}
 if _env_async not in _allowed_modes:
     # fallback sûr si une valeur inconnue est fournie
@@ -73,7 +73,9 @@ def setup_sql_event_listener():
 
     from services.unified_dispatch import performance_metrics
 
-    def _receive_before_cursor_execute(_conn, _cursor, statement, _parameters, _context, _executemany):
+    def _receive_before_cursor_execute(
+        _conn, _cursor, statement, _parameters, _context, _executemany
+    ):
         """Compteur SQL pour performance metrics."""
         # Détecter type de requête
         query_type = "SELECT"  # par défaut
@@ -90,7 +92,9 @@ def setup_sql_event_listener():
         # Incrémenter compteur
         performance_metrics.increment_sql_counter(query_type)
 
-    sqlalchemy_event.listens_for(engine.Engine, "before_cursor_execute")(_receive_before_cursor_execute)
+    sqlalchemy_event.listens_for(engine.Engine, "before_cursor_execute")(
+        _receive_before_cursor_execute
+    )
 
 
 # ✅ 2.7: Setup DB Profiler pour détecter N+1
@@ -130,7 +134,11 @@ def setup_db_profiler(app):
 
                 # Détecter N+1
                 if profiler.detect_n_plus_1(threshold=DB_PROFILER_N_PLUS_1_THRESHOLD):
-                    app.logger.error("[DB Profiler] 🚨 PATTERN N+1 détecté sur %s %s", request.method, request.path)
+                    app.logger.error(
+                        "[DB Profiler] 🚨 PATTERN N+1 détecté sur %s %s",
+                        request.method,
+                        request.path,
+                    )
 
                 # Ajouter headers de profiling si demandé
                 if os.getenv("DB_PROFILING_HEADERS", "false").lower() == "true":
@@ -141,7 +149,9 @@ def setup_db_profiler(app):
 
         app.logger.info("[DB Profiler] Middleware de profiling configuré")
     else:
-        app.logger.debug("[DB Profiler] Profiling désactivé (set ENABLE_DB_PROFILING=true)")
+        app.logger.debug(
+            "[DB Profiler] Profiling désactivé (set ENABLE_DB_PROFILING=true)"
+        )
 
 
 #  JWT error handlers
@@ -157,12 +167,16 @@ def invalid_token_callback(_error):
 
 @jwt.unauthorized_loader
 def missing_token_callback(_error):
-    return jsonify({"error": "Token d'accès manquant. Veuillez vous authentifier."}), 401
+    return jsonify(
+        {"error": "Token d'accès manquant. Veuillez vous authentifier."}
+    ), 401
 
 
 @jwt.needs_fresh_token_loader
 def token_not_fresh_callback(_jwt_header, _jwt_payload):
-    return jsonify({"error": "Le token n'est pas frais. Veuillez vous reconnecter."}), 401
+    return jsonify(
+        {"error": "Le token n'est pas frais. Veuillez vous reconnecter."}
+    ), 401
 
 
 # ✅ Phase 3: Callback pour vérifier la blacklist des tokens
@@ -216,7 +230,11 @@ def validate_jwt_audience(jwt_payload: dict[str, Any]) -> bool:
         return False
 
     if token_audience != expected_audience:
-        app_logger.warning("[JWT Security] Audience invalide: %s (attendu: %s)", token_audience, expected_audience)
+        app_logger.warning(
+            "[JWT Security] Audience invalide: %s (attendu: %s)",
+            token_audience,
+            expected_audience,
+        )
         return False
 
     return True
@@ -233,7 +251,9 @@ def role_required(*roles):
             user = User.query.filter_by(public_id=user_public_id).first()
 
             if not user:
-                app_logger.warning("Utilisateur non trouvé pour le public_id : %s", user_public_id)
+                app_logger.warning(
+                    "Utilisateur non trouvé pour le public_id : %s", user_public_id
+                )
                 abort(404, description="Utilisateur non trouvé")
 
             # Convertir les rôles en objets UserRole pour la comparaison
@@ -258,11 +278,15 @@ def role_required(*roles):
                     try:
                         allowed_roles.append(UserRole[role_str])
                     except KeyError:
-                        app_logger.warning("Rôle invalide dans la configuration : %s", role_str)
+                        app_logger.warning(
+                            "Rôle invalide dans la configuration : %s", role_str
+                        )
 
             if user.role not in allowed_roles:
                 app_logger.warning(
-                    "⛔ Accès refusé : %s (%s) a tenté d'accéder à une route restreinte.", user.username, user.role
+                    "⛔ Accès refusé : %s (%s) a tenté d'accéder à une route restreinte.",
+                    user.username,
+                    user.role,
                 )
                 abort(403, description="Accès non autorisé")
 

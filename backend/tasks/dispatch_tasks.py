@@ -278,7 +278,9 @@ def run_dispatch_task(
                         try:
                             from datetime import date as date_type
 
-                            from services.notification_service import notify_dispatch_run_completed
+                            from services.notification_service import (
+                                notify_dispatch_run_completed,
+                            )
 
                             day_date = date_type.fromisoformat(for_date) if for_date else None
                             date_str = day_date.isoformat() if day_date else None
@@ -378,7 +380,9 @@ def autorun_tick() -> Dict[str, Any]:
 
             try:
                 # 🆕 Utiliser le gestionnaire autonome pour décider si le dispatch doit tourner
-                from services.unified_dispatch.autonomous_manager import get_manager_for_company
+                from services.unified_dispatch.autonomous_manager import (
+                    get_manager_for_company,
+                )
 
                 manager = get_manager_for_company(company_id)
 
@@ -492,7 +496,9 @@ def realtime_monitoring_tick() -> Dict[str, Any]:
 
             try:
                 # Créer le gestionnaire autonome
-                from services.unified_dispatch.autonomous_manager import get_manager_for_company
+                from services.unified_dispatch.autonomous_manager import (
+                    get_manager_for_company,
+                )
 
                 manager = get_manager_for_company(company_id)
 
@@ -508,7 +514,9 @@ def realtime_monitoring_tick() -> Dict[str, Any]:
                 results["companies_checked"] += 1
 
                 # Vérifier les opportunités d'optimisation
-                from services.unified_dispatch.realtime_optimizer import check_opportunities_manual
+                from services.unified_dispatch.realtime_optimizer import (
+                    check_opportunities_manual,
+                )
 
                 opportunities = check_opportunities_manual(
                     company_id=company_id,
@@ -610,7 +618,9 @@ def ensure_agents_running(self) -> Dict[str, Any]:  # noqa: ARG001
 
             for company in companies:
                 try:
-                    from services.agent_dispatch.orchestrator import get_agent_for_company
+                    from services.agent_dispatch.orchestrator import (
+                        get_agent_for_company,
+                    )
 
                     agent = get_agent_for_company(company.id, app=app)
 

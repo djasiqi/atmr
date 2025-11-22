@@ -7,7 +7,16 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import CheckConstraint, Column, DateTime, Float, ForeignKey, Index, Integer, func
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    func,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 

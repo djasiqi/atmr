@@ -102,8 +102,8 @@ class SuggestionEngine:
         suggestions: list[Suggestion] = []
 
         # Récupérer le booking et le driver
-        booking_id = int(assignment.booking_id) if assignment.booking_id is not None else None  # type: ignore[arg-type]
-        driver_id = int(assignment.driver_id) if assignment.driver_id is not None else None  # type: ignore[arg-type]
+        booking_id = int(assignment.booking_id) if assignment.booking_id is not None else None
+        driver_id = int(assignment.driver_id) if assignment.driver_id is not None else None
 
         booking = db.session.get(Booking, booking_id) if booking_id else None
         driver = db.session.get(Driver, driver_id) if driver_id else None
@@ -543,7 +543,7 @@ def _apply_customer_notification(suggestion: Suggestion, company_id: int, dry_ru
         return {"success": False, "error": "Booking ID manquant"}
 
     booking = db.session.get(Booking, booking_id)
-    if not booking or booking.company_id != company_id:  # type: ignore[operator]
+    if not booking or booking.company_id != company_id:
         return {"success": False, "error": "Booking introuvable"}
 
     auto_message = suggestion.additional_data.get("auto_message", "") if suggestion.additional_data else ""

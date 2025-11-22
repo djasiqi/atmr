@@ -46,7 +46,9 @@ def init():
 
 
 @dbcli.command()
-@click.option("-m", "--message", required=True, help="Message de description pour la migration.")
+@click.option(
+    "-m", "--message", required=True, help="Message de description pour la migration."
+)
 def migrate(message):
     """Génère une nouvelle migration."""
     with app.app_context():

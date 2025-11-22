@@ -74,7 +74,10 @@ def send_daily_reports_task(company_id: int | None = None, day: date | None = No
 
     """
     try:
-        from services.analytics.report_generator import generate_daily_report, generate_email_content
+        from services.analytics.report_generator import (
+            generate_daily_report,
+            generate_email_content,
+        )
 
         if day is None:
             day = date.today() - timedelta(days=1)
@@ -145,7 +148,10 @@ def send_weekly_reports_task(company_id: int | None = None, week_start: date | N
 
     """
     try:
-        from services.analytics.report_generator import generate_email_content, generate_weekly_report
+        from services.analytics.report_generator import (
+            generate_email_content,
+            generate_weekly_report,
+        )
 
         if week_start is None:
             today = date.today()

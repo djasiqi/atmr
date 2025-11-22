@@ -13,7 +13,12 @@ from sqlalchemy.exc import IntegrityError
 
 from models import Assignment, BookingStatus, DriverState, DriverStatus, DriverType
 from services.unified_dispatch.apply import apply_assignments
-from tests.factories import BookingFactory, CompanyFactory, DispatchRunFactory, DriverFactory
+from tests.factories import (
+    BookingFactory,
+    CompanyFactory,
+    DispatchRunFactory,
+    DriverFactory,
+)
 
 logger = logging.getLogger(__name__)
 

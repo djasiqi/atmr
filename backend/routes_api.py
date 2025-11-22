@@ -18,7 +18,9 @@ from routes.company_mobile_auth import company_mobile_auth_ns
 from routes.company_mobile_dispatch import company_mobile_dispatch_ns
 from routes.company_settings import settings_ns
 from routes.dispatch_health import dispatch_health_ns  # /company_dispatch_health
-from routes.dispatch_routes import dispatch_ns as company_dispatch_ns  # /company_dispatch
+from routes.dispatch_routes import (
+    dispatch_ns as company_dispatch_ns,  # /company_dispatch
+)
 from routes.driver import driver_ns
 from routes.geocode import geocode_ns
 from routes.invoices import invoices_ns

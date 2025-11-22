@@ -25,7 +25,10 @@ from models import (
 )
 from models.enums import AssignmentStatus, BookingStatus, DriverType, SenderRole
 from routes.companies import get_company_from_token
-from services.agent_dispatch.orchestrator import get_agent_for_company, stop_agent_for_company
+from services.agent_dispatch.orchestrator import (
+    get_agent_for_company,
+    stop_agent_for_company,
+)
 from services.agent_dispatch.tools import AgentTools
 from services.unified_dispatch import settings as dispatch_settings
 from services.unified_dispatch.heuristics import MAX_FAIRNESS_GAP

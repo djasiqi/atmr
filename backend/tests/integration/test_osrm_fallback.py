@@ -93,7 +93,11 @@ class TestOSRMFallback:
 
     def test_osrm_route_info_fallback_on_error(self):
         """Test que route_info utilise le fallback haversine quand OSRM échoue."""
-        from services.osrm_client import _fallback_eta_seconds, _haversine_km, route_info
+        from services.osrm_client import (
+            _fallback_eta_seconds,
+            _haversine_km,
+            route_info,
+        )
 
         # Coordonnées de test (Lausanne)
         origin = (46.2044, 6.1432)

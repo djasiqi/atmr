@@ -128,7 +128,10 @@ class PaymentResource(Resource):
             from marshmallow import ValidationError
 
             from schemas.payment_schemas import PaymentStatusUpdateSchema
-            from schemas.validation_utils import handle_validation_error, validate_request
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
             try:
                 validated_data = validate_request(PaymentStatusUpdateSchema(), data)
@@ -176,7 +179,10 @@ class CreatePayment(Resource):
             from marshmallow import ValidationError
 
             from schemas.payment_schemas import PaymentCreateSchema
-            from schemas.validation_utils import handle_validation_error, validate_request
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
             data = request.get_json(silent=True) or {}
             try:

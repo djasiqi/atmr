@@ -20,7 +20,9 @@ route_response_model = osrm_ns.model(
     {
         "duration": fields.Float(description="Durée en secondes"),
         "distance": fields.Float(description="Distance en mètres"),
-        "route": fields.List(fields.List(fields.Float), description="Liste des coordonnées [lat, lon]"),
+        "route": fields.List(
+            fields.List(fields.Float), description="Liste des coordonnées [lat, lon]"
+        ),
     },
 )
 
@@ -52,12 +54,14 @@ class OSRMRoute(Resource):
 
             # URL du serveur OSRM (priorité Config -> env -> fallback service docker)
             config_base = getattr(Config, "UD_OSRM_URL", None)
-            osrm_base_url = os.getenv("OSRM_BASE_URL", config_base or "http://osrm:5000")
+            osrm_base_url = os.getenv(
+                "OSRM_BASE_URL", config_base or "http://osrm:5000"
+            )
 
             # Obtenir l'itinéraire avec géométrie complète
             result = route_info(
-                origin=(pickup_lat, pickup_lon),  # type: ignore
-                destination=(dropoff_lat, dropoff_lon),  # type: ignore
+                origin=(pickup_lat, pickup_lon),
+                destination=(dropoff_lat, dropoff_lon),
                 base_url=osrm_base_url,
                 profile="driving",
                 timeout=4,  # ⚡ Réduit à 4s pour fail-fast (cohérent avec frontend)
@@ -74,7 +78,9 @@ class OSRMRoute(Resource):
             if result.get("geometry") and result["geometry"].get("coordinates"):
                 # OSRM retourne [lon, lat], on convertit en [lat, lon] pour
                 # Leaflet
-                route_coords = [[coord[1], coord[0]] for coord in result["geometry"]["coordinates"]]
+                route_coords = [
+                    [coord[1], coord[0]] for coord in result["geometry"]["coordinates"]
+                ]
 
             return {
                 "duration": result.get("duration", 0),
