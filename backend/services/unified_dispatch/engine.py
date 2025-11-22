@@ -107,7 +107,9 @@ def _release_day_lock(company_id: int, day_str: str) -> None:
 
 
 def _analyze_unassigned_reasons(
-    problem: Dict[str, Any], assignments: List[Any], unassigned_ids: List[int]
+    problem: Dict[str, Any],
+    assignments: List[Any],  # noqa: ARG001 - Argument conservé pour compatibilité API
+    unassigned_ids: List[int],
 ) -> Dict[int, List[str]]:
     """Analyse les raisons détaillées pour lesquelles certaines courses n'ont pas pu être assignées."""
     reasons = {}
@@ -116,8 +118,7 @@ def _analyze_unassigned_reasons(
 
     # Créer des dictionnaires pour un accès rapide
     bookings_dict = {b.id: b for b in bookings}
-    _drivers_dict = {d.id: d for d in drivers}
-    _assigned_booking_ids = {a.booking_id for a in assignments}
+    # Note: drivers_dict et assigned_booking_ids supprimés car non utilisés
 
     for booking_id in unassigned_ids:
         booking = bookings_dict.get(booking_id)
@@ -1981,6 +1982,10 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
         )
 
     except Exception as e:
+        # ✅ FIX: Re-lever CompanyNotFoundError si elle a été levée avec raise_on_company_not_found=True
+        if isinstance(e, CompanyNotFoundError) and raise_on_company_not_found:
+            raise  # Re-lever l'exception pour qu'elle soit propagée au test
+
         # ✅ logging SQLA enrichi pour capter la 1re requête fautive
         extra_sql = {}
         try:

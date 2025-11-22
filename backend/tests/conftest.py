@@ -1056,16 +1056,17 @@ def persisted_fixture(
         Instance du modèle persisté et rechargé depuis la DB
     """
     # Ajouter l'objet à la session
-    db_session.add(factory_instance)
-    db_session.flush()  # Force l'assignation de l'ID
+    # ✅ FIX: db_session est l'instance Flask-SQLAlchemy, utiliser .session
+    db_session.session.add(factory_instance)
+    db_session.session.flush()  # Force l'assignation de l'ID
 
     # Commit pour garantir la persistance
-    db_session.commit()
+    db_session.session.commit()
 
     if reload:
         # Expirer et recharger pour s'assurer que l'objet est bien en DB
-        db_session.expire(factory_instance)
-        reloaded = db_session.query(model_class).get(factory_instance.id)
+        db_session.session.expire(factory_instance)
+        reloaded = db_session.session.query(model_class).get(factory_instance.id)
 
         if assert_exists:
             assert reloaded is not None, (

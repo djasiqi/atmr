@@ -78,15 +78,28 @@ def validate_required_env_vars(config_name: str) -> None:
     # Variables critiques pour production
     if config_name == "production":
         production_vars = {
-            "DATABASE_URL",
             "REDIS_URL",
         }
+        # DATABASE_URL ou SQLALCHEMY_DATABASE_URI ou POSTGRES_* doivent être présents
         # SENTRY_DSN et PDF_BASE_URL sont optionnels mais recommandés
         recommended_vars = {
             "SENTRY_DSN",
             "PDF_BASE_URL",
         }
         required_vars.update(production_vars)
+
+        # Vérifier que la configuration de base de données est disponible
+        has_db_config = (
+            os.getenv("DATABASE_URL")
+            or os.getenv("SQLALCHEMY_DATABASE_URI")
+            or (os.getenv("POSTGRES_USER") and os.getenv("POSTGRES_PASSWORD") and os.getenv("POSTGRES_DB"))
+        )
+        if not has_db_config:
+            raise RuntimeError(
+                "Configuration de base de données manquante pour production. "
+                + "Fournissez soit DATABASE_URL, soit SQLALCHEMY_DATABASE_URI, "
+                + "soit POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB"
+            )
 
         missing = []
         for var in required_vars:

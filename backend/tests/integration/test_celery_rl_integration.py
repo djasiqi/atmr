@@ -212,7 +212,7 @@ class TestCeleryRLPerformance:
         print("🧪 Test de latence Celery RL...")
 
         # Mock des tâches avec timing
-        _start_time = time.time()
+        _start_time = time.time()  # Variable de debug (timing) - préfixée avec _ pour indiquer usage intentionnel
 
         with patch("tasks.rl_tasks.retrain_dqn_model_task") as mock_task:
             mock_result = Mock()

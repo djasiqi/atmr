@@ -84,7 +84,7 @@ def run_load_test(concurrent_dispatches: int = 5, base_url: str = "http://localh
     results["metrics_before"] = get_metrics_summary(base_url)
 
     # Trouver une company
-    company = Company.query.first()
+    company = db.session.query(Company).first()
     if not company:
         results["errors"].append("Aucune company trouvée")
         return results

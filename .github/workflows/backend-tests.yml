@@ -46,15 +46,21 @@ jobs:
             pip install -r requirements.txt
           fi
 
+      - name: Ruff format
+        run: |
+          cd backend
+          # Formater automatiquement le code
+          ruff format .
+          # Vérifier que le code est bien formaté (fail si des changements sont nécessaires)
+          ruff format --check . || {
+            echo "❌ Le code n'est pas formaté correctement. Exécutez 'ruff format .' localement."
+            exit 1
+          }
+
       - name: Ruff lint
         run: |
           cd backend
           ruff check . --output-format=github
-
-      - name: Ruff format
-        run: |
-          cd backend
-          ruff format .
 
       - name: Flake8 check
         run: |

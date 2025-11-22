@@ -1,5 +1,0 @@
-2025-11-21T16:14:57.7340000Z Requested labels: ubuntu-latest
-2025-11-21T16:14:57.7340000Z Job defined at: djasiqi/atmr/.github/workflows/deploy.yml@refs/heads/main
-2025-11-21T16:14:57.7340000Z Waiting for a runner to pick up this job...
-2025-11-21T16:14:57.7380000Z Job is about to start running on the hosted runner: GitHub Actions 1000001262
-2025-11-21T16:14:57.7390000Z Job is waiting for a hosted runner to come online.

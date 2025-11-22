@@ -19,7 +19,11 @@ services:
     networks:
       - atmr-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} && psql -U $${POSTGRES_USER} -d $${POSTGRES_DB} -c 'SELECT 1' > /dev/null 2>&1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -76,6 +80,8 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-atmr_db}
+      # SQLALCHEMY_DATABASE_URI explicite pour les migrations Flask
+      SQLALCHEMY_DATABASE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # DATABASE_URL sera construit par config.py avec échappement URL automatique
 
       # Redis/Celery
@@ -145,6 +151,12 @@ services:
     container_name: atmr-celery-worker
     restart: unless-stopped
     command: celery -A celery_app.celery worker --loglevel=info --concurrency=2
+    healthcheck:
+      test: ["CMD", "celery", "-A", "celery_app.celery", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     environment:
       # Même configuration que le backend
       FLASK_ENV: production
@@ -154,6 +166,8 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-atmr_db}
+      # SQLALCHEMY_DATABASE_URI explicite pour les migrations Flask
+      SQLALCHEMY_DATABASE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # DATABASE_URL sera construit par config.py avec échappement URL automatique
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
@@ -195,6 +209,12 @@ services:
     container_name: atmr-celery-beat
     restart: unless-stopped
     command: celery -A celery_app.celery beat --loglevel=info
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/celerybeat-schedule/db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     environment:
       FLASK_ENV: production
       # Base de données (variables individuelles pour échappement URL automatique)
@@ -203,6 +223,8 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-atmr_db}
+      # SQLALCHEMY_DATABASE_URI explicite pour les migrations Flask
+      SQLALCHEMY_DATABASE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # DATABASE_URL sera construit par config.py avec échappement URL automatique
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0

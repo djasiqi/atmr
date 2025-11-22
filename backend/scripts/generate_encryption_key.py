@@ -4,7 +4,6 @@
 Usage: python -m scripts.generate_encryption_key
 """
 
-import os
 import secrets
 import sys
 from pathlib import Path

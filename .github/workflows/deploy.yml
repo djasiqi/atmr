@@ -44,11 +44,53 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate required secrets
+        run: |
+          REQUIRED_SECRETS=(
+            "DOCKER_IMAGE"
+            "DOCKER_TAG"
+            "SSH_HOST"
+            "SSH_USER"
+            "SSH_KEY"
+            "SSH_PORT"
+            "APP_ENCRYPTION_KEY_B64"
+            "SECRET_KEY"
+            "JWT_SECRET_KEY"
+            "POSTGRES_PASSWORD"
+            "POSTGRES_USER"
+            "POSTGRES_DB"
+            "MAIL_PASSWORD"
+            "SENTRY_DSN"
+            "DOCKERHUB_USERNAME"
+            "DOCKERHUB_TOKEN"
+          )
+          MISSING_SECRETS=()
+          for secret in "${REQUIRED_SECRETS[@]}"; do
+            if [ -z "${!secret:-}" ]; then
+              MISSING_SECRETS+=("$secret")
+            fi
+          done
+          if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
+            echo "❌ Secrets manquants: ${MISSING_SECRETS[*]}"
+            exit 1
+          fi
+          echo "✅ Tous les secrets requis sont présents (${#REQUIRED_SECRETS[@]} secrets validés)"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+        continue-on-error: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Generate SBOM with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          version: v0.67.2
+          scan-type: "fs"
+          scan-ref: "./backend"
+          format: "cyclonedx"
+          output: "sbom-cyclonedx.json"
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -65,6 +107,8 @@ jobs:
             WITH_RL=false
           push: true
           tags: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@master
@@ -75,6 +119,7 @@ jobs:
           output: trivy-results.sarif
           ignore-unfixed: true
           vuln-type: os,library
+          severity: CRITICAL,HIGH
 
       - name: Upload Trivy results to GitHub Security
         if: false
@@ -92,6 +137,16 @@ jobs:
           source: "docker-compose.production.yml"
           target: "/srv/atmr"
 
+      - name: Copy smoke tests script to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          source: "scripts/smoke_tests.sh"
+          target: "/srv/atmr/scripts/"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -103,6 +158,16 @@ jobs:
           script: |
             cd /srv/atmr
             set -o errexit -o nounset -o pipefail -x
+
+            # Fonction de rollback en cas d'erreur
+            rollback() {
+              echo "🔄 Rollback en cours..."
+              docker compose -f docker-compose.production.yml down --remove-orphans || true
+              echo "❌ Déploiement échoué, rollback effectué"
+              exit 1
+            }
+            trap rollback ERR
+
             export APP_ENCRYPTION_KEY_B64="${{ secrets.APP_ENCRYPTION_KEY_B64 }}"
             export SECRET_KEY="${{ secrets.SECRET_KEY }}"
             export JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}"
@@ -119,7 +184,7 @@ jobs:
             docker compose -f docker-compose.production.yml down --remove-orphans || true
             echo "🔄 Démarrage des services..."
             docker compose -f docker-compose.production.yml up -d
-            
+
             echo "⏳ Attente que PostgreSQL soit prêt..."
             echo "📊 Vérification de l'état du conteneur PostgreSQL..."
             for i in $(seq 1 60); do
@@ -155,7 +220,11 @@ jobs:
               sleep 2
             done
             echo "🔄 Exécution des migrations de base de données..."
-            docker compose -f docker-compose.production.yml exec -T backend flask db upgrade || {
+            # Construire SQLALCHEMY_DATABASE_URI explicitement pour les migrations
+            SQLALCHEMY_DATABASE_URI="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+            docker compose -f docker-compose.production.yml exec -T \
+              -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
+              backend flask db upgrade || {
               echo "❌ Erreur lors de l'exécution des migrations"
               echo "---- Diagnostics (migration failed) ----"
               docker compose -f docker-compose.production.yml exec -T backend flask db current || true
@@ -164,4 +233,20 @@ jobs:
               exit 1
             }
             echo "✅ Migrations appliquées avec succès"
-            echo "✅ Déploiement terminé"
+
+            # Smoke tests post-déploiement
+            echo "🧪 Exécution des smoke tests..."
+            if [ -f "/srv/atmr/scripts/smoke_tests.sh" ]; then
+              export BACKEND_URL="http://localhost:5000"
+              bash /srv/atmr/scripts/smoke_tests.sh || {
+                echo "❌ Les smoke tests ont échoué"
+                rollback
+              }
+            else
+              echo "⚠️  Script de smoke tests non trouvé, tests ignorés"
+            fi
+
+            # Désactiver le trap de rollback après succès
+            trap - ERR
+
+            echo "✅ Déploiement terminé avec succès"
