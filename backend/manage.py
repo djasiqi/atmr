@@ -28,9 +28,10 @@ app = create_app(config_name)
 @click.group()
 def cli():
     """Point d'entrée principal pour les commandes de gestion."""
+    pass
 
 
-@cli.group(name="db")
+@cli.group(name="db")  # type: ignore[reportFunctionMemberAccess]
 def dbcli():
     """Commandes pour les migrations de base de données."""
 
