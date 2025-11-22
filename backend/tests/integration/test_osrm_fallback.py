@@ -11,7 +11,6 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
-
 # Ajouter le répertoire backend au path Python
 backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))

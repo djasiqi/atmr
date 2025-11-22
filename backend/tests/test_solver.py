@@ -7,7 +7,6 @@ Tests pour OR-Tools VRPTW (Vehicle Routing Problem with Time Windows)
 
 from datetime import datetime, timedelta
 
-
 from services.unified_dispatch.settings import Settings
 from services.unified_dispatch.solver import (
     SAFE_MAX_NODES,

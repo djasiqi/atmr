@@ -6,7 +6,6 @@ Tests unitaires pour schemas/dispatch_schemas.py
 from datetime import date, datetime
 from typing import Any, cast
 
-
 from schemas.dispatch_schemas import (
     assignment_schema,
     assignments_schema,

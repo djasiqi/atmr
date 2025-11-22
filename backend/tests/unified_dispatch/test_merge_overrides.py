@@ -11,7 +11,6 @@ Valide que merge_overrides gère correctement:
 
 import logging
 
-
 from services.unified_dispatch.settings import Settings, merge_overrides
 
 logger = logging.getLogger(__name__)

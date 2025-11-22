@@ -8,7 +8,6 @@ Teste que les SLO sont respectés pour différentes tailles de batch.
 import logging
 import time
 
-
 from services.unified_dispatch.slo import (
     SLOBreachTracker,
     check_slo_breach,
