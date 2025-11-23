@@ -106,7 +106,9 @@ def _iso(dt):  # pyright: ignore[reportUnusedFunction]
     return dt.isoformat()
 
 
-def _coerce_enum(value, enum_class: type[TEnum]) -> TEnum:  # pyright: ignore[reportUnusedFunction]
+def _coerce_enum(  # pyright: ignore[reportUnusedFunction]
+    value, enum_class: type[TEnum]
+) -> TEnum:
     """Convertit une valeur en enum."""
     if isinstance(value, PyEnum):
         return cast(TEnum, value)

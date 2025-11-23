@@ -39,7 +39,8 @@ SLOT_SIZE_MINUTES = 15
 
 # ==================== Prometheus Metrics ====================
 
-# Métriques Prometheus pour cache OSRM (créées uniquement si prometheus_client disponible)
+# Métriques Prometheus pour cache OSRM
+# (créées uniquement si prometheus_client disponible)
 if PROMETHEUS_AVAILABLE and Counter is not None and Gauge is not None:
     OSRM_CACHE_HITS_TOTAL = Counter(
         "osrm_cache_hits_total",
@@ -63,7 +64,8 @@ if PROMETHEUS_AVAILABLE and Counter is not None and Gauge is not None:
         "Taux de réussite du cache OSRM (0-1)",
     )
 
-    # ✅ FIX: Initialiser les métriques avec 0.0 pour qu'elles apparaissent même si jamais incrémentées
+    # ✅ FIX: Initialiser les métriques avec 0.0 pour qu'elles apparaissent
+    # même si jamais incrémentées
     # Note: Pour les Counters avec labels, on initialise avec un label par défaut
     try:
         OSRM_CACHE_HITS_TOTAL.labels(cache_type="matrix").inc(0)
@@ -71,7 +73,8 @@ if PROMETHEUS_AVAILABLE and Counter is not None and Gauge is not None:
         OSRM_CACHE_BYPASS_TOTAL.inc(0)
         OSRM_CACHE_HIT_RATE.set(0.0)
     except Exception as e:
-        # Ignorer les erreurs d'initialisation (peut échouer si Prometheus non configuré)
+        # Ignorer les erreurs d'initialisation
+        # (peut échouer si Prometheus non configuré)
         logger.debug(
             "[OSRM Cache Metrics] Failed to initialize metrics with 0.0: %s", e
         )

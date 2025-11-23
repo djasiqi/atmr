@@ -166,7 +166,8 @@ class TestIdempotence:
         logger.info("✅ Test idempotence réussi: 0 doublon créé")
 
     def test_unique_constraint_enforced(self, app_context, db_session):
-        """Test: violation de contrainte unique (booking_id, dispatch_run_id) → erreur."""
+        """Test: violation de contrainte unique
+        (booking_id, dispatch_run_id) → erreur."""
 
         # Créer une company d'abord (requis pour FK)
         company = CompanyFactory()
@@ -217,7 +218,8 @@ class TestIdempotence:
         db_session.add(assignment1)
         db_session.commit()
 
-        # Essayer de créer une seconde assignation avec le même (booking_id, dispatch_run_id)
+        # Essayer de créer une seconde assignation avec le même
+        # (booking_id, dispatch_run_id)
         assignment2 = Assignment(
             booking_id=booking.id,
             driver_id=driver.id,

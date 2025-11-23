@@ -7,7 +7,8 @@ Métriques exposées:
 - dispatch_quality_score: Gauge qualité (0-100)
 - dispatch_assignment_rate: Gauge taux d'assignation (%)
 - dispatch_unassigned_count: Gauge nombre de bookings non assignés
-- dispatch_circuit_breaker_state: Gauge état circuit breaker OSRM (0=CLOSED, 1=OPEN, 2=HALF_OPEN)
+- dispatch_circuit_breaker_state: Gauge état circuit breaker OSRM
+  (0=CLOSED, 1=OPEN, 2=HALF_OPEN)
 - dispatch_temporal_conflicts_total: Compteur conflits temporels
 - dispatch_db_conflicts_total: Compteur conflits DB
 """
@@ -361,15 +362,19 @@ def dispatch_metrics_context(
             record_dispatch_quality(score, dispatch_run_id, company_id)
 
     Args:
-        dispatch_run_id: ID du dispatch run (passé pour usage dans le contexte, non utilisé directement)
+        dispatch_run_id: ID du dispatch run (passé pour usage dans le
+          contexte, non utilisé directement)
         company_id: ID de l'entreprise
         mode: Mode du dispatch
 
     Note:
-        dispatch_run_id est accepté mais non utilisé directement dans cette fonction.
-        Il est disponible pour être passé aux fonctions appelées dans le contexte (ex: record_dispatch_quality).
+        dispatch_run_id est accepté mais non utilisé directement dans cette
+        fonction.
+        Il est disponible pour être passé aux fonctions appelées dans le
+        contexte (ex: record_dispatch_quality).
     """
-    _ = dispatch_run_id  # Accepté mais non utilisé directement (utilisé par fonctions appelées dans le contexte)
+    _ = dispatch_run_id  # Accepté mais non utilisé directement
+    # (utilisé par fonctions appelées dans le contexte)
     import time
 
     start_time = time.time()

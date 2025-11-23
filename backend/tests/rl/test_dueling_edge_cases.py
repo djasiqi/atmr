@@ -498,7 +498,8 @@ class TestDuelingInitializationEdgeCases:
             advantage_hidden_size=128,
         )
 
-        # Vérifier que les poids ne sont pas tous zéro (sauf pour les paramètres normalement initialisés à zéro)
+        # Vérifier que les poids ne sont pas tous zéro
+        # (sauf pour les paramètres normalement initialisés à zéro)
         for name, param in network.named_parameters():
             # Exclure les paramètres qui sont normalement initialisés à zéro
             if "bias" in name:

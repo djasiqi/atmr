@@ -86,7 +86,8 @@ def test_create_booking_for_dispatch(
     for i in range(2):
         booking = Booking(
             client_id=sample_client.id,
-            company_id=sample_company.id,  # Utiliser sample_company.id au lieu de sample_user.company_id
+            company_id=sample_company.id,  # Utiliser sample_company.id
+            # au lieu de sample_user.company_id
             user_id=sample_client.user_id,
             customer_name=f"Client {i}",
             pickup_location="Lausanne Gare",

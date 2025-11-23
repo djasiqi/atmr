@@ -280,7 +280,10 @@ class TestDispatchSafetyIntegration:
                 mock_notification_class.return_value = notification_service
 
                 # Simuler le dispatch
-                _result = self._simulate_dispatch(
+                # _result = self._simulate_dispatch(
+                #     mock_company, mock_drivers, mock_bookings, mock_assignments
+                # )
+                self._simulate_dispatch(
                     mock_company, mock_drivers, mock_bookings, mock_assignments
                 )
 

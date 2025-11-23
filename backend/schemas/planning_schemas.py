@@ -4,7 +4,8 @@ from marshmallow import Schema, fields, validate
 
 
 class PlanningShiftsQuerySchema(Schema):
-    """Schema pour validation query params GET /api/planning/companies/me/planning/shifts."""
+    """Schema pour validation query params
+    GET /api/planning/companies/me/planning/shifts."""
 
     driver_id = fields.Int(
         validate=validate.Range(min=1, error="driver_id doit être > 0"),
@@ -17,7 +18,8 @@ class PlanningShiftsQuerySchema(Schema):
 
 
 class PlanningUnavailabilityQuerySchema(Schema):
-    """Schema pour validation query params GET /api/planning/companies/me/planning/unavailability."""
+    """Schema pour validation query params
+    GET /api/planning/companies/me/planning/unavailability."""
 
     driver_id = fields.Int(
         validate=validate.Range(min=1, error="driver_id doit être > 0"),
@@ -27,7 +29,8 @@ class PlanningUnavailabilityQuerySchema(Schema):
 
 
 class PlanningWeeklyTemplateQuerySchema(Schema):
-    """Schema pour validation query params GET /api/planning/companies/me/planning/weekly-template."""
+    """Schema pour validation query params
+    GET /api/planning/companies/me/planning/weekly-template."""
 
     driver_id = fields.Int(
         validate=validate.Range(min=1, error="driver_id doit être > 0"),

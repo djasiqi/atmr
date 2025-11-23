@@ -66,7 +66,11 @@ class AssignmentValidator:
             # Vérifier min_minutes_before_pickup
             if not self._check_min_minutes_before_pickup(booking, driver):
                 violations.append(
-                    f"Assignment {assignment.id}: violates min_minutes_before_pickup ({self.min_minutes_before_pickup} min)"
+                    (
+                        f"Assignment {assignment.id}: violates "
+                        f"min_minutes_before_pickup "
+                        f"({self.min_minutes_before_pickup} min)"
+                    )
                 )
 
         is_valid = len(violations) == 0

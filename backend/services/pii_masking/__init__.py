@@ -56,7 +56,10 @@ SENSITIVE_KEYS = {
 
 # Pattern pour détecter les tokens dans les chaînes (token: value, key: value, etc.)
 TOKEN_PATTERN = re.compile(
-    r"(?i)(token|key|secret|password|apikey|access_key|secret_key|authorization|auth)\s*[:=]\s*['\"]?([^'\"]\S+)",
+    (
+        r"(?i)(token|key|secret|password|apikey|access_key|secret_key|"
+        r"authorization|auth)\s*[:=]\s*['\"]?([^'\"]\S+)"
+    ),
     re.IGNORECASE,
 )
 
@@ -185,9 +188,11 @@ class PIIMaskingService:
 
         if isinstance(data, str):
             # ✅ IMPORTANT: Appliquer patterns spécifiques AVANT patterns génériques
-            # pour éviter conflits (ex: 0791234567 masqué par PHONE_PATTERN avant PHONE_CH_PATTERN)
+            # pour éviter conflits (ex: 0791234567 masqué par PHONE_PATTERN avant
+            # PHONE_CH_PATTERN)
 
-            # 1. Masquer les patterns de tokens dans les chaînes (token: value, key: value, etc.)
+            # 1. Masquer les patterns de tokens dans les chaînes
+            # (token: value, key: value, etc.)
             sanitized = TOKEN_PATTERN.sub(r"\1: [REDACTED]", data)
 
             # 2. Patterns spécifiques (prioritaires)

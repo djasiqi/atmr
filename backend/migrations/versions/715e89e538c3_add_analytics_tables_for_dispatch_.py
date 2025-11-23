@@ -127,7 +127,10 @@ def upgrade():
             "preferential_rate",
             existing_type=sa.NUMERIC(precision=10, scale=2),
             comment=None,
-            existing_comment="Tarif préférentiel en CHF (ex: 45, 50, 55, 60, 70, 80, 110). NULL = tarif standard",
+            existing_comment=(
+                "Tarif préférentiel en CHF "
+                "(ex: 45, 50, 55, 60, 70, 80, 110). NULL = tarif standard"
+            ),
             existing_nullable=True,
         )
 
@@ -140,7 +143,10 @@ def downgrade():
         batch_op.alter_column(
             "preferential_rate",
             existing_type=sa.NUMERIC(precision=10, scale=2),
-            comment="Tarif préférentiel en CHF (ex: 45, 50, 55, 60, 70, 80, 110). NULL = tarif standard",
+            comment=(
+                "Tarif préférentiel en CHF "
+                "(ex: 45, 50, 55, 60, 70, 80, 110). NULL = tarif standard"
+            ),
             existing_nullable=True,
         )
 

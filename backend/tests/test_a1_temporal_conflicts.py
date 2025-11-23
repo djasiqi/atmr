@@ -134,11 +134,13 @@ class TestTemporalConflicts:
         # Vérifier qu'une seule course est assignée
         assert len(result.assignments) >= 1, "Au moins une course doit être assignée"
 
-        # La 2e course doit être rejetée ou assignée à un autre chauffeur (imp possible ici)
-        # Si les deux sont assignées, vérifier qu'elles ne sont pas au même chauffeur
-        # OU que la 2e est refusée
+        # La 2e course doit être rejetée ou assignée à un autre chauffeur
+        # (imp possible ici)
+        # Si les deux sont assignées, vérifier qu'elles ne sont pas
+        # au même chauffeur OU que la 2e est refusée
         if len(result.assignments) == 2:
-            # Les deux assignées → vérifier qu'elles sont au même chauffeur avec gap suffisant
+            # Les deux assignées → vérifier qu'elles sont au même chauffeur
+            # avec gap suffisant
             assert len({a.driver_id for a in result.assignments}) >= 1
         else:
             # Une seule assignée → c'est normal (l'autre était en conflit)

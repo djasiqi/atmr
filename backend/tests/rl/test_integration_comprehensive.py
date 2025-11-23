@@ -146,7 +146,7 @@ class TestRLIntegration:
     def test_action_masking_integration(self, mock_agent, mock_env):
         """Test l'intégration de l'action masking."""
         # Mock des actions valides (utilisé pour la validation)
-        _valid_actions = [0, 2, 4, 7, 9, 12, 15, 18, 21, 24]
+        # _valid_actions = [0, 2, 4, 7, 9, 12, 15, 18, 21, 24]  # Commenté car non utilisé
 
         # Mock de la génération de masque
         mock_env._get_valid_actions_mask.return_value = np.array(
@@ -442,12 +442,14 @@ class TestRLSystemRobustness:
 
         for invalid_data in invalid_data_cases:
             # Tenter d'utiliser les données invalides
-            _result = (
-                np.isfinite(invalid_data)
-                if isinstance(invalid_data, np.ndarray)
-                else invalid_data is not None
-            )
-            # Le résultat n'est pas utilisé car c'est juste un test de robustesse
+            # Test de robustesse - vérification que les données invalides
+            # ne causent pas d'erreur
+            if isinstance(invalid_data, np.ndarray):
+                # Vérifier que le tableau ne cause pas d'erreur
+                _ = np.isfinite(invalid_data)
+            else:
+                # Vérifier que la valeur ne cause pas d'erreur
+                _ = invalid_data is not None
 
     def test_system_recovery(self):
         """Test la récupération du système après erreur."""

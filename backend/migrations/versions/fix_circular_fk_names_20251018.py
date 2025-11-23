@@ -40,7 +40,8 @@ def upgrade():
                     AND constraint_name LIKE 'booking_invoice_line_id_fkey%'
                 ) THEN
                     ALTER TABLE booking
-                    RENAME CONSTRAINT booking_invoice_line_id_fkey TO fk_booking_invoice_line;
+                    RENAME CONSTRAINT booking_invoice_line_id_fkey
+                    TO fk_booking_invoice_line;
                 END IF;
             EXCEPTION WHEN OTHERS THEN
                 -- La contrainte a déjà le bon nom ou n'existe pas
@@ -60,7 +61,8 @@ def upgrade():
                     AND constraint_name LIKE 'invoice_lines_reservation_id_fkey%'
                 ) THEN
                     ALTER TABLE invoice_lines
-                    RENAME CONSTRAINT invoice_lines_reservation_id_fkey TO fk_invoice_line_reservation;
+                    RENAME CONSTRAINT invoice_lines_reservation_id_fkey
+                    TO fk_invoice_line_reservation;
                 END IF;
             EXCEPTION WHEN OTHERS THEN
                 NULL;

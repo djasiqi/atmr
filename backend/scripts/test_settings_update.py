@@ -6,10 +6,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app import create_app
-from ext import db
-from models import Company
-from services.unified_dispatch.settings import for_company
+from app import create_app  # noqa: E402
+from ext import db  # noqa: E402
+from models import Company  # noqa: E402
+from services.unified_dispatch.settings import for_company  # noqa: E402
 
 
 def test_settings_update():
@@ -93,14 +93,20 @@ def test_settings_update():
             )
         else:
             print(
-                f"   ❌ emergency_penalty NON récupéré: attendu {new_emergency}, obtenu {emergency_penalty2}"
+                (
+                    f"   ❌ emergency_penalty NON récupéré: "
+                    f"attendu {new_emergency}, obtenu {emergency_penalty2}"
+                )
             )
 
         if proximity2 == new_proximity:
             print(f"   ✅ proximity correctement récupéré: {proximity2}")
         else:
             print(
-                f"   ❌ proximity NON récupéré: attendu {new_proximity}, obtenu {proximity2}"
+                (
+                    f"   ❌ proximity NON récupéré: "
+                    f"attendu {new_proximity}, obtenu {proximity2}"
+                )
             )
 
         # 5. Restaurer les valeurs originales

@@ -433,7 +433,7 @@ def _coerce_bool_param(v: str | None, default: bool = False) -> bool:
 
 
 def _get_current_company() -> Company:
-    """Récupère l'entreprise courante en s'alignant sur la logique de routes/companies.py."""
+    """Récupère l'entreprise courante en s'alignant sur routes/companies.py."""
     company, err, code = get_company_from_token()
     if err or company is None:
         # err est typiquement {"error": "..."}
@@ -482,7 +482,7 @@ class CompanyDispatchRun(Resource):
     @dispatch_ns.doc(
         description="""
         Lance un dispatch pour une journée donnée.
-        
+
         **Mode asynchrone (async=true, par défaut)**:
         - Enfile un job Celery via la queue
         - Retourne 202 avec job_id et dispatch_run_id
@@ -500,7 +500,8 @@ class CompanyDispatchRun(Resource):
         - `heuristic`: { "driver_load_balance": 0.5, "proximity": 0.3 }
         - `fairness`: { "fairness_weight": 0.8 }
         - `solver`: { "time_limit_sec": 120 }
-        - `preferred_driver_id`: ID du chauffeur préféré (ignoré dans Settings mais utilisé par heuristics)
+        - `preferred_driver_id`: ID du chauffeur préféré
+          (ignoré dans Settings mais utilisé par heuristics)
         - `reset_existing`: true pour réinitialiser les assignations existantes
         - `fast_mode`: true pour activer le mode rapide (solver désactivé)
 
@@ -535,7 +536,8 @@ class CompanyDispatchRun(Resource):
         ```
 
         **Validation**:
-        Utilisez POST /company_dispatch/settings/validate pour valider les overrides avant exécution.
+        Utilisez POST /company_dispatch/settings/validate
+        pour valider les overrides avant exécution.
         """,
         responses={
             200: "Dispatch synchrone réussi",
@@ -604,7 +606,8 @@ class CompanyDispatchRun(Resource):
         company_id: int = _cid if isinstance(_cid, int) else int(cast("Any", _cid))
 
         # --- Mode async ou sync (unifié)
-        # La validation Marshmallow garantit que 'async_mode' est présent avec défaut True
+        # La validation Marshmallow garantit que 'async_mode'
+        # est présent avec défaut True
         is_async = validated_data.get("async_mode", True)
 
         mode = effective_mode or validated_data.get("mode")
@@ -647,8 +650,11 @@ class CompanyDispatchRun(Resource):
         if bookings_count > max_sync_bookings:
             dispatch_ns.abort(
                 400,
-                f"Mode sync limité à {max_sync_bookings} bookings max (trouvé: {bookings_count}). "
-                + "Utilisez async=true pour les dispatches volumineux.",
+                (
+                    f"Mode sync limité à {max_sync_bookings} bookings max "
+                    f"(trouvé: {bookings_count}). "
+                    "Utilisez async=true pour les dispatches volumineux."
+                ),
             )
 
         logger.info(
@@ -699,11 +705,15 @@ class CompanyDispatchStatus(Resource):
     @role_required(UserRole.company)
     @dispatch_ns.doc(
         params={
-            "date": "Date optionnelle (YYYY-MM-DD) pour obtenir le statut d'un dispatch spécifique"
+            "date": (
+                "Date optionnelle (YYYY-MM-DD) pour obtenir "
+                "le statut d'un dispatch spécifique"
+            )
         }
     )
     def get(self):
-        """Statut courant du worker de dispatch (coalescing / dernier résultat / dernière erreur).
+        """Statut courant du worker de dispatch
+        (coalescing / dernier résultat / dernière erreur).
 
         Retourne:
         - Le statut du dernier dispatch (si disponible)
@@ -777,7 +787,8 @@ class DispatchTrigger(Resource):
         description="""
         ⚠️ **DÉPRÉCIÉ** - Cet endpoint sera supprimé dans une future version.
 
-        **Migration recommandée**: Utilisez `POST /company_dispatch/run` avec `async=true`.
+        **Migration recommandée**: Utilisez `POST /company_dispatch/run`
+        avec `async=true`.
 
         **Guide de migration**: Voir `/docs/API_MIGRATION_TRIGGER_TO_RUN.md`
 
@@ -796,7 +807,10 @@ class DispatchTrigger(Resource):
         if not for_date:
             dispatch_ns.abort(
                 400,
-                "for_date manquant (YYYY-MM-DD). Utilisez plutôt POST /company_dispatch/run.",
+                (
+                    "for_date manquant (YYYY-MM-DD). "
+                    "Utilisez plutôt POST /company_dispatch/run."
+                ),
             )
 
         allow_emergency = body.get("allow_emergency", None)
@@ -851,7 +865,8 @@ class DispatchSettingsValidate(Resource):
             new_settings = ud_settings.merge_overrides(base_settings, overrides)
 
             # Récupérer le résultat de validation depuis les logs
-            # (On pourrait améliorer merge_overrides pour retourner le résultat de validation)
+            # (On pourrait améliorer merge_overrides pour retourner
+            # le résultat de validation)
             # Pour l'instant, on vérifie manuellement les paramètres critiques
             validation_result = {
                 "applied": [],
@@ -873,8 +888,12 @@ class DispatchSettingsValidate(Resource):
                             )
                         else:
                             validation_result["errors"].append(
-                                f"heuristic.driver_load_balance demandé={h_ov['driver_load_balance']} "
-                                + f"mais appliqué={new_settings.heuristic.driver_load_balance}"
+                                (
+                                    f"heuristic.driver_load_balance "
+                                    f"demandé={h_ov['driver_load_balance']} "
+                                    f"mais appliqué="
+                                    f"{new_settings.heuristic.driver_load_balance}"
+                                )
                             )
                     if "proximity" in h_ov:
                         if new_settings.heuristic.proximity == h_ov["proximity"]:
@@ -892,8 +911,12 @@ class DispatchSettingsValidate(Resource):
                         validation_result["applied"].append("fairness.fairness_weight")
                     else:
                         validation_result["errors"].append(
-                            f"fairness.fairness_weight demandé={f_ov['fairness_weight']} "
-                            + f"mais appliqué={new_settings.fairness.fairness_weight}"
+                            (
+                                f"fairness.fairness_weight "
+                                f"demandé={f_ov['fairness_weight']} "
+                                f"mais appliqué="
+                                f"{new_settings.fairness.fairness_weight}"
+                            )
                         )
 
             # Identifier les clés ignorées (non dans Settings)
@@ -964,7 +987,8 @@ class DispatchAutorunEnable(Resource):
         interval_sec = body.get("interval_sec")
 
         try:
-            # Lire les réglages existants en toute sécurité (l'attribut peut ne pas exister)
+            # Lire les réglages existants en toute sécurité
+            # (l'attribut peut ne pas exister)
             settings_data: dict[str, Any] = {}
             settings_raw = getattr(company, "dispatch_settings", None)
             if isinstance(settings_raw, str) and settings_raw:
@@ -1095,7 +1119,8 @@ class AssignmentsListResource(Resource):
     def get(self):
         """Liste des assignations pour un jour.
 
-        Retourne toutes les assignations pour la date donnée, avec les relations booking et driver chargées.
+        Retourne toutes les assignations pour la date donnée,
+        avec les relations booking et driver chargées.
         """
         try:
             date_str = request.args.get("date")
@@ -1118,8 +1143,10 @@ class AssignmentsListResource(Resource):
             company = _get_current_company()
             time_expr = _booking_time_expr()
 
-            # Ids des bookings du jour (entreprise courante), en excluant les statuts terminés/annulés
-            # ✅ PERF: Import selectinload au début du fichier pour éviter import local répété
+            # Ids des bookings du jour (entreprise courante),
+            # en excluant les statuts terminés/annulés
+            # ✅ PERF: Import selectinload au début du fichier
+            # pour éviter import local répété
             from sqlalchemy.orm import selectinload as sel_load
 
             bookings_query = Booking.query.options(
@@ -1172,14 +1199,20 @@ class AssignmentsListResource(Resource):
                 )
 
                 logger.info(
-                    "[Dispatch] /assignments found %d assignments for %d bookings date=%s",
+                    (
+                        "[Dispatch] /assignments found %d assignments "
+                        "for %d bookings date=%s"
+                    ),
                     len(assignments),
                     len(booking_ids),
                     date_str,
                 )
             else:
                 logger.debug(
-                    "[Dispatch] /assignments no bookings found for date=%s, returning empty assignments",
+                    (
+                        "[Dispatch] /assignments no bookings found "
+                        "for date=%s, returning empty assignments"
+                    ),
                     date_str,
                 )
 
@@ -1391,8 +1424,10 @@ class ReassignResource(Resource):
                     metric.applied_at = datetime.now(UTC)
 
                     # Calculer gain réel (approximation basée sur ETA)
-                    # Note : Le gain réel précis nécessiterait de tracker l'ETA avant/après
-                    # Pour l'instant, on marque comme "appliqué" et on calculera le gain plus tard
+                    # Note : Le gain réel précis nécessiterait
+                    # de tracker l'ETA avant/après
+                    # Pour l'instant, on marque comme "appliqué"
+                    # et on calculera le gain plus tard
                     metric.was_successful = True  # Assume succès (à affiner)
 
                     db.session.add(metric)
@@ -1430,7 +1465,10 @@ class ReassignResource(Resource):
                             deleted_count += 1
 
                         logger.info(
-                            "[RL] Cache invalidated: %s keys deleted for company %s, date %s",
+                            (
+                                "[RL] Cache invalidated: %s keys deleted "
+                                "for company %s, date %s"
+                            ),
                             deleted_count,
                             company.id,
                             for_date_cache,
@@ -1722,7 +1760,8 @@ def _calculate_eta_for_assignment(
             from services.unified_dispatch.settings import Settings
             from shared.geo_utils import haversine_distance
 
-            # Créer une instance par défaut (DEFAULT_SETTINGS n'existe pas dans settings.py)
+            # Créer une instance par défaut
+            # (DEFAULT_SETTINGS n'existe pas dans settings.py)
             default_settings = Settings()
             distance_km = haversine_distance(
                 driver_pos[0], driver_pos[1], pickup_pos[0], pickup_pos[1]
@@ -1775,9 +1814,12 @@ class LiveDelaysResource(Resource):
         company = _get_current_company()
         time_expr = _booking_time_expr()
 
-        # ✅ CRITIQUE: Filtrer les assignations par proximité temporelle (1h avant à 1h après le pickup)
-        # On ne doit calculer des ETAs que pour les courses proches de leur heure de pickup
-        # Cela évite de calculer des ETAs pour des courses qui sont à H+00 (plusieurs heures avant)
+        # ✅ CRITIQUE: Filtrer les assignations par proximité temporelle
+        # (1h avant à 1h après le pickup)
+        # On ne doit calculer des ETAs que pour les courses
+        # proches de leur heure de pickup
+        # Cela évite de calculer des ETAs pour des courses
+        # qui sont à H+00 (plusieurs heures avant)
         now = now_local()
         TIME_WINDOW_BEFORE_MINUTES = (
             60  # Commencer à surveiller 1 heure avant (augmenté de 30 à 60 min)
@@ -1801,7 +1843,8 @@ class LiveDelaysResource(Resource):
                         BookingStatus.CANCELED,
                     ]
                 ),
-                # ✅ FILTRE TEMPOREL: Ne traiter que les courses dans la fenêtre (30 min avant à 1h après)
+                # ✅ FILTRE TEMPOREL: Ne traiter que les courses
+                # dans la fenêtre (30 min avant à 1h après)
                 time_expr >= time_window_start,
                 time_expr <= time_window_end,
             )
@@ -1888,12 +1931,18 @@ class LiveDelaysResource(Resource):
 
             if _osrm_circuit_breaker.state == "OPEN":
                 logger.info(
-                    "[LiveDelays] OSRM circuit breaker is OPEN, using Haversine only for all ETA calculations"
+                    (
+                        "[LiveDelays] OSRM circuit breaker is OPEN, "
+                        "using Haversine only for all ETA calculations"
+                    )
                 )
                 use_haversine_only = True
         except Exception as e:
             logger.warning(
-                "[LiveDelays] Could not check OSRM circuit breaker: %s, will try OSRM first",
+                (
+                    "[LiveDelays] Could not check OSRM circuit breaker: %s, "
+                    "will try OSRM first"
+                ),
                 e,
             )
             # Si on ne peut pas vérifier le circuit breaker, continuer normalement
@@ -1908,7 +1957,8 @@ class LiveDelaysResource(Resource):
 
         if assignments_needing_eta:
             start_time = time.time()
-            # ✅ Timeout global réduit : 3s si Haversine (rapide), 5s si OSRM (peut être lent)
+            # ✅ Timeout global réduit : 3s si Haversine (rapide),
+            # 5s si OSRM (peut être lent)
             GLOBAL_TIMEOUT_SECONDS = 3 if use_haversine_only else 5
 
             def _calculate_with_index(index_data):
@@ -1920,7 +1970,8 @@ class LiveDelaysResource(Resource):
                 )
                 return (data_item["assignment"].id, eta_sec)
 
-            # ✅ Utiliser ThreadPoolExecutor avec max_workers réduit pour éviter la surcharge
+            # ✅ Utiliser ThreadPoolExecutor avec max_workers réduit
+            # pour éviter la surcharge
             max_workers = min(
                 5, len(assignments_needing_eta)
             )  # Max 5 workers en parallèle (réduit de 10 à 5)
@@ -1932,7 +1983,8 @@ class LiveDelaysResource(Resource):
                         ].id
                         for item in assignments_needing_eta
                     }
-                    # ✅ Utiliser as_completed avec timeout global pour éviter d'attendre trop longtemps
+                    # ✅ Utiliser as_completed avec timeout global
+                    # pour éviter d'attendre trop longtemps
                     completed = 0
                     for future in as_completed(futures, timeout=GLOBAL_TIMEOUT_SECONDS):
                         try:
@@ -1943,7 +1995,10 @@ class LiveDelaysResource(Resource):
                             # Si on dépasse le timeout global, arrêter d'attendre
                             if time.time() - start_time >= GLOBAL_TIMEOUT_SECONDS:
                                 logger.warning(
-                                    "[LiveDelays] Global timeout (%ds) reached, stopping ETA calculations (%d/%d completed)",
+                                    (
+                                        "[LiveDelays] Global timeout (%ds) reached, "
+                                        "stopping ETA calculations (%d/%d completed)"
+                                    ),
                                     GLOBAL_TIMEOUT_SECONDS,
                                     completed,
                                     len(futures),
@@ -1952,13 +2007,20 @@ class LiveDelaysResource(Resource):
                         except Exception as e:
                             assignment_id_key = futures.get(future, "unknown")
                             logger.warning(
-                                "[LiveDelays] ETA calculation failed for assignment %s: %s",
+                                (
+                                    "[LiveDelays] ETA calculation failed "
+                                    "for assignment %s: %s"
+                                ),
                                 assignment_id_key,
                                 e,
                             )
                 except FutureTimeoutError:
                     logger.warning(
-                        "[LiveDelays] Global timeout (%ds) reached for ETA calculations, using partial results (%d/%d completed)",
+                        (
+                            "[LiveDelays] Global timeout (%ds) reached "
+                            "for ETA calculations, using partial results "
+                            "(%d/%d completed)"
+                        ),
                         GLOBAL_TIMEOUT_SECONDS,
                         len(eta_results),
                         len(assignments_needing_eta),
@@ -1970,7 +2032,10 @@ class LiveDelaysResource(Resource):
 
             elapsed_time = time.time() - start_time
             logger.info(
-                "[LiveDelays] Calculated %d ETAs in parallel in %.2fs (timeout: %ds, total: %d)",
+                (
+                    "[LiveDelays] Calculated %d ETAs in parallel in %.2fs "
+                    "(timeout: %ds, total: %d)"
+                ),
                 len(eta_results),
                 elapsed_time,
                 GLOBAL_TIMEOUT_SECONDS,
@@ -1983,7 +2048,10 @@ class LiveDelaysResource(Resource):
             # ✅ Vérifier le timeout global pour éviter les timeouts frontend
             if time.time() - endpoint_start_time >= ENDPOINT_TIMEOUT_SECONDS:
                 logger.warning(
-                    "[LiveDelays] Endpoint timeout (%ds) reached, returning partial results (%d/%d delays)",
+                    (
+                        "[LiveDelays] Endpoint timeout (%ds) reached, "
+                        "returning partial results (%d/%d delays)"
+                    ),
                     ENDPOINT_TIMEOUT_SECONDS,
                     len(delays),
                     len(assignment_data),
@@ -2015,14 +2083,16 @@ class LiveDelaysResource(Resource):
             pickup_time = _to_dt(pickup_time)
             dropoff_time = _to_dt(dropoff_time)
 
-            # ✅ Utiliser l'ETA calculé en parallèle (ou calculer en fallback si non disponible)
+            # ✅ Utiliser l'ETA calculé en parallèle
+            # (ou calculer en fallback si non disponible)
             current_eta = None
             if a.id in eta_results and pickup_time:
                 # ✅ ETA calculé en parallèle disponible
                 eta_seconds = eta_results[a.id]
                 current_eta = now_local() + timedelta(seconds=eta_seconds)
             elif driver_pos and pickup_pos and pickup_time:
-                # Fallback: calculer maintenant si pas dans les résultats (ne devrait pas arriver normalement)
+                # Fallback: calculer maintenant si pas dans les résultats
+                # (ne devrait pas arriver normalement)
                 try:
                     eta_seconds = _calculate_eta_for_assignment(driver_pos, pickup_pos)
                     if eta_seconds:
@@ -2061,16 +2131,21 @@ class LiveDelaysResource(Resource):
                     eta_from_now_minutes = eta_from_now_seconds / 60.0
 
                     if pickup_time > current_time:
-                        # ✅ Course dans le futur : logique intelligente de détection
-                        # Exemple : Chauffeur à 27 min du pickup, il reste 40 min → PAS de retard (il a le temps)
-                        # Exemple : Chauffeur à 27 min du pickup, il reste 25 min → Retard de 2 min si EN_ROUTE, problème si ASSIGNED
+                        # ✅ Course dans le futur : logique intelligente
+                        # Exemple : Chauffeur à 27 min du pickup,
+                        # il reste 40 min → PAS de retard (il a le temps)
+                        # Exemple : Chauffeur à 27 min du pickup,
+                        # il reste 25 min → Retard de 2 min si EN_ROUTE,
+                        # problème si ASSIGNED
 
                         if eta_from_now_minutes <= time_remaining_until_pickup:
-                            # ✅ Le chauffeur arrivera à temps (ETA GPS <= temps restant)
+                            # ✅ Le chauffeur arrivera à temps
+                            # (ETA GPS <= temps restant)
                             status = "on_time"
                             delay_minutes = 0
                         else:
-                            # ⚠️ Le chauffeur sera en retard (ETA GPS > temps restant)
+                            # ⚠️ Le chauffeur sera en retard
+                            # (ETA GPS > temps restant)
                             potential_delay_minutes = int(
                                 eta_from_now_minutes - time_remaining_until_pickup
                             )
@@ -2082,8 +2157,10 @@ class LiveDelaysResource(Resource):
                             ]
 
                             if is_en_route:
-                                # ✅ Chauffeur en mouvement : le retard se propagera à l'arrivée
-                                # Exemple : Part avec 2 min de retard → 2 min de retard à l'arrivée
+                                # ✅ Chauffeur en mouvement :
+                                # le retard se propagera à l'arrivée
+                                # Exemple : Part avec 2 min de retard
+                                # → 2 min de retard à l'arrivée
                                 delay_minutes = potential_delay_minutes
                                 status = (
                                     "late"
@@ -2091,18 +2168,27 @@ class LiveDelaysResource(Resource):
                                     else "on_time"
                                 )
                                 logger.debug(
-                                    "[LiveDelays] Driver EN_ROUTE but will be %d min late (ETA: %.1f min, remaining: %.1f min)",
+                                    (
+                                        "[LiveDelays] Driver EN_ROUTE "
+                                        "but will be %d min late "
+                                        "(ETA: %.1f min, remaining: %.1f min)"
+                                    ),
                                     delay_minutes,
                                     eta_from_now_minutes,
                                     time_remaining_until_pickup,
                                 )
                             else:
-                                # ❌ Chauffeur pas encore en route : signaler un problème
+                                # ❌ Chauffeur pas encore en route :
+                                # signaler un problème
                                 # Il devrait être en route mais ne l'est pas
                                 delay_minutes = potential_delay_minutes
                                 status = "late"
                                 logger.warning(
-                                    "[LiveDelays] Driver should be EN_ROUTE but status is %s. Will be %d min late (ETA: %.1f min, remaining: %.1f min)",
+                                    (
+                                        "[LiveDelays] Driver should be EN_ROUTE "
+                                        "but status is %s. Will be %d min late "
+                                        "(ETA: %.1f min, remaining: %.1f min)"
+                                    ),
                                     booking_status,
                                     delay_minutes,
                                     eta_from_now_minutes,
@@ -2124,13 +2210,15 @@ class LiveDelaysResource(Resource):
                         "[LiveDelays] Error calculating intelligent delay: %s", e
                     )
             elif pickup_time and not current_eta:
-                # ⭐ FALLBACK : Si pas d'ETA disponible, comparer heure actuelle vs heure prévue
+                # ⭐ FALLBACK : Si pas d'ETA disponible,
+                # comparer heure actuelle vs heure prévue
                 # Utile pour détecter les retards même sans GPS
                 try:
                     current_time = now_local()
                     time_diff_seconds = (current_time - pickup_time).total_seconds()
 
-                    # Si l'heure actuelle est déjà passée et le chauffeur n'est pas arrivé
+                    # Si l'heure actuelle est déjà passée
+                    # et le chauffeur n'est pas arrivé
                     if (
                         time_diff_seconds > TIME_DIFF_SECONDS_THRESHOLD
                     ):  # 5 minutes de buffer
@@ -2146,24 +2234,35 @@ class LiveDelaysResource(Resource):
                         "[LiveDelays] Failed to calculate time-based delay: %s", e
                     )
 
-            # ✅ OPTIMISATION CRITIQUE: Désactiver suggestions et cascade pour améliorer les performances
-            # Ces fonctionnalités sont coûteuses et peuvent être calculées de manière asynchrone si nécessaire
+            # ✅ OPTIMISATION CRITIQUE: Désactiver suggestions et cascade
+            # pour améliorer les performances
+            # Ces fonctionnalités sont coûteuses et peuvent être calculées
+            # de manière asynchrone si nécessaire
             suggestions_list = []
             cascade_impact = []
 
-            # ✅ DÉSACTIVÉ TEMPORAIREMENT pour améliorer les performances de l'endpoint /delays/live
-            # Les suggestions et l'impact cascade peuvent être calculés de manière asynchrone si nécessaire
-            # if delay_minutes > DELAY_MINUTES_THRESHOLD:  # Seulement pour retards > 15 min
+            # ✅ DÉSACTIVÉ TEMPORAIREMENT pour améliorer les performances
+            # de l'endpoint /delays/live
+            # Les suggestions et l'impact cascade peuvent être calculés
+            # de manière asynchrone si nécessaire
+            # if delay_minutes > DELAY_MINUTES_THRESHOLD:
+            # Seulement pour retards > 15 min
             #     try:
             #         company_id_int = int(cast("Any", company.id))
-            #         suggestions = generate_suggestions(a, delay_minutes, company_id_int)
+            #         suggestions = generate_suggestions(
+            #             a, delay_minutes, company_id_int
+            #         )
             #         suggestions_list = [s.to_dict() for s in suggestions]
             #     except Exception as e:
-            #         logger.warning("[LiveDelays] Failed to generate suggestions for assignment %s: %s", a.id, e)
+            #         logger.warning(
+            #             "[LiveDelays] Failed to generate suggestions "
+            #             "for assignment %s: %s", a.id, e
+            #         )
 
             # ✅ DÉSACTIVÉ TEMPORAIREMENT pour améliorer les performances
             # ✅ DÉSACTIVÉ TEMPORAIREMENT pour améliorer les performances
-            # if driver and delay_minutes > DELAY_MINUTES_THRESHOLD and pickup_time is not None:
+            # if driver and delay_minutes > DELAY_MINUTES_THRESHOLD
+            # and pickup_time is not None:
             #     try:
             #         # Trouver les prochaines courses du chauffeur
             #         next_assignments = (
@@ -2185,12 +2284,20 @@ class LiveDelaysResource(Resource):
             #             if next_b:
             #                 cascade_impact.append({
             #                     "booking_id": next_b.id,
-            #                     "scheduled_time": next_b.scheduled_time.isoformat() if next_b.scheduled_time else None,
-            #                     "customer_name": getattr(next_b, "customer_name", None),
-            #                     "potential_delay_minutes": delay_minutes  # Propagation simplifiée
+            #                     "scheduled_time": (
+            #                         next_b.scheduled_time.isoformat()
+            #                         if next_b.scheduled_time else None
+            #                     ),
+            #                     "customer_name": getattr(
+            #                         next_b, "customer_name", None
+            #                     ),
+            #                     "potential_delay_minutes": delay_minutes
+            #                     # Propagation simplifiée
             #                 })
             #     except Exception as e:
-            #         logger.warning("[LiveDelays] Failed to check cascade impact: %s", e)
+            #         logger.warning(
+            #             "[LiveDelays] Failed to check cascade impact: %s", e
+            #         )
 
             # Construire la réponse
             if current_eta or delay_minutes != DELAY_MINUTES_ZERO:
@@ -2307,12 +2414,18 @@ class OptimizerStopResource(Resource):
 
             if current_mode == "fully_auto":
                 logger.warning(
-                    "[Optimizer] Tentative d'arrêt refusée pour company %s (mode fully_auto actif)",
+                    (
+                        "[Optimizer] Tentative d'arrêt refusée pour company %s "
+                        "(mode fully_auto actif)"
+                    ),
                     company_id,
                 )
                 return {
                     "success": False,
-                    "error": "Impossible d'arrêter l'optimiseur en mode fully_auto. Changez le mode de dispatch pour arrêter l'optimiseur.",
+                    "error": (
+                        "Impossible d'arrêter l'optimiseur en mode fully_auto. "
+                        "Changez le mode de dispatch pour arrêter l'optimiseur."
+                    ),
                     "current_mode": current_mode,
                 }, 403  # Forbidden
 
@@ -2414,12 +2527,18 @@ class AgentStopResource(Resource):
 
             if current_mode == "fully_auto":
                 logger.warning(
-                    "[Agent] Tentative d'arrêt refusée pour company %s (mode fully_auto actif)",
+                    (
+                        "[Agent] Tentative d'arrêt refusée pour company %s "
+                        "(mode fully_auto actif)"
+                    ),
                     company_id,
                 )
                 return {
                     "success": False,
-                    "error": "Impossible d'arrêter l'agent en mode fully_auto. Changez le mode de dispatch pour arrêter l'agent.",
+                    "error": (
+                        "Impossible d'arrêter l'agent en mode fully_auto. "
+                        "Changez le mode de dispatch pour arrêter l'agent."
+                    ),
                     "current_mode": current_mode,
                 }, 403  # Forbidden
 
@@ -2631,7 +2750,9 @@ class RealtimeDashboardResource(Resource):
                         driver_load_details.append(
                             {
                                 "driver_id": driver_id,
-                                "name": f"{driver.user.first_name} {driver.user.last_name}",
+                                "name": (
+                                    f"{driver.user.first_name} {driver.user.last_name}"
+                                ),
                                 "bookings_count": count,
                                 "is_emergency": getattr(driver, "is_emergency", False),
                             }
@@ -2716,7 +2837,9 @@ class DispatchModeResource(Resource):
                 },
                 "semi_auto": {
                     "label": "Semi-Automatique",
-                    "description": "Dispatch sur demande ou périodique, validation manuelle",
+                    "description": (
+                        "Dispatch sur demande ou périodique, validation manuelle"
+                    ),
                     "features": [
                         "Dispatch optimisé avec OR-Tools",
                         "Monitoring temps réel",
@@ -2791,26 +2914,36 @@ class DispatchModeResource(Resource):
                         if not agent.state.running:
                             agent.start()
                             logger.info(
-                                "[Dispatch] 🤖 Agent démarré automatiquement pour company %s (mode fully_auto)",
+                                (
+                                    "[Dispatch] 🤖 Agent démarré automatiquement "
+                                    "pour company %s (mode fully_auto)"
+                                ),
                                 company_id,
                             )
                     elif old_mode == "fully_auto" and new_mode != "fully_auto":
                         # Arrêter l'agent si on sort du mode fully_auto
                         stop_agent_for_company(company_id)
                         logger.info(
-                            "[Dispatch] ⏸️ Agent arrêté automatiquement pour company %s (mode changé vers %s)",
+                            (
+                                "[Dispatch] ⏸️ Agent arrêté automatiquement "
+                                "pour company %s (mode changé vers %s)"
+                            ),
                             company_id,
                             new_mode,
                         )
                 except Exception as agent_err:
-                    # Ne pas faire échouer le changement de mode si l'agent a un problème
+                    # Ne pas faire échouer le changement de mode
+                    # si l'agent a un problème
                     logger.warning(
                         "[Dispatch] ⚠️ Erreur gestion agent lors changement mode: %s",
                         agent_err,
                     )
             except ValueError:
                 return {
-                    "error": f"Mode invalide: {new_mode}. Valeurs possibles: manual, semi_auto, fully_auto"
+                    "error": (
+                        f"Mode invalide: {new_mode}. "
+                        "Valeurs possibles: manual, semi_auto, fully_auto"
+                    )
                 }, 400
 
         # Mettre à jour la config
@@ -2976,7 +3109,9 @@ class AutonomousTestResource(Resource):
                     "blocked_by_limits": 0,
                 },
                 "simulated_actions": simulated_actions,
-                "recommendation": "ℹ️ Aucune action automatique détectée (normal si pas de retard)",
+                "recommendation": (
+                    "ℹ️ Aucune action automatique détectée (normal si pas de retard)"
+                ),
             }, 200
 
         except Exception as e:
@@ -3074,7 +3209,10 @@ class RLDispatchSuggestions(Resource):
                     status_code = 400
                 else:
                     # ✅ CACHE REDIS : Clé unique par company/date/params
-                    cache_key = f"rl_suggestions:{company.id}:{for_date_str}:{min_confidence}:{limit}"
+                    cache_key = (
+                        f"rl_suggestions:{company.id}:{for_date_str}:"
+                        f"{min_confidence}:{limit}"
+                    )
 
                     # Check cache
                     from ext import redis_client
@@ -3097,7 +3235,8 @@ class RLDispatchSuggestions(Resource):
                             logger.warning("[RL] Cache read error: %s", e)
 
                     if result is None:  # Pas de cache hit
-                        # Parse date (DTZ007: OK car on compare juste la date, pas de timezone nécessaire)
+                        # Parse date (DTZ007: OK car on compare juste la date,
+                        # pas de timezone nécessaire)
                         for_date = datetime.strptime(for_date_str, "%Y-%m-%d").date()
 
                         # Récupérer tous les assignments actifs pour cette date
@@ -3137,7 +3276,8 @@ class RLDispatchSuggestions(Resource):
                                 "message": "Aucun assignment actif pour cette date",
                             }
                         else:
-                            # Récupérer tous les conducteurs disponibles avec leur relation user
+                            # Récupérer tous les conducteurs disponibles
+                            # avec leur relation user
                             drivers = (
                                 Driver.query.options(joinedload(Driver.user))
                                 .filter(
@@ -3178,7 +3318,10 @@ class RLDispatchSuggestions(Resource):
 
                                     for suggestion in all_suggestions:
                                         # Créer ID unique pour la suggestion
-                                        suggestion_id = f"{suggestion['assignment_id']}_{int(dt.now(UTC).timestamp() * 1000)}"
+                                        suggestion_id = (
+                                            f"{suggestion['assignment_id']}_"
+                                            f"{int(dt.now(UTC).timestamp() * 1000)}"
+                                        )
 
                                         metric = RLSuggestionMetric()
                                         metric.company_id = int(company.id)
@@ -3207,7 +3350,8 @@ class RLDispatchSuggestions(Resource):
                                         }
                                         db.session.add(metric)
 
-                                        # Ajouter l'ID à la suggestion pour tracking frontend
+                                        # Ajouter l'ID à la suggestion
+                                        # pour tracking frontend
                                         suggestion["metric_id"] = suggestion_id
 
                                     db.session.commit()
@@ -3229,7 +3373,8 @@ class RLDispatchSuggestions(Resource):
                                     try:
                                         redis_client.setex(
                                             cache_key,
-                                            30,  # TTL 30 secondes (sync avec auto-refresh frontend)
+                                            30,  # TTL 30 secondes
+                                            # (sync avec auto-refresh frontend)
                                             json.dumps(all_suggestions),
                                         )
                                         logger.info(
@@ -3592,7 +3737,9 @@ class RLDispatchToggle(Resource):
                 "company_id": company.id,
                 "rl_dispatch_enabled": enabled,
                 "config": config["rl_dispatch"],
-                "message": f"Dispatch RL {'activé' if enabled else 'désactivé'} avec succès",
+                "message": (
+                    f"Dispatch RL {'activé' if enabled else 'désactivé'} avec succès"
+                ),
             }, 200
 
         except Exception as e:
@@ -3606,7 +3753,8 @@ class RLDispatchToggle(Resource):
 
 @dispatch_ns.route("/advanced_settings")
 class DispatchAdvancedSettingsResource(Resource):
-    """Gestion des paramètres avancés de dispatch (heuristic, solver, fairness, emergency, etc.)
+    """Gestion des paramètres avancés de dispatch
+    (heuristic, solver, fairness, emergency, etc.)
     Stockés dans company.autonomous_config sous la clé 'dispatch_overrides'.
     """
 
@@ -3901,7 +4049,10 @@ class PerformanceMetricsResource(Resource):
                             result_response = (
                                 {
                                     "dispatch_run_id": dispatch_run_id,
-                                    "message": "Aucune métrique disponible pour ce dispatch run",
+                                    "message": (
+                                        "Aucune métrique disponible "
+                                        "pour ce dispatch run"
+                                    ),
                                 },
                                 200,
                             )
@@ -4292,7 +4443,10 @@ class A1BackoutResource(Resource):
 
             if backout_needed:
                 logger.error(
-                    "[A1] ❌ Backout recommandé: violation_rate=%.4f >= threshold=%.4f (company_id=%s)",
+                    (
+                        "[A1] ❌ Backout recommandé: violation_rate=%.4f >= "
+                        "threshold=%.4f (company_id=%s)"
+                    ),
                     violation_rate,
                     threshold,
                     company_id,
@@ -4401,7 +4555,10 @@ class ResetAssignmentsResource(Resource):
             db.session.commit()
 
             logger.info(
-                "[RESET] ✅ Réinitialisation effectuée pour company_id=%s: %d assignations supprimées, %d bookings réinitialisés",
+                (
+                    "[RESET] ✅ Réinitialisation effectuée pour company_id=%s: "
+                    "%d assignations supprimées, %d bookings réinitialisés"
+                ),
                 company_id,
                 assignments_count,
                 bookings_count,

@@ -123,7 +123,10 @@ class InvoiceService:
                 "first_name": getattr(user, "first_name", None) if user else None,
                 "last_name": getattr(user, "last_name", None) if user else None,
                 "username": getattr(user, "username", None) if user else None,
-                "full_name": f"{getattr(user, 'first_name', '') or ''} {getattr(user, 'last_name', '') or ''}".strip()
+                "full_name": (
+                    f"{getattr(user, 'first_name', '') or ''} "
+                    f"{getattr(user, 'last_name', '') or ''}"
+                ).strip()
                 if user
                 else None,
             }
@@ -159,8 +162,10 @@ class InvoiceService:
             client_id: ID du bénéficiaire du service (patient)
             period_year: Année de facturation
             period_month: Mois de facturation
-            bill_to_client_id: ID du payeur (clinique/institution). Si None, client_id paie.
-            reservation_ids: Liste d'IDs de réservations spécifiques. Si None, prend toutes les réservations non facturées.
+            bill_to_client_id: ID du payeur (clinique/institution).
+                Si None, client_id paie.
+            reservation_ids: Liste d'IDs de réservations spécifiques.
+                Si None, prend toutes les réservations non facturées.
             overrides: Dict facultatif {reservation_id: {amount, vat_rate, note}}
 
         Returns:
@@ -200,7 +205,8 @@ class InvoiceService:
             # Récupérer les réservations
             target_statuses = ["COMPLETED", "RETURN_COMPLETED"]
             if reservation_ids:
-                # Mode sélection manuelle : récupérer seulement les réservations spécifiées
+                # Mode sélection manuelle : récupérer seulement
+                # les réservations spécifiées
                 reservations = Booking.query.filter(
                     Booking.id.in_(reservation_ids),
                     Booking.company_id == company_id,
@@ -211,7 +217,10 @@ class InvoiceService:
 
                 if len(reservations) != len(reservation_ids):
                     app_logger.warning(
-                        "Certaines réservations ne sont pas valides ou déjà facturées. Demandé: %s, Trouvé: %s",
+                        (
+                            "Certaines réservations ne sont pas valides ou "
+                            "déjà facturées. Demandé: %s, Trouvé: %s"
+                        ),
                         len(reservation_ids),
                         len(reservations),
                     )
@@ -235,7 +244,8 @@ class InvoiceService:
             )
 
             # Préparer la TVA
-            # La TVA est applicable uniquement si vat_applicable est True ET vat_rate est défini
+            # La TVA est applicable uniquement si vat_applicable est True
+            # ET vat_rate est défini
             vat_applicable_setting = bool(
                 getattr(billing_settings, "vat_applicable", False)
             )
@@ -250,7 +260,8 @@ class InvoiceService:
                 type(vat_rate_setting).__name__,
             )
 
-            # Vérifier que vat_rate_setting est valide (pas None, pas 0, et convertible en Decimal)
+            # Vérifier que vat_rate_setting est valide
+            # (pas None, pas 0, et convertible en Decimal)
             vat_rate_valid = False
             if vat_rate_setting is not None:
                 try:
@@ -375,9 +386,16 @@ class InvoiceService:
 
                 # Si facturation tierce, inclure le nom du patient dans la description
                 if bill_to_client_id:
-                    description = f"Trajet pour {patient_name}: {reservation.pickup_location} → {reservation.dropoff_location}"
+                    description = (
+                        f"Trajet pour {patient_name}: "
+                        f"{reservation.pickup_location} → "
+                        f"{reservation.dropoff_location}"
+                    )
                 else:
-                    description = f"Trajet {reservation.pickup_location} → {reservation.dropoff_location}"
+                    description = (
+                        f"Trajet {reservation.pickup_location} → "
+                        f"{reservation.dropoff_location}"
+                    )
 
                 line = InvoiceLine()
                 line.invoice_id = invoice.id
@@ -395,7 +413,8 @@ class InvoiceService:
                 db.session.add(line)
                 db.session.flush()  # Pour obtenir l'ID de la ligne
 
-                # NOUVEAU: Lier la réservation à la ligne de facture pour éviter double facturation
+                # NOUVEAU: Lier la réservation à la ligne de facture
+                # pour éviter double facturation
                 reservation.invoice_line_id = line.id
 
                 subtotal += base_amount
@@ -469,7 +488,8 @@ class InvoiceService:
         client_reservations=None,
         overrides=None,
     ):
-        """Génère plusieurs factures pour différents clients mais toutes adressées à une institution.
+        """Génère plusieurs factures pour différents clients
+        mais toutes adressées à une institution.
 
         Args:
             company_id: ID de l'entreprise
@@ -477,7 +497,8 @@ class InvoiceService:
             period_year: Année de facturation
             period_month: Mois de facturation
             bill_to_client_id: ID de l'institution payeuse (clinique)
-            client_reservations: Dict {client_id: [reservation_ids]} pour sélection manuelle. Si None, mode auto.
+            client_reservations: Dict {client_id: [reservation_ids]}
+                pour sélection manuelle. Si None, mode auto.
             overrides: Dict optionnel {reservation_id: {amount, vat_rate, note}}
 
         Returns:
@@ -489,7 +510,8 @@ class InvoiceService:
 
         for client_id in client_ids:
             try:
-                # Vérifier qu'une facture non annulée n'existe pas déjà pour ce client et cette période
+                # Vérifier qu'une facture non annulée n'existe pas déjà
+                # pour ce client et cette période
                 # avec le même bill_to_client_id (même type de facturation)
                 filter_conditions = [
                     Invoice.company_id == company_id,
@@ -498,7 +520,8 @@ class InvoiceService:
                     Invoice.period_month == period_month,
                     Invoice.status != InvoiceStatus.CANCELLED,
                 ]
-                # Prendre en compte le bill_to_client_id : None = facturation directe, sinon facturation tierce
+                # Prendre en compte le bill_to_client_id :
+                # None = facturation directe, sinon facturation tierce
                 if bill_to_client_id is None:
                     filter_conditions.append(Invoice.bill_to_client_id.is_(None))
                 else:
@@ -511,7 +534,10 @@ class InvoiceService:
 
                 if existing_invoice:
                     app_logger.warning(
-                        "Facture déjà existante pour client %s, période %s/%s, bill_to_client_id=%s",
+                        (
+                            "Facture déjà existante pour client %s, période %s/%s, "
+                            "bill_to_client_id=%s"
+                        ),
                         client_id,
                         period_month,
                         period_year,
@@ -555,7 +581,10 @@ class InvoiceService:
                 continue
 
         app_logger.info(
-            "Facturation consolidée: %s factures créées, %s erreurs pour institution %s",
+            (
+                "Facturation consolidée: %s factures créées, %s erreurs "
+                "pour institution %s"
+            ),
             len(invoices),
             len(errors),
             bill_to_client_id,

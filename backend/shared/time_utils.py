@@ -27,7 +27,8 @@ def _normalize_local_string(s: str) -> str:
 
 
 def parse_local_naive(dt: Union[str, datetime, None]) -> datetime | None:
-    """Retourne un datetime **naïf** (ou None) en interprétant toute entrée comme locale."""
+    """Retourne un datetime **naïf** (ou None) en interprétant
+    toute entrée comme locale."""
     if dt is None:
         return None
     if isinstance(dt, datetime):
@@ -217,7 +218,8 @@ def to_geneva_local(dt: Union[str, datetime, None]) -> datetime | None:
 
 
 def format_geneva(dt: Union[str, datetime, None]) -> Tuple[str | None, str | None]:
-    """Retourne ('YYYY-MM-DD','HH:MM') en **LOCAL_TZ** (aware), pratique pour l'affichage."""
+    """Retourne ('YYYY-MM-DD','HH:MM') en **LOCAL_TZ** (aware),
+    pratique pour l'affichage."""
     d = to_geneva_local(dt)
     if not d:
         return None, None

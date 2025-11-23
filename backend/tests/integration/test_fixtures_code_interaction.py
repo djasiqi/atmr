@@ -1,12 +1,14 @@
 # backend/tests/integration/test_fixtures_code_interaction.py
-"""✅ Tests d'intégration : Interaction entre fixtures (savepoints) et code métier (transactions).
+"""✅ Tests d'intégration : Interaction entre fixtures (savepoints)
+et code métier (transactions).
 
-Ces tests vérifient que l'isolation entre les fixtures de test (savepoints) et le code métier
-(transactions) fonctionne correctement.
+Ces tests vérifient que l'isolation entre les fixtures de test
+(savepoints) et le code métier (transactions) fonctionne correctement.
 
 Scénarios testés :
 1. Les objets commités dans les fixtures sont visibles dans le code métier
-2. Le rollback défensif de engine.run() n'affecte pas les objets commités dans les fixtures
+2. Le rollback défensif de engine.run() n'affecte pas
+   les objets commités dans les fixtures
 3. Les transactions du code métier n'affectent pas l'isolation des fixtures
 4. Les savepoints imbriqués fonctionnent correctement avec le code métier
 """
@@ -23,7 +25,8 @@ class TestFixturesCodeInteraction:
     """Tests d'intégration pour l'interaction entre fixtures et code métier."""
 
     def test_fixture_committed_visible_in_code_metier(self, db):
-        """✅ Test : Les objets commités dans les fixtures sont visibles dans le code métier.
+        """✅ Test : Les objets commités dans les fixtures
+        sont visibles dans le code métier.
 
         Ce test vérifie que les objets créés et commités via persisted_fixture()
         sont bien visibles dans le code métier (engine.run()).
@@ -43,7 +46,8 @@ class TestFixturesCodeInteraction:
             "dispatch_run_id"
         )
         assert dispatch_run_id is not None, (
-            f"DispatchRun doit être créé. Company doit être visible dans le code métier. "
+            f"DispatchRun doit être créé. "
+            f"Company doit être visible dans le code métier. "
             f"Résultat: {result.get('meta', {})}"
         )
 
@@ -59,7 +63,8 @@ class TestFixturesCodeInteraction:
         print("✅ Test : Fixture commitée visible dans code métier OK")
 
     def test_rollback_defensif_does_not_affect_committed_fixtures(self, db):
-        """✅ Test : Le rollback défensif de engine.run() n'affecte pas les objets commités.
+        """✅ Test : Le rollback défensif de engine.run()
+        n'affecte pas les objets commités.
 
         Ce test vérifie que le rollback défensif effectué par engine.run() au début
         n'affecte pas les objets qui ont été commités dans les fixtures.
@@ -91,9 +96,11 @@ class TestFixturesCodeInteraction:
         print("✅ Test : Rollback défensif n'affecte pas fixtures commitées OK")
 
     def test_code_metier_transaction_does_not_affect_fixture_isolation(self, db):
-        """✅ Test : Les transactions du code métier n'affectent pas l'isolation des fixtures.
+        """✅ Test : Les transactions du code métier
+        n'affectent pas l'isolation des fixtures.
 
-        Ce test vérifie que les transactions créées par le code métier (via engine.run())
+        Ce test vérifie que les transactions créées par le code métier
+        (via engine.run())
         n'affectent pas l'isolation garantie par les savepoints des fixtures.
         """
         # Créer une company via persisted_fixture (dans le savepoint du test)
@@ -138,9 +145,11 @@ class TestFixturesCodeInteraction:
         )
 
     def test_nested_savepoint_with_code_metier(self, db):
-        """✅ Test : Les savepoints imbriqués fonctionnent correctement avec le code métier.
+        """✅ Test : Les savepoints imbriqués fonctionnent correctement
+        avec le code métier.
 
-        Ce test vérifie que les savepoints imbriqués (via nested_savepoint()) fonctionnent
+        Ce test vérifie que les savepoints imbriqués
+        (via nested_savepoint()) fonctionnent
         correctement avec le code métier (engine.run()).
         """
         # Créer une company dans le savepoint principal
@@ -169,11 +178,14 @@ class TestFixturesCodeInteraction:
 
         # Après la sortie du savepoint imbriqué, le DispatchRun devrait toujours exister
         # car il a été créé dans une transaction normale (pas dans le savepoint)
-        # Note: engine.run() crée sa propre transaction, donc elle n'est pas affectée par le rollback du savepoint
+        # Note: engine.run() crée sa propre transaction,
+        # donc elle n'est pas affectée par le rollback du savepoint
         dispatch_run_after = DispatchRun.query.get(dispatch_run_id)
-        # Le DispatchRun devrait toujours exister car engine.run() commit dans sa propre transaction
+        # Le DispatchRun devrait toujours exister
+        # car engine.run() commit dans sa propre transaction
         assert dispatch_run_after is not None, (
-            "DispatchRun doit toujours exister car engine.run() commit dans sa propre transaction"
+            "DispatchRun doit toujours exister "
+            "car engine.run() commit dans sa propre transaction"
         )
 
         # La company doit toujours exister (créée dans le savepoint principal)
@@ -215,7 +227,8 @@ class TestFixturesCodeInteraction:
                 "meta", {}
             ).get("dispatch_run_id")
             assert dispatch_run_id is not None, (
-                "DispatchRun doit être créé. ensure_committed() doit garantir la persistance"
+                "DispatchRun doit être créé. "
+                "ensure_committed() doit garantir la persistance"
             )
 
         print("✅ Test : ensure_committed() garantit persistance avant code métier OK")

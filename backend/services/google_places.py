@@ -47,7 +47,8 @@ def autocomplete_address(
         language: Langue des résultats (ex: "fr")
         location: Centre de recherche {"lat": float, "lng": float}
         radius: Rayon de recherche en mètres
-        types: Type de résultats - "(regions)" pour tout type (adresses + établissements)
+        types: Type de résultats - "(regions)" pour tout type
+            (adresses + établissements)
         limit: Nombre maximum de résultats
 
     Returns:

@@ -19,7 +19,8 @@ class TestOSRMClientSHA256:
     """Tests pour vérifier que osrm_client.py utilise SHA-256."""
 
     def test_cache_key_route_uses_sha256(self):
-        """Vérifie que get_distance_time_cached utilise SHA-256 pour hasher les coordonnées."""
+        """Vérifie que get_distance_time_cached utilise SHA-256
+        pour hasher les coordonnées."""
         import hashlib
 
         # Coordonnées de test

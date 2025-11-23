@@ -515,5 +515,8 @@ class PlanningICS(Resource):
         if not company:
             return {"error": "unauthorized"}, 401
         # Placeholder minimal: renvoie ICS vide
-        ics = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ATMR//Planning//EN\nEND:VCALENDAR\n"
+        ics = (
+            "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ATMR//Planning//EN\n"
+            "END:VCALENDAR\n"
+        )
         return {"ics": ics}

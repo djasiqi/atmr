@@ -184,7 +184,8 @@ class Login(Resource):
                 expires_delta=current_app.config["JWT_ACCESS_TOKEN_EXPIRES"],
             )
 
-            # Création du refresh token (durée configurée dans JWT_REFRESH_TOKEN_EXPIRES)
+            # Création du refresh token
+            # (durée configurée dans JWT_REFRESH_TOKEN_EXPIRES)
             refresh_token = create_refresh_token(
                 identity=str(user.public_id),
                 expires_delta=current_app.config["JWT_REFRESH_TOKEN_EXPIRES"],
@@ -245,7 +246,9 @@ class Login(Resource):
                     user_agent=request.headers.get("User-Agent"),
                 )
             except Exception:
-                pass  # Ignorer les erreurs d'audit logging dans le gestionnaire d'erreurs
+                # Ignorer les erreurs d'audit logging
+                # dans le gestionnaire d'erreurs
+                pass
             return {"error": "Une erreur interne est survenue."}, 500
 
 
@@ -312,7 +315,8 @@ class Logout(Resource):
     @auth_ns.doc(
         description=(
             "Révoque le token JWT actuel et l'ajoute à la blacklist. "
-            "Après la déconnexion, le token ne pourra plus être utilisé pour accéder aux endpoints protégés."
+            "Après la déconnexion, le token ne pourra plus être utilisé "
+            "pour accéder aux endpoints protégés."
         ),
         summary="Déconnexion utilisateur",
     )
@@ -458,8 +462,10 @@ class Register(Resource):
                 # Utiliser abort au lieu de return pour réduire le nombre de returns
                 auth_ns.abort(400, str(e))
 
-            # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # Le mot de passe est validé explicitement
+            # par validate_password_or_raise() ci-dessus
+            # nosemgrep: python.django.security.audit.unvalidated-password.
+            # unvalidated-password
             user.set_password(password, force_change=False)
             db.session.add(user)
             db.session.flush()
@@ -526,7 +532,10 @@ class ForgotPassword(Resource):
             msg = Message(
                 subject="Réinitialisation de votre mot de passe",
                 recipients=[email],
-                body=f"Cliquez sur ce lien pour réinitialiser votre mot de passe : http://localhost:3000/reset-password/{reset_token}",
+                body=(
+                    f"Cliquez sur ce lien pour réinitialiser votre mot de passe : "
+                    f"http://localhost:3000/reset-password/{reset_token}"
+                ),
             )
             mail.send(msg)
             return {"message": "Password reset email sent successfully"}, 200
@@ -566,8 +575,10 @@ class ResetPassword(Resource):
             except ValueError as e:
                 return {"error": str(e)}, 400
 
-            # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # Le mot de passe est validé explicitement
+            # par validate_password_or_raise() ci-dessus
+            # nosemgrep: python.django.security.audit.unvalidated-password.
+            # unvalidated-password
             user.set_password(new_password)
             user.force_password_change = False
             db.session.commit()

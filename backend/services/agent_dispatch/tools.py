@@ -62,7 +62,8 @@ class AgentTools:
 
             # Récupérer bookings dans la fenêtre
             # Inclure ACCEPTED, ASSIGNED pour détecter toutes les courses à assigner
-            # Si scheduled_time est NULL, inclure quand même (pour courses sans heure définie)
+            # Si scheduled_time est NULL, inclure quand même
+            # (pour courses sans heure définie)
             bookings = (
                 Booking.query.filter(
                     Booking.company_id == self.company_id,
@@ -104,7 +105,10 @@ class AgentTools:
             # Construire état
             jobs = []
             logger.info(
-                "[AgentTools] 🔍 Récupéré %d bookings pour company %s (fenêtre: %s -> %s)",
+                (
+                    "[AgentTools] 🔍 Récupéré %d bookings pour company %s "
+                    "(fenêtre: %s -> %s)"
+                ),
                 len(bookings),
                 self.company_id,
                 window_start.isoformat(),
@@ -152,8 +156,10 @@ class AgentTools:
                             else None,
                         },
                         "time_window": {
-                            "start": None,  # Booking model n'a pas pickup_time_window_start
-                            "end": None,  # Booking model n'a pas pickup_time_window_end
+                            # Booking model n'a pas pickup_time_window_start
+                            "start": None,
+                            # Booking model n'a pas pickup_time_window_end
+                            "end": None,
                         },
                         "eta_risk": eta_risk,
                     }
@@ -161,7 +167,10 @@ class AgentTools:
 
             unassigned_count = len([j for j in jobs if j.get("status") == "unassigned"])
             logger.info(
-                "[AgentTools] État construit: %d jobs (%d non assignés), %d drivers disponibles",
+                (
+                    "[AgentTools] État construit: %d jobs (%d non assignés), "
+                    "%d drivers disponibles"
+                ),
                 len(jobs),
                 unassigned_count,
                 len(drivers),
@@ -251,10 +260,14 @@ class AgentTools:
                 logger.warning("[AgentTools] OSRM health check error: %s", e)
                 latency_ms = -1
 
-            # Si le test échoue et que le circuit breaker est CLOSED, on le considère comme suspect
+            # Si le test échoue et que le circuit breaker est CLOSED,
+            # on le considère comme suspect
             if not test_successful and cb_state == "CLOSED":
                 logger.warning(
-                    "[AgentTools] OSRM test failed but circuit breaker is CLOSED - possible issue"
+                    (
+                        "[AgentTools] OSRM test failed but circuit breaker is CLOSED - "
+                        "possible issue"
+                    )
                 )
 
             return {
@@ -389,7 +402,8 @@ class AgentTools:
 
                 if existing:
                     existing.driver_id = driver_id
-                    # Note: Assignment n'a pas de champ notes, utiliser decision_explanation si nécessaire
+                    # Note: Assignment n'a pas de champ notes,
+                    # utiliser decision_explanation si nécessaire
                 else:
                     existing = Assignment()
                     existing.booking_id = job_id
@@ -569,8 +583,10 @@ class AgentTools:
                     required_start_time - existing_end_time
                 ).total_seconds() / 60
                 return (
-                    f"Conflit temporel avec course #{existing_booking.id} à {existing_booking.scheduled_time:%H:%M}. "
-                    f"Temps nécessaire: {total_time_needed}min, écart disponible: {time_gap:.1f}min"
+                    f"Conflit temporel avec course #{existing_booking.id} "
+                    f"à {existing_booking.scheduled_time:%H:%M}. "
+                    f"Temps nécessaire: {total_time_needed}min, "
+                    f"écart disponible: {time_gap:.1f}min"
                 )
 
         return None
@@ -581,7 +597,8 @@ class AgentTools:
         strategy: str,
         overrides: Optional[Dict[str, Any]] = None,
         for_date: Optional[str] = None,  # ✅ Nouveau paramètre pour spécifier la date
-        force_reassign: bool = False,  # ✅ Si True, réassigne même les bookings déjà assignés aux réguliers
+        force_reassign: bool = False,  # ✅ Si True, réassigne même les bookings
+        # déjà assignés aux réguliers
     ) -> Dict[str, Any]:
         """Ré-optimise le dispatch.
 
@@ -589,7 +606,8 @@ class AgentTools:
             scope: "window" | "driver" | "all"
             strategy: "full" | "degraded_proximity"
             overrides: Paramètres de surcharge
-            for_date: Date au format YYYY-MM-DD (optionnel, utilise aujourd'hui par défaut)
+            for_date: Date au format YYYY-MM-DD
+                (optionnel, utilise aujourd'hui par défaut)
 
         Returns:
             {"plan": [...], "gains": {...}}
@@ -607,7 +625,8 @@ class AgentTools:
                 # Ajuster overrides selon stratégie
                 final_overrides = overrides or {}
 
-                # ✅ Récupérer preferred_driver_id et driver_load_multipliers depuis les paramètres de la company
+                # ✅ Récupérer preferred_driver_id et driver_load_multipliers
+                # depuis les paramètres de la company
                 from models import Company, Driver
 
                 company = Company.query.get(self.company_id)
@@ -616,7 +635,10 @@ class AgentTools:
                     dispatch_overrides = autonomous_config.get("dispatch_overrides", {})
 
                     logger.info(
-                        "[AgentTools] 🔍 Récupération config dispatch: dispatch_overrides clés disponibles: %s",
+                        (
+                            "[AgentTools] 🔍 Récupération config dispatch: "
+                            "dispatch_overrides clés disponibles: %s"
+                        ),
                         list(dispatch_overrides.keys()) if dispatch_overrides else [],
                     )
 
@@ -627,7 +649,8 @@ class AgentTools:
                             # S'assurer que c'est un entier
                             try:
                                 preferred_driver_id = int(preferred_driver_id)
-                                # Vérifier que le chauffeur existe et appartient à la company
+                                # Vérifier que le chauffeur existe et appartient
+                                # à la company
                                 driver = Driver.query.filter(
                                     Driver.id == preferred_driver_id,
                                     Driver.company_id == self.company_id,
@@ -642,29 +665,45 @@ class AgentTools:
                                         or f"Chauffeur #{preferred_driver_id}"
                                     )
                                     logger.info(
-                                        "[AgentTools] 🎯 Chauffeur préféré DÉTECTÉ et ACTIVÉ: %s (%s) - sera priorisé dans les assignations",
+                                        (
+                                            "[AgentTools] 🎯 Chauffeur préféré DÉTECTÉ et ACTIVÉ: "
+                                            "%s (%s) - sera priorisé dans les "
+                                            "assignations"
+                                        ),
                                         preferred_driver_id,
                                         driver_name,
                                     )
                                 else:
                                     logger.warning(
-                                        "[AgentTools] ⚠️ Chauffeur préféré #%s non trouvé ou n'appartient pas à la company %s",
+                                        (
+                                            "[AgentTools] ⚠️ Chauffeur préféré #%s non trouvé "
+                                            "ou n'appartient pas à la company %s"
+                                        ),
                                         preferred_driver_id,
                                         self.company_id,
                                     )
                             except (ValueError, TypeError) as e:
                                 logger.warning(
-                                    "[AgentTools] ⚠️ preferred_driver_id invalide: %s (erreur: %s)",
+                                    (
+                                        "[AgentTools] ⚠️ preferred_driver_id invalide: %s "
+                                        "(erreur: %s)"
+                                    ),
                                     preferred_driver_id,
                                     e,
                                 )
                         else:
                             logger.info(
-                                "[AgentTools] ℹ️ preferred_driver_id est None/null - équité stricte sera appliquée"
+                                (
+                                    "[AgentTools] ℹ️ preferred_driver_id est None/null -"
+                                    " équité stricte sera appliquée"
+                                )
                             )
                     else:
                         logger.info(
-                            "[AgentTools] ℹ️ Aucun preferred_driver_id configuré dans dispatch_overrides - équité stricte sera appliquée"
+                            (
+                                "[AgentTools] ℹ️ Aucun preferred_driver_id configuré dans "
+                                "dispatch_overrides - équité stricte sera appliquée"
+                            )
                         )
 
                     # Récupérer driver_load_multipliers depuis dispatch_overrides
@@ -673,7 +712,8 @@ class AgentTools:
                             "driver_load_multipliers"
                         ]
                         if driver_load_multipliers:
-                            # S'assurer que les clés sont des entiers et les valeurs des floats
+                            # S'assurer que les clés sont des entiers
+                            # et les valeurs des floats
                             try:
                                 if isinstance(driver_load_multipliers, dict):
                                     normalized_multipliers = {
@@ -684,18 +724,27 @@ class AgentTools:
                                         normalized_multipliers
                                     )
                                     logger.info(
-                                        "[AgentTools] ⚖️ Multiplicateurs de charge DÉTECTÉS et ACTIVÉS: %s",
+                                        (
+                                            "[AgentTools] ⚖️ Multiplicateurs de charge "
+                                            "DÉTECTÉS et ACTIVÉS: %s"
+                                        ),
                                         normalized_multipliers,
                                     )
                                 else:
                                     logger.warning(
-                                        "[AgentTools] ⚠️ driver_load_multipliers n'est pas un dict: %s (type: %s)",
+                                        (
+                                            "[AgentTools] ⚠️ driver_load_multipliers n'est pas "
+                                            "un dict: %s (type: %s)"
+                                        ),
                                         driver_load_multipliers,
                                         type(driver_load_multipliers).__name__,
                                     )
                             except (ValueError, TypeError) as e:
                                 logger.warning(
-                                    "[AgentTools] ⚠️ Erreur normalisation driver_load_multipliers: %s (erreur: %s)",
+                                    (
+                                        "[AgentTools] ⚠️ Erreur normalisation "
+                                        "driver_load_multipliers: %s (erreur: %s)"
+                                    ),
                                     driver_load_multipliers,
                                     e,
                                 )
@@ -705,14 +754,21 @@ class AgentTools:
                             )
                     else:
                         logger.debug(
-                            "[AgentTools] ℹ️ Aucun driver_load_multipliers dans dispatch_overrides"
+                            (
+                                "[AgentTools] ℹ️ Aucun driver_load_multipliers dans "
+                                "dispatch_overrides"
+                            )
                         )
 
-                # ⚠️ IMPORTANT: Ne PAS utiliser reset_existing=True pour éviter de réassigner toutes les courses
+                # ⚠️ IMPORTANT: Ne PAS utiliser reset_existing=True pour éviter
+                # de réassigner toutes les courses
                 # L'agent doit seulement assigner les courses non assignées
                 if "reset_existing" in final_overrides:
                     logger.warning(
-                        "[AgentTools] ⚠️ reset_existing ignoré dans overrides (agent ne doit pas réassigner toutes les courses)"
+                        (
+                            "[AgentTools] ⚠️ reset_existing ignoré dans overrides "
+                            "(agent ne doit pas réassigner toutes les courses)"
+                        )
                     )
                     final_overrides = {
                         k: v
@@ -720,12 +776,15 @@ class AgentTools:
                         if k != "reset_existing"
                     }
 
-                # 🚨 IMPORTANT: Les chauffeurs d'urgence ne sont utilisés qu'en dernier recours
+                # 🚨 IMPORTANT: Les chauffeurs d'urgence ne sont utilisés
+                # qu'en dernier recours
                 # Le système engine.run() gère déjà les deux passes automatiquement :
                 # - Pass 1: Chauffeurs réguliers uniquement (si regular_first=True)
-                # - Pass 2: Ajout des chauffeurs d'urgence pour les courses non assignées (si allow_emergency=True)
+                # - Pass 2: Ajout des chauffeurs d'urgence pour les courses
+                #   non assignées (si allow_emergency=True)
                 #
-                # ⚠️ CRITIQUE: Exclure les courses déjà assignées aux réguliers pour éviter les réassignations inutiles
+                # ⚠️ CRITIQUE: Exclure les courses déjà assignées aux réguliers
+                # pour éviter les réassignations inutiles
                 # On filtre les bookings avant de lancer le dispatch
                 from sqlalchemy.orm import joinedload
 
@@ -767,9 +826,12 @@ class AgentTools:
                     for assignment in assignments:
                         existing_assignments[assignment.booking_id] = assignment
 
-                # Identifier les courses déjà assignées aux réguliers (à ne PAS réassigner)
-                # et les courses non assignées ou assignées aux urgences (à réassigner si nécessaire)
-                # ⚡ EXCEPTION: Si force_reassign=True, on inclut TOUTES les courses pour réassignation
+                # Identifier les courses déjà assignées aux réguliers
+                # (à ne PAS réassigner)
+                # et les courses non assignées ou assignées aux urgences
+                # (à réassigner si nécessaire)
+                # ⚡ EXCEPTION: Si force_reassign=True, on inclut TOUTES les courses
+                # pour réassignation
                 bookings_to_dispatch = []
                 already_assigned_to_regular = []
 
@@ -789,21 +851,29 @@ class AgentTools:
                                     driver_type_str = driver_type_str.split(".")[-1]
                                 is_emergency_driver = driver_type_str == "EMERGENCY"
 
-                        # ⚡ Si force_reassign=True, on inclut TOUTES les courses pour réassignation
+                        # ⚡ Si force_reassign=True, on inclut TOUTES les courses
+                        # pour réassignation
                         if force_reassign:
                             logger.info(
-                                "[AgentTools] 🔄 Booking %s inclus pour réassignation (force_reassign=True, actuellement assigné à %s)",
+                                (
+                                    "[AgentTools] 🔄 Booking %s inclus pour réassignation "
+                                    "(force_reassign=True, actuellement assigné à %s)"
+                                ),
                                 booking.id,
                                 driver.id if driver else "unknown",
                             )
                             bookings_to_dispatch.append(booking)
                             continue
 
-                        # Si assignée à un régulier, ne pas inclure dans le dispatch (sauf si force_reassign)
+                        # Si assignée à un régulier, ne pas inclure dans le dispatch
+                        # (sauf si force_reassign)
                         if driver and not is_emergency_driver:
                             already_assigned_to_regular.append(booking.id)
                             logger.debug(
-                                "[AgentTools] ⏭️ Booking %s déjà assigné au régulier %s (type: %s), exclu du dispatch",
+                                (
+                                    "[AgentTools] ⏭️ Booking %s déjà assigné au régulier %s "
+                                    "(type: %s), exclu du dispatch"
+                                ),
                                 booking.id,
                                 driver.id,
                                 getattr(driver, "driver_type", "UNKNOWN"),
@@ -811,7 +881,10 @@ class AgentTools:
                             continue
                         # Si assignée à un urgent, on peut la réassigner si nécessaire
                         logger.debug(
-                            "[AgentTools] 🔄 Booking %s assigné à l'urgent %s (type: %s), inclus pour réassignation possible",
+                            (
+                                "[AgentTools] 🔄 Booking %s assigné à l'urgent %s (type: %s), "
+                                "inclus pour réassignation possible"
+                            ),
                             booking.id,
                             driver.id if driver else "unknown",
                             getattr(driver, "driver_type", "UNKNOWN")
@@ -821,7 +894,10 @@ class AgentTools:
                     bookings_to_dispatch.append(booking)
 
                 logger.info(
-                    "[AgentTools] 📋 Dispatch: %d bookings à traiter (%d déjà assignés aux réguliers exclus)",
+                    (
+                        "[AgentTools] 📋 Dispatch: %d bookings à traiter "
+                        "(%d déjà assignés aux réguliers exclus)"
+                    ),
                     len(bookings_to_dispatch),
                     len(already_assigned_to_regular),
                 )
@@ -829,7 +905,10 @@ class AgentTools:
                 # Si aucune course à traiter, retourner vide
                 if not bookings_to_dispatch:
                     logger.info(
-                        "[AgentTools] ✅ Toutes les courses sont déjà assignées aux réguliers, aucun dispatch nécessaire"
+                        (
+                            "[AgentTools] ✅ Toutes les courses sont déjà assignées aux"
+                            " réguliers, aucun dispatch nécessaire"
+                        )
                     )
                     return {
                         "plan": [],
@@ -840,9 +919,12 @@ class AgentTools:
                 final_overrides = {
                     **final_overrides,
                     "regular_first": True,  # Toujours prioriser les réguliers
-                    "allow_emergency": True,  # Autoriser les urgences en dernier recours
-                    # ⚠️ IMPORTANT: Exclure les bookings déjà assignés aux réguliers (sauf si force_reassign)
-                    # Si force_reassign=True, on veut réassigner même les bookings déjà assignés
+                    "allow_emergency": True,  # Autoriser les urgences
+                    # en dernier recours
+                    # ⚠️ IMPORTANT: Exclure les bookings déjà assignés aux réguliers
+                    # (sauf si force_reassign)
+                    # Si force_reassign=True, on veut réassigner même les bookings
+                    # déjà assignés
                     "exclude_booking_ids": already_assigned_to_regular
                     if not force_reassign
                     else [],
@@ -866,7 +948,8 @@ class AgentTools:
                 # Appeler engine.run() avec regular_first=True et allow_emergency=True
                 # Le système gère automatiquement les deux passes :
                 # - Pass 1: Réguliers uniquement
-                # - Pass 2: Urgences pour les courses non assignées (seulement celles vraiment non assignées)
+                # - Pass 2: Urgences pour les courses non assignées
+                #   (seulement celles vraiment non assignées)
                 result = dispatch_run(
                     company_id=self.company_id,
                     mode="auto",
@@ -884,8 +967,10 @@ class AgentTools:
                     type(assignments_raw).__name__ if assignments_raw else "None",
                 )
 
-                # ✅ FILTRER les assignations pour exclure celles déjà assignées aux réguliers
-                # (double vérification de sécurité même si exclude_booking_ids est appliqué)
+                # ✅ FILTRER les assignations pour exclure celles déjà assignées
+                # aux réguliers
+                # (double vérification de sécurité même si exclude_booking_ids
+                # est appliqué)
                 from models import Assignment, AssignmentStatus
 
                 plan = []
@@ -911,7 +996,10 @@ class AgentTools:
                     )
 
                     logger.debug(
-                        "[AgentTools] Assignment: booking_id=%s, driver_id=%s, assignment=%s",
+                        (
+                            "[AgentTools] Assignment: booking_id=%s, driver_id=%s, "
+                            "assignment=%s"
+                        ),
                         booking_id,
                         driver_id,
                         type(assignment).__name__ if assignment else "None",
@@ -919,7 +1007,10 @@ class AgentTools:
 
                     if not booking_id or not driver_id:
                         logger.warning(
-                            "[AgentTools] Assignment ignoré: booking_id=%s, driver_id=%s",
+                            (
+                                "[AgentTools] Assignment ignoré: booking_id=%s, "
+                                "driver_id=%s"
+                            ),
                             booking_id,
                             driver_id,
                         )
@@ -958,14 +1049,20 @@ class AgentTools:
                         # Si déjà assignée à un régulier, ne pas inclure dans le plan
                         if driver and not is_emergency_driver:
                             logger.debug(
-                                "[AgentTools] ⏭️ Booking %s déjà assigné au régulier %s, exclu du plan",
+                                (
+                                    "[AgentTools] ⏭️ Booking %s déjà assigné au régulier %s, "
+                                    "exclu du plan"
+                                ),
                                 booking_id,
                                 driver.id,
                             )
                             continue
                         # Si assignée à un urgent, on peut la réassigner
                         logger.debug(
-                            "[AgentTools] 🔄 Booking %s assigné à l'urgent %s, inclus pour réassignation",
+                            (
+                                "[AgentTools] 🔄 Booking %s assigné à l'urgent %s, "
+                                "inclus pour réassignation"
+                            ),
                             booking_id,
                             driver.id if driver else "unknown",
                         )
@@ -974,7 +1071,10 @@ class AgentTools:
                         {
                             "job_id": int(booking_id),
                             "driver_id": int(driver_id),
-                            "reasoning_brief": f"Reoptimize {strategy} - ETA: {assignment.get('eta_minutes', 'N/A')} min",
+                            "reasoning_brief": (
+                                f"Reoptimize {strategy} - ETA: "
+                                f"{assignment.get('eta_minutes', 'N/A')} min"
+                            ),
                         }
                     )
 

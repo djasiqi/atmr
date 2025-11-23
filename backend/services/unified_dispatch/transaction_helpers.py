@@ -37,7 +37,8 @@ def _in_tx() -> bool:
 @contextmanager
 def _begin_tx():
     """Ouvre une transaction en s'adaptant à l'état courant de la Session.
-    - Si une transaction est déjà ouverte (implicitement ou non), on utilise un savepoint (begin_nested).
+    - Si une transaction est déjà ouverte (implicitement ou non),
+      on utilise un savepoint (begin_nested).
     - Sinon, on ouvre une transaction normale (begin).
 
     Usage:

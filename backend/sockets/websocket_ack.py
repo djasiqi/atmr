@@ -1,3 +1,7 @@
+# pyright: reportUnusedFunction=false
+# La fonction handle_ack est enregistrée via @socketio.on() et appelée
+# par le framework Socket.IO, donc elle n'est pas directement "accédée"
+# dans le code Python.
 """✅ C3: WebSocket ACK + retry/backoff pour garantie de livraison UI.
 
 Objectif: 99.5% des messages confirmés < 5s.
@@ -70,7 +74,8 @@ class WebSocketACKManager:
         Returns:
             message_id généré
         """
-        # Générer message_id si non fourni (SHA-256 au lieu de MD5 pour meilleures pratiques)
+        # Générer message_id si non fourni
+        # (SHA-256 au lieu de MD5 pour meilleures pratiques)
         if message_id is None:
             payload_str = f"{event}:{room}:{payload!s}"
             message_id = hashlib.sha256(payload_str.encode()).hexdigest()[:16]
@@ -191,7 +196,6 @@ def register_ack_handlers(socketio_instance: Any) -> None:
             manager = get_ack_manager()
             manager.on_ack_received(message_id)
 
-    # Utilisée par Socket.IO via le décorateur
-    _handle_ack = handle_ack
+    # La fonction handle_ack est enregistrée via @socketio.on() ci-dessus
 
     logger.info("[C3] Registered ACK handlers")

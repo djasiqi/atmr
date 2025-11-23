@@ -541,7 +541,7 @@ class TestIntegration:
         )
 
         # Capturer les statistiques de bruit initiales
-        _initial_stats = network.get_noise_stats()
+        # _initial_stats = network.get_noise_stats()  # Commenté car non utilisé
 
         # Simuler une réduction progressive du bruit
         for step in range(5):

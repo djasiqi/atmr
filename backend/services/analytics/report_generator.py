@@ -151,7 +151,10 @@ class ReportGenerator:
                 {
                     "priority": "high",
                     "title": "Améliorer la ponctualité",
-                    "description": "Le taux de ponctualité est faible. Analysez les causes récurrentes de retards.",
+                    "description": (
+                        "Le taux de ponctualité est faible. "
+                        "Analysez les causes récurrentes de retards."
+                    ),
                 }
             )
 
@@ -174,7 +177,10 @@ class ReportGenerator:
                 {
                     "priority": "low",
                     "title": "Maintenir la performance",
-                    "description": "Continuez sur cette lancée ! Aucune action urgente requise.",
+                    "description": (
+                        "Continuez sur cette lancée ! "
+                        "Aucune action urgente requise."
+                    ),
                 }
             )
 
@@ -212,7 +218,8 @@ class ReportGenerator:
             <h2 style="color: #0f766e;">Rapport Quotidien - {company_name}</h2>
             <p><strong>Date :</strong> {date}</p>
 
-            <div style="background: #f0fdfa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <div style="background: #f0fdfa; padding: 15px; border-radius: 8px; "
+                 "margin: 20px 0;">
                 <h3 style="color: #0f766e; margin-top: 0;">Résumé</h3>
                 <p>{summary}</p>
             </div>
@@ -282,7 +289,8 @@ class ReportGenerator:
             reco_html += f"""
             <li style="margin-bottom: 10px;">
                 {emoji} <strong>{reco.get("title", "")}</strong><br>
-                <span style="color: #666; font-size: 14px;">{reco.get("description", "")}</span>
+                <span style="color: #666; font-size: 14px;">"
+                    "{reco.get("description", "")}</span>
             </li>
             """
 

@@ -1,6 +1,11 @@
 # backend/sockets/chat.py
+# pyright: reportUnusedFunction=false
+# Les fonctions handlers sont enregistrées via @socketio.on() et appelées
+# par le framework Socket.IO, donc elles ne sont pas directement "accédées"
+# dans le code Python.
 """Socket.IO handlers pour le chat et la localisation.
-Les fonctions de handlers sont enregistrées via @socketio.on() et appelées par le framework.
+Les fonctions de handlers sont enregistrées via @socketio.on()
+et appelées par le framework.
 """
 
 import logging
@@ -221,24 +226,33 @@ def init_chat_socket(socketio: SocketIO):
             has_pdf = bool(pdf_url)
             if has_image and has_pdf:
                 logger.error(
-                    "❌ [CHAT] Limite: 1 fichier par message (image OU PDF, pas les deux)"
+                    (
+                        "❌ [CHAT] Limite: 1 fichier par message "
+                        "(image OU PDF, pas les deux)"
+                    )
                 )
                 emit(
                     "error",
                     {
-                        "error": "Limite: 1 fichier par message. Choisissez une image OU un PDF."
+                        "error": (
+                            "Limite: 1 fichier par message. "
+                            "Choisissez une image OU un PDF."
+                        )
                     },
                 )
                 return
 
-            # ✅ Validation : le message doit avoir au moins du contenu texte, une image ou un PDF
+            # ✅ Validation : le message doit avoir au moins du contenu texte,
+            # une image ou un PDF
             has_content = bool(content)
             if not (has_content or has_image or has_pdf):
                 logger.error("❌ [CHAT] Message vide : ni contenu, ni image, ni PDF")
                 emit(
                     "error",
                     {
-                        "error": "Le message doit contenir du texte, une image ou un PDF."
+                        "error": (
+                            "Le message doit contenir du texte, une image ou un PDF."
+                        )
                     },
                 )
                 return
@@ -248,7 +262,9 @@ def init_chat_socket(socketio: SocketIO):
                 emit(
                     "error",
                     {
-                        "error": f"Message trop long (max {MAX_MESSAGE_LENGTH} caractères)."
+                        "error": (
+                            f"Message trop long (max {MAX_MESSAGE_LENGTH} caractères)."
+                        )
                     },
                 )
                 return
@@ -300,7 +316,11 @@ def init_chat_socket(socketio: SocketIO):
                 return
 
             logger.info(
-                "📨 [CHAT] Création du message: sender_id=%s, receiver_id=%s, company_id=%s, sender_role=%s, content='%s' (len=%d)",
+                (
+                    "📨 [CHAT] Création du message: sender_id=%s, "
+                    "receiver_id=%s, company_id=%s, sender_role=%s, "
+                    "content='%s' (len=%d)"
+                ),
                 sender_id,
                 receiver_id,
                 company_id,
@@ -314,7 +334,10 @@ def init_chat_socket(socketio: SocketIO):
                 # Permettre None si seulement image/PDF
                 content_final = content.strip() if content else None
                 logger.info(
-                    "📨 [CHAT] Contenu final avant création: '%s' (len=%d, type=%s, has_image=%s, has_pdf=%s)",
+                    (
+                        "📨 [CHAT] Contenu final avant création: '%s' "
+                        "(len=%d, type=%s, has_image=%s, has_pdf=%s)"
+                    ),
                     content_final or "(vide)",
                     len(content_final) if content_final else 0,
                     type(content_final).__name__ if content_final else "None",
@@ -351,7 +374,10 @@ def init_chat_socket(socketio: SocketIO):
                 logger.info("📨 [CHAT] Commit en cours...")
                 db.session.commit()
                 logger.info(
-                    "✅ [CHAT] Message sauvegardé en DB: id=%s, content='%s', sender_role=%s",
+                    (
+                        "✅ [CHAT] Message sauvegardé en DB: id=%s, "
+                        "content='%s', sender_role=%s"
+                    ),
                     message.id,
                     content[:50],
                     sender_role,
@@ -364,7 +390,9 @@ def init_chat_socket(socketio: SocketIO):
                 emit(
                     "error",
                     {
-                        "error": f"Erreur lors de la sauvegarde du message: {commit_err!s}"
+                        "error": (
+                            f"Erreur lors de la sauvegarde du message: {commit_err!s}"
+                        )
                     },
                 )
                 return
@@ -379,7 +407,8 @@ def init_chat_socket(socketio: SocketIO):
                 "sender_role": sender_role.value
                 if hasattr(sender_role, "value")
                 else str(sender_role),  # ✅ S'assurer que c'est une chaîne
-                "sender_name": user.first_name,  # ✅ Utiliser user.first_name directement
+                "sender_name": user.first_name,  # ✅ Utiliser user.first_name
+                # directement
                 "content": content,
                 "timestamp": timestamp.isoformat(),
                 "type": "chat",
@@ -558,7 +587,8 @@ def init_chat_socket(socketio: SocketIO):
                 else:
                     logger.warning("⚠️ Aucun driver associé à user_id=%s", user_id)
 
-            # Évite l'évaluation booléenne d'une colonne SQLA : on récupère un int ou None
+            # Évite l'évaluation booléenne d'une colonne SQLA :
+            # on récupère un int ou None
             company_id_val = tcast("int | None", getattr(driver, "company_id", None))
             if (driver is None) or (company_id_val is None):
                 logger.error(
@@ -713,7 +743,10 @@ def init_chat_socket(socketio: SocketIO):
             company_id_val = tcast("int | None", getattr(driver, "company_id", None))
             if (driver is None) or (company_id_val is None):
                 logger.error(
-                    "❌ Driver introuvable pour driver_location_batch: payload_driver_id=%s, user_id=%s",
+                    (
+                        "❌ Driver introuvable pour driver_location_batch: "
+                        "payload_driver_id=%s, user_id=%s"
+                    ),
                     payload_driver_id,
                     user.id,
                 )
@@ -936,7 +969,8 @@ def init_chat_socket(socketio: SocketIO):
                             },
                         )
                 except Exception as e:
-                    # driver vient du for → devrait exister, mais on défend le log quand même
+                    # driver vient du for → devrait exister,
+                    # mais on défend le log quand même
                     safe_id = getattr(driver, "id", None)
                     logger.exception(
                         "❌ Error sending driver location for driver %s: %s", safe_id, e
@@ -958,17 +992,4 @@ def init_chat_socket(socketio: SocketIO):
         info = _SID_INDEX.pop(sid, None)
         logger.info("👋 SIO disconnect sid=%s info=%s", sid, info)
 
-    # Référencer les handlers pour indiquer qu'ils sont utilisés par Socket.IO
-    _registered_handlers = (
-        handle_connect,
-        handle_team_chat,
-        handle_typing_start,
-        handle_typing_stop,
-        handle_join_driver_room,
-        handle_driver_location,
-        handle_driver_location_batch,
-        handle_join_company,
-        handle_get_driver_locations,
-        handle_disconnect,
-    )
     # Les handlers sont enregistrés via @socketio.on() ci-dessus

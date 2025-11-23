@@ -109,7 +109,10 @@ class AutonomousAction(db.Model):
 
     @override
     def __repr__(self) -> str:
-        return f"<AutonomousAction id={self.id} type={self.action_type} company={self.company_id} success={self.success}>"
+        return (
+            f"<AutonomousAction id={self.id} type={self.action_type} "
+            f"company={self.company_id} success={self.success}>"
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Convertit en dictionnaire pour API."""

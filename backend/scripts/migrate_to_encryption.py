@@ -12,11 +12,11 @@ from pathlib import Path
 # Ajouter le répertoire parent au path pour les imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app import create_app
-from ext import db
-from models.client import Client
-from models.user import User
-from security.crypto import get_encryption_service
+from app import create_app  # noqa: E402
+from ext import db  # noqa: E402
+from models.client import Client  # noqa: E402
+from models.user import User  # noqa: E402
+from security.crypto import get_encryption_service  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -33,7 +33,9 @@ def migrate_users(dry_run: bool = False, batch_size: int = 100):
         return 0
 
     # Compter le total d'utilisateurs à migrer
-    total_count = User.query.filter(User.encryption_migrated == False).count()  # noqa: E712
+    total_count = User.query.filter(
+        User.encryption_migrated == False  # noqa: E712
+    ).count()
     logger.info("Migration de %d utilisateurs vers le chiffrement...", total_count)
 
     migrated = 0
@@ -93,7 +95,8 @@ def migrate_users(dry_run: bool = False, batch_size: int = 100):
                     # Commit par batch pour améliorer les performances
                     if batch_count >= batch_size and not dry_run:
                         try:
-                            db.session.flush()  # Flush avant commit pour libérer mémoire
+                            # Flush avant commit pour libérer mémoire
+                            db.session.flush()
                             db.session.commit()
                             batch_count = 0
                         except Exception as commit_error:
@@ -177,7 +180,9 @@ def migrate_clients(dry_run: bool = False, batch_size: int = 100):
         return 0
 
     # Compter le total de clients à migrer
-    total_count = Client.query.filter(Client.encryption_migrated == False).count()  # noqa: E712
+    total_count = Client.query.filter(
+        Client.encryption_migrated == False  # noqa: E712
+    ).count()
     logger.info("Migration de %d clients vers le chiffrement...", total_count)
 
     migrated = 0
@@ -232,7 +237,8 @@ def migrate_clients(dry_run: bool = False, batch_size: int = 100):
                     # Commit par batch pour améliorer les performances
                     if batch_count >= batch_size and not dry_run:
                         try:
-                            db.session.flush()  # Flush avant commit pour libérer mémoire
+                            # Flush avant commit pour libérer mémoire
+                            db.session.flush()
                             db.session.commit()
                             batch_count = 0
                         except Exception as commit_error:

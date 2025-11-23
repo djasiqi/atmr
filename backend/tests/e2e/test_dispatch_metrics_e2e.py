@@ -216,7 +216,8 @@ def test_osrm_metrics_present(authenticated_client):
         if not match:
             # Vérifier que la métrique est au moins déclarée
             assert f"# HELP {metric}" in content or f"# TYPE {metric}" in content, (
-                f"Métrique {metric} doit être déclarée même si valeur absente. Contenu partiel: {content[:500]}"
+                f"Métrique {metric} doit être déclarée même si valeur absente. "
+                f"Contenu partiel: {content[:500]}"
             )
         else:
             # Si match trouvé, vérifier que la valeur est valide
@@ -258,7 +259,8 @@ def test_metrics_labels(db, test_company, authenticated_client):
 
 
 def test_osrm_metrics_initialized(authenticated_client):
-    """✅ Test de non-régression : Vérifier que les métriques OSRM sont initialisées même sans appels.
+    """✅ Test de non-régression : Vérifier que les métriques OSRM
+    sont initialisées même sans appels.
 
     Ce test vérifie que les métriques OSRM sont déclarées et initialisées avec 0.0
     même si aucun appel OSRM n'a été fait.
@@ -275,7 +277,8 @@ def test_osrm_metrics_initialized(authenticated_client):
     )
 
     # ✅ FIX: Vérifier qu'elles ont une valeur (même 0.0)
-    # Les métriques avec labels peuvent avoir plusieurs lignes, on cherche au moins une avec valeur
+    # Les métriques avec labels peuvent avoir plusieurs lignes,
+    # on cherche au moins une avec valeur
     hits_pattern = r"^osrm_cache_hits_total(\{[^}]*\})?\s+([0-9.+-eE]+)"
     hits_match = re.search(hits_pattern, content, re.MULTILINE)
     if hits_match:

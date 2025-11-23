@@ -6,7 +6,8 @@ from marshmallow import Schema, fields, validate
 
 
 class BillingSettingsUpdateSchema(Schema):
-    """Schema pour mise à jour des paramètres de facturation (PUT /api/invoices/companies/<id>/billing-settings)."""
+    """Schema pour mise à jour des paramètres de facturation
+    (PUT /api/invoices/companies/<id>/billing-settings)."""
 
     payment_terms_days = fields.Int(
         validate=validate.Range(
@@ -70,7 +71,8 @@ class BillingSettingsUpdateSchema(Schema):
 
 
 class InvoiceGenerateSchema(Schema):
-    """Schema pour génération de facture (POST /api/invoices/companies/<id>/invoices/generate)."""
+    """Schema pour génération de facture
+    (POST /api/invoices/companies/<id>/invoices/generate)."""
 
     client_id = fields.Int(validate=validate.Range(min=1))
     client_ids = fields.List(

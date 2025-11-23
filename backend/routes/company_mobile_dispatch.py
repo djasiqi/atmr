@@ -545,8 +545,12 @@ class MobileDispatchStatus(Resource):
                 agent_active = bool(agent_status.get("running"))
                 agent_last_tick = agent_status.get("last_tick")
             except Exception as exc:  # pragma: no cover
+                warning_msg = (
+                    "[MobileDispatch] Impossible de récupérer le statut agent "
+                    + "pour company %s: %s"
+                )
                 logger.warning(
-                    "[MobileDispatch] Impossible de récupérer le statut agent pour company %s: %s",
+                    warning_msg,
                     company_id,
                     exc,
                 )
@@ -585,8 +589,12 @@ class MobileDispatchStatus(Resource):
                         "next_window_start": next_window_iso,
                     }
             except Exception as exc:  # pragma: no cover
+                warning_msg = (
+                    "[MobileDispatch] Impossible de récupérer le statut optimizer "
+                    + "pour company %s: %s"
+                )
                 logger.warning(
-                    "[MobileDispatch] Impossible de récupérer le statut optimizer pour company %s: %s",
+                    warning_msg,
                     company_id,
                     exc,
                 )
@@ -921,6 +929,9 @@ class MobileRideSchedule(Resource):
         db.session.commit()
 
         tools = AgentTools(company_id)
+        scheduled_str = (
+            booking.scheduled_time.isoformat() if booking.scheduled_time else "None"
+        )
         event_id = (
             _log_mobile_action(
                 tools,
@@ -932,7 +943,7 @@ class MobileRideSchedule(Resource):
                     else None,
                     "source": "mobile_enterprise",
                 },
-                reasoning=f"Planification mobile {booking_id} -> {booking.scheduled_time.isoformat() if booking.scheduled_time else 'None'}",
+                reasoning=f"Planification mobile {booking_id} -> {scheduled_str}",
             )
             or ""
         )
@@ -998,7 +1009,9 @@ class MobileRideUrgent(Resource):
                     "extra_delay_minutes": extra_delay_minutes,
                     "source": "mobile_enterprise",
                 },
-                reasoning=f"Marquage urgent mobile {booking_id} (+{extra_delay_minutes} min)",
+                reasoning=(
+                    f"Marquage urgent mobile {booking_id} (+{extra_delay_minutes} min)"
+                ),
             )
             or ""
         )
@@ -1065,8 +1078,12 @@ class MobileDispatchMode(Resource):
                 )
                 if not agent.state.running:
                     agent.start()
+                    log_msg = (
+                        "[Dispatch-Mobile] Agent démarré automatiquement "
+                        + "pour company %s (mode fully_auto)"
+                    )
                     logger.info(
-                        "[Dispatch-Mobile] Agent démarré automatiquement pour company %s (mode fully_auto)",
+                        log_msg,
                         company_id,
                     )
             elif previous_mode == "fully_auto":
@@ -1303,8 +1320,12 @@ class MobileDispatchRun(Resource):
                     dispatch_overrides,
                     return_validation=True,
                 )
+                log_msg = (
+                    "[MobileDispatch] Validation overrides: "
+                    + "applied=%s ignored=%s errors=%s"
+                )
                 logger.info(
-                    "[MobileDispatch] Validation overrides: applied=%s ignored=%s errors=%s",
+                    log_msg,
                     validation.get("applied"),
                     validation.get("ignored"),
                     validation.get("errors"),

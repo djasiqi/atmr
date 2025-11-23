@@ -75,7 +75,10 @@ class AuditLog(db.Model):
     additional_metadata = db.Column(Text, nullable=True)  # JSON string supplémentaire
 
     def __repr__(self) -> str:  # type: ignore[override]
-        return f"<AuditLog {self.id}: {self.action_type} by {self.user_type} at {self.created_at}>"
+        return (
+            f"<AuditLog {self.id}: {self.action_type} by {self.user_type} "
+            f"at {self.created_at}>"
+        )
 
 
 class AuditLogger:
@@ -164,7 +167,10 @@ class AuditLogger:
             user_id=user_id,
             user_type="system",
             result_status=result_status,
-            result_message=f"Dispatch run {dispatch_run_id}: {assignments_count} assigned, {unassigned_count} unassigned",
+            result_message=(
+                f"Dispatch run {dispatch_run_id}: {assignments_count} assigned, "
+                f"{unassigned_count} unassigned"
+            ),
             action_details={
                 "dispatch_run_id": dispatch_run_id,
                 "mode": mode,

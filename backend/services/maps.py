@@ -27,7 +27,8 @@ _AVG_SPEED_KMH = 40.0  # fallback
 
 
 def _as_origin_str(addr_or_coord: Any) -> str:
-    """Accepte une adresse string OU un tuple (lat, lon) -> 'lat,lon' ou adresse telle quelle."""
+    """Accepte une adresse string OU un tuple (lat, lon)
+    -> 'lat,lon' ou adresse telle quelle."""
     # MAGIC_VALUE_2: toujours traiter comme coordonnées
     return f"{float(addr_or_coord[0])},{float(addr_or_coord[1])}"
 
@@ -58,7 +59,10 @@ def get_distance_duration(
 
     if not GOOGLE_MAPS_API_KEY:
         if pick_is_coord and drop_is_coord:
-            dist_km = _haversine_km(pickup_address, dropoff_address)  # type: ignore[arg-type]
+            dist_km = _haversine_km(
+                cast(Tuple[float, float], pickup_address),
+                cast(Tuple[float, float], dropoff_address),
+            )
             dur_s = int((dist_km / _AVG_SPEED_KMH) * 3600)
             return max(1, dur_s), int(dist_km * 1000)
         msg = "Clé API Google Maps manquante et aucune coordonnée pour fallback."
@@ -98,7 +102,10 @@ def get_distance_duration(
     except Exception as e:
         app_logger.warning("⚠️ DistanceMatrix single-pair fallback: %s", e)
         if pick_is_coord and drop_is_coord:
-            dist_km = _haversine_km(pickup_address, dropoff_address)  # type: ignore[arg-type]
+            dist_km = _haversine_km(
+                cast(Tuple[float, float], pickup_address),
+                cast(Tuple[float, float], dropoff_address),
+            )
             dur_s = int((dist_km / _AVG_SPEED_KMH) * 3600)
             return max(1, dur_s), int(dist_km * 1000)
         raise
@@ -138,7 +145,9 @@ def geocode_address(
 
         if data.get("status") != "OK" or not data.get("results"):
             app_logger.warning(
-                "⚠️ Aucune coordonnée trouvée pour : '%s' (country=%s)", address, country
+                "⚠️ Aucune coordonnée trouvée pour : '%s' (country=%s)",
+                address,
+                country,
             )
             return None
 
@@ -155,7 +164,8 @@ def geocode_address(
 def geocode_address_nominatim(
     address: str, *, country: str | None = None
 ) -> Dict[str, float] | None:
-    """Géocode une adresse avec Nominatim (OpenStreetMap) → {'lat': float, 'lon': float} | None.
+    """Géocode une adresse avec Nominatim (OpenStreetMap)
+    → {'lat': float, 'lon': float} | None.
     - country: code ISO (ex: "CH") pour biaiser la recherche.
     """
     address = (address or "").strip()
@@ -502,7 +512,10 @@ def _update_cache_from_block(
                 if r:
                     try:
                         dj = qcoords[j]
-                        key = f"gdm:{UD_MATRIX_GRID_ROUND}:{oi[0]},{oi[1]},{dj[0]},{dj[1]}"
+                        key = (
+                            f"gdm:{UD_MATRIX_GRID_ROUND}:"
+                            f"{oi[0]},{oi[1]},{dj[0]},{dj[1]}"
+                        )
                         r.setex(
                             key,
                             UD_MATRIX_CACHE_TTL,

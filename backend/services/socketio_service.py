@@ -37,7 +37,9 @@ def get_date_room(date_str: str) -> str:
 # Garde-fous utilitaires
 # ---------------------------------------------------------------------------
 def _is_jsonable(x: Any) -> bool:
-    """Vérifie qu'un payload est sérialisable en JSON (évite les plantages silencieux)."""
+    """Vérifie qu'un payload est sérialisable en JSON
+    (évite les plantages silencieux).
+    """
     try:
         json.dumps(x)
         return True
@@ -327,7 +329,9 @@ def emit_delay_detected(
 def join_company_room(
     sid: str, company_id: int, namespace: str = DEFAULT_NAMESPACE
 ) -> None:
-    """Ajoute un client (sid) à la room d'entreprise - utilisable hors contexte handler."""
+    """Ajoute un client (sid) à la room d'entreprise
+    - utilisable hors contexte handler.
+    """
     try:
         cast("Any", socketio).enter_room(
             sid, get_company_room(company_id), namespace=namespace
@@ -341,7 +345,9 @@ def join_company_room(
 def leave_company_room(
     sid: str, company_id: int, namespace: str = DEFAULT_NAMESPACE
 ) -> None:
-    """Retire un client (sid) de la room d'entreprise - utilisable hors contexte handler."""
+    """Retire un client (sid) de la room d'entreprise
+    - utilisable hors contexte handler.
+    """
     try:
         cast("Any", socketio).leave_room(
             sid, get_company_room(company_id), namespace=namespace

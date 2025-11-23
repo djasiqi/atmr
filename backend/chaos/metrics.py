@@ -39,7 +39,8 @@ class ChaosMetrics:
         """Enregistre une injection de chaos.
 
         Args:
-            chaos_type: Type de chaos (ex: "osrm_down", "db_read_only", "latency", "error")
+            chaos_type: Type de chaos
+            (ex: "osrm_down", "db_read_only", "latency", "error")
         """
         with _chaos_metrics_lock:
             _chaos_metrics["injections_total"][chaos_type] += 1
@@ -73,7 +74,8 @@ class ChaosMetrics:
             latency_ms: Latence en millisecondes
         """
         with _chaos_metrics_lock:
-            # Garder seulement les 1000 derniers échantillons pour éviter explosion mémoire
+            # Garder seulement les 1000 derniers échantillons
+            # pour éviter explosion mémoire
             MAX_LATENCY_SAMPLES = 1000
             _chaos_metrics["latency_samples"].append((latency_ms, time.time()))
             if len(_chaos_metrics["latency_samples"]) > MAX_LATENCY_SAMPLES:
@@ -192,8 +194,10 @@ def measure_rto(
 
     Args:
         service_name: Nom du service (ex: "osrm", "db")
-        restore_func: Fonction qui restaure le service (ex: lambda: injector.set_osrm_down(False))
-        test_func: Fonction qui teste une opération sur le service (doit retourner un résultat ou lever une exception)
+        restore_func: Fonction qui restaure le service
+        (ex: lambda: injector.set_osrm_down(False))
+        test_func: Fonction qui teste une opération sur le service
+        (doit retourner un résultat ou lever une exception)
         objective_seconds: Objectif RTO en secondes (ex: 30.0 pour OSRM)
         max_attempts: Nombre max de tentatives si la première échoue (défaut: 3)
         retry_delay_seconds: Délai entre tentatives en secondes (défaut: 1.0)
@@ -236,7 +240,9 @@ def measure_rto(
 
     for attempt in range(1, max_attempts + 1):
         try:
-            test_func()  # Appeler la fonction de test (peut retourner une valeur ou None)
+            # Appeler la fonction de test
+            # (peut retourner une valeur ou None)
+            test_func()
 
             # Opération réussie
             rto_seconds = time.time() - rto_start
@@ -319,5 +325,8 @@ def measure_rto(
     # Re-lever la dernière exception
     if last_error:
         raise last_error from last_error
-    error_msg = f"RTO measurement failed: all {max_attempts} attempts failed for service {service_name}"
+    error_msg = (
+        f"RTO measurement failed: all {max_attempts} attempts "
+        f"failed for service {service_name}"
+    )
     raise RuntimeError(error_msg) from None

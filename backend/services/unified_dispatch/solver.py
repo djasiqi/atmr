@@ -36,7 +36,8 @@ class SolverAssignment:
     driver_id: int
     reason: str = "solver"  # homogène avec heuristics
     route_index: int = 0  # position dans la tournée (pickup index)
-    # note: on ne sort pas les timestamps exacts ici, OR-Tools peut les fournir si besoin
+    # note: on ne sort pas les timestamps exacts ici,
+    # OR-Tools peut les fournir si besoin
     # Estimations min depuis t0 (base_time du problème)
     estimated_pickup_min: int = 0
     estimated_dropoff_min: int = 0
@@ -45,7 +46,8 @@ class SolverAssignment:
 
     def to_dict(self) -> Dict[str, Any]:
         """Sérialisation compatible API:
-        - convertit les minutes relatives en datetimes ISO (local naïf) basés sur base_time.
+        - convertit les minutes relatives en datetimes ISO
+        (local naïf) basés sur base_time.
         - inclut dispatch_run_id pour persistance.
         """
         bt = self.base_time or datetime.now()
@@ -63,7 +65,8 @@ class SolverAssignment:
             "estimated_dropoff_arrival": est_drop_dt,
             "reason": self.reason,
             "route_index": int(self.route_index),
-            "dispatch_run_id": self.dispatch_run_id,  # Include dispatch_run_id in the dict
+            "dispatch_run_id": self.dispatch_run_id,  # Include dispatch_run_id
+            # in the dict
         }
 
 
@@ -83,7 +86,8 @@ def solve(
     problem: Dict[str, Any], settings: Settings = DEFAULT_SETTINGS
 ) -> SolverResult:
     """Solve VRPTW.
-    time_matrix/service_times/time_windows/driver_windows en MINUTES, horizon en MINUTES.
+    time_matrix/service_times/time_windows/driver_windows en MINUTES,
+    horizon en MINUTES.
     """
     if not problem or not problem.get("bookings") or not problem.get("drivers"):
         return SolverResult(
@@ -134,7 +138,10 @@ def solve(
         msg = f"time_windows size mismatch: expected {2 * len(bookings)}, got {len(tw)}"
         raise ValueError(msg)
     if len(service_times) != 2 * len(bookings):
-        msg = f"service_times size mismatch: expected {2 * len(bookings)}, got {len(service_times)}"
+        msg = (
+            f"service_times size mismatch: expected {2 * len(bookings)}, "
+            f"got {len(service_times)}"
+        )
         raise ValueError(msg)
     if len(starts) != num_vehicles or len(ends) != num_vehicles:
         msg = "starts/ends must have length = num_vehicles"
@@ -180,7 +187,10 @@ def solve(
         or n_nodes > SAFE_MAX_NODES
     ):
         logger.warning(
-            "[Solver] Problem too large -> fallback (veh=%d, tasks=%d, nodes=%d; caps=%d/%d/%d)",
+            (
+                "[Solver] Problem too large -> fallback "
+                "(veh=%d, tasks=%d, nodes=%d; caps=%d/%d/%d)"
+            ),
             num_vehicles,
             len(bookings),
             n_nodes,
@@ -242,7 +252,8 @@ def solve(
         return 0
 
     # --- Callback TEMPS unique pour la dimension "Time"
-    #     (utilise le temps réel: travel + service ; SANS pénalité/multiplicateur urgence)
+    #     (utilise le temps réel: travel + service ;
+    #     SANS pénalité/multiplicateur urgence)
     def _time_callback(from_index: int, to_index: int) -> int:
         from_node = manager.IndexToNode(from_index)
         to_node = manager.IndexToNode(to_index)
@@ -443,7 +454,8 @@ def solve(
         "Visits",
     )
 
-    # Disjunctions: GROUPÉES par PAIRE (pickup+dropoff) avec grosse pénalité si non servi
+    # Disjunctions: GROUPÉES par PAIRE (pickup+dropoff)
+    # avec grosse pénalité si non servi
     # NB: une seule disjonction par paire => on paie la pénalité au plus une
     # fois par course complète.
     base_penalty_raw = getattr(
@@ -460,11 +472,14 @@ def solve(
     for i in range(len(bookings)):
         p_idx = manager.NodeToIndex(pickup_nodes[i])
         d_idx = manager.NodeToIndex(dropoff_nodes[i])
-        # ✅ Disjonction groupée pickup+dropoff : on paie au plus une pénalité par course complète
-        # (et on évite des états "pickup absent / dropoff présent" même si ActiveVar égalise déjà).
+        # ✅ Disjonction groupée pickup+dropoff :
+        # on paie au plus une pénalité par course complète
+        # (et on évite des états "pickup absent / dropoff présent"
+        # même si ActiveVar égalise déjà).
         routing.AddDisjunction([p_idx, d_idx], int(penalty))
 
-    # --- NOUVEAU: Pénalité "soft" pour encourager le MÊME chauffeur sur les Aller/Retour ---
+    # --- NOUVEAU: Pénalité "soft" pour encourager le MÊME chauffeur
+    # sur les Aller/Retour ---
     # On ajoute une pénalité au coût total si les chauffeurs sont différents.
     # Cela incite le solveur à préférer l'attente sur place.
     solver = routing.solver()
@@ -545,7 +560,10 @@ def solve(
             if not gain_result.get("skipped"):
                 gain_pct = gain_result.get("gain_pct", 0)
                 logger.info(
-                    "[B5] Warm-start gain: %.1f%% (size=%d, without=%.0fms, with=%.0fms)",
+                    (
+                        "[B5] Warm-start gain: %.1f%% "
+                        "(size=%d, without=%.0fms, with=%.0fms)"
+                    ),
                     gain_pct,
                     size,
                     gain_result.get("without_ms", 0),
@@ -563,7 +581,10 @@ def solve(
             getattr(getattr(settings, "solver", None), "time_limit_sec", 0)
         )
         logger.warning(
-            "[Solver] No solution (limit=%ss, vehicles=%d, tasks=%d, nodes=%d, penalty=%d)",
+            (
+                "[Solver] No solution "
+                "(limit=%ss, vehicles=%d, tasks=%d, nodes=%d, penalty=%d)"
+            ),
             _limit_sec,
             num_vehicles,
             len(bookings),

@@ -12,7 +12,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Default configuration (⚠️ par défaut on pointe vers le service Docker 'redis', pas localhost)
+# Default configuration
+# (⚠️ par défaut on pointe vers le service Docker 'redis', pas localhost)
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
@@ -43,8 +44,10 @@ celery.conf.update(
     accept_content=["json"],
     result_serializer="json",
     task_track_started=True,
-    task_time_limit=600,  # ✅ 10 minutes max per task (600 secondes) - corrigé de 0.600
-    task_soft_time_limit=540,  # ✅ 9 minutes soft limit (540 secondes) - corrigé de 0.540
+    task_time_limit=600,  # ✅ 10 minutes max per task (600 secondes)
+    # - corrigé de 0.600
+    task_soft_time_limit=540,  # ✅ 9 minutes soft limit (540 secondes)
+    # - corrigé de 0.540
     worker_max_tasks_per_child=0.200,  # Restart worker after 200 tasks
     worker_prefetch_multiplier=1,  # One task at a time
     task_acks_late=True,  # Acknowledge task after execution
@@ -110,10 +113,12 @@ celery.conf.beat_schedule = {
         "schedule": 7 * 24 * 3600,  # 1 semaine
         "options": {
             "expires": 12 * 3600,  # Expire après 12h
-            "jitter": 1800,  # ✅ 2.6: Jitter jusqu'à 30 minutes (tasks hebdomadaires)
+            "jitter": 1800,  # ✅ 2.6: Jitter jusqu'à 30 minutes
+            # (tasks hebdomadaires)
         },
     },
-    # 🤖 Agent Dispatch: Démarrer automatiquement tous les agents en mode FULLY_AUTO (toutes les 5 min)
+    # 🤖 Agent Dispatch: Démarrer automatiquement tous les agents
+    # en mode FULLY_AUTO (toutes les 5 min)
     "ensure-agents-running": {
         "task": "tasks.dispatch_tasks.ensure_agents_running",
         "schedule": 300.0,  # 5 minutes
@@ -137,10 +142,12 @@ celery.conf.beat_schedule = {
         "schedule": 7 * 24 * 3600,  # 1 semaine
         "options": {
             "expires": 6 * 3600,
-            "jitter": 1800,  # ✅ 2.6: Jitter jusqu'à 30 minutes (tasks hebdomadaires)
+            "jitter": 1800,  # ✅ 2.6: Jitter jusqu'à 30 minutes
+            # (tasks hebdomadaires)
         },
     },
-    # ✅ 2.5: Vérification rotation clés (tous les 7 jours pour détecter si rotation due)
+    # ✅ 2.5: Vérification rotation clés
+    # (tous les 7 jours pour détecter si rotation due)
     "secret-rotation-check": {
         "task": "tasks.secret_rotation_tasks.check_rotation_due",
         "schedule": 7 * 24 * 3600,  # 1 semaine
@@ -203,7 +210,8 @@ celery.conf.beat_schedule = {
             "jitter": 7200,  # ✅ 2.6: Jitter jusqu'à 2 heures (tasks trimestrielles)
         },
     },
-    # ✅ 4.1: Rotation globale des secrets (tous les 90 jours, backup de la rotation individuelle)
+    # ✅ 4.1: Rotation globale des secrets (tous les 90 jours,
+    # backup de la rotation individuelle)
     "vault-rotate-all": {
         "task": "tasks.vault_rotation_tasks.rotate_all_secrets",
         "schedule": 90 * 24 * 3600,  # 90 jours
@@ -234,7 +242,8 @@ def get_flask_app():
 
         config_name = os.getenv("FLASK_CONFIG", "production")
         # ✅ Désactiver l'initialisation des routes API dans le contexte Celery
-        # pour éviter l'erreur Flask-RESTX "View function mapping is overwriting an existing endpoint function: specs"
+        # pour éviter l'erreur Flask-RESTX
+        # "View function mapping is overwriting an existing endpoint function: specs"
         original_skip = os.getenv("SKIP_ROUTES_INIT", "false")
         os.environ["SKIP_ROUTES_INIT"] = "true"
         try:
@@ -287,9 +296,9 @@ def _register_dlq_handlers():
     from celery.signals import task_failure, task_retry, task_success
 
     @task_failure.connect
-    def task_failed_handler(
+    def task_failed_handler(  # pyright: ignore[reportUnusedFunction]
         sender=None, task_id=None, exception=None, traceback=None, _einfo=None, **kwargs
-    ):  # pyright: ignore[reportUnusedFunction]
+    ):
         """Gère les tâches échouées après max_retries."""
         task_name = getattr(sender, "name", None) if sender else "unknown"
         retries = kwargs.get("request", {}).get("retries", 0)
@@ -349,13 +358,17 @@ def _register_dlq_handlers():
                 )
 
     @task_retry.connect
-    def task_retry_handler(_sender=None, task_id=None, reason=None, **kwargs):  # pyright: ignore[reportUnusedFunction]
+    def task_retry_handler(  # pyright: ignore[reportUnusedFunction]
+        _sender=None, task_id=None, reason=None, **kwargs
+    ):
         """Log les retries."""
         retries = kwargs.get("request", {}).get("retries", 0)
         logger.warning("[Celery] Task %s retry #%d: %s", task_id, retries + 1, reason)
 
     @task_success.connect
-    def task_succeeded_handler(sender=None, **_kwargs):  # pyright: ignore[reportUnusedFunction]
+    def task_succeeded_handler(  # pyright: ignore[reportUnusedFunction]
+        sender=None, **_kwargs
+    ):
         """Log les succès."""
         logger.debug("[Celery] Task %s succeeded", sender.name if sender else "unknown")
 

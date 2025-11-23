@@ -385,7 +385,10 @@ def clear_alert_history():
         return jsonify(
             {
                 "success": True,
-                "message": f"Historique nettoyé{' pour booking ' + booking_id if booking_id else ''}",
+                "message": (
+                    f"Historique nettoyé"
+                    f"{' pour booking ' + booking_id if booking_id else ''}"
+                ),
                 "timestamp": datetime.now(UTC).isoformat(),
             }
         )

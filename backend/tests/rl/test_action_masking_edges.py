@@ -182,7 +182,8 @@ class TestActionMaskingEdges:
                 "pickup_lat": 46.3,  # Très loin (distance > 0, donc travel_time > 0)
                 "pickup_lon": 6.2,
                 "priority": 3,
-                "time_window_end": 5,  # Fenêtre très courte (current_time=10 + travel_time > 5)
+                # Fenêtre très courte (current_time=10 + travel_time > 5)
+                "time_window_end": 5,
                 "time_remaining": 5,
                 "assigned": False,
             },
@@ -196,7 +197,8 @@ class TestActionMaskingEdges:
         mask = mock_env._get_valid_actions_mask()
         assignment_actions = [i for i in range(1, mock_env.action_space.n) if mask[i]]
         assert len(assignment_actions) == 0, (
-            f"Pas d'actions d'assignation valides avec fenêtres impossibles, trouvé {assignment_actions}"
+            f"Pas d'actions d'assignation valides avec fenêtres impossibles, "
+            f"trouvé {assignment_actions}"
         )
 
         logger.info("✅ Test fenêtres temporelles impossibles réussi")

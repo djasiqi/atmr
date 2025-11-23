@@ -38,7 +38,8 @@ def enable_maintenance(reason: str = "Maintenance mode activated"):
             f.write(f"{datetime.now().isoformat()} - ENABLED - {reason}\n")
 
         # Définir la variable d'environnement (si dans Docker)
-        # nosec B104: Script d'administration nécessitant la modification de variables d'environnement
+        # nosec B104: Script d'administration nécessitant
+        # la modification de variables d'environnement
         os.environ["MAINTENANCE_MODE"] = "true"
 
         logger.warning("✅ Maintenance mode ENABLED: %s", reason)
@@ -66,7 +67,8 @@ def disable_maintenance():
 
         # Supprimer la variable d'environnement
         if "MAINTENANCE_MODE" in os.environ:
-            # nosec B104: Script d'administration nécessitant la suppression de variables d'environnement
+            # nosec B104: Script d'administration nécessitant
+            # la suppression de variables d'environnement
             del os.environ["MAINTENANCE_MODE"]
 
         logger.info("✅ Maintenance mode DISABLED")

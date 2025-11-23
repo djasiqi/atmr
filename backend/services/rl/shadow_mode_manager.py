@@ -43,13 +43,16 @@ class ShadowModeManager:
         - Export CSV/JSON automatisé
     """
 
-    def __init__(self, data_dir: str = "data/rl/shadow_mode"):  # pyright: ignore[reportMissingSuperCall]
+    def __init__(
+        self, data_dir: str = "data/rl/shadow_mode"
+    ):
         """Initialise le ShadowModeManager.
 
         Args:
             data_dir: Répertoire pour stocker les données shadow mode
 
         """
+        super().__init__()  # Explicitly call parent constructor
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -147,7 +150,8 @@ class ShadowModeManager:
     ) -> Dict[str, Any]:
         """Calcule les KPIs détaillés pour la comparaison.
 
-        Si aucun paramètre n'est fourni, calcule des KPIs agrégés depuis les logs stockés.
+        Si aucun paramètre n'est fourni, calcule des KPIs agrégés depuis les
+        logs stockés.
 
         Args:
             human_decision: Décision humaine (optionnel)
@@ -289,7 +293,8 @@ class ShadowModeManager:
             total_human_delay += human_delay
             total_rl_delay += rl_delay
 
-            # Déterminer qui gagne (RL gagne si ETA ou delay est meilleur, ou si les deux sont égaux et RL a un meilleur delay)
+            # Déterminer qui gagne (RL gagne si ETA ou delay est meilleur,
+            # ou si les deux sont égaux et RL a un meilleur delay)
             if rl_eta < human_eta or (rl_eta == human_eta and rl_delay < human_delay):
                 rl_wins += 1
             elif human_eta < rl_eta or (human_eta == rl_eta and human_delay < rl_delay):
@@ -695,7 +700,10 @@ class ShadowModeManager:
             avg_eta_improvement < EXCELLENT_RL_ETA_IMPROVEMENT_THRESHOLD
         ):  # RL meilleur de plus de 5 minutes
             recommendations.append(
-                "Performance RL excellente - Augmenter la confiance dans les suggestions"
+                (
+                    "Performance RL excellente - Augmenter la confiance dans "
+                    "les suggestions"
+                )
             )
 
         return recommendations

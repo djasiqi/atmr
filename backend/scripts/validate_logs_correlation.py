@@ -15,7 +15,6 @@ backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
 from app import create_app  # noqa: E402
-from ext import db  # noqa: E402
 from models import DispatchRun  # noqa: E402
 
 
@@ -69,9 +68,12 @@ def validate_dispatch_run_logs(dispatch_run_id: int) -> Dict[str, Any]:
         results["dispatch_run_exists"] = True
         results["company_id"] = dispatch_run.company_id
 
-        # Dans un environnement réel, on devrait lire les logs depuis un fichier ou système de logs
-        # Ici, on simule en vérifiant que le dispatch_run a les bonnes données
-        # Pour une vraie validation, il faudrait parser les logs depuis un fichier ou système centralisé
+        # Dans un environnement réel, on devrait lire les logs
+        # depuis un fichier ou système de logs
+        # Ici, on simule en vérifiant que le dispatch_run
+        # a les bonnes données
+        # Pour une vraie validation, il faudrait parser les logs
+        # depuis un fichier ou système centralisé
 
         results["logs_analyzed"] = 1  # Simulation
         results["logs_with_dispatch_run_id"] = 1  # Simulation

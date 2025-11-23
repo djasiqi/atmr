@@ -51,7 +51,10 @@ class PDFService:
             pdf_content = self._create_invoice_pdf_content(invoice)
 
             # Sauvegarder le fichier
-            filename = f"invoice_{invoice.invoice_number}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
+            filename = (
+                f"invoice_{invoice.invoice_number}_"
+                f"{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
+            )
             filepath = Path(self.invoices_dir, filename)
 
             with filepath.open("wb") as f:
@@ -98,7 +101,10 @@ class PDFService:
             pdf_content = self._create_reminder_pdf_content(invoice, level)
 
             # Sauvegarder le fichier
-            filename = f"reminder_{invoice.invoice_number}_level{level}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
+            filename = (
+                f"reminder_{invoice.invoice_number}_level{level}_"
+                f"{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
+            )
             filepath = Path(self.invoices_dir, filename)
 
             with filepath.open("wb") as f:
@@ -121,7 +127,8 @@ class PDFService:
             raise
 
     def _create_invoice_pdf_content(self, invoice):
-        """Crée le contenu PDF d'une facture selon la variante de template sélectionnée."""
+        """Crée le contenu PDF d'une facture selon la variante de template
+        sélectionnée."""
         # Récupérer la variante de template depuis les paramètres de facturation
         billing_settings = CompanyBillingSettings.query.filter_by(
             company_id=invoice.company_id
@@ -139,7 +146,8 @@ class PDFService:
         return self._create_standard_invoice_pdf(invoice, billing_settings)
 
     def _create_standard_invoice_pdf(self, invoice, billing_settings):
-        """Crée le contenu PDF d'une facture avec le template standard (format actuel)."""
+        """Crée le contenu PDF d'une facture avec le template standard
+        (format actuel)."""
         # Import ici pour éviter les problèmes de dépendances circulaires
         from io import BytesIO
 
@@ -209,7 +217,8 @@ class PDFService:
 
                 # Vérifier si c'est une URL externe (http/https)
                 if logo_url.startswith(("http://", "https://")):
-                    # Pour les URLs externes, on ne peut pas les charger directement dans ReportLab
+                    # Pour les URLs externes, on ne peut pas les charger
+                    # directement dans ReportLab
                     # On pourrait télécharger l'image, mais pour l'instant on ignore
                     app_logger.info(
                         "Logo externe détecté (non supporté pour PDF): %s", logo_url
@@ -232,7 +241,8 @@ class PDFService:
                     # Utiliser des pourcentages pour s'adapter à tous les formats
                     logo_width_percent = 0.15  # 15% de la largeur de page
 
-                    # Convertir en points (1 inch = 72 points, page A4 ≈ 21cm = 595 points)
+                    # Convertir en points (1 inch = 72 points,
+                    # page A4 ≈ 21cm = 595 points)
                     logo_width = 595 * logo_width_percent  # ≈ 89 points
                     logo_height = logo_width / 4.17  # ≈ 21 points
 
@@ -263,10 +273,12 @@ class PDFService:
                                 logo_path,
                                 str(svg_error),
                             )
-                            # En cas d'erreur, on continue sans logo plutôt que de faire échouer la génération
+                            # En cas d'erreur, on continue sans logo plutôt que
+                            # de faire échouer la génération
                             logo_img = None
                     else:
-                        # Pour les autres formats (PNG, JPG, etc.), utiliser Image directement
+                        # Pour les autres formats (PNG, JPG, etc.),
+                        # utiliser Image directement
                         logo_img = Image(
                             logo_path, width=logo_width, height=logo_height
                         )
@@ -284,8 +296,10 @@ class PDFService:
 
         # === LOGO ET COORDONNÉES ENTREPRISE (GAUCHE) ===
         if logo_img:
-            # Vérifier si c'est un drawing (SVG converti) en vérifiant la présence d'attributs spécifiques
-            # Les drawings de svglib ont des attributs width, height et une méthode scale
+            # Vérifier si c'est un drawing (SVG converti) en vérifiant
+            # la présence d'attributs spécifiques
+            # Les drawings de svglib ont des attributs width, height
+            # et une méthode scale
             is_drawing = (
                 hasattr(logo_img, "width")
                 and hasattr(logo_img, "height")
@@ -323,7 +337,10 @@ class PDFService:
                 )
                 # Créer un Paragraph avec le logo
                 logo_para = Paragraph(
-                    f'<img src="{logo_path}" width="{logo_width}" height="{logo_height}"/>',
+                    (
+                        f'<img src="{logo_path}" width="{logo_width}" '
+                        f'height="{logo_height}"/>'
+                    ),
                     logo_style,
                 )
                 story.append(logo_para)
@@ -378,7 +395,10 @@ class PDFService:
                     and client.domicile_zip
                     and client.domicile_city
                 ):
-                    billed_to_address = f"{street_address}\n{client.domicile_zip} {client.domicile_city} Suisse"
+                    billed_to_address = (
+                        f"{street_address}\n{client.domicile_zip} "
+                        f"{client.domicile_city} Suisse"
+                    )
                 else:
                     billed_to_address = street_address
             elif (
@@ -413,12 +433,14 @@ class PDFService:
         story.append(Spacer(1, 20))
 
         # === TABLEAU DES COURSES ===
-        # Fonction pour formater les adresses longues avec retour à la ligne dans les colonnes
+        # Fonction pour formater les adresses longues avec retour à la ligne
+        # dans les colonnes
         def format_address_for_table(address, max_length=25):
             if not address or address == "Adresse inconnue":
                 return "Adresse non renseignée"
 
-            # Nettoyer l'adresse : supprimer "Suisse" et "Trajet" mais garder les numéros d'adresse
+            # Nettoyer l'adresse : supprimer "Suisse" et "Trajet"
+            # mais garder les numéros d'adresse
             clean_address = address.replace(", Suisse", "").strip()
             # Supprimer le mot "Trajet" au début
             import re
@@ -485,7 +507,10 @@ class PDFService:
                     if is_third_party:
                         patient_name = (
                             booking.customer_name
-                            or f"{booking.client.user.first_name or ''} {booking.client.user.last_name or ''}".strip()
+                            or (
+                                f"{booking.client.user.first_name or ''} "
+                                f"{booking.client.user.last_name or ''}"
+                            ).strip()
                             or "Patient"
                         )
                         # Tronquer si trop long
@@ -512,7 +537,8 @@ class PDFService:
                     else:
                         table_data.append([date_str, departure, arrival, amount])
                 else:
-                    # Si pas de booking trouvé, utiliser la description mais séparer départ/arrivée
+                    # Si pas de booking trouvé, utiliser la description
+                    # mais séparer départ/arrivée
                     date_str = ""
                     desc = line.description
                     if " → " in desc:
@@ -593,7 +619,8 @@ class PDFService:
         vat_total_amount = float(invoice.vat_total_amount)
         total_amount = float(invoice.total_amount)
 
-        # Vérifier si la TVA est applicable (présente dans les métadonnées ou montant > 0)
+        # Vérifier si la TVA est applicable
+        # (présente dans les métadonnées ou montant > 0)
         vat_is_applicable = False
         vat_label_display = "TVA"
         if isinstance(invoice.meta, dict) and "vat" in invoice.meta:
@@ -704,7 +731,8 @@ class PDFService:
 
         # === PIED DE PAGE - NOTES DE FACTURATION ===
 
-        # Utiliser billing_settings passé en paramètre (déjà récupéré dans _create_invoice_pdf_content)
+        # Utiliser billing_settings passé en paramètre
+        # (déjà récupéré dans _create_invoice_pdf_content)
 
         # Délai de paiement (par défaut 10 jours)
         payment_terms_days = 10
@@ -726,15 +754,18 @@ class PDFService:
         elif hasattr(company, "iban") and company.iban:
             iban_value = company.iban
 
-        # Message du pied de page : utiliser legal_footer si disponible, sinon message dynamique
+        # Message du pied de page : utiliser legal_footer si disponible,
+        # sinon message dynamique
         if billing_settings and billing_settings.legal_footer:
             # Utiliser le texte légal personnalisé depuis les paramètres
             footer_message = billing_settings.legal_footer
         else:
             # Message dynamique par défaut avec valeurs des paramètres
             footer_message = (
-                f"En votre aimable règlement net sous {payment_terms_days} {jours_text} avec nos remerciements anticipés. "
-                f"En cas de retard de paiement, des frais de rappel d'un montant de CHF {overdue_fee:.2f} vous seront facturés, "
+                f"En votre aimable règlement net sous {payment_terms_days} "
+                f"{jours_text} avec nos remerciements anticipés. "
+                f"En cas de retard de paiement, des frais de rappel d'un montant "
+                f"de CHF {overdue_fee:.2f} vous seront facturés, "
                 f"conformément à nos conditions générales. "
                 f"Paiement par virement bancaire : IBAN : {iban_value}"
             )
@@ -748,7 +779,8 @@ class PDFService:
 
         story.append(PageBreak())
 
-        # Ajouter un espacement pour pousser le QR-Bill vraiment en bas de la page QR-Bill
+        # Ajouter un espacement pour pousser le QR-Bill vraiment en bas
+        # de la page QR-Bill
         story.append(Spacer(1, 545))  # Espacement optimal pour pousser vraiment en bas
 
         try:
@@ -818,7 +850,8 @@ class PDFService:
         return buffer.getvalue()
 
     def _create_minimal_invoice_pdf(self, invoice, billing_settings):
-        """Crée le contenu PDF d'une facture avec le template minimal (version simplifiée)."""
+        """Crée le contenu PDF d'une facture avec le template minimal
+        (version simplifiée)."""
         from io import BytesIO
 
         from reportlab.lib import colors
@@ -897,7 +930,11 @@ class PDFService:
         story.append(Spacer(1, 10))
 
         # === INFORMATIONS FACTURE (SIMPLIFIÉES) ===
-        invoice_info = f"<b>Facture {invoice.invoice_number}</b> - {invoice.issued_at.strftime('%d.%m.%Y')} - Échéance: {invoice.due_date.strftime('%d.%m.%Y')}"
+        invoice_info = (
+            f"<b>Facture {invoice.invoice_number}</b> - "
+            f"{invoice.issued_at.strftime('%d.%m.%Y')} - "
+            f"Échéance: {invoice.due_date.strftime('%d.%m.%Y')}"
+        )
         story.append(Paragraph(invoice_info, normal_style))
         story.append(Spacer(1, 15))
 
@@ -926,7 +963,10 @@ class PDFService:
                     if is_third_party:
                         patient_name = (
                             booking.customer_name
-                            or f"{booking.client.user.first_name or ''} {booking.client.user.last_name or ''}".strip()
+                            or (
+                                f"{booking.client.user.first_name or ''} "
+                                f"{booking.client.user.last_name or ''}"
+                            ).strip()
                             or "Patient"
                         )
                         if len(patient_name) > MAX_PATIENT_NAME_LENGTH:
@@ -989,7 +1029,12 @@ class PDFService:
         if billing_settings and billing_settings.legal_footer:
             footer_message = billing_settings.legal_footer
         else:
-            footer_message = f"Merci de votre règlement. IBAN: {billing_settings.iban if billing_settings and billing_settings.iban else 'Non configuré'}"
+            iban_display = (
+                billing_settings.iban
+                if billing_settings and billing_settings.iban
+                else "Non configuré"
+            )
+            footer_message = f"Merci de votre règlement. IBAN: {iban_display}"
 
         story.append(Paragraph(footer_message, centered_style))
 
@@ -1028,7 +1073,8 @@ class PDFService:
         return buffer.getvalue()
 
     def _create_detailed_invoice_pdf(self, invoice, billing_settings):
-        """Crée le contenu PDF d'une facture avec le template détaillé (version enrichie)."""
+        """Crée le contenu PDF d'une facture avec le template détaillé
+        (version enrichie)."""
         from io import BytesIO
 
         from reportlab.lib import colors
@@ -1156,7 +1202,10 @@ class PDFService:
                     spaceAfter=8,
                 )
                 logo_para = Paragraph(
-                    f'<img src="{logo_path}" width="{logo_width}" height="{logo_height}"/>',
+                    (
+                        f'<img src="{logo_path}" width="{logo_width}" '
+                        f'height="{logo_height}"/>'
+                    ),
                     logo_style,
                 )
                 story.append(logo_para)
@@ -1210,7 +1259,10 @@ class PDFService:
                     and client.domicile_zip
                     and client.domicile_city
                 ):
-                    billed_to_address = f"{street_address}\n{client.domicile_zip} {client.domicile_city} Suisse"
+                    billed_to_address = (
+                        f"{street_address}\n{client.domicile_zip} "
+                        f"{client.domicile_city} Suisse"
+                    )
                 else:
                     billed_to_address = street_address
 
@@ -1225,12 +1277,18 @@ class PDFService:
         story.append(Spacer(1, 20))
 
         # === INFORMATIONS FACTURE DÉTAILLÉES ===
+        status_value = (
+            invoice.status.value
+            if hasattr(invoice.status, "value")
+            else str(invoice.status)
+        )
+        period_str = f"{invoice.period_month:02d}.{invoice.period_year}"
         invoice_info_detailed = f"""
         <b>Numéro de facture :</b> {invoice.invoice_number}<br/>
         <b>Date d'émission :</b> {invoice.issued_at.strftime("%d.%m.%Y")}<br/>
         <b>Date d'échéance :</b> {invoice.due_date.strftime("%d.%m.%Y")}<br/>
-        <b>Période de facturation :</b> {invoice.period_month:02d}.{invoice.period_year}<br/>
-        <b>Statut :</b> {invoice.status.value if hasattr(invoice.status, "value") else str(invoice.status)}
+        <b>Période de facturation :</b> {period_str}<br/>
+        <b>Statut :</b> {status_value}
         """
         story.append(Paragraph(invoice_info_detailed, normal_style))
         story.append(Spacer(1, 20))
@@ -1292,7 +1350,10 @@ class PDFService:
                     if is_third_party:
                         patient_name = (
                             booking.customer_name
-                            or f"{booking.client.user.first_name or ''} {booking.client.user.last_name or ''}".strip()
+                            or (
+                                f"{booking.client.user.first_name or ''} "
+                                f"{booking.client.user.last_name or ''}"
+                            ).strip()
                             or "Patient"
                         )
                         if len(patient_name) > MAX_PATIENT_NAME_LENGTH:
@@ -1463,8 +1524,10 @@ class PDFService:
             footer_message = billing_settings.legal_footer
         else:
             footer_message = (
-                f"En votre aimable règlement net sous {payment_terms_days} {jours_text} avec nos remerciements anticipés. "
-                f"En cas de retard de paiement, des frais de rappel d'un montant de CHF {overdue_fee:.2f} vous seront facturés, "
+                f"En votre aimable règlement net sous {payment_terms_days} "
+                f"{jours_text} avec nos remerciements anticipés. "
+                f"En cas de retard de paiement, des frais de rappel d'un montant "
+                f"de CHF {overdue_fee:.2f} vous seront facturés, "
                 f"conformément à nos conditions générales. "
                 f"Paiement par virement bancaire : IBAN : {iban_value}"
             )
@@ -1581,7 +1644,10 @@ class PDFService:
         left_section.append(Paragraph("Zahlbar durch", label_style))
         left_section.append(
             Paragraph(
-                f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}",
+                (
+                    f"{invoice.client.user.first_name or ''} "
+                    f"{invoice.client.user.last_name or ''}"
+                ),
                 normal_style,
             )
         )
@@ -1593,7 +1659,10 @@ class PDFService:
         )
         left_section.append(
             Paragraph(
-                f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}",
+                (
+                    f"{invoice.client.domicile_zip or ''} "
+                    f"{invoice.client.domicile_city or ''}"
+                ),
                 normal_style,
             )
         )
@@ -1648,7 +1717,10 @@ class PDFService:
         right_section.append(Paragraph("Zahlbar durch", label_style))
         right_section.append(
             Paragraph(
-                f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}",
+                (
+                    f"{invoice.client.user.first_name or ''} "
+                    f"{invoice.client.user.last_name or ''}"
+                ),
                 normal_style,
             )
         )
@@ -1660,7 +1732,10 @@ class PDFService:
         )
         right_section.append(
             Paragraph(
-                f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}",
+                (
+                    f"{invoice.client.domicile_zip or ''} "
+                    f"{invoice.client.domicile_city or ''}"
+                ),
                 normal_style,
             )
         )
@@ -1767,7 +1842,10 @@ class PDFService:
         left_content.append(Paragraph("Zahlbar durch", label_style))
         left_content.append(
             Paragraph(
-                f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}",
+                (
+                    f"{invoice.client.user.first_name or ''} "
+                    f"{invoice.client.user.last_name or ''}"
+                ),
                 normal_text_style,
             )
         )
@@ -1779,7 +1857,10 @@ class PDFService:
         )
         left_content.append(
             Paragraph(
-                f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}",
+                (
+                    f"{invoice.client.domicile_zip or ''} "
+                    f"{invoice.client.domicile_city or ''}"
+                ),
                 normal_text_style,
             )
         )
@@ -1835,7 +1916,10 @@ class PDFService:
         right_content.append(Paragraph("Zahlbar durch", label_style))
         right_content.append(
             Paragraph(
-                f"{invoice.client.user.first_name or ''} {invoice.client.user.last_name or ''}",
+                (
+                    f"{invoice.client.user.first_name or ''} "
+                    f"{invoice.client.user.last_name or ''}"
+                ),
                 normal_text_style,
             )
         )
@@ -1847,7 +1931,10 @@ class PDFService:
         )
         right_content.append(
             Paragraph(
-                f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}",
+                (
+                    f"{invoice.client.domicile_zip or ''} "
+                    f"{invoice.client.domicile_city or ''}"
+                ),
                 normal_text_style,
             )
         )
@@ -1983,16 +2070,30 @@ class PDFService:
             if billing_settings and billing_settings.reminder1template:
                 message = billing_settings.reminder1template
             else:
-                message = f"Nous vous rappelons que votre facture {invoice.invoice_number} d'un montant de {invoice.balance_due:.2f}"
+                message = (
+                    f"Nous vous rappelons que votre facture "
+                    f"{invoice.invoice_number} d'un montant de "
+                    f"{invoice.balance_due:.2f}"
+                )
         elif level == LEVEL_THRESHOLD:
             if billing_settings and billing_settings.reminder2template:
                 message = billing_settings.reminder2template
             else:
-                message = f"Conformément à nos CG, un montant de CHF 40.- a été ajouté à votre facture {invoice.invoice_number}. À défaut de règlement dans ce délai, une procédure de mise en demeure sera engagée."
+                message = (
+                    f"Conformément à nos CG, un montant de CHF 40.- a été ajouté "
+                    f"à votre facture {invoice.invoice_number}. "
+                    f"À défaut de règlement dans ce délai, une procédure de mise "
+                    f"en demeure sera engagée."
+                )
         elif billing_settings and billing_settings.reminder3template:
             message = billing_settings.reminder3template
         else:
-            message = "Dernier rappel : Merci d'effectuer votre règlement net sous 5 jours. En l'absence de paiement, une mise en demeure sera engagée, entraînant des frais supplémentaires et une éventuelle procédure légale."
+            message = (
+                "Dernier rappel : Merci d'effectuer votre règlement net sous 5 jours. "
+                "En l'absence de paiement, une mise en demeure sera engagée, "
+                "entraînant des frais supplémentaires et une éventuelle "
+                "procédure légale."
+            )
 
         story.append(Paragraph(message, styles["Normal"]))
         story.append(Spacer(1, 20))

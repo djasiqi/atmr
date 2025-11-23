@@ -150,7 +150,10 @@ class SuggestionEngine:
                 Suggestion(
                     action="none",
                     priority="low",
-                    message=f"✅ Chauffeur en avance de {abs(delay_minutes)} min - situation optimale",
+                    message=(
+                        f"✅ Chauffeur en avance de {abs(delay_minutes)} min "
+                        "- situation optimale"
+                    ),
                     booking_id=int(booking.id) if booking else None,
                     driver_id=int(driver.id) if driver else None,
                     auto_applicable=False,
@@ -210,14 +213,17 @@ class SuggestionEngine:
                         else "high"
                     )
 
+                    driver_name = driver.user.first_name if driver.user else "Driver"
+
                     suggestions.append(
                         Suggestion(
                             action="reassign",
                             priority=priority,
                             message=(
                                 f"Réassigner au chauffeur #{driver.id} "
-                                f"({driver.user.first_name if driver.user else 'Driver'}) "
-                                f"- Gain: {gain} min (distance: {distance_km:.1f}km)"
+                                f"({driver_name}) "
+                                f"- Gain: {gain} min "
+                                f"(distance: {distance_km:.1f}km)"
                             ),
                             estimated_gain_minutes=gain,
                             booking_id=int(booking.id) if booking else None,
@@ -228,7 +234,9 @@ class SuggestionEngine:
                             additional_data={
                                 "distance_km": distance_km,
                                 "new_eta_minutes": eta_minutes,
-                                "driver_name": f"{driver.user.first_name} {driver.user.last_name}"
+                                "driver_name": (
+                                    f"{driver.user.first_name} {driver.user.last_name}"
+                                )
                                 if driver.user
                                 else None,
                             },
@@ -261,7 +269,8 @@ class SuggestionEngine:
             booking_id=int(booking.id) if booking else None,
             additional_data={
                 "auto_message": (
-                    f"Bonjour, votre chauffeur arrivera avec environ {delay_minutes} minutes de retard. "
+                    f"Bonjour, votre chauffeur arrivera avec environ "
+                    f"{delay_minutes} minutes de retard. "
                     f"Nous nous excusons pour ce désagrément."
                 ),
                 "customer_name": booking.customer_name,
@@ -277,7 +286,8 @@ class SuggestionEngine:
         advance_minutes: int,
         company_id: int,
     ) -> List[Suggestion]:
-        """Suggère d'ajouter une course supplémentaire quand le chauffeur est très en avance."""
+        """Suggère d'ajouter une course supplémentaire
+        quand le chauffeur est très en avance."""
         suggestions: list[Suggestion] = []
 
         if not driver or advance_minutes < ADVANCE_MINUTES_THRESHOLD:
@@ -299,7 +309,8 @@ class SuggestionEngine:
                         action="add_booking",
                         priority="medium",
                         message=(
-                            f"Chauffeur disponible {advance_minutes} min avant rendez-vous. "
+                            f"Chauffeur disponible {advance_minutes} min "
+                            "avant rendez-vous. "
                             f"Peut prendre la course #{nearby_booking.id} "
                             f"({nearby_booking.customer_name}) à {distance_km:.1f}km"
                         ),
@@ -336,7 +347,8 @@ class SuggestionEngine:
                     priority="critical",
                     message=(
                         f"🔴 URGENT : Reporter le rendez-vous de {delay_minutes} min "
-                        f"({delay_minutes // 60}h{delay_minutes % 60:02d}) et contacter le client immédiatement"
+                        f"({delay_minutes // 60}h{delay_minutes % 60:02d}) "
+                        "et contacter le client immédiatement"
                     ),
                     booking_id=int(booking.id) if booking else None,
                     additional_data={
@@ -357,7 +369,8 @@ class SuggestionEngine:
                     action="adjust_time",
                     priority="high",
                     message=(
-                        f"Reporter le rendez-vous de {delay_minutes} min et prévenir le client"
+                        f"Reporter le rendez-vous de {delay_minutes} min "
+                        "et prévenir le client"
                     ),
                     booking_id=int(booking.id) if booking else None,
                     additional_data={
@@ -382,7 +395,8 @@ class SuggestionEngine:
                         action="adjust_time",
                         priority="medium",
                         message=(
-                            f"Proposer de décaler le rendez-vous de {delay_minutes} min (booking non urgent)"
+                            f"Proposer de décaler le rendez-vous "
+                            f"de {delay_minutes} min (booking non urgent)"
                         ),
                         booking_id=int(booking.id) if booking else None,
                         additional_data={
@@ -557,7 +571,9 @@ def generate_reactive_suggestions(
     """Génère des suggestions RÉACTIVES basées sur un retard détecté.
 
     Usage:
-        suggestions = generate_reactive_suggestions(assignment, delay_minutes=12, company_id=1)
+        suggestions = generate_reactive_suggestions(
+            assignment, delay_minutes=12, company_id=1
+        )
         for suggestion in suggestions:
             print(suggestion.message)
             if suggestion.auto_applicable:
@@ -613,7 +629,9 @@ def apply_suggestion(
             return _apply_time_adjustment(suggestion, company_id, dry_run)
         return {
             "success": False,
-            "error": f"Action '{suggestion.action}' non supportée pour auto-application",
+            "error": (
+                f"Action '{suggestion.action}' non supportée pour auto-application"
+            ),
             "suggestion": suggestion.to_dict(),
         }
     except Exception as e:
@@ -668,7 +686,10 @@ def _apply_customer_notification(
         )
 
         logger.info(
-            "[Suggestions] Auto-applied customer notification for booking %s (delay: %d min)",
+            (
+                "[Suggestions] Auto-applied customer notification for booking %s "
+                "(delay: %d min)"
+            ),
             booking_id,
             suggestion.additional_data.get("delay_minutes", 0)
             if suggestion.additional_data
@@ -712,6 +733,8 @@ def _apply_time_adjustment(
     # (impact client trop important)
     return {
         "success": False,
-        "error": "Ajustement horaire automatique désactivé (nécessite validation humaine)",
+        "error": (
+            "Ajustement horaire automatique désactivé (nécessite validation humaine)"
+        ),
         "suggestion": suggestion.to_dict(),
     }

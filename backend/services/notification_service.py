@@ -130,13 +130,19 @@ def notify_dispatch_run_completed(
                     d = dr.day
                     date_str = d.isoformat() if hasattr(d, "isoformat") else str(d)
                     app_logger.info(
-                        "[notify_dispatch_run_completed] Retrieved date_str=%s from dispatch_run_id=%s",
+                        (
+                            "[notify_dispatch_run_completed] Retrieved date_str=%s "
+                            "from dispatch_run_id=%s"
+                        ),
                         date_str,
                         dispatch_run_id,
                     )
             except Exception as e:
                 app_logger.warning(
-                    "[notify_dispatch_run_completed] Failed to get day_str from DispatchRun: %s",
+                    (
+                        "[notify_dispatch_run_completed] Failed to get day_str "
+                        "from DispatchRun: %s"
+                    ),
                     e,
                 )
 
@@ -145,7 +151,8 @@ def notify_dispatch_run_completed(
             "assignments_count": int(assignments_count),
             "date": date_str,
         }
-        # ✅ Utiliser json.dumps pour éviter les erreurs de formatage si payload contient des %
+        # ✅ Utiliser json.dumps pour éviter les erreurs de formatage
+        # si payload contient des %
         app_logger.info(
             "[notify_dispatch_run_completed] Emitting payload: %s", json.dumps(payload)
         )
@@ -206,7 +213,10 @@ def notify_dispatcher_optimization_opportunity(
         }
 
         app_logger.info(
-            "[notify_dispatcher_optimization_opportunity] Emitting to company %s: severity=%s delay=%d",
+            (
+                "[notify_dispatcher_optimization_opportunity] Emitting to company %s: "
+                "severity=%s delay=%d"
+            ),
             company_id,
             payload.get("severity"),
             payload.get("current_delay"),

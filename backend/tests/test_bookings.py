@@ -66,7 +66,8 @@ def test_list_bookings_pagination(
     for i in range(15):
         booking = Booking(
             client_id=sample_client.id,
-            company_id=sample_company.id,  # Utiliser sample_company.id au lieu de sample_user.company_id
+            company_id=sample_company.id,  # Utiliser sample_company.id
+            # au lieu de sample_user.company_id
             user_id=sample_client.user_id,
             customer_name=f"Client {i}",
             pickup_location="Lausanne Gare",
@@ -97,7 +98,8 @@ def test_get_booking_details(
     """GET /bookings/<id> renvoie les détails d'une réservation."""
     booking = Booking(
         client_id=sample_client.id,
-        company_id=sample_company.id,  # Utiliser sample_company.id au lieu de sample_user.company_id
+        company_id=sample_company.id,  # Utiliser sample_company.id
+        # au lieu de sample_user.company_id
         user_id=sample_client.user_id,
         customer_name="Jean Dupont",
         pickup_location="Lausanne Gare",

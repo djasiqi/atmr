@@ -32,7 +32,8 @@ celery_app = Celery("billing")
     autoretry_for=(Exception,),
 )
 def check_overdues_and_trigger_reminders():
-    """Tâche quotidienne pour vérifier les factures en retard et déclencher les rappels automatiques."""
+    """Tâche quotidienne pour vérifier les factures en retard
+    et déclencher les rappels automatiques."""
     try:
         app_logger.info("Début de la vérification des factures en retard")
 
@@ -197,7 +198,10 @@ def generate_monthly_invoices():
 
                     except Exception as e:
                         app_logger.error(
-                            "Erreur lors de la génération de facture pour client %s: %s",
+                            (
+                                "Erreur lors de la génération de facture "
+                                "pour client %s: %s"
+                            ),
                             client.id,
                             str(e),
                         )

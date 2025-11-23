@@ -57,7 +57,10 @@ _doc_v1: Any = False if API_DOCS is False else f"{API_DOCS}/v1"
 api_v1 = Api(
     title="ATMR Transport API v1",
     version="1.0",
-    description="API v1 pour la gestion des transports de personnes (dépréciée - migrer vers v2)",
+    description=(
+        "API v1 pour la gestion des transports de personnes "
+        "(dépréciée - migrer vers v2)"
+    ),
     prefix=f"{API_PREFIX}/v1",
     doc=_doc_v1,
     authorizations=authorizations,
@@ -138,7 +141,8 @@ api_v1.add_namespace(company_mobile_dispatch_ns, path="/company_mobile/dispatch"
 
 
 # Prometheus metrics export
-# Ajouter une représentation personnalisée pour text/plain qui accepte les objets Response
+# Ajouter une représentation personnalisée pour text/plain
+# qui accepte les objets Response
 @api_v1.representation("text/plain")
 @api_v1.representation("text/plain; version=0.0.4; charset=utf-8")
 def output_text_plain(data, code, headers=None):
@@ -179,7 +183,10 @@ if _keep_legacy_api:
     api_legacy = Api(
         title="ATMR Transport API (Legacy - Déprécié)",
         version="1.0",
-        description="⚠️ API Legacy - Utiliser /api/v1/ ou /api/v2/ à la place. Cette version sera supprimée dans une version future.",
+        description=(
+            "⚠️ API Legacy - Utiliser /api/v1/ ou /api/v2/ à la place. "
+            "Cette version sera supprimée dans une version future."
+        ),
         prefix=API_PREFIX,
         doc=_doc_legacy,  # completely disable swagger UI/docs for legacy
         serve_spec=False,  # ensure no spec endpoint is created
@@ -235,7 +242,8 @@ def init_namespaces(app):
     app.logger.info("[api] ✅ API v1 initialisée: %s/v1", API_PREFIX)
 
     # ✅ 3.2: Initialiser API v2 seulement quand des routes seront ajoutées
-    # Pour l'instant, api_v2 est vide donc on ne l'initialise pas pour éviter conflit /specs
+    # Pour l'instant, api_v2 est vide donc on ne l'initialise pas
+    # pour éviter conflit /specs
     # Quand des routes seront ajoutées, décommenter:
     # api_v2.init_app(app)
     # app.logger.info("[api] ✅ API v2 initialisée: %s/v2", API_PREFIX)

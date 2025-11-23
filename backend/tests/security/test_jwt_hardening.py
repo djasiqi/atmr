@@ -47,7 +47,8 @@ class TestJWTExpirationConfig:
             assert abs(actual_duration - expected_duration) <= 1
 
     def test_refresh_token_uses_config_expiration(self, app_context, sample_user):
-        """Vérifie que le refresh token utilise JWT_REFRESH_TOKEN_EXPIRES de la config."""
+        """Vérifie que le refresh token utilise JWT_REFRESH_TOKEN_EXPIRES
+        de la config."""
         from flask_jwt_extended import create_refresh_token
 
         with app_context:
@@ -168,8 +169,10 @@ class TestJWTAudienceValidation:
             )
 
             # Essayer de décoder le token (Flask-JWT-Extended devrait rejeter)
-            # Note: Flask-JWT-Extended valide automatiquement l'audience si JWT_DECODE_AUDIENCE est configuré
-            # Flask-JWT-Extended lève InvalidTokenError ou JWTDecodeError pour tokens invalides
+            # Note: Flask-JWT-Extended valide automatiquement l'audience
+            # si JWT_DECODE_AUDIENCE est configuré
+            # Flask-JWT-Extended lève InvalidTokenError ou JWTDecodeError
+            # pour tokens invalides
             with pytest.raises((InvalidTokenError, pyjwt.InvalidTokenError)):
                 # Tenter d'utiliser le token devrait échouer
                 decode_token(token)

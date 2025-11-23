@@ -325,7 +325,8 @@ class TestCheckSafetyLimits:
     """Tests pour check_safety_limits()."""
 
     def test_check_safety_limits_returns_ok(self, db):
-        """Test que check_safety_limits autorise les actions (implémentation actuelle)."""
+        """Test que check_safety_limits autorise les actions
+        (implémentation actuelle)."""
         company = CompanyFactory(dispatch_mode=DispatchMode.FULLY_AUTO)
         manager = AutonomousDispatchManager(company.id)
 

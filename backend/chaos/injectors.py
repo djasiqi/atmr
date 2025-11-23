@@ -28,7 +28,8 @@ logger = logging.getLogger(__name__)
 class ChaosInjector:
     """Injecteur de chaos pour les tests de résilience.
 
-    ✅ D3: Lit les variables d'environnement au démarrage pour configuration automatique.
+    ✅ D3: Lit les variables d'environnement au démarrage
+    pour configuration automatique.
     ⚠️ En production, CHAOS_ENABLED doit être 'false' ou non défini.
     """
 
@@ -59,9 +60,11 @@ class ChaosInjector:
 
         # Logging au démarrage si chaos activé (pour visibilité)
         if self.enabled:
-            logger.warning(
-                "[CHAOS] ⚠️ Chaos injection activé via CHAOS_ENABLED=true !, Vérifier que ce n'est PAS en production !"
+            warning_msg = (
+                "[CHAOS] ⚠️ Chaos injection activé via CHAOS_ENABLED=true !, "
+                "Vérifier que ce n'est PAS en production !"
             )
+            logger.warning(warning_msg)
             if self.osrm_down:
                 logger.warning("[CHAOS] OSRM down activé via CHAOS_OSRM_DOWN=true")
             if self.db_read_only:

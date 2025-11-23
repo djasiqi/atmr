@@ -171,7 +171,8 @@ class RLLogger:
             # Générer le hash de l'état
             state_hash = self.hash_state(state)
 
-            # Convertir l'action en int, using ternary for compliance with flake8-simplicity
+            # Convertir l'action en int, using ternary for compliance
+            # with flake8-simplicity
             action_int = (
                 int(action.item())
                 if torch is not None and isinstance(action, torch.Tensor)
@@ -226,7 +227,10 @@ class RLLogger:
             # Log de debug
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug(
-                    "[RLLogger] Décision loggée - Hash: %s..., Action: %s, Redis: %s, DB: %s",
+                    (
+                        "[RLLogger] Décision loggée - Hash: %s..., "
+                        "Action: %s, Redis: %s, DB: %s"
+                    ),
                     state_hash[:8],
                     action_int,
                     redis_success,

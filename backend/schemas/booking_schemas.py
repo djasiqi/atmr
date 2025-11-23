@@ -6,7 +6,8 @@ from schemas.validation_utils import ISO8601_DATE_REGEX, ISO8601_DATETIME_REGEX
 
 
 class BookingCreateSchema(Schema):
-    """Schema pour création de réservation (POST /api/bookings/clients/<id>/bookings)."""
+    """Schema pour création de réservation
+    (POST /api/bookings/clients/<id>/bookings)."""
 
     customer_name = fields.Str(required=True, validate=validate.Length(min=1, max=200))
     pickup_location = fields.Str(

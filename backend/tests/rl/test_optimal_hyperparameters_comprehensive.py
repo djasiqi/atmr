@@ -475,12 +475,15 @@ class TestOptimalHyperparameters:
             ) as mock_save,
         ):
             # Simuler l'exécution du module principal
-            import services.rl.optimal_hyperparameters  # Import pour effet de bord
+            # Import pour effet de bord (exécution du code au niveau module)
+            import services.rl.optimal_hyperparameters
 
-            # Vérifier que logging.info est appelé (peut être 0 si le module est déjà importé)
+            # Vérifier que logging.info est appelé
+            # (peut être 0 si le module est déjà importé)
             assert mock_logging.call_count >= 0
 
-            # Vérifier que save_config est appelé (peut être 0 si le module est déjà importé)
+            # Vérifier que save_config est appelé
+            # (peut être 0 si le module est déjà importé)
             assert mock_save.call_count >= 0
 
     def test_config_copy_behavior(self):

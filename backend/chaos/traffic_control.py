@@ -28,9 +28,12 @@ class TrafficControlManager:
     def __init__(self, interface: str = "eth0") -> None:  # type: ignore[no-untyped-def]
         # ✅ Sécurité : Valider le nom d'interface réseau
         if not self._validate_interface(interface):
-            raise ValueError(
-                f"Invalid interface name: {interface}. Must match pattern: {INTERFACE_NAME_PATTERN.pattern}"
+            pattern_str = INTERFACE_NAME_PATTERN.pattern
+            error_msg = (
+                f"Invalid interface name: {interface}. "
+                f"Must match pattern: {pattern_str}"
             )
+            raise ValueError(error_msg)
         self.interface = interface
         self.active = False
 
@@ -44,8 +47,9 @@ class TrafficControlManager:
         Returns:
             True si valide, False sinon
         """
-        # Défense en profondeur : vérifier le type même si annoté (runtime validation)
-        if not isinstance(interface, str):  # pyright: ignore[reportUnnecessaryIsInstance]
+        # Défense en profondeur : vérifier le type même si annoté
+        # (runtime validation)
+        if not isinstance(interface, str):  # pyright: ignore
             return False
         return bool(INTERFACE_NAME_PATTERN.match(interface))
 
@@ -59,8 +63,9 @@ class TrafficControlManager:
         Returns:
             True si valide (0 < ms <= MAX_LATENCY_MS), False sinon
         """
-        # Défense en profondeur : vérifier le type même si annoté (runtime validation)
-        return isinstance(ms, int) and 0 < ms <= MAX_LATENCY_MS  # pyright: ignore[reportUnnecessaryIsInstance]
+        # Défense en profondeur : vérifier le type même si annoté
+        # (runtime validation)
+        return isinstance(ms, int) and 0 < ms <= MAX_LATENCY_MS  # pyright: ignore
 
     @staticmethod
     def _validate_jitter_ms(jitter_ms: int) -> bool:
@@ -72,8 +77,9 @@ class TrafficControlManager:
         Returns:
             True si valide (0 <= jitter_ms <= MAX_JITTER_MS), False sinon
         """
-        # Défense en profondeur : vérifier le type même si annoté (runtime validation)
-        return isinstance(jitter_ms, int) and 0 <= jitter_ms <= MAX_JITTER_MS  # pyright: ignore[reportUnnecessaryIsInstance]
+        # Défense en profondeur : vérifier le type même si annoté
+        # (runtime validation)
+        return 0 <= jitter_ms <= MAX_JITTER_MS
 
     @staticmethod
     def _validate_percent(percent: float) -> bool:
@@ -85,8 +91,9 @@ class TrafficControlManager:
         Returns:
             True si valide (0.0 <= percent <= MAX_PERCENT), False sinon
         """
-        # Défense en profondeur : vérifier le type même si annoté (runtime validation)
-        if not isinstance(percent, (int, float)):  # pyright: ignore[reportUnnecessaryIsInstance]
+        # Défense en profondeur : vérifier le type même si annoté
+        # (runtime validation)
+        if not isinstance(percent, (int, float)):  # pyright: ignore
             return False
         return 0.0 <= float(percent) <= MAX_PERCENT
 
@@ -120,7 +127,8 @@ class TrafficControlManager:
             return False
 
         try:
-            # ✅ Sécurité : Utiliser liste d'arguments (pas shell=True) pour éviter injection shell
+            # ✅ Sécurité : Utiliser liste d'arguments (pas shell=True)
+            # pour éviter injection shell
             # Ajouter une qdisc netem pour la latence
             cmd = [
                 "tc",
@@ -177,14 +185,15 @@ class TrafficControlManager:
 
         # ✅ Sécurité : Valider le paramètre d'entrée
         if not self._validate_percent(percent):
-            logger.error(
-                "[TC] Invalid packet loss percent: %s (must be 0.0 <= percent <= 100.0)",
-                percent,
+            error_msg = (
+                "[TC] Invalid packet loss percent: %s (must be 0.0 <= percent <= 100.0)"
             )
+            logger.error(error_msg, percent)
             return False
 
         try:
-            # ✅ Sécurité : Utiliser liste d'arguments (pas shell=True) pour éviter injection shell
+            # ✅ Sécurité : Utiliser liste d'arguments (pas shell=True)
+            # pour éviter injection shell
             cmd = [
                 "tc",
                 "qdisc",
@@ -230,7 +239,8 @@ class TrafficControlManager:
             return False
 
         try:
-            # ✅ Sécurité : Utiliser liste d'arguments (pas shell=True) pour éviter injection shell
+            # ✅ Sécurité : Utiliser liste d'arguments (pas shell=True)
+            # pour éviter injection shell
             cmd = ["tc", "qdisc", "del", "dev", self.interface, "root"]
             # ✅ Sécurité : Ajouter timeout pour éviter blocage indéfini
             result = subprocess.run(
@@ -261,7 +271,8 @@ class TrafficControlManager:
     def is_active(self) -> bool:
         """Vérifie si des règles TC sont actives."""
         try:
-            # ✅ Sécurité : Utiliser liste d'arguments (pas shell=True) pour éviter injection shell
+            # ✅ Sécurité : Utiliser liste d'arguments (pas shell=True)
+            # pour éviter injection shell
             cmd = ["tc", "qdisc", "show", "dev", self.interface]
             # ✅ Sécurité : Ajouter timeout pour éviter blocage indéfini
             result = subprocess.run(

@@ -194,7 +194,8 @@ class SafetyGuards:
 
         Args:
             metrics: Métriques extraites du résultat de dispatch
-            has_rl_metadata: Si False, on ne vérifie pas les checks RL (pas d'implication RL)
+            has_rl_metadata: Si False, on ne vérifie pas les checks RL
+                (pas d'implication RL)
         """
         checks = {}
 

@@ -84,7 +84,10 @@ def validate_no_temporal_conflicts(
 
                 errors.append(
                     f"⚠️ Chauffeur #{driver_id}: Conflit temporel "
-                    + f"entre courses #{current.get('booking_id')} (fin estimée {current_end:%H:%M}) "
+                    + (
+                        f"entre courses #{current.get('booking_id')} "
+                        f"(fin estimée {current_end:%H:%M}) "
+                    )
                     + f"et #{next_assign.get('booking_id')} (début {next_time:%H:%M}) "
                     + f"→ Écart: {abs(time_gap):.1f}min"
                 )
@@ -136,9 +139,12 @@ def validate_no_duplicate_times(
         if len(driver_assignments) > max_same_time:
             booking_ids = [a.get("booking_id") for a in driver_assignments]
             errors.append(
-                f"🔴 Chauffeur #{driver_id}: {len(driver_assignments)} courses AU MÊME MOMENT "
-                + f"({scheduled_time:%H:%M}) → Courses: {booking_ids} "
-                + "(IMPOSSIBLE : un chauffeur ne peut pas être à plusieurs endroits simultanément)"
+                (
+                    f"🔴 Chauffeur #{driver_id}: {len(driver_assignments)} courses "
+                    f"AU MÊME MOMENT ({scheduled_time:%H:%M}) → Courses: {booking_ids} "
+                    "(IMPOSSIBLE : un chauffeur ne peut pas être à plusieurs "
+                    "endroits simultanément)"
+                )
             )
 
     return (len(errors) == 0, errors)
@@ -273,7 +279,8 @@ def check_existing_assignment_conflict(
     booking_id: int | None = None,
     tolerance_minutes: int = 30,
 ) -> Tuple[bool, str | None]:
-    """Vérifie si une nouvelle assignation créerait un conflit avec les assignations existantes.
+    """Vérifie si une nouvelle assignation créerait un conflit
+    avec les assignations existantes.
     Utilisé lors d'assignation manuelle ou réassignation.
 
     Args:

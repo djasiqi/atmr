@@ -264,7 +264,8 @@ class TestShellInjectionProtection:
     """Tests pour la protection contre l'injection shell."""
 
     def test_no_subprocess_with_shell_true(self):
-        """Test qu'il n'y a pas d'utilisation de subprocess avec shell=True dans le code de production."""
+        """Test qu'il n'y a pas d'utilisation de subprocess avec shell=True
+        dans le code de production."""
         import subprocess
 
         # Vérifier que les appels subprocess dans le code utilisent des listes

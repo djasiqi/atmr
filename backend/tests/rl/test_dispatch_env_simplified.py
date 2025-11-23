@@ -224,7 +224,8 @@ class TestDispatchEnvSimplified:
 
         _obs, reward, _terminated, _truncated, info = env.step(0)
 
-        # La récompense peut être négative, donc on vérifie juste que les stats sont mises à jour
+        # La récompense peut être négative,
+        # donc on vérifie juste que les stats sont mises à jour
         assert env.episode_stats["total_reward"] == initial_reward + reward
         assert isinstance(info, dict)
 

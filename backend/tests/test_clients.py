@@ -150,7 +150,8 @@ def test_company_clients_pagination(
 
 
 def test_company_clients_search_pagination(client, auth_headers, db, sample_company):
-    """GET /companies/me/clients?search=Client&page=1&per_page=3 combine recherche et pagination."""
+    """GET /companies/me/clients?search=Client&page=1&per_page=3
+    combine recherche et pagination."""
     from ext import bcrypt
     from models import ClientType
 

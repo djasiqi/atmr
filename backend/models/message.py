@@ -80,7 +80,8 @@ class Message(db.Model):
 
     @override
     def __repr__(self):
-        return f"<Message {self.id} from {getattr(self.sender_role, 'value', self.sender_role)} ({self.sender_id})>"
+        sender_role_val = getattr(self.sender_role, "value", self.sender_role)
+        return f"<Message {self.id} from {sender_role_val} ({self.sender_id})>"
 
     @property
     def serialize(self):

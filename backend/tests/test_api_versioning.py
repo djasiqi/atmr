@@ -34,7 +34,8 @@ class TestAPIVersioning:
         response = client.get("/api/v1/companies/me", headers=auth_headers)
         # Peut être 404 si pas de company, mais doit être accessible
         assert response.status_code in (200, 404, 403), (
-            f"Endpoint /api/v1/companies/me doit être accessible (status: {response.status_code})"
+            f"Endpoint /api/v1/companies/me doit être accessible "
+            f"(status: {response.status_code})"
         )
 
     def test_v1_deprecation_header(self, client, auth_headers):
@@ -46,7 +47,8 @@ class TestAPIVersioning:
             "Header Deprecation doit être présent sur routes v1"
         )
         assert response.headers["Deprecation"] == 'version="v1"', (
-            f"Header Deprecation doit être 'version=\"v1\"', reçu: {response.headers['Deprecation']}"
+            f"Header Deprecation doit être 'version=\"v1\"', "
+            f"reçu: {response.headers['Deprecation']}"
         )
 
         # Vérifier header Sunset
@@ -61,11 +63,13 @@ class TestAPIVersioning:
         )
 
     def test_v2_endpoint_available(self, client):
-        """Test que les endpoints v2 sont prêts (peuvent retourner 404 mais sont montés)."""
+        """Test que les endpoints v2 sont prêts
+        (peuvent retourner 404 mais sont montés)."""
         # V2 est vide pour l'instant, mais l'API doit être montée
         # Un endpoint inexistant doit retourner 404, pas 404 de route Flask
         response = client.get("/api/v2/nonexistent", headers={})
-        # L'API v2 doit être montée, donc une route inexistante retourne 404 JSON de Flask-RESTx
+        # L'API v2 doit être montée, donc une route inexistante retourne
+        # 404 JSON de Flask-RESTx
         assert response.status_code == 404, (
             f"Endpoint /api/v2/* doit être monté (status: {response.status_code})"
         )
@@ -85,7 +89,8 @@ class TestAPIVersioning:
         if legacy_enabled:
             # Legacy activée: doit être accessible
             assert response.status_code in (200, 404, 403), (
-                f"Route legacy doit être accessible si activée (status: {response.status_code})"
+                f"Route legacy doit être accessible si activée "
+                f"(status: {response.status_code})"
             )
 
             # Vérifier header Deprecation sur legacy
@@ -124,7 +129,8 @@ class TestAPIVersioning:
             )
 
     def test_same_endpoint_v1_v2_behavior(self, client, auth_headers):
-        """Test que /api/v1/* et /api/v2/* ont des comportements différents (v2 vide)."""
+        """Test que /api/v1/* et /api/v2/* ont des comportements différents
+        (v2 vide)."""
         # V1 doit avoir des routes
         response_v1 = client.get("/api/v1/companies/me", headers=auth_headers)
 

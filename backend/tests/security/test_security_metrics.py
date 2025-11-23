@@ -64,7 +64,8 @@ class TestSecurityMetricsSensitiveActions:
     """Tests pour les métriques d'actions sensibles."""
 
     def test_sensitive_actions_metrics(self, app_context):
-        """Vérifie que les métriques d'actions sensibles sont correctement incrémentées."""
+        """Vérifie que les métriques d'actions sensibles
+        sont correctement incrémentées."""
         with app_context:
             from security.security_metrics import security_sensitive_actions_total
 
@@ -85,7 +86,8 @@ class TestSecurityMetricsSensitiveActions:
             )
 
     def test_permission_changes_metrics(self, app_context):
-        """Vérifie que les métriques de changement de permissions sont correctement incrémentées."""
+        """Vérifie que les métriques de changement de permissions
+        sont correctement incrémentées."""
         with app_context:
             from security.security_metrics import security_permission_changes_total
 

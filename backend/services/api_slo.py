@@ -136,7 +136,8 @@ def get_slo_target(
             return None
         return slo
 
-    # Chercher une correspondance par préfixe (ex: "/api/bookings/:id" -> "/api/bookings")
+    # Chercher une correspondance par préfixe
+    # (ex: "/api/bookings/:id" -> "/api/bookings")
     for slo_endpoint, slo in API_SLOS.items():
         if endpoint.startswith(slo_endpoint) and (
             not slo.method or slo.method == method

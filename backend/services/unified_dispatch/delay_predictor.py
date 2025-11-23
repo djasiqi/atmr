@@ -93,7 +93,11 @@ class DelayAnalysis:
 class DelayPredictor:
     """Prédit les retards potentiels pour les assignations."""
 
-    def __init__(self, settings: Settings | None = None):  # pyright: ignore[reportMissingSuperCall]
+    def __init__(
+        self, settings: Settings | None = None
+    ):
+        """Initialise le prédicteur de retards."""
+        super().__init__()  # Explicitly call parent constructor
         self.settings = settings or Settings()
         # Seuils de retard
         self.delay_thresholds = {
@@ -162,7 +166,10 @@ class DelayPredictor:
         analysis.recommendations = self._generate_recommendations(analysis, problem)
 
         logger.info(
-            "[DelayPredictor] Analyzed %d assignments: %d on-time, %d delayed (avg: %.1f min)",
+            (
+                "[DelayPredictor] Analyzed %d assignments: %d on-time, "
+                "%d delayed (avg: %.1f min)"
+            ),
             analysis.total_assignments,
             analysis.on_time_count,
             analysis.delayed_count,
@@ -336,24 +343,38 @@ class DelayPredictor:
 
             if delay_rate > HIGH_DELAY_RATE_THRESHOLD:
                 recommendations.append(
-                    f"⚠️ Taux de retard élevé ({int(delay_rate * 100)}%). Envisagez d'ajouter des chauffeurs ou d'activer les chauffeurs d'urgence."
+                    (
+                        f"⚠️ Taux de retard élevé ({int(delay_rate * 100)}%). "
+                        "Envisagez d'ajouter des chauffeurs ou d'activer les "
+                        "chauffeurs d'urgence."
+                    )
                 )
             elif delay_rate > MODERATE_DELAY_RATE_THRESHOLD:
                 recommendations.append(
-                    f"⚠️ Taux de retard modéré ({int(delay_rate * 100)}%). Surveillez la situation et anticipez les besoins."
+                    (
+                        f"⚠️ Taux de retard modéré ({int(delay_rate * 100)}%). "
+                        "Surveillez la situation et anticipez les besoins."
+                    )
                 )
 
         # Retard moyen élevé
         if analysis.average_delay > AVERAGE_DELAY_THRESHOLD:
             recommendations.append(
-                f"⏰ Retard moyen élevé ({analysis.average_delay:.1f} min). Vérifiez les fenêtres horaires et la capacité des chauffeurs."
+                (
+                    f"⏰ Retard moyen élevé ({analysis.average_delay:.1f} min). "
+                    "Vérifiez les fenêtres horaires et la capacité des "
+                    "chauffeurs."
+                )
             )
 
         # Retards critiques
         critical_delays = [p for p in analysis.predictions if p.severity == "critical"]
         if critical_delays:
             recommendations.append(
-                f"🚨 {len(critical_delays)} assignation(s) avec retard critique (>15 min). Réassignation urgente recommandée."
+                (
+                    f"🚨 {len(critical_delays)} assignation(s) avec retard "
+                    "critique (>15 min). Réassignation urgente recommandée."
+                )
             )
 
         # Recommandations spécifiques
@@ -364,7 +385,10 @@ class DelayPredictor:
             ratio = bookings_count / drivers_count
             if ratio > RATIO_THRESHOLD:
                 recommendations.append(
-                    f"📊 Ratio courses/chauffeur élevé ({ratio:.1f}). Ajoutez des chauffeurs pour améliorer les délais."
+                    (
+                        f"📊 Ratio courses/chauffeur élevé ({ratio:.1f}). "
+                        "Ajoutez des chauffeurs pour améliorer les délais."
+                    )
                 )
 
         if not recommendations:

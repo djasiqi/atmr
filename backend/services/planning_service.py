@@ -105,7 +105,10 @@ def compute_driver_availability(
 def materialize_template(
     company_id: int, driver_id: int, from_d: date, to_d: date
 ) -> int:
-    """Génère des DriverShift depuis les templates (squelette). Retourne le nombre créés."""
+    """Génère des DriverShift depuis les templates (squelette).
+    
+    Retourne le nombre créés.
+    """
     _ = company_id, driver_id, from_d, to_d  # Placeholder pour future implémentation
     return 0
 

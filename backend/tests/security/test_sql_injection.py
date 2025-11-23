@@ -32,14 +32,16 @@ class TestSQLInjectionQueryParams:
     def test_sql_injection_in_search_query(self, client, auth_headers):
         """Test que l'injection SQL dans ?q= est bloquée."""
         # Note: SQLAlchemy protège automatiquement via requêtes paramétrées
-        # On teste que les payloads SQL ne causent pas d'erreurs SQL ni d'accès non autorisé
+        # On teste que les payloads SQL ne causent pas d'erreurs SQL
+        # ni d'accès non autorisé
         for payload in SQL_INJECTION_PAYLOADS:
             # Tester avec différents endpoints de recherche
             response = client.get(
                 f"/api/invoices/companies/1/invoices?q={payload}",
                 headers=auth_headers,
             )
-            # Ne doit pas retourner d'erreur SQL (500), juste 400/404/200 avec résultats vides
+            # Ne doit pas retourner d'erreur SQL (500),
+            # juste 400/404/200 avec résultats vides
             assert response.status_code in (200, 400, 401, 403, 404)
             response_text = response.get_data(as_text=True).lower()
             # Ne doit pas contenir d'erreurs SQL PostgreSQL/MySQL
@@ -173,7 +175,8 @@ class TestSQLInjectionBodyJSON:
     """Tests d'injection SQL dans les champs texte du body JSON."""
 
     def test_sql_injection_in_customer_name(self, client, auth_headers, sample_user):
-        """Test que l'injection SQL dans customer_name est stockée telle quelle (pas exécutée)."""
+        """Test que l'injection SQL dans customer_name est stockée telle quelle
+        (pas exécutée)."""
         payload = "Test'; DROP TABLE bookings--"
         data = {
             "customer_name": payload,
@@ -187,7 +190,8 @@ class TestSQLInjectionBodyJSON:
             json=data,
             headers=auth_headers,
         )
-        # Doit accepter le payload comme texte (validation peut échouer, mais pas d'erreur SQL)
+        # Doit accepter le payload comme texte
+        # (validation peut échouer, mais pas d'erreur SQL)
         assert response.status_code in (201, 400, 401, 403, 404)
         response_text = response.get_data(as_text=True).lower()
         # Ne doit pas contenir d'erreurs SQL
@@ -195,7 +199,8 @@ class TestSQLInjectionBodyJSON:
         assert "syntax error" not in response_text
 
     def test_sql_injection_in_location_fields(self, client, auth_headers, sample_user):
-        """Test que l'injection SQL dans pickup_location/dropoff_location est stockée telle quelle."""
+        """Test que l'injection SQL dans pickup_location/dropoff_location
+        est stockée telle quelle."""
         payload = "Rue Test'; DROP TABLE bookings--"
         data = {
             "customer_name": "Test Customer",
@@ -222,7 +227,8 @@ class TestSQLInjectionBodyJSON:
             "password": "password123",
         }
         response = client.post("/api/auth/login", json=data)
-        # Doit retourner 400 pour email invalide (validation Marshmallow), pas d'erreur SQL
+        # Doit retourner 400 pour email invalide (validation Marshmallow),
+        # pas d'erreur SQL
         assert response.status_code in (
             400,
             401,

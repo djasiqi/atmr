@@ -35,7 +35,8 @@ except Exception:
     redis_client = None
     limiter_storage = "memory://"
 
-# ⚠️ Ne fixe PAS CORS/path ici pour éviter les conflits - tout est défini dans app.py (socketio.init_app)
+# ⚠️ Ne fixe PAS CORS/path ici pour éviter les conflits
+# - tout est défini dans app.py (socketio.init_app)
 # Active la file Redis si disponible (scaling multi-workers).
 # Typage strict de async_mode pour contenter Pylance/pyright.
 AsyncMode = Literal["threading", "eventlet", "gevent", "gevent_uwsgi"]
@@ -203,10 +204,12 @@ def check_if_token_revoked(_jwt_header, jwt_payload):
 # ✅ Hardening JWT: Validation explicite de l'audience (défense en profondeur)
 @jwt.additional_claims_loader
 def add_claims_to_access_token(_identity):
-    """Ajoute des claims supplémentaires au token (déjà fait dans auth.py, mais défense en profondeur).
+    """Ajoute des claims supplémentaires au token
+    (déjà fait dans auth.py, mais défense en profondeur).
 
     Args:
-        _identity: Identité de l'utilisateur (non utilisé, mais requis par Flask-JWT-Extended)
+        _identity: Identité de l'utilisateur
+        (non utilisé, mais requis par Flask-JWT-Extended)
     """
     # Les claims sont déjà ajoutés dans auth.py lors de la création du token
     # Ce callback est optionnel mais peut servir de vérification supplémentaire
@@ -261,7 +264,9 @@ def role_required(*roles):
 
             allowed_roles = []
 
-            # Gérer les deux formats : @role_required(['ADMIN', 'COMPANY']) et @role_required(UserRole.company)
+            # Gérer les deux formats :
+            # @role_required(['ADMIN', 'COMPANY']) et
+            # @role_required(UserRole.company)
             if roles and len(roles) > 0:
                 first_arg = roles[0]
                 if isinstance(first_arg, list):
@@ -283,11 +288,11 @@ def role_required(*roles):
                         )
 
             if user.role not in allowed_roles:
-                app_logger.warning(
-                    "⛔ Accès refusé : %s (%s) a tenté d'accéder à une route restreinte.",
-                    user.username,
-                    user.role,
+                warning_msg = (
+                    "⛔ Accès refusé : %s (%s) a tenté d'accéder "
+                    + "à une route restreinte."
                 )
+                app_logger.warning(warning_msg, user.username, user.role)
                 abort(403, description="Accès non autorisé")
 
             return fn(*args, **kwargs)

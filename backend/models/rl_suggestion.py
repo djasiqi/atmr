@@ -53,4 +53,7 @@ class RLSuggestion(db.Model):
         }
 
     def __repr__(self) -> str:  # pyright: ignore[reportImplicitOverride]
-        return f"<RLSuggestion(id={self.id}, booking_id={self.booking_id}, driver_id={self.driver_id}, score={self.score})>"
+        return (
+            f"<RLSuggestion(id={self.id}, booking_id={self.booking_id}, "
+            f"driver_id={self.driver_id}, score={self.score})>"
+        )

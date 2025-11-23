@@ -92,39 +92,66 @@ class DispatchPerformanceMetrics:
         lines = [
             "# HELP dispatch_total_time Total time for dispatch (seconds)",
             "# TYPE dispatch_total_time gauge",
-            f'dispatch_total_time{{company_id="{self.company_id}"}} {self.total_time:.3f}',
+            (
+                f'dispatch_total_time{{company_id="{self.company_id}"}} '
+                f"{self.total_time:.3f}"
+            ),
             "",
             "# HELP dispatch_quality_score Quality score (0-100)",
             "# TYPE dispatch_quality_score gauge",
-            f'dispatch_quality_score{{company_id="{self.company_id}"}} {self.quality_score:.1f}',
+            (
+                f'dispatch_quality_score{{company_id="{self.company_id}"}} '
+                f"{self.quality_score:.1f}"
+            ),
             "",
             "# HELP dispatch_assignment_rate Assignment rate (%)",
             "# TYPE dispatch_assignment_rate gauge",
-            f'dispatch_assignment_rate{{company_id="{self.company_id}"}} {self.assignment_rate:.1f}',
+            (
+                f'dispatch_assignment_rate{{company_id="{self.company_id}"}} '
+                f"{self.assignment_rate:.1f}"
+            ),
             "",
             "# HELP sql_queries_count SQL queries count",
             "# TYPE sql_queries_count counter",
-            f'sql_queries_count{{company_id="{self.company_id}"}} {self.sql_queries_count}',
+            (
+                f'sql_queries_count{{company_id="{self.company_id}"}} '
+                f"{self.sql_queries_count}"
+            ),
             "",
             "# HELP cache_hit_rate Cache hit rate (0-1)",
             "# TYPE cache_hit_rate gauge",
-            f'cache_hit_rate{{company_id="{self.company_id}"}} {self._cache_hit_rate():.2f}',
+            (
+                f'cache_hit_rate{{company_id="{self.company_id}"}} '
+                f"{self._cache_hit_rate():.2f}"
+            ),
             "",
             "# HELP ud_temporal_conflict_total Temporal conflicts detected (A1)",
             "# TYPE ud_temporal_conflict_total counter",
-            f'ud_temporal_conflict_total{{company_id="{self.company_id}"}} {self.temporal_conflicts_count}',
+            (
+                f'ud_temporal_conflict_total{{company_id="{self.company_id}"}} '
+                f"{self.temporal_conflicts_count}"
+            ),
             "",
             "# HELP ud_db_conflict_total Database conflicts detected (A2)",
             "# TYPE ud_db_conflict_total counter",
-            f'ud_db_conflict_total{{company_id="{self.company_id}"}} {self.db_conflicts_count}',
+            (
+                f'ud_db_conflict_total{{company_id="{self.company_id}"}} '
+                f"{self.db_conflicts_count}"
+            ),
             "",
             "# HELP ud_osrm_cache_hit_rate OSRM cache hit rate (A5)",
             "# TYPE ud_osrm_cache_hit_rate gauge",
-            f'ud_osrm_cache_hit_rate{{company_id="{self.company_id}"}} {self._osrm_cache_hit_rate():.2f}',
+            (
+                f'ud_osrm_cache_hit_rate{{company_id="{self.company_id}"}} '
+                f"{self._osrm_cache_hit_rate():.2f}"
+            ),
             "",
             "# HELP ud_osrm_cache_bypass_total OSRM cache bypasses (Redis HS) (A5)",
             "# TYPE ud_osrm_cache_bypass_total counter",
-            f'ud_osrm_cache_bypass_total{{company_id="{self.company_id}"}} {self.osrm_cache_bypass_count}',
+            (
+                f'ud_osrm_cache_bypass_total{{company_id="{self.company_id}"}} '
+                f"{self.osrm_cache_bypass_count}"
+            ),
         ]
         return "\n".join(lines)
 
@@ -270,7 +297,11 @@ class DispatchMetricsCollector(object):
 
         # Log final
         logger.info(
-            "[PerformanceMetrics] Dispatch %s terminé: %.3fs total (data=%.3fs, heur=%.3fs, solver=%.3fs, persist=%.3fs, SQL=%d, conflits=%d)",
+            (
+                "[PerformanceMetrics] Dispatch %s terminé: %.3fs total "
+                "(data=%.3fs, heur=%.3fs, solver=%.3fs, persist=%.3fs, "
+                "SQL=%d, conflits=%d)"
+            ),
             self.dispatch_run_id or "?",
             self.metrics.total_time,
             self.metrics.data_collection_time,

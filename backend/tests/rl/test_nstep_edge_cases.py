@@ -51,7 +51,8 @@ class TestNStepEndEpisodeEdgeCases:
         assert len(n_step_buffer.buffer) == 3
 
         # Vérifier que les transitions partielles sont gérées correctement
-        # Les premières transitions ne peuvent pas être complétées car l'épisode se termine
+        # Les premières transitions ne peuvent pas être complétées
+        # car l'épisode se termine
         assert len(n_step_buffer.buffer) == 3
 
     def test_n_step_end_episode_shorter_than_n(self, n_step_buffer):
@@ -91,7 +92,8 @@ class TestNStepEndEpisodeEdgeCases:
         assert len(n_step_buffer.buffer) == 5
 
         # Vérifier que les transitions partielles sont gérées correctement
-        # Les dernières transitions ne peuvent pas être complétées car l'épisode se termine
+        # Les dernières transitions ne peuvent pas être complétées
+        # car l'épisode se termine
 
     def test_n_step_end_episode_multiple_episodes(self, n_step_buffer):
         """Test N-step avec plusieurs épisodes."""
@@ -368,7 +370,8 @@ class TestNStepPrioritizedEdgeCases:
         # Vérifier que les transitions sont ajoutées
         assert len(n_step_prioritized_buffer.buffer) == 3
 
-        # Vérifier que les priorités sont définies pour les transitions dans le buffer principal
+        # Vérifier que les priorités sont définies pour les transitions
+        # dans le buffer principal
         assert len(n_step_prioritized_buffer.priorities) == 100  # Capacité du buffer
         # Vérifier que les priorités des éléments ajoutés sont définies
         for i in range(len(n_step_prioritized_buffer.buffer)):

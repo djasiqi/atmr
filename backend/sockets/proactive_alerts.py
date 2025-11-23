@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-# pyright: reportAttributeAccessIssue=false
+# pyright: reportAttributeAccessIssue=false, reportUnusedFunction=false
+# Les fonctions handlers sont enregistrées via @socketio.on() et appelées
+# par le framework Socket.IO, donc elles ne sont pas directement "accédées"
+# dans le code Python.
 """Socket.IO pour alertes proactives temps réel.
 
 Ce module gère les connexions WebSocket pour:
@@ -260,16 +263,7 @@ def register_proactive_alerts_sockets(socketio: SocketIO):
 
     logger.info("[ProactiveAlerts] Handlers Socket.IO enregistrés (incluant ACK C3)")
 
-    # Référencer les handlers pour indiquer qu'ils sont utilisés par Socket.IO
-    _handlers = (
-        handle_connect,
-        handle_disconnect,
-        handle_subscribe_alerts,
-        handle_unsubscribe_alerts,
-        handle_request_explanation,
-        handle_ping,
-        handle_message_ack,
-    )
+    # Les handlers sont enregistrés via @socketio.on() ci-dessus
 
 
 def broadcast_delay_alert(

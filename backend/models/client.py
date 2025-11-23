@@ -186,7 +186,10 @@ class Client(db.Model):
             domicile = getattr(self, "domicile_address", None)
             if domicile and str(domicile).strip():
                 return domicile
-            msg = "L'adresse de facturation (ou de domicile) est obligatoire pour les clients liés à une entreprise."
+            msg = (
+                "L'adresse de facturation (ou de domicile) est obligatoire "
+                "pour les clients liés à une entreprise."
+            )
             raise ValueError(msg)
         return value
 
@@ -213,7 +216,9 @@ class Client(db.Model):
 
     # ✅ D2: Propriétés hybrides pour chiffrement/déchiffrement automatique
     @hybrid_property
-    def contact_phone_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
+    def contact_phone_secure(  # pyright: ignore[reportRedeclaration]
+        self,
+    ) -> Optional[str]:
         """Téléphone de contact déchiffré."""
         try:
             from security.crypto import get_encryption_service
@@ -313,7 +318,9 @@ class Client(db.Model):
             self.gp_phone = value
 
     @hybrid_property
-    def billing_address_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
+    def billing_address_secure(  # pyright: ignore[reportRedeclaration]
+        self,
+    ) -> Optional[str]:
         """Adresse de facturation déchiffrée."""
         try:
             from security.crypto import get_encryption_service
@@ -423,4 +430,7 @@ class Client(db.Model):
 
     @override
     def __repr__(self) -> str:
-        return f"<Client id={self.id}, user_id={self.user_id}, type={self.client_type}, active={self.is_active}>"
+        return (
+            f"<Client id={self.id}, user_id={self.user_id}, "
+            f"type={self.client_type}, active={self.is_active}>"
+        )

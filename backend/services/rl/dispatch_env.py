@@ -381,7 +381,10 @@ class DispatchEnv(gym.Env):
                         info["invalid_action"] = True
                         info["index_out_of_range"] = True
                         logging.warning(
-                            "[DispatchEnv] Index out of range: driver_idx=%s, booking_idx=%s",
+                            (
+                                "[DispatchEnv] Index out of range: "
+                                "driver_idx=%s, booking_idx=%s"
+                            ),
                             driver_idx,
                             booking_idx,
                         )
@@ -662,7 +665,8 @@ class DispatchEnv(gym.Env):
         driver["completed_bookings"] += 1
         driver["idle_time"] = 0  # Reset idle time
 
-        # ⭐ LOGIQUE RÉALISTE: Cycle chauffeur (Bureau → Pickup → Dropoff → Pickup → ...)
+        # ⭐ LOGIQUE RÉALISTE: Cycle chauffeur
+        # (Bureau → Pickup → Dropoff → Pickup → ...)
         # Après avoir pris le client, le chauffeur se déplace vers la
         # destination
         if "dropoff_lat" in booking and "dropoff_lon" in booking:
@@ -847,7 +851,8 @@ class DispatchEnv(gym.Env):
             current_lat, current_lon, driver["home_lat"], driver["home_lon"]
         )
 
-        # ⭐ LOGIQUE RÉALISTE: Retour au bureau si véhicule de société, maison si personnel
+        # ⭐ LOGIQUE RÉALISTE: Retour au bureau si véhicule de société,
+        # maison si personnel
         # Pour simplifier: 70% retour bureau, 30% retour maison
         if self.np_random.random() < RETURN_TO_OFFICE_PROBABILITY:  # Retour bureau
             driver["lat"] = self.bureau_lat
@@ -951,15 +956,20 @@ class DispatchEnv(gym.Env):
             minute = self.current_time % 60
             print("\n{'='*60}")
             print(f"⏰ Time: {hour:02d}:{minute:02d}")
+            available_count = len([d for d in self.drivers if d["available"]])
             print(
-                f"🚗 Drivers: {len([d for d in self.drivers if d['available']])} / {len(self.drivers)} available"
+                f"🚗 Drivers: {available_count} / {len(self.drivers)} available"
             )
-            print(
-                f"📋 Bookings: {len([b for b in self.bookings if not b['assigned']])} pending"
-            )
-            print(
-                f"🚦 Traffic: {'🟢' if self._get_traffic_density() < TRAFFIC_LOW_THRESHOLD else '🟡' if self._get_traffic_density() < TRAFFIC_MEDIUM_THRESHOLD else '🔴'} {self._get_traffic_density():.2f}"
-            )
+            pending_count = len([b for b in self.bookings if not b["assigned"]])
+            print(f"📋 Bookings: {pending_count} pending")
+            traffic_density = self._get_traffic_density()
+            if traffic_density < TRAFFIC_LOW_THRESHOLD:
+                traffic_icon = "🟢"
+            elif traffic_density < TRAFFIC_MEDIUM_THRESHOLD:
+                traffic_icon = "🟡"
+            else:
+                traffic_icon = "🔴"
+            print(f"🚦 Traffic: {traffic_icon} {traffic_density:.2f}")
             print("\n📊 Stats:")
             print("  ✅ Assignments: {self.episode_stats['assignments']}")
             print("  ⏱️ Late pickups: {self.episode_stats['late_pickups']}")

@@ -44,7 +44,8 @@ class TestCeleryRLIntegration:
             with patch("tasks.rl_tasks.retrain_dqn_model_task.delay") as mock_delay:
                 mock_delay.return_value = Mock()
 
-                # Simuler l'appel de la tâche (sans paramètres car la tâche n'en prend pas)
+                # Simuler l'appel de la tâche
+                # (sans paramètres car la tâche n'en prend pas)
                 result = mock_delay()
                 assert result is not None
                 print("  ✅ Tâche Celery RL training exécutée")
@@ -74,8 +75,10 @@ class TestCeleryRLIntegration:
             }
 
             # Mock de l'exécution de la tâche
-            # Note: Cette tâche n'existe peut-être pas encore, on mock juste pour le test
-            # ✅ FIX: Utiliser Mock directement au lieu de patcher une fonction inexistante
+            # Note: Cette tâche n'existe peut-être pas encore,
+            # on mock juste pour le test
+            # ✅ FIX: Utiliser Mock directement
+            # au lieu de patcher une fonction inexistante
             # pour éviter AttributeError lors de la résolution du nom
             mock_delay = Mock()
             mock_delay.return_value = Mock()
@@ -209,7 +212,8 @@ class TestCeleryRLPerformance:
         print("🧪 Test de latence Celery RL...")
 
         # Mock des tâches avec timing
-        _start_time = time.time()  # Variable de debug (timing) - préfixée avec _ pour indiquer usage intentionnel
+        # Variable de debug (timing) - préfixée avec _ pour indiquer usage intentionnel
+        # _start_time = time.time()  # Commenté car non utilisé
 
         with patch("tasks.rl_tasks.retrain_dqn_model_task") as mock_task:
             mock_result = Mock()
@@ -250,11 +254,11 @@ class TestCeleryRLPerformance:
         print("🧪 Test d'utilisation mémoire Celery RL...")
 
         # Mock de l'utilisation mémoire
-        _mock_memory_usage = {
-            "rss": 1024 * 1024 * 100,  # 100 MB
-            "vms": 1024 * 1024 * 200,  # 200 MB
-            "peak": 1024 * 1024 * 150,  # 150 MB
-        }
+        # _mock_memory_usage = {
+        #     "rss": 1024 * 1024 * 100,  # 100 MB
+        #     "vms": 1024 * 1024 * 200,  # 200 MB
+        #     "peak": 1024 * 1024 * 150,  # 150 MB
+        # }
 
         # Test d'utilisation mémoire (mock)
         monitor_rl_memory_usage = Mock()

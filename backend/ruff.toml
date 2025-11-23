@@ -57,6 +57,7 @@ ignore = [
 
 [lint.per-file-ignores]
 "__init__.py" = ["F401", "D104"]  # Imports inutilisés OK dans __init__
+"manage.py" = ["RUF100"]  # noqa: E402 nécessaire pour Flake8 (eventlet monkey patch)
 "migrations/**/*.py" = ["E501", "F401", "N999", "D"]  # Alembic auto-generated
 "scripts/**/*.py" = [
     "T201",     # Print statements OK dans scripts
@@ -65,6 +66,9 @@ ignore = [
     "PLR2004",  # Magic values OK dans scripts
     "F401",     # Imports inutilisés OK dans scripts
 ]
+"scripts/migrate_to_encryption.py" = ["RUF100"]  # noqa: E402 nécessaire pour Flake8 (sys.path.insert)
+"scripts/test_settings_update.py" = ["RUF100"]  # noqa: E402 nécessaire pour Flake8 (sys.path.insert)
+"scripts/verify_all_settings.py" = ["RUF100"]  # noqa: E402 nécessaire pour Flake8 (sys.path.insert)
 "train_*.py" = [
     "T201",     # Print statements OK dans scripts de formation
     "DTZ005",   # datetime.now() sans tz OK dans scripts de formation

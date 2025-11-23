@@ -82,14 +82,18 @@ def validate_password_or_raise(password: str, _user=None) -> None:
 
     Args:
         password: Mot de passe à valider
-        _user: Utilisateur (optionnel, pour compatibilité avec Django-style validation, non utilisé)
+        _user: Utilisateur (optionnel, pour compatibilité avec
+            Django-style validation, non utilisé)
 
     Raises:
         ValueError: Si le mot de passe ne respecte pas les critères de sécurité
     """
     if not validate_password(password):
         raise ValueError(
-            "Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule et un chiffre."
+            (
+                "Le mot de passe doit contenir au moins 8 caractères, "
+                "une majuscule, une minuscule et un chiffre."
+            )
         )
 
 
@@ -118,12 +122,15 @@ class GenerateQR(Resource):
             return {"error": "Aucune donnée fournie."}, 400
         if len(data) > MAX_QR_DATA_LENGTH:
             return {
-                "error": f"Données trop volumineuses (max {MAX_QR_DATA_LENGTH} caractères)."
+                "error": (
+                    f"Données trop volumineuses (max {MAX_QR_DATA_LENGTH} caractères)."
+                )
             }, 413
 
         try:
             b64_png = generate_qr_code(data)
-            # (optionnel) tu peux ajouter le préfixe "data:image/png;base64," côté client
+            # (optionnel) tu peux ajouter le préfixe
+            # "data:image/png;base64," côté client
             return {"qr_code": b64_png}, 200
         except Exception as e:
             return handle_error(e)

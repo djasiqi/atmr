@@ -101,7 +101,8 @@ class TestRollbackTransactionnel:
         # Vérifier qu'aucun booking n'a été assigné (rollback complet)
         # Le troisième devrait être skipped, mais les deux premiers ne devraient
         # PAS être persistés si une erreur survient
-        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        # ✅ FIX: Utiliser query au lieu de refresh pour éviter
+        # "Instance is not persistent"
         booking0 = db.session.query(Booking).get(bookings[0].id)
         booking1 = db.session.query(Booking).get(bookings[1].id)
         booking2 = db.session.query(Booking).get(bookings[2].id)
@@ -140,7 +141,8 @@ class TestRollbackTransactionnel:
         )
 
         # Vérifier que tous les bookings sont assignés
-        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        # ✅ FIX: Utiliser query au lieu de refresh pour éviter
+        # "Instance is not persistent"
         booking0 = db.session.query(Booking).get(bookings[0].id)
         booking1 = db.session.query(Booking).get(bookings[1].id)
         booking2 = db.session.query(Booking).get(bookings[2].id)
@@ -208,7 +210,8 @@ class TestRollbackTransactionnel:
         # Vérifier que le conflit est géré (idempotence)
         # Le booking[0] devrait garder son assignment existant
         # Le booking[1] devrait être assigné
-        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        # ✅ FIX: Utiliser query au lieu de refresh pour éviter
+        # "Instance is not persistent"
         booking0 = db.session.query(Booking).get(bookings[0].id)
         booking1 = db.session.query(Booking).get(bookings[1].id)
 
@@ -265,7 +268,8 @@ class TestRollbackTransactionnel:
 
         # Tous les bookings devraient être dans leur état initial
         # (pas d'assignation partielle due au crash)
-        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        # ✅ FIX: Utiliser query au lieu de refresh pour éviter
+        # "Instance is not persistent"
         booking0 = db.session.query(Booking).get(bookings[0].id)
         booking1 = db.session.query(Booking).get(bookings[1].id)
         booking2 = db.session.query(Booking).get(bookings[2].id)
@@ -304,7 +308,8 @@ class TestRollbackTransactionnel:
         assert len(result["applied"]) == 3
 
         # Vérifier que les changements sont persistés
-        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        # ✅ FIX: Utiliser query au lieu de refresh pour éviter
+        # "Instance is not persistent"
         booking0 = db.session.query(Booking).get(bookings[0].id)
         booking1 = db.session.query(Booking).get(bookings[1].id)
         booking2 = db.session.query(Booking).get(bookings[2].id)

@@ -136,7 +136,10 @@ class User(db.Model):
             return None
         # Validation du format si non vide
         if not re.match(r"^\+?\d{7,15}$", phone):
-            msg = "Numéro de téléphone invalide. Doit contenir 7 à 15 chiffres avec option '+'."
+            msg = (
+                "Numéro de téléphone invalide. "
+                "Doit contenir 7 à 15 chiffres avec option '+'."
+            )
             raise ValueError(msg)
         return phone
 
@@ -195,8 +198,10 @@ class User(db.Model):
     @validates("email")
     def validate_email(self, _key, email):
         """Valide le format si fourni.
-        ⚠️ La règle 'self-service => email requis' est déjà appliquée dans Client.validate_contact_email.
-        On évite ici toute logique cross-model (et donc les tests sur self.clients / self.role).
+        ⚠️ La règle 'self-service => email requis' est déjà appliquée
+        dans Client.validate_contact_email.
+        On évite ici toute logique cross-model
+        (et donc les tests sur self.clients / self.role).
         """
         if email is None or email.strip() == "":
             return None
@@ -276,7 +281,9 @@ class User(db.Model):
             self.email = value
 
     @hybrid_property
-    def first_name_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
+    def first_name_secure(  # pyright: ignore[reportRedeclaration]
+        self,
+    ) -> Optional[str]:
         """Récupère le prénom déchiffré."""
         try:
             from security.crypto import get_encryption_service

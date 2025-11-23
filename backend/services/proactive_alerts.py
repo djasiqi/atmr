@@ -61,8 +61,10 @@ class ProactiveAlertsService:
         """Initialise le service d'alertes proactives.
 
         Args:
-            notification_service: Service de notification optionnel (pour injection de dépendances dans les tests)
-            delay_predictor: Prédicteur de retard optionnel (pour injection de dépendances dans les tests)
+            notification_service: Service de notification optionnel
+                (pour injection de dépendances dans les tests)
+            delay_predictor: Prédicteur de retard optionnel
+                (pour injection de dépendances dans les tests)
         """
         super().__init__()
         self.notification_service = notification_service or (
@@ -106,7 +108,10 @@ class ProactiveAlertsService:
 
             if self.delay_predictor.is_trained:
                 logger.info(
-                    "[ProactiveAlerts] ✅ Modèle delay_predictor chargé via DelayMLPredictor"
+                    (
+                        "[ProactiveAlerts] ✅ Modèle delay_predictor chargé via "
+                        "DelayMLPredictor"
+                    )
                 )
             else:
                 logger.warning(
@@ -223,7 +228,10 @@ class ProactiveAlertsService:
             probability = probability * confidence + (1 - confidence) * 0.5
 
             logger.debug(
-                "[ProactiveAlerts] Prédiction ML - Retard: %.1f min, Confiance: %.2f, Prob: %.2f",
+                (
+                    "[ProactiveAlerts] Prédiction ML - Retard: %.1f min, "
+                    "Confiance: %.2f, Prob: %.2f"
+                ),
                 predicted_delay_minutes,
                 confidence,
                 probability,
@@ -713,7 +721,10 @@ class ProactiveAlertsService:
 
             if success:
                 logger.info(
-                    "[ProactiveAlerts] ✅ Alerte envoyée - Booking %s, Risque %s (%.1f%%)",
+                    (
+                        "[ProactiveAlerts] ✅ Alerte envoyée - Booking %s, "
+                        "Risque %s (%.1f%%)"
+                    ),
                     analysis_result.get("booking_id"),
                     risk_level,
                     probability * 100,
@@ -935,7 +946,10 @@ class ProactiveAlertsService:
                 if recent_count >= self.max_alerts_per_hour:
                     return {
                         "should_send": False,
-                        "reason": f"Limite fréquence: {recent_count}/{self.max_alerts_per_hour} par heure",
+                        "reason": (
+                            f"Limite fréquence: {recent_count}/"
+                            f"{self.max_alerts_per_hour} par heure"
+                        ),
                     }
 
             # Règle 3: Escalade de risque (forcer si risque augmente)
@@ -950,7 +964,10 @@ class ProactiveAlertsService:
                 if risk_escalation:
                     return {
                         "should_send": True,
-                        "reason": f"Escalade de risque: {last_risk_level} → {risk_level}",
+                        "reason": (
+                            f"Escalade de risque: {last_risk_level} → "
+                            f"{risk_level}"
+                        ),
                     }
 
             # Règle 4: Alerte critique toujours autorisée

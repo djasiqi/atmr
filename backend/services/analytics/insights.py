@@ -59,7 +59,11 @@ def generate_insights(
                 "category": "punctuality",
                 "priority": "high",
                 "title": "Taux de ponctualité faible",
-                "message": f"Votre taux de ponctualité ({on_time_rate:.1f}%) est en dessous du seuil recommandé. Recommandation : Analysez les causes de retards récurrents.",
+                "message": (
+                    f"Votre taux de ponctualité ({on_time_rate:.1f}%) est en dessous "
+                    f"du seuil recommandé. Recommandation : Analysez les causes de "
+                    f"retards récurrents."
+                ),
                 "action": "view_delays",
             }
         )
@@ -70,7 +74,9 @@ def generate_insights(
                 "category": "punctuality",
                 "priority": "low",
                 "title": "Excellente ponctualité",
-                "message": f"Votre taux de ponctualité ({on_time_rate:.1f}%) est excellent !",
+                "message": (
+                    f"Votre taux de ponctualité ({on_time_rate:.1f}%) est excellent !"
+                ),
                 "action": None,
             }
         )
@@ -84,7 +90,10 @@ def generate_insights(
                 "category": "delays",
                 "priority": "high",
                 "title": "Retard moyen élevé",
-                "message": f"Le retard moyen est de {avg_delay:.1f} minutes. Cela impacte la satisfaction client.",
+                "message": (
+                    f"Le retard moyen est de {avg_delay:.1f} minutes. "
+                    f"Cela impacte la satisfaction client."
+                ),
                 "action": "optimize_planning",
             }
         )
@@ -110,7 +119,9 @@ def generate_insights(
                         "category": "trend",
                         "priority": "medium",
                         "title": "Amélioration continue",
-                        "message": f"Votre score de qualité s'améliore (+{evolution:.1f}%)",
+                        "message": (
+                            f"Votre score de qualité s'améliore (+{evolution:.1f}%)"
+                        ),
                         "action": None,
                     }
                 )
@@ -137,7 +148,11 @@ def generate_insights(
                     "category": "pattern",
                     "priority": "medium",
                     "title": "Retards fréquents",
-                    "message": f"{len(high_delay_days)} jours sur {len(trends)} ont des retards >{RETARDS_THRESHOLD} min. Analysez les patterns (jour de la semaine, heure, etc.)",
+                    "message": (
+                        f"{len(high_delay_days)} jours sur {len(trends)} ont des retards "
+                        f">{RETARDS_THRESHOLD} min. Analysez les patterns "
+                        f"(jour de la semaine, heure, etc.)"
+                    ),
                     "action": "analyze_patterns",
                 }
             )
@@ -154,7 +169,10 @@ def generate_insights(
                     "category": "volume",
                     "priority": "low",
                     "title": "Volume faible",
-                    "message": f"Moyenne de {avg_daily_bookings:.1f} courses/jour. Opportunité de croissance.",
+                    "message": (
+                        f"Moyenne de {avg_daily_bookings:.1f} courses/jour. "
+                        f"Opportunité de croissance."
+                    ),
                     "action": None,
                 }
             )
@@ -165,7 +183,10 @@ def generate_insights(
                     "category": "volume",
                     "priority": "low",
                     "title": "Volume élevé",
-                    "message": f"Moyenne de {avg_daily_bookings:.1f} courses/jour. Excellent volume !",
+                    "message": (
+                        f"Moyenne de {avg_daily_bookings:.1f} courses/jour. "
+                        f"Excellent volume !"
+                    ),
                     "action": None,
                 }
             )
@@ -179,7 +200,9 @@ def generate_insights(
                 "category": "quality",
                 "priority": "low",
                 "title": "Score de qualité excellent",
-                "message": f"Score global de {quality_score:.1f}/100. Excellent travail !",
+                "message": (
+                    f"Score global de {quality_score:.1f}/100. Excellent travail !"
+                ),
                 "action": None,
             }
         )
@@ -190,7 +213,10 @@ def generate_insights(
                 "category": "quality",
                 "priority": "critical",
                 "title": "Score de qualité faible",
-                "message": f"Score global de {quality_score:.1f}/100. Plan d'amélioration nécessaire.",
+                "message": (
+                    f"Score global de {quality_score:.1f}/100. "
+                    f"Plan d'amélioration nécessaire."
+                ),
                 "action": "improvement_plan",
             }
         )
@@ -283,8 +309,14 @@ def detect_patterns(company_id: int, lookback_days: int = 30) -> Dict[str, Any]:
             patterns.append(
                 {
                     "type": "high_delay_day",
-                    "message": f"{worst_day['weekday_name']} a systématiquement plus de retards (moy: {worst_day['avg_delay']:.1f} min)",
-                    "recommendation": f"Ajoutez du temps buffer ou des chauffeurs supplémentaires le {worst_day['weekday_name']}",
+                    "message": (
+                        f"{worst_day['weekday_name']} a systématiquement plus de retards "
+                        f"(moy: {worst_day['avg_delay']:.1f} min)"
+                    ),
+                    "recommendation": (
+                        f"Ajoutez du temps buffer ou des chauffeurs supplémentaires "
+                        f"le {worst_day['weekday_name']}"
+                    ),
                 }
             )
 
@@ -294,8 +326,13 @@ def detect_patterns(company_id: int, lookback_days: int = 30) -> Dict[str, Any]:
             patterns.append(
                 {
                     "type": "busy_day",
-                    "message": f"{busiest_day['weekday_name']} est le jour le plus chargé (moy: {busiest_day['avg_bookings']:.1f} courses)",
-                    "recommendation": "Assurez-vous d'avoir assez de chauffeurs disponibles",
+                    "message": (
+                        f"{busiest_day['weekday_name']} est le jour le plus chargé "
+                        f"(moy: {busiest_day['avg_bookings']:.1f} courses)"
+                    ),
+                    "recommendation": (
+                        "Assurez-vous d'avoir assez de chauffeurs disponibles"
+                    ),
                 }
             )
 

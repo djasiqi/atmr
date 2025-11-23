@@ -292,10 +292,15 @@ class Booking(db.Model):
                 "username": self.driver.user.username if self.driver.user else None,
                 "first_name": self.driver.user.first_name if self.driver.user else None,
                 "last_name": self.driver.user.last_name if self.driver.user else None,
-                "full_name": f"{self.driver.user.first_name or ''} {self.driver.user.last_name or ''}".strip()
-                or self.driver.user.username
-                if self.driver.user
-                else None,
+                "full_name": (
+                    (
+                        f"{self.driver.user.first_name or ''} "
+                        + f"{self.driver.user.last_name or ''}"
+                    ).strip()
+                    or self.driver.user.username
+                    if self.driver.user
+                    else None
+                ),
             }
             if self.driver
             else None,
@@ -378,7 +383,10 @@ class Booking(db.Model):
             msg = "Le nom du client ne peut pas être vide"
             raise ValueError(msg)
         if len(name) > CUSTOMER_NAME_MAX_LENGTH:
-            msg = f"Le nom du client ne peut pas dépasser {CUSTOMER_NAME_MAX_LENGTH} caractères"
+            msg = (
+                f"Le nom du client ne peut pas dépasser "
+                f"{CUSTOMER_NAME_MAX_LENGTH} caractères"
+            )
             raise ValueError(msg)
         return name
 
@@ -399,7 +407,10 @@ class Booking(db.Model):
             try:
                 status = BookingStatus[status]
             except KeyError:
-                msg = f"Statut invalide : {status}. Doit être l'un de {list(BookingStatus.__members__.keys())}"
+                msg = (
+                    f"Statut invalide : {status}. "
+                    f"Doit être l'un de {list(BookingStatus.__members__.keys())}"
+                )
                 raise ValueError(msg) from None
         if not isinstance(status, BookingStatus):
             msg = f"Statut invalide : {status}. Doit être un BookingStatus valide."
@@ -491,7 +502,10 @@ class Booking(db.Model):
             return
         company_id = _as_int(getattr(target, "billed_to_company_id", None))
         if company_id <= COMPANY_ID_ZERO:
-            msg = "billed_to_company_id est obligatoire si billed_to_type n'est pas 'patient'"
+            msg = (
+                "billed_to_company_id est obligatoire "
+                "si billed_to_type n'est pas 'patient'"
+            )
             raise ValueError(msg)
 
 

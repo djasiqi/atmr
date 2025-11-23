@@ -110,7 +110,10 @@ class MLMonitoringService:
                 db.session.commit()
 
                 logger.info(
-                    "[MLMonitoring] Updated actual delay for booking %s: predicted=%s actual=%s error=%s",
+                    (
+                        "[MLMonitoring] Updated actual delay for booking %s: "
+                        "predicted=%s actual=%s error=%s"
+                    ),
                     booking_id,
                     prediction.predicted_delay_minutes,
                     actual_delay,

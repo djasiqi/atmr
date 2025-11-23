@@ -32,7 +32,8 @@ class ProblemState:
         """Crée un ProblemState à partir d'un dict problem et d'une liste de drivers.
 
         Args:
-            problem: Dict avec les clés optionnelles busy_until, driver_scheduled_times, proposed_load
+            problem: Dict avec les clés optionnelles busy_until,
+                driver_scheduled_times, proposed_load
             drivers: Liste des chauffeurs disponibles
 
         Returns:
@@ -57,7 +58,10 @@ class ProblemState:
 
         if previous_busy or previous_times or previous_load:
             logger.debug(
-                "[ProblemState] État récupéré: %d busy_until, %d scheduled_times, %d proposed_load",
+                (
+                    "[ProblemState] État récupéré: %d busy_until, "
+                    "%d scheduled_times, %d proposed_load"
+                ),
                 len(previous_busy),
                 len(previous_times),
                 len(previous_load),
@@ -105,7 +109,8 @@ class ProblemState:
     def has_time_conflict(
         self, driver_id: int, time_min: int, min_gap_minutes: int = 30
     ) -> bool:
-        """Vérifie si l'ajout d'une course à time_min crée un conflit avec les courses existantes.
+        """Vérifie si l'ajout d'une course à time_min crée un conflit
+        avec les courses existantes.
 
         Args:
             driver_id: ID du chauffeur
@@ -121,7 +126,11 @@ class ProblemState:
         for existing_time in existing_times:
             if abs(time_min - existing_time) < min_gap_minutes:
                 logger.debug(
-                    "[ProblemState] Conflit détecté pour driver #%d: course à %dmin vs nouvelle à %dmin (écart: %dmin < %dmin)",
+                    (
+                        "[ProblemState] Conflit détecté pour driver #%d: "
+                        "course à %dmin vs nouvelle à %dmin "
+                        "(écart: %dmin < %dmin)"
+                    ),
                     driver_id,
                     existing_time,
                     time_min,
@@ -162,7 +171,10 @@ class ProblemState:
         self.proposed_load[driver_id] = self.proposed_load.get(driver_id, 0) + 1
 
         logger.debug(
-            "[ProblemState] Driver #%d assigné: start=%d, end=%d, busy_until=%d, load=%d",
+            (
+                "[ProblemState] Driver #%d assigné: start=%d, end=%d, "
+                "busy_until=%d, load=%d"
+            ),
             driver_id,
             start_time_min,
             end_time_min,
@@ -177,7 +189,8 @@ class ProblemState:
 
         Args:
             driver_id: ID du chauffeur
-            fairness_counts: Dict optionnel avec le nombre de courses déjà assignées aujourd'hui
+            fairness_counts: Dict optionnel avec le nombre de courses
+                déjà assignées aujourd'hui
 
         Returns:
             Charge totale du chauffeur

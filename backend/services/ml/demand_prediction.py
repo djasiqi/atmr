@@ -26,7 +26,10 @@ try:
     SKLEARN_AVAILABLE = True
 except ImportError:
     logger.error(
-        "[DemandPrediction] scikit-learn requis. Installer avec: pip install scikit-learn"
+        (
+            "[DemandPrediction] scikit-learn requis. "
+            "Installer avec: pip install scikit-learn"
+        )
     )
     SKLEARN_AVAILABLE = False
 
@@ -223,7 +226,8 @@ class DemandPredictor:
                 "weekend": 1.0 if is_weekend_init else 0.0,
                 "rush_hour": 1.0 if is_rush_init else 0.0,
                 "holiday": 1.0 if holiday_factor_init > 1.0 else 0.0,
-                "seasonal_trend": 1.0,  # TODO: calculer depuis décomposition saisonnière
+                # TODO: calculer depuis décomposition saisonnière
+                "seasonal_trend": 1.0,
             }
 
             return ZoneDemandPrediction(
@@ -242,7 +246,8 @@ class DemandPredictor:
         """Récupère les données historiques pour une zone.
 
         Args:
-            _zone_id: ID de la zone (non utilisé actuellement, TODO: implémenter filtrage)
+            _zone_id: ID de la zone (non utilisé actuellement,
+                TODO: implémenter filtrage)
 
         Returns:
             DataFrame avec colonnes 'timestamp', 'demand'

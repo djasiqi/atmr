@@ -75,7 +75,8 @@ class ABRouter:
     def should_apply_with_quality_check(
         self, company_id: int, projected_quality_score: float
     ) -> bool:
-        """Vérifie si RL peut être appliqué en tenant compte du quality_score prévisionnel.
+        """Vérifie si RL peut être appliqué en tenant compte du
+        quality_score prévisionnel.
 
         Args:
             company_id: ID de l'entreprise
@@ -96,7 +97,10 @@ class ABRouter:
 
         if projected_quality_score < min_quality_score:
             logger.warning(
-                "[ABRouter] Company %d: projected quality_score (%.1f) < threshold (%.1f), skipping RL apply",
+                (
+                    "[ABRouter] Company %d: projected quality_score (%.1f) < "
+                    "threshold (%.1f), skipping RL apply"
+                ),
                 company_id,
                 projected_quality_score,
                 min_quality_score,

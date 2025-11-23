@@ -325,7 +325,8 @@ def get_company_from_token() -> tuple[
 
     user = cast("User", user_opt)
 
-    # Si l'utilisateur est de rôle company mais n'a pas encore d'objet Company, on le crée.
+    # Si l'utilisateur est de rôle company mais n'a pas encore d'objet Company,
+    # on le crée.
     # ⚠️ ne jamais faire "if user.company" (truthiness interdit sur relationships)
     company_rel: Company | None = cast("Company | None", getattr(user, "company", None))
     # Pylance peut inférer ColumnElement[bool] sur l'égalité -> on cast côté
@@ -391,7 +392,9 @@ def get_company_from_token() -> tuple[
 
 
 def _maybe_trigger_dispatch(company_id: int, action: str = "update") -> None:
-    """Déclenche le dispatch si activé pour la société (compatible avec plusieurs APIs queue)."""
+    """Déclenche le dispatch si activé pour la société
+    (compatible avec plusieurs APIs queue).
+    """
     company = Company.query.get(company_id)
     if not company or not bool(getattr(company, "dispatch_enabled", False)):
         return
@@ -423,7 +426,9 @@ def _maybe_trigger_dispatch(company_id: int, action: str = "update") -> None:
 
 
 def _driver_trigger(company: Company, action: str) -> None:
-    """Déclenche un événement de dispatch lié à un chauffeur si le dispatch est activé."""
+    """Déclenche un événement de dispatch lié à un chauffeur
+    si le dispatch est activé.
+    """
     if not company or not bool(getattr(company, "dispatch_enabled", False)):
         return
 
@@ -502,7 +507,8 @@ class CompanyMe(Resource):
         # Géocodage automatique de l'adresse si fournie et coordonnées absentes
         address = validated_data.get("address")
         if address:
-            # Si les coordonnées ne sont pas fournies dans le payload, géocoder l'adresse
+            # Si les coordonnées ne sont pas fournies dans le payload,
+            # géocoder l'adresse
             if not validated_data.get("latitude") or not validated_data.get(
                 "longitude"
             ):
@@ -523,7 +529,8 @@ class CompanyMe(Resource):
                     app_logger.warning(
                         "[Company] Failed to geocode company address: %s", e
                     )
-            # Si les coordonnées sont déjà fournies (depuis AddressAutocomplete), les utiliser directement
+            # Si les coordonnées sont déjà fournies (depuis AddressAutocomplete),
+            # les utiliser directement
             elif validated_data.get("latitude") and validated_data.get("longitude"):
                 app_logger.info(
                     "[Company] Using provided coordinates for address: (%s, %s)",
@@ -576,7 +583,8 @@ class CompanyReservations(Resource):
         if error_response:
             return error_response, status_code
 
-        # ⚙️ Sécurise l'ID entreprise pour les expressions SQLAlchemy (évite Column[int] → int)
+        # ⚙️ Sécurise l'ID entreprise pour les expressions SQLAlchemy
+        # (évite Column[int] → int)
         company_id_obj = getattr(company, "id", None)
         try:
             company_id = int(company_id_obj) if company_id_obj is not None else None
@@ -611,7 +619,10 @@ class CompanyReservations(Resource):
                 days_diff = (end_local - start_local).days
                 if days_diff > max_days_range:
                     return {
-                        "error": f"Plage de dates trop large. Maximum {max_days_range} jours autorisés"
+                        "error": (
+                            f"Plage de dates trop large. "
+                            f"Maximum {max_days_range} jours autorisés"
+                        )
                     }, 400
                 # Appliquer le filtre de date
                 query = query.filter(
@@ -680,7 +691,8 @@ class AcceptReservation(Resource):
         if not booking or booking.status != BookingStatus.PENDING:
             return {"error": "Reservation not found or cannot be accepted"}, 400
 
-        # 🔒 Sécurise l'ID (évite Column[int] -> bool dans les expressions / casts Pylance)
+        # 🔒 Sécurise l'ID (évite Column[int] -> bool dans les expressions
+        # / casts Pylance)
         company_id_obj = getattr(company, "id", None)
         try:
             company_id = int(company_id_obj) if company_id_obj is not None else None
@@ -798,8 +810,12 @@ class AssignDriver(Resource):
 
         # Autoriser seulement les statuts ACCEPTED et ASSIGNED
         if booking.status not in [BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]:
+            warning_msg = (
+                "❌ Statut invalide pour assignation : %s. "
+                + "Doit être ACCEPTED ou ASSIGNED."
+            )
             app_logger.warning(
-                "❌ Statut invalide pour assignation : %s. Doit être ACCEPTED ou ASSIGNED.",
+                warning_msg,
                 booking.status,
             )
             return {"error": "Reservation cannot be assigned in current state"}, 400
@@ -827,7 +843,8 @@ class AssignDriver(Resource):
             booking.status = BookingStatus.ASSIGNED
 
             # Get or create a DispatchRun for today
-            # ⚙️ Pylance : protège .date() quand scheduled_time ou le retour de to_geneva_local peuvent être None
+            # ⚙️ Pylance : protège .date() quand scheduled_time ou le retour
+            # de to_geneva_local peuvent être None
             st = getattr(booking, "scheduled_time", None)
             if st is None:
                 day_local = datetime.now(UTC).date()
@@ -1179,7 +1196,8 @@ class DeactivateDispatch(Resource):
         except Exception:
             cid = None
 
-        # ⚙️ Pylance + SQLAlchemy : éviter l'assign direct sur une Column -> utiliser setattr
+        # ⚙️ Pylance + SQLAlchemy : éviter l'assign direct sur une Column
+        # -> utiliser setattr
         if company:
             company.dispatch_enabled = False
             db.session.commit()
@@ -1193,7 +1211,8 @@ class DeactivateDispatch(Resource):
 
 
 # ======================================================
-# 13. Réservations dispatchées (ASSIGNED ou IN_PROGRESS)
+# 13. Réservations dispatchées
+# (ASSIGNED ou IN_PROGRESS)
 # ======================================================
 
 
@@ -1202,7 +1221,9 @@ class AssignedReservations(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        """Retourne les réservations dispatchées (status ASSIGNED ou IN_PROGRESS) de l'entreprise connectée."""
+        """Retourne les réservations dispatchées
+        (status ASSIGNED ou IN_PROGRESS) de l'entreprise connectée.
+        """
         company, error_response, status_code = get_company_from_token()
         if error_response:
             return error_response, status_code
@@ -1217,7 +1238,8 @@ class AssignedReservations(Resource):
             if cid is None:
                 return {"error": "Entreprise introuvable (ID invalide)."}, 500
 
-            # 🧭 Pylance : typer explicitement la colonne status pour autoriser .in_(...)
+            # 🧭 Pylance : typer explicitement la colonne status
+            # pour autoriser .in_(...)
 
             assigned_reservations = (
                 Booking.query.options(
@@ -1366,7 +1388,8 @@ class CreateManualReservation(Resource):
             return {"error": "Client non trouvé."}, 404
         user = client.user
 
-        # ---------- 0) Résolution du payeur (defaults Client + override payload) - utilise données validées
+        # ---------- 0) Résolution du payeur
+        # (defaults Client + override payload) - utilise données validées
         def _norm_str(x: Any, default: str | None = None) -> str | None:
             if isinstance(x, str):
                 return x.strip()
@@ -1390,14 +1413,20 @@ class CreateManualReservation(Resource):
         # Validation de billed_to_type
         if billed_to_type not in ("patient", "clinic", "insurance"):
             return {
-                "error": "billed_to_type invalide (valeurs possibles: patient | clinic | insurance)"
+                "error": (
+                    "billed_to_type invalide "
+                    "(valeurs possibles: patient | clinic | insurance)"
+                )
             }, 400
 
         # Validation de billed_to_company_id
         if billed_to_type in ("clinic", "insurance"):
             if billed_to_company_id in (None, ""):
                 return {
-                    "error": "billed_to_company_id est requis quand billed_to_type != 'patient'."
+                    "error": (
+                        "billed_to_company_id est requis "
+                        "quand billed_to_type != 'patient'."
+                    )
                 }, 400
             # cast en int si string numérique
             try:
@@ -1410,7 +1439,8 @@ class CreateManualReservation(Resource):
             if not payer:
                 return {"error": "Société payeuse introuvable."}, 404
 
-        # ---------- 1) Parse des dates + Récurrence ---------- (utilise données validées)
+        # ---------- 1) Parse des dates + Récurrence ----------
+        # (utilise données validées)
         try:
             scheduled = parse_local_naive(
                 validated_data["scheduled_time"]
@@ -1423,25 +1453,27 @@ class CreateManualReservation(Resource):
         return_dt = None
         return_time_confirmed = True  # Par défaut, l'heure est confirmée
         return_date_str = validated_data.get("return_date")  # Format: YYYY-MM-DD
-        return_time_str = validated_data.get(
-            "return_time"
-        )  # Format: HH:mm ou YYYY-MM-DDTHH:mm:00 (optionnel)
+        # Format: HH:mm ou YYYY-MM-DDTHH:mm:00 (optionnel)
+        return_time_str = validated_data.get("return_time")
 
         if is_rt and return_date_str:
             try:
                 # Si on a la date ET l'heure, on combine
                 if return_time_str:
-                    # ⚡ Extraire seulement l'heure de return_time_str si c'est déjà un datetime complet
+                    # ⚡ Extraire seulement l'heure de return_time_str
+                    # si c'est déjà un datetime complet
                     time_only = return_time_str
                     if "T" in return_time_str:
-                        # Si return_time_str est déjà un datetime (ex: "2025-11-04T14:00:00"),
+                        # Si return_time_str est déjà un datetime
+                        # (ex: "2025-11-04T14:00:00"),
                         # extraire seulement la partie heure après le dernier "T"
                         time_parts = return_time_str.split("T")
                         if len(time_parts) > 1:
                             time_only = time_parts[
                                 -1
                             ]  # Prendre la dernière partie après le dernier T
-                            # Extraire seulement HH:mm (supprimer les secondes si présentes)
+                            # Extraire seulement HH:mm
+                            # (supprimer les secondes si présentes)
                             time_only = time_only.split(":")[:2]
                             time_only = ":".join(time_only)
                             app_logger.debug(
@@ -1463,8 +1495,12 @@ class CreateManualReservation(Resource):
                     combined = f"{return_date_str}T00:00:00"
                     return_dt = parse_local_naive(combined)
                     return_time_confirmed = False
+                    log_msg = (
+                        "📅 Retour avec date %s mais heure à confirmer "
+                        + "(time_confirmed=False)"
+                    )
                     app_logger.info(
-                        "📅 Retour avec date %s mais heure à confirmer (time_confirmed=False)",
+                        log_msg,
                         return_date_str,
                     )
             except Exception as e:
@@ -1548,8 +1584,11 @@ class CreateManualReservation(Resource):
                                         recurrence_end_date_str
                                     )
                                     if end_date and current_date > end_date:
+                                        log_msg = (
+                                            "  ⛔ Date de fin atteinte pour jour %s: %s"
+                                        )
                                         app_logger.info(
-                                            "  ⛔ Date de fin atteinte pour jour %s: %s",
+                                            log_msg,
                                             target_weekday,
                                             end_date,
                                         )
@@ -1598,7 +1637,8 @@ class CreateManualReservation(Resource):
             def geocode_with_nominatim(address: str):
                 try:
                     url = "https://nominatim.openstreetmap.org/search"
-                    # Convertir les valeurs en str pour satisfaire mypy (requests.get attend des types spécifiques)
+                    # Convertir les valeurs en str pour satisfaire mypy
+                    # (requests.get attend des types spécifiques)
                     params: dict[str, str | int] = {
                         "q": address,
                         "format": "json",
@@ -1658,7 +1698,8 @@ class CreateManualReservation(Resource):
                         validated_data["dropoff_location"],
                     )
 
-            # Récupérer les coordonnées finales (frontend OU géocodées) - utilise données validées
+            # Récupérer les coordonnées finales (frontend OU géocodées)
+            # - utilise données validées
 
             if validated_data.get("pickup_lat") and validated_data.get("pickup_lon"):
                 final_pickup_coords = (
@@ -1684,13 +1725,16 @@ class CreateManualReservation(Resource):
 
             if final_pickup_coords and final_dropoff_coords:
                 # Utiliser OSRM pour calculer la durée et la distance
-                # ⚡ Utiliser directement _route (sans singleflight) pour éviter blocages
-                # ⚡ Timeout très court (2s) pour fail-fast et ne pas bloquer la création
+                # ⚡ Utiliser directement _route (sans singleflight)
+                # pour éviter blocages
+                # ⚡ Timeout très court (2s) pour fail-fast
+                # et ne pas bloquer la création
                 osrm_url = getattr(Config, "UD_OSRM_URL", "http://osrm:5000")
                 try:
                     from services.osrm_client import _route
 
-                    # Appel direct à _route (bypass singleflight/cache) pour éviter blocages
+                    # Appel direct à _route (bypass singleflight/cache)
+                    # pour éviter blocages
                     # Signature: _route(base_url, profile, origin, destination, *, ...)
                     route_data = _route(
                         base_url=osrm_url,
@@ -1709,18 +1753,24 @@ class CreateManualReservation(Resource):
                         dist_m = int(r0.get("distance", 0))
                     else:
                         raise ValueError(
-                            f"OSRM bad response: {route_data.get('message', 'Unknown error')}"
+                            "OSRM bad response: "
+                            + f"{route_data.get('message', 'Unknown error')}"
                         )
                 except Exception as osrm_error:
                     # ⚡ Fallback immédiat si OSRM timeout/erreur
+                    warning_msg = (
+                        "⚠️ OSRM timeout/erreur (timeout=2s), "
+                        + "utilisation fallback haversine: %s"
+                    )
                     app_logger.warning(
-                        "⚠️ OSRM timeout/erreur (timeout=2s), utilisation fallback haversine: %s",
+                        warning_msg,
                         osrm_error,
                     )
                     base_dur_s = None
                     dist_m = None
 
-                # 🚦 Facteur rush hour : ajuster selon l'heure de la réservation (seulement si OSRM a réussi)
+                # 🚦 Facteur rush hour : ajuster selon l'heure de la réservation
+                # (seulement si OSRM a réussi)
                 if base_dur_s is not None:
                     scheduled_hour = (
                         scheduled.hour if scheduled else datetime.now(UTC).hour
@@ -1751,10 +1801,15 @@ class CreateManualReservation(Resource):
                     # Appliquer le facteur
                     dur_s = int(base_dur_s * rush_hour_factor)
 
-                    # ⚡ Formatage sécurisé : vérifier que dist_m n'est pas None avant division
+                    # ⚡ Formatage sécurisé : vérifier que dist_m n'est pas None
+                    # avant division
                     if dist_m is not None:
+                        log_msg = (
+                            "✅ Durée/distance calculée via OSRM : "
+                            + "%ss → %ss (%smin) / %sm (%.1fkm)"
+                        )
                         app_logger.info(
-                            "✅ Durée/distance calculée via OSRM : %ss → %ss (%smin) / %sm (%.1fkm)",
+                            log_msg,
                             base_dur_s,
                             dur_s,
                             dur_s // 60,
@@ -1762,17 +1817,24 @@ class CreateManualReservation(Resource):
                             dist_m / 1000,
                         )
                     else:
+                        log_msg = (
+                            "✅ Durée calculée via OSRM : "
+                            + "%ss → %ss (%smin) / distance non disponible"
+                        )
                         app_logger.info(
-                            "✅ Durée calculée via OSRM : %ss → %ss (%smin) / distance non disponible",
+                            log_msg,
                             base_dur_s,
                             dur_s,
                             dur_s // 60,
                         )
                 else:
-                    # ⚡ OSRM a échoué/timeout → dur_s et dist_m restent None (seront ignorés lors de la création)
-                    app_logger.info(
-                        "⚠️ Durée/distance non calculée (OSRM indisponible), réservation créée sans ces informations"
+                    # ⚡ OSRM a échoué/timeout → dur_s et dist_m restent None
+                    # (seront ignorés lors de la création)
+                    log_msg = (
+                        "⚠️ Durée/distance non calculée (OSRM indisponible), "
+                        + "réservation créée sans ces informations"
                     )
+                    app_logger.info(log_msg)
             else:
                 app_logger.warning(
                     "⚠️ Géocodage échoué pour pickup=%s ou dropoff=%s",
@@ -1782,11 +1844,15 @@ class CreateManualReservation(Resource):
         except Exception as e:
             app_logger.error("❌ Calcul durée/distance OSRM échoué : %s", e)
 
-        # ---------- 3) Création des réservations (avec récurrence) ----------
+        # ---------- 3) Création des réservations
+        # (avec récurrence) ----------
         try:
-            full_name = f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
+            full_name = (
+                f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}"
+            ).strip()
 
-            # 🏥 Utiliser le nom de l'institution si c'est une institution, sinon le nom de la personne
+            # 🏥 Utiliser le nom de l'institution si c'est une institution,
+            # sinon le nom de la personne
             if client.is_institution and client.institution_name:
                 display_name = client.institution_name
                 app_logger.info(
@@ -1795,7 +1861,8 @@ class CreateManualReservation(Resource):
             else:
                 display_name = full_name or (getattr(user, "username", "") or "Client")
 
-            # 💰 Utiliser le tarif préférentiel du client si disponible, sinon le montant fourni (utilise données validées)
+            # 💰 Utiliser le tarif préférentiel du client si disponible,
+            # sinon le montant fourni (utilise données validées)
             amount_to_use = float(validated_data.get("amount") or 0)
             if (
                 client.preferential_rate
@@ -1827,9 +1894,11 @@ class CreateManualReservation(Resource):
                         # Pas d'heure de retour : laisser scheduled_time à None
                         # (à confirmer plus tard)
                         occurrence_return_dt = None
-                        app_logger.info(
-                            "📅 Retour sans horaire précis : scheduled_time = None (à confirmer plus tard)"
+                        log_msg = (
+                            "📅 Retour sans horaire précis : scheduled_time = None "
+                            + "(à confirmer plus tard)"
                         )
+                        app_logger.info(log_msg)
 
                 # Créer la réservation aller
                 outbound = Booking()
@@ -1882,7 +1951,8 @@ class CreateManualReservation(Resource):
 
                 # Créer le retour si demandé
                 if is_rt:
-                    # ✅ Toujours ACCEPTED pour les réservations manuelles (même sans heure de retour)
+                    # ✅ Toujours ACCEPTED pour les réservations manuelles
+                    # (même sans heure de retour)
                     return_booking = Booking()
                     return_booking.parent_booking_id = outbound.id
                     return_booking.customer_name = outbound.customer_name
@@ -1916,7 +1986,8 @@ class CreateManualReservation(Resource):
                     return_booking.billed_to_company_id = billed_to_company_id
                     return_booking.billed_to_contact = billed_to_contact
 
-                    # 🏥 Informations médicales (mêmes que l'aller) - utilise données validées
+                    # 🏥 Informations médicales (mêmes que l'aller)
+                    # - utilise données validées
                     return_booking.medical_facility = validated_data.get(
                         "medical_facility"
                     )
@@ -2110,7 +2181,8 @@ class TriggerReturnBooking(Resource):
                 return_booking = existing
                 action = "modifié"
             else:
-                # 💰 Utiliser le même tarif que l'aller (peut être un tarif préférentiel)
+                # 💰 Utiliser le même tarif que l'aller
+                # (peut être un tarif préférentiel)
                 return_booking = Booking()
                 return_booking.customer_name = booking.customer_name
                 return_booking.pickup_location = booking.dropoff_location
@@ -2300,7 +2372,10 @@ class CompanyClients(Resource):
         ct_str = validated_data["client_type"].upper()
         if ct_str not in ClientType.__members__:
             return {
-                "error": "client_type invalide. Valeurs possibles: SELF_SERVICE, PRIVATE, CORPORATE"
+                "error": (
+                    "client_type invalide. "
+                    "Valeurs possibles: SELF_SERVICE, PRIVATE, CORPORATE"
+                )
             }, 400
         ctype = ClientType[ct_str]
 
@@ -2352,17 +2427,23 @@ class CompanyClients(Resource):
         pwd = None  # Initialiser pwd
         if ctype == ClientType.SELF_SERVICE:
             pwd = uuid4().hex[:12]
-            # Validation explicite du mot de passe auto-généré avant set_password (sécurité)
+            # Validation explicite du mot de passe auto-généré
+            # avant set_password (sécurité)
             validate_password_or_raise(pwd, _user=user)
-            # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # Le mot de passe est validé explicitement
+            # par validate_password_or_raise() ci-dessus
+            # nosemgrep: python.django.security.audit.unvalidated-password.
+            # unvalidated-password
             user.set_password(pwd)
         else:
             generated_pwd = uuid4().hex
-            # Validation explicite du mot de passe auto-généré avant set_password (sécurité)
+            # Validation explicite du mot de passe auto-généré
+            # avant set_password (sécurité)
             validate_password_or_raise(generated_pwd, _user=user)
-            # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # Le mot de passe est validé explicitement
+            # par validate_password_or_raise() ci-dessus
+            # nosemgrep: python.django.security.audit.unvalidated-password.
+            # unvalidated-password
             user.set_password(generated_pwd)
 
         db.session.add(user)
@@ -2551,7 +2632,10 @@ class CompanyClientDetail(Resource):
                         ).date()
                     except (ValueError, TypeError):
                         return {
-                            "error": "Format de date de naissance invalide. Utiliser YYYY-MM-DD."
+                            "error": (
+                                "Format de date de naissance invalide. "
+                                "Utiliser YYYY-MM-DD."
+                            )
                         }, 400
                 else:
                     client.user.birth_date = None
@@ -2587,7 +2671,8 @@ class CompanyClientDetail(Resource):
 
         try:
             if hard_delete:
-                # Vérifier si le client a des factures, réservations ou autres dépendances
+                # Vérifier si le client a des factures, réservations
+                # ou autres dépendances
                 invoice_count = Invoice.query.filter(
                     or_(
                         Invoice.client_id == client_id,
@@ -2603,8 +2688,13 @@ class CompanyClientDetail(Resource):
                 ):
                     return {
                         "error": "Impossible de supprimer définitivement ce client",
-                        "reason": f"Le client a {invoice_count} facture(s) et {booking_count} réservation(s)",
-                        "suggestion": "Utilisez la désactivation (soft delete) à la place",
+                        "reason": (
+                            f"Le client a {invoice_count} facture(s) "
+                            f"et {booking_count} réservation(s)"
+                        ),
+                        "suggestion": (
+                            "Utilisez la désactivation (soft delete) à la place"
+                        ),
                     }, 400
 
                 # Suppression définitive (seulement si aucune dépendance)
@@ -2689,7 +2779,8 @@ class DriverCompletedTrips(Resource):
                     else None,
                     "duration_in_minutes": duration,
                     "status": str(trip.status),
-                    # Optionnel: "client_name": trip.customer_name ou trip.client.user.full_name
+                    # Optionnel: "client_name": trip.customer_name
+                    # ou trip.client.user.full_name
                 }
             )
 
@@ -2755,7 +2846,9 @@ class CreateDriver(Resource):
     @limiter.limit("20 per hour")  # ✅ 2.8: Rate limiting création chauffeur
     @companies_ns.expect(create_driver_model, validate=True)
     def post(self):
-        """Crée un nouvel utilisateur avec le rôle chauffeur et l'associe à l'entreprise."""
+        """Crée un nouvel utilisateur avec le rôle chauffeur
+        et l'associe à l'entreprise.
+        """
         company, error_response, status_code = get_company_from_token()
         if error_response:
             # Utiliser abort au lieu de return pour réduire le nombre de returns
@@ -2789,13 +2882,17 @@ class CreateDriver(Resource):
             validated_data = {}  # Never reached, but satisfies type checker
 
         # validated_data is guaranteed to be defined here (abort() raises exception)
-        # Défense en profondeur : vérification explicite pour robustesse en production
-        # Note: Le type checker considère cette vérification inatteignable, mais elle reste utile
-        # pour la robustesse si abort() ne lève pas d'exception dans un contexte non-Flask
+        # Défense en profondeur : vérification explicite
+        # pour robustesse en production
+        # Note: Le type checker considère cette vérification inatteignable,
+        # mais elle reste utile pour la robustesse si abort() ne lève pas
+        # d'exception dans un contexte non-Flask
         if validated_data is None:  # type: ignore[comparison-overlap]
-            app_logger.error(
-                "[Companies] validated_data is None after validation (should not happen)"
+            error_msg = (
+                "[Companies] validated_data is None after validation "
+                + "(should not happen)"
             )
+            app_logger.error(error_msg)
             companies_ns.abort(500, "Erreur interne de validation")
 
         # Vérifier si l'email ou le username existe déjà
@@ -2830,8 +2927,10 @@ class CreateDriver(Resource):
                 # Utiliser abort au lieu de return pour réduire le nombre de returns
                 companies_ns.abort(400, str(e))
 
-            # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # Le mot de passe est validé explicitement
+            # par validate_password_or_raise() ci-dessus
+            # nosemgrep: python.django.security.audit.unvalidated-password.
+            # unvalidated-password
             new_user.set_password(validated_data["password"])
             db.session.add(new_user)
             db.session.flush()  # Pour obtenir l'ID du nouvel utilisateur
@@ -2848,7 +2947,8 @@ class CreateDriver(Resource):
             db.session.add(new_driver)
             db.session.commit()
 
-            # ✅ Priorité 7: Audit logging et métriques pour création utilisateur (chauffeur)
+            # ✅ Priorité 7: Audit logging et métriques
+            # pour création utilisateur (chauffeur)
             try:
                 from security.audit_log import AuditLogger
                 from security.security_metrics import security_sensitive_actions_total
@@ -2910,8 +3010,10 @@ class SingleReservation(Resource):
     @role_required(UserRole.company)
     @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting modification réservation
     def put(self, reservation_id):  # noqa: PLR0911
-        """Met à jour une réservation (adresses, heure, informations médicales).
-        Permet la modification pour PENDING, ACCEPTED et ASSIGNED (pour les entreprises).
+        """Met à jour une réservation
+        (adresses, heure, informations médicales).
+        Permet la modification pour PENDING, ACCEPTED et ASSIGNED
+        (pour les entreprises).
         """
         company, error_response, status_code = get_company_from_token()
         if error_response:
@@ -2930,7 +3032,8 @@ class SingleReservation(Resource):
         if not booking:
             return {"error": "Réservation non trouvée."}, 404
 
-        # ✅ Autoriser la modification pour PENDING, ACCEPTED et ASSIGNED (pour les entreprises)
+        # ✅ Autoriser la modification pour PENDING, ACCEPTED et ASSIGNED
+        # (pour les entreprises)
         allowed_statuses = [
             BookingStatus.PENDING,
             BookingStatus.ACCEPTED,
@@ -2938,7 +3041,11 @@ class SingleReservation(Resource):
         ]
         if booking.status not in allowed_statuses:
             return {
-                "error": f"Impossible de modifier une réservation avec le statut '{booking.status.value}'. Seules les réservations en attente, acceptées ou assignées peuvent être modifiées."
+                "error": (
+                    f"Impossible de modifier une réservation avec le statut "
+                    f"'{booking.status.value}'. Seules les réservations "
+                    "en attente, acceptées ou assignées peuvent être modifiées."
+                )
             }, 400
 
         data = request.get_json() or {}
@@ -3109,7 +3216,8 @@ class SingleReservation(Resource):
                         "message": "La réservation a été supprimée avec succès."
                     }, 200
 
-                # 🚫 Cas B: Course future (> +24h) OU récente (-24h à maintenant) → ANNULATION
+                # 🚫 Cas B: Course future (> +24h) OU récente
+                # (-24h à maintenant) → ANNULATION
                 booking.status = BookingStatus.CANCELED
                 # Libérer le chauffeur
                 if booking.driver_id:
@@ -3125,13 +3233,18 @@ class SingleReservation(Resource):
 
             # ❌ Règle 3: IN_PROGRESS, COMPLETED, etc. → IMPOSSIBLE
             status_messages = {
-                BookingStatus.IN_PROGRESS: "La course est en cours et ne peut pas être annulée.",
-                BookingStatus.COMPLETED: "La course est terminée et ne peut pas être modifiée.",
+                BookingStatus.IN_PROGRESS: (
+                    "La course est en cours et ne peut pas être annulée."
+                ),
+                BookingStatus.COMPLETED: (
+                    "La course est terminée et ne peut pas être modifiée."
+                ),
                 BookingStatus.CANCELED: "La course est déjà annulée.",
             }
             msg = status_messages.get(
                 booking.status,
-                f"Impossible de supprimer/annuler une course avec le statut '{booking.status.value}'.",
+                "Impossible de supprimer/annuler une course avec le statut "
+                + f"'{booking.status.value}'.",
             )
             return {"error": msg}, 403
 
@@ -3170,7 +3283,8 @@ class UpdateReservation(Resource):
         if not booking:
             return {"error": "Réservation introuvable."}, 404
 
-        # ✅ Autoriser la modification pour PENDING, ACCEPTED et ASSIGNED (pour les entreprises)
+        # ✅ Autoriser la modification pour PENDING, ACCEPTED et ASSIGNED
+        # (pour les entreprises)
         allowed_statuses = [
             BookingStatus.PENDING,
             BookingStatus.ACCEPTED,
@@ -3178,7 +3292,11 @@ class UpdateReservation(Resource):
         ]
         if booking.status not in allowed_statuses:
             return {
-                "error": f"Impossible de modifier une réservation avec le statut '{booking.status.value}'. Seules les réservations en attente, acceptées ou assignées peuvent être modifiées."
+                "error": (
+                    f"Impossible de modifier une réservation avec le statut "
+                    f"'{booking.status.value}'. Seules les réservations "
+                    "en attente, acceptées ou assignées peuvent être modifiées."
+                )
             }, 400
 
         data = request.get_json() or {}
@@ -3312,7 +3430,8 @@ class ScheduleReservation(Resource):
         ]:
             return {"error": f"Statut '{booking.status.value}' non modifiable."}, 400
 
-        # 🔒 SÉCURITÉ : Vérifier que la course aller est complétée avant de planifier un retour
+        # 🔒 SÉCURITÉ : Vérifier que la course aller est complétée
+        # avant de planifier un retour
         if booking.is_return and booking.parent_booking_id:
             outbound = Booking.query.filter_by(id=booking.parent_booking_id).first()
             if outbound:
@@ -3323,7 +3442,11 @@ class ScheduleReservation(Resource):
                 if outbound.status not in completed_statuses:
                     return {
                         "error": "Impossible de planifier un retour.",
-                        "message": f"La course aller (ID: {outbound.id}) doit être complétée avant de planifier le retour. Statut actuel: {outbound.status.value}",
+                        "message": (
+                            f"La course aller (ID: {outbound.id}) doit être "
+                            f"complétée avant de planifier le retour. "
+                            f"Statut actuel: {outbound.status.value}"
+                        ),
                         "outbound_status": outbound.status.value,
                         "outbound_id": outbound.id,
                     }, 400
@@ -3337,7 +3460,8 @@ class ScheduleReservation(Resource):
         booking.scheduled_time = sched_local
         booking.time_confirmed = True  # L'heure est maintenant confirmée
 
-        # Si elle était PENDING et qu'on veut qu'elle entre dans le moteur, on peut la passer en ACCEPTED
+        # Si elle était PENDING et qu'on veut qu'elle entre dans le moteur,
+        # on peut la passer en ACCEPTED
         if booking.status == BookingStatus.PENDING:
             booking.status = BookingStatus.ACCEPTED
 
@@ -3357,7 +3481,8 @@ class ScheduleReservation(Resource):
 
 
 # ======================================================
-# 24. Dispatch urgent d'une réservation (fixe scheduled_time si besoin, status -> ACCEPTED)
+# 24. Dispatch urgent d'une réservation
+# (fixe scheduled_time si besoin, status -> ACCEPTED)
 # ======================================================
 @companies_ns.route("/me/reservations/<int:booking_id>/dispatch-now")
 class DispatchNowReservation(Resource):
@@ -3388,7 +3513,8 @@ class DispatchNowReservation(Resource):
         if not booking:
             return {"error": "Réservation introuvable."}, 404
 
-        # 🔒 SÉCURITÉ : Vérifier que la course aller est complétée avant de déclencher un retour
+        # 🔒 SÉCURITÉ : Vérifier que la course aller est complétée
+        # avant de déclencher un retour
         if booking.is_return and booking.parent_booking_id:
             outbound = Booking.query.filter_by(id=booking.parent_booking_id).first()
             if outbound:
@@ -3399,13 +3525,18 @@ class DispatchNowReservation(Resource):
                 if outbound.status not in completed_statuses:
                     return {
                         "error": "Impossible de déclencher un retour d'urgence.",
-                        "message": f"La course aller (ID: {outbound.id}) doit être complétée avant de déclencher le retour. Statut actuel: {outbound.status.value}",
+                        "message": (
+                            f"La course aller (ID: {outbound.id}) doit être "
+                            f"complétée avant de déclencher le retour. "
+                            f"Statut actuel: {outbound.status.value}"
+                        ),
                         "outbound_status": outbound.status.value,
                         "outbound_id": outbound.id,
                     }, 400
 
         # ✅ Pour dispatch-now, on fixe TOUJOURS l'heure à maintenant + offset
-        # Cela permet de mettre à jour les retours avec heure à confirmer (00:00)
+        # Cela permet de mettre à jour les retours avec heure à confirmer
+        # (00:00)
         booking.scheduled_time = now + timedelta(minutes=minutes_offset)  # UTC aware
 
         # L'heure est maintenant confirmée
@@ -3421,7 +3552,8 @@ class DispatchNowReservation(Resource):
         )  # ✅ Rafraîchir l'objet pour obtenir les valeurs à jour
 
         # ⚡ Assignation automatique immédiate pour retours urgents
-        # (au lieu de déclencher un dispatch complet qui prendrait du temps)
+        # (au lieu de déclencher un dispatch complet
+        # qui prendrait du temps)
         assigned_driver = None
         if bool(getattr(company, "dispatch_enabled", True)):
             try:
@@ -3432,8 +3564,9 @@ class DispatchNowReservation(Resource):
                 from services.unified_dispatch.settings import Settings
 
                 # ⚡ Construire un problème minimal pour cette seule booking urgente
-                # Utiliser for_date=None pour récupérer toutes les bookings actives de la journée
-                # (nécessaire pour calculer les conflits temporels avec les autres bookings)
+                # Utiliser for_date=None pour récupérer toutes les bookings actives
+                # de la journée (nécessaire pour calculer les conflits temporels
+                # avec les autres bookings)
                 from shared.time_utils import now_local
 
                 today_str = now_local().strftime("%Y-%m-%d")
@@ -3441,21 +3574,27 @@ class DispatchNowReservation(Resource):
                 problem = build_problem_data(
                     company_id=cid,
                     settings=Settings(),
-                    for_date=today_str,  # ⚡ Utiliser la date d'aujourd'hui pour le contexte
+                    # ⚡ Utiliser la date d'aujourd'hui pour le contexte
+                    for_date=today_str,
                     regular_first=True,
                     allow_emergency=True,
                     overrides=None,
                 )
 
                 # Filtrer les bookings pour ne garder que celle-ci
-                # (mais garder les autres pour le contexte de calcul des conflits)
+                # (mais garder les autres pour le contexte
+                # de calcul des conflits)
                 urgent_booking = next(
                     (b for b in problem["bookings"] if int(b.id) == booking_id), None
                 )
 
                 if not urgent_booking:
+                    warning_msg = (
+                        "⚠️ [Dispatch-Now] Booking #%s introuvable "
+                        + "dans build_problem_data"
+                    )
                     app_logger.warning(
-                        "⚠️ [Dispatch-Now] Booking #%s introuvable dans build_problem_data",
+                        warning_msg,
                         booking_id,
                     )
                     # Fallback : déclencher le dispatch classique
@@ -3479,7 +3618,8 @@ class DispatchNowReservation(Resource):
                             company_id=cid,
                             assignments=result.assignments,
                             allow_reassign=True,
-                            respect_existing=False,  # ⚡ Permettre réassignation pour urgent
+                            # ⚡ Permettre réassignation pour urgent
+                            respect_existing=False,
                         )
 
                         if apply_result.get("applied"):
@@ -3492,28 +3632,46 @@ class DispatchNowReservation(Resource):
                                 driver_id = applied.get("driver_id")
                                 if driver_id:
                                     assigned_driver = Driver.query.get(driver_id)
+                                    log_msg = (
+                                        "✅ [Dispatch-Now] Chauffeur #%s assigné "
+                                        + "automatiquement à la réservation #%s"
+                                    )
                                     app_logger.info(
-                                        "✅ [Dispatch-Now] Chauffeur #%s assigné automatiquement à la réservation #%s",
+                                        log_msg,
                                         driver_id,
                                         booking_id,
                                     )
                                 else:
-                                    app_logger.warning(
-                                        "⚠️ [Dispatch-Now] Assignation appliquée mais driver_id manquant"
+                                    warning_msg = (
+                                        "⚠️ [Dispatch-Now] Assignation appliquée "
+                                        + "mais driver_id manquant"
                                     )
+                                    app_logger.warning(warning_msg)
                         else:
+                            warning_msg = (
+                                "⚠️ [Dispatch-Now] Aucune assignation appliquée "
+                                + "(conflicts: %s)"
+                            )
                             app_logger.warning(
-                                "⚠️ [Dispatch-Now] Aucune assignation appliquée (conflicts: %s)",
+                                warning_msg,
                                 apply_result.get("conflicts", []),
                             )
                     else:
+                        warning_msg = (
+                            "⚠️ [Dispatch-Now] Aucun chauffeur disponible "
+                            + "pour la réservation #%s"
+                        )
                         app_logger.warning(
-                            "⚠️ [Dispatch-Now] Aucun chauffeur disponible pour la réservation #%s",
+                            warning_msg,
                             booking_id,
                         )
                 else:
+                    warning_msg = (
+                        "⚠️ [Dispatch-Now] Problème incomplet "
+                        + "(bookings: %d, drivers: %d)"
+                    )
                     app_logger.warning(
-                        "⚠️ [Dispatch-Now] Problème incomplet (bookings: %d, drivers: %d)",
+                        warning_msg,
                         len(problem.get("bookings", [])),
                         len(problem.get("drivers", [])),
                     )
@@ -3544,7 +3702,9 @@ class DispatchNowReservation(Resource):
                 "full_name": getattr(assigned_driver, "full_name", None),
             }
             response_data["message"] = (
-                f"Dispatch urgent déclenché. Chauffeur {assigned_driver.username or assigned_driver.full_name} assigné automatiquement."
+                f"Dispatch urgent déclenché. "
+                f"Chauffeur {assigned_driver.username or assigned_driver.full_name} "
+                f"assigné automatiquement."
             )
 
         return response_data, 200
@@ -3700,7 +3860,8 @@ class MyVehicle(Resource):
                 v.is_active = validated_data["is_active"]
             if "notes" in validated_data:
                 v.notes = validated_data["notes"]
-            # Les champs dates ne sont pas dans le schéma de validation mais on les garde pour compatibilité
+            # Les champs dates ne sont pas dans le schéma de validation
+            # mais on les garde pour compatibilité
             if "insurance_expires_at" in data:
                 v.insurance_expires_at = parse_dt(data["insurance_expires_at"])
             if "inspection_expires_at" in data:
@@ -3772,7 +3933,9 @@ class CompanyLogo(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self):
-        """Upload d'un logo (PNG/JPG/JPEG/SVG <= SVG_THRESHOLD Mo). Écrase l'ancien si présent."""
+        """Upload d'un logo (PNG/JPG/JPEG/SVG <= SVG_THRESHOLD Mo).
+        Écrase l'ancien si présent.
+        """
         company, err, code = get_company_from_token()
         if err:
             return err, code
@@ -3812,7 +3975,8 @@ class CompanyLogo(Resource):
         logos_dir = Path(upload_root) / "company_logos"
         logos_dir.mkdir(parents=True, exist_ok=True)
 
-        # On supprime les anciens logos pour éviter des reliquats quand l'extension change
+        # On supprime les anciens logos pour éviter des reliquats
+        # quand l'extension change
         _remove_existing_logos(cid, logos_dir)
 
         # Nom stable: company_<id>.<ext>

@@ -12,7 +12,8 @@ from schemas.validation_utils import (
 
 
 class ManualBookingCreateSchema(Schema):
-    """Schema pour création manuelle de réservation (POST /api/companies/me/reservations/manual)."""
+    """Schema pour création manuelle de réservation
+    (POST /api/companies/me/reservations/manual)."""
 
     # Champs requis
     client_id = fields.Int(required=True, validate=validate.Range(min=1))
@@ -163,7 +164,9 @@ class CompanyUpdateSchema(Schema):
     iban = fields.Str(
         validate=validate.Regexp(
             r"^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$",
-            error="IBAN invalide (format: 2 lettres pays + 2 chiffres + 1-30 caractères)",
+            error=(
+                "IBAN invalide (format: 2 lettres pays + 2 chiffres + 1-30 caractères)"
+            ),
         )
     )
     # UID IDE Suisse: CHE-123.456.789
@@ -207,7 +210,8 @@ class DriverCreateSchema(Schema):
 
 
 class DriverVacationCreateSchema(Schema):
-    """Schema pour création de congés/vacances (POST /api/companies/me/drivers/<id>/vacations)."""
+    """Schema pour création de congés/vacances
+    (POST /api/companies/me/drivers/<id>/vacations)."""
 
     start_date = fields.Str(
         required=True,

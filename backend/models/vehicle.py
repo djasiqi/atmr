@@ -140,4 +140,7 @@ class Vehicle(db.Model):
 
     @override
     def __repr__(self):
-        return f"<Vehicle id={self.id} plate={self.license_plate} model={self.model} company_id={self.company_id}>"
+        return (
+            f"<Vehicle id={self.id} plate={self.license_plate} "
+            f"model={self.model} company_id={self.company_id}>"
+        )

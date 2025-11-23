@@ -53,7 +53,10 @@ def record_rotation(
         raise ValueError(msg)
 
     if status not in {STATUS_SUCCESS, STATUS_ERROR, STATUS_SKIPPED}:
-        msg = f"Invalid status: {status}. Must be one of {STATUS_SUCCESS, STATUS_ERROR, STATUS_SKIPPED}"
+        valid_statuses = {STATUS_SUCCESS, STATUS_ERROR, STATUS_SKIPPED}
+        msg = (
+            f"Invalid status: {status}. Must be one of {valid_statuses}"
+        )
         raise ValueError(msg)
 
     try:
@@ -73,7 +76,10 @@ def record_rotation(
         db.session.commit()
 
         logger.info(
-            "[SecretRotationMonitor] ✅ Rotation enregistrée: type=%s, status=%s, env=%s",
+            (
+                "[SecretRotationMonitor] ✅ Rotation enregistrée: "
+                "type=%s, status=%s, env=%s"
+            ),
             secret_type,
             status,
             environment,
@@ -258,7 +264,10 @@ def get_days_since_last_rotation(
 
     except Exception as e:
         logger.exception(
-            "[SecretRotationMonitor] ❌ Erreur calcul jours depuis dernière rotation: %s",
+            (
+                "[SecretRotationMonitor] ❌ Erreur calcul jours depuis "
+                "dernière rotation: %s"
+            ),
             e,
         )
         return None

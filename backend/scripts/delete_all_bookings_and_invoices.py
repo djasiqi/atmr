@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Script pour supprimer toutes les réservations (bookings) et factures de la base de données."""
+"""Script pour supprimer toutes les réservations (bookings)
+et factures de la base de données."""
 
 import sys
 from pathlib import Path

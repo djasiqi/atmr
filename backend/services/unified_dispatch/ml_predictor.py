@@ -18,7 +18,8 @@ try:
 except ImportError:
     # Fallback vers pickle si joblib n'est pas disponible (cas rare en production)
     # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-    # Utilisé uniquement comme fallback si joblib n'est pas installé (scikit-learn le fournit généralement)
+    # Utilisé uniquement comme fallback si joblib n'est pas installé
+    # (scikit-learn le fournit généralement)
     import pickle as joblib
 
     logger.warning("[MLPredictor] joblib non disponible, utilisation de pickle")
@@ -59,7 +60,10 @@ except ImportError:
 
     SKLEARN_AVAILABLE = False
     logger.warning(
-        "[MLPredictor] scikit-learn not available. Install with: pip install scikit-learn"
+        (
+            "[MLPredictor] scikit-learn not available. "
+            "Install with: pip install scikit-learn"
+        )
     )
 
 
@@ -178,7 +182,8 @@ class DelayMLPredictor(object):
             return 5  # Distance par défaut
 
     def _calculate_driver_punctuality(self, driver: Any) -> float:
-        """Calcule un score de ponctualité du chauffeur (0-1) basé sur l'historique réel.
+        """Calcule un score de ponctualité du chauffeur (0-1)
+        basé sur l'historique réel.
         Méthode :
         - Récupère les 50 dernières courses du chauffeur
         - Calcule le % de courses terminées à temps (delay <= DELAY_THRESHOLD min)
@@ -217,7 +222,10 @@ class DelayMLPredictor(object):
             # Minimum SI_THRESHOLD courses pour avoir des statistiques significatives
             if len(recent_bookings) < SI_THRESHOLD:
                 logger.debug(
-                    "[MLPredictor] Driver #%s : seulement %s courses, score par défaut 0.75",
+                    (
+                        "[MLPredictor] Driver #%s : seulement %s courses, "
+                        "score par défaut 0.75"
+                    ),
                     driver_id,
                     len(recent_bookings),
                 )
@@ -228,7 +236,8 @@ class DelayMLPredictor(object):
             total_count = 0
 
             for booking in recent_bookings:
-                # Comparer scheduled_time vs actual_pickup_time (ou completed_at si pas de pickup_time)
+                # Comparer scheduled_time vs actual_pickup_time
+                # (ou completed_at si pas de pickup_time)
                 scheduled = getattr(booking, "scheduled_time", None)
                 actual_pickup = getattr(booking, "actual_pickup_time", None)
 
@@ -299,7 +308,10 @@ class DelayMLPredictor(object):
 
         """
         if not SKLEARN_AVAILABLE:
-            msg = "scikit-learn is required for training. Install with: pip install scikit-learn"
+            msg = (
+                "scikit-learn is required for training. "
+                "Install with: pip install scikit-learn"
+            )
             raise ImportError(msg)
 
         if not historical_data:
@@ -514,8 +526,10 @@ class DelayMLPredictor(object):
         }
 
         with Path(self.model_path).open("wb") as f:
-            # Utilisation de joblib (recommandé pour scikit-learn) au lieu de pickle direct
-            # joblib utilise pickle en interne mais avec des optimisations pour numpy/scipy
+            # Utilisation de joblib (recommandé pour scikit-learn)
+            # au lieu de pickle direct
+            # joblib utilise pickle en interne mais avec des optimisations
+            # pour numpy/scipy
             # nosec B301: Modèles internes uniquement, provenant de sources de confiance
             joblib.dump(
                 model_data, f
@@ -531,9 +545,12 @@ class DelayMLPredictor(object):
 
         try:
             with Path(self.model_path).open("rb") as f:
-                # Utilisation de joblib (recommandé pour scikit-learn) au lieu de pickle direct
-                # joblib utilise pickle en interne mais avec des optimisations pour numpy/scipy
-                # nosec B301: Modèles internes uniquement, provenant de sources de confiance
+                # Utilisation de joblib (recommandé pour scikit-learn)
+                # au lieu de pickle direct
+                # joblib utilise pickle en interne mais avec des optimisations
+                # pour numpy/scipy
+                # nosec B301: Modèles internes uniquement,
+                # provenant de sources de confiance
                 model_data = joblib.load(
                     f
                 )  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
@@ -551,7 +568,10 @@ class DelayMLPredictor(object):
                     self.scaler_params = json.load(f).get("standard_scaler", None)
 
             logger.info(
-                "[MLPredictor] Model loaded from %s (trained at: %s, features: %d, MAE test: %s)",
+                (
+                    "[MLPredictor] Model loaded from %s "
+                    "(trained at: %s, features: %d, MAE test: %s)"
+                ),
                 self.model_path,
                 model_data.get("trained_at", "unknown"),
                 len(self.feature_names),
@@ -623,7 +643,11 @@ def predict_with_feature_flag(
 
                 # Logging exhaustif
                 logger.info(
-                    "[ML] Prediction for booking %s (driver %s): delay=%.2f, confidence=%.3f, risk=%s, time=%.1fms, request_id=%s",
+                    (
+                        "[ML] Prediction for booking %s (driver %s): "
+                        "delay=%.2f, confidence=%.3f, risk=%s, time=%.1fms, "
+                        "request_id=%s"
+                    ),
                     booking_id,
                     driver_id,
                     prediction.predicted_delay_minutes,
@@ -638,7 +662,10 @@ def predict_with_feature_flag(
         else:
             # Utiliser fallback
             logger.info(
-                "[ML] Using fallback for booking %s (ML disabled or outside traffic percentage)",
+                (
+                    "[ML] Using fallback for booking %s "
+                    "(ML disabled or outside traffic percentage)"
+                ),
                 booking_id,
             )
 
