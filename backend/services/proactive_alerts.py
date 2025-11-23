@@ -965,8 +965,7 @@ class ProactiveAlertsService:
                     return {
                         "should_send": True,
                         "reason": (
-                            f"Escalade de risque: {last_risk_level} → "
-                            f"{risk_level}"
+                            f"Escalade de risque: {last_risk_level} → {risk_level}"
                         ),
                     }
 

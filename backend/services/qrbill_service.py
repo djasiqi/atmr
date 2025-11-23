@@ -73,8 +73,7 @@ class QRBillService:
                 # (avec même logique que le PDF)
                 debtor_name = (
                     (
-                        f"{client.user.first_name or ''} "
-                        f"{client.user.last_name or ''}"
+                        f"{client.user.first_name or ''} {client.user.last_name or ''}"
                     ).strip()
                     or client.user.username
                     or "Client"
@@ -210,8 +209,7 @@ class QRBillService:
                 # (avec même logique que le PDF)
                 debtor_name = (
                     (
-                        f"{client.user.first_name or ''} "
-                        f"{client.user.last_name or ''}"
+                        f"{client.user.first_name or ''} {client.user.last_name or ''}"
                     ).strip()
                     or client.user.username
                     or "Client"

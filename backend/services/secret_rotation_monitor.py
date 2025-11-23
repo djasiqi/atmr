@@ -54,9 +54,7 @@ def record_rotation(
 
     if status not in {STATUS_SUCCESS, STATUS_ERROR, STATUS_SKIPPED}:
         valid_statuses = {STATUS_SUCCESS, STATUS_ERROR, STATUS_SKIPPED}
-        msg = (
-            f"Invalid status: {status}. Must be one of {valid_statuses}"
-        )
+        msg = f"Invalid status: {status}. Must be one of {valid_statuses}"
         raise ValueError(msg)
 
     try:

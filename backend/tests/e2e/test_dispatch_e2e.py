@@ -278,10 +278,8 @@ class TestDispatchE2E:
                 "validation_failed",
                 "conflict",
             ], (
-                (
-                    f"Le dispatch devrait avoir échoué, "
-                    f"mais reason={result['meta'].get('reason')}"
-                )
+                f"Le dispatch devrait avoir échoué, "
+                f"mais reason={result['meta'].get('reason')}"
             )
 
     def test_rollback_transactionnel_complet(self, company, drivers, bookings):
@@ -298,14 +296,10 @@ class TestDispatchE2E:
         # ✅ FIX: Vérifier que les bookings existent en DB
         for booking in bookings:
             booking_from_db = db.session.query(Booking).filter_by(id=booking.id).first()
-            assert booking_from_db is not None, (
-                f"Booking {booking.id} must exist in DB"
-            )
+            assert booking_from_db is not None, f"Booking {booking.id} must exist in DB"
             assert booking_from_db.company_id == company.id, (
-                (
-                    f"Booking {booking.id} must belong to company "
-                    f"{company.id}, got {booking_from_db.company_id}"
-                )
+                f"Booking {booking.id} must belong to company "
+                f"{company.id}, got {booking_from_db.company_id}"
             )
 
         # ✅ FIX: S'assurer que company.id est bien utilisé
@@ -348,8 +342,7 @@ class TestDispatchE2E:
 
         # Vérifier que les assignations sont appliquées
         assert len(result["applied"]) == 2, (
-            f"Expected 2 applied assignments, got {len(result['applied'])}. "
-            (
+            f"Expected 2 applied assignments, got {len(result['applied'])}. "(
                 f"Skipped: {result.get('skipped', {})}, "
                 f"Conflicts: {result.get('conflicts', [])}"
             )
@@ -452,10 +445,8 @@ class TestDispatchE2E:
 
         # Vérifier qu'au moins un dispatch_run_id est présent
         assert len(dispatch_run_ids) > 0, (
-            (
-                f"At least one dispatch_run_id should be returned. "
-                f"Results: {[r.get('meta', {}) for r in results]}"
-            )
+            f"At least one dispatch_run_id should be returned. "
+            f"Results: {[r.get('meta', {}) for r in results]}"
         )
 
         # Vérifier que les DispatchRuns existent en DB
@@ -645,10 +636,8 @@ class TestDispatchE2E:
         # 4. Vérifier que le résultat contient des informations cohérentes
         assert "meta" in result, "Résultat doit contenir meta"
         assert result.get("meta", {}).get("reason") != "company_not_found", (
-            (
-                "Company doit être trouvée par engine.run() "
-                "(pas de reason='company_not_found')"
-            )
+            "Company doit être trouvée par engine.run() "
+            "(pas de reason='company_not_found')"
         )
 
         print("✅ Test isolation fixtures et rollback défensif OK")

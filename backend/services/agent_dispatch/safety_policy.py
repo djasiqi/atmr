@@ -94,22 +94,18 @@ class SafetyPolicy:
         current_hour_count = AutonomousAction.count_actions_last_hour(self.company_id)
         if current_hour_count >= max_per_hour:
             return False, (
-                (
-                    f"Limite horaire globale atteinte: "
-                    f"{current_hour_count}/{max_per_hour} actions/h. "
-                    "Validation manuelle requise."
-                )
+                f"Limite horaire globale atteinte: "
+                f"{current_hour_count}/{max_per_hour} actions/h. "
+                "Validation manuelle requise."
             )
 
         # Vérifier limite globale journalière
         current_day_count = AutonomousAction.count_actions_today(self.company_id)
         if current_day_count >= max_per_day:
             return False, (
-                (
-                    f"Limite journalière globale atteinte: "
-                    f"{current_day_count}/{max_per_day} actions/jour. "
-                    "Système basculé en mode manuel jusqu'à demain."
-                )
+                f"Limite journalière globale atteinte: "
+                f"{current_day_count}/{max_per_day} actions/jour. "
+                "Système basculé en mode manuel jusqu'à demain."
             )
 
         # Vérifier limites spécifiques par type
@@ -124,10 +120,8 @@ class SafetyPolicy:
                 )
                 if type_count_hour >= type_limit_hour:
                     return False, (
-                        (
-                            f"Limite horaire pour '{action_type}' atteinte: "
-                            f"{type_count_hour}/{type_limit_hour} actions/h."
-                        )
+                        f"Limite horaire pour '{action_type}' atteinte: "
+                        f"{type_count_hour}/{type_limit_hour} actions/h."
                     )
 
             if type_limit_day:
@@ -217,11 +211,9 @@ class SafetyPolicy:
                 max_reassignments_per_30min = 3
                 if recent_reassignments >= max_reassignments_per_30min:
                     return False, (
-                        (
-                            f"Trop de réassignations pour ce booking "
-                            f"({recent_reassignments} en 30 min) - "
-                            f"Limite: {max_reassignments_per_30min}"
-                        )
+                        f"Trop de réassignations pour ce booking "
+                        f"({recent_reassignments} en 30 min) - "
+                        f"Limite: {max_reassignments_per_30min}"
                     )
 
                 return True, "OK"

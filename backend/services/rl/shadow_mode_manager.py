@@ -43,9 +43,7 @@ class ShadowModeManager:
         - Export CSV/JSON automatisé
     """
 
-    def __init__(
-        self, data_dir: str = "data/rl/shadow_mode"
-    ):
+    def __init__(self, data_dir: str = "data/rl/shadow_mode"):
         """Initialise le ShadowModeManager.
 
         Args:

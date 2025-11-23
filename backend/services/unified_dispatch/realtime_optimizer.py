@@ -503,13 +503,11 @@ class RealtimeOptimizer:
                             action="redistribute",
                             priority="critical",
                             message=(
-                                (
-                                    f"🚨 URGENT : {driver_name} a "
-                                    f"{len(delayed_trips)} courses en retard "
-                                    f"(retard total: {total_delay} min). "
-                                    f"Recommandation : Répartir sur "
-                                    f"{len(delayed_trips)} chauffeurs différents."
-                                )
+                                f"🚨 URGENT : {driver_name} a "
+                                f"{len(delayed_trips)} courses en retard "
+                                f"(retard total: {total_delay} min). "
+                                f"Recommandation : Répartir sur "
+                                f"{len(delayed_trips)} chauffeurs différents."
                             ),
                             driver_id=driver_id,
                             additional_data={

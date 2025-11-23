@@ -93,9 +93,7 @@ class DelayAnalysis:
 class DelayPredictor:
     """Prédit les retards potentiels pour les assignations."""
 
-    def __init__(
-        self, settings: Settings | None = None
-    ):
+    def __init__(self, settings: Settings | None = None):
         """Initialise le prédicteur de retards."""
         super().__init__()  # Explicitly call parent constructor
         self.settings = settings or Settings()

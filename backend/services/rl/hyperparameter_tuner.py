@@ -274,13 +274,11 @@ class HyperparameterTuner:
 
         print("\n✅ Optimisation terminée !")
         completed_trials = [
-            t for t in study.trials
-            if t.state == optuna.trial.TrialState.COMPLETE
+            t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE
         ]
         print(f"   Trials complétés: {len(completed_trials)}")
         pruned_trials = [
-            t for t in study.trials
-            if t.state == optuna.trial.TrialState.PRUNED
+            t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED
         ]
         print(f"   Trials pruned: {len(pruned_trials)}")
         print("   Best trial: #{study.best_trial.number}")
@@ -444,9 +442,7 @@ class HyperparameterTuner:
         improvement_pct = comparison_data["comparison_summary"][
             "improvement_percentage"
         ]
-        print(
-            f"   Amélioration: {improvement_abs:+.1f} ({improvement_pct:+.1f}%)"
-        )
+        print(f"   Amélioration: {improvement_abs:+.1f} ({improvement_pct:+.1f}%)")
 
         if study.best_value >= BEST_VALUE_THRESHOLD + 0.3:
             print("   ✅ OBJECTIF ATTEINT!")
