@@ -75,9 +75,7 @@ class RLSuggestionGenerator:
     et proposer des réassignations optimales.
     """
 
-    def __init__(
-        self, model_path: str | None = None
-    ):
+    def __init__(self, model_path: str | None = None):
         """Initialise le générateur de suggestions.
 
         Args:

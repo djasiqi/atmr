@@ -957,9 +957,7 @@ class DispatchEnv(gym.Env):
             print("\n{'='*60}")
             print(f"⏰ Time: {hour:02d}:{minute:02d}")
             available_count = len([d for d in self.drivers if d["available"]])
-            print(
-                f"🚗 Drivers: {available_count} / {len(self.drivers)} available"
-            )
+            print(f"🚗 Drivers: {available_count} / {len(self.drivers)} available")
             pending_count = len([b for b in self.bookings if not b["assigned"]])
             print(f"📋 Bookings: {pending_count} pending")
             traffic_density = self._get_traffic_density()

@@ -147,9 +147,7 @@ class ImprovedDQNAgent:
         print("✅ Agent DQN amélioré créé:")
         print("   State dim: {state_dim}")
         print("   Action dim: {action_dim}")
-        total_params = sum(
-            p.numel() for p in self.q_network.parameters()
-        )
+        total_params = sum(p.numel() for p in self.q_network.parameters())
         print(f"   Paramètres Q-Network: {total_params:,}")
         print("   Double DQN: {use_double_dqn}")
         print("   Prioritized Replay: {use_prioritized_replay}")

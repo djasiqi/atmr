@@ -178,8 +178,7 @@ class ReportGenerator:
                     "priority": "low",
                     "title": "Maintenir la performance",
                     "description": (
-                        "Continuez sur cette lancée ! "
-                        "Aucune action urgente requise."
+                        "Continuez sur cette lancée ! Aucune action urgente requise."
                     ),
                 }
             )
