@@ -739,10 +739,7 @@ def init_chat_socket(socketio: SocketIO):
                             driver.id,
                         )
                 except (ValueError, TypeError):
-                    logger.warning(
-                        "⚠️ driver_id non convertible: %s", 
-                        payload_driver_id
-                        )
+                    logger.warning("⚠️ driver_id non convertible: %s", payload_driver_id)
 
             if not driver and user_role == "driver":
                 driver = Driver.query.filter_by(user_id=user.id).first()
