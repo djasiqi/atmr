@@ -44,6 +44,9 @@ from services.unified_dispatch.transaction_helpers import _begin_tx
 from services.unified_dispatch.types import DispatchResult
 from shared.otel_setup import get_tracer  # ✅ D1: OpenTelemetry
 
+# pyright: reportUnusedImport=false, reportUnusedVariable=false, reportUnusedFunction=false
+# Nombreuses variables conditionnelles utilisées dans des blocs try/except
+
 # Constantes pour éviter les valeurs magiques
 DISTANCE_ZERO = 0
 DISTANCE_THRESHOLD_KM = 0.1  # ~1km en degrés
@@ -53,9 +56,6 @@ CLUSTERING_BOOKINGS_THRESHOLD = 100  # Seuil pour activer le clustering géograp
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-
-# pyright: reportUnusedImport=false, reportUnusedVariable=false, reportUnusedFunction=false
-# Nombreuses variables conditionnelles utilisées dans des blocs try/except
 
 logger = logging.getLogger(__name__)
 

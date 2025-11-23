@@ -63,8 +63,8 @@ from sqlalchemy.dialects import postgresql
 
 postgresql.JSONB = JSON
 
-import pytest
-from flask import Flask
+import pytest  # noqa: E402
+from flask import Flask  # noqa: E402
 
 # Forcer environnement de test avant d'importer l'app
 os.environ["FLASK_ENV"] = "testing"
@@ -77,9 +77,9 @@ os.environ["API_DOCS"] = "off"
 # Désactiver l'API legacy pendant les tests pour éviter conflits RestX
 os.environ["API_LEGACY_ENABLED"] = "false"
 
-from app import create_app
-from ext import db as _db
-from models import Company, User, UserRole
+from app import create_app  # noqa: E402
+from ext import db as _db  # noqa: E402
+from models import Company, User, UserRole  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -1056,8 +1056,8 @@ def pii_config():
 
 # ✅ FIX 6.2: Helpers pour gérer les transactions dans les tests
 # Réduit les couplages dangereux entre fixtures et engine.run()
-from contextlib import contextmanager
-from typing import Any, Iterator, Type, TypeVar
+from contextlib import contextmanager  # noqa: E402
+from typing import Any, Iterator, Type, TypeVar  # noqa: E402
 
 T = TypeVar("T")
 
