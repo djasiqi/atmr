@@ -35,7 +35,8 @@ def should_alert_for_ip(client_ip: str) -> bool:
     """
     if not redis_client:
         # Si Redis n'est pas disponible, utiliser un cache en mémoire simple
-        # Note: Ce cache sera perdu au redémarrage, mais c'est acceptable pour le rate limiting
+        # Note: Ce cache sera perdu au redémarrage,
+        # mais c'est acceptable pour le rate limiting
         if not hasattr(should_alert_for_ip, "_memory_cache"):
             should_alert_for_ip._memory_cache = {}  # type: ignore[attr-defined]
 
@@ -131,7 +132,10 @@ def send_ip_whitelist_alert(
         )
 
         logger.info(
-            "[IP Whitelist Alerts] ✅ Événement enregistré dans audit log: IP=%s, endpoint=%s, method=%s",
+            (
+                "[IP Whitelist Alerts] ✅ Événement enregistré dans audit log: "
+                "IP=%s, endpoint=%s, method=%s"
+            ),
             client_ip,
             endpoint,
             method,
@@ -167,7 +171,7 @@ def send_ip_whitelist_alert(
             # Envoyer l'alerte Sentry
             sentry_sdk.capture_message(
                 alert_message,
-                level="warning",  # "warning" car c'est suspect mais pas forcément critique
+                level="warning",  # "warning" car suspect mais pas forcément critique
                 tags=tags,
                 contexts={"request": context},
             )

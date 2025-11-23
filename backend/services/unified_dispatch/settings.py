@@ -130,7 +130,8 @@ class EmergencyPolicy:
     allow_emergency_drivers: bool = True  # autoriser les chauffeurs d'urgence
     emergency_threshold_min: int = 30  # seuil d'urgence (minutes)
     emergency_priority: float = 0.8  # priorité des urgences
-    emergency_penalty: float = 900.0  # pénalité d'utilisation (0-1000), plus élevé = utilisé en dernier recours seulement
+    emergency_penalty: float = 900.0  # pénalité d'utilisation (0-1000),
+    # plus élevé = utilisé en dernier recours seulement
 
 
 @dataclass
@@ -359,7 +360,8 @@ def _validate_merge_result(
         for key in keys:
             path = f"{section}.{key}"
             if path in applied_paths:
-                # Vérifier que la valeur finale dans new_settings correspond à la valeur demandée
+                # Vérifier que la valeur finale dans new_settings correspond
+                # à la valeur demandée
                 if (
                     section in overrides
                     and isinstance(overrides[section], dict)
@@ -372,7 +374,10 @@ def _validate_merge_result(
                         final_value = getattr(section_obj, key, None)
                         if final_value is not None and final_value != requested_value:
                             # Valeur différente de celle demandée → erreur
-                            error_msg = f"Paramètre {path} appliqué avec valeur différente: {requested_value} → {final_value}"
+                            error_msg = (
+                                f"Paramètre {path} appliqué avec valeur "
+                                f"différente: {requested_value} → {final_value}"
+                            )
                             validation_result["errors"].append(error_msg)
                             validation_result["critical_errors"].append(path)
                             logger.warning("[Settings] %s", error_msg)
@@ -470,17 +475,22 @@ def merge_overrides(
             current_path = f"{path}.{key}" if path else key
 
             # ✅ Mapping des noms de paramètres frontend → backend
-            # Le frontend envoie "emergency_per_stop_penalty" mais le backend attend "emergency_penalty"
+            # Le frontend envoie "emergency_per_stop_penalty" mais le backend
+            # attend "emergency_penalty"
             final_key = key
             if path == "emergency" and key == "emergency_per_stop_penalty":
                 final_key = "emergency_penalty"
                 current_path = f"{path}.{final_key}" if path else final_key
                 logger.debug(
-                    "[Settings] Mapping frontend→backend: emergency_per_stop_penalty → emergency_penalty"
+                    (
+                        "[Settings] Mapping frontend→backend: "
+                        "emergency_per_stop_penalty → emergency_penalty"
+                    ),
                 )
 
             if not hasattr(obj, final_key):
-                # clé inconnue → on ignore (c'est normal pour preferred_driver_id, mode, etc.)
+                # clé inconnue → on ignore
+                # (c'est normal pour preferred_driver_id, mode, etc.)
                 logger.debug(
                     "[Settings] Clé inconnue ignorée dans overrides: %s", current_path
                 )
@@ -515,7 +525,10 @@ def merge_overrides(
 
     if modified_keys:
         logger.info(
-            "[Settings] %d override(s) appliqué(s): %s (applied=%d, ignored=%d, errors=%d)",
+            (
+                "[Settings] %d override(s) appliqué(s): %s "
+                "(applied=%d, ignored=%d, errors=%d)"
+            ),
             len(modified_keys),
             [k for k, _, _ in modified_keys],
             len(validation_result["applied"]),
@@ -564,7 +577,8 @@ def for_company(company) -> Settings:
     # Configuration de base
     s = Settings()
 
-    # ✅ PRIORITÉ 1: Surcharges depuis autonomous_config.dispatch_overrides (nouveau système)
+    # ✅ PRIORITÉ 1: Surcharges depuis autonomous_config.dispatch_overrides
+    # (nouveau système)
     if hasattr(company, "get_autonomous_config"):
         try:
             autonomous_config = company.get_autonomous_config()
@@ -577,7 +591,8 @@ def for_company(company) -> Settings:
             logger = logging.getLogger(__name__)
             logger.debug("[Settings] Erreur lecture autonomous_config: %s", e)
 
-    # ✅ PRIORITÉ 2: Surcharges depuis dispatch_settings (ancien système, pour compatibilité)
+    # ✅ PRIORITÉ 2: Surcharges depuis dispatch_settings
+    # (ancien système, pour compatibilité)
     if hasattr(company, "dispatch_settings") and company.dispatch_settings:
         try:
             overrides = json.loads(company.dispatch_settings)

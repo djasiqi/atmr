@@ -56,9 +56,9 @@ class DBProfiler:
         """Configure les event listeners SQLAlchemy pour profiler les requêtes."""
 
         @sqlalchemy_event.listens_for(Engine, "before_cursor_execute")
-        def receive_before_cursor_execute(
+        def receive_before_cursor_execute(  # pyright: ignore[reportUnusedFunction]
             _conn, _cursor, statement, _parameters, context, _executemany
-        ):  # pyright: ignore[reportUnusedFunction]
+        ):
             """Capture le début d'exécution d'une requête."""
             if not self.enabled:
                 return
@@ -72,9 +72,9 @@ class DBProfiler:
             context._query_start_time = time.time()
 
         @sqlalchemy_event.listens_for(Engine, "after_cursor_execute")
-        def receive_after_cursor_execute(
+        def receive_after_cursor_execute(  # pyright: ignore[reportUnusedFunction]
             _conn, _cursor, statement, _parameters, context, _executemany
-        ):  # pyright: ignore[reportUnusedFunction]
+        ):
             """Capture la fin d'exécution d'une requête."""
             if not self.enabled:
                 return
@@ -214,7 +214,10 @@ class DBProfiler:
         # Avertissement si trop de requêtes
         if stats["query_count"] > N_PLUS_1_REPORT_THRESHOLD:
             lines.append(
-                f"⚠️ ATTENTION: {stats['query_count']} requêtes détectées (suspect N+1?)"
+                (
+                    f"⚠️ ATTENTION: {stats['query_count']} requêtes détectées "
+                    "(suspect N+1?)"
+                )
             )
 
         # Avertissement si requêtes lentes

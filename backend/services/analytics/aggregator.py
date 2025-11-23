@@ -124,7 +124,10 @@ class MetricsAggregator:
             db.session.commit()
 
             logger.info(
-                "[Aggregator] Daily stats aggregated for %s: Quality=%.2f, Avg delay=%.2f",
+                (
+                    "[Aggregator] Daily stats aggregated for %s: Quality=%.2f, "
+                    "Avg delay=%.2f"
+                ),
                 day,
                 avg_quality,
                 avg_delay,

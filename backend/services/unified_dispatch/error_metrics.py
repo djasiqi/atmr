@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 
 # ==================== Prometheus Metrics ====================
 
-# Métriques Prometheus pour erreurs de dispatch (créées uniquement si prometheus_client disponible)
+# Métriques Prometheus pour erreurs de dispatch (créées uniquement si
+# prometheus_client disponible)
 if PROMETHEUS_AVAILABLE and Counter is not None:
     DISPATCH_ERRORS_TOTAL = Counter(
         "dispatch_errors_total",
@@ -59,7 +60,8 @@ if PROMETHEUS_AVAILABLE and Counter is not None:
         ],  # error_code: "23503" (FK), "23505" (unique), etc.
     )
 
-    # ✅ FIX: Initialiser les métriques avec 0.0 pour qu'elles apparaissent même si jamais incrémentées
+    # ✅ FIX: Initialiser les métriques avec 0.0 pour qu'elles apparaissent
+    # même si jamais incrémentées
     try:
         DISPATCH_ERRORS_TOTAL.labels(
             error_type="company_not_found", company_id="0"
@@ -71,7 +73,8 @@ if PROMETHEUS_AVAILABLE and Counter is not None:
         ).inc(0)
         DISPATCH_INTEGRITY_ERROR_TOTAL.labels(error_code="23503", company_id="0").inc(0)
     except Exception as e:
-        # Ignorer les erreurs d'initialisation (peut échouer si Prometheus non configuré)
+        # Ignorer les erreurs d'initialisation (peut échouer si Prometheus
+        # non configuré)
         logger.debug(
             "[Dispatch Error Metrics] Failed to initialize metrics with 0.0: %s", e
         )
@@ -100,7 +103,10 @@ def track_company_not_found(
         ).inc()
 
     logger.debug(
-        "[Dispatch Error Metrics] CompanyNotFoundError tracked: company_id=%s, dispatch_run_id=%s",
+        (
+            "[Dispatch Error Metrics] CompanyNotFoundError tracked: "
+            "company_id=%s, dispatch_run_id=%s"
+        ),
         company_id,
         dispatch_run_id,
     )
@@ -131,7 +137,10 @@ def track_fk_violation(
         ).inc()
 
     logger.debug(
-        "[Dispatch Error Metrics] FK violation tracked: fk_constraint=%s, company_id=%s, dispatch_run_id=%s",
+        (
+            "[Dispatch Error Metrics] FK violation tracked: "
+            "fk_constraint=%s, company_id=%s, dispatch_run_id=%s"
+        ),
         fk_constraint,
         company_id,
         dispatch_run_id,
@@ -173,7 +182,10 @@ def track_integrity_error(
         ).inc()
 
     logger.debug(
-        "[Dispatch Error Metrics] IntegrityError tracked: error_code=%s, company_id=%s, dispatch_run_id=%s",
+        (
+            "[Dispatch Error Metrics] IntegrityError tracked: "
+            "error_code=%s, company_id=%s, dispatch_run_id=%s"
+        ),
         error_code,
         company_id,
         dispatch_run_id,
@@ -200,7 +212,10 @@ def track_dispatch_error(
         ).inc()
 
     logger.debug(
-        "[Dispatch Error Metrics] Dispatch error tracked: error_type=%s, company_id=%s, dispatch_run_id=%s",
+        (
+            "[Dispatch Error Metrics] Dispatch error tracked: "
+            "error_type=%s, company_id=%s, dispatch_run_id=%s"
+        ),
         error_type,
         company_id,
         dispatch_run_id,

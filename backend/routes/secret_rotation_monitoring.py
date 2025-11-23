@@ -67,7 +67,9 @@ rotation_stats_model = secret_rotation_ns.model(
         "error_count": fields.Integer(description="Nombre d'erreurs"),
         "skipped_count": fields.Integer(description="Nombre de rotations ignorées"),
         "by_type": fields.Raw(
-            description="Statistiques par type de secret (jwt, encryption, flask_secret_key)"
+            description=(
+                "Statistiques par type de secret (jwt, encryption, flask_secret_key)"
+            )
         ),
         "last_rotations": fields.Raw(
             description="Date de dernière rotation par type (ISO 8601)"
@@ -95,9 +97,14 @@ last_rotation_model = secret_rotation_ns.model(
 @secret_rotation_ns.route("/history")
 class RotationHistory(Resource):
     @secret_rotation_ns.doc(
-        description="Récupère l'historique des rotations de secrets avec filtres optionnels et pagination.",
+        description=(
+            "Récupère l'historique des rotations de secrets "
+            "avec filtres optionnels et pagination."
+        ),
         params={
-            "secret_type": "Filtrer par type de secret (jwt, encryption, flask_secret_key)",
+            "secret_type": (
+                "Filtrer par type de secret (jwt, encryption, flask_secret_key)"
+            ),
             "status": "Filtrer par statut (success, error, skipped)",
             "environment": "Filtrer par environnement (dev, prod, testing)",
             "limit": "Nombre maximum de résultats (défaut: 50, max: 100)",
@@ -195,9 +202,16 @@ class RotationStats(Resource):
 @secret_rotation_ns.route("/last")
 class LastRotation(Resource):
     @secret_rotation_ns.doc(
-        description="Récupère la dernière rotation pour chaque type de secret ou un type spécifique.",
+        description=(
+            "Récupère la dernière rotation pour chaque type de secret "
+            "ou un type spécifique."
+        ),
         params={
-            "secret_type": "Type de secret spécifique (jwt, encryption, flask_secret_key). Si omis, retourne tous les types.",
+            "secret_type": (
+                "Type de secret spécifique "
+                "(jwt, encryption, flask_secret_key). "
+                "Si omis, retourne tous les types."
+            ),
             "environment": "Filtrer par environnement (dev, prod, testing)",
         },
     )

@@ -6,8 +6,9 @@
 Remplace les patterns try/except/finally répétés dans tout le code par
 des context managers réutilisables et testables.
 
-📚 Documentation complète : Voir `backend/docs/SESSION_MANAGEMENT.md` pour le guide complet
-   de gestion des sessions SQLAlchemy (code métier + tests).
+📚 Documentation complète : Voir `backend/docs/SESSION_MANAGEMENT.md`
+   pour le guide complet de gestion des sessions SQLAlchemy
+   (code métier + tests).
 """
 
 from __future__ import annotations
@@ -227,7 +228,6 @@ def db_batch_operation(
 
     def commit_batch():
         """Commit le batch actuel et reset le compteur."""
-        nonlocal counter  # counter est utilisé via counter[0] (assignation indirecte)
         try:
             # ✅ P2.1: Track le commit
             with track_transaction("commit"):

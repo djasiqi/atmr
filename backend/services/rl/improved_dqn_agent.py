@@ -147,9 +147,10 @@ class ImprovedDQNAgent:
         print("✅ Agent DQN amélioré créé:")
         print("   State dim: {state_dim}")
         print("   Action dim: {action_dim}")
-        print(
-            f"   Paramètres Q-Network: {sum(p.numel() for p in self.q_network.parameters()):,}"
+        total_params = sum(
+            p.numel() for p in self.q_network.parameters()
         )
+        print(f"   Paramètres Q-Network: {total_params:,}")
         print("   Double DQN: {use_double_dqn}")
         print("   Prioritized Replay: {use_prioritized_replay}")
         print("   N-step Learning: {use_n_step} (n={n_step})")
@@ -524,7 +525,8 @@ class ImprovedDQNAgent:
         if torch is None:
             msg = "PyTorch is required but not available"
             raise ImportError(msg)
-        # nosec B506: Les checkpoints contiennent optimizer state et config, pas seulement des poids
+        # nosec B506: Les checkpoints contiennent optimizer state et config,
+        # pas seulement des poids
         # Les modèles proviennent de sources internes de confiance uniquement
         checkpoint = torch.load(filepath, map_location=self.device, weights_only=False)
         self.q_network.load_state_dict(checkpoint["q_network_state_dict"])

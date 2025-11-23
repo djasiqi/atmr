@@ -45,7 +45,10 @@ def aggregate_daily_stats_task(company_id: int | None = None, day: date | None =
                 if stats:
                     success_count += 1
                     logger.info(
-                        "[Analytics] Daily stats aggregated for company %s (%s) - Quality: %.1f",
+                        (
+                            "[Analytics] Daily stats aggregated for company %s (%s) "
+                            "- Quality: %.1f"
+                        ),
                         company.id,
                         company.name,
                         stats.quality_score,
@@ -162,7 +165,10 @@ def send_daily_reports_task(company_id: int | None = None, day: date | None = No
             except Exception as e:
                 error_count += 1
                 logger.exception(
-                    "[Analytics] Failed to generate/send daily report for company %s: %s",
+                    (
+                        "[Analytics] Failed to generate/send daily report "
+                        "for company %s: %s"
+                    ),
                     company.id,
                     e,
                 )
@@ -268,7 +274,10 @@ def send_weekly_reports_task(
             except Exception as e:
                 error_count += 1
                 logger.exception(
-                    "[Analytics] Failed to generate/send weekly report for company %s: %s",
+                    (
+                        "[Analytics] Failed to generate/send weekly report "
+                        "for company %s: %s"
+                    ),
                     company.id,
                     e,
                 )

@@ -53,11 +53,18 @@ class PrometheusMetrics(Resource):
                 )
                 slo_metrics.append("# TYPE dispatch_slo_breaches_total counter")
                 slo_metrics.append(
-                    f'dispatch_slo_breaches_total{{window_minutes="{slo_tracker.window_minutes}"}} {breach_summary["breach_count"]}'
+                    (
+                        f"dispatch_slo_breaches_total{{window_minutes="
+                        f'"{slo_tracker.window_minutes}"}} '
+                        f"{breach_summary['breach_count']}"
+                    )
                 )
                 slo_metrics.append("")
                 slo_metrics.append(
-                    "# HELP dispatch_slo_breach_severity SLO breach severity (0=info, 1=warning, 2=critical)"
+                    (
+                        "# HELP dispatch_slo_breach_severity SLO breach severity "
+                        "(0=info, 1=warning, 2=critical)"
+                    )
                 )
                 slo_metrics.append("# TYPE dispatch_slo_breach_severity gauge")
                 severity_value = (
@@ -66,22 +73,34 @@ class PrometheusMetrics(Resource):
                     else (1 if breach_summary["severity"] == "warning" else 2)
                 )
                 slo_metrics.append(
-                    f'dispatch_slo_breach_severity{{severity="{breach_summary["severity"]}"}} {severity_value}'
+                    (
+                        f"dispatch_slo_breach_severity{{severity="
+                        f'"{breach_summary["severity"]}"}} {severity_value}'
+                    )
                 )
                 slo_metrics.append("")
                 slo_metrics.append(
-                    "# HELP dispatch_slo_should_alert Whether to page oncall (0=no, 1=yes)"
+                    (
+                        "# HELP dispatch_slo_should_alert "
+                        "Whether to page oncall (0=no, 1=yes)"
+                    )
                 )
                 slo_metrics.append("# TYPE dispatch_slo_should_alert gauge")
                 slo_metrics.append(
-                    f"dispatch_slo_should_alert {1 if breach_summary['should_alert'] else 0}"
+                    (
+                        f"dispatch_slo_should_alert "
+                        f"{1 if breach_summary['should_alert'] else 0}"
+                    )
                 )
 
                 # Ajouter les métriques par type de breach
                 for breach_type, count in breach_summary.get("by_type", {}).items():
                     slo_metrics.append("")
                     slo_metrics.append(
-                        "# HELP dispatch_slo_breaches_by_type SLO breaches by breach type"
+                        (
+                            "# HELP dispatch_slo_breaches_by_type "
+                            "SLO breaches by breach type"
+                        )
                     )
                     slo_metrics.append("# TYPE dispatch_slo_breaches_by_type counter")
                     slo_metrics.append(
@@ -94,7 +113,8 @@ class PrometheusMetrics(Resource):
                 # Ajouter les métriques de rotation de secrets
                 rotation_metrics = self._get_secret_rotation_metrics()
 
-                # Combiner métriques prometheus_client + métriques SLO + métriques rotations
+                # Combiner métriques prometheus_client + métriques SLO
+                # + métriques rotations
                 # generate_latest() retourne toujours bytes
                 metrics_output_str = metrics_output.decode("utf-8")
 
@@ -106,7 +126,8 @@ class PrometheusMetrics(Resource):
                     + rotation_metrics
                 )
 
-                # Utiliser make_response pour éviter la sérialisation JSON de Flask-RESTX
+                # Utiliser make_response pour éviter la sérialisation JSON
+                # de Flask-RESTX
                 response = make_response(full_metrics, 200)
                 response.mimetype = CONTENT_TYPE_LATEST
                 return response
@@ -114,7 +135,10 @@ class PrometheusMetrics(Resource):
             except ImportError:
                 # Fallback si prometheus_client non disponible
                 logger.warning(
-                    "[PrometheusMetrics] prometheus_client non disponible, export SLO uniquement"
+                    (
+                        "[PrometheusMetrics] prometheus_client non disponible, "
+                        "export SLO uniquement"
+                    )
                 )
                 current_time = time.time()
                 return self._export_slo_only(current_time)
@@ -124,18 +148,30 @@ class PrometheusMetrics(Resource):
             return {"error": "Failed to generate metrics", "details": str(e)}, 500
 
     def _export_slo_only(self, current_time: float) -> Response:
-        """Export uniquement les métriques SLO (fallback si prometheus_client absent)."""
+        """Export uniquement les métriques SLO
+        (fallback si prometheus_client absent)."""
         slo_tracker = get_slo_tracker()
         breach_summary = slo_tracker.get_breach_summary(current_time)
 
         lines = [
             "# HELP dispatch_slo_breaches_total Total SLO breaches detected",
             "# TYPE dispatch_slo_breaches_total counter",
-            f'dispatch_slo_breaches_total{{window_minutes="{slo_tracker.window_minutes}"}} {breach_summary["breach_count"]}',
+            (
+                f"dispatch_slo_breaches_total{{window_minutes="
+                f'"{slo_tracker.window_minutes}"}} '
+                f"{breach_summary['breach_count']}"
+            ),
             "",
-            "# HELP dispatch_slo_breach_severity SLO breach severity (0=info, 1=warning, 2=critical)",
+            (
+                "# HELP dispatch_slo_breach_severity SLO breach severity "
+                "(0=info, 1=warning, 2=critical)"
+            ),
             "# TYPE dispatch_slo_breach_severity gauge",
-            f'dispatch_slo_breach_severity{{severity="{breach_summary["severity"]}"}} {0 if breach_summary["severity"] == "info" else (1 if breach_summary["severity"] == "warning" else 2)}',
+            (
+                f"dispatch_slo_breach_severity{{severity="
+                f'"{breach_summary["severity"]}"}} '
+                f"{0 if breach_summary['severity'] == 'info' else (1 if breach_summary['severity'] == 'warning' else 2)}"
+            ),
             "",
             "# HELP dispatch_slo_should_alert Whether to page oncall (0=no, 1=yes)",
             "# TYPE dispatch_slo_should_alert gauge",
@@ -186,14 +222,20 @@ class PrometheusMetrics(Resource):
                     count = type_stats.get(status, 0)
                     if count > 0:
                         lines.append(
-                            f'vault_rotation_total{{secret_type="{secret_type}",status="{status}"}} {count}'
+                            (
+                                f"vault_rotation_total{{secret_type="
+                                f'"{secret_type}",status="{status}"}} {count}'
+                            )
                         )
 
             lines.append("")
 
             # Gauge: Timestamp de dernière rotation réussie par type
             lines.append(
-                "# HELP vault_rotation_last_success_timestamp Timestamp of last successful rotation (Unix seconds)"
+                (
+                    "# HELP vault_rotation_last_success_timestamp "
+                    "Timestamp of last successful rotation (Unix seconds)"
+                )
             )
             lines.append("# TYPE vault_rotation_last_success_timestamp gauge")
 
@@ -209,7 +251,10 @@ class PrometheusMetrics(Resource):
                         )
                         timestamp = int(last_dt.timestamp())
                         lines.append(
-                            f'vault_rotation_last_success_timestamp{{secret_type="{secret_type}"}} {timestamp}'
+                            (
+                                f"vault_rotation_last_success_timestamp{{secret_type="
+                                f'"{secret_type}"}} {timestamp}'
+                            )
                         )
                     except Exception:
                         pass  # Ignorer les erreurs de parsing
@@ -218,7 +263,10 @@ class PrometheusMetrics(Resource):
 
             # Gauge: Jours depuis dernière rotation réussie par type
             lines.append(
-                "# HELP vault_rotation_days_since_last Days since last successful rotation"
+                (
+                    "# HELP vault_rotation_days_since_last "
+                    "Days since last successful rotation"
+                )
             )
             lines.append("# TYPE vault_rotation_days_since_last gauge")
 
@@ -226,7 +274,10 @@ class PrometheusMetrics(Resource):
                 days = get_days_since_last_rotation(secret_type)
                 if days is not None:
                     lines.append(
-                        f'vault_rotation_days_since_last{{secret_type="{secret_type}"}} {days}'
+                        (
+                            f"vault_rotation_days_since_last{{secret_type="
+                            f'"{secret_type}"}} {days}'
+                        )
                     )
 
             return "\n".join(lines)

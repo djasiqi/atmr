@@ -1,4 +1,5 @@
-"""Tests pour les schemas de la Phase 2 (CompanyUpdate, DriverCreate, ClientUpdate, DriverProfileUpdate)."""
+"""Tests pour les schemas de la Phase 2
+(CompanyUpdate, DriverCreate, ClientUpdate, DriverProfileUpdate)."""
 
 import pytest
 from marshmallow import ValidationError

@@ -613,7 +613,10 @@ class DriverVacation(db.Model):
         ed = getattr(self, "end_date", None)
         sd_str = sd.isoformat() if isinstance(sd, date) else "?"
         ed_str = ed.isoformat() if isinstance(ed, date) else "?"
-        return f"<DriverVacation id={self.id}, driver_id={self.driver_id}, {sd_str} → {ed_str}, type={vt}>"
+        return (
+            f"<DriverVacation id={self.id}, driver_id={self.driver_id}, "
+            f"{sd_str} → {ed_str}, type={vt}>"
+        )
 
     @validates("start_date", "end_date")
     def validate_dates(self, key: str, value: date | None) -> date | None:

@@ -10,7 +10,8 @@ from schemas.query_schemas import (
 
 
 class UserRoleUpdateSchema(Schema):
-    """Schema pour mise à jour du rôle d'un utilisateur (PUT /api/admin/users/<id>/role)."""
+    """Schema pour mise à jour du rôle d'un utilisateur
+    (PUT /api/admin/users/<id>/role)."""
 
     role = fields.Str(
         required=True,
@@ -27,7 +28,8 @@ class UserRoleUpdateSchema(Schema):
 
 
 class AutonomousActionReviewSchema(Schema):
-    """Schema pour review d'une action autonome (POST /api/admin/autonomous-actions/<id>/review)."""
+    """Schema pour review d'une action autonome
+    (POST /api/admin/autonomous-actions/<id>/review)."""
 
     notes = fields.Str(
         validate=validate.Length(
@@ -43,7 +45,8 @@ class AutonomousActionsListQuerySchema(
 ):
     """Schema pour validation query params GET /api/admin/autonomous-actions.
 
-    Combine pagination, date range et filtres communs, avec filtres spécifiques aux actions autonomes.
+    Combine pagination, date range et filtres communs,
+    avec filtres spécifiques aux actions autonomes.
     """
 
     action_type = fields.Str(

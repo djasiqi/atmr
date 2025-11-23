@@ -39,6 +39,7 @@ def upgrade():
 
 
 def downgrade():
-    # Supprimer les colonnes wheelchair_client_has et wheelchair_need de la table booking
+    # Supprimer les colonnes wheelchair_client_has et wheelchair_need
+    # de la table booking
     op.drop_column("booking", "wheelchair_need")
     op.drop_column("booking", "wheelchair_client_has")

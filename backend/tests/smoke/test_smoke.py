@@ -1,4 +1,5 @@
-"""Tests smoke pour vérifier le démarrage de l'application et les connexions critiques."""
+"""Tests smoke pour vérifier le démarrage de l'application
+et les connexions critiques."""
 
 import pytest
 from sqlalchemy import text

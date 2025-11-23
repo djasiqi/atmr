@@ -25,8 +25,10 @@ def company(db):
     """Créer une entreprise pour les tests.
 
     ⚠️ COUPLAGE IMPORTANT :
-    - Cette fixture DOIT être commitée avant utilisation car `engine.run()` fait un rollback défensif
-    - Les fixtures `drivers` et `bookings` dépendent de cette fixture (ordre d'exécution garanti par pytest)
+    - Cette fixture DOIT être commitée avant utilisation
+      car `engine.run()` fait un rollback défensif
+    - Les fixtures `drivers` et `bookings` dépendent de cette fixture
+      (ordre d'exécution garanti par pytest)
     - L'objet est rechargé depuis la DB pour garantir qu'il est bien persisté
 
     🔄 ISOLATION :
@@ -44,7 +46,8 @@ def company(db):
     db.session.add(company)
     db.session.flush()  # Force l'assignation de l'ID
     # ✅ FIX: Commit pour garantir persistance avant engine.run()
-    # engine.run() fait un rollback défensif qui peut expirer la Company si elle n'est pas commitée
+    # engine.run() fait un rollback défensif qui peut expirer la Company
+    # si elle n'est pas commitée
     db.session.commit()
     # ✅ FIX: Expirer et recharger pour s'assurer que l'objet est bien en DB
     db.session.expire(company)
@@ -244,10 +247,12 @@ class TestDispatchE2E:
         # Vérifier que le rollback a fonctionné (aucune assignation partielle)
         # ✅ FIX: Expirer tous les objets avant rollback
         db.session.expire_all()
-        # ✅ FIX: S'assurer que le rollback est bien exécuté (engine.run() peut avoir fait un rollback, mais on force)
+        # ✅ FIX: S'assurer que le rollback est bien exécuté
+        # (engine.run() peut avoir fait un rollback, mais on force)
         db.session.rollback()
 
-        # ✅ FIX: Recharger depuis DB avec un nouveau query (pas get() qui peut utiliser le cache)
+        # ✅ FIX: Recharger depuis DB avec un nouveau query
+        # (pas get() qui peut utiliser le cache)
         booking1_reloaded = db.session.query(Booking).filter_by(id=booking1.id).first()
         booking2_reloaded = db.session.query(Booking).filter_by(id=booking2.id).first()
 
@@ -256,7 +261,8 @@ class TestDispatchE2E:
         assert booking2_reloaded is not None, "Booking2 must be reloaded from DB"
 
         # Si validation stricte active, les bookings ne devraient pas être assignés
-        # Vérifier que le résultat indique un échec ou que les bookings ne sont pas assignés
+        # Vérifier que le résultat indique un échec
+        # ou que les bookings ne sont pas assignés
         assert booking1_reloaded.driver_id is None, (
             "Booking1 ne devrait pas être assigné après rollback"
         )
@@ -264,14 +270,18 @@ class TestDispatchE2E:
             "Booking2 ne devrait pas être assigné après rollback"
         )
 
-        # Vérifier que le résultat du dispatch indique un problème (optionnel selon implémentation)
+        # Vérifier que le résultat du dispatch indique un problème
+        # (optionnel selon implémentation)
         if result.get("meta", {}).get("reason"):
             assert result["meta"]["reason"] in [
                 "run_failed",
                 "validation_failed",
                 "conflict",
             ], (
-                f"Le dispatch devrait avoir échoué, mais reason={result['meta'].get('reason')}"
+                (
+                    f"Le dispatch devrait avoir échoué, "
+                    f"mais reason={result['meta'].get('reason')}"
+                )
             )
 
     def test_rollback_transactionnel_complet(self, company, drivers, bookings):
@@ -288,9 +298,14 @@ class TestDispatchE2E:
         # ✅ FIX: Vérifier que les bookings existent en DB
         for booking in bookings:
             booking_from_db = db.session.query(Booking).filter_by(id=booking.id).first()
-            assert booking_from_db is not None, f"Booking {booking.id} must exist in DB"
+            assert booking_from_db is not None, (
+                f"Booking {booking.id} must exist in DB"
+            )
             assert booking_from_db.company_id == company.id, (
-                f"Booking {booking.id} must belong to company {company.id}, got {booking_from_db.company_id}"
+                (
+                    f"Booking {booking.id} must belong to company "
+                    f"{company.id}, got {booking_from_db.company_id}"
+                )
             )
 
         # ✅ FIX: S'assurer que company.id est bien utilisé
@@ -334,11 +349,15 @@ class TestDispatchE2E:
         # Vérifier que les assignations sont appliquées
         assert len(result["applied"]) == 2, (
             f"Expected 2 applied assignments, got {len(result['applied'])}. "
-            f"Skipped: {result.get('skipped', {})}, Conflicts: {result.get('conflicts', [])}"
+            (
+                f"Skipped: {result.get('skipped', {})}, "
+                f"Conflicts: {result.get('conflicts', [])}"
+            )
         )
 
         # Vérifier que les bookings sont assignés en DB
-        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        # ✅ FIX: Utiliser query au lieu de refresh
+        # pour éviter "Instance is not persistent"
         booking0 = db.session.query(Booking).get(bookings[0].id)
         booking1 = db.session.query(Booking).get(bookings[1].id)
 
@@ -373,7 +392,8 @@ class TestDispatchE2E:
         assert result.get("meta", {}).get("reason") != "run_failed"
 
         # Vérifier que le DispatchRun est complété
-        # ✅ FIX: Utiliser query au lieu de refresh pour éviter "Instance is not persistent"
+        # ✅ FIX: Utiliser query au lieu de refresh
+        # pour éviter "Instance is not persistent"
         dispatch_run = db.session.query(DispatchRun).get(dispatch_run.id)
         assert dispatch_run.status == DispatchStatus.COMPLETED
 
@@ -432,7 +452,10 @@ class TestDispatchE2E:
 
         # Vérifier qu'au moins un dispatch_run_id est présent
         assert len(dispatch_run_ids) > 0, (
-            f"At least one dispatch_run_id should be returned. Results: {[r.get('meta', {}) for r in results]}"
+            (
+                f"At least one dispatch_run_id should be returned. "
+                f"Results: {[r.get('meta', {}) for r in results]}"
+            )
         )
 
         # Vérifier que les DispatchRuns existent en DB
@@ -484,7 +507,8 @@ class TestDispatchE2E:
         )
 
     def test_apply_assignments_finds_bookings(self, company, drivers, bookings, db):
-        """✅ Test de non-régression : Vérifier que apply_assignments trouve bien les bookings.
+        """✅ Test de non-régression : Vérifier que apply_assignments
+        trouve bien les bookings.
 
         Ce test vérifie que apply_assignments peut trouver les bookings en DB
         même après un commit, garantissant que booking_map n'est pas vide.
@@ -520,7 +544,8 @@ class TestDispatchE2E:
         )
 
     def test_rollback_restores_original_values(self, company, drivers, db):
-        """✅ Test de non-régression : Vérifier que le rollback restaure bien les valeurs originales.
+        """✅ Test de non-régression : Vérifier que le rollback
+        restaure bien les valeurs originales.
 
         Ce test vérifie que le rollback SQLAlchemy restaure correctement les valeurs
         en DB après une modification non commitée.
@@ -544,7 +569,8 @@ class TestDispatchE2E:
         )
 
     def test_company_persisted_before_dispatch(self, company, db):
-        """✅ Test de non-régression : Vérifier que la Company est bien persistée avant dispatch.
+        """✅ Test de non-régression : Vérifier que la Company
+        est bien persistée avant dispatch.
 
         Ce test vérifie que la fixture company garantit la persistance en DB,
         permettant à engine.run() de trouver la Company et créer un DispatchRun.
@@ -578,7 +604,8 @@ class TestDispatchE2E:
         )
 
     def test_fixtures_isolation_and_rollback_defensive(self, db, company):
-        """✅ Test de non-régression : Vérifier l'isolation des fixtures et le rollback défensif.
+        """✅ Test de non-régression : Vérifier l'isolation des fixtures
+        et le rollback défensif.
 
         Ce test vérifie que :
         1. Les fixtures sont bien isolées entre les tests (savepoint)
@@ -597,7 +624,8 @@ class TestDispatchE2E:
         assert company_reloaded is not None, "Company doit être visible après commit"
         assert company_reloaded.id == company.id, "Company doit avoir le même ID"
 
-        # 2. Vérifier que engine.run() peut accéder à la company (même après rollback défensif)
+        # 2. Vérifier que engine.run() peut accéder à la company
+        # (même après rollback défensif)
         # Le rollback défensif ne devrait pas affecter les objets commités
         result = engine.run(
             company_id=company.id,
@@ -617,16 +645,21 @@ class TestDispatchE2E:
         # 4. Vérifier que le résultat contient des informations cohérentes
         assert "meta" in result, "Résultat doit contenir meta"
         assert result.get("meta", {}).get("reason") != "company_not_found", (
-            "Company doit être trouvée par engine.run() (pas de reason='company_not_found')"
+            (
+                "Company doit être trouvée par engine.run() "
+                "(pas de reason='company_not_found')"
+            )
         )
 
         print("✅ Test isolation fixtures et rollback défensif OK")
 
     def test_company_not_found_raises_exception(self, db):
-        """✅ Test de non-régression : Vérifier que CompanyNotFoundError est levée si demandé.
+        """✅ Test de non-régression : Vérifier que CompanyNotFoundError
+        est levée si demandé.
 
         Ce test vérifie que le paramètre `raise_on_company_not_found=True`
-        lève bien une exception `CompanyNotFoundError` au lieu de retourner un résultat structuré.
+        lève bien une exception `CompanyNotFoundError`
+        au lieu de retourner un résultat structuré.
         """
         from services.unified_dispatch import engine
         from services.unified_dispatch.exceptions import CompanyNotFoundError

@@ -161,7 +161,10 @@ def generate_load_test_report() -> str:
         before_runs = results["metrics_before"].get("dispatch_runs_total", 0)
         after_runs = results["metrics_after"].get("dispatch_runs_total", 0)
         print(
-            f"  dispatch_runs_total: {before_runs} → {after_runs} (+{after_runs - before_runs})"
+            (
+                f"  dispatch_runs_total: {before_runs} → {after_runs} "
+                f"(+{after_runs - before_runs})"
+            )
         )
 
     if results["errors"]:

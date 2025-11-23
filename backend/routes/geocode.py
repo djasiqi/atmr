@@ -272,8 +272,9 @@ class GeocodeAutocomplete(Resource):
                 )
 
                 for pred in google_results:
-                    # Pour chaque prédiction, on peut optionnellement récupérer les coordonnées
-                    # via Place Details (mais c'est plus coûteux en quota)
+                    # Pour chaque prédiction, on peut optionnellement
+                    # récupérer les coordonnées via Place Details
+                    # (mais c'est plus coûteux en quota)
                     # Pour l'autocomplete, on retourne juste les suggestions
                     results.append(
                         {
@@ -351,8 +352,10 @@ class PlaceDetails(Resource):
         },
     )
     def get(self):
-        """Récupère les détails complets d'un lieu (coordonnées GPS incluses) via son place_id.
-        Utilisé après qu'un utilisateur a sélectionné une adresse dans l'autocomplete.
+        """Récupère les détails complets d'un lieu
+        (coordonnées GPS incluses) via son place_id.
+        Utilisé après qu'un utilisateur a sélectionné
+        une adresse dans l'autocomplete.
         """
         place_id = request.args.get("place_id", "").strip()
 

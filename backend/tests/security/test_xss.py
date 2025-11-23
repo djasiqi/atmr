@@ -51,13 +51,15 @@ class TestXSSInTextFields:
         # Doit accepter le payload comme texte (pas d'exécution)
         assert response.status_code in (201, 400, 401, 403, 404)
         if response.status_code == 201:
-            # Si la création réussit, vérifier que les données sont stockées telles quelles
+            # Si la création réussit, vérifier que les données
+            # sont stockées telles quelles
             json_data = response.get_json()
             # Les données doivent être stockées comme texte, pas exécutées
             assert json_data is not None
 
     def test_xss_in_location_fields(self, client, auth_headers, sample_user):
-        """Test que les payloads XSS dans pickup_location/dropoff_location sont stockés comme texte."""
+        """Test que les payloads XSS dans pickup_location/dropoff_location
+        sont stockés comme texte."""
         for payload in XSS_PAYLOADS[:5]:  # Tester les 5 premiers payloads
             data = {
                 "customer_name": "Test Customer",
@@ -123,7 +125,8 @@ class TestXSSInQueryParams:
         assert "alert" not in response_text or response.status_code == 400
 
     def test_xss_in_medical_search(self, client):
-        """Test que les payloads XSS dans recherche médicale sont traités comme texte."""
+        """Test que les payloads XSS dans recherche médicale
+        sont traités comme texte."""
         payload = "<img src=x onerror=alert('XSS')>"
         response = client.get(f"/api/medical/establishments?q={payload}")
         # Endpoint public, doit traiter comme texte
@@ -208,7 +211,8 @@ class TestXSSInJSONBody:
         assert "alert" not in response_text or response.status_code == 400
 
     def test_xss_in_driver_creation(self, client, auth_headers):
-        """Test que les payloads XSS dans création chauffeur sont stockés comme texte."""
+        """Test que les payloads XSS dans création chauffeur
+        sont stockés comme texte."""
         payload = "<img src=x onerror=alert('XSS')>"
         data = {
             "username": "testdriver",

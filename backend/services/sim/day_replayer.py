@@ -88,7 +88,10 @@ class DayReplayer:
             policies = ["heuristic", "solver", "rl"]
 
         logger.info(
-            "[DayReplayer] Replaying day %s: %d bookings, %d drivers, %d policies, %d iterations",
+            (
+                "[DayReplayer] Replaying day %s: %d bookings, %d drivers, "
+                "%d policies, %d iterations"
+            ),
             target_date,
             len(bookings),
             len(drivers),
@@ -303,5 +306,7 @@ except ImportError:
     ) -> float:
         return 1.0 / (1.0 + len(assignments))
 
-    def calculate_fairness_score(assignments: List[Dict[str, Any]]) -> float:  # noqa: ARG001
+    def calculate_fairness_score(
+        assignments: List[Dict[str, Any]]
+    ) -> float:  # noqa: ARG001
         return 0.5  # Placeholder

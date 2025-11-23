@@ -122,7 +122,8 @@ class Config:
     # --- Redis / Socket.IO ---
     REDIS_URL = os.getenv("REDIS_URL", "redis://127.00.1:6379/0")
     # Liste d'origines autorisées pour Socket.IO (séparées par des virgules).
-    # Exemple: SOCKETIO_CORS_ORIGINS="https://app.example.com,https://admin.example.com,http://localhost:3000"
+    # Exemple: SOCKETIO_CORS_ORIGINS="https://app.example.com,
+    # https://admin.example.com,http://localhost:3000"
     SOCKETIO_CORS_ORIGINS = os.getenv("SOCKETIO_CORS_ORIGINS", "")
 
     # Ratelimit on/off (tests = off plus bas)
@@ -168,7 +169,9 @@ class DevelopmentConfig(Config):
     )
 
     # ✅ PostgreSQL-specific options pour développement
-    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {  # pyright: ignore[reportIncompatibleVariableOverride]
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[  # pyright: ignore
+        dict[str, int | bool | dict[str, str]]
+    ] = {
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
         "pool_size": 10,  # ✅ PERF: Connection pooling (PostgreSQL uniquement)
         "max_overflow": 20,  # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
@@ -210,8 +213,10 @@ class ProductionConfig(Config):
         vault_key="value",
         env_key="MAIL_PASSWORD",
     )
-    # ✅ 4.1: Support dynamic secrets Database (via Vault) pour rotation automatique
-    # Construire DATABASE_URL depuis Vault/env, ou depuis variables individuelles avec échappement
+    # ✅ 4.1: Support dynamic secrets Database (via Vault)
+    # pour rotation automatique
+    # Construire DATABASE_URL depuis Vault/env,
+    # ou depuis variables individuelles avec échappement
     _db_url_from_secret = _get_secret_from_vault_or_env(
         vault_path="prod/database/url",
         vault_key="value",
@@ -221,15 +226,20 @@ class ProductionConfig(Config):
     SQLALCHEMY_DATABASE_URI = (
         _db_url_from_secret if _db_url_from_secret else _build_database_url_safe()
     )
-    # Validation explicite pour éviter les erreurs lors de l'initialisation Flask-SQLAlchemy
+    # Validation explicite pour éviter les erreurs
+    # lors de l'initialisation Flask-SQLAlchemy
     if not SQLALCHEMY_DATABASE_URI:
-        raise RuntimeError(
+        error_msg = (
             "SQLALCHEMY_DATABASE_URI must be set. "
-            + "Provide either DATABASE_URL or POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB"
+            "Provide either DATABASE_URL or "
+            "POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB"
         )
+        raise RuntimeError(error_msg)
 
     # ✅ PostgreSQL-specific options
-    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {  # pyright: ignore[reportIncompatibleVariableOverride]
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[  # pyright: ignore
+        dict[str, int | bool | dict[str, str]]
+    ] = {
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
         "pool_size": 10,  # ✅ PERF: Connection pooling (PostgreSQL uniquement)
         "max_overflow": 20,  # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
@@ -256,9 +266,11 @@ class TestingConfig(Config):
     SECRET_KEY = "test-secret-key"
     JWT_SECRET_KEY = "test-jwt-key"
     MAIL_PASSWORD = "test-mail-password"
-    # Utiliser DATABASE_URL si disponible (PostgreSQL), sinon SQLite en mémoire
+    # Utiliser DATABASE_URL si disponible (PostgreSQL),
+    # sinon SQLite en mémoire
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite:///:memory:")
-    # Options de base uniquement (pas de pool_size/max_overflow pour compatibilité SQLite)
+    # Options de base uniquement
+    # (pas de pool_size/max_overflow pour compatibilité SQLite)
     SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool]] = {
         "pool_pre_ping": True,
         "pool_recycle": 1800,
@@ -271,7 +283,8 @@ class TestingConfig(Config):
     @staticmethod
     def init_app(app):  # pyright: ignore[reportImplicitOverride]
         """Ajuste les options d'engine selon le type de base de données."""
-        # Utiliser DATABASE_URL de l'environnement si disponible (priorité sur valeur par défaut)
+        # Utiliser DATABASE_URL de l'environnement si disponible
+        # (priorité sur valeur par défaut)
         database_url = os.getenv("DATABASE_URL")
         if database_url:
             app.config["SQLALCHEMY_DATABASE_URI"] = database_url

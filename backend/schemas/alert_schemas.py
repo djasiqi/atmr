@@ -4,7 +4,8 @@ from marshmallow import Schema, fields, validate
 
 
 class ClearAlertHistorySchema(Schema):
-    """Schema pour nettoyage de l'historique des alertes (POST /api/proactive-alerts/clear-history)."""
+    """Schema pour nettoyage de l'historique des alertes
+    (POST /api/proactive-alerts/clear-history)."""
 
     booking_id = fields.Str(
         validate=validate.Length(max=100),

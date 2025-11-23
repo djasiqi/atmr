@@ -231,7 +231,8 @@ class ModelRegistry:
         return model_path
 
     def _calculate_checksum(self, file_path: Path) -> str:
-        """Calcule le checksum d'un fichier (SHA-256 au lieu de MD5 pour meilleures pratiques)."""
+        """Calcule le checksum d'un fichier
+        (SHA-256 au lieu de MD5 pour meilleures pratiques)."""
         import hashlib
 
         hash_sha256 = hashlib.sha256()
@@ -519,13 +520,14 @@ class ModelRegistry:
 class ModelPromotionValidator:
     """Validateur pour la promotion de modèles."""
 
-    def __init__(self, registry: ModelRegistry):  # pyright: ignore[reportMissingSuperCall]
+    def __init__(self, registry: ModelRegistry):
         """Initialise le validateur.
 
         Args:
             registry: Registre de modèles
 
         """
+        super().__init__()  # Appel explicite pour object
         self.registry = registry
 
     def validate_model_for_promotion(

@@ -79,7 +79,8 @@ def validate_required_env_vars(config_name: str) -> None:
     if not (os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY")):
         raise RuntimeError(
             "JWT_SECRET_KEY ou SECRET_KEY manquant(e). "
-            + "Ajoutez au moins l'une de ces variables dans backend/.env puis redémarrez."
+            + "Ajoutez au moins l'une de ces variables dans backend/.env "
+            + "puis redémarrez."
         )
 
     # Variables critiques pour production
@@ -118,10 +119,13 @@ def validate_required_env_vars(config_name: str) -> None:
                 missing.append(var)
 
         if missing:
-            raise RuntimeError(
-                f"Variables d'environnement manquantes pour production: {', '.join(missing)}\n"
-                + "Ajoutez-les dans backend/.env puis redémarrez."
+            missing_str = ", ".join(missing)
+            error_msg = (
+                f"Variables d'environnement manquantes pour production: "
+                f"{missing_str}\n"
+                f"Ajoutez-les dans backend/.env puis redémarrez."
             )
+            raise RuntimeError(error_msg)
 
         # Vérifier variables recommandées et avertir si manquantes
         missing_recommended = [var for var in recommended_vars if not os.getenv(var)]
@@ -129,10 +133,13 @@ def validate_required_env_vars(config_name: str) -> None:
             import logging
 
             logger = logging.getLogger(__name__)
-            logger.warning(
-                "Variables recommandées manquantes pour production: %s. L'application fonctionnera mais certaines fonctionnalités peuvent être limitées.",
-                ", ".join(missing_recommended),
+            missing_str = ", ".join(missing_recommended)
+            warning_msg = (
+                "Variables recommandées manquantes pour production: %s. "
+                "L'application fonctionnera mais certaines fonctionnalités "
+                "peuvent être limitées."
             )
+            logger.warning(warning_msg, missing_str)
 
 
 # ---------- JSON encoder/provider ----------
@@ -218,7 +225,8 @@ def create_app(config_name: str | None = None):
         # Instrumenter SQLAlchemy (requêtes DB)
         # Flask-SQLAlchemy expose get_engine() ou .engine selon la version
         try:
-            # Essayer d'obtenir l'engine (Flask-SQLAlchemy 3+ utilise .engine directement)
+            # Essayer d'obtenir l'engine
+            # Flask-SQLAlchemy 3+ utilise .engine directement
             if hasattr(db, "engine"):
                 engine = db.engine
             elif hasattr(db, "get_engine"):
@@ -228,7 +236,7 @@ def create_app(config_name: str | None = None):
             else:
                 # Délayer l'instrumentation après que l'engine soit créé
                 @app.before_first_request
-                def _instrument_db_after_init():  # pyright: ignore[reportUnusedFunction]
+                def _instrument_db_after_init():  # pyright: ignore
                     try:
                         with app.app_context():
                             if hasattr(db, "engine"):
@@ -254,7 +262,8 @@ def create_app(config_name: str | None = None):
     except Exception as e:
         app.logger.warning("[2.9] Échec initialisation OpenTelemetry: %s", e)
 
-    # ✅ 2.7: Setup DB Profiler pour détecter N+1 (activable via ENABLE_DB_PROFILING=true)
+    # ✅ 2.7: Setup DB Profiler pour détecter N+1
+    # (activable via ENABLE_DB_PROFILING=true)
     try:
         from ext import setup_db_profiler
 
@@ -302,7 +311,8 @@ def create_app(config_name: str | None = None):
     # ✅ Skip Socket.IO pour les scripts (évite blocage)
     skip_socketio = os.getenv("SKIP_SOCKETIO", "false").lower() == "true"
 
-    # Définir cors_origins même si Socket.IO est désactivé (nécessaire pour CORS plus bas)
+    # Définir cors_origins même si Socket.IO est désactivé
+    # (nécessaire pour CORS plus bas)
     if config_name == "development":
         cors_origins: str | list[str] = "*"  # dev permissif
     else:
@@ -332,7 +342,8 @@ def create_app(config_name: str | None = None):
         ):
             allow_ws_upgrades = False
 
-        # NB: pas de 'upgrade_timeout' (paramètre inexistant) ni 'cookie=True' (type incompatible)
+        # NB: pas de 'upgrade_timeout' (paramètre inexistant)
+        # ni 'cookie=True' (type incompatible)
         socketio.init_app(
             app,
             async_mode=async_mode,
@@ -353,7 +364,8 @@ def create_app(config_name: str | None = None):
             allow_ws_upgrades,
         )
 
-    # ✅ 2.9: Injection trace_id dans logs pour corrélation (une seule fois au démarrage)
+    # ✅ 2.9: Injection trace_id dans logs pour corrélation
+    # (une seule fois au démarrage)
     try:
         from shared.otel_setup import inject_trace_id_to_logs
 
@@ -429,9 +441,10 @@ def create_app(config_name: str | None = None):
     def _check_db_read_only():  # pyright: ignore[reportUnusedFunction]
         """Vérifie si la DB est en read-only (via chaos injector).
 
-        ⚠️ Chaos ne doit JAMAIS être activé en production (vérifier CHAOS_ENABLED=false).
-        Les requêtes GET/HEAD sont toujours autorisées, seules les écritures (POST/PUT/PATCH/DELETE)
-        sont bloquées.
+        ⚠️ Chaos ne doit JAMAIS être activé en production
+        (vérifier CHAOS_ENABLED=false).
+        Les requêtes GET/HEAD sont toujours autorisées,
+        seules les écritures (POST/PUT/PATCH/DELETE) sont bloquées.
         """
         # Ne bloquer que les méthodes d'écriture
         if request.method not in ["POST", "PUT", "PATCH", "DELETE"]:
@@ -447,12 +460,16 @@ def create_app(config_name: str | None = None):
             injector = get_chaos_injector()
             if injector.enabled and injector.db_read_only:
                 app.logger.warning(
-                    "[CHAOS] DB read-only: blocking %s %s", request.method, request.path
+                    "[CHAOS] DB read-only: blocking %s %s",
+                    request.method,
+                    request.path,
                 )
                 return jsonify(
                     {
                         "error": "Database is in read-only mode",
-                        "message": "Writes are temporarily disabled. Please try again later.",
+                        "message": (
+                            "Writes are temporarily disabled. Please try again later."
+                        ),
                     }
                 ), 503
         except ImportError:
@@ -544,7 +561,8 @@ def create_app(config_name: str | None = None):
         return response
 
     # 4) Sécurité (CSP)
-    # ✅ FIX: Désactiver HTTPS en mode testing pour éviter les redirections 302 dans les tests E2E
+    # ✅ FIX: Désactiver HTTPS en mode testing pour éviter
+    # les redirections 302 dans les tests E2E
     if config_name in {"testing", "development"}:
         csp = {
             "default-src": "'self'",
@@ -566,7 +584,8 @@ def create_app(config_name: str | None = None):
         }
         # En production, on force HTTPS pour la sécurité
         # Note: Les healthchecks Docker utilisent HTTP depuis localhost
-        # On va créer un endpoint /health exempt de Talisman pour permettre les healthchecks
+        # On va créer un endpoint /health exempt de Talisman
+        # pour permettre les healthchecks
         force_https = True
 
     # ✅ Définir /health AVANT Talisman pour qu'il ne soit pas soumis à force_https
@@ -586,13 +605,17 @@ def create_app(config_name: str | None = None):
     # Les healthchecks Docker utilisent HTTP depuis localhost
     @app.before_request
     def _bypass_talisman_for_healthcheck():  # pyright: ignore[reportUnusedFunction]
-        """Court-circuite Talisman pour /health depuis localhost (healthchecks Docker)."""
+        """Court-circuite Talisman pour /health depuis localhost
+        (healthchecks Docker).
+        """
         if request.path == "/health":
             # Vérifier si la requête vient de localhost (healthcheck Docker)
-            # Dans Docker, remote_addr peut être "127.0.0.1", "::1", ou l'IP du conteneur
+            # Dans Docker, remote_addr peut être "127.0.0.1", "::1",
+            # ou l'IP du conteneur
             remote = request.remote_addr or ""
             host = request.host or ""
-            # Si c'est depuis localhost OU si le schéma est HTTP (pas HTTPS), retourner directement
+            # Si c'est depuis localhost OU si le schéma est HTTP
+            # (pas HTTPS), retourner directement
             if (
                 remote in ("127.0.0.1", "::1", "localhost")
                 or request.scheme == "http"
@@ -609,20 +632,24 @@ def create_app(config_name: str | None = None):
 
     # ✅ FIX RC1: Intercepter /api/v1/prometheus/metrics avant Talisman
     @app.before_request
-    def _bypass_talisman_for_prometheus_metrics():  # pyright: ignore[reportUnusedFunction]
-        """Court-circuite Talisman pour /api/v1/prometheus/metrics (prometheus scraping sans HTTPS)."""
+    def _bypass_talisman_for_prometheus_metrics():  # pyright: ignore
+        """Court-circuite Talisman pour /api/v1/prometheus/metrics
+        (prometheus scraping sans HTTPS).
+        """
         if request.path == "/api/v1/prometheus/metrics":
             # Vérifier si la requête vient de localhost ou utilise HTTP
             remote = request.remote_addr or ""
             host = request.host or ""
-            # Si c'est depuis localhost OU si le schéma est HTTP (pas HTTPS) OU en mode testing, retourner directement
+            # Si c'est depuis localhost OU si le schéma est HTTP
+            # (pas HTTPS) OU en mode testing, retourner directement
             if (
                 remote in ("127.0.0.1", "::1", "localhost")
                 or request.scheme == "http"
                 or "localhost" in host
                 or current_app.config.get("TESTING", False)
             ):
-                # Appeler directement la méthode PrometheusMetrics.get() pour éviter Talisman
+                # Appeler directement la méthode PrometheusMetrics.get()
+                # pour éviter Talisman
                 from routes.prometheus_metrics import PrometheusMetrics
 
                 metrics_resource = PrometheusMetrics()
@@ -637,14 +664,17 @@ def create_app(config_name: str | None = None):
     else:
         strict_transport_security = config_name != "testing"
 
-    # ✅ FIX RC1: Double vérification pour s'assurer que force_https est False en testing
-    # (au cas où config_name n'est pas "testing" mais FLASK_CONFIG=testing)
+    # ✅ FIX RC1: Double vérification pour s'assurer que force_https
+    # est False en testing (au cas où config_name n'est pas "testing"
+    # mais FLASK_CONFIG=testing)
     if app.config.get("TESTING", False) or os.getenv("FLASK_CONFIG") == "testing":
         force_https = False
         strict_transport_security = False
 
-    # ✅ FIX: En mode testing, désactiver complètement Talisman pour éviter toute redirection 302
-    # Talisman peut encore causer des redirections même avec force_https=False dans certains cas
+    # ✅ FIX: En mode testing, désactiver complètement Talisman
+    # pour éviter toute redirection 302
+    # Talisman peut encore causer des redirections même avec
+    # force_https=False dans certains cas
     if (
         config_name == "testing"
         or app.config.get("TESTING", False)
@@ -782,21 +812,21 @@ def create_app(config_name: str | None = None):
 
             # ✅ 3.2: Ajouter header Deprecation sur toutes les routes /api/v1/*
             @app.after_request
-            def _add_deprecation_header_v1(response):  # pyright: ignore[reportUnusedFunction]
+            def _add_deprecation_header_v1(response):  # pyright: ignore
                 """Ajoute le header Deprecation sur les routes API v1."""
                 if request.path and request.path.startswith("/api/v1/"):
                     response.headers["Deprecation"] = 'version="v1"'
-                    response.headers["Sunset"] = (
-                        "Wed, 01 Jan 2025 00:00:00 GMT"  # Date estimée de suppression
-                    )
+                    # Date estimée de suppression
+                    response.headers["Sunset"] = "Wed, 01 Jan 2025 00:00:00 GMT"
                     response.headers["Link"] = (
                         '<https://docs.atmr.ch/api/v2>; rel="successor-version"'
                     )
                 return response
 
-            # ✅ 3.2: Ajouter header Deprecation sur routes legacy /api/* (si activées)
+            # ✅ 3.2: Ajouter header Deprecation sur routes legacy /api/*
+            # (si activées)
             @app.after_request
-            def _add_deprecation_header_legacy(response):  # pyright: ignore[reportUnusedFunction]
+            def _add_deprecation_header_legacy(response):  # pyright: ignore
                 """Ajoute le header Deprecation sur les routes API legacy."""
                 if (
                     request.path
@@ -812,14 +842,16 @@ def create_app(config_name: str | None = None):
                 return response
 
             # ✅ 3.2: Shim générique pour /api[/vX]/auth/login si RESTX rate
-            # Supporte /api/auth/login (legacy), /api/v1/auth/login et /api/v2/auth/login
+            # Supporte /api/auth/login (legacy), /api/v1/auth/login
+            # et /api/v2/auth/login
             @app.before_request
-            def _auth_login_shim_any_version():  # pyright: ignore[reportUnusedFunction]
+            def _auth_login_shim_any_version():  # pyright: ignore
                 p = request.path or ""
                 if request.method in ("POST", "OPTIONS") and re.fullmatch(
                     r"/api(?:/v\d+)?/auth/login", p
                 ):
-                    # Correspond à /api/auth/login (legacy), /api/v1/auth/login ou /api/v2/auth/login
+                    # Correspond à /api/auth/login (legacy),
+                    # /api/v1/auth/login ou /api/v2/auth/login
                     if request.method == "OPTIONS":
                         return make_response("", 204)
                     try:
@@ -901,9 +933,10 @@ def create_app(config_name: str | None = None):
         def index():  # pyright: ignore[reportUnusedFunction]
             return jsonify({"message": "Welcome to the Transport API"}), 200
 
-        # Compat: accès direct à l'autocomplete (certains environnements/proxy peuvent rater la déclaration RESTX)
+        # Compat: accès direct à l'autocomplete
+        # (certains environnements/proxy peuvent rater la déclaration RESTX)
         @app.route("/api/geocode/autocomplete", methods=["GET", "OPTIONS"])
-        def _compat_geocode_autocomplete():  # pyright: ignore[reportUnusedFunction]
+        def _compat_geocode_autocomplete():  # pyright: ignore
             if request.method == "OPTIONS":
                 return make_response("", 204)
             try:
@@ -915,11 +948,12 @@ def create_app(config_name: str | None = None):
                 # Laisse la 404 standard si la ressource n'est pas dispo
                 raise NotFound from err
 
-        # Compat: accès direct au login (certains environnements/proxy peuvent rater la déclaration RESTX)
+        # Compat: accès direct au login
+        # (certains environnements/proxy peuvent rater la déclaration RESTX)
         from routes.auth import Login  # Import au niveau module
 
         @app.route("/api/auth/login", methods=["POST", "OPTIONS"])
-        def _compat_auth_login():  # pyright: ignore[reportUnusedFunction]
+        def _compat_auth_login():  # pyright: ignore
             if request.method == "OPTIONS":
                 return make_response("", 204)
             # Laisse passer les réponses normales (200/4xx)
@@ -932,12 +966,13 @@ def create_app(config_name: str | None = None):
             return Login().post()
 
         @app.route("/api/v<int:version>/auth/login", methods=["POST", "OPTIONS"])
-        def _compat_auth_login_v(version: int):  # pyright: ignore[reportUnusedFunction]  # noqa: ARG001
+        def _compat_auth_login_v(version: int):  # pyright: ignore  # noqa: ARG001
             if request.method == "OPTIONS":
                 return make_response("", 204)
             return Login().post()
 
-        # --- Compat: endpoints companies les plus utilisés (évite 404 si RESTX rate) ---
+        # --- Compat: endpoints companies les plus utilisés
+        # (évite 404 si RESTX rate) ---
         from routes.companies import CompanyDriversList, CompanyMe
 
         @app.route("/api/companies/me", methods=["GET", "PUT", "OPTIONS"])
@@ -954,7 +989,7 @@ def create_app(config_name: str | None = None):
         @app.route(
             "/api/v<int:version>/companies/me", methods=["GET", "PUT", "OPTIONS"]
         )
-        def _compat_companies_me_v(version: int):  # pyright: ignore[reportUnusedFunction]  # noqa: ARG001
+        def _compat_companies_me_v(version: int):  # pyright: ignore  # noqa: ARG001
             if request.method == "OPTIONS":
                 return make_response("", 204)
             res = CompanyMe()
@@ -978,8 +1013,10 @@ def create_app(config_name: str | None = None):
                 return make_response("", 204)
             return CompanyDriversList().get()
 
-        # Note: L'endpoint /health est défini plus bas, après l'initialisation de Talisman
-        # Il sera exempt de la redirection HTTPS via un décorateur ou une configuration spéciale
+        # Note: L'endpoint /health est défini plus bas,
+        # après l'initialisation de Talisman
+        # Il sera exempt de la redirection HTTPS via un décorateur
+        # ou une configuration spéciale
 
         @app.route("/config")
         def show_config():  # pyright: ignore[reportUnusedFunction]
@@ -1007,7 +1044,7 @@ def create_app(config_name: str | None = None):
 
         # JWT : handlers d'erreurs
         @jwt.expired_token_loader
-        def expired_token_callback(_jwt_header, _jwt_payload):  # pyright: ignore[reportUnusedFunction]
+        def expired_token_callback(_jwt_header, _jwt_payload):  # pyright: ignore
             return jsonify(
                 {"error": "token_expired", "message": "Signature has expired"}
             ), 401
@@ -1021,10 +1058,11 @@ def create_app(config_name: str | None = None):
             return jsonify({"error": "missing_token", "message": str(error)}), 401
 
         @app.errorhandler(HTTPException)
-        def handle_http_exception(e: HTTPException):  # pyright: ignore[reportUnusedFunction]
+        def handle_http_exception(e: HTTPException):  # pyright: ignore
             if isinstance(e, NotFound):
                 app.logger.warning("404 on path: %s", request.path)
-            status_code: int = int(e.code or 500)  # <- évite int | None
+            # <- évite int | None
+            status_code: int = int(e.code or 500)
             return jsonify({"error": e.name, "message": e.description}), status_code
 
         @app.errorhandler(Exception)

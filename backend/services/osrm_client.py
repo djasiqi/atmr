@@ -78,7 +78,8 @@ CACHE_TTL_SECONDS = int(os.getenv("UD_OSRM_CACHE_TTL", "7200"))  # 2h par défau
 # Optional Redis import (safe) + alias d'exception
 # ============================================================
 try:
-    # Import runtime; on évite l'attribut '.exceptions' que Pylance ne connaît pas toujours
+    # Import runtime; on évite l'attribut '.exceptions'
+    # que Pylance ne connaît pas toujours
     from redis.exceptions import ConnectionError as _RedisConnError  # type: ignore
 except Exception:  # redis absent ou API inattendue
 
@@ -102,7 +103,8 @@ def _singleflight_do(
     Args:
         key: Clé de déduplication
         fn: Fonction à exécuter
-        max_wait_seconds: Temps maximum d'attente pour les followers (évite blocage indéfini)
+        max_wait_seconds: Temps maximum d'attente pour les followers
+            (évite blocage indéfini)
     """
     with _inflight_lock:
         entry = _inflight.get(key)
@@ -137,11 +139,15 @@ def _singleflight_do(
             with _inflight_lock:
                 _inflight.pop(key, None)
     else:
-        # ⚡ Timeout sur l'attente pour éviter blocage indéfini si la requête leader timeout
+        # ⚡ Timeout sur l'attente pour éviter blocage indéfini
+        # si la requête leader timeout
         if not entry["evt"].wait(timeout=max_wait_seconds):
             # Timeout d'attente → exécuter directement pour éviter blocage en cascade
             logger.warning(
-                "[OSRM] Singleflight wait timeout (%ds) for key=%s..., executing directly",
+                (
+                    "[OSRM] Singleflight wait timeout (%ds) for key=%s..., "
+                    "executing directly"
+                ),
                 max_wait_seconds,
                 key[:16],
             )
@@ -183,7 +189,8 @@ def _fallback_matrix(
     coords: List[Tuple[float, float]], avg_kmh: float = 50.0
 ) -> List[List[float]]:
     # ✅ Standardisé à 50 km/h selon plan d'audit (au lieu de 25 km/h)
-    """Fallback durations matrix (seconds) using haversine distance and an average speed.
+    """Fallback durations matrix (seconds) using haversine distance
+    and an average speed.
     Symmetric, diagonal 0.0.
     """
     n = len(coords)
@@ -599,7 +606,10 @@ def build_distance_matrix_osrm(
             # ✅ 2.3: Utiliser retry uniformisé
             def _fetch_table_data():
                 logger.info(
-                    "[OSRM] 🔵 Requesting table: sources=%d destinations=%d timeout=%ds base_url=%s",
+                    (
+                        "[OSRM] 🔵 Requesting table: sources=%d destinations=%d "
+                        "timeout=%ds base_url=%s"
+                    ),
                     len(src_block),
                     len(all_dests),
                     timeout,
@@ -618,14 +628,20 @@ def build_distance_matrix_osrm(
                     )
                     request_duration_ms = int((time.time() - request_start) * 1000)
                     logger.info(
-                        "[OSRM] ✅ Table request successful: duration_ms=%d sources=%d destinations=%d",
+                        (
+                            "[OSRM] ✅ Table request successful: duration_ms=%d "
+                            "sources=%d destinations=%d"
+                        ),
                         request_duration_ms,
                         len(src_block),
                         len(all_dests),
                     )
                     if request_duration_ms > timeout * 1000 * 0.8:  # >80% du timeout
                         logger.warning(
-                            "[OSRM] ⚠️ Request took %d ms (close to timeout %ds) - consider increasing timeout",
+                            (
+                                "[OSRM] ⚠️ Request took %d ms (close to timeout %ds) - "
+                                "consider increasing timeout"
+                            ),
                             request_duration_ms,
                             timeout,
                         )
@@ -704,7 +720,10 @@ def build_distance_matrix_osrm(
             # Redis HS -> log mais on continue
             redis_available = False
             logger.warning(
-                "[OSRM] Redis connection failed when writing to cache - continuing without cache"
+                (
+                    "[OSRM] Redis connection failed when writing to cache - "
+                    "continuing without cache"
+                )
             )
         except Exception:
             logger.warning("[OSRM] Redis setex failed", exc_info=True)
@@ -739,7 +758,8 @@ def route_info(
     base_url: str,
     profile: str = "driving",
     waypoints: List[Tuple[float, float]] | None = None,
-    timeout: int = 15,  # ✅ Augmenté pour routes longues multi-points
+    timeout: int = 15,  # ✅ Augmenté pour routes longues
+    # multi-points
     redis_client: Any | None = None,
     coord_precision: int = 5,
     overview: str = "false",
@@ -749,7 +769,8 @@ def route_info(
     avg_speed_kmh_fallback: float = 50.0,  # ✅ Standardisé à 50 km/h selon plan d'audit
     cache_ttl_s: int | None = None,
 ) -> Dict[str, Any]:
-    """Retourne un dict: {"duration": sec, "distance": m, "geometry": ..., "legs": [...]}
+    """Retourne un dict: {"duration": sec, "distance": m, "geometry": ...,
+    "legs": [...]}
     Fallback: haversine + vitesse moyenne.
     """
     key = _canonical_key_route(
@@ -768,7 +789,8 @@ def route_info(
                 if "duration" in cached and "distance" in cached:
                     # ✅ Track cache hit
                     increment_cache_hit(cache_type="route")
-                    # ✅ S'assurer que fallback est présent dans le cache (rétrocompatibilité)
+                    # ✅ S'assurer que fallback est présent dans le cache
+                    # (rétrocompatibilité)
                     if "fallback" not in cached:
                         cached["fallback"] = False
                     return cached
@@ -823,7 +845,8 @@ def route_info(
         requests.RequestException,
         Exception,
     ) as e:
-        # ✅ Gestion d'erreurs améliorée : Fallback pour toutes les erreurs (réseau/timeout/autres)
+        # ✅ Gestion d'erreurs améliorée : Fallback pour toutes les erreurs
+        # (réseau/timeout/autres)
         error_type = (
             "network/timeout"
             if isinstance(
@@ -866,7 +889,10 @@ def route_info(
                 logger.debug("OSRM cache SET key=%s ttl=%ss", cache_key, ttl)
     except _RedisConnError:
         logger.warning(
-            "[OSRM] Redis connection failed when writing to cache - continuing without cache"
+            (
+                "[OSRM] Redis connection failed when writing to cache - "
+                "continuing without cache"
+            )
         )
     except Exception:
         logger.warning("[OSRM] Redis setex failed (route)", exc_info=True)
@@ -886,7 +912,8 @@ def eta_seconds(
     coord_precision: int = 5,
     avg_speed_kmh_fallback: float = 50.0,  # ✅ Standardisé à 50 km/h selon plan d'audit
 ) -> int:
-    """Calcule un ETA (secondes) robuste via OSRM /route, avec cache + fallback haversine."""
+    """Calcule un ETA (secondes) robuste via OSRM /route,
+    avec cache + fallback haversine."""
     info = route_info(
         origin,
         destination,
@@ -937,7 +964,10 @@ class CircuitBreaker:
                     time_since_last_failure = time.time() - self.last_failure_time
                     if time_since_last_failure >= self.timeout_duration:
                         logger.info(
-                            "[CircuitBreaker] OPEN -> HALF_OPEN (timeout expired: %.1fs >= %ds, allowing test request)",
+                            (
+                                "[CircuitBreaker] OPEN -> HALF_OPEN "
+                                "(timeout expired: %.1fs >= %ds, allowing test request)"
+                            ),
                             time_since_last_failure,
                             self.timeout_duration,
                         )
@@ -947,13 +977,20 @@ class CircuitBreaker:
                         # ⚡ Continuer pour tenter l'appel en HALF_OPEN
                     else:
                         remaining = self.timeout_duration - time_since_last_failure
-                        msg = f"CircuitBreaker OPEN (failures: {self.failure_count}, remaining: {remaining:.1f}s/{self.timeout_duration}s)"
+                        msg = (
+                            f"CircuitBreaker OPEN (failures: {self.failure_count}, "
+                            f"remaining: {remaining:.1f}s/{self.timeout_duration}s)"
+                        )
                         logger.warning("[CircuitBreaker] %s", msg)
                         raise Exception(msg)
                 else:
-                    # Pas de last_failure_time mais état OPEN -> passer en HALF_OPEN pour test
+                    # Pas de last_failure_time mais état OPEN
+                    # -> passer en HALF_OPEN pour test
                     logger.info(
-                        "[CircuitBreaker] OPEN -> HALF_OPEN (no last_failure_time, resetting)"
+                        (
+                            "[CircuitBreaker] OPEN -> HALF_OPEN "
+                            "(no last_failure_time, resetting)"
+                        )
                     )
                     self.state = "HALF_OPEN"
                     self.failure_count = 0
@@ -985,7 +1022,10 @@ class CircuitBreaker:
                 if self.failure_count >= self.failure_threshold:
                     if self.state != "OPEN":
                         logger.warning(
-                            "[CircuitBreaker] %s -> OPEN (failures: %d >= threshold: %d, last_error: %s)",
+                            (
+                                "[CircuitBreaker] %s -> OPEN "
+                                "(failures: %d >= threshold: %d, last_error: %s)"
+                            ),
                             old_state,
                             self.failure_count,
                             self.failure_threshold,
@@ -1061,7 +1101,10 @@ def build_distance_matrix_osrm_with_cb(
         return result
     except Exception as e:
         logger.warning(
-            "[OSRM] Circuit-breaker triggered or call failed: %s (type=%s), using haversine fallback",
+            (
+                "[OSRM] Circuit-breaker triggered or call failed: %s (type=%s), "
+                "using haversine fallback"
+            ),
             str(e),
             type(e).__name__,
             exc_info=True,
@@ -1125,7 +1168,8 @@ class OSRMClient:
             **kwargs: Arguments supplémentaires passés à route_info()
 
         Returns:
-            Dict avec duration, distance, geometry, legs, et fallback (True si fallback utilisé)
+            Dict avec duration, distance, geometry, legs, et fallback
+                (True si fallback utilisé)
         """
         timeout_used = timeout if timeout is not None else self.timeout
         try:
@@ -1209,7 +1253,8 @@ def get_distance_time(
     redis_client: Any | None = None,
 ) -> Dict[str, float]:
     """Retourne un dict {"distance": m, "duration": s} en utilisant route_info.
-    base_url est requis par les appels existants du module (utiliser OSRM_BASE_URL sinon).
+    base_url est requis par les appels existants du module
+    (utiliser OSRM_BASE_URL sinon).
     """
     # Résolution de l'URL de base
     osrm_base = base_url or os.getenv("OSRM_BASE_URL", "http://localhost:5000")
@@ -1249,7 +1294,8 @@ def get_matrix(
         redis_client=redis_client,
     )
 
-    # Si origins/destinations sont des sous-ensembles/ordres différents, on extrait la sous-matrice correspondante
+    # Si origins/destinations sont des sous-ensembles/ordres différents,
+    # on extrait la sous-matrice correspondante
     idx = {pt: i for i, pt in enumerate(all_points)}
     sub = []
     for o in origins:
@@ -1284,7 +1330,8 @@ def get_distance_time_cached(origin, dest, date_str=None):
 
         date_str = datetime.now(UTC).strftime("%Y-%m-%d")
 
-    # Créer une clé de cache plus robuste (SHA-256 au lieu de MD5 pour meilleures pratiques)
+    # Créer une clé de cache plus robuste
+    # (SHA-256 au lieu de MD5 pour meilleures pratiques)
     origin_hash = hashlib.sha256(
         f"{origin[ORIG_ZERO]},{origin[1]}".encode()
     ).hexdigest()[:8]
@@ -1335,7 +1382,8 @@ def get_matrix_cached(origins, destinations, date_str=None):
 
         date_str = datetime.now(UTC).strftime("%Y-%m-%d")
 
-    # Créer une clé de cache pour la matrice (SHA-256 au lieu de MD5 pour meilleures pratiques)
+    # Créer une clé de cache pour la matrice
+    # (SHA-256 au lieu de MD5 pour meilleures pratiques)
     origins_str = ",".join([f"{o[0]},{o[1]}" for o in origins])
     dests_str = ",".join([f"{d[0]},{d[1]}" for d in destinations])
     matrix_hash = hashlib.sha256(f"{origins_str}|{dests_str}".encode()).hexdigest()[:16]

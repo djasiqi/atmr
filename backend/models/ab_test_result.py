@@ -65,7 +65,10 @@ class ABTestResult(db.Model):
 
     @override
     def __repr__(self) -> str:
-        return f"<ABTestResult {self.id} Booking:{self.booking_id} ML:{self.ml_delay_minutes}>"
+        return (
+            f"<ABTestResult {self.id} "
+            f"Booking:{self.booking_id} ML:{self.ml_delay_minutes}>"
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Convertit en dictionnaire."""

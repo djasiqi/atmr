@@ -110,8 +110,12 @@ def _get_company_security(company: Company | None) -> Dict[str, Any]:
     try:
         payload = json.loads(company.autonomous_config)
     except (ValueError, TypeError):
+        warning_msg = (
+            "[AUTH][Enterprise] Impossible de parser autonomous_config "
+            + "pour company_id=%s"
+        )
         logger.warning(
-            "[AUTH][Enterprise] Impossible de parser autonomous_config pour company_id=%s",
+            warning_msg,
             getattr(company, "id", None),
         )
         return {}
@@ -235,9 +239,11 @@ def _store_mfa_challenge(
             json.dumps(payload),
         )
     else:  # pragma: no cover - fallback
-        logger.warning(
-            "[AUTH][Enterprise] Redis indisponible, impossible de stocker le challenge MFA."
+        warning_msg = (
+            "[AUTH][Enterprise] Redis indisponible, "
+            + "impossible de stocker le challenge MFA."
         )
+        logger.warning(warning_msg)
     return challenge_id
 
 

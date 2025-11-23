@@ -145,7 +145,10 @@ class DLQResource(Resource):
                 alerts.append(
                     {
                         "severity": "warning",
-                        "message": f"Âge max DLQ: {max_age_minutes} minutes (> {DLQ_AGE_THRESHOLD_MINUTES} min)",
+                        "message": (
+                            f"Âge max DLQ: {max_age_minutes} minutes "
+                            f"(> {DLQ_AGE_THRESHOLD_MINUTES} min)"
+                        ),
                         "threshold": DLQ_AGE_THRESHOLD_MINUTES,
                         "value": max_age_minutes,
                     }

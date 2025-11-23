@@ -49,7 +49,8 @@ def escape_js(text: str | None) -> str | None:
     text_str = text_str.replace('"', '\\"')
     text_str = text_str.replace("\n", "\\n")
     text_str = text_str.replace("\r", "\\r")
-    # Dernière transformation avant return (RET504 : assignment avant return nécessaire ici
+    # Dernière transformation avant return
+    # (RET504 : assignment avant return nécessaire ici
     # car on fait plusieurs transformations successives)
     return text_str.replace("\t", "\\t")
 
@@ -113,7 +114,11 @@ def sanitize_email(email: str | None) -> str | None:
 
     # Pattern basique pour email (RFC 5322 simplifié)
     email_pattern = re.compile(
-        r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+        (
+            r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9]"
+            r"(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
+            r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+        )
     )
 
     if not email_pattern.match(email_str):

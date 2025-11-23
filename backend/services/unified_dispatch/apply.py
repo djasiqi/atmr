@@ -53,7 +53,10 @@ def _get_scoped_session(db_instance):
         return scoped_session(sessionmaker(bind=engine))
     except Exception as e:
         logger.warning(
-            "[Apply] Erreur lors de la création de scoped_session: %s, utilisation de db.session",
+            (
+                "[Apply] Erreur lors de la création de scoped_session: %s, "
+                "utilisation de db.session"
+            ),
             e,
         )
         # Dernier recours : utiliser la session principale
@@ -165,7 +168,8 @@ def apply_assignments(
         # ✅ FIX RC2: Expirer tous les objets après rollback pour forcer le rechargement
         db.session.expire_all()
         # ✅ FIX RC2: S'assurer que tous les objets modifiés sont bien restaurés
-        # En expirant tous les objets, SQLAlchemy les rechargera depuis la DB au prochain accès
+        # En expirant tous les objets, SQLAlchemy les rechargera depuis la DB
+        # au prochain accès
         return {
             "applied": [],
             "skipped": {},
@@ -185,7 +189,9 @@ def _apply_assignments_inner(
     enforce_driver_checks: bool = True,
     return_pairs: bool = False,
 ) -> Dict[str, Any]:
-    """Logique interne d'application des assignations (exécutée dans une transaction)."""
+    """Logique interne d'application des assignations
+    (exécutée dans une transaction).
+    """
 
     # Helper: attr ou clé dict
     def _aget(obj: Any, name: str, default: Any = None) -> Any:
@@ -225,7 +231,8 @@ def _apply_assignments_inner(
     )
 
     # 2) Chargements + (optionnel) verrouillage
-    # ✅ FIX RC4: Flush la session pour s'assurer que les objets en attente sont visibles
+    # ✅ FIX RC4: Flush la session pour s'assurer que les objets en attente
+    # sont visibles
     db.session.flush()
 
     bookings_q = Booking.query.options(joinedload(Booking.driver)).filter(
@@ -274,7 +281,8 @@ def _apply_assignments_inner(
 
     for b_id, a in chosen_by_booking.items():
         b = booking_map.get(b_id)
-        # ✅ FIX RC2/RC4: Recharger le booking depuis la DB pour éviter problèmes de session
+        # ✅ FIX RC2/RC4: Recharger le booking depuis la DB pour éviter
+        # problèmes de session
         if b is None:
             # Essayer de flush la session pour voir les objets en attente
             db.session.flush()
@@ -287,7 +295,10 @@ def _apply_assignments_inner(
         if b is None:
             # ✅ FIX RC4: Logger plus d'infos pour debug
             logger.warning(
-                "[Apply] Booking id=%s company_id=%s not found in booking_map (size=%d) or DB query",
+                (
+                    "[Apply] Booking id=%s company_id=%s not found in "
+                    "booking_map (size=%d) or DB query"
+                ),
                 b_id,
                 company_id,
                 len(booking_map),
@@ -485,7 +496,10 @@ def _apply_assignments_inner(
                                     conflicts_count += 1
                                     increment_db_conflict_counter()
                                     logger.debug(
-                                        "[Apply] Conflit unique ignoré (idempotence): %s",
+                                        (
+                                            "[Apply] Conflit unique ignoré "
+                                            "(idempotence): %s"
+                                        ),
                                         conflict_err,
                                     )
                                 else:
@@ -493,7 +507,10 @@ def _apply_assignments_inner(
 
                         if conflicts_count > 0:
                             logger.info(
-                                "[Apply] UPSERT: %d insertions, %d conflits ignorés (idempotent)",
+                                (
+                                    "[Apply] UPSERT: %d insertions, %d conflits "
+                                    "ignorés (idempotent)"
+                                ),
                                 len(new_assignments) - conflicts_count,
                                 conflicts_count,
                             )
@@ -505,7 +522,10 @@ def _apply_assignments_inner(
                     except Exception as upsert_err:
                         # Fallback sur bulk_insert si ON CONFLICT non supporté
                         logger.warning(
-                            "[Apply] ON CONFLICT not supported, falling back to bulk_insert: %s",
+                            (
+                                "[Apply] ON CONFLICT not supported, falling back "
+                                "to bulk_insert: %s"
+                            ),
                             upsert_err,
                         )
                         db.session.bulk_insert_mappings(
@@ -549,7 +569,10 @@ def _apply_assignments_inner(
 
     if not updates:
         logger.info(
-            "[Apply] No booking updates (company_id=%s) - assignments/ETA refreshed only.",
+            (
+                "[Apply] No booking updates (company_id=%s) - "
+                "assignments/ETA refreshed only."
+            ),
             company_id,
         )
 
@@ -571,7 +594,10 @@ def _apply_assignments_inner(
             )
             is_return = getattr(booking_obj, "is_return", None) if booking_obj else None
             logger.warning(
-                "[Apply] Skipped booking_id=%s reason=%s scheduled_time=%s time_confirmed=%s is_return=%s",
+                (
+                    "[Apply] Skipped booking_id=%s reason=%s scheduled_time=%s "
+                    "time_confirmed=%s is_return=%s"
+                ),
                 skipped_id,
                 reason,
                 scheduled_time,
@@ -618,7 +644,10 @@ def _apply_assignments_inner(
                         notify_driver_new_booking(int(d_id), booking_obj)
                     except Exception:
                         logger.exception(
-                            "[Apply] notify_driver_new_booking failed booking_id=%s driver_id=%s",
+                            (
+                                "[Apply] notify_driver_new_booking failed "
+                                "booking_id=%s driver_id=%s"
+                            ),
                             b_id,
                             d_id,
                         )

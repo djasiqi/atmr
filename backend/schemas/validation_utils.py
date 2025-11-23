@@ -73,9 +73,11 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
         # Si c'est une liste de messages, prendre directement
         if isinstance(messages, list):
             formatted["errors"][field] = messages
-        # Si c'est un dict (champs nested ou erreurs de liste), formater récursivement
+        # Si c'est un dict (champs nested ou erreurs de liste),
+        # formater récursivement
         elif isinstance(messages, dict):
-            # ⚡ Détecter si c'est une erreur de validation de liste (clés = indices entiers)
+            # ⚡ Détecter si c'est une erreur de validation de liste
+            # (clés = indices entiers)
             # Exemple: {'client_ids': {1: ['Must be greater than or equal to 1.']}}
             all_keys_are_int_indices = all(
                 (isinstance(k, int) or (isinstance(k, str) and k.isdigit()))
@@ -83,7 +85,8 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
             )
 
             if all_keys_are_int_indices:
-                # ⚡ Cas: erreur de validation de liste (regrouper toutes les erreurs sous le nom du champ)
+                # ⚡ Cas: erreur de validation de liste
+                # (regrouper toutes les erreurs sous le nom du champ)
                 all_list_errors: list[str] = []
                 for _, index_msgs in messages.items():
                     if isinstance(index_msgs, list):
@@ -92,7 +95,8 @@ def _format_validation_errors(errors: Dict[str, Any]) -> Dict[str, Any]:
                         all_list_errors.append(str(index_msgs))
                 formatted["errors"][field] = all_list_errors
             # ⚡ Éviter de créer une structure errors.errors.errors...
-            # Si le dict contient déjà "errors" ou "message", extraire directement les champs
+            # Si le dict contient déjà "errors" ou "message",
+            # extraire directement les champs
             elif "errors" in messages and isinstance(messages["errors"], dict):
                 # Cas: erreur nested avec structure {errors: {...}}
                 for nested_field, nested_msgs in messages["errors"].items():
@@ -125,8 +129,10 @@ def validate_query_params(
 
     Args:
         schema: Schema Marshmallow à utiliser pour la validation
-        query_params: Query parameters à valider (dict, request.args ou ImmutableMultiDict)
-        strict: Si True, rejette les champs inconnus (défaut: False pour query params)
+        query_params: Query parameters à valider
+            (dict, request.args ou ImmutableMultiDict)
+        strict: Si True, rejette les champs inconnus
+            (défaut: False pour query params)
 
     Returns:
         Dict validé et nettoyé
@@ -140,7 +146,9 @@ def validate_query_params(
         from schemas.validation_utils import validate_query_params
 
         try:
-            validated_params = validate_query_params(PaginationQuerySchema(), request.args)
+            validated_params = validate_query_params(
+                PaginationQuerySchema(), request.args
+            )
             page = validated_params.get("page", 1)
             per_page = validated_params.get("per_page", 50)
         except ValidationError as e:

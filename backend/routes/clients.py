@@ -502,7 +502,8 @@ class ResetPassword(Resource):
             new_password = data.get("new_password", "").strip()
             confirm_password = data.get("confirm_password", "").strip()
 
-            # Validation des champs - combiner toutes les validations pour réduire les returns
+            # Validation des champs - combiner toutes les validations
+            # pour réduire les returns
             error_message = None
 
             if not old_password or not new_password or not confirm_password:
@@ -524,8 +525,10 @@ class ResetPassword(Resource):
             if error_message:
                 return {"error": error_message}, 400
 
-            # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # Le mot de passe est validé explicitement
+            # par validate_password_or_raise() ci-dessus
+            # nosemgrep: python.django.security.audit.unvalidated-password.
+            # unvalidated-password
             current_user.set_password(new_password)
             db.session.commit()
 
@@ -537,7 +540,8 @@ class ResetPassword(Resource):
                 body=(
                     f"Bonjour {current_user.first_name},\n\n"
                     "Votre mot de passe a été modifié avec succès. "
-                    "Si vous n'êtes pas à l'origine de cette modification, veuillez contacter immédiatement notre support."
+                    "Si vous n'êtes pas à l'origine de cette modification, "
+                    "veuillez contacter immédiatement notre support."
                 ),
             )
             mail.send(msg)
@@ -607,10 +611,16 @@ class ClientsList(Resource):
                     description="Adresse de domicile (sera géocodée automatiquement)"
                 ),
                 "billing_address": fields.String(
-                    description="Adresse de facturation (optionnelle, sera géocodée automatiquement)"
+                    description=(
+                        "Adresse de facturation (optionnelle, "
+                        "sera géocodée automatiquement)"
+                    )
                 ),
                 "domicile_address": fields.String(
-                    description="Adresse de domicile (optionnelle, sera géocodée automatiquement)"
+                    description=(
+                        "Adresse de domicile (optionnelle, "
+                        "sera géocodée automatiquement)"
+                    )
                 ),
                 "domicile_zip": fields.String(description="Code postal"),
                 "domicile_city": fields.String(description="Ville"),
@@ -666,8 +676,11 @@ class ClientsList(Resource):
                         new_client.domicile_address = main_address
                         new_client.domicile_lat = coords.get("lat")
                         new_client.domicile_lon = coords.get("lon")
+                        log_msg = (
+                            "✅ Adresse de domicile géocodée pour %s %s: %s -> (%s, %s)"
+                        )
                         app_logger.info(
-                            "✅ Adresse de domicile géocodée pour %s %s: %s -> (%s, %s)",
+                            log_msg,
                             data["first_name"],
                             data["last_name"],
                             main_address,
@@ -699,8 +712,12 @@ class ClientsList(Resource):
                         new_client.billing_address = billing_address
                         new_client.billing_lat = coords.get("lat")
                         new_client.billing_lon = coords.get("lon")
+                        log_msg = (
+                            "✅ Adresse de facturation géocodée pour %s %s: %s "
+                            "-> (%s, %s)"
+                        )
                         app_logger.info(
-                            "✅ Adresse de facturation géocodée pour %s %s: %s -> (%s, %s)",
+                            log_msg,
                             data["first_name"],
                             data["last_name"],
                             billing_address,

@@ -88,7 +88,8 @@ class TestDispatchEnvUltraTargeted:
             mock_logging.warning.assert_called()  # Ligne 281
 
     def test_check_time_window_constraint_exception_lines_373_375(self):
-        """Test _check_time_window_constraint pour couvrir EXACTEMENT les lignes 373-375"""
+        """Test _check_time_window_constraint pour couvrir EXACTEMENT
+        les lignes 373-375"""
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
@@ -633,7 +634,8 @@ class TestDispatchEnvUltraTargeted:
         assert isinstance(info, dict)
 
     def test_environment_consistency_all_lines(self):
-        """Test cohérence de l'environnement pour couvrir TOUTES les lignes manquantes"""
+        """Test cohérence de l'environnement pour couvrir
+        TOUTES les lignes manquantes"""
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 

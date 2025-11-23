@@ -82,7 +82,8 @@ class TestPersistedFixture:
         assert reloaded.company_id == company.id, "Driver doit être lié à la company"
 
     def test_persisted_fixture_uses_db_session_correctly(self, db):
-        """Test que persisted_fixture utilise db.session correctement (Flask-SQLAlchemy)."""
+        """Test que persisted_fixture utilise db.session correctement
+        (Flask-SQLAlchemy)."""
         # Vérifier que db est bien une instance Flask-SQLAlchemy
         assert hasattr(db, "session"), (
             "db doit être une instance Flask-SQLAlchemy avec .session"

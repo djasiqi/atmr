@@ -55,7 +55,8 @@ def upgrade():
             existing_server_default=sa.text("'SEMI_AUTO'::dispatchmode"),
         )
 
-    # Commented out: cannot change from TEXT to VARCHAR(500) if existing data exceeds 500 chars
+    # Commented out: cannot change from TEXT to VARCHAR(500)
+    # if existing data exceeds 500 chars
     # with op.batch_alter_table('driver', schema=None) as batch_op:
     #     batch_op.alter_column('driver_photo',
     #            existing_type=sa.TEXT(),
@@ -217,7 +218,9 @@ def downgrade():
                 "MANUAL", "SEMI_AUTO", "FULLY_AUTO", name="dispatchmode"
             ),
             comment=None,
-            existing_comment="Mode de fonctionnement du dispatch: manual, semi_auto, fully_auto",
+            existing_comment=(
+                "Mode de fonctionnement du dispatch: manual, semi_auto, fully_auto"
+            ),
             existing_nullable=False,
             existing_server_default=sa.text("'SEMI_AUTO'::dispatchmode"),
         )

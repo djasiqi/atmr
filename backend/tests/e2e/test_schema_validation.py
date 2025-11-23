@@ -16,11 +16,13 @@ class TestSchemaValidationE2E:
     """Tests E2E pour validation des schemas sur les endpoints validés."""
 
     def test_no_redirects_in_auth_endpoints(self, client):
-        """✅ Test de non-régression : Vérifier qu'aucune redirection 302 n'est générée en mode testing."""
+        """✅ Test de non-régression : Vérifier qu'aucune redirection 302
+        n'est générée en mode testing."""
         # Tester login avec payload invalide (devrait retourner 400, pas 302)
         response = client.post("/api/v1/auth/login", json={"password": "test"})
         assert response.status_code != 302, (
-            f"Pas de redirections en mode testing pour /api/v1/auth/login, reçu: {response.status_code} "
+            f"Pas de redirections en mode testing pour /api/v1/auth/login, "
+            f"reçu: {response.status_code} "
             f"(Location: {response.headers.get('Location', 'N/A')})"
         )
         # Vérifier que c'est soit 400 (validation) soit 404/500 (erreur) mais pas 302
@@ -31,7 +33,8 @@ class TestSchemaValidationE2E:
         # Tester register avec payload invalide (devrait retourner 400, pas 302)
         response = client.post("/api/v1/auth/register", json={"email": "invalid"})
         assert response.status_code != 302, (
-            f"Pas de redirections en mode testing pour /api/v1/auth/register, reçu: {response.status_code} "
+            f"Pas de redirections en mode testing pour /api/v1/auth/register, "
+            f"reçu: {response.status_code} "
             f"(Location: {response.headers.get('Location', 'N/A')})"
         )
         # Vérifier que c'est soit 400 (validation) soit 404/500 (erreur) mais pas 302
@@ -55,18 +58,25 @@ class TestSchemaValidationE2E:
             if location.endswith("/login"):
                 # Redirection vers login = erreur d'authentification (devrait être 401)
                 pytest.fail(
-                    f"Redirection 302 vers /login inattendue (devrait être 401 ou 400). Location: {location}"
+                    (
+                        f"Redirection 302 vers /login inattendue "
+                        f"(devrait être 401 ou 400). Location: {location}"
+                    )
                 )
             elif location.endswith("/"):
                 # Redirection après login = OK, mais devrait être 200 avec token
                 pytest.fail(
-                    f"Redirection 302 après login inattendue (devrait être 200 avec token). Location: {location}"
+                    (
+                        f"Redirection 302 après login inattendue "
+                        f"(devrait être 200 avec token). Location: {location}"
+                    )
                 )
             else:
                 pytest.fail(f"Redirection 302 inattendue vers {location}")
 
         assert response.status_code in [200, 400, 404, 429, 500], (
-            f"Status code inattendu: {response.status_code}. Response: {response.get_data(as_text=True)[:200]}"
+            f"Status code inattendu: {response.status_code}. "
+            f"Response: {response.get_data(as_text=True)[:200]}"
         )
         data = response.get_json() or {}
         assert (
@@ -84,11 +94,15 @@ class TestSchemaValidationE2E:
         if response.status_code == 302:
             location = response.headers.get("Location", "")
             pytest.fail(
-                f"Redirection 302 inattendue pour payload invalide (devrait être 400). Location: {location}"
+                (
+                    f"Redirection 302 inattendue pour payload invalide "
+                    f"(devrait être 400). Location: {location}"
+                )
             )
 
         assert response.status_code in [400, 404, 500], (
-            f"Status code inattendu: {response.status_code}. Response: {response.get_data(as_text=True)[:200]}"
+            f"Status code inattendu: {response.status_code}. "
+            f"Response: {response.get_data(as_text=True)[:200]}"
         )
         data = response.get_json() or {}
         assert (
@@ -118,11 +132,15 @@ class TestSchemaValidationE2E:
         if response.status_code == 302:
             location = response.headers.get("Location", "")
             pytest.fail(
-                f"Redirection 302 inattendue pour register (devrait être 200/201 ou 400). Location: {location}"
+                (
+                    f"Redirection 302 inattendue pour register "
+                    f"(devrait être 200/201 ou 400). Location: {location}"
+                )
             )
 
         assert response.status_code in [200, 201, 400, 404, 500], (
-            f"Status code inattendu: {response.status_code}. Response: {response.get_data(as_text=True)[:200]}"
+            f"Status code inattendu: {response.status_code}. "
+            f"Response: {response.get_data(as_text=True)[:200]}"
         )
         data = response.get_json() or {}
         assert (
@@ -221,7 +239,8 @@ class TestSchemaValidationE2E:
     def test_create_booking_invalid_schema(
         self, client, auth_headers, sample_user, db, sample_company
     ):
-        """Test POST /api/v1/clients/<id>/bookings avec payload invalide (champs manquants)."""
+        """Test POST /api/v1/clients/<id>/bookings avec payload invalide
+        (champs manquants)."""
         from models import Client, User
 
         client_user = User()
@@ -488,7 +507,8 @@ class TestSchemaValidationE2E:
         assert "message" in data or "errors" in data
 
     def test_create_manual_booking_valid_schema(self, client, db, sample_company):
-        """✅ Test E2E POST /api/companies/me/reservations/manual avec ManualBookingCreateSchema valide."""
+        """✅ Test E2E POST /api/companies/me/reservations/manual
+        avec ManualBookingCreateSchema valide."""
         from datetime import UTC, timedelta
 
         from ext import bcrypt
@@ -565,7 +585,8 @@ class TestSchemaValidationE2E:
             assert "id" in data or "booking_id" in data or "message" in data
 
     def test_create_manual_booking_invalid_schema(self, client, db, sample_company):
-        """✅ Test E2E POST /api/companies/me/reservations/manual avec ManualBookingCreateSchema invalide."""
+        """✅ Test E2E POST /api/companies/me/reservations/manual
+        avec ManualBookingCreateSchema invalide."""
         from datetime import UTC, timedelta
 
         from ext import bcrypt
@@ -708,7 +729,8 @@ class TestSchemaValidationE2E:
         assert ("message" in data) or ("errors" in data) or ("error" in data)
 
     def test_create_client_valid_schema_self_service(self, client, db, sample_company):
-        """✅ Test E2E POST /api/companies/me/clients avec ClientCreateSchema valide (SELF_SERVICE)."""
+        """✅ Test E2E POST /api/companies/me/clients
+        avec ClientCreateSchema valide (SELF_SERVICE)."""
         from models import User
 
         # Login en tant que company
@@ -733,7 +755,8 @@ class TestSchemaValidationE2E:
         assert response.status_code in [201, 400, 429, 500]  # 429 rate limit toléré
 
     def test_create_client_valid_schema_private(self, client, db, sample_company):
-        """✅ Test E2E POST /api/companies/me/clients avec ClientCreateSchema valide (PRIVATE)."""
+        """✅ Test E2E POST /api/companies/me/clients
+        avec ClientCreateSchema valide (PRIVATE)."""
         from models import User, UserRole
 
         # Authentification: générer un JWT company directement
@@ -772,7 +795,8 @@ class TestSchemaValidationE2E:
         assert response.status_code in [201, 400, 429]
 
     def test_create_client_valid_schema_corporate(self, client, db, sample_company):
-        """✅ Test E2E POST /api/companies/me/clients avec ClientCreateSchema valide (CORPORATE)."""
+        """✅ Test E2E POST /api/companies/me/clients
+        avec ClientCreateSchema valide (CORPORATE)."""
         from models import User, UserRole
 
         # Authentification: générer un JWT company directement
@@ -812,7 +836,8 @@ class TestSchemaValidationE2E:
         assert response.status_code in [201, 400, 429]
 
     def test_create_client_invalid_schema(self, client, db, sample_company):
-        """✅ Test E2E POST /api/companies/me/clients avec ClientCreateSchema invalide."""
+        """✅ Test E2E POST /api/companies/me/clients
+        avec ClientCreateSchema invalide."""
         from models import User, UserRole
 
         # Authentification: générer un JWT company directement
@@ -953,7 +978,8 @@ class TestSchemaValidationE2E:
         assert ("message" in data) or ("errors" in data) or ("error" in data)
 
     def test_create_payment_valid_schema(self, client, db):
-        """✅ Test E2E POST /api/v1/payments/booking/<id> avec PaymentCreateSchema valide."""
+        """✅ Test E2E POST /api/v1/payments/booking/<id>
+        avec PaymentCreateSchema valide."""
         from datetime import UTC, timedelta
 
         from ext import bcrypt
@@ -1048,7 +1074,8 @@ class TestSchemaValidationE2E:
             assert "error" in data
 
     def test_create_payment_invalid_schema(self, client, db):
-        """✅ Test E2E POST /api/v1/payments/booking/<id> avec PaymentCreateSchema invalide."""
+        """✅ Test E2E POST /api/v1/payments/booking/<id>
+        avec PaymentCreateSchema invalide."""
         from datetime import UTC, timedelta
 
         from ext import bcrypt
@@ -1205,7 +1232,8 @@ class TestSchemaValidationE2E:
         assert "message" in data or "errors" in data
 
     def test_update_payment_status_valid_schema(self, client, db):
-        """✅ Test E2E PUT /api/v1/payments/<id> avec PaymentStatusUpdateSchema valide."""
+        """✅ Test E2E PUT /api/v1/payments/<id>
+        avec PaymentStatusUpdateSchema valide."""
         from datetime import UTC, timedelta
 
         from ext import bcrypt
@@ -1329,7 +1357,8 @@ class TestSchemaValidationE2E:
             assert "error" in data
 
     def test_update_payment_status_invalid_schema(self, client, db):
-        """✅ Test E2E PUT /api/v1/payments/<id> avec PaymentStatusUpdateSchema invalide."""
+        """✅ Test E2E PUT /api/v1/payments/<id>
+        avec PaymentStatusUpdateSchema invalide."""
         from datetime import UTC, timedelta
 
         from ext import bcrypt
@@ -1690,7 +1719,8 @@ class TestSchemaValidationE2E:
         assert "message" in data or "errors" in data
 
     def test_update_driver_profile_valid_schema(self, client, db, sample_company):
-        """✅ Test E2E PUT /api/v1/driver/me/profile avec DriverProfileUpdateSchema valide."""
+        """✅ Test E2E PUT /api/v1/driver/me/profile
+        avec DriverProfileUpdateSchema valide."""
         from ext import bcrypt
         from models import Driver, User, UserRole
 
@@ -1780,7 +1810,8 @@ class TestSchemaValidationE2E:
         assert "message" in data
 
     def test_update_driver_profile_invalid_schema(self, client, db, sample_company):
-        """✅ Test E2E PUT /api/v1/driver/me/profile avec DriverProfileUpdateSchema invalide."""
+        """✅ Test E2E PUT /api/v1/driver/me/profile
+        avec DriverProfileUpdateSchema invalide."""
         from ext import bcrypt
         from models import Driver, User, UserRole
 
@@ -1905,7 +1936,8 @@ class TestSchemaValidationE2E:
         response = client.put(
             "/api/v1/driver/me/profile",
             json={
-                "employment_start_date": "15-01-2020"  # Format invalide (doit être YYYY-MM-DD)
+                # Format invalide (doit être YYYY-MM-DD)
+                "employment_start_date": "15-01-2020"
             },
             headers=driver_headers,
         )
@@ -1944,7 +1976,8 @@ class TestSchemaValidationE2E:
         assert "message" in data or "errors" in data
 
     def test_update_billing_settings_valid_schema(self, client, db, sample_company):
-        """✅ Test E2E PUT /api/v1/invoices/companies/<id>/billing-settings avec BillingSettingsUpdateSchema valide."""
+        """✅ Test E2E PUT /api/v1/invoices/companies/<id>/billing-settings
+        avec BillingSettingsUpdateSchema valide."""
         from models import CompanyBillingSettings, User
 
         # Créer CompanyBillingSettings pour la company
@@ -2010,7 +2043,8 @@ class TestSchemaValidationE2E:
         assert response.status_code == 200
 
     def test_update_billing_settings_invalid_schema(self, client, db, sample_company):
-        """✅ Test E2E PUT /api/v1/invoices/companies/<id>/billing-settings avec BillingSettingsUpdateSchema invalide."""
+        """✅ Test E2E PUT /api/v1/invoices/companies/<id>/billing-settings
+        avec BillingSettingsUpdateSchema invalide."""
         from models import CompanyBillingSettings, User
 
         # Créer CompanyBillingSettings pour la company
@@ -2214,7 +2248,8 @@ class TestSchemaValidationE2E:
         assert "message" in data or "errors" in data
 
     def test_generate_invoice_valid_schema(self, client, db, sample_company):
-        """✅ Test E2E POST /api/v1/invoices/companies/<id>/invoices/generate avec InvoiceGenerateSchema valide."""
+        """✅ Test E2E POST /api/v1/invoices/companies/<id>/invoices/generate
+        avec InvoiceGenerateSchema valide."""
         from datetime import UTC
 
         from ext import bcrypt
@@ -2339,7 +2374,8 @@ class TestSchemaValidationE2E:
         assert response.status_code in [201, 400, 404]
 
     def test_generate_invoice_invalid_schema(self, client, db, sample_company):
-        """✅ Test E2E POST /api/v1/invoices/companies/<id>/invoices/generate avec InvoiceGenerateSchema invalide."""
+        """✅ Test E2E POST /api/v1/invoices/companies/<id>/invoices/generate
+        avec InvoiceGenerateSchema invalide."""
         from models import User, UserRole
 
         # Auth company via JWT direct
@@ -2530,7 +2566,8 @@ class TestSchemaValidationE2E:
             },
             headers=company_headers,
         )
-        # L'endpoint vérifie cette condition après validation schema, donc 400 (ou 429 si rate limit atteint)
+        # L'endpoint vérifie cette condition après validation schema,
+        # donc 400 (ou 429 si rate limit atteint)
         assert response.status_code in [400, 429]  # 429 pour rate limiting
 
     # ========== COMPANIES ENDPOINTS ==========
@@ -2577,7 +2614,8 @@ class TestSchemaValidationE2E:
         assert response.status_code in [201, 400, 404]  # 404 si pas de company
 
     def test_create_driver_invalid_schema(self, authenticated_client):
-        """Test POST /api/companies/me/drivers/create avec payload invalide (champs manquants)."""
+        """Test POST /api/companies/me/drivers/create avec payload invalide
+        (champs manquants)."""
         response = authenticated_client.post(
             "/api/v1/companies/me/drivers/create",
             json={
@@ -2599,7 +2637,8 @@ class TestSchemaValidationE2E:
         assert response.status_code == 200
 
     def test_medical_establishments_invalid_query(self, authenticated_client):
-        """Test GET /api/medical/establishments avec query params invalides (limit trop élevé).
+        """Test GET /api/medical/establishments avec query params invalides
+        (limit trop élevé).
 
         Note: La route utilise un fallback sur reqparse qui limite automatiquement à 25,
         donc on accepte 200 avec limit=25 appliqué.
@@ -2622,7 +2661,8 @@ class TestSchemaValidationE2E:
         assert response.status_code in [200, 404]  # 404 si établissement introuvable
 
     def test_medical_services_invalid_query(self, authenticated_client):
-        """Test GET /api/medical/services avec query params invalides (establishment_id manquant)."""
+        """Test GET /api/medical/services avec query params invalides
+        (establishment_id manquant)."""
         response = authenticated_client.get("/api/v1/medical/services?q=cardio")
         # establishment_id est requis, donc 400 attendu
         assert response.status_code == 400
@@ -2637,7 +2677,8 @@ class TestSchemaValidationE2E:
         assert response.status_code in [200, 404]  # 404 si pas de company
 
     def test_analytics_dashboard_invalid_query(self, authenticated_client):
-        """Test GET /api/analytics/dashboard avec query params invalides (period invalide)."""
+        """Test GET /api/analytics/dashboard avec query params invalides
+        (period invalide)."""
         response = authenticated_client.get(
             "/api/v1/analytics/dashboard?period=invalid"
         )
@@ -2653,7 +2694,8 @@ class TestSchemaValidationE2E:
         assert response.status_code in [200, 404]
 
     def test_analytics_insights_invalid_query(self, authenticated_client):
-        """Test GET /api/analytics/insights avec query params invalides (lookback_days trop élevé)."""
+        """Test GET /api/analytics/insights avec query params invalides
+        (lookback_days trop élevé)."""
         response = authenticated_client.get(
             "/api/v1/analytics/insights?lookback_days=400"
         )
@@ -2666,19 +2708,25 @@ class TestSchemaValidationE2E:
         start_date = date.today() - timedelta(days=7)
         end_date = date.today()
         response = authenticated_client.get(
-            f"/api/v1/analytics/export?start_date={start_date.isoformat()}&end_date={end_date.isoformat()}&format=csv"
+            (
+                f"/api/v1/analytics/export?"
+                f"start_date={start_date.isoformat()}&"
+                f"end_date={end_date.isoformat()}&format=csv"
+            )
         )
         assert response.status_code in [200, 404]
 
     def test_analytics_export_invalid_query(self, authenticated_client):
-        """Test GET /api/analytics/export avec query params invalides (dates manquantes)."""
+        """Test GET /api/analytics/export avec query params invalides
+        (dates manquantes)."""
         response = authenticated_client.get("/api/v1/analytics/export?format=csv")
         assert response.status_code == 400
         data = response.get_json() or {}
         assert "message" in data or "errors" in data
 
     def test_analytics_weekly_summary_valid_query(self, authenticated_client):
-        """✅ Test E2E GET /api/analytics/weekly-summary avec AnalyticsWeeklySummaryQuerySchema valide."""
+        """✅ Test E2E GET /api/analytics/weekly-summary
+        avec AnalyticsWeeklySummaryQuerySchema valide."""
         from datetime import date, timedelta
 
         # Test avec week_start spécifié
@@ -2699,10 +2747,12 @@ class TestSchemaValidationE2E:
             assert "success" in data or "data" in data
 
     def test_analytics_weekly_summary_invalid_query(self, authenticated_client):
-        """✅ Test E2E GET /api/analytics/weekly-summary avec AnalyticsWeeklySummaryQuerySchema invalide."""
+        """✅ Test E2E GET /api/analytics/weekly-summary
+        avec AnalyticsWeeklySummaryQuerySchema invalide."""
         # Test avec format date invalide (pas YYYY-MM-DD)
         response = authenticated_client.get(
-            "/api/v1/analytics/weekly-summary?week_start=01/15/2024"  # Format US invalide
+            # Format US invalide
+            "/api/v1/analytics/weekly-summary?week_start=01/15/2024"
         )
         assert response.status_code == 400
         data = response.get_json() or {}
@@ -2720,7 +2770,8 @@ class TestSchemaValidationE2E:
 
         # Test avec format date invalide (pas ISO8601)
         response = authenticated_client.get(
-            "/api/v1/analytics/weekly-summary?week_start=2024-1-1"  # Format invalide (sans zéro padding)
+            # Format invalide (sans zéro padding)
+            "/api/v1/analytics/weekly-summary?week_start=2024-1-1"
         )
         assert response.status_code == 400
         data = response.get_json() or {}
@@ -2741,14 +2792,16 @@ class TestSchemaValidationE2E:
     # ========== PLANNING ENDPOINTS (QUERY PARAMS) ==========
 
     def test_planning_shifts_valid_query(self, authenticated_client):
-        """Test GET /api/planning/companies/me/planning/shifts avec query params valides."""
+        """Test GET /api/planning/companies/me/planning/shifts
+        avec query params valides."""
         response = authenticated_client.get(
             "/api/v1/planning/companies/me/planning/shifts?driver_id=1"
         )
         assert response.status_code in [200, 401]  # 401 si pas autorisé
 
     def test_planning_shifts_invalid_query(self, authenticated_client):
-        """Test GET /api/planning/companies/me/planning/shifts avec query params invalides (driver_id négatif)."""
+        """Test GET /api/planning/companies/me/planning/shifts
+        avec query params invalides (driver_id négatif)."""
         response = authenticated_client.get(
             "/api/v1/planning/companies/me/planning/shifts?driver_id=-1"
         )
@@ -2757,7 +2810,8 @@ class TestSchemaValidationE2E:
         assert "message" in data or "errors" in data
 
     def test_planning_unavailability_valid_query(self, authenticated_client):
-        """✅ Test E2E GET /api/planning/companies/me/planning/unavailability avec PlanningUnavailabilityQuerySchema valide."""
+        """✅ Test E2E GET /api/planning/companies/me/planning/unavailability
+        avec PlanningUnavailabilityQuerySchema valide."""
         # Test avec driver_id spécifié
         response = authenticated_client.get(
             "/api/v1/planning/companies/me/planning/unavailability?driver_id=1"
@@ -2782,7 +2836,8 @@ class TestSchemaValidationE2E:
             assert "items" in data or "total" in data
 
     def test_planning_unavailability_invalid_query(self, authenticated_client):
-        """✅ Test E2E GET /api/planning/companies/me/planning/unavailability avec PlanningUnavailabilityQuerySchema invalide."""
+        """✅ Test E2E GET /api/planning/companies/me/planning/unavailability
+        avec PlanningUnavailabilityQuerySchema invalide."""
         # Test avec driver_id négatif (< 1)
         response = authenticated_client.get(
             "/api/v1/planning/companies/me/planning/unavailability?driver_id=-1"
@@ -2811,7 +2866,8 @@ class TestSchemaValidationE2E:
         assert "message" in data or "errors" in data
 
     def test_planning_weekly_template_valid_query(self, authenticated_client):
-        """✅ Test E2E GET /api/planning/companies/me/planning/weekly-template avec PlanningWeeklyTemplateQuerySchema valide."""
+        """✅ Test E2E GET /api/planning/companies/me/planning/weekly-template
+        avec PlanningWeeklyTemplateQuerySchema valide."""
         # Test avec driver_id spécifié
         response = authenticated_client.get(
             "/api/v1/planning/companies/me/planning/weekly-template?driver_id=1"
@@ -2836,7 +2892,8 @@ class TestSchemaValidationE2E:
             assert "items" in data or "total" in data
 
     def test_planning_weekly_template_invalid_query(self, authenticated_client):
-        """✅ Test E2E GET /api/planning/companies/me/planning/weekly-template avec PlanningWeeklyTemplateQuerySchema invalide."""
+        """✅ Test E2E GET /api/planning/companies/me/planning/weekly-template
+        avec PlanningWeeklyTemplateQuerySchema invalide."""
         # Test avec driver_id négatif (< 1)
         response = authenticated_client.get(
             "/api/v1/planning/companies/me/planning/weekly-template?driver_id=-1"
@@ -2952,7 +3009,8 @@ class TestSchemaValidationE2E:
     # ========== ADMIN AUTONOMOUS ACTIONS REVIEW (E2E) ==========
 
     def test_autonomous_action_review_valid(self, client, db):
-        """✅ Test E2E POST /api/v1/admin/autonomous-actions/<id>/review avec payload valide."""
+        """✅ Test E2E POST /api/v1/admin/autonomous-actions/<id>/review
+        avec payload valide."""
         from ext import bcrypt
         from models import Company, User, UserRole
         from models.autonomous_action import AutonomousAction
@@ -3026,7 +3084,8 @@ class TestSchemaValidationE2E:
         assert resp2.status_code == 200
 
     def test_autonomous_action_review_invalid(self, client, db):
-        """✅ Test E2E POST /api/v1/admin/autonomous-actions/<id>/review avec payload invalide (notes trop longues)."""
+        """✅ Test E2E POST /api/v1/admin/autonomous-actions/<id>/review
+        avec payload invalide (notes trop longues)."""
         from ext import bcrypt
         from models import Company, User, UserRole
         from models.autonomous_action import AutonomousAction
@@ -3213,7 +3272,8 @@ class TestSchemaValidationE2E:
             assert "user_id" in data
 
     def test_company_driver_create_invalid_schema(self, authenticated_client):
-        """Test POST /api/v1/companies/me/drivers/create - création chauffeur invalide."""
+        """Test POST /api/v1/companies/me/drivers/create
+        - création chauffeur invalide."""
         url = "/api/v1/companies/me/drivers/create"
         payload = {
             "username": "ab",  # trop court (< 3)
@@ -3275,7 +3335,8 @@ class TestSchemaValidationE2E:
             assert isinstance(data["reservations"], list)
 
 
-# ================== COMPANIES RESERVATIONS ACTIONS (ACCEPT/REJECT/ASSIGN/COMPLETE) ==================
+# ================== COMPANIES RESERVATIONS ACTIONS
+# (ACCEPT/REJECT/ASSIGN/COMPLETE) ==================
 
 
 class TestCompaniesReservationActions:
@@ -3345,7 +3406,8 @@ class TestCompaniesReservationActions:
         assert isinstance(data, dict)
 
 
-# ================== COMPANIES VEHICLES (LIST/CREATE/GET/UPDATE/DELETE) ==================
+# ================== COMPANIES VEHICLES
+# (LIST/CREATE/GET/UPDATE/DELETE) ==================
 
 
 class TestCompaniesVehicles:
@@ -3457,7 +3519,8 @@ class TestCompaniesDriverVacations:
         assert isinstance(data, (dict, list))
 
 
-# ================== COMPANIES CLIENTS (LIST/CREATE/GET/UPDATE/DELETE) ==================
+# ================== COMPANIES CLIENTS
+# (LIST/CREATE/GET/UPDATE/DELETE) ==================
 
 
 class TestCompaniesClients:
@@ -3524,7 +3587,8 @@ class TestCompaniesClients:
         assert resp.status_code in [200, 404]
 
 
-# ================== COMPANIES MANUAL RESERVATIONS (CREATE/SCHEDULE/DISPATCH-NOW/TRIGGER-RETURN) ==================
+# ================== COMPANIES MANUAL RESERVATIONS
+# (CREATE/SCHEDULE/DISPATCH-NOW/TRIGGER-RETURN) ==================
 
 
 class TestCompaniesManualReservations:
@@ -3684,7 +3748,8 @@ class TestCompaniesInvoicesAndLogo:
         _ = resp.get_json() if resp.is_json else None
 
 
-# ================== COMPANIES MISC (DRIVERS CREATE, CLIENT RESERVATIONS, COMPANIES LIST) ==================
+# ================== COMPANIES MISC
+# (DRIVERS CREATE, CLIENT RESERVATIONS, COMPANIES LIST) ==================
 
 
 class TestCompaniesMisc:
@@ -3730,7 +3795,8 @@ class TestCompaniesMisc:
         _ = resp.get_json() if resp.is_json else None
 
     def test_companies_list(self, client, db, sample_company):
-        # Liste des companies (peut être restreinte selon rôle) -> tolérer 200/403/404/405
+        # Liste des companies (peut être restreinte selon rôle)
+        # -> tolérer 200/403/404/405
         headers = self._company_headers(client, db, sample_company)
         resp = client.get("/api/v1/companies/", headers=headers)
         assert resp.status_code in [200, 403, 404, 405]

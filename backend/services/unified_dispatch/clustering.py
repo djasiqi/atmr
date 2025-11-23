@@ -115,7 +115,10 @@ class GeographicClustering:
                 )
 
             logger.info(
-                "[Clustering] Created %d zones (avg %d bookings/zone, %d drivers total)",
+                (
+                    "[Clustering] Created %d zones (avg %d bookings/zone, "
+                    "%d drivers total)"
+                ),
                 len(zones),
                 sum(len(z.bookings) for z in zones) / len(zones) if zones else 0,
                 sum(len(z.drivers) for z in zones),
@@ -285,10 +288,12 @@ class GeographicClustering:
             try:
                 # Essayer d'échanger quelques bookings entre zones adjacentes
                 improved = self._stitch_boundary_bookings(
-                    final_assignments,  # Non utilisé pour le moment mais peut être utile plus tard
+                    final_assignments,  # Non utilisé pour le moment mais peut
+                    # être utile plus tard
                     final_unassigned,
                     zones,
-                    zone_results,  # Non utilisé pour le moment mais peut être utile plus tard
+                    zone_results,  # Non utilisé pour le moment mais peut être
+                    # utile plus tard
                 )
 
                 if improved > 0:
@@ -300,7 +305,10 @@ class GeographicClustering:
                 logger.warning("[C1] Stitching failed: %s", e)
 
         logger.info(
-            "[Clustering] Stitched results: %d assignments, %d unassigned across %d zones",
+            (
+                "[Clustering] Stitched results: %d assignments, %d unassigned "
+                "across %d zones"
+            ),
             len(final_assignments),
             len(final_unassigned),
             len(zones),

@@ -75,13 +75,16 @@ class RLSuggestionGenerator:
     et proposer des réassignations optimales.
     """
 
-    def __init__(self, model_path: str | None = None):  # pyright: ignore[reportMissingSuperCall]
+    def __init__(
+        self, model_path: str | None = None
+    ):
         """Initialise le générateur de suggestions.
 
         Args:
             model_path: Chemin vers le modèle DQN entraîné (.pth)
 
         """
+        super().__init__()  # Explicitly call parent constructor
         self.model_path = model_path or "data/ml/dqn_agent_best_v33.pth"
         self.agent = None
         self.env = None
@@ -100,7 +103,11 @@ class RLSuggestionGenerator:
             model_file = Path(self.model_path)
             if not model_file.exists():
                 logger.warning(
-                    "[RL] Modèle DQN non trouvé: %s. Les suggestions seront basiques. Entraînez le modèle avec: python backend/scripts/rl/train_dqn.py",
+                    (
+                        "[RL] Modèle DQN non trouvé: %s. Les suggestions seront "
+                        "basiques. Entraînez le modèle avec: "
+                        "python backend/scripts/rl/train_dqn.py"
+                    ),
                     model_file,
                 )
                 return
@@ -245,14 +252,20 @@ class RLSuggestionGenerator:
                 # Get driver names from user relation
                 current_user = getattr(current_driver, "user", None)
                 current_name = (
-                    f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}".strip()
+                    (
+                        f"{getattr(current_user, 'first_name', '')} "
+                        f"{getattr(current_user, 'last_name', '')}"
+                    ).strip()
                     if current_user
                     else f"Driver #{current_driver.id}"
                 )
 
                 alt_user = getattr(alt_driver, "user", None)
                 alt_name = (
-                    f"{getattr(alt_user, 'first_name', '')} {getattr(alt_user, 'last_name', '')}".strip()
+                    (
+                        f"{getattr(alt_user, 'first_name', '')} "
+                        f"{getattr(alt_user, 'last_name', '')}"
+                    ).strip()
                     if alt_user
                     else f"Driver #{alt_driver.id}"
                 )
@@ -270,7 +283,8 @@ class RLSuggestionGenerator:
                     "distance_km": None,
                     "action": "reassign",
                     "message": (
-                        f"MDI suggère: Réassigner de {current_name} à {alt_name} (gain estimé: +{expected_gain} min)"
+                        f"MDI suggère: Réassigner de {current_name} à {alt_name} "
+                        f"(gain estimé: +{expected_gain} min)"
                     ),
                     "source": "dqn_model",
                 }
@@ -295,8 +309,10 @@ class RLSuggestionGenerator:
         """Construit l'état pour le modèle DQN avec VRAIES features.
 
         Format (adapté à l'environnement d'entraînement):
-        - Infos booking (4 features) : pickup_time, distance, is_emergency, time_until_pickup
-        - Infos drivers (5 drivers x 3 features = 15) : is_available, distance_to_pickup, current_load
+        - Infos booking (4 features) : pickup_time, distance, is_emergency,
+          time_until_pickup
+        - Infos drivers (5 drivers x 3 features = 15) : is_available,
+          distance_to_pickup, current_load
         - Total: 19 features (match avec l'environnement)
 
         Normalisation :
@@ -521,7 +537,10 @@ class RLSuggestionGenerator:
                 "expected_gain_minutes": 5,
                 "distance_km": None,
                 "action": "reassign",
-                "message": f"Suggestion basique: Réassigner de {current_driver_name} à {suggested_driver_name}",
+                "message": (
+                    f"Suggestion basique: Réassigner de {current_driver_name} à "
+                    f"{suggested_driver_name}"
+                ),
                 "source": "basic_heuristic",
             }
 

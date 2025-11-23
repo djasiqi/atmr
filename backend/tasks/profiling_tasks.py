@@ -188,7 +188,8 @@ def _profile_endpoints(
 def run_weekly_profiling(self: Task) -> dict[str, Any]:  # noqa: ARG001
     """✅ 3.4: Profiling automatique hebdomadaire.
 
-    Profile l'application pendant une durée définie et identifie les top-10 fonctions chaudes.
+    Profile l'application pendant une durée définie et identifie
+    les top-10 fonctions chaudes.
     Stocke les résultats en base de données pour analyse historique.
 
     Returns:
@@ -259,7 +260,10 @@ def run_weekly_profiling(self: Task) -> dict[str, Any]:  # noqa: ARG001
             except ImportError:
                 # Modèle ProfilingMetrics n'existe pas encore - logger mais continuer
                 logger.warning(
-                    "[3.4 Profiling] ⚠️ Modèle ProfilingMetrics non trouvé - résultats non stockés"
+                    (
+                        "[3.4 Profiling] ⚠️ Modèle ProfilingMetrics non trouvé "
+                        "- résultats non stockés"
+                    ),
                 )
             except Exception as e:
                 logger.exception("[3.4 Profiling] Erreur stockage métriques: %s", e)
@@ -331,7 +335,10 @@ def run_weekly_profiling(self: Task) -> dict[str, Any]:  # noqa: ARG001
 
 
 @celery.task(bind=True, name="tasks.profiling_tasks.generate_profiling_report")
-def generate_profiling_report(self: Task, days: int = 7) -> dict[str, Any]:  # noqa: ARG001
+def generate_profiling_report(
+    self: Task,  # noqa: ARG001
+    days: int = 7,
+) -> dict[str, Any]:
     """✅ 3.4: Génère un rapport consolidé sur les dernières X semaines de profiling.
 
     Args:
@@ -410,7 +417,11 @@ def generate_profiling_report(self: Task, days: int = 7) -> dict[str, Any]:  # n
                         recommendations.append(
                             {
                                 "function": func_name,
-                                "reason": f"Fonction chaude apparaissant dans {count}/{len(recent_profiles)} profils (temps moyen: {avg_time:.2f}s)",
+                                "reason": (
+                                    f"Fonction chaude apparaissant dans "
+                                    f"{count}/{len(recent_profiles)} profils "
+                                    f"(temps moyen: {avg_time:.2f}s)"
+                                ),
                                 "priority": "high"
                                 if avg_time > CRITICAL_THRESHOLD_SECONDS
                                 else "medium",

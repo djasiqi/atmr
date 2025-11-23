@@ -244,7 +244,8 @@ class BillingSettings(Resource):
                         ]:
                             setattr(billing, field, None)
                         continue
-                    # Conversion spéciale pour reminder_schedule_days (doit être un dict)
+                    # Conversion spéciale pour reminder_schedule_days
+                    # (doit être un dict)
                     if field == "reminder_schedule_days" and isinstance(value, dict):
                         # S'assurer que les clés sont des strings
                         normalized = {

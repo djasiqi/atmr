@@ -128,7 +128,10 @@ class MetricsCollector:
             db.session.commit()
 
             logger.info(
-                "[MetricsCollector] Collected metrics for dispatch run %s: Quality=%.1f, Avg delay=%.1f",
+                (
+                    "[MetricsCollector] Collected metrics for dispatch run %s: "
+                    "Quality=%.1f, Avg delay=%.1f"
+                ),
                 dispatch_run_id,
                 quality_score,
                 avg_delay,
@@ -267,7 +270,10 @@ class MetricsCollector:
             db.session.commit()
 
             logger.debug(
-                "[MetricsCollector] Updated suggestions count for dispatch run %s: generated=%s, applied=%s",
+                (
+                    "[MetricsCollector] Updated suggestions count for dispatch run %s: "
+                    "generated=%s, applied=%s"
+                ),
                 dispatch_run_id,
                 generated,
                 applied,

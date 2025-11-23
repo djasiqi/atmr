@@ -267,7 +267,10 @@ class Company(db.Model):
             msg = "Le nom de l'entreprise ne peut pas être vide."
             raise ValueError(msg)
         if len(value) > COMPANY_NAME_MAX_LENGTH:
-            msg = f"Le nom de l'entreprise ne peut pas dépasser {COMPANY_NAME_MAX_LENGTH} caractères."
+            msg = (
+                f"Le nom de l'entreprise ne peut pas dépasser "
+                f"{COMPANY_NAME_MAX_LENGTH} caractères."
+            )
             raise ValueError(msg)
         return value.strip()
 
@@ -311,7 +314,8 @@ class Company(db.Model):
             "auto_apply_rules": {
                 # Notifications auto (5-20 min retard)
                 "customer_notifications": True,
-                "minor_time_adjustments": False,  # Ajustements < AJUSTEMENTS_THRESHOLD min
+                # Ajustements < AJUSTEMENTS_THRESHOLD min
+                "minor_time_adjustments": False,
                 "reassignments": False,  # Toujours manuel par défaut
                 "emergency_notifications": True,  # Alertes urgentes (>30 min)
             },

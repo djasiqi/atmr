@@ -41,7 +41,8 @@ class VaultClient:
     """✅ 4.1: Client Vault avec cache et fallback .env.
 
     Utilise HashiCorp Vault pour stocker et récupérer les secrets.
-    En cas d'erreur ou si Vault n'est pas configuré, fallback vers variables d'environnement.
+    En cas d'erreur ou si Vault n'est pas configuré,
+    fallback vers variables d'environnement.
     """
 
     def __init__(

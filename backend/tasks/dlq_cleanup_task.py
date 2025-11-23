@@ -49,7 +49,10 @@ def cleanup_old_dlq_entries() -> dict[str, int | str]:
             db.session.commit()
 
             logger.info(
-                "[DLQ Cleanup] Supprimé %d entrées DLQ plus anciennes que %s (rétention: %d jours)",
+                (
+                    "[DLQ Cleanup] Supprimé %d entrées DLQ plus anciennes que %s "
+                    "(rétention: %d jours)"
+                ),
                 deleted_count,
                 threshold_date.isoformat(),
                 DLQ_RETENTION_DAYS,

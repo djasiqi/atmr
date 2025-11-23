@@ -134,7 +134,8 @@ class AutonomousDispatchManager:
         """Détermine si une ré-optimisation automatique doit être déclenchée.
 
         Args:
-            trigger_type: Type de déclencheur ('delay', 'driver_unavailable', 'better_driver_available')
+            trigger_type: Type de déclencheur ('delay', 'driver_unavailable',
+                'better_driver_available')
             context: Contexte avec les détails (delay_minutes, booking_id, etc.)
 
         Returns:
@@ -191,8 +192,8 @@ class AutonomousDispatchManager:
 
         if current_hour_count >= max_per_hour:
             return False, (
-                f"Limite horaire globale atteinte: {current_hour_count}/{max_per_hour} actions/h. "
-                f"Validation manuelle requise."
+                f"Limite horaire globale atteinte: {current_hour_count}/"
+                f"{max_per_hour} actions/h. Validation manuelle requise."
             )
 
         # 2. Vérifier limite globale journalière
@@ -201,8 +202,9 @@ class AutonomousDispatchManager:
 
         if current_day_count >= max_per_day:
             return False, (
-                f"Limite journalière globale atteinte: {current_day_count}/{max_per_day} actions/jour. "
-                f"Système basculé en mode manuel jusqu'à demain."
+                f"Limite journalière globale atteinte: {current_day_count}/"
+                f"{max_per_day} actions/jour. Système basculé en mode manuel "
+                f"jusqu'à demain."
             )
 
         # 3. Vérifier limites spécifiques par type d'action
@@ -217,7 +219,8 @@ class AutonomousDispatchManager:
 
                 if type_count_hour >= type_limit_hour:
                     return False, (
-                        f"Limite horaire pour '{action_type}' atteinte: {type_count_hour}/{type_limit_hour} actions/h."
+                        f"Limite horaire pour '{action_type}' atteinte: "
+                        f"{type_count_hour}/{type_limit_hour} actions/h."
                     )
 
             type_limit_day = action_limits[action_type].get("per_day")
@@ -263,7 +266,10 @@ class AutonomousDispatchManager:
                 if not self.can_auto_apply_suggestion(suggestion):
                     stats["manual_required"] += 1
                     logger.info(
-                        "[AutonomousManager] Suggestion requires manual approval: %s (company=%s, mode=%s)",
+                        (
+                            "[AutonomousManager] Suggestion requires manual "
+                            "approval: %s (company=%s, mode=%s)"
+                        ),
                         suggestion.action,
                         self.company_id,
                         self.mode.value,
@@ -275,7 +281,10 @@ class AutonomousDispatchManager:
                 if not can_proceed:
                     stats["blocked_by_limits"] += 1
                     logger.warning(
-                        "[AutonomousManager] Action blocked by safety limit: %s (company=%s, reason=%s)",
+                        (
+                            "[AutonomousManager] Action blocked by safety limit: "
+                            "%s (company=%s, reason=%s)"
+                        ),
                         suggestion.action,
                         self.company_id,
                         reason,
@@ -309,7 +318,10 @@ class AutonomousDispatchManager:
                                 }
                             )
                             logger.info(
-                                "[AutonomousManager] ✅ Auto-applied: %s for booking %s (company=%s)",
+                                (
+                                    "[AutonomousManager] ✅ Auto-applied: %s "
+                                    "for booking %s (company=%s)"
+                                ),
                                 suggestion.action,
                                 suggestion.booking_id,
                                 self.company_id,
@@ -358,7 +370,10 @@ class AutonomousDispatchManager:
                                 database.session.flush()
                             except Exception as e:
                                 logger.warning(
-                                    "[AutonomousManager] Failed to log action (non-critical): %s",
+                                    (
+                                        "[AutonomousManager] Failed to log "
+                                        "action (non-critical): %s"
+                                    ),
                                     e,
                                 )
                                 database.session.rollback()
@@ -407,14 +422,20 @@ class AutonomousDispatchManager:
                                 database.session.flush()
                             except Exception as e:
                                 logger.warning(
-                                    "[AutonomousManager] Failed to log failed action (non-critical): %s",
+                                    (
+                                        "[AutonomousManager] Failed to log "
+                                        "failed action (non-critical): %s"
+                                    ),
                                     e,
                                 )
                                 database.session.rollback()
                     else:
                         stats["auto_applied"] += 1
                         logger.info(
-                            "[AutonomousManager] [DRY RUN] Would auto-apply: %s (company=%s)",
+                            (
+                                "[AutonomousManager] [DRY RUN] Would auto-apply: "
+                                "%s (company=%s)"
+                            ),
                             suggestion.action,
                             self.company_id,
                         )
@@ -422,13 +443,19 @@ class AutonomousDispatchManager:
                 except Exception:
                     stats["errors"] += 1
                     logger.exception(
-                        "[AutonomousManager] Exception while applying suggestion: %s (company=%s)",
+                        (
+                            "[AutonomousManager] Exception while applying "
+                            "suggestion: %s (company=%s)"
+                        ),
                         suggestion.action,
                         self.company_id,
                     )
 
         logger.info(
-            "[AutonomousManager] Processed %d opportunities for company %s: %d auto-applied, %d manual, %d blocked, %d errors",
+            (
+                "[AutonomousManager] Processed %d opportunities for company %s: "
+                "%d auto-applied, %d manual, %d blocked, %d errors"
+            ),
             stats["total_opportunities"],
             self.company_id,
             stats["auto_applied"],

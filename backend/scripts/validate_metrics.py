@@ -16,7 +16,6 @@ backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
 from app import create_app  # noqa: E402
-from ext import db  # noqa: E402
 
 # Métriques attendues
 EXPECTED_METRICS = {
@@ -261,7 +260,10 @@ def generate_report() -> str:
 
     print()
     print(
-        f"Métriques trouvées: {len(metrics_results['metrics_found'])}/{metrics_results['total_metrics_expected']}"
+        (
+            f"Métriques trouvées: {len(metrics_results['metrics_found'])}/"
+            f"{metrics_results['total_metrics_expected']}"
+        )
     )
     for metric_name, info in metrics_results["metrics_found"].items():
         print(f"  ✅ {metric_name}: {info}")
@@ -284,7 +286,10 @@ def generate_report() -> str:
                 f"   Status OSRM: {health_results['response'].get('status', 'unknown')}"
             )
             print(
-                f"   Circuit Breaker: {health_results['response'].get('circuit_breaker', {}).get('state', 'unknown')}"
+                (
+                    f"   Circuit Breaker: "
+                    f"{health_results['response'].get('circuit_breaker', {}).get('state', 'unknown')}"
+                )
             )
     else:
         print("❌ Endpoint non accessible")

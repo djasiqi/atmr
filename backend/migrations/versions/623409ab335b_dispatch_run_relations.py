@@ -30,7 +30,8 @@ def upgrade():
             ondelete="SET NULL",
         )
 
-    # --- dispatch_run.status : drop ancien CHECK (lowercase), uppercasing des données, passage à Enum UPPER ---
+    # --- dispatch_run.status : drop ancien CHECK (lowercase),
+    # uppercasing des données, passage à Enum UPPER ---
     bind = op.get_bind()
     insp = sa.inspect(bind)
     ck_names = {c["name"] for c in insp.get_check_constraints("dispatch_run")}
@@ -64,7 +65,8 @@ def upgrade():
 
 
 def downgrade():
-    # --- dispatch_run.status : drop index, repasser en VARCHAR, remettre les valeurs en lower, recréer l'ancien CHECK ---
+    # --- dispatch_run.status : drop index, repasser en VARCHAR,
+    # remettre les valeurs en lower, recréer l'ancien CHECK ---
     with op.batch_alter_table("dispatch_run", schema=None) as batch_op:
         batch_op.drop_index("ix_dispatch_run_company_status_day")
         batch_op.alter_column(

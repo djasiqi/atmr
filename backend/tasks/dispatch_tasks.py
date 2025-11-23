@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 
 
 def _safe_int(v: Any) -> int | None:
-    """Convertit en int Python si possible, sinon None (compatible Column/InstrumentedAttribute)."""
+    """Convertit en int Python si possible, sinon None
+    (compatible Column/InstrumentedAttribute)."""
     try:
         return int(v)
     except Exception:
@@ -32,7 +33,8 @@ def _safe_int(v: Any) -> int | None:
 @shared_task(
     bind=True,
     acks_late=True,  # ✅ Ne pas ack avant traitement complet
-    task_time_limit=600,  # 10 minutes max (600 secondes) - augmenté pour grandes matrices
+    task_time_limit=600,  # 10 minutes max (600 secondes)
+    # - augmenté pour grandes matrices
     task_soft_time_limit=540,  # 9 minutes soft limit (540 secondes)
     max_retries=3,
     default_retry_delay=30,
@@ -77,7 +79,8 @@ def run_dispatch_task(
         ov["mode"] = mode  # garde une source unique pour le moteur
 
     # On fait tout sous app_context pour une session/teardown propre
-    # ✅ Utiliser get_flask_app() au lieu de current_app pour éviter les conflits Flask-RESTX
+    # ✅ Utiliser get_flask_app() au lieu de current_app
+    # pour éviter les conflits Flask-RESTX
     app = get_flask_app()
     with app.app_context():
         # Assainit d'abord la session si elle a été "polluée" par un appel
@@ -101,7 +104,10 @@ def run_dispatch_task(
                     )
                 else:
                     logger.warning(
-                        "[Celery] DispatchRun id=%s not found, will be created by engine.run()",
+                        (
+                            "[Celery] DispatchRun id=%s not found, "
+                            "will be created by engine.run()"
+                        ),
                         dispatch_run_id,
                     )
             except Exception as e:
@@ -113,7 +119,10 @@ def run_dispatch_task(
                 # Continuer quand même, engine.run() créera le DispatchRun
 
         logger.info(
-            "[Celery] Starting dispatch task company_id=%s for_date=%s mode=%s task_id=%s dispatch_run_id=%s",
+            (
+                "[Celery] Starting dispatch task company_id=%s for_date=%s "
+                "mode=%s task_id=%s dispatch_run_id=%s"
+            ),
             company_id,
             for_date,
             mode,
@@ -140,7 +149,8 @@ def run_dispatch_task(
                 "allow_emergency": allow_emergency,
                 "overrides": ov,
             }
-            # ✅ Passer dispatch_run_id à engine.run() pour réutiliser le DispatchRun existant
+            # ✅ Passer dispatch_run_id à engine.run()
+            # pour réutiliser le DispatchRun existant
             if dispatch_run_id:
                 run_kwargs["existing_dispatch_run_id"] = dispatch_run_id
 
@@ -205,7 +215,11 @@ def run_dispatch_task(
                     pass  # Ignorer les erreurs de comptage
 
             logger.info(
-                "[Celery] Dispatch completed successfully company_id=%s for_date=%s assigned=%s unassigned=%s applied=%s dispatch_run_id=%s duration=%.3fs",
+                (
+                    "[Celery] Dispatch completed successfully "
+                    "company_id=%s for_date=%s assigned=%s unassigned=%s "
+                    "applied=%s dispatch_run_id=%s duration=%.3fs"
+                ),
                 company_id,
                 for_date,
                 assigned,
@@ -293,7 +307,9 @@ def run_dispatch_task(
                             )
                         else:
                             failed_run.mark_failed(
-                                reason=f"Task failed: {type(e).__name__}: {str(e)[:200]}"
+                                reason=(
+                                    f"Task failed: {type(e).__name__}: {str(e)[:200]}"
+                                )
                             )
                         db.session.commit()
                         logger.info(
@@ -320,7 +336,10 @@ def run_dispatch_task(
                                 date_str,
                             )
                             logger.info(
-                                "[Celery] Notified WebSocket of failed dispatch_run_id=%s",
+                                (
+                                    "[Celery] Notified WebSocket of failed "
+                                    "dispatch_run_id=%s"
+                                ),
                                 failed_dispatch_run_id,
                             )
                         except Exception as notify_err:
@@ -334,7 +353,10 @@ def run_dispatch_task(
                     )
 
             logger.error(
-                "[Celery] Dispatch FAILED company_id=%s for_date=%s dispatch_run_id=%s type=%s msg=%s extra=%s\n%s",
+                (
+                    "[Celery] Dispatch FAILED company_id=%s for_date=%s "
+                    "dispatch_run_id=%s type=%s msg=%s extra=%s\n%s"
+                ),
                 company_id,
                 for_date,
                 failed_dispatch_run_id,
@@ -419,7 +441,8 @@ def autorun_tick() -> Dict[str, Any]:
                 continue
 
             try:
-                # 🆕 Utiliser le gestionnaire autonome pour décider si le dispatch doit tourner
+                # 🆕 Utiliser le gestionnaire autonome pour décider
+                # si le dispatch doit tourner
                 from services.unified_dispatch.autonomous_manager import (
                     get_manager_for_company,
                 )
@@ -429,7 +452,10 @@ def autorun_tick() -> Dict[str, Any]:
                 # Vérifier si l'autorun doit s'exécuter selon le mode
                 if not manager.should_run_autorun():
                     logger.debug(
-                        "[Celery] Autorun skipped for company_id=%s (mode: %s, autorun disabled)",
+                        (
+                            "[Celery] Autorun skipped for company_id=%s "
+                            "(mode: %s, autorun disabled)"
+                        ),
                         company_id,
                         manager.mode.value,
                     )
@@ -437,7 +463,10 @@ def autorun_tick() -> Dict[str, Any]:
                     continue
 
                 logger.info(
-                    "[Celery] Autorun triggering dispatch for company_id=%s mode=%s date=%s",
+                    (
+                        "[Celery] Autorun triggering dispatch for "
+                        "company_id=%s mode=%s date=%s"
+                    ),
                     company_id,
                     manager.mode.value,
                     today,
@@ -483,7 +512,10 @@ def autorun_tick() -> Dict[str, Any]:
 
     results["duration"] = float(time.time() - start_time)
     logger.info(
-        "[Celery] Autorun tick completed: triggered=%s skipped=%s errors=%s duration=%s",
+        (
+            "[Celery] Autorun tick completed: triggered=%s skipped=%s "
+            "errors=%s duration=%s"
+        ),
         results["triggered"],
         results["skipped"],
         results["errors"],
@@ -549,7 +581,10 @@ def realtime_monitoring_tick() -> Dict[str, Any]:
                 # Vérifier si le monitoring doit tourner pour cette entreprise
                 if not manager.should_run_realtime_optimizer():
                     logger.debug(
-                        "[RealtimeMonitoring] Skipped for company %s (mode: %s, optimizer disabled)",
+                        (
+                            "[RealtimeMonitoring] Skipped for company %s "
+                            "(mode: %s, optimizer disabled)"
+                        ),
                         company_id,
                         manager.mode.value,
                     )
@@ -580,7 +615,10 @@ def realtime_monitoring_tick() -> Dict[str, Any]:
                     results["manual_required"] += stats["manual_required"]
 
                     logger.info(
-                        "[RealtimeMonitoring] Company %s: %d opportunities, %d auto-applied, %d manual",
+                        (
+                            "[RealtimeMonitoring] Company %s: %d opportunities, "
+                            "%d auto-applied, %d manual"
+                        ),
                         company_id,
                         len(opportunities),
                         stats["auto_applied"],
@@ -622,7 +660,11 @@ def realtime_monitoring_tick() -> Dict[str, Any]:
     results["duration"] = float(time.time() - start_time)
 
     logger.info(
-        "[RealtimeMonitoring] Tick completed: companies=%d opportunities=%d auto_applied=%d manual=%d errors=%d duration=%.3fs",
+        (
+            "[RealtimeMonitoring] Tick completed: companies=%d "
+            "opportunities=%d auto_applied=%d manual=%d errors=%d "
+            "duration=%.3fs"
+        ),
         results["companies_checked"],
         results["total_opportunities"],
         results["auto_applied"],
@@ -642,9 +684,11 @@ def realtime_monitoring_tick() -> Dict[str, Any]:
     name="tasks.dispatch_tasks.ensure_agents_running",
 )
 def ensure_agents_running(self) -> Dict[str, Any]:  # noqa: ARG001
-    """Tâche périodique pour s'assurer que tous les agents sont actifs pour les entreprises en mode FULLY_AUTO.
+    """Tâche périodique pour s'assurer que tous les agents sont actifs
+    pour les entreprises en mode FULLY_AUTO.
 
-    Cette tâche démarre automatiquement tous les agents pour les entreprises en mode fully_auto,
+    Cette tâche démarre automatiquement tous les agents
+    pour les entreprises en mode fully_auto,
     même si le backend redémarre ou si un agent s'arrête.
 
     Returns:
@@ -663,7 +707,10 @@ def ensure_agents_running(self) -> Dict[str, Any]:  # noqa: ARG001
             ).all()
 
             logger.info(
-                "[AgentAutoStart] Vérification agents pour %d entreprise(s) en mode FULLY_AUTO",
+                (
+                    "[AgentAutoStart] Vérification agents pour %d entreprise(s) "
+                    "en mode FULLY_AUTO"
+                ),
                 len(companies),
             )
 
@@ -691,7 +738,10 @@ def ensure_agents_running(self) -> Dict[str, Any]:  # noqa: ARG001
                 except Exception as e:
                     error_count += 1
                     logger.exception(
-                        "[AgentAutoStart] ❌ Erreur démarrage agent pour company %s: %s",
+                        (
+                            "[AgentAutoStart] ❌ Erreur démarrage agent "
+                            "pour company %s: %s"
+                        ),
                         company.id,
                         e,
                     )

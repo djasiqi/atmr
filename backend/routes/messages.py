@@ -62,7 +62,10 @@ def _validate_file_upload(
     if not filename or not _allowed_file(filename):
         return (
             {
-                "error": f"Extension non autorisée. Autorisées: {', '.join(sorted(ALLOWED_EXT))}."
+                "error": (
+                    f"Extension non autorisée. "
+                    f"Autorisées: {', '.join(sorted(ALLOWED_EXT))}."
+                )
             },
             400,
         )
@@ -77,7 +80,10 @@ def _validate_file_upload(
     if mime_type not in ALLOWED_MIME:
         return (
             {
-                "error": f"Type MIME non autorisé: {mime_type}. Autorisés: {', '.join(sorted(ALLOWED_MIME))}."
+                "error": (
+                    f"Type MIME non autorisé: {mime_type}. "
+                    f"Autorisés: {', '.join(sorted(ALLOWED_MIME))}."
+                )
             },
             400,
         )
@@ -187,7 +193,8 @@ class MessagesList(Resource):
                             else "Entreprise"
                         )
 
-                        # 🔧 Sérialisation (s'aligne sur Message.serialize pour cohérence API)
+                        # 🔧 Sérialisation (s'aligne sur Message.serialize
+                        # pour cohérence API)
                         results: list[dict[str, Any]] = []
                         for m in messages:
                             try:
@@ -227,7 +234,11 @@ class MessagesList(Resource):
                             results.append(base)
 
                         app_logger.info(
-                            f"📨 {len(results)} messages (limit={limit}, before={before}) pour company_id={company_id}"
+                            (
+                                f"📨 {len(results)} messages "
+                                f"(limit={limit}, before={before}) "
+                                f"pour company_id={company_id}"
+                            )
                         )
                         result = results
 
@@ -268,7 +279,10 @@ class MessageUpload(Resource):
         files = request.files.getlist("file")
         if len(files) > MAX_FILES_PER_MESSAGE:
             return {
-                "error": f"Trop de fichiers. Maximum {MAX_FILES_PER_MESSAGE} fichier(s) par message."
+                "error": (
+                    f"Trop de fichiers. Maximum {MAX_FILES_PER_MESSAGE} "
+                    f"fichier(s) par message."
+                )
             }, 400
 
         if not files or not files[0] or not files[0].filename:
@@ -332,7 +346,10 @@ class MessageUpload(Resource):
             response["file_type"] = "pdf"
 
         app_logger.info(
-            f"📎 Fichier uploadé: {file.filename} ({size_bytes} bytes) -> {public_url} par user {user_public_id}"
+            (
+                f"📎 Fichier uploadé: {file.filename} ({size_bytes} bytes) "
+                f"-> {public_url} par user {user_public_id}"
+            )
         )
 
         return response, 200

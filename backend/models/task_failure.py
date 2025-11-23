@@ -71,4 +71,7 @@ class TaskFailure(db.Model):
 
     @override
     def __repr__(self) -> str:
-        return f"<TaskFailure task_id={self.task_id} task_name={self.task_name} failures={self.failure_count}>"
+        return (
+            f"<TaskFailure task_id={self.task_id} task_name={self.task_name} "
+            f"failures={self.failure_count}>"
+        )

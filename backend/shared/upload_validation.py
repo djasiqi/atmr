@@ -43,7 +43,10 @@ def validate_file_extension(
     if ext not in allowed_extensions:
         return (
             False,
-            f"Extension non autorisée: {ext}. Autorisées: {', '.join(sorted(allowed_extensions))}",
+            (
+                f"Extension non autorisée: {ext}. "
+                f"Autorisées: {', '.join(sorted(allowed_extensions))}"
+            ),
         )
 
     return True, None
@@ -105,7 +108,10 @@ def validate_file_content(
 
     return (
         False,
-        f"Type de fichier invalide: le contenu ne correspond pas à l'extension {expected_ext}",
+        (
+            f"Type de fichier invalide: le contenu ne correspond pas "
+            f"à l'extension {expected_ext}"
+        ),
     )
 
 

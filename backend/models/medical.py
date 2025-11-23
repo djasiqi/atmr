@@ -160,7 +160,10 @@ class FavoritePlace(db.Model):
 
     @override
     def __repr__(self) -> str:
-        return f"<FavoritePlace {self.label!r} @ {self.address!r} (company={self.company_id})>"
+        return (
+            f"<FavoritePlace {self.label!r} @ {self.address!r} "
+            f"(company={self.company_id})>"
+        )
 
 
 class MedicalEstablishment(db.Model):
@@ -346,7 +349,10 @@ class MedicalService(db.Model):
 
     @override
     def __repr__(self):
-        return f"<MedicalService {self.name!r} ({self.category}) estab={self.establishment_id}>"
+        return (
+            f"<MedicalService {self.name!r} ({self.category}) "
+            f"estab={self.establishment_id}>"
+        )
 
     # Validations
     @validates("name")

@@ -309,7 +309,8 @@ class TestImprovedDQNAgent:
         ):
             state = np.random.rand(agent.state_dim)
 
-            # L'exception devrait être propagée car elle n'est pas gérée dans select_action
+            # L'exception devrait être propagée
+            # car elle n'est pas gérée dans select_action
             with pytest.raises(Exception, match="Network error"):
                 agent.select_action(state)
 

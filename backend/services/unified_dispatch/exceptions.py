@@ -21,7 +21,10 @@ class CompanyNotFoundError(DispatchError):
     """Exception levée quand une Company est introuvable en DB."""
 
     def __init__(self, company_id: int, **kwargs):
-        message = f"Company {company_id} introuvable en DB. Vérifier que la Company existe et est commitée avant d'appeler engine.run()"
+        message = (
+            f"Company {company_id} introuvable en DB. Vérifier que la Company "
+            "existe et est commitée avant d'appeler engine.run()"
+        )
         super().__init__(message, company_id=company_id, **kwargs)
         self.company_id = company_id
 

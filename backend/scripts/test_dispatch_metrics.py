@@ -15,7 +15,6 @@ backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
 from app import create_app  # noqa: E402
-from ext import db  # noqa: E402
 from models import Booking, Company, Driver  # noqa: E402
 
 
@@ -193,7 +192,10 @@ def test_dispatch_metrics() -> str:
         print("✅ Métriques validées:")
         for item in validation["validated"]:
             print(
-                f"   - {item['metric']}: {item['before']} → {item['after']} (+{item['increment']})"
+                (
+                    f"   - {item['metric']}: {item['before']} → {item['after']} "
+                    f"(+{item['increment']})"
+                )
             )
 
     if validation["missing"]:

@@ -53,7 +53,8 @@ class TestProactiveAlertsService:
         predictor.predict_delay_probability = Mock(return_value=0.75)
         predictor.predict_delay_minutes = Mock(return_value=15)
 
-        # Si DelayMLPredictor est disponible, utiliser spec mais garder les méthodes définies
+        # Si DelayMLPredictor est disponible, utiliser spec mais garder
+        # les méthodes définies
         if DelayMLPredictor is not None:
             # Créer un nouveau mock avec spec mais copier les méthodes
             spec_predictor = Mock(spec=DelayMLPredictor)
@@ -356,11 +357,11 @@ class TestSocketIOAlerts:
     def test_alert_subscription(self):
         """Test l'abonnement aux alertes."""
         # Mock des données de connexion (utilisé pour la validation)
-        _connection_data = {
-            "company_id": "company_1",
-            "user_id": "user_123",
-            "socket_id": "socket_456",
-        }
+        # _connection_data = {
+        #     "company_id": "company_1",
+        #     "user_id": "user_123",
+        #     "socket_id": "socket_456",
+        # }
 
         # Simuler l'abonnement
         subscribed = True
@@ -369,14 +370,14 @@ class TestSocketIOAlerts:
     def test_alert_event_broadcast(self):
         """Test la diffusion d'événements d'alerte."""
         # Mock des données d'alerte (utilisé pour la validation)
-        _alert_data = {
-            "booking_id": "booking_123",
-            "driver_id": "driver_456",
-            "risk_level": "high",
-            "probability": 0.85,
-            "predicted_delay_minutes": 25,
-            "timestamp": datetime.now(UTC).isoformat(),
-        }
+        # _alert_data = {
+        #     "booking_id": "booking_123",
+        #     "driver_id": "driver_456",
+        #     "risk_level": "high",
+        #     "probability": 0.85,
+        #     "predicted_delay_minutes": 25,
+        #     "timestamp": datetime.now(UTC).isoformat(),
+        # }
 
         # Simuler la diffusion
         broadcast_successful = True

@@ -8,7 +8,8 @@ class TestValidationOverrides:
     """Tests pour vérifier la validation post-merge des overrides."""
 
     def test_preferred_driver_id_applique_correctement(self):
-        """Test : preferred_driver_id appliqué correctement (ignoré mais pas d'erreur)."""
+        """Test : preferred_driver_id appliqué correctement
+        (ignoré mais pas d'erreur)."""
         base = ud_settings.Settings()
         overrides = {
             "heuristic": {"driver_load_balance": 0.5},
@@ -52,12 +53,15 @@ class TestValidationOverrides:
         # Les clés inconnues sont ignorées (pas d'erreur)
 
     def test_validation_strict_mode(self, monkeypatch):
-        """Test : Mode strict validation lève exception si paramètre critique non appliqué."""
+        """Test : Mode strict validation lève exception si paramètre
+        critique non appliqué."""
         monkeypatch.setenv("UD_SETTINGS_STRICT_VALIDATION", "true")
 
         base = ud_settings.Settings()
-        # Tenter d'appliquer des overrides valides pour vérifier que le mode strict fonctionne
-        # Le mode strict ne devrait pas lever d'exception si tous les paramètres sont appliqués
+        # Tenter d'appliquer des overrides valides pour vérifier
+        # que le mode strict fonctionne
+        # Le mode strict ne devrait pas lever d'exception si tous
+        # les paramètres sont appliqués
         overrides = {
             "heuristic": {"driver_load_balance": 0.5},
             "fairness": {"fairness_weight": 0.8},
@@ -70,7 +74,8 @@ class TestValidationOverrides:
         )
         assert strict_val is True
 
-        # Test avec merge_overrides: devrait fonctionner si tous les paramètres sont valides
+        # Test avec merge_overrides: devrait fonctionner si tous
+        # les paramètres sont valides
         result = ud_settings.merge_overrides(base, overrides)
 
         # Vérifier que les paramètres ont été appliqués

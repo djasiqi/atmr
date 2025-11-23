@@ -103,8 +103,10 @@ def ip_whitelist_required(
     """Décorateur pour restreindre l'accès à une liste d'IPs.
 
     Args:
-        allowed_ips: Liste d'IPs/réseaux autorisés (ex: ["192.168.1.0/24", "10.0.0.1"])
-        env_key: Clé de variable d'environnement pour la whitelist (par défaut: ADMIN_IP_WHITELIST)
+        allowed_ips: Liste d'IPs/réseaux autorisés
+            (ex: ["192.168.1.0/24", "10.0.0.1"])
+        env_key: Clé de variable d'environnement pour la whitelist
+            (par défaut: ADMIN_IP_WHITELIST)
         allow_localhost: Si True, autorise localhost/127.0.0.1 en développement
 
     Returns:
@@ -125,16 +127,23 @@ def ip_whitelist_required(
             # Récupérer la whitelist depuis les arguments ou l'environnement
             whitelist_str = ",".join(allowed_ips) if allowed_ips else os.getenv(env_key)
 
-            # Si pas de whitelist configurée, autoriser l'accès (fail-open pour développement)
+            # Si pas de whitelist configurée, autoriser l'accès
+            # (fail-open pour développement)
             if not whitelist_str:
                 if os.getenv("FLASK_ENV") == "production":
                     logger.warning(
-                        "[IP Whitelist] ⚠️ Pas de whitelist configurée en production pour %s",
+                        (
+                            "[IP Whitelist] ⚠️ Pas de whitelist configurée "
+                            "en production pour %s"
+                        ),
                         request.path,
                     )
                 else:
                     logger.debug(
-                        "[IP Whitelist] Pas de whitelist configurée, accès autorisé (dev)"
+                        (
+                            "[IP Whitelist] Pas de whitelist configurée, "
+                            "accès autorisé (dev)"
+                        )
                     )
                 return fn(*args, **kwargs)
 

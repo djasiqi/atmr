@@ -181,7 +181,10 @@ class DispatchRun(db.Model):
 
     @override
     def __repr__(self) -> str:
-        return f"<DispatchRun id={self.id} company={self.company_id} day={self.day} status={self.status}>"
+        return (
+            f"<DispatchRun id={self.id} company={self.company_id} "
+            f"day={self.day} status={self.status}>"
+        )
 
 
 class Assignment(db.Model):
@@ -279,7 +282,10 @@ class Assignment(db.Model):
     @override
     def __repr__(self):
         status_str = getattr(self.status, "value", self.status)
-        return f"<Assignment id={self.id} booking={self.booking_id} driver={self.driver_id} status={status_str}>"
+        return (
+            f"<Assignment id={self.id} booking={self.booking_id} "
+            f"driver={self.driver_id} status={status_str}>"
+        )
 
     # Validations
     @validates("dispatch_run_id")
@@ -419,7 +425,10 @@ class DriverStatus(db.Model):
     def __repr__(self):
         st_any = getattr(self, "state", None)
         state_str = st_any.value if isinstance(st_any, DriverState) else _as_str(st_any)
-        return f"<DriverStatus driver={self.driver_id} state={state_str} next_free_at={_iso(self.next_free_at)}>"
+        return (
+            f"<DriverStatus driver={self.driver_id} state={state_str} "
+            f"next_free_at={_iso(self.next_free_at)}>"
+        )
 
     # Validateurs
     @validates("driver_id")
@@ -444,7 +453,10 @@ class DriverStatus(db.Model):
             try:
                 state = DriverState[state.upper()]
             except KeyError:
-                msg = f"state invalide. Valeurs autorisées : {[s.value for s in DriverState]}"
+                msg = (
+                    f"state invalide. "
+                    f"Valeurs autorisées : {[s.value for s in DriverState]}"
+                )
                 raise ValueError(msg) from None
         if not isinstance(state, DriverState):
             msg = "state invalide (Enum attendu)."
@@ -573,7 +585,10 @@ class RealtimeEvent(db.Model):
             if isinstance(en_any, RealtimeEntityType)
             else _as_str(en_any) or "?"
         )
-        return f"<RealtimeEvent id={self.id} company={self.company_id} type={et_str} entity={en_str}:{self.entity_id}>"
+        return (
+            f"<RealtimeEvent id={self.id} company={self.company_id} "
+            f"type={et_str} entity={en_str}:{self.entity_id}>"
+        )
 
     @property
     def serialize(self):
@@ -611,7 +626,10 @@ class RealtimeEvent(db.Model):
             try:
                 v = RealtimeEventType[v.upper()]
             except KeyError:
-                msg = f"event_type invalide. Valeurs autorisées : {[e.value for e in RealtimeEventType]}"
+                msg = (
+                    f"event_type invalide. "
+                    f"Valeurs autorisées : {[e.value for e in RealtimeEventType]}"
+                )
                 raise ValueError(msg) from None
         if not isinstance(v, RealtimeEventType):
             msg = "event_type invalide (Enum attendu)."
@@ -624,7 +642,10 @@ class RealtimeEvent(db.Model):
             try:
                 v = RealtimeEntityType[v.upper()]
             except KeyError:
-                msg = f"entity_type invalide. Valeurs autorisées : {[e.value for e in RealtimeEntityType]}"
+                msg = (
+                    f"entity_type invalide. "
+                    f"Valeurs autorisées : {[e.value for e in RealtimeEntityType]}"
+                )
                 raise ValueError(msg) from None
         if not isinstance(v, RealtimeEntityType):
             msg = "entity_type invalide (Enum attendu)."

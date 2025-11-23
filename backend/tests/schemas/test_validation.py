@@ -56,7 +56,8 @@ class TestDispatchRunRequestSchema:
             "for_date": "2025-01-15",
             "overrides": {"heuristic": {"<script>alert('xss')</script>": "test"}},
         }
-        # Le schéma devrait accepter (overrides est un Dict), mais la sanitisation devrait être appliquée ailleurs
+        # Le schéma devrait accepter (overrides est un Dict),
+        # mais la sanitisation devrait être appliquée ailleurs
         result = schema.load(data, strict=False)
         assert "overrides" in result
 

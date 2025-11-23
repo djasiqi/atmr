@@ -30,14 +30,18 @@ def upgrade():
     # Créer les nouveaux types d'enum s'ils n'existent pas
     op.execute("""
         DO $$ BEGIN
-            CREATE TYPE invoice_line_type AS ENUM ('RIDE', 'LATE_FEE', 'REMINDER_FEE', 'CUSTOM');
+            CREATE TYPE invoice_line_type AS ENUM (
+                'RIDE', 'LATE_FEE', 'REMINDER_FEE', 'CUSTOM'
+            );
         EXCEPTION
             WHEN duplicate_object THEN null;
         END $$;
     """)
     op.execute("""
         DO $$ BEGIN
-            CREATE TYPE payment_method AS ENUM ('BANK_TRANSFER', 'CASH', 'CARD', 'ADJUSTMENT');
+            CREATE TYPE payment_method AS ENUM (
+                'BANK_TRANSFER', 'CASH', 'CARD', 'ADJUSTMENT'
+            );
         EXCEPTION
             WHEN duplicate_object THEN null;
         END $$;

@@ -107,7 +107,9 @@ booking_status_model = driver_ns.model(
     {
         "status": fields.String(
             required=True,
-            description="Nouveau statut (en_route, in_progress, completed, return_completed)",
+            description=(
+                "Nouveau statut (en_route, in_progress, completed, return_completed)"
+            ),
         )
     },
 )
@@ -167,7 +169,8 @@ def notify_driver_new_booking(driver_id: int, booking: Booking) -> None:
 def notify_booking_update(driver_id: int, booking: Booking) -> None:
     """Notifie le chauffeur d'une mise à jour de mission."""
     room = f"driver_{driver_id}"
-    # ✅ FIX: Émettre "new_booking" au lieu de "booking_updated" pour cohérence avec le mobile
+    # ✅ FIX: Émettre "new_booking" au lieu de "booking_updated"
+    # pour cohérence avec le mobile
     socketio.emit("new_booking", booking.to_dict(), to=room)
     app_logger.info(
         f"📤 new_booking (update) émis vers {room} pour booking_id={booking.id}"
@@ -203,7 +206,9 @@ class DriverProfile(Resource):
             )
             sentry_sdk.capture_exception(e)
             return {
-                "error": "Une erreur interne est survenue lors de la récupération du profil."
+                "error": (
+                    "Une erreur interne est survenue lors de la récupération du profil."
+                )
             }, 500
 
     @jwt_required()
@@ -350,14 +355,18 @@ class DriverUpcomingBookings(Resource):
             else f"#{driver.id}"
         )
         app_logger.info(
-            f"📱 [Driver Bookings] Driver {driver_name} (ID: {driver.id}) loading bookings"
+            (
+                f"📱 [Driver Bookings] Driver {driver_name} "
+                f"(ID: {driver.id}) loading bookings"
+            )
         )
 
         from datetime import date
 
         from shared.time_utils import day_local_bounds
 
-        # ✅ Récupérer les courses d'AUJOURD'HUI (passées et futures) tant qu'elles ne sont pas terminées
+        # ✅ Récupérer les courses d'AUJOURD'HUI (passées et futures)
+        # tant qu'elles ne sont pas terminées
         today_start, today_end = day_local_bounds(date.today().strftime("%Y-%m-%d"))
 
         # S'assurer que ce sont des objets datetime pour SQLAlchemy
@@ -383,11 +392,17 @@ class DriverUpcomingBookings(Resource):
 
         # 🔍 LOG : Afficher les courses trouvées
         app_logger.info(
-            f"📱 [Driver Bookings] Found {len(bookings)} bookings for driver {driver_name} (ID: {driver.id})"
+            (
+                f"📱 [Driver Bookings] Found {len(bookings)} bookings "
+                f"for driver {driver_name} (ID: {driver.id})"
+            )
         )
         for b in bookings:
             app_logger.info(
-                f"   - Booking #{b.id}: driver_id={b.driver_id}, client={b.customer_name}, time={b.scheduled_time}"
+                (
+                    f"   - Booking #{b.id}: driver_id={b.driver_id}, "
+                    f"client={b.customer_name}, time={b.scheduled_time}"
+                )
             )
 
         return [b.serialize for b in bookings], 200
@@ -398,7 +413,8 @@ class DriverBookingsETA(Resource):
     @jwt_required()
     @role_required(UserRole.driver)
     def get(self):
-        """Calcule l'ETA dynamique pour toutes les missions du chauffeur basé sur sa position GPS actuelle."""
+        """Calcule l'ETA dynamique pour toutes les missions du chauffeur
+        basé sur sa position GPS actuelle."""
         driver, error_response, status_code = get_driver_from_token()
         if error_response:
             return error_response, status_code
@@ -736,7 +752,8 @@ class BookingDetails(Resource):
 class CompanyLiveLocations(Resource):
     @jwt_required()
     def get(self, company_id: int):
-        """Retourne la dernière position connue de tous les chauffeurs de l'entreprise."""
+        """Retourne la dernière position connue
+        de tous les chauffeurs de l'entreprise."""
         try:
             drivers = Driver.query.filter_by(company_id=company_id).all()
             items: list[dict[str, Any]] = []
@@ -832,7 +849,10 @@ class UpdateBookingStatus(Resource):
                                     result = {"message": "Booking already en route"}
                                 elif booking.status != BookingStatus.ASSIGNED:
                                     result = {
-                                        "error": "Booking must be ASSIGNED before going en_route"
+                                        "error": (
+                                            "Booking must be ASSIGNED "
+                                            "before going en_route"
+                                        )
                                     }
                                     status_code = 400
                                 else:
@@ -844,7 +864,9 @@ class UpdateBookingStatus(Resource):
                                     result = {"message": "Booking already in progress"}
                                 elif booking.status != BookingStatus.EN_ROUTE:
                                     result = {
-                                        "error": "Booking must be en_route before starting"
+                                        "error": (
+                                            "Booking must be en_route before starting"
+                                        )
                                     }
                                     status_code = 400
                                 else:
@@ -860,7 +882,10 @@ class UpdateBookingStatus(Resource):
                                         }
                                     elif booking.status != BookingStatus.IN_PROGRESS:
                                         result = {
-                                            "error": "Booking must be in_progress before completing return"
+                                            "error": (
+                                                "Booking must be in_progress "
+                                                "before completing return"
+                                            )
                                         }
                                         status_code = 400
                                     else:
@@ -870,7 +895,10 @@ class UpdateBookingStatus(Resource):
                                     result = {"message": "Booking already completed"}
                                 elif booking.status != BookingStatus.IN_PROGRESS:
                                     result = {
-                                        "error": "Booking must be in_progress before completing"
+                                        "error": (
+                                            "Booking must be in_progress "
+                                            "before completing"
+                                        )
                                     }
                                     status_code = 400
                                 else:
@@ -885,7 +913,10 @@ class UpdateBookingStatus(Resource):
                                     }
                                 elif booking.status != BookingStatus.IN_PROGRESS:
                                     result = {
-                                        "error": "Booking must be in_progress before completing return"
+                                        "error": (
+                                            "Booking must be in_progress "
+                                            "before completing return"
+                                        )
                                     }
                                     status_code = 400
                                 elif booking.is_return:
@@ -900,7 +931,9 @@ class UpdateBookingStatus(Resource):
                                 driver_id = driver.id
                                 notify_booking_update(driver_id, booking)
                                 result = {
-                                    "message": f"Booking status updated to {new_status_str}"
+                                    "message": (
+                                        f"Booking status updated to {new_status_str}"
+                                    )
                                 }
 
             except Exception as e:
@@ -1070,7 +1103,10 @@ class SavePushToken(Resource):
                         )
                     except (ValueError, TypeError) as e:
                         app_logger.warning(
-                            f"[push-token] Impossible de convertir driver_id={raw_id}: {e}"
+                            (
+                                f"[push-token] Impossible de convertir "
+                                f"driver_id={raw_id}: {e}"
+                            )
                         )
                         result = {"error": f"Format de driverId invalide: {raw_id}"}
                         status_code = 400
@@ -1093,7 +1129,9 @@ class SavePushToken(Resource):
                             drv = Driver.query.filter_by(user_id=user.id).one_or_none()
                             if not drv:
                                 result = {
-                                    "error": "Chauffeur introuvable pour cet utilisateur."
+                                    "error": (
+                                        "Chauffeur introuvable pour cet utilisateur."
+                                    )
                                 }
                                 status_code = 404
                             else:
@@ -1107,7 +1145,10 @@ class SavePushToken(Resource):
                     driver = Driver.query.get(driver_id)
                     if not driver:
                         app_logger.error(
-                            f"[push-token] Driver introuvable pour driver_id={driver_id}"
+                            (
+                                f"[push-token] Driver introuvable "
+                                f"pour driver_id={driver_id}"
+                            )
                         )
                         result = {
                             "error": f"Chauffeur introuvable pour l'ID {driver_id}."
@@ -1119,7 +1160,10 @@ class SavePushToken(Resource):
                         db.session.commit()
 
                         app_logger.info(
-                            f"[push-token] ✅ Token enregistré avec succès pour driver_id={driver_id}"
+                            (
+                                f"[push-token] ✅ Token enregistré avec succès "
+                                f"pour driver_id={driver_id}"
+                            )
                         )
                         result = {
                             "message": "✅ Push token enregistré avec succès.",

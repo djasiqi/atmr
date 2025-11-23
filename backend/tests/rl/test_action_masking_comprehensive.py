@@ -431,7 +431,8 @@ class TestActionMaskingPerformance:
 
         for _ in range(num_iterations):
             state = np.random.rand(30)
-            _mask = env._get_valid_actions_mask(state)
+            # Appel pour tester la performance, résultat non utilisé
+            env._get_valid_actions_mask(state)
 
         end_time = time.time()
 

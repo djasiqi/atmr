@@ -27,7 +27,8 @@ Fixtures pytest pour les tests backend ATMR.
 5. **Rechargement après rollback** :
    - Après un rollback, utiliser `db.session.expire_all()` puis recharger depuis la DB
    - Ne pas réutiliser les objets expirés sans les recharger
-   - Utiliser `query.filter_by().first()` plutôt que `query.get()` pour forcer un nouveau query
+   - Utiliser `query.filter_by().first()` plutôt que `query.get()`
+     pour forcer un nouveau query
 
 📝 EXEMPLES D'UTILISATION :
 ---------------------------
@@ -88,9 +89,11 @@ def app() -> Flask:
     # ✅ FIX: Passer explicitement "testing" pour désactiver force_https dans Talisman
     app = create_app(config_name="testing")
 
-    # ✅ FIX: Utiliser la DB PostgreSQL du workflow GitHub Actions pour les tests
+    # ✅ FIX: Utiliser la DB PostgreSQL du workflow GitHub Actions
+    # pour les tests
     # Évite les problèmes d'enums, contraintes nommées, et JSONB
-    # Les tests utilisent des savepoints (transactions nested) donc pas de risque pour les données
+    # Les tests utilisent des savepoints (transactions nested)
+    # donc pas de risque pour les données
     # Workflow utilise test:test@localhost:5432/atmr_test
     database_url = os.getenv(
         "DATABASE_URL", "postgresql://test:test@localhost:5432/atmr_test"
@@ -139,27 +142,34 @@ def db(app):
 
         # Rollback automatique du savepoint
         _db.session.rollback()
-        _db.session.expire_all()  # ✅ AJOUT: Expirer tous les objets pour forcer le rechargement après rollback
+        # ✅ AJOUT: Expirer tous les objets pour forcer
+        # le rechargement après rollback
+        _db.session.expire_all()
         _db.session.remove()
 
 
 @pytest.fixture
 def client(app, db):
     """Client de test Flask qui ne suit pas les redirections automatiquement."""
-    # ✅ FIX: Ne pas suivre les redirections pour éviter les 302 dans les tests E2E
-    # Les tests doivent pouvoir vérifier les codes HTTP directement (200, 400, etc.)
-    # Flask moderne ne supporte plus follow_redirects dans test_client(), on crée un wrapper
+    # ✅ FIX: Ne pas suivre les redirections pour éviter
+    # les 302 dans les tests E2E
+    # Les tests doivent pouvoir vérifier les codes HTTP directement
+    # (200, 400, etc.)
+    # Flask moderne ne supporte plus follow_redirects dans test_client(),
+    # on crée un wrapper
     base = app.test_client()
 
     class NoRedirectClient:
         """Wrapper client qui définit follow_redirects=False par défaut."""
 
         def __init__(self, client):  # pyright: ignore[reportMissingSuperCall]
-            # Cette classe n'hérite pas d'une classe parente qui nécessite super().__init__()
+            # Cette classe n'hérite pas d'une classe parente
+            # qui nécessite super().__init__()
             self._client = client
 
         def _with_defaults(self, kwargs):
-            # Ensure follow_redirects default is False for compatibility with older tests
+            # Ensure follow_redirects default is False
+            # for compatibility with older tests
             if "follow_redirects" not in kwargs:
                 kwargs["follow_redirects"] = False
             return kwargs
@@ -323,7 +333,8 @@ def authenticated_client(client, sample_user):
         "aud": "atmr-api",
     }
     with client.application.app_context():
-        # ✅ FIX: Utiliser un token avec expiration longue (24h) pour éviter les problèmes en tests
+        # ✅ FIX: Utiliser un token avec expiration longue (24h)
+        # pour éviter les problèmes en tests
         # Utiliser public_id comme identity (comme dans bookings.py:588)
         token = create_access_token(
             identity=str(sample_user.public_id),
@@ -533,11 +544,7 @@ def sample_client(db, sample_company):
     user.address = "Rue Client 1, 1000 Lausanne"
     user.public_id = str(uuid.uuid4())
     password_hash = bcrypt.generate_password_hash("password123")
-    user.password = (
-        password_hash.decode("utf-8")
-        if isinstance(password_hash, bytes)
-        else password_hash
-    )  # type: ignore[unnecessary-isinstance]
+    user.password = password_hash.decode("utf-8")
     db.session.add(user)
     db.session.flush()
 
@@ -679,9 +686,12 @@ def mock_external_services(monkeypatch):
     except ImportError:
         pass
 
-    # Retourner un dictionnaire avec les mocks pour permettre l'accès si nécessaire
-    # Note: Utilisation de return au lieu de yield car il n'y a pas de teardown nécessaire
-    # Les mocks sont déjà appliqués via monkeypatch, donc ils sont actifs pour tous les tests
+    # Retourner un dictionnaire avec les mocks pour permettre
+    # l'accès si nécessaire
+    # Note: Utilisation de return au lieu de yield
+    # car il n'y a pas de teardown nécessaire
+    # Les mocks sont déjà appliqués via monkeypatch,
+    # donc ils sont actifs pour tous les tests
     return {
         "osrm": {
             "build_distance_matrix_osrm": mock_build_distance_matrix_osrm,
@@ -698,7 +708,8 @@ def mock_external_services(monkeypatch):
 def mock_osrm_client(monkeypatch):
     """Mock osrm_client fonctions pour éviter appels réseau.
 
-    ✅ FIX: Mock les fonctions réelles utilisées (build_distance_matrix_osrm, route_info)
+    ✅ FIX: Mock les fonctions réelles utilisées
+    (build_distance_matrix_osrm, route_info)
     au lieu de fonctions qui n'existent pas.
     """
 
@@ -1102,7 +1113,8 @@ def persisted_fixture(
 
         if assert_exists:
             assert reloaded is not None, (
-                f"{model_class.__name__} must be persisted before use (id={factory_instance.id})"
+                f"{model_class.__name__} must be persisted before use "
+                f"(id={factory_instance.id})"
             )
 
         return reloaded if reloaded is not None else factory_instance
@@ -1115,13 +1127,16 @@ def ensure_committed(db_session: Any) -> Iterator[None]:
     """Context manager pour garantir que les objets sont commités avant utilisation.
 
     ⚠️ PROBLÈME RÉSOLU :
-    - `engine.run()` fait un rollback défensif qui peut expirer les objets non commités
-    - Ce helper garantit que tous les objets en attente sont commités avant utilisation
+    - `engine.run()` fait un rollback défensif qui peut expirer
+      les objets non commités
+    - Ce helper garantit que tous les objets en attente
+      sont commités avant utilisation
 
     📝 UTILISATION :
     ```python
     def test_dispatch(db, company, drivers, bookings):
-        # Les fixtures garantissent déjà le commit, mais on peut forcer un commit explicite
+        # Les fixtures garantissent déjà le commit,
+        # mais on peut forcer un commit explicite
         with ensure_committed(db):
             # Tous les objets sont garantis commités ici
             result = engine.run(company_id=company.id, ...)
@@ -1172,13 +1187,15 @@ def nested_savepoint(db_session: Any) -> Iterator[None]:
             db.session.add(obj2)
             db.session.commit()
             # obj2 sera rollback à la fin du context manager
+            # (ligne trop longue corrigée)
 
         # obj1 existe toujours, obj2 a été rollback
         assert obj1.id is not None
     ```
 
     ⚠️ ATTENTION :
-    - Les savepoints imbriqués sont rollback automatiquement si le savepoint parent est rollback
+    - Les savepoints imbriqués sont rollback automatiquement
+      si le savepoint parent est rollback
     - Ne pas utiliser pour isoler des tests (utiliser la fixture `db` à la place)
     - Utile pour tester des scénarios de rollback partiel dans un même test
 

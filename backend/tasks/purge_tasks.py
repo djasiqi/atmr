@@ -38,7 +38,9 @@ def _log_purge_audit(
             action_category="gdpr_purge",
             user_type="system",
             result_status="success" if len(errors) == 0 else "partial",
-            result_message=f"Purge {model_name}: {deleted_count} enregistrements supprimés",
+            result_message=(
+                f"Purge {model_name}: {deleted_count} enregistrements supprimés"
+            ),
             action_details={
                 "model": model_name,
                 "deleted_count": deleted_count,
@@ -68,7 +70,10 @@ MESSAGE_RETENTION_DAYS = int(os.getenv("GDPR_MESSAGE_RETENTION_DAYS", "2555"))  
 
 
 @celery.task(bind=True, name="tasks.purge_tasks.purge_old_bookings")
-def purge_old_bookings(self: Task, retention_days: int | None = None) -> dict[str, Any]:  # noqa: ARG001
+def purge_old_bookings(
+    self: Task,  # noqa: ARG001
+    retention_days: int | None = None,
+) -> dict[str, Any]:
     """✅ 3.3: Purge les réservations (bookings) anciennes (> 7 ans par défaut).
 
     Supprime définitivement les bookings dont created_at > retention_days.
@@ -121,7 +126,10 @@ def purge_old_bookings(self: Task, retention_days: int | None = None) -> dict[st
                     deleted_count += 1
 
                     logger.debug(
-                        "[3.3 GDPR] Booking %d supprimé (company=%s, client=%s, created=%s)",
+                        (
+                            "[3.3 GDPR] Booking %d supprimé "
+                            "(company=%s, client=%s, created=%s)"
+                        ),
                         booking_id,
                         company_id,
                         client_id,
@@ -166,7 +174,10 @@ def purge_old_bookings(self: Task, retention_days: int | None = None) -> dict[st
 
 
 @celery.task(bind=True, name="tasks.purge_tasks.purge_old_messages")
-def purge_old_messages(self: Task, retention_days: int | None = None) -> dict[str, Any]:  # noqa: ARG001
+def purge_old_messages(
+    self: Task,  # noqa: ARG001
+    retention_days: int | None = None,
+) -> dict[str, Any]:
     """✅ 3.3: Purge les messages anciens (> 7 ans par défaut).
 
     Args:
@@ -261,7 +272,10 @@ def purge_old_realtime_events(
             cutoff_date = datetime.now(UTC) - timedelta(days=retention)
 
             logger.info(
-                "[3.3 GDPR] Début purge RealtimeEvent antérieurs à %s (rétention: %d jours)",
+                (
+                    "[3.3 GDPR] Début purge RealtimeEvent antérieurs à %s "
+                    "(rétention: %d jours)"
+                ),
                 cutoff_date.isoformat(),
                 retention,
             )
@@ -308,7 +322,8 @@ def purge_old_autonomous_actions(
 ) -> dict[str, Any]:
     """✅ 3.3: Purge les actions autonomes anciennes (> 7 ans par défaut).
 
-    Les actions reviewées peuvent être purgées, les non-reviewées sont conservées plus longtemps.
+    Les actions reviewées peuvent être purgées,
+    les non-reviewées sont conservées plus longtemps.
 
     Args:
         retention_days: Nombre de jours de rétention (défaut: 7 ans)
@@ -326,7 +341,10 @@ def purge_old_autonomous_actions(
             cutoff_date = datetime.now(UTC) - timedelta(days=retention)
 
             logger.info(
-                "[3.3 GDPR] Début purge AutonomousAction antérieures à %s (rétention: %d jours)",
+                (
+                    "[3.3 GDPR] Début purge AutonomousAction antérieures à %s "
+                    "(rétention: %d jours)"
+                ),
                 cutoff_date.isoformat(),
                 retention,
             )
@@ -355,7 +373,10 @@ def purge_old_autonomous_actions(
             db.session.commit()
 
             logger.info(
-                "[3.3 GDPR] ✅ Purge AutonomousAction terminée: %d supprimées, %d erreurs",
+                (
+                    "[3.3 GDPR] ✅ Purge AutonomousAction terminée: "
+                    "%d supprimées, %d erreurs"
+                ),
                 deleted_count,
                 len(errors),
             )
@@ -406,7 +427,10 @@ def purge_old_task_failures(
             cutoff_date = datetime.now(UTC) - timedelta(days=retention)
 
             logger.info(
-                "[3.3 GDPR] Début purge TaskFailure antérieures à %s (rétention: %d jours)",
+                (
+                    "[3.3 GDPR] Début purge TaskFailure antérieures à %s "
+                    "(rétention: %d jours)"
+                ),
                 cutoff_date.isoformat(),
                 retention,
             )
@@ -462,7 +486,8 @@ def purge_all_old_data(self: Task) -> dict[str, Any]:
         results: dict[str, dict[str, Any]] = {}
 
         # Purger chaque type de données
-        # Note: Les fonctions purge_* sont des tâches Celery, mais peuvent être appelées directement
+        # Note: Les fonctions purge_* sont des tâches Celery,
+        # mais peuvent être appelées directement
         purge_functions = [
             ("Bookings", purge_old_bookings),
             ("Messages", purge_old_messages),
@@ -505,7 +530,10 @@ def purge_all_old_data(self: Task) -> dict[str, Any]:
         }
 
         logger.info(
-            "[3.3 GDPR] ✅ Purge globale terminée: %d enregistrements supprimés, %d erreurs",
+            (
+                "[3.3 GDPR] ✅ Purge globale terminée: "
+                "%d enregistrements supprimés, %d erreurs"
+            ),
             total_deleted,
             total_errors,
         )
@@ -519,7 +547,9 @@ def purge_all_old_data(self: Task) -> dict[str, Any]:
                 action_category="gdpr_purge",
                 user_type="system",
                 result_status="success" if total_errors == 0 else "partial",
-                result_message=f"Purge globale RGPD: {total_deleted} enregistrements supprimés",
+                result_message=(
+                    f"Purge globale RGPD: {total_deleted} enregistrements supprimés"
+                ),
                 action_details={
                     "total_deleted": total_deleted,
                     "total_errors": total_errors,
@@ -549,7 +579,8 @@ def purge_all_old_data(self: Task) -> dict[str, Any]:
 def anonymize_old_user_data(
     _self: Task, retention_days: int | None = None
 ) -> dict[str, Any]:
-    """✅ 3.3: Anonymise les données utilisateur anciennes (> 7 ans) au lieu de supprimer.
+    """✅ 3.3: Anonymise les données utilisateur anciennes (> 7 ans)
+    au lieu de supprimer.
 
     Conformément RGPD, anonymise plutôt que supprimer pour préserver statistiques.
 
@@ -569,7 +600,10 @@ def anonymize_old_user_data(
             cutoff_date = datetime.now(UTC) - timedelta(days=retention)
 
             logger.info(
-                "[3.3 GDPR] Début anonymisation utilisateurs antérieurs à %s (rétention: %d jours)",
+                (
+                    "[3.3 GDPR] Début anonymisation utilisateurs antérieurs à %s "
+                    "(rétention: %d jours)"
+                ),
                 cutoff_date.isoformat(),
                 retention,
             )
@@ -604,7 +638,10 @@ def anonymize_old_user_data(
                     anonymized_count += 1
 
                     logger.info(
-                        "[3.3 GDPR] Utilisateur %d anonymisé (email: %s → anonymized_%d@deleted.local)",
+                        (
+                            "[3.3 GDPR] Utilisateur %d anonymisé "
+                            "(email: %s → anonymized_%d@deleted.local)"
+                        ),
                         user_id,
                         original_email,
                         user_id,
@@ -618,7 +655,10 @@ def anonymize_old_user_data(
             db.session.commit()
 
             logger.info(
-                "[3.3 GDPR] ✅ Anonymisation utilisateurs terminée: %d anonymisés, %d erreurs",
+                (
+                    "[3.3 GDPR] ✅ Anonymisation utilisateurs terminée: "
+                    "%d anonymisés, %d erreurs"
+                ),
                 anonymized_count,
                 len(errors),
             )
@@ -632,7 +672,9 @@ def anonymize_old_user_data(
                     action_category="gdpr_purge",
                     user_type="system",
                     result_status="success" if len(errors) == 0 else "partial",
-                    result_message=f"Anonymisation utilisateurs: {anonymized_count} anonymisés",
+                    result_message=(
+                        f"Anonymisation utilisateurs: {anonymized_count} anonymisés"
+                    ),
                     action_details={
                         "model": "User",
                         "anonymized_count": anonymized_count,

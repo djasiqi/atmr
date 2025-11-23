@@ -29,7 +29,8 @@ logger = logging.getLogger(__name__)
 
 # ==================== Prometheus Metrics ====================
 
-# Métriques Prometheus pour sessions DB (créées uniquement si prometheus_client disponible)
+# Métriques Prometheus pour sessions DB
+# (créées uniquement si prometheus_client disponible)
 if PROMETHEUS_AVAILABLE and Counter is not None and Histogram is not None:
     DB_TRANSACTION_TOTAL = Counter(
         "db_transaction_total",
@@ -64,7 +65,8 @@ if PROMETHEUS_AVAILABLE and Counter is not None and Histogram is not None:
         ["operation"],  # operation: "commit", "rollback", "add", "query"
     )
 
-    # ✅ FIX: Initialiser les métriques avec 0.0 pour qu'elles apparaissent même si jamais incrémentées
+    # ✅ FIX: Initialiser les métriques avec 0.0 pour qu'elles apparaissent
+    # même si jamais incrémentées
     try:
         DB_TRANSACTION_TOTAL.labels(operation="commit").inc(0)
         DB_TRANSACTION_TOTAL.labels(operation="rollback").inc(0)
@@ -75,7 +77,8 @@ if PROMETHEUS_AVAILABLE and Counter is not None and Histogram is not None:
         DB_DIRECT_SESSION_USAGE.labels(operation="commit").inc(0)
         DB_DIRECT_SESSION_USAGE.labels(operation="rollback").inc(0)
     except Exception as e:
-        # Ignorer les erreurs d'initialisation (peut échouer si Prometheus non configuré)
+        # Ignorer les erreurs d'initialisation
+        # (peut échouer si Prometheus non configuré)
         logger.debug(
             "[DB Session Metrics] Failed to initialize metrics with 0.0: %s", e
         )
@@ -112,7 +115,8 @@ def track_context_manager_usage(manager_type: str) -> None:
     """Track l'utilisation d'un context manager DB.
 
     Args:
-        manager_type: Type de context manager ("db_transaction", "db_read_only", "db_batch_operation")
+        manager_type: Type de context manager
+            ("db_transaction", "db_read_only", "db_batch_operation")
     """
     if DB_CONTEXT_MANAGER_USAGE is not None:
         DB_CONTEXT_MANAGER_USAGE.labels(manager_type=manager_type).inc()
@@ -131,7 +135,10 @@ def track_direct_session_usage(operation: str) -> None:
         DB_DIRECT_SESSION_USAGE.labels(operation=operation).inc()
         # Logger un warning en mode DEBUG pour aider à identifier les usages à migrer
         logger.debug(
-            "[DB Session Metrics] Usage direct de db.session.%s détecté. Considérer utiliser db_transaction() ou db_read_only() à la place.",
+            (
+                "[DB Session Metrics] Usage direct de db.session.%s détecté. "
+                "Considérer utiliser db_transaction() ou db_read_only() à la place."
+            ),
             operation,
         )
 

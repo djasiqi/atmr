@@ -33,7 +33,8 @@ _loggers_cache: dict[str, logging.Logger] = {}
 
 
 class DispatchLoggerAdapter(logging.LoggerAdapter[logging.Logger]):
-    """Adapter de logger qui ajoute automatiquement dispatch_run_id et company_id au contexte."""
+    """Adapter de logger qui ajoute automatiquement dispatch_run_id
+    et company_id au contexte."""
 
     @override
     def process(
@@ -111,8 +112,10 @@ def get_dispatch_logger(
 
     Args:
         name: Nom du logger (défaut: nom du module appelant)
-        dispatch_run_id: ID du dispatch run (optionnel, peut être défini via set_dispatch_context)
-        company_id: ID de l'entreprise (optionnel, peut être défini via set_dispatch_context)
+        dispatch_run_id: ID du dispatch run (optionnel,
+            peut être défini via set_dispatch_context)
+        company_id: ID de l'entreprise (optionnel,
+            peut être défini via set_dispatch_context)
 
     Returns:
         LoggerAdapter avec contexte dispatch_run_id

@@ -50,7 +50,10 @@ def can_send_message(user_id: int) -> tuple[bool, Optional[str]]:
                     # Trop rapide - spam détecté
                     wait_time = SPAM_RATE_LIMIT_SECONDS - elapsed
                     logger.warning(
-                        "🚫 Anti-spam: Utilisateur %s a envoyé un message il y a %.2fs (limite: %ss)",
+                        (
+                            "🚫 Anti-spam: Utilisateur %s a envoyé un message "
+                            "il y a %.2fs (limite: %ss)"
+                        ),
                         user_id,
                         elapsed,
                         SPAM_RATE_LIMIT_SECONDS,

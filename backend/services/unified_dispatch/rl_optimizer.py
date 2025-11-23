@@ -56,7 +56,8 @@ class RLDispatchOptimizer:
             model_path: Chemin vers le modèle DQN entraîné
             max_swaps: Nombre maximum de réassignations à tenter
             min_improvement: Amélioration minimale de l'écart pour accepter un swap
-            config_context: Contexte de configuration ("production", "training", "evaluation")
+            config_context: Contexte de configuration
+                ("production", "training", "evaluation")
 
         """
         super().__init__()
@@ -78,12 +79,14 @@ class RLDispatchOptimizer:
         if self.model_path.exists():
             self._load_model()
         else:
-            # ✅ FIX: Réduire le niveau de log en mode testing (normal en tests, modèle RL non disponible)
+            # ✅ FIX: Réduire le niveau de log en mode testing
+            # (normal en tests, modèle RL non disponible)
             import os
 
             is_testing = False
             try:
-                # Essayer d'abord via variable d'environnement (plus sûr, fonctionne partout)
+                # Essayer d'abord via variable d'environnement
+                # (plus sûr, fonctionne partout)
                 is_testing = os.getenv("FLASK_CONFIG") == "testing"
                 # Si current_app est disponible, utiliser sa config (plus précis)
                 try:
@@ -91,7 +94,8 @@ class RLDispatchOptimizer:
 
                     is_testing = is_testing or current_app.config.get("TESTING", False)
                 except RuntimeError:
-                    # current_app pas disponible (hors contexte Flask), utiliser seulement env var
+                    # current_app pas disponible (hors contexte Flask),
+                    # utiliser seulement env var
                     pass
             except Exception:
                 # En cas d'erreur, utiliser warning par défaut
@@ -108,7 +112,8 @@ class RLDispatchOptimizer:
         try:
             import torch  # pyright: ignore[reportMissingImports]
 
-            # nosec B506: Les checkpoints contiennent optimizer state et config, pas seulement des poids
+            # nosec B506: Les checkpoints contiennent optimizer state et config,
+            # pas seulement des poids
             # Les modèles proviennent de sources internes de confiance uniquement
             checkpoint = torch.load(
                 str(self.model_path), map_location="cpu", weights_only=False
@@ -202,7 +207,10 @@ class RLDispatchOptimizer:
         if matrix_quality and (
             matrix_quality.get("fallback_used") or matrix_quality.get("has_large_value")
         ):
-            disable_reason = f"matrix fallback={matrix_quality.get('fallback_used')} max={matrix_quality.get('max_entry')}"
+            disable_reason = (
+                f"matrix fallback={matrix_quality.get('fallback_used')} "
+                f"max={matrix_quality.get('max_entry')}"
+            )
 
         if disable_reason is None and coord_quality:
             min_factor = coord_quality.get("min_factor", 1.0)
@@ -210,7 +218,8 @@ class RLDispatchOptimizer:
                 disable_reason = f"coord_quality={min_factor:.2f}"
 
         if disable_reason is None and not coord_quality:
-            # ✅ FIX: Vérifier que les valeurs sont des nombres réels, pas des Mock objects
+            # ✅ FIX: Vérifier que les valeurs sont des nombres réels,
+            # pas des Mock objects
             def safe_float(value):
                 """Convertit en float en gérant les Mock objects."""
                 from unittest.mock import Mock
@@ -364,7 +373,10 @@ class RLDispatchOptimizer:
                 self._booking_index_map
             ):
                 logger.debug(
-                    "[RLOptimizer] Action ignorée (slot driver=%s booking=%s hors sous-ensemble)",
+                    (
+                        "[RLOptimizer] Action ignorée "
+                        "(slot driver=%s booking=%s hors sous-ensemble)"
+                    ),
                     driver_slot,
                     booking_slot,
                 )
@@ -399,7 +411,10 @@ class RLDispatchOptimizer:
             if improvement >= self.min_improvement:
                 # Accepter la réassignation
                 logger.info(
-                    "[RLOptimizer] ✅ Swap %d/%d accepté: Booking %d → Driver %d (gap %d → %d, Δ=%.1f)",
+                    (
+                        "[RLOptimizer] ✅ Swap %d/%d accepté: "
+                        "Booking %d → Driver %d (gap %d → %d, Δ=%.1f)"
+                    ),
                     swap_idx + 1,
                     self.max_swaps,
                     booking_id,
@@ -428,7 +443,10 @@ class RLDispatchOptimizer:
                 # Rollback (annuler)
                 assignment["driver_id"] = old_driver_id
                 logger.debug(
-                    "[RLOptimizer] ❌ Swap rejeté: Booking %d → Driver %d (pas d'amélioration)",
+                    (
+                        "[RLOptimizer] ❌ Swap rejeté: "
+                        "Booking %d → Driver %d (pas d'amélioration)"
+                    ),
                     booking_id,
                     new_driver_id,
                 )
@@ -436,7 +454,10 @@ class RLDispatchOptimizer:
         # Rapport final
         final_gap = self._calculate_gap(optimized, drivers)
         logger.info(
-            "[RLOptimizer] 🎉 Optimisation terminée: gap %d → %d (%d swaps, %d améliorations)",
+            (
+                "[RLOptimizer] 🎉 Optimisation terminée: "
+                "gap %d → %d (%d swaps, %d améliorations)"
+            ),
             self._calculate_gap(initial_assignments, drivers),
             final_gap,
             self.max_swaps,
@@ -497,7 +518,8 @@ class RLDispatchOptimizer:
                 "max_delay_minutes": 0,  # À calculer
                 "avg_delay_minutes": 0,
                 "completion_rate": len(optimized) / len(bookings) if bookings else 1.0,
-                "invalid_action_rate": 0.0,  # Pas d'actions invalides en mode exploitation
+                "invalid_action_rate": 0.0,  # Pas d'actions invalides
+                # en mode exploitation
                 "driver_loads": list(
                     self._calculate_loads(optimized, drivers).values()
                 ),
@@ -525,7 +547,11 @@ class RLDispatchOptimizer:
 
             if not is_safe:
                 logger.warning(
-                    "[RLOptimizer] 🛡️ Safety Guards: Optimisation RL dangereuse - Rollback vers assignations initiales"
+                    (
+                        "[RLOptimizer] 🛡️ Safety Guards: "
+                        "Optimisation RL dangereuse - Rollback vers "
+                        "assignations initiales"
+                    ),
                 )
 
                 # Rollback vers assignations initiales

@@ -194,7 +194,8 @@ class OptimalHyperparameters:
         """Retourne la configuration optimale pour un contexte donné.
 
         Args:
-            context: Contexte d'utilisation ("production", "training", "evaluation", "fine_tuning")
+            context: Contexte d'utilisation ("production", "training",
+                "evaluation", "fine_tuning")
 
         Returns:
             Configuration optimale

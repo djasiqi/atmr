@@ -106,7 +106,8 @@ class RealtimeOptimizer:
         self._running = True
         self._thread = threading.Thread(
             target=self._monitoring_loop,
-            daemon=False,  # ⭐ NON-DAEMON : le thread persiste même si la requête HTTP se termine
+            daemon=False,  # ⭐ NON-DAEMON : le thread persiste même si
+            # la requête HTTP se termine
             name=f"RealtimeOptimizer-{self.company_id}",
         )
         self._thread.start()
@@ -155,7 +156,8 @@ class RealtimeOptimizer:
     def check_current_assignments(
         self, for_date: str | None = None
     ) -> List[OptimizationOpportunity]:
-        """Vérifie toutes les assignations actives et détecte les opportunités d'optimisation.
+        """Vérifie toutes les assignations actives et détecte
+        les opportunités d'optimisation.
 
         Args:
             for_date: Date à vérifier (format YYYY-MM-DD), par défaut aujourd'hui
@@ -216,7 +218,10 @@ class RealtimeOptimizer:
             )
 
             logger.info(
-                "[RealtimeOptimizer] Found %d optimization opportunities for company %s",
+                (
+                    "[RealtimeOptimizer] Found %d optimization opportunities "
+                    "for company %s"
+                ),
                 len(opportunities),
                 self.company_id,
             )
@@ -262,7 +267,10 @@ class RealtimeOptimizer:
                 # Mettre à jour delay_minutes avec prédiction ML
                 delay_minutes = int(ml_prediction.predicted_delay_minutes)
                 logger.info(
-                    "[RealtimeOptimizer] Prédiction ML: booking %s, P(retard)=%.2f, delay=%d min",
+                    (
+                        "[RealtimeOptimizer] Prédiction ML: booking %s, "
+                        "P(retard)=%.2f, delay=%d min"
+                    ),
                     booking.id,
                     ml_prediction.probability_delay,
                     delay_minutes,
@@ -347,7 +355,10 @@ class RealtimeOptimizer:
                     delay_minutes = int(delay_seconds / 60)
 
                     logger.debug(
-                        "[RealtimeOptimizer] Assignment %s: ETA-based delay = %d min (GPS: %s → %s)",
+                        (
+                            "[RealtimeOptimizer] Assignment %s: "
+                            "ETA-based delay = %d min (GPS: %s → %s)"
+                        ),
                         assignment.id,
                         delay_minutes,
                         driver_pos,
@@ -357,13 +368,17 @@ class RealtimeOptimizer:
                     return delay_minutes
                 except Exception as e:
                     logger.warning(
-                        "[RealtimeOptimizer] GPS calculation failed for assignment %s: %s",
+                        (
+                            "[RealtimeOptimizer] GPS calculation failed "
+                            "for assignment %s: %s"
+                        ),
                         assignment.id,
                         e,
                     )
                     # Fallback au cas 2
 
-            # ⭐ CAS 2 : Pas de GPS → Comparer simplement l'heure actuelle vs heure prévue
+            # ⭐ CAS 2 : Pas de GPS → Comparer simplement l'heure actuelle
+            # vs heure prévue
             # Si l'heure actuelle est déjà après l'heure prévue, c'est un
             # retard
             time_difference = (current_time - scheduled_time).total_seconds()
@@ -383,7 +398,10 @@ class RealtimeOptimizer:
                 )
 
                 logger.debug(
-                    "[RealtimeOptimizer] Assignment %s: Time-based delay = %d min (no GPS, time diff: %.1f min)",
+                    (
+                        "[RealtimeOptimizer] Assignment %s: "
+                        "Time-based delay = %d min (no GPS, time diff: %.1f min)"
+                    ),
                     assignment.id,
                     total_delay,
                     time_difference / 60,
@@ -411,7 +429,8 @@ class RealtimeOptimizer:
         opportunities = []
 
         try:
-            # ✅ PERF: Charger tous les bookings et drivers en une seule query chacun (évite N+1)
+            # ✅ PERF: Charger tous les bookings et drivers en une seule query
+            # chacun (évite N+1)
             booking_ids = [int(a.booking_id) for a in assignments if a.booking_id]
             driver_ids = [int(a.driver_id) for a in assignments if a.driver_id]
 
@@ -484,9 +503,13 @@ class RealtimeOptimizer:
                             action="redistribute",
                             priority="critical",
                             message=(
-                                f"🚨 URGENT : {driver_name} a {len(delayed_trips)} courses en retard "
-                                f"(retard total: {total_delay} min). "
-                                f"Recommandation : Répartir sur {len(delayed_trips)} chauffeurs différents."
+                                (
+                                    f"🚨 URGENT : {driver_name} a "
+                                    f"{len(delayed_trips)} courses en retard "
+                                    f"(retard total: {total_delay} min). "
+                                    f"Recommandation : Répartir sur "
+                                    f"{len(delayed_trips)} chauffeurs différents."
+                                )
                             ),
                             driver_id=driver_id,
                             additional_data={
@@ -517,7 +540,10 @@ class RealtimeOptimizer:
                     )
 
                     logger.warning(
-                        "[RealtimeOptimizer] 🚨 Driver %s is overloaded: %d trips delayed (total: %d min)",
+                        (
+                            "[RealtimeOptimizer] 🚨 Driver %s is overloaded: "
+                            "%d trips delayed (total: %d min)"
+                        ),
                         driver_name,
                         len(delayed_trips),
                         total_delay,
@@ -581,7 +607,10 @@ class RealtimeOptimizer:
                 )
 
                 logger.info(
-                    "[RealtimeOptimizer] Notified %s opportunity for assignment %s (delay: %d min)",
+                    (
+                        "[RealtimeOptimizer] Notified %s opportunity "
+                        "for assignment %s (delay: %d min)"
+                    ),
                     opportunity.severity,
                     opportunity.assignment_id,
                     opportunity.current_delay_minutes,

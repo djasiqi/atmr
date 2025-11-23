@@ -24,7 +24,9 @@ def upgrade():
 
     # Ajouter un commentaire pour documenter les valeurs typiques
     op.execute(
-        "COMMENT ON COLUMN client.preferential_rate IS 'Tarif préférentiel en CHF (ex: 45, 50, 55, 60, 70, 80, 110). NULL = tarif standard'"
+        "COMMENT ON COLUMN client.preferential_rate IS "
+        "'Tarif préférentiel en CHF (ex: 45, 50, 55, 60, 70, 80, 110). "
+        "NULL = tarif standard'"
     )
 
 

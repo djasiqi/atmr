@@ -136,7 +136,10 @@ class ParetoFront:
                 best_solution = solution
 
         logger.info(
-            "[ParetoFront] Solution sélectionnée: fairness_weight=%.2f, solution_id=%d, efficiency=%.2f, fairness=%.2f",
+            (
+                "[ParetoFront] Solution sélectionnée: fairness_weight=%.2f, "
+                "solution_id=%d, efficiency=%.2f, fairness=%.2f"
+            ),
             fairness_weight,
             best_solution.solution_id if best_solution else -1,
             best_solution.efficiency_score if best_solution else 0,

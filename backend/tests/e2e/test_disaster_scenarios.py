@@ -212,7 +212,8 @@ class TestDisasterScenarios:
         # ✅ FIX: Utiliser la route correcte /api/v1/bookings/ (pas /api/bookings/)
         response_get = authenticated_client.get("/api/v1/bookings/")
         assert response_get.status_code in [200, 404], (
-            f"GET devrait fonctionner même en read-only, reçu: {response_get.status_code}"
+            f"GET devrait fonctionner même en read-only, "
+            f"reçu: {response_get.status_code}"
         )
 
         # ✅ Activer DB read-only
@@ -227,7 +228,8 @@ class TestDisasterScenarios:
         # ✅ FIX: Utiliser la route correcte /api/v1/bookings/ (pas /api/bookings/)
         response_get_readonly = authenticated_client.get("/api/v1/bookings/")
         assert response_get_readonly.status_code in [200, 404], (
-            f"GET devrait fonctionner en read-only, reçu: {response_get_readonly.status_code}"
+            f"GET devrait fonctionner en read-only, "
+            f"reçu: {response_get_readonly.status_code}"
         )
         logger.info("[D3] ✅ Lectures fonctionnent en read-only")
 
@@ -250,7 +252,8 @@ class TestDisasterScenarios:
 
         # ✅ Vérifier HTTP 503 retourné
         assert response_post.status_code == 503, (
-            f"Écriture devrait retourner 503 en read-only, reçu: {response_post.status_code}"
+            f"Écriture devrait retourner 503 en read-only, "
+            f"reçu: {response_post.status_code}"
         )
 
         # ✅ Vérifier message d'erreur contient "read-only" ou similaire
@@ -288,7 +291,8 @@ class TestDisasterScenarios:
             f"/api/clients/{sample_client.user.public_id}/bookings", json=booking_data
         )
 
-        # Maintenant ça devrait fonctionner (201 créé ou 500 si autre problème, mais pas 503 read-only)
+        # Maintenant ça devrait fonctionner
+        # (201 créé ou 500 si autre problème, mais pas 503 read-only)
         assert response_post_after.status_code != 503, (
             "Écriture devrait fonctionner après désactivation read-only"
         )
@@ -529,7 +533,10 @@ class TestDisasterScenarios:
                 logger.info("[D3] ✅ Retries automatiques détectés dans les logs")
             else:
                 logger.warning(
-                    "[D3] ⚠️ Retries non détectés (peut-être cache utilisé ou pas d'erreurs)"
+                    (
+                        "[D3] ⚠️ Retries non détectés "
+                        "(peut-être cache utilisé ou pas d'erreurs)"
+                    )
                 )
 
             if fallback_detected:
@@ -758,10 +765,14 @@ class TestDisasterScenarios:
                 logger.info("  - Avec chaos: %.2fs", combined_duration)
                 logger.info("  - Facteur: %.2fx", degradation_factor)
 
-                # Accepter une dégradation raisonnable (≤ 5x) avec tous les chaos activés
+                # Accepter une dégradation raisonnable (≤ 5x)
+                # avec tous les chaos activés
                 if degradation_factor > 5.0:
                     logger.warning(
-                        "[D3] ⚠️ Dégradation importante (%.2fx), mais système fonctionne",
+                        (
+                            "[D3] ⚠️ Dégradation importante (%.2fx), "
+                            "mais système fonctionne"
+                        ),
                         degradation_factor,
                     )
                 else:
@@ -782,7 +793,8 @@ class TestDisasterScenarios:
             injector.disable()
 
     def test_no_redirects_in_testing_mode(self, authenticated_client):
-        """✅ Test de non-régression : Vérifier qu'aucune redirection 302 n'est générée en mode testing.
+        """✅ Test de non-régression : Vérifier qu'aucune redirection 302
+        n'est générée en mode testing.
 
         Ce test vérifie que les routes API ne redirigent pas vers /login ou autre
         en mode testing, même si l'authentification échoue.
@@ -803,7 +815,8 @@ class TestDisasterScenarios:
         # Vérifier que c'est soit 200 (succès) soit 401/403 (erreur auth) mais pas 302
         assert response.status_code in [200, 401, 403, 404], (
             f"Status code inattendu: {response.status_code}. "
-            f"En mode testing, on attend 200 (succès), 401 (unauthorized), 403 (forbidden) ou 404 (not found), "
+            f"En mode testing, on attend 200 (succès), "
+            f"401 (unauthorized), 403 (forbidden) ou 404 (not found), "
             f"mais pas 302 (redirection)."
         )
 

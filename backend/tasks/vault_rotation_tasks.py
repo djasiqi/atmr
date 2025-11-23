@@ -11,10 +11,11 @@ from __future__ import annotations
 import logging
 import os
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 try:
-    import hvac  # type: ignore[import-untyped]  # noqa: F401  # Dépendance optionnelle, utilisée indirectement
+    import hvac  # type: ignore[import-untyped]  # noqa: F401
+    # Dépendance optionnelle, utilisée indirectement
 
     HVAC_AVAILABLE = True
 except ImportError:
@@ -354,7 +355,10 @@ def rotate_encryption_key(self: Task) -> dict[str, Any]:
         )
 
         logger.info(
-            "[4.1 Vault Rotation] ✅ Encryption key rotée avec succès (env=%s, %d legacy keys)",
+            (
+                "[4.1 Vault Rotation] ✅ Encryption key rotée avec succès "
+                "(env=%s, %d legacy keys)"
+            ),
             env_path,
             len(legacy_keys),
         )
@@ -363,7 +367,8 @@ def rotate_encryption_key(self: Task) -> dict[str, Any]:
         vault_client.clear_cache()
 
         # ✅ 2.5: Intégration avec système de rotation existant
-        # Notifier le EncryptionService de la nouvelle clé (à faire manuellement ou via reload)
+        # Notifier le EncryptionService de la nouvelle clé
+        # (à faire manuellement ou via reload)
 
         result = {
             "status": "success",
@@ -626,13 +631,13 @@ def rotate_all_secrets(self: Task) -> dict[str, Any]:  # noqa: ARG001
         class FakeTask:
             pass
 
-        fake_task = FakeTask()
+        fake_task = cast(Task, FakeTask())
 
         results = {}
 
         # Rotation SECRET_KEY Flask
         try:
-            flask_secret_result = rotate_flask_secret_key(fake_task)  # type: ignore[arg-type]
+            flask_secret_result = rotate_flask_secret_key(fake_task)
             results["flask_secret_key"] = flask_secret_result
         except Exception as e:
             logger.exception(
@@ -642,7 +647,7 @@ def rotate_all_secrets(self: Task) -> dict[str, Any]:  # noqa: ARG001
 
         # Rotation JWT
         try:
-            jwt_result = rotate_jwt_secret(fake_task)  # type: ignore[arg-type]
+            jwt_result = rotate_jwt_secret(fake_task)
             results["jwt"] = jwt_result
         except Exception as e:
             logger.exception("[4.1 Vault Rotation] Erreur rotation JWT: %s", e)
@@ -650,13 +655,14 @@ def rotate_all_secrets(self: Task) -> dict[str, Any]:  # noqa: ARG001
 
         # Rotation Encryption
         try:
-            encryption_result = rotate_encryption_key(fake_task)  # type: ignore[arg-type]
+            encryption_result = rotate_encryption_key(fake_task)
             results["encryption"] = encryption_result
         except Exception as e:
             logger.exception("[4.1 Vault Rotation] Erreur rotation encryption: %s", e)
             results["encryption"] = {"status": "error", "error": str(e)}
 
-        # Note: Database credentials sont gérés via dynamic secrets (rotation automatique)
+        # Note: Database credentials sont gérés via dynamic secrets
+        # (rotation automatique)
 
         success_count = sum(1 for r in results.values() if r.get("status") == "success")
         total_count = len(results)

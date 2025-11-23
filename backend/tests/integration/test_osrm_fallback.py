@@ -4,7 +4,8 @@ Tests de fallback OSRM pour l'Étape 15.
 
 Ces tests valident le système de fallback OSRM quand le service principal
 n'est pas disponible, garantissant la continuité du service de dispatch.
-✅ FIX: Tests simplifiés pour tester le fallback haversine réel au lieu de classes inexistantes.
+✅ FIX: Tests simplifiés pour tester le fallback haversine réel
+au lieu de classes inexistantes.
 """
 
 import sys
@@ -43,7 +44,8 @@ class TestOSRMFallback:
         print("  ✅ build_distance_matrix_osrm fonctionne correctement")
 
     def test_osrm_build_distance_matrix_osrm_fallback_on_error(self):
-        """Test que build_distance_matrix_osrm utilise le fallback haversine quand OSRM échoue."""
+        """Test que build_distance_matrix_osrm utilise le fallback haversine
+        quand OSRM échoue."""
         from services.osrm_client import build_distance_matrix_osrm
 
         # Coordonnées de test (Lausanne)
@@ -72,7 +74,8 @@ class TestOSRMFallback:
             for i in range(len(coords)):
                 assert result[i][i] == 0.0
 
-            # Vérifier que les durées sont cohérentes (non nulles pour les paires différentes)
+            # Vérifier que les durées sont cohérentes
+            # (non nulles pour les paires différentes)
             assert result[0][1] > 0.0
             assert result[1][0] > 0.0
 
@@ -86,7 +89,8 @@ class TestOSRMFallback:
         origin = (46.2044, 6.1432)
         dest = (46.2100, 6.1500)
 
-        # Avec le fixture mock_osrm_client, la fonction devrait retourner des données de route
+        # Avec le fixture mock_osrm_client, la fonction devrait retourner
+        # des données de route
         result = route_info(
             origin=origin, destination=dest, base_url="http://localhost:5000"
         )

@@ -42,7 +42,8 @@ class QRBillService:
             company = invoice.company
             client = invoice.client
 
-            # Débiteur : Institution (si facturation tierce) ou Client (si facturation directe)
+            # Débiteur : Institution (si facturation tierce) ou Client
+            # (si facturation directe)
             if (
                 invoice.bill_to_client_id
                 and invoice.bill_to_client_id != invoice.client_id
@@ -68,9 +69,13 @@ class QRBillService:
                     debtor_pcode = "1200"
                     debtor_city = "Genève"
             else:
-                # 👤 Facturation directe : débiteur = client (avec même logique que le PDF)
+                # 👤 Facturation directe : débiteur = client
+                # (avec même logique que le PDF)
                 debtor_name = (
-                    f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
+                    (
+                        f"{client.user.first_name or ''} "
+                        f"{client.user.last_name or ''}"
+                    ).strip()
                     or client.user.username
                     or "Client"
                 )
@@ -127,7 +132,10 @@ class QRBillService:
                 amount=str(invoice.total_amount),
                 currency="CHF",
                 reference_number=None,  # Pas de référence QR pour l'instant
-                additional_information=f"Facture {invoice.invoice_number} - Période: {invoice.period_month:02d}.{invoice.period_year}",
+                additional_information=(
+                    f"Facture {invoice.invoice_number} - "
+                    f"Période: {invoice.period_month:02d}.{invoice.period_year}"
+                ),
                 language="de",
             )
 
@@ -171,7 +179,8 @@ class QRBillService:
             company = invoice.company
             client = invoice.client
 
-            # Débiteur : Institution (si facturation tierce) ou Client (si facturation directe)
+            # Débiteur : Institution (si facturation tierce) ou Client
+            # (si facturation directe)
             if (
                 invoice.bill_to_client_id
                 and invoice.bill_to_client_id != invoice.client_id
@@ -197,9 +206,13 @@ class QRBillService:
                     debtor_pcode = "1200"
                     debtor_city = "Genève"
             else:
-                # 👤 Facturation directe : débiteur = client (avec même logique que le PDF)
+                # 👤 Facturation directe : débiteur = client
+                # (avec même logique que le PDF)
                 debtor_name = (
-                    f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
+                    (
+                        f"{client.user.first_name or ''} "
+                        f"{client.user.last_name or ''}"
+                    ).strip()
                     or client.user.username
                     or "Client"
                 )
@@ -256,7 +269,10 @@ class QRBillService:
                 amount=str(invoice.total_amount),
                 currency="CHF",
                 reference_number=None,  # Pas de référence QR pour l'instant
-                additional_information=f"Facture {invoice.invoice_number} - Période: {invoice.period_month:02d}.{invoice.period_year}",
+                additional_information=(
+                    f"Facture {invoice.invoice_number} - "
+                    f"Période: {invoice.period_month:02d}.{invoice.period_year}"
+                ),
                 language="de",
             )
 

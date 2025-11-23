@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Script pour réinitialiser les bookings : supprimer les assignations et réinitialiser driver_id
+Script pour réinitialiser les bookings :
+supprimer les assignations et réinitialiser driver_id
 """
 
 import sys
@@ -16,7 +17,8 @@ from models import Assignment, Booking, BookingStatus  # noqa: E402
 
 
 def reset_bookings():
-    """Réinitialise tous les bookings : supprime les assignations et réinitialise driver_id et status"""
+    """Réinitialise tous les bookings :
+    supprime les assignations et réinitialise driver_id et status"""
     app = create_app()
 
     with app.app_context():
@@ -46,7 +48,10 @@ def reset_bookings():
             )
 
             print(
-                f"🔄 Réinitialisé {bookings_reset} bookings avec driver_id (driver_id = None, status = ACCEPTED)"
+                (
+                    f"🔄 Réinitialisé {bookings_reset} bookings avec driver_id "
+                    f"(driver_id = None, status = ACCEPTED)"
+                )
             )
 
             # 4. Mettre à jour tous les bookings en PENDING vers ACCEPTED
@@ -57,7 +62,10 @@ def reset_bookings():
             )
 
             print(
-                f"🔄 Mis à jour {bookings_pending_to_accepted} bookings de PENDING vers ACCEPTED"
+                (
+                    f"🔄 Mis à jour {bookings_pending_to_accepted} bookings "
+                    f"de PENDING vers ACCEPTED"
+                )
             )
 
             # 5. Commit
@@ -73,10 +81,16 @@ def reset_bookings():
             ).count()
             print("✅ Vérification:")
             print(
-                f"   - Bookings avec driver_id restants: {remaining_with_driver} (devrait être 0)"
+                (
+                    f"   - Bookings avec driver_id restants: {remaining_with_driver} "
+                    f"(devrait être 0)"
+                )
             )
             print(
-                f"   - Bookings en PENDING restants: {remaining_pending} (devrait être 0)"
+                (
+                    f"   - Bookings en PENDING restants: {remaining_pending} "
+                    f"(devrait être 0)"
+                )
             )
 
         except Exception as e:

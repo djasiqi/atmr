@@ -81,7 +81,8 @@ def verify_rollback_restores_values(
 
     if reloaded is None:
         error_msg = (
-            f"{model_class.__name__} with id={object_id} not found in DB after rollback. "
+            f"{model_class.__name__} with id={object_id} "
+            f"not found in DB after rollback. "
             f"Object may have been deleted or never committed."
         )
         raise AssertionError(error_msg)
@@ -97,7 +98,8 @@ def verify_rollback_restores_values(
 
     if mismatches:
         error_msg = (
-            f"Rollback did not restore original values for {model_class.__name__} id={object_id}:\n"
+            f"Rollback did not restore original values for "
+            f"{model_class.__name__} id={object_id}:\n"
             f"{chr(10).join(f'  - {mismatch}' for mismatch in mismatches)}"
         )
         logger.error(error_msg)

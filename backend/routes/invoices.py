@@ -578,7 +578,8 @@ class EligibleClients(Resource):
         maximum=200,
     )
     def get(self, company_id: int):
-        """Liste les clients ayant des trajets non facturés, avec possibilité de recherche."""
+        """Liste les clients ayant des trajets non facturés,
+        avec possibilité de recherche."""
         user_public_id = get_jwt_identity()
         user = User.query.filter_by(public_id=user_public_id).first()
         if not user or not user.company or user.company.id != company_id:
@@ -702,7 +703,8 @@ class GenerateInvoice(Resource):
                 period_year = validated_data["period_year"]
                 period_month = validated_data["period_month"]
 
-                # period_year et period_month sont déjà validés par le schema, donc toujours présents
+                # period_year et period_month sont déjà validés par le schema,
+                # donc toujours présents
                 invoice_service = InvoiceService()
 
                 client_reservations = validated_data.get("client_reservations")
@@ -712,7 +714,10 @@ class GenerateInvoice(Resource):
                 # institution
                 if client_ids and bill_to_client_id:
                     app_logger.info(
-                        "Génération factures consolidées: %s clients vers institution %s",
+                        (
+                            "Génération factures consolidées: %s clients "
+                            "vers institution %s"
+                        ),
                         len(client_ids),
                         bill_to_client_id,
                     )
@@ -743,7 +748,11 @@ class GenerateInvoice(Resource):
                         )
 
                         result = {
-                            "message": f"{invoice_result['success_count']} facture(s) générée(s), {invoice_result['error_count']} erreur(s)",
+                            "message": (
+                                f"{invoice_result['success_count']} "
+                                f"facture(s) générée(s), "
+                                f"{invoice_result['error_count']} erreur(s)"
+                            ),
                             "invoices": [
                                 inv.to_dict() for inv in invoice_result["invoices"]
                             ],
@@ -772,7 +781,9 @@ class GenerateInvoice(Resource):
                             status_code = 404
                         elif not institution.is_institution:
                             result = {
-                                "error": "Le client sélectionné n'est pas une institution"
+                                "error": (
+                                    "Le client sélectionné n'est pas une institution"
+                                )
                             }
                             status_code = 400
                         else:
@@ -1165,7 +1176,11 @@ class DuplicateInvoice(Resource):
             draft_context = invoice_service.duplicate_invoice(invoice)
 
             return {
-                "message": "Les transports ont été libérés. Veuillez corriger le brouillon puis générer une nouvelle facture.",
+                "message": (
+                    "Les transports ont été libérés. "
+                    "Veuillez corriger le brouillon puis générer "
+                    "une nouvelle facture."
+                ),
                 "draft": draft_context,
             }, 200
 
@@ -1265,7 +1280,10 @@ class ToggleInstitution(Resource):
             db.session.commit()
 
             return {
-                "message": f"Client {'marqué comme' if is_institution else 'démarqué en tant que'} institution",
+                "message": (
+                    f"Client {'marqué comme' if is_institution else 'démarqué en tant que'} "
+                    "institution"
+                ),
                 "client": client.serialize,
             }
 
@@ -1317,7 +1335,11 @@ class UnbilledReservations(Resource):
 
             # 🔍 LOG : Debug pour voir ce qui est trouvé
             app_logger.warning(
-                "🔍 [Unbilled] Recherche pour client_id=%s, company_id=%s, year=%s, month=%s, billed_to_filter=%s",
+                (
+                    "🔍 [Unbilled] Recherche pour client_id=%s, "
+                    "company_id=%s, year=%s, month=%s, "
+                    "billed_to_filter=%s"
+                ),
                 client_id,
                 company_id,
                 period_year,
@@ -1345,12 +1367,18 @@ class UnbilledReservations(Resource):
                 count_before_filter,
             )
 
-            # ⚠️ NE PAS filtrer par billed_to_type : on veut TOUS les transports non facturés du client
+            # ⚠️ NE PAS filtrer par billed_to_type :
+            # on veut TOUS les transports non facturés du client
             # Même si le type de facturation ne correspond pas, on affiche tout
             # Le dispatcher pourra choisir ce qu'il veut facturer
-            # if billed_to_filter and billed_to_filter in ['patient', 'clinic', 'insurance']:
+            # if billed_to_filter and billed_to_filter in [
+            #     'patient', 'clinic', 'insurance'
+            # ]:
             #     query = query.filter(Booking.billed_to_type == billed_to_filter)
-            #     app_logger.warning("🔍 [Unbilled] Filtre appliqué: billed_to_type=%s", billed_to_filter)
+            #     app_logger.warning(
+            #         "🔍 [Unbilled] Filtre appliqué: billed_to_type=%s",
+            #         billed_to_filter
+            #     )
 
             # Trier par date
             from sqlalchemy import asc
@@ -1366,7 +1394,10 @@ class UnbilledReservations(Resource):
             )
             for r in reservations:
                 app_logger.warning(
-                    "   - Booking #%s: %s, %s, status=%s, billed_to_type=%s, invoice_line_id=%s",
+                    (
+                        "   - Booking #%s: %s, %s, status=%s, "
+                        "billed_to_type=%s, invoice_line_id=%s"
+                    ),
                     r.id,
                     r.customer_name,
                     r.scheduled_time,

@@ -68,9 +68,12 @@ def prom_middleware(app: Flask) -> Flask:
         App Flask avec middleware ajouté
     """
     if not PROMETHEUS_AVAILABLE:
-        app.logger.warning(
-            "[Prometheus] prometheus_client non installé - métriques HTTP désactivées. Installer avec: pip install prometheus-client"
+        warning_msg = (
+            "[Prometheus] prometheus_client non installé - "
+            "métriques HTTP désactivées. "
+            "Installer avec: pip install prometheus-client"
         )
+        app.logger.warning(warning_msg)
         return app
 
     app.logger.info("[Prometheus] Middleware métriques HTTP activé")
@@ -86,7 +89,9 @@ def prom_middleware(app: Flask) -> Flask:
             REQUEST_IN_PROGRESS.labels(method=request.method, endpoint=endpoint).inc()
 
     @app.after_request
-    def _record_metrics(resp: "Response") -> "Response":  # pyright: ignore[reportUnusedFunction]
+    def _record_metrics(  # pyright: ignore[reportUnusedFunction]
+        resp: "Response",
+    ) -> "Response":
         """Enregistre les métriques après la requête."""
         if not hasattr(request, "_prom_start_time"):
             return resp

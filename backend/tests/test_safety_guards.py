@@ -311,7 +311,7 @@ class TestSafetyGuardsIntegration:
         if SafetyGuards is None:
             pytest.skip("SafetyGuards non disponible")
 
-        _guards = SafetyGuards()
+        # _guards = SafetyGuards()
 
         # Vérifier que le logging a été configuré
         mock_logging.getLogger.assert_called()

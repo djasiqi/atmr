@@ -200,8 +200,12 @@ def _check_booking_ownership(
             return True, None
         else:
             # IDOR attempt détecté
+            warning_msg = (
+                "🚨 IDOR blocked: user=%s (client_id=%s) tried to %s "
+                + "booking_id=%s (owner_client_id=%s)"
+            )
             app_logger.warning(
-                "🚨 IDOR blocked: user=%s (client_id=%s) tried to %s booking_id=%s (owner_client_id=%s)",
+                warning_msg,
                 user.public_id,
                 client.id,
                 action,
@@ -267,11 +271,14 @@ class CreateBooking(Resource):
             user, client, auth_error = _validate_user_and_client(public_id)
             if auth_error:
                 return auth_error
-            # Défense en profondeur : vérification explicite pour éviter AttributeError si None en production
+            # Défense en profondeur : vérification explicite
+            # pour éviter AttributeError si None en production
             if user is None or client is None:
-                app_logger.error(
-                    "[Bookings] user or client is None after validation (should not happen)"
+                error_msg = (
+                    "[Bookings] user or client is None after validation "
+                    + "(should not happen)"
                 )
+                app_logger.error(error_msg)
                 return {"error": "Erreur interne d'authentification"}, 500
 
             # Horaire et distance
@@ -384,7 +391,8 @@ class CreateBooking(Resource):
 
             db.session.commit()
 
-            # ⚠️ Pas de dispatch ici (PENDING seulement). L'entreprise acceptera -> ACCEPTED.
+            # ⚠️ Pas de dispatch ici (PENDING seulement).
+            # L'entreprise acceptera -> ACCEPTED.
             return {
                 "message": "Réservation créée avec succès",
                 "booking_id": getattr(new_booking, "id", None),
@@ -513,7 +521,9 @@ class BookingResource(Resource):
     @jwt_required()
     @limiter.limit("50 per hour")  # ✅ 2.8: Rate limiting suppression réservation
     def delete(self, booking_id):
-        """Annule une réservation (PENDING ou ASSIGNED). Déclenche queue si nécessaire."""
+        """Annule une réservation (PENDING ou ASSIGNED).
+        Déclenche queue si nécessaire.
+        """
         try:
             public_id = get_jwt_identity()
             user = User.query.filter_by(public_id=public_id).one_or_none()
@@ -531,7 +541,10 @@ class BookingResource(Resource):
 
             if booking.status not in {BookingStatus.PENDING, BookingStatus.ASSIGNED}:
                 return {
-                    "error": "Seules les réservations en attente ou confirmées peuvent être annulées"
+                    "error": (
+                        "Seules les réservations en attente ou confirmées "
+                        "peuvent être annulées"
+                    )
                 }, 400
 
             company_id = booking.company_id
@@ -581,7 +594,9 @@ def _get_admin_bookings(
 def _get_client_bookings(
     user: User, page: int, per_page: int, status_filter: str | None
 ) -> tuple[dict[str, Any], int, dict[str, str]] | None:
-    """Helper pour récupérer les réservations pour un client. Retourne None si erreur."""
+    """Helper pour récupérer les réservations pour un client.
+    Retourne None si erreur.
+    """
     client = Client.query.filter_by(user_id=user.id).one_or_none()
     if not client:
         return None
@@ -650,7 +665,8 @@ class ListBookings(Resource):
         Query params:
             - page: numéro de page (défaut: 1, min: 1)
             - per_page: résultats par page (défaut: 100, min: 1, max: 500)
-            - status: filtre par statut (pending|confirmed|in_progress|completed|cancelled), optionnel
+            - status: filtre par statut
+              (pending|confirmed|in_progress|completed|cancelled), optionnel
             - from_date: filtre par date de début (YYYY-MM-DD), optionnel
             - to_date: filtre par date de fin (YYYY-MM-DD), optionnel
         """

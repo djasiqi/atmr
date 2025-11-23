@@ -563,4 +563,7 @@ class InvoiceSequence(db.Model):
 
     @override
     def __repr__(self):
-        return f"<InvoiceSequence {self.company_id}-{self.year}-{self.month}: {self.sequence}>"
+        return (
+            f"<InvoiceSequence {self.company_id}-{self.year}-{self.month}: "
+            f"{self.sequence}>"
+        )

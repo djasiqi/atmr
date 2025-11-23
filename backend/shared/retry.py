@@ -218,7 +218,10 @@ def retry_with_backoff(
             # Vérifier si on a encore des tentatives
             if attempt >= max_retries:
                 log.warning(
-                    "[Retry] Toutes les tentatives épuisées (%d/%d). Dernière erreur: %s",
+                    (
+                        "[Retry] Toutes les tentatives épuisées (%d/%d). "
+                        "Dernière erreur: %s"
+                    ),
                     attempt + 1,
                     max_retries + 1,
                     e,

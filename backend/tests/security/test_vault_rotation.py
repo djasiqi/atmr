@@ -222,7 +222,8 @@ class TestRotateEncryptionKey:
         assert (
             result["legacy_keys_count"] == 3
         )  # 2 existantes + 1 nouvelle (ancienne clé)
-        # Vérifier que create_or_update_secret a été appelé pour master_key et legacy_keys
+        # Vérifier que create_or_update_secret a été appelé
+        # pour master_key et legacy_keys
         assert mock_vault._client.secrets.kv.v2.create_or_update_secret.call_count == 2
 
 

@@ -10,7 +10,8 @@ import logging
 import os
 from typing import Any
 
-# ✅ 2.9: Imports optionnels OpenTelemetry (s'il n'est pas installé, les fonctions sont no-ops)
+# ✅ 2.9: Imports optionnels OpenTelemetry
+# (s'il n'est pas installé, les fonctions sont no-ops)
 # pyright: reportMissingImports=false
 try:
     from opentelemetry import trace
@@ -65,7 +66,10 @@ def setup_opentelemetry(
     """
     if not OPENTELEMETRY_AVAILABLE or Resource is None:
         logger.warning(
-            "[2.9] OpenTelemetry non installé - installer avec: pip install -r requirements-otel.txt"
+            (
+                "[2.9] OpenTelemetry non installé - installer avec: "
+                "pip install -r requirements-otel.txt"
+            )
         )
         return
     # Créer resource avec métadonnées service

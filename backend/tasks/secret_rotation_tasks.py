@@ -23,7 +23,8 @@ DEFAULT_ROTATION_INTERVAL_DAYS = 90
 def rotate_encryption_keys(self: Task) -> dict[str, Any]:  # noqa: ARG001
     """✅ 2.5: Génère une nouvelle clé de chiffrement et la marque comme active.
 
-    L'ancienne clé devient legacy pour permettre le déchiffrement des données existantes.
+    L'ancienne clé devient legacy pour permettre le déchiffrement
+    des données existantes.
 
     Returns:
         dict avec status, old_key_hex, new_key_hex
@@ -55,7 +56,8 @@ def rotate_encryption_keys(self: Task) -> dict[str, Any]:  # noqa: ARG001
                 new_key_hex[:16],
             )
 
-            # ⚠️ IMPORTANT: Le développeur doit mettre à jour les variables d'environnement
+            # ⚠️ IMPORTANT: Le développeur doit mettre à jour
+            # les variables d'environnement
             # MASTER_ENCRYPTION_KEY et LEGACY_ENCRYPTION_KEYS manuellement
             warning_msg = (
                 "[2.5] ⚠️ MISE À JOUR MANUELLE REQUISE:\n"
@@ -66,7 +68,10 @@ def rotate_encryption_keys(self: Task) -> dict[str, Any]:  # noqa: ARG001
 
             return {
                 "status": "success",
-                "message": "Rotation effectuée - Mise à jour manuelle des variables d'environnement requise",
+                "message": (
+                    "Rotation effectuée - Mise à jour manuelle "
+                    "des variables d'environnement requise"
+                ),
                 "new_key_hex": new_key_hex,
                 "old_key_hex": old_key_hex,
                 "legacy_count": len(service.legacy_keys),
@@ -106,7 +111,10 @@ def migrate_encrypted_data(
             from security.crypto import get_encryption_service
 
             logger.info(
-                "[2.5] Début migration données chiffrées: model=%s, field=%s, batch_size=%d",
+                (
+                    "[2.5] Début migration données chiffrées: "
+                    "model=%s, field=%s, batch_size=%d"
+                ),
                 model_name,
                 field_name,
                 batch_size,
@@ -182,7 +190,8 @@ def migrate_encrypted_data(
                             if not encrypted_value:
                                 continue
 
-                            # Déchiffrer avec l'ancienne clé (via service qui essaie toutes les clés)
+                            # Déchiffrer avec l'ancienne clé
+                            # (via service qui essaie toutes les clés)
                             try:
                                 plaintext = service.decrypt_field(encrypted_value)
                             except Exception as decrypt_err:
@@ -272,8 +281,10 @@ def check_rotation_due(self: Task) -> dict[str, Any]:  # noqa: ARG001
             logger.info("[2.5] Vérification rotation des clés...")
 
             # ⚠️ NOTE: L'age de la clé devrait être stocké en DB ou fichier
-            # Pour simplifier, on vérifie via variable d'environnement ou dernière rotation
-            # En production, utiliser une table de métadonnées pour stocker la date de dernière rotation
+            # Pour simplifier, on vérifie via variable d'environnement
+            # ou dernière rotation
+            # En production, utiliser une table de métadonnées
+            # pour stocker la date de dernière rotation
 
             rotation_interval_days = int(
                 os.getenv("ENCRYPTION_KEY_ROTATION_INTERVAL_DAYS", "90")
@@ -281,17 +292,25 @@ def check_rotation_due(self: Task) -> dict[str, Any]:  # noqa: ARG001
 
             # Logique simplifiée: si pas de rotation récente détectée, suggérer rotation
             logger.info(
-                "[2.5] Intervalle rotation: %d jours (configurable via ENCRYPTION_KEY_ROTATION_INTERVAL_DAYS)",
+                (
+                    "[2.5] Intervalle rotation: %d jours "
+                    "(configurable via ENCRYPTION_KEY_ROTATION_INTERVAL_DAYS)"
+                ),
                 rotation_interval_days,
             )
 
-            # ⚠️ En production, lire la date de dernière rotation depuis une source persistante
-            # Ici on retourne juste l'info que la rotation peut être effectuée manuellement
+            # ⚠️ En production, lire la date de dernière rotation
+            # depuis une source persistante
+            # Ici on retourne juste l'info que la rotation
+            # peut être effectuée manuellement
 
             return {
                 "status": "check_complete",
                 "rotation_interval_days": rotation_interval_days,
-                "message": "Vérification terminée - Utiliser rotate_encryption_keys() pour rotation manuelle",
+                "message": (
+                    "Vérification terminée - Utiliser rotate_encryption_keys() "
+                    "pour rotation manuelle"
+                ),
             }
 
     except Exception as e:

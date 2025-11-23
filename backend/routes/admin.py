@@ -93,9 +93,11 @@ class AdminStats(Resource):
 
             total_revenue = db.session.execute(stmt).scalar_one()
 
-            app_logger.info(
-                f"📊 Stats: {total_bookings} bookings, {total_users} users, {total_invoices} invoices, {total_revenue} revenue"
+            stats_msg = (
+                f"📊 Stats: {total_bookings} bookings, {total_users} users, "
+                + f"{total_invoices} invoices, {total_revenue} revenue"
             )
+            app_logger.info(stats_msg)
             return {
                 "totalBookings": total_bookings,
                 "totalUsers": total_users,
@@ -221,7 +223,9 @@ class ManageUser(Resource):
 def _setup_driver_role(
     user: User, company_id: int | None
 ) -> tuple[bool, dict[str, str] | None, int | None]:
-    """Helper pour configurer le rôle DRIVER. Retourne (success, error_response, status_code)."""
+    """Helper pour configurer le rôle DRIVER.
+    Retourne (success, error_response, status_code).
+    """
     if not company_id:
         db.session.rollback()
         return False, {"error": "company_id is required for a driver."}, 400
@@ -254,7 +258,9 @@ user_role_update_model = admin_ns.model(
             description="Nouveau rôle",
         ),
         "company_id": fields.Integer(
-            description="ID entreprise (requis pour rôle driver, optionnel pour company)",
+            description=(
+                "ID entreprise (requis pour rôle driver, optionnel pour company)"
+            ),
             minimum=1,
         ),
         "company_name": fields.String(
@@ -424,7 +430,9 @@ class UpdateUserRole(Resource):
                 )
 
             return {
-                "message": f"✅ Rôle de {user.username} mis à jour en {new_role_enum.value}",
+                "message": (
+                    f"✅ Rôle de {user.username} mis à jour en {new_role_enum.value}"
+                ),
                 "user": cast("Any", user).serialize,
             }, 200
 
@@ -454,7 +462,8 @@ class ResetUserPassword(Resource):
             from routes.utils import validate_password_or_raise
 
             validate_password_or_raise(new_password, _user=u)
-            # Le mot de passe est validé explicitement par validate_password_or_raise() ci-dessus
+            # Le mot de passe est validé explicitement
+            # par validate_password_or_raise() ci-dessus
             # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             u.set_password(new_password)
             u.force_password_change = True

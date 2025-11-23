@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Script temporaire pour tester les migrations sans Flask-Migrate.
 
-Ce script contourne le problème avec rich/flask_limiter en utilisant Alembic directement.
+Ce script contourne le problème avec rich/flask_limiter
+en utilisant Alembic directement.
 """
 
 import sys

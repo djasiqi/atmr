@@ -166,4 +166,7 @@ class RLFeedback(db.Model):
 
     @override
     def __repr__(self):
-        return f"<RLFeedback {self.suggestion_id} action={self.action} booking={self.booking_id}>"
+        return (
+            f"<RLFeedback {self.suggestion_id} action={self.action} "
+            f"booking={self.booking_id}>"
+        )

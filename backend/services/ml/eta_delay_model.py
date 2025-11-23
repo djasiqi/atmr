@@ -2,7 +2,8 @@
 
 Ce module implémente:
 - Gradient boosting (XGBoost/LightGBM) pour prédiction de retard
-- Features: heure, pluie, densité zone, historique chauffeur, distance OSRM, marge fenêtre
+- Features: heure, pluie, densité zone, historique chauffeur,
+  distance OSRM, marge fenêtre
 - Intégration RealtimeOptimizer: si P(retard)>p0 → Notify + Reassign candidates
 - Critères: AUC > 0.75; réduction notifications tardives -25%
 """
@@ -25,7 +26,8 @@ try:
 except ImportError:
     # Fallback vers pickle si joblib n'est pas disponible (cas rare en production)
     # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-    # Utilisé uniquement comme fallback si joblib n'est pas installé (scikit-learn le fournit généralement)
+    # Utilisé uniquement comme fallback si joblib n'est pas installé
+    # (scikit-learn le fournit généralement)
     import pickle as joblib
 
     logger.warning("[ETADelayModel] joblib non disponible, utilisation de pickle")
@@ -555,7 +557,10 @@ class ETADelayModel:
             normalized_density = min(1.0, bookings_in_zone / ZONE_DENSITY_MAX_BOOKINGS)
 
             logger.debug(
-                "[ETADelayModel] Zone density: %d bookings in zone (lat:%.4f, lon:%.4f) → density=%.2f",
+                (
+                    "[ETADelayModel] Zone density: %d bookings in zone "
+                    "(lat:%.4f, lon:%.4f) → density=%.2f"
+                ),
                 bookings_in_zone,
                 pickup_lat,
                 pickup_lon,
@@ -582,7 +587,10 @@ class ETADelayModel:
         """
         if not XGBOOST_AVAILABLE and not LIGHTGBM_AVAILABLE:
             raise ImportError(
-                "XGBoost ou LightGBM requis. Installer avec: pip install xgboost lightgbm"
+                (
+                    "XGBoost ou LightGBM requis. "
+                    "Installer avec: pip install xgboost lightgbm"
+                )
             )
 
         if not training_data:
@@ -698,7 +706,10 @@ class ETADelayModel:
         }
 
         logger.info(
-            "[ETADelayModel] Entraînement terminé: MAE=%.2f, RMSE=%.2f, R²=%.3f, AUC=%.3f",
+            (
+                "[ETADelayModel] Entraînement terminé: "
+                "MAE=%.2f, RMSE=%.2f, R²=%.3f, AUC=%.3f"
+            ),
             mae,
             rmse,
             train_score_reg,
@@ -732,9 +743,12 @@ class ETADelayModel:
         }
 
         with Path(self.model_path).open("wb") as f:
-            # Utilisation de joblib (recommandé pour scikit-learn) au lieu de pickle direct
-            # joblib utilise pickle en interne mais avec des optimisations pour numpy/scipy
-            # nosec B301: Modèles internes uniquement, provenant de sources de confiance
+            # Utilisation de joblib (recommandé pour scikit-learn)
+            # au lieu de pickle direct
+            # joblib utilise pickle en interne mais avec des optimisations
+            # pour numpy/scipy
+            # nosec B301: Modèles internes uniquement,
+            # provenant de sources de confiance
             joblib.dump(
                 model_data, f
             )  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
@@ -748,9 +762,12 @@ class ETADelayModel:
 
         try:
             with Path(self.model_path).open("rb") as f:
-                # Utilisation de joblib (recommandé pour scikit-learn) au lieu de pickle direct
-                # joblib utilise pickle en interne mais avec des optimisations pour numpy/scipy
-                # nosec B301: Modèles internes uniquement, provenant de sources de confiance
+                # Utilisation de joblib (recommandé pour scikit-learn)
+                # au lieu de pickle direct
+                # joblib utilise pickle en interne mais avec des optimisations
+                # pour numpy/scipy
+                # nosec B301: Modèles internes uniquement,
+                # provenant de sources de confiance
                 model_data = joblib.load(
                     f
                 )  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle

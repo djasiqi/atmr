@@ -6,9 +6,7 @@ Create Date: 2025-10-31 11:05:20.836158
 
 """
 
-from alembic import op  # noqa: I001
-
-
+# revision identifiers, used by Alembic.
 revision = "8186648ac54e"
 down_revision = ("3_4_profiling", "rl_suggestions_001", "fix_audit_metadata")
 branch_labels = None

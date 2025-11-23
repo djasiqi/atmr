@@ -93,7 +93,10 @@ for name, actual, expected in checks:
     print(f"{status} {name}: {actual} (attendu: {expected})")
 
 print(
-    "\n=== Paramètres non gérés par merge_overrides (passés directement dans problem) ===\n"
+    (
+        "\n=== Paramètres non gérés par merge_overrides "
+        "(passés directement dans problem) ===\n"
+    )
 )
 print("✅ preferred_driver_id: Passé dans problem['preferred_driver_id']")
 print("✅ driver_load_multipliers: Passé dans problem['driver_load_multipliers']")

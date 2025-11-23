@@ -61,7 +61,10 @@ def retrain_dqn_model_task():
 
         if len(feedbacks) < MIN_FEEDBACKS_FOR_TRAINING:
             logger.warning(
-                "[RL] ⚠️ Pas assez de feedbacks pour ré-entraîner (%s/%s minimum). Ré-entraînement reporté.",
+                (
+                    "[RL] ⚠️ Pas assez de feedbacks pour ré-entraîner "
+                    "(%s/%s minimum). Ré-entraînement reporté."
+                ),
                 len(feedbacks),
                 MIN_FEEDBACKS_FOR_TRAINING,
             )
@@ -99,7 +102,10 @@ def retrain_dqn_model_task():
 
         if len(training_samples) < MIN_TRAINING_SAMPLES:
             logger.warning(
-                "[RL] ⚠️ Pas assez d'échantillons valides (%s/%s minimum). Ré-entraînement reporté.",
+                (
+                    "[RL] ⚠️ Pas assez d'échantillons valides "
+                    "(%s/%s minimum). Ré-entraînement reporté."
+                ),
                 len(training_samples),
                 MIN_TRAINING_SAMPLES,
             )
@@ -120,7 +126,9 @@ def retrain_dqn_model_task():
             logger.info("[RL] Chargement modèle depuis %s...", model_path)
 
             try:
-                agent = ImprovedDQNAgent.load(filepath=model_path)  # type: ignore[call-arg]
+                agent = ImprovedDQNAgent.load(  # type: ignore[call-arg]
+                    filepath=model_path
+                )
             except FileNotFoundError:
                 logger.warning(
                     "[RL] ⚠️ Modèle %s introuvable. Création d'un nouveau modèle...",
@@ -196,7 +204,10 @@ def retrain_dqn_model_task():
             }
 
             logger.info(
-                "[RL] ✅ Ré-entraînement réussi ! Échantillons: %s, Reward moyen: %s, Loss moyen: %s",
+                (
+                    "[RL] ✅ Ré-entraînement réussi ! "
+                    "Échantillons: %s, Reward moyen: %s, Loss moyen: %s"
+                ),
                 len(training_samples),
                 avg_reward,
                 avg_loss,
@@ -206,7 +217,11 @@ def retrain_dqn_model_task():
 
         except ImportError as e:
             logger.warning(
-                "[RL] ⚠️ PyTorch/DQN non disponible dans cet environnement: %s. Ré-entraînement impossible. Feedbacks sauvegardés pour analyse manuelle.",
+                (
+                    "[RL] ⚠️ PyTorch/DQN non disponible dans cet environnement: %s. "
+                    "Ré-entraînement impossible. "
+                    "Feedbacks sauvegardés pour analyse manuelle."
+                ),
                 e,
             )
             return {

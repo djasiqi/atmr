@@ -220,7 +220,8 @@ class TrainingMetadataSchema:
                 "tensorboard_logs": "logs/tensorboard/dqn_dispatch_v1.00",
             },
             "deployment_info": {
-                "deployment_status": "not_deployed",  # not_deployed, staging, production
+                # not_deployed, staging, production
+                "deployment_status": "not_deployed",
                 "deployment_date": None,
                 "deployment_version": None,
                 "rollback_version": None,
@@ -244,7 +245,9 @@ class TrainingMetadataSchema:
                 "experiment_id": "exp_dqn_dispatch_v1",
                 "experiment_name": "DQN Dispatch Optimization v1",
                 "tags": ["dqn", "dispatch", "optimization", "v1"],
-                "description": "Optimisation du dispatch avec DQN et améliorations avancées",
+                "description": (
+                    "Optimisation du dispatch avec DQN et améliorations avancées"
+                ),
                 "researcher": "ML Team",
                 "baseline_model": "heuristic_dispatch",
                 "improvement_over_baseline": 0.0,

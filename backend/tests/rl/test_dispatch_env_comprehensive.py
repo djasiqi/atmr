@@ -104,7 +104,8 @@ class TestDispatchEnvComprehensive:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        # Action invalide (hors limites) - utiliser une action dans les limites mais invalide
+        # Action invalide (hors limites)
+        # - utiliser une action dans les limites mais invalide
         obs, reward, terminated, truncated, info = env.step(
             15
         )  # Action dans les limites mais peut-être invalide

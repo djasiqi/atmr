@@ -5,7 +5,8 @@ et que les tentatives d'injection sont rejetées.
 """
 
 
-# Note: Ces tests utilisent les fixtures de conftest.py (app, client, auth_headers, admin_headers, etc.)
+# Note: Ces tests utilisent les fixtures de conftest.py
+# (app, client, auth_headers, admin_headers, etc.)
 
 
 class TestDispatchRunValidation:

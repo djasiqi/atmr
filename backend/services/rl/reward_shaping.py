@@ -79,7 +79,10 @@ class AdvancedRewardShaping:
         self.good_equity_threshold = 2  # Écart ≤ 2 courses
 
         logger.info(
-            "[RewardShaping] Initialisé avec poids: punct=%.1f, dist=%.1f, equity=%.1f, eff=%.1f, sat=%.1f",
+            (
+                "[RewardShaping] Initialisé avec poids: punct=%.1f, "
+                "dist=%.1f, equity=%.1f, eff=%.1f, sat=%.1f"
+            ),
             punctuality_weight,
             distance_weight,
             equity_weight,
@@ -131,7 +134,10 @@ class AdvancedRewardShaping:
         # Logging détaillé pour debug
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
-                "[RewardShaping] Détail: punct=%.1f, dist=%.1f, equity=%.1f, eff=%.1f, sat=%.1f → total=%.1f",
+                (
+                    "[RewardShaping] Détail: punct=%.1f, dist=%.1f, "
+                    "equity=%.1f, eff=%.1f, sat=%.1f → total=%.1f"
+                ),
                 punctuality_reward,
                 distance_reward,
                 equity_reward,

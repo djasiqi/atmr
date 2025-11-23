@@ -153,7 +153,8 @@ class ResidualQNetwork(nn.Module):
 
 
 class DuelingQNetwork(nn.Module):
-    """Dueling DQN Network qui sépare la valeur d'état (V) et l'avantage des actions (A).
+    """Dueling DQN Network qui sépare la valeur d'état (V) et l'avantage
+    des actions (A).
 
     Architecture Dueling:
         Input(state_dim) → Shared Layers →

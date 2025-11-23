@@ -1,21 +1,23 @@
 # backend/manage.py
 # ruff: noqa: E402
+# Note: E402 est une règle Flake8, pas Ruff
+# Les directives # noqa: E402 sont nécessaires pour Flake8 dans le CI
 
 import eventlet
 
 eventlet.monkey_patch()
 
-import os
+import os  # noqa: E402
 
-import click
-from flask_migrate import init as _init  # initialisation du dossier migrations
-from flask_migrate import migrate as _migrate
-from flask_migrate import stamp as _stamp
+import click  # noqa: E402
+from flask_migrate import init as _init  # noqa: E402
+from flask_migrate import migrate as _migrate  # noqa: E402
+from flask_migrate import stamp as _stamp  # noqa: E402
 
 # Importation des fonctions de migration nécessaires
-from flask_migrate import upgrade as _upgrade
+from flask_migrate import upgrade as _upgrade  # noqa: E402
 
-from app import create_app
+from app import create_app  # noqa: E402
 
 # Crée une instance de l'application pour le contexte
 config_name = os.getenv("FLASK_ENV") or "development"

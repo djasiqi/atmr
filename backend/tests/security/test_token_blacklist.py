@@ -129,7 +129,8 @@ class TestAddToBlacklist:
         assert result is True
         mock_redis_client.setex.assert_called_once()
         call_args = mock_redis_client.setex.call_args
-        # Le TTL devrait être le minimum entre l'expiration du token et le TTL personnalisé
+        # Le TTL devrait être le minimum entre l'expiration du token
+        # et le TTL personnalisé
         assert call_args[0][1] <= custom_ttl
 
     @patch("security.token_blacklist.redis_client")
