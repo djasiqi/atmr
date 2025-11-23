@@ -18,7 +18,7 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from shared.logging_utils import (
+from shared.logging_utils import (  # noqa: E402
     PIIFilter,
     mask_email,
     mask_gps_coords,
