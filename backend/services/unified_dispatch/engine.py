@@ -44,7 +44,9 @@ from services.unified_dispatch.transaction_helpers import _begin_tx
 from services.unified_dispatch.types import DispatchResult
 from shared.otel_setup import get_tracer  # ✅ D1: OpenTelemetry
 
-# pyright: reportUnusedImport=false, reportUnusedVariable=false, reportUnusedFunction=false
+# pyright: reportUnusedImport=false
+# pyright: reportUnusedVariable=false
+# pyright: reportUnusedFunction=false
 # Nombreuses variables conditionnelles utilisées dans des blocs try/except
 
 # Constantes pour éviter les valeurs magiques
