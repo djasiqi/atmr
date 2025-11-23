@@ -485,7 +485,9 @@ def create_app(config_name: str | None = None):
 
     # à l'initialisation Flask
     @app.teardown_appcontext
-    def shutdown_session(exception=None):  # pyright: ignore[reportUnusedFunction]  # noqa: ARG001
+    def shutdown_session(  # pyright: ignore[reportUnusedFunction]
+        exception=None,  # noqa: ARG001
+    ):
         db.session.remove()
 
     # Gestion d'erreurs réseau (Bad file descriptor, etc.)
@@ -1008,7 +1010,9 @@ def create_app(config_name: str | None = None):
         @app.route(
             "/api/v<int:version>/companies/me/drivers", methods=["GET", "OPTIONS"]
         )
-        def _compat_companies_me_drivers_v(version: int):  # pyright: ignore[reportUnusedFunction]  # noqa: ARG001
+        def _compat_companies_me_drivers_v(  # pyright: ignore[reportUnusedFunction]
+            version: int,  # noqa: ARG001
+        ):
             if request.method == "OPTIONS":
                 return make_response("", 204)
             return CompanyDriversList().get()

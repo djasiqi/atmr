@@ -167,16 +167,28 @@ class PrometheusMetrics(Resource):
                 "(0=info, 1=warning, 2=critical)"
             ),
             "# TYPE dispatch_slo_breach_severity gauge",
-            (
-                f"dispatch_slo_breach_severity{{severity="
-                f'"{breach_summary["severity"]}"}} '
-                f"{0 if breach_summary['severity'] == 'info' else (1 if breach_summary['severity'] == 'warning' else 2)}"
-            ),
-            "",
-            "# HELP dispatch_slo_should_alert Whether to page oncall (0=no, 1=yes)",
-            "# TYPE dispatch_slo_should_alert gauge",
-            f"dispatch_slo_should_alert {1 if breach_summary['should_alert'] else 0}",
         ]
+        severity_value = (
+            0
+            if breach_summary["severity"] == "info"
+            else (1 if breach_summary["severity"] == "warning" else 2)
+        )
+        lines.extend(
+            [
+                (
+                    f"dispatch_slo_breach_severity{{severity="
+                    f'"{breach_summary["severity"]}"}} '
+                    f"{severity_value}"
+                ),
+                "",
+                "# HELP dispatch_slo_should_alert Whether to page oncall (0=no, 1=yes)",
+                "# TYPE dispatch_slo_should_alert gauge",
+                (
+                    f"dispatch_slo_should_alert "
+                    f"{1 if breach_summary['should_alert'] else 0}"
+                ),
+            ]
+        )
 
         for breach_type, count in breach_summary.get("by_type", {}).items():
             lines.append("")

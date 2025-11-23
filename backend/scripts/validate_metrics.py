@@ -285,12 +285,12 @@ def generate_report() -> str:
             print(
                 f"   Status OSRM: {health_results['response'].get('status', 'unknown')}"
             )
-            print(
-                (
-                    f"   Circuit Breaker: "
-                    f"{health_results['response'].get('circuit_breaker', {}).get('state', 'unknown')}"
-                )
+            circuit_breaker_state = (
+                health_results["response"]
+                .get("circuit_breaker", {})
+                .get("state", "unknown")
             )
+            print(f"   Circuit Breaker: {circuit_breaker_state}")
     else:
         print("❌ Endpoint non accessible")
         for error in health_results["errors"]:

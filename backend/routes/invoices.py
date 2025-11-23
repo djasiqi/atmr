@@ -1281,7 +1281,8 @@ class ToggleInstitution(Resource):
 
             return {
                 "message": (
-                    f"Client {'marqué comme' if is_institution else 'démarqué en tant que'} "
+                    f"Client "
+                    f"{'marqué comme' if is_institution else 'démarqué en tant que'} "
                     "institution"
                 ),
                 "client": client.serialize,

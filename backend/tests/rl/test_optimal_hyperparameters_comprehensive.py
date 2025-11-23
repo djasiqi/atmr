@@ -476,7 +476,7 @@ class TestOptimalHyperparameters:
         ):
             # Simuler l'exécution du module principal
             # Import pour effet de bord (exécution du code au niveau module)
-            import services.rl.optimal_hyperparameters
+            import services.rl.optimal_hyperparameters  # noqa: F401
 
             # Vérifier que logging.info est appelé
             # (peut être 0 si le module est déjà importé)

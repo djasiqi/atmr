@@ -146,7 +146,8 @@ class TestRLIntegration:
     def test_action_masking_integration(self, mock_agent, mock_env):
         """Test l'intégration de l'action masking."""
         # Mock des actions valides (utilisé pour la validation)
-        # _valid_actions = [0, 2, 4, 7, 9, 12, 15, 18, 21, 24]  # Commenté car non utilisé
+        # _valid_actions = [0, 2, 4, 7, 9, 12, 15, 18, 21, 24]
+        # Commenté car non utilisé
 
         # Mock de la génération de masque
         mock_env._get_valid_actions_mask.return_value = np.array(

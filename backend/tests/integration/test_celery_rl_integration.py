@@ -7,7 +7,6 @@ notamment pour l'entraînement asynchrone et la génération de suggestions.
 """
 
 import sys
-import time
 from pathlib import Path
 from unittest.mock import Mock, patch
 

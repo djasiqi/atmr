@@ -149,9 +149,9 @@ def generate_insights(
                     "priority": "medium",
                     "title": "Retards fréquents",
                     "message": (
-                        f"{len(high_delay_days)} jours sur {len(trends)} ont des retards "
-                        f">{RETARDS_THRESHOLD} min. Analysez les patterns "
-                        f"(jour de la semaine, heure, etc.)"
+                        f"{len(high_delay_days)} jours sur {len(trends)} "
+                        f"ont des retards >{RETARDS_THRESHOLD} min. "
+                        f"Analysez les patterns (jour de la semaine, heure, etc.)"
                     ),
                     "action": "analyze_patterns",
                 }
@@ -310,8 +310,8 @@ def detect_patterns(company_id: int, lookback_days: int = 30) -> Dict[str, Any]:
                 {
                     "type": "high_delay_day",
                     "message": (
-                        f"{worst_day['weekday_name']} a systématiquement plus de retards "
-                        f"(moy: {worst_day['avg_delay']:.1f} min)"
+                        f"{worst_day['weekday_name']} a systématiquement "
+                        f"plus de retards (moy: {worst_day['avg_delay']:.1f} min)"
                     ),
                     "recommendation": (
                         f"Ajoutez du temps buffer ou des chauffeurs supplémentaires "

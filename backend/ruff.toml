@@ -81,6 +81,7 @@ ignore = [
     "S101",     # Assert OK
     "F401",     # Imports hors top OK (mocks)
     "E402",     # Imports hors top OK (mocks)
+    "RUF100",   # noqa: E402 nécessaire pour flake8 même si E402 ignoré
     "D",        # Docstrings optionnelles dans tests
     "PLR2004",  # Magic values OK dans tests
     "S101",     # Assert OK dans tests

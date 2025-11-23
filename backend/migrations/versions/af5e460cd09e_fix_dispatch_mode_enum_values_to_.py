@@ -23,13 +23,16 @@ def upgrade():
     """
     # Mettre à jour les valeurs existantes en UPPERCASE
     op.execute(
-        "UPDATE company SET dispatch_mode = 'SEMI_AUTO' WHERE dispatch_mode::text = 'semi_auto'"
+        "UPDATE company SET dispatch_mode = 'SEMI_AUTO' "
+        "WHERE dispatch_mode::text = 'semi_auto'"
     )
     op.execute(
-        "UPDATE company SET dispatch_mode = 'MANUAL' WHERE dispatch_mode::text = 'manual'"
+        "UPDATE company SET dispatch_mode = 'MANUAL' "
+        "WHERE dispatch_mode::text = 'manual'"
     )
     op.execute(
-        "UPDATE company SET dispatch_mode = 'FULLY_AUTO' WHERE dispatch_mode::text = 'fully_auto'"
+        "UPDATE company SET dispatch_mode = 'FULLY_AUTO' "
+        "WHERE dispatch_mode::text = 'fully_auto'"
     )
 
 
@@ -38,11 +41,14 @@ def downgrade():
     Revenir aux valeurs lowercase (si nécessaire).
     """
     op.execute(
-        "UPDATE company SET dispatch_mode = 'semi_auto' WHERE dispatch_mode::text = 'SEMI_AUTO'"
+        "UPDATE company SET dispatch_mode = 'semi_auto' "
+        "WHERE dispatch_mode::text = 'SEMI_AUTO'"
     )
     op.execute(
-        "UPDATE company SET dispatch_mode = 'manual' WHERE dispatch_mode::text = 'MANUAL'"
+        "UPDATE company SET dispatch_mode = 'manual' "
+        "WHERE dispatch_mode::text = 'MANUAL'"
     )
     op.execute(
-        "UPDATE company SET dispatch_mode = 'fully_auto' WHERE dispatch_mode::text = 'FULLY_AUTO'"
+        "UPDATE company SET dispatch_mode = 'fully_auto' "
+        "WHERE dispatch_mode::text = 'FULLY_AUTO'"
     )

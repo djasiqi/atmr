@@ -23,11 +23,11 @@ Auteur: ATMR Project - RL Team
 Date: 21 octobre 2025
 """
 
-import logging
-from unittest.mock import patch
+import logging  # noqa: E402
+from unittest.mock import patch  # noqa: E402
 
-import numpy as np
-import pytest
+import numpy as np  # noqa: E402
+import pytest  # noqa: E402
 
 # Import conditionnel pour éviter les erreurs si les modules ne sont pas disponibles
 try:
