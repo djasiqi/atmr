@@ -16,7 +16,7 @@ from prometheus_client import Counter
 security_login_attempts_total = Counter(
     "security_login_attempts_total",
     "Nombre total de tentatives de login",
-    ["type"],  # type: "success" ou "failed"
+    ["type"],  # type peut être "success" ou "failed"
 )
 
 # Compteur des échecs de login
