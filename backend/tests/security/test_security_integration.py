@@ -81,8 +81,6 @@ class TestEndToEndAuditLogging:
 
     def test_malicious_actions_are_logged(self, client, auth_headers, db):
         """Test que les actions malveillantes sont bien loggées."""
-        from security.audit_log import AuditLog
-
         # Tenter plusieurs actions malveillantes
         malicious_payloads = [
             "1' OR '1'='1",

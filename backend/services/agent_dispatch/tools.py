@@ -666,9 +666,9 @@ class AgentTools:
                                     )
                                     logger.info(
                                         (
-                                            "[AgentTools] 🎯 Chauffeur préféré DÉTECTÉ et ACTIVÉ: "
-                                            "%s (%s) - sera priorisé dans les "
-                                            "assignations"
+                                            "[AgentTools] 🎯 Chauffeur préféré "
+                                            "DÉTECTÉ et ACTIVÉ: %s (%s) - "
+                                            "sera priorisé dans les assignations"
                                         ),
                                         preferred_driver_id,
                                         driver_name,
@@ -676,8 +676,9 @@ class AgentTools:
                                 else:
                                     logger.warning(
                                         (
-                                            "[AgentTools] ⚠️ Chauffeur préféré #%s non trouvé "
-                                            "ou n'appartient pas à la company %s"
+                                            "[AgentTools] ⚠️ Chauffeur préféré #%s "
+                                            "non trouvé ou n'appartient pas "
+                                            "à la company %s"
                                         ),
                                         preferred_driver_id,
                                         self.company_id,
@@ -685,8 +686,8 @@ class AgentTools:
                             except (ValueError, TypeError) as e:
                                 logger.warning(
                                     (
-                                        "[AgentTools] ⚠️ preferred_driver_id invalide: %s "
-                                        "(erreur: %s)"
+                                        "[AgentTools] ⚠️ preferred_driver_id invalide: "
+                                        "%s (erreur: %s)"
                                     ),
                                     preferred_driver_id,
                                     e,
@@ -694,15 +695,16 @@ class AgentTools:
                         else:
                             logger.info(
                                 (
-                                    "[AgentTools] ℹ️ preferred_driver_id est None/null -"
-                                    " équité stricte sera appliquée"
+                                    "[AgentTools] ℹ️ preferred_driver_id est "
+                                    "None/null - équité stricte sera appliquée"
                                 )
                             )
                     else:
                         logger.info(
                             (
-                                "[AgentTools] ℹ️ Aucun preferred_driver_id configuré dans "
-                                "dispatch_overrides - équité stricte sera appliquée"
+                                "[AgentTools] ℹ️ Aucun preferred_driver_id configuré "
+                                "dans dispatch_overrides - équité stricte "
+                                "sera appliquée"
                             )
                         )
 
@@ -733,8 +735,8 @@ class AgentTools:
                                 else:
                                     logger.warning(
                                         (
-                                            "[AgentTools] ⚠️ driver_load_multipliers n'est pas "
-                                            "un dict: %s (type: %s)"
+                                            "[AgentTools] ⚠️ driver_load_multipliers "
+                                            "n'est pas un dict: %s (type: %s)"
                                         ),
                                         driver_load_multipliers,
                                         type(driver_load_multipliers).__name__,
@@ -856,8 +858,9 @@ class AgentTools:
                         if force_reassign:
                             logger.info(
                                 (
-                                    "[AgentTools] 🔄 Booking %s inclus pour réassignation "
-                                    "(force_reassign=True, actuellement assigné à %s)"
+                                    "[AgentTools] 🔄 Booking %s inclus pour "
+                                    "réassignation (force_reassign=True, "
+                                    "actuellement assigné à %s)"
                                 ),
                                 booking.id,
                                 driver.id if driver else "unknown",
@@ -871,8 +874,8 @@ class AgentTools:
                             already_assigned_to_regular.append(booking.id)
                             logger.debug(
                                 (
-                                    "[AgentTools] ⏭️ Booking %s déjà assigné au régulier %s "
-                                    "(type: %s), exclu du dispatch"
+                                    "[AgentTools] ⏭️ Booking %s déjà assigné "
+                                    "au régulier %s (type: %s), exclu du dispatch"
                                 ),
                                 booking.id,
                                 driver.id,
@@ -882,8 +885,8 @@ class AgentTools:
                         # Si assignée à un urgent, on peut la réassigner si nécessaire
                         logger.debug(
                             (
-                                "[AgentTools] 🔄 Booking %s assigné à l'urgent %s (type: %s), "
-                                "inclus pour réassignation possible"
+                                "[AgentTools] 🔄 Booking %s assigné à l'urgent %s "
+                                "(type: %s), inclus pour réassignation possible"
                             ),
                             booking.id,
                             driver.id if driver else "unknown",
@@ -1050,7 +1053,8 @@ class AgentTools:
                         if driver and not is_emergency_driver:
                             logger.debug(
                                 (
-                                    "[AgentTools] ⏭️ Booking %s déjà assigné au régulier %s, "
+                                    "[AgentTools] ⏭️ Booking %s déjà assigné "
+                                    "au régulier %s, "
                                     "exclu du plan"
                                 ),
                                 booking_id,

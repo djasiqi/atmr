@@ -130,12 +130,19 @@ class Payment(db.Model):
                 PaymentMethod(method)
                 return method
             except ValueError:
-                msg = f"Méthode de paiement invalide. Autorisées : {', '.join(sorted(allowed))} ou {[m.value for m in PaymentMethod]}"
+                msg = (
+                    f"Méthode de paiement invalide. Autorisées : "
+                    f"{', '.join(sorted(allowed))} ou "
+                    f"{[m.value for m in PaymentMethod]}"
+                )
                 raise ValueError(msg) from None
         if isinstance(method, PaymentMethod):
             return method.value
         if method not in allowed:
-            msg = f"Méthode de paiement invalide. Autorisées : {', '.join(sorted(allowed))}"
+            msg = (
+                f"Méthode de paiement invalide. Autorisées : "
+                f"{', '.join(sorted(allowed))}"
+            )
             raise ValueError(msg)
         return method
 
@@ -154,7 +161,10 @@ class Payment(db.Model):
         if isinstance(status, str):
             key = status.upper().strip()
             if key not in PaymentStatus.__members__:
-                msg = f"Statut de paiement invalide : {status}. Attendu: {list(PaymentStatus.__members__.keys())}"
+                msg = (
+                    f"Statut de paiement invalide : {status}. "
+                    f"Attendu: {list(PaymentStatus.__members__.keys())}"
+                )
                 raise ValueError(msg)
             status = PaymentStatus[key]
         if not isinstance(status, PaymentStatus):

@@ -306,5 +306,7 @@ except ImportError:
     ) -> float:
         return 1.0 / (1.0 + len(assignments))
 
-    def calculate_fairness_score(assignments: List[Dict[str, Any]]) -> float:  # noqa: ARG001
+    def calculate_fairness_score(
+        assignments: List[Dict[str, Any]],  # noqa: ARG001
+    ) -> float:
         return 0.5  # Placeholder

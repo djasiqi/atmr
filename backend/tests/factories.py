@@ -62,7 +62,10 @@ class UserFactory(SQLAlchemyModelFactory):
         lambda _: f"test_{uuid.uuid4().hex[:12]}@atmr-test.ch"
     )
     password = factory.LazyFunction(
-        lambda: "$2b$12$KIXabcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJK"  # Hash bcrypt fake
+        lambda: (
+            "$2b$12$KIXabcdefghijklmnopqrstuvwxyz0123456789"
+            "ABCDEFGHIJK"  # Hash bcrypt fake
+        )
     )
     first_name = factory.LazyAttribute(lambda _: fake.first_name())
     last_name = factory.LazyAttribute(lambda _: fake.last_name())

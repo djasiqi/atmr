@@ -236,8 +236,8 @@ class AgentOrchestrator:
             # Premier tick avec chauffeur préféré configuré
             logger.info(
                 (
-                    "[AgentOrchestrator] 🎯 Chauffeur préféré configuré au premier tick:"
-                    " #%s"
+                    "[AgentOrchestrator] 🎯 Chauffeur préféré configuré "
+                    "au premier tick: #%s"
                 ),
                 current_preferred_driver_id,
             )
@@ -294,9 +294,9 @@ class AgentOrchestrator:
             if unassigned_jobs and current_preferred_driver_id:
                 logger.info(
                     (
-                        "[AgentOrchestrator] 🎯 Premier tick: %d course(s) non assignée(s)"
-                        " + chauffeur préféré configuré (#%s) → Action pour appliquer "
-                        "préférence"
+                        "[AgentOrchestrator] 🎯 Premier tick: "
+                        "%d course(s) non assignée(s) + chauffeur préféré "
+                        "configuré (#%s) → Action pour appliquer préférence"
                     ),
                     unassigned_count,
                     current_preferred_driver_id,
@@ -307,9 +307,9 @@ class AgentOrchestrator:
             elif unassigned_jobs:
                 logger.info(
                     (
-                        "[AgentOrchestrator] ⏸️ Premier tick: %d course(s) non assignée(s)"
-                        " détectée(s) mais pas d'action (attente événement réel ou "
-                        "configuration préférence)"
+                        "[AgentOrchestrator] ⏸️ Premier tick: "
+                        "%d course(s) non assignée(s) détectée(s) mais pas d'action "
+                        "(attente événement réel ou configuration préférence)"
                     ),
                     unassigned_count,
                 )
@@ -333,8 +333,9 @@ class AgentOrchestrator:
 
             logger.debug(
                 (
-                    "[AgentOrchestrator] 🔍 Détection changements: %d nouvelles courses, "
-                    "%d chauffeurs indisponibles, non assignées: %d (était %d)"
+                    "[AgentOrchestrator] 🔍 Détection changements: "
+                    "%d nouvelles courses, %d chauffeurs indisponibles, "
+                    "non assignées: %d (était %d)"
                 ),
                 len(new_bookings),
                 len(drivers_became_unavailable),
@@ -384,16 +385,16 @@ class AgentOrchestrator:
             if preferred_driver_changed:
                 logger.info(
                     (
-                        "[AgentOrchestrator] 🔄 Changement de chauffeur préféré détecté → "
-                        "Réoptimisation pour appliquer nouvelle préférence"
+                        "[AgentOrchestrator] 🔄 Changement de chauffeur préféré "
+                        "détecté → Réoptimisation pour appliquer nouvelle préférence"
                     )
                 )
             elif is_first_tick and unassigned_jobs and current_preferred_driver_id:
                 logger.info(
                     (
                         "[AgentOrchestrator] 🎯 Premier tick avec chauffeur préféré "
-                        "configuré (#%s) → Réoptimisation pour appliquer préférence aux "
-                        "%d course(s) non assignée(s)"
+                        "configuré (#%s) → Réoptimisation pour appliquer "
+                        "préférence aux %d course(s) non assignée(s)"
                     ),
                     current_preferred_driver_id,
                     unassigned_count,
@@ -401,8 +402,9 @@ class AgentOrchestrator:
             else:
                 logger.info(
                     (
-                        "[AgentOrchestrator] 🔄 Changement détecté: %d nouvelle(s) course(s), "
-                        "%d chauffeur(s) indisponible(s), %d course(s) non assignée(s)"
+                        "[AgentOrchestrator] 🔄 Changement détecté: "
+                        "%d nouvelle(s) course(s), %d chauffeur(s) indisponible(s), "
+                        "%d course(s) non assignée(s)"
                     ),
                     len(new_bookings),
                     len(drivers_became_unavailable),
@@ -994,8 +996,8 @@ class AgentOrchestrator:
             if has_conflicts:
                 logger.warning(
                     (
-                        "[AgentOrchestrator] ⚠️ Conflits temporels détectés dans le plan,"
-                        " ré-optimisation nécessaire"
+                        "[AgentOrchestrator] ⚠️ Conflits temporels détectés "
+                        "dans le plan, ré-optimisation nécessaire"
                     )
                 )
                 return False
@@ -1257,8 +1259,9 @@ class AgentOrchestrator:
         ):
             logger.info(
                 (
-                    "[AgentOrchestrator] 🔍 Détection: %d course(s) assignée(s) à l'urgent,"
-                    " vérification si réassignation possible"
+                    "[AgentOrchestrator] 🔍 Détection: "
+                    "%d course(s) assignée(s) à l'urgent, "
+                    "vérification si réassignation possible"
                 ),
                 len(emergency_assignments_to_check),
             )
@@ -1276,8 +1279,8 @@ class AgentOrchestrator:
                 if best_regular_driver:
                     logger.info(
                         (
-                            "[AgentOrchestrator] 🔄 Correction: Réassignation course #%s"
-                            " de l'urgent #%s vers régulier #%s"
+                            "[AgentOrchestrator] 🔄 Correction: Réassignation "
+                            "course #%s de l'urgent #%s vers régulier #%s"
                         ),
                         job_id,
                         emergency_driver_id,
@@ -1309,8 +1312,9 @@ class AgentOrchestrator:
                             self.state.actions_last_hour += 1
                             logger.info(
                                 (
-                                    "[AgentOrchestrator] ✅ Correction réussie:"
-                                    " course #%s réassignée de l'urgent vers régulier #%s"
+                                    "[AgentOrchestrator] ✅ Correction réussie: "
+                                    "course #%s réassignée de l'urgent "
+                                    "vers régulier #%s"
                                 ),
                                 job_id,
                                 best_regular_driver,
@@ -1370,8 +1374,8 @@ class AgentOrchestrator:
 
         logger.debug(
             (
-                "[AgentOrchestrator] 🔍 Optimiseur différé: vérification de %d course(s)"
-                " dans la prochaine heure"
+                "[AgentOrchestrator] 🔍 Optimiseur différé: vérification "
+                "de %d course(s) dans la prochaine heure"
             ),
             len(jobs_to_check),
         )

@@ -45,26 +45,32 @@ def verify_all_settings(company_id: int = 1):
     priority_settings = getattr(settings.heuristic, "priority", None)
 
     print("   Proximité:")
-    print(
-        (
-            f"     DB: {proximity_db} → Settings: {proximity_settings} "
-            f"{'✅' if proximity_db == proximity_settings or (proximity_db is None and proximity_settings == 0.2) else '❌'}"
-        )
+    proximity_match = (
+        "✅"
+        if proximity_db == proximity_settings
+        or (proximity_db is None and proximity_settings == 0.2)
+        else "❌"
     )
+    print(f"     DB: {proximity_db} → Settings: {proximity_settings} {proximity_match}")
     print("   Équilibre charge:")
+    driver_load_match = (
+        "✅"
+        if driver_load_db == driver_load_settings
+        or (driver_load_db is None and driver_load_settings == 0.7)
+        else "❌"
+    )
     print(
-        (
-            f"     DB: {driver_load_db} → Settings: {driver_load_settings} "
-            f"{'✅' if driver_load_db == driver_load_settings or (driver_load_db is None and driver_load_settings == 0.7) else '❌'}"
-        )
+        f"     DB: {driver_load_db} → Settings: "
+        f"{driver_load_settings} {driver_load_match}"
     )
     print("   Priorité:")
-    print(
-        (
-            f"     DB: {priority_db} → Settings: {priority_settings} "
-            f"{'✅' if priority_db == priority_settings or (priority_db is None and priority_settings == 0.06) else '❌'}"
-        )
+    priority_match = (
+        "✅"
+        if priority_db == priority_settings
+        or (priority_db is None and priority_settings == 0.06)
+        else "❌"
     )
+    print(f"     DB: {priority_db} → Settings: {priority_settings} {priority_match}")
 
     # 2. Optimiseur (OR-Tools)
     print("\n2️⃣ OPTIMISEUR (OR-TOOLS)")
@@ -77,29 +83,42 @@ def verify_all_settings(company_id: int = 1):
     time_limit_settings = getattr(settings.solver, "time_limit_sec", None)
     max_bookings_settings = getattr(settings.solver, "max_bookings_per_driver", None)
     unassigned_penalty_settings = getattr(
-        settings.solver, "unassigned_penalty_base", None
+        settings.solver,
+        "unassigned_penalty_base",
+        None,
     )
 
     print("   Temps limite (secondes):")
+    time_limit_match = (
+        "✅"
+        if time_limit_db == time_limit_settings
+        or (time_limit_db is None and time_limit_settings == 60)
+        else "❌"
+    )
     print(
-        (
-            f"     DB: {time_limit_db} → Settings: {time_limit_settings} "
-            f"{'✅' if time_limit_db == time_limit_settings or (time_limit_db is None and time_limit_settings == 60) else '❌'}"
-        )
+        f"     DB: {time_limit_db} → Settings: {time_limit_settings} {time_limit_match}"
     )
     print("   Courses max par chauffeur:")
+    max_bookings_match = (
+        "✅"
+        if max_bookings_db == max_bookings_settings
+        or (max_bookings_db is None and max_bookings_settings == 6)
+        else "❌"
+    )
     print(
-        (
-            f"     DB: {max_bookings_db} → Settings: {max_bookings_settings} "
-            f"{'✅' if max_bookings_db == max_bookings_settings or (max_bookings_db is None and max_bookings_settings == 6) else '❌'}"
-        )
+        f"     DB: {max_bookings_db} → Settings: {max_bookings_settings} "
+        f"{max_bookings_match}"
     )
     print("   Pénalité non-assigné:")
+    unassigned_penalty_match = (
+        "✅"
+        if unassigned_penalty_db == unassigned_penalty_settings
+        or (unassigned_penalty_db is None and unassigned_penalty_settings == 10000)
+        else "❌"
+    )
     print(
-        (
-            f"     DB: {unassigned_penalty_db} → Settings: {unassigned_penalty_settings} "
-            f"{'✅' if unassigned_penalty_db == unassigned_penalty_settings or (unassigned_penalty_db is None and unassigned_penalty_settings == 10000) else '❌'}"
-        )
+        f"     DB: {unassigned_penalty_db} → Settings: {unassigned_penalty_settings} "
+        f"{unassigned_penalty_match}"
     )
 
     # 3. Temps de Service
@@ -112,29 +131,34 @@ def verify_all_settings(company_id: int = 1):
 
     pickup_settings = getattr(settings.service_times, "pickup_service_min", None)
     dropoff_settings = getattr(settings.service_times, "dropoff_service_min", None)
-    margin_settings = getattr(settings.service_times, "min_transition_margin_min", None)
+    margin_settings = getattr(
+        settings.service_times,
+        "min_transition_margin_min",
+        None,
+    )
 
     print("   Pickup (minutes):")
-    print(
-        (
-            f"     DB: {pickup_db} → Settings: {pickup_settings} "
-            f"{'✅' if pickup_db == pickup_settings or (pickup_db is None and pickup_settings == 5) else '❌'}"
-        )
+    pickup_match = (
+        "✅"
+        if pickup_db == pickup_settings or (pickup_db is None and pickup_settings == 5)
+        else "❌"
     )
+    print(f"     DB: {pickup_db} → Settings: {pickup_settings} {pickup_match}")
     print("   Dropoff (minutes):")
-    print(
-        (
-            f"     DB: {dropoff_db} → Settings: {dropoff_settings} "
-            f"{'✅' if dropoff_db == dropoff_settings or (dropoff_db is None and dropoff_settings == 10) else '❌'}"
-        )
+    dropoff_match = (
+        "✅"
+        if dropoff_db == dropoff_settings
+        or (dropoff_db is None and dropoff_settings == 10)
+        else "❌"
     )
+    print(f"     DB: {dropoff_db} → Settings: {dropoff_settings} {dropoff_match}")
     print("   Marge transition (minutes):")
-    print(
-        (
-            f"     DB: {margin_db} → Settings: {margin_settings} "
-            f"{'✅' if margin_db == margin_settings or (margin_db is None and margin_settings == 15) else '❌'}"
-        )
+    margin_match = (
+        "✅"
+        if margin_db == margin_settings or (margin_db is None and margin_settings == 15)
+        else "❌"
     )
+    print(f"     DB: {margin_db} → Settings: {margin_settings} {margin_match}")
 
     # 4. Regroupement de Courses
     print("\n4️⃣ REGROUPEMENT DE COURSES")
@@ -145,11 +169,15 @@ def verify_all_settings(company_id: int = 1):
     pooling_enabled_settings = getattr(settings.pooling, "enabled", None)
 
     print("   Activer le regroupement:")
+    pooling_enabled_match = (
+        "✅"
+        if pooling_enabled_db == pooling_enabled_settings
+        or (pooling_enabled_db is None and pooling_enabled_settings)
+        else "❌"
+    )
     print(
-        (
-            f"     DB: {pooling_enabled_db} → Settings: {pooling_enabled_settings} "
-            f"{'✅' if pooling_enabled_db == pooling_enabled_settings or (pooling_enabled_db is None and pooling_enabled_settings) else '❌'}"
-        )
+        f"     DB: {pooling_enabled_db} → Settings: "
+        f"{pooling_enabled_settings} {pooling_enabled_match}"
     )
 
     # 5. Équité Chauffeurs
@@ -160,30 +188,54 @@ def verify_all_settings(company_id: int = 1):
     fairness_window_db = fairness_db.get("fairness_window_days")
     fairness_weight_db = fairness_db.get("fairness_weight")
 
-    fairness_enabled_settings = getattr(settings.fairness, "enable_fairness", None)
-    fairness_window_settings = getattr(settings.fairness, "fairness_window_days", None)
-    fairness_weight_settings = getattr(settings.fairness, "fairness_weight", None)
+    fairness_enabled_settings = getattr(
+        settings.fairness,
+        "enable_fairness",
+        None,
+    )
+    fairness_window_settings = getattr(
+        settings.fairness,
+        "fairness_window_days",
+        None,
+    )
+    fairness_weight_settings = getattr(
+        settings.fairness,
+        "fairness_weight",
+        None,
+    )
 
     print("   Activer l'équité:")
+    fairness_enabled_match = (
+        "✅"
+        if fairness_enabled_db == fairness_enabled_settings
+        or (fairness_enabled_db is None and fairness_enabled_settings)
+        else "❌"
+    )
     print(
-        (
-            f"     DB: {fairness_enabled_db} → Settings: {fairness_enabled_settings} "
-            f"{'✅' if fairness_enabled_db == fairness_enabled_settings or (fairness_enabled_db is None and fairness_enabled_settings) else '❌'}"
-        )
+        f"     DB: {fairness_enabled_db} → Settings: {fairness_enabled_settings} "
+        f"{fairness_enabled_match}"
     )
     print("   Fenêtre d'équité (jours):")
+    fairness_window_match = (
+        "✅"
+        if fairness_window_db == fairness_window_settings
+        or (fairness_window_db is None and fairness_window_settings == 7)
+        else "❌"
+    )
     print(
-        (
-            f"     DB: {fairness_window_db} → Settings: {fairness_window_settings} "
-            f"{'✅' if fairness_window_db == fairness_window_settings or (fairness_window_db is None and fairness_window_settings == 7) else '❌'}"
-        )
+        f"     DB: {fairness_window_db} → Settings: "
+        f"{fairness_window_settings} {fairness_window_match}"
     )
     print("   Poids équité (0-1):")
+    fairness_weight_match = (
+        "✅"
+        if fairness_weight_db == fairness_weight_settings
+        or (fairness_weight_db is None and fairness_weight_settings == 0.3)
+        else "❌"
+    )
     print(
-        (
-            f"     DB: {fairness_weight_db} → Settings: {fairness_weight_settings} "
-            f"{'✅' if fairness_weight_db == fairness_weight_settings or (fairness_weight_db is None and fairness_weight_settings == 0.3) else '❌'}"
-        )
+        f"     DB: {fairness_weight_db} → Settings: {fairness_weight_settings} "
+        f"{fairness_weight_match}"
     )
 
     # 6. Chauffeur d'Urgence
@@ -201,18 +253,26 @@ def verify_all_settings(company_id: int = 1):
     emergency_penalty_settings = getattr(settings.emergency, "emergency_penalty", None)
 
     print("   Autoriser chauffeurs d'urgence:")
+    allow_emergency_match = (
+        "✅"
+        if allow_emergency_db == allow_emergency_settings
+        or (allow_emergency_db is None and allow_emergency_settings)
+        else "❌"
+    )
     print(
-        (
-            f"     DB: {allow_emergency_db} → Settings: {allow_emergency_settings} "
-            f"{'✅' if allow_emergency_db == allow_emergency_settings or (allow_emergency_db is None and allow_emergency_settings) else '❌'}"
-        )
+        f"     DB: {allow_emergency_db} → Settings: {allow_emergency_settings} "
+        f"{allow_emergency_match}"
     )
     print("   Pénalité d'utilisation (0-1000):")
+    emergency_penalty_match = (
+        "✅"
+        if emergency_penalty_db == emergency_penalty_settings
+        or (emergency_penalty_db is None and emergency_penalty_settings == 900.0)
+        else "❌"
+    )
     print(
-        (
-            f"     DB: {emergency_penalty_db} → Settings: {emergency_penalty_settings} "
-            f"{'✅' if emergency_penalty_db == emergency_penalty_settings or (emergency_penalty_db is None and emergency_penalty_settings == 900.0) else '❌'}"
-        )
+        f"     DB: {emergency_penalty_db} → Settings: {emergency_penalty_settings} "
+        f"{emergency_penalty_match}"
     )
     if emergency_penalty_settings:
         malus = -(emergency_penalty_settings / 180.0)
