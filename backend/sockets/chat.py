@@ -577,7 +577,10 @@ def init_chat_socket(socketio: SocketIO):
                             candidate_id,
                         )
                 except (ValueError, TypeError):
-                    logger.warning("⚠️ driver_id non convertible: %s", payload_driver_id)
+                    logger.warning(
+                        "⚠️ driver_id non convertible: %s",
+                        payload_driver_id,
+                    )
 
             if not driver and user_id and user_role == "driver":
                 # Fallback: recherche via user_id
@@ -731,9 +734,15 @@ def init_chat_socket(socketio: SocketIO):
                     candidate_id = int(payload_driver_id)
                     driver = Driver.query.get(candidate_id)
                     if driver:
-                        logger.info("✅ Driver trouvé via payload: %s", driver.id)
+                        logger.info(
+                            "✅ Driver trouvé via payload: %s",
+                            driver.id,
+                        )
                 except (ValueError, TypeError):
-                    logger.warning("⚠️ driver_id non convertible: %s", payload_driver_id)
+                    logger.warning(
+                        "⚠️ driver_id non convertible: %s", 
+                        payload_driver_id
+                        )
 
             if not driver and user_role == "driver":
                 driver = Driver.query.filter_by(user_id=user.id).first()

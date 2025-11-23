@@ -292,7 +292,10 @@ def broadcast_delay_alert(
         }
 
         # Diffuser à la room de l'entreprise
-        socketio.emit("delay_alert", alert_message, room=room_name)  # type: ignore[call-arg]
+        socketio.emit(
+            "delay_alert", alert_message,
+            room=room_name, # type: ignore[call-arg]
+        )
 
         logger.info(
             "[ProactiveAlerts] Alerte diffusée - Company %s, Room %s, Risque %s",
@@ -333,7 +336,11 @@ def broadcast_rl_explanation(
         }
 
         # Diffuser à la room de l'entreprise
-        socketio.emit("rl_explanation", explanation_message, room=room_name)  # type: ignore[call-arg]
+        socketio.emit(
+            "rl_explanation",
+            explanation_message,
+            room=room_name, # type: ignore[call-arg]
+        )
 
         logger.info(
             "[ProactiveAlerts] Explication RL diffusée - Company %s, Booking %s",
@@ -373,7 +380,11 @@ def broadcast_system_status(
         }
 
         # Diffuser à la room de l'entreprise
-        socketio.emit("system_status", status_message, room=room_name)  # type: ignore[call-arg]
+        socketio.emit(
+            "system_status",
+            status_message,
+            room=room_name, # type: ignore[call-arg]
+        )
 
         logger.info("[ProactiveAlerts] Statut système diffusé - Company %s", company_id)
 
