@@ -58,7 +58,8 @@ def record_rotation(
         raise ValueError(msg)
 
     try:
-        # Créer l'instance avec une variable temporaire Any pour éviter les problèmes de type checker
+        # Créer l'instance avec une variable temporaire Any pour éviter
+        # les problèmes de type checker
         rotation = SecretRotation()
         rotation_any: Any = rotation
         rotation_any.secret_type = secret_type
