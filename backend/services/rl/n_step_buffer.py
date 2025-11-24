@@ -4,7 +4,7 @@
 # Constantes pour éviter les valeurs magiques
 import logging
 from collections import deque
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, cast
 
 import numpy as np
 
@@ -217,7 +217,10 @@ class NStepBuffer:
         try:
             final_idx = min(start_idx + self.n_step - 1, len(self.temp_buffer) - 1)
 
-            return self.temp_buffer[final_idx]["next_state"].copy()
+            return cast(
+                np.ndarray[Any, np.dtype[np.float32]],
+                self.temp_buffer[final_idx]["next_state"].copy(),
+            )
 
         except Exception as e:
             self.logger.error("[NStepBuffer] Erreur état final: %s", e)
@@ -318,7 +321,7 @@ class NStepPrioritizedBuffer(NStepBuffer):
 
         # Buffer de priorités
         self.priorities = np.zeros(int(capacity), dtype=np.float32)
-        self.max_priority = 1
+        self.max_priority: float = 1.0
 
         self.logger.info(
             "[NStepPrioritizedBuffer] Initialisé avec PER - alpha: %s, beta: %s-%s",
@@ -331,7 +334,7 @@ class NStepPrioritizedBuffer(NStepBuffer):
         """Vide le buffer priorisé."""
         super().clear()
         self.priorities.fill(0)
-        self.max_priority = 1
+        self.max_priority = 1.0
         self.beta = self.beta_start
         self.logger.info("[NStepPrioritizedBuffer] Buffer priorisé vidé")
 

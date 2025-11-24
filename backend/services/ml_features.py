@@ -153,17 +153,17 @@ def create_interaction_features(features: dict[str, float]) -> dict[str, float]:
 
 def create_temporal_features(features: dict[str, float]) -> dict[str, float]:
     """Crée les features temporelles avancées."""
-    temporal = {}
+    temporal: dict[str, float] = {}
 
     time_of_day = features["time_of_day"]
     day_of_week = features["day_of_week"]
 
     # Binaires
-    temporal["is_rush_hour"] = 1 if time_of_day in [7, 8, 17, 18] else 0
-    temporal["is_morning_peak"] = 1 if time_of_day in [7, 8] else 0
-    temporal["is_evening_peak"] = 1 if time_of_day in [17, 18] else 0
-    temporal["is_weekend"] = 1 if day_of_week >= DAY_OF_WEEK_THRESHOLD else 0
-    temporal["is_lunch_time"] = 1 if time_of_day in [12, 13] else 0
+    temporal["is_rush_hour"] = 1.0 if time_of_day in [7, 8, 17, 18] else 0.0
+    temporal["is_morning_peak"] = 1.0 if time_of_day in [7, 8] else 0.0
+    temporal["is_evening_peak"] = 1.0 if time_of_day in [17, 18] else 0.0
+    temporal["is_weekend"] = 1.0 if day_of_week >= DAY_OF_WEEK_THRESHOLD else 0.0
+    temporal["is_lunch_time"] = 1.0 if time_of_day in [12, 13] else 0.0
 
     # Encodage cyclique
     temporal["hour_sin"] = np.sin(2 * np.pi * time_of_day / 24)

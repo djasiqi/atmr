@@ -10,7 +10,7 @@ import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, cast
 
 # Ajouter le répertoire backend au path Python
 backend_dir = Path(__file__).parent.parent
@@ -399,7 +399,7 @@ class TrainingMetadataSchema:
             msg = f"Métadonnées invalides dans {file_path}: {issues}"
             raise ValueError(msg)
 
-        return metadata
+        return cast(Dict[str, Any], metadata)
 
 
 def create_training_metadata(

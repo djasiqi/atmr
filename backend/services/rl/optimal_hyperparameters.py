@@ -2,7 +2,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List
+from typing import Any, ClassVar, Dict, List, cast
 
 LR_ONE = 1
 GAMMA_ZERO = 0
@@ -220,8 +220,11 @@ class OptimalHyperparameters:
             Configuration de reward shaping
 
         """
-        return cls.REWARD_SHAPING_CONFIGS.get(
-            profile, cls.REWARD_SHAPING_CONFIGS["default"]
+        return cast(
+            Dict[str, float],
+            cls.REWARD_SHAPING_CONFIGS.get(
+                profile, cls.REWARD_SHAPING_CONFIGS["default"]
+            ),
         )
 
     @classmethod
@@ -265,7 +268,7 @@ class OptimalHyperparameters:
         config_path = Path("backend/data/rl/configs") / filename
 
         with Path(config_path, encoding="utf-8").open() as f:
-            return json.load(f)
+            return cast(Dict[str, Any], json.load(f))
 
     @classmethod
     def validate_config(cls, config: Dict[str, Any]) -> List[str]:

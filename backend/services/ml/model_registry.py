@@ -7,7 +7,7 @@ import shutil
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, cast
 
 import torch
 
@@ -151,7 +151,7 @@ class ModelRegistry:
         """Charge le registre depuis le fichier."""
         if self.registry_file.exists():
             with self.registry_file.open("r", encoding="utf-8") as f:
-                return json.load(f)
+                return cast(Dict[str, Any], json.load(f))
         return {
             "models": {},
             "current_models": {},
@@ -255,7 +255,7 @@ class ModelRegistry:
 
         """
         model_key = f"{model_name}_{model_arch}"
-        return self.registry["models"].get(model_key, [])
+        return cast(List[Dict[str, Any]], self.registry["models"].get(model_key, []))
 
     def get_latest_model(
         self, model_name: str, model_arch: str
@@ -453,7 +453,9 @@ class ModelRegistry:
 
         """
         model_key = f"{model_name}_{model_arch}"
-        return self.registry["current_models"].get(model_key)
+        return cast(
+            Dict[str, Any] | None, self.registry["current_models"].get(model_key)
+        )
 
     def list_models(self) -> Dict[str, List[str]]:
         """Liste tous les modèles disponibles.
@@ -477,7 +479,7 @@ class ModelRegistry:
             Historique des promotions
 
         """
-        return self.registry["promotion_history"]
+        return cast(List[Dict[str, Any]], self.registry["promotion_history"])
 
     def cleanup_old_versions(
         self, model_name: str, model_arch: str, keep_versions: int = 5

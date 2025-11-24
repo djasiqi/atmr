@@ -15,7 +15,7 @@ Usage:
 
 import logging
 import re
-from typing import Any
+from typing import Any, cast
 
 # Patterns à masquer (renforcés pour RGPD/OWASP)
 EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
@@ -172,16 +172,16 @@ class PIIMaskingService:
             Données masquées avec même structure
         """
         if isinstance(data, dict):
-            sanitized = {}
+            sanitized_dict: dict[Any, Any] = {}
             for key, value in data.items():
                 key_lower = str(key).lower()
                 # Vérifier si la clé contient un mot-clé sensible
                 if any(sensitive in key_lower for sensitive in SENSITIVE_KEYS):
-                    sanitized[key] = "[REDACTED]"
+                    sanitized_dict[key] = "[REDACTED]"
                 else:
                     # Sanitizer récursivement la valeur
-                    sanitized[key] = PIIMaskingService.mask_log_data(value)
-            return sanitized
+                    sanitized_dict[key] = PIIMaskingService.mask_log_data(value)
+            return sanitized_dict
 
         if isinstance(data, (list, tuple)):
             return [PIIMaskingService.mask_log_data(item) for item in data]
@@ -193,7 +193,7 @@ class PIIMaskingService:
 
             # 1. Masquer les patterns de tokens dans les chaînes
             # (token: value, key: value, etc.)
-            sanitized = TOKEN_PATTERN.sub(r"\1: [REDACTED]", data)
+            sanitized: str = TOKEN_PATTERN.sub(r"\1: [REDACTED]", data)
 
             # 2. Patterns spécifiques (prioritaires)
             sanitized = IBAN_CH_PATTERN.sub("[IBAN_REDACTED]", sanitized)
@@ -233,7 +233,7 @@ class PIIMaskingService:
         """
         # Pour l'instant, utilise la même logique que mask_log_data
         # Peut être adapté plus tard selon les besoins spécifiques de l'API
-        return PIIMaskingService.mask_log_data(data)
+        return cast(dict[str, Any], PIIMaskingService.mask_log_data(data))
 
 
 class PIIFilter(logging.Filter):

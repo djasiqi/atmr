@@ -64,7 +64,7 @@ class User(db.Model):
     profile_image: Mapped[str] = mapped_column(String(255), nullable=True)
 
     password: Mapped[str] = mapped_column(String(255), nullable=False)
-    role = Column(
+    role: Mapped[UserRole] = mapped_column(
         SAEnum(UserRole, name="user_role"),
         nullable=False,
         default=UserRole.CLIENT,
@@ -212,7 +212,7 @@ class User(db.Model):
 
     # ✅ D2: Propriétés hybrides pour chiffrement/déchiffrement automatique
     @hybrid_property
-    def phone_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
+    def phone_secure(self) -> Optional[str]:  # type: ignore[no-redef]
         """Récupère le téléphone déchiffré."""
         try:
             from security.crypto import get_encryption_service
@@ -250,7 +250,7 @@ class User(db.Model):
             self.phone = value
 
     @hybrid_property
-    def email_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
+    def email_secure(self) -> Optional[str]:  # type: ignore[no-redef]
         """Récupère l'email déchiffré."""
         try:
             from security.crypto import get_encryption_service
@@ -281,7 +281,7 @@ class User(db.Model):
             self.email = value
 
     @hybrid_property
-    def first_name_secure(  # pyright: ignore[reportRedeclaration]
+    def first_name_secure(  # type: ignore[no-redef]
         self,
     ) -> Optional[str]:
         """Récupère le prénom déchiffré."""
@@ -316,7 +316,7 @@ class User(db.Model):
             self.first_name = value
 
     @hybrid_property
-    def last_name_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
+    def last_name_secure(self) -> Optional[str]:  # type: ignore[no-redef]
         """Récupère le nom déchiffré."""
         try:
             from security.crypto import get_encryption_service
@@ -347,7 +347,7 @@ class User(db.Model):
             self.last_name = value
 
     @hybrid_property
-    def address_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
+    def address_secure(self) -> Optional[str]:  # type: ignore[no-redef]
         """Récupère l'adresse déchiffrée."""
         try:
             from security.crypto import get_encryption_service

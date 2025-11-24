@@ -87,10 +87,10 @@ def calculate_backoff_delay(
         0.5...    # ~1000ms avec jitter
     """
     # Exponential backoff: base * (2 ** attempt)
-    delay_ms = base_delay_ms * (2**attempt)
+    delay_ms: float = float(base_delay_ms * (2**attempt))
 
     # Limiter au maximum
-    delay_ms = min(delay_ms, max_delay_ms)
+    delay_ms = min(delay_ms, float(max_delay_ms))
 
     # Appliquer jitter si demandé (évite synchronisation des retries)
     if use_jitter:

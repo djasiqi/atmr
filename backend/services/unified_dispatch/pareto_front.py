@@ -295,6 +295,6 @@ def calculate_fairness_score(assignments: List[Dict[str, Any]]) -> float:
     if max_std == 0:
         return 1.0
 
-    fairness = 1.0 - (std_dev / max_std)
+    fairness: float = 1.0 - (std_dev / max_std)
 
     return max(0.0, min(1.0, fairness))

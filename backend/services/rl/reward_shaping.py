@@ -109,7 +109,7 @@ class AdvancedRewardShaping:
             Récompense totale calculée
 
         """
-        reward = 0
+        reward: float = 0.0
 
         # 1. Punctuality reward (piecewise)
         punctuality_reward = self._calculate_punctuality_reward(info)
@@ -158,28 +158,28 @@ class AdvancedRewardShaping:
             Récompense de ponctualité
 
         """
+        lateness: float = float(info.get("lateness_minutes", 0))
+
         if not info.get("is_late", False):
             # Ponctualité parfaite
-            lateness = info.get("lateness_minutes", 0)
             if lateness <= LATENESS_ZERO:
-                return 100  # Bonus parfait
+                return 100.0  # Bonus parfait
             # Bonus décroissant avec l'avance
-            return max(50, 100 - lateness * 2)
+            return max(50.0, 100.0 - lateness * 2.0)
 
         # Retard détecté
-        lateness = info.get("lateness_minutes", 0)
         is_outbound = info.get("is_outbound", False)
 
         if is_outbound:  # ALLER: 0 tolérance
-            return -min(200, lateness * 10)
+            return -min(200.0, lateness * 10.0)
         # RETOUR: tolérance progressive
         if lateness <= self.retour_tolerance_soft:
-            return 0  # Neutre dans la tolérance douce
+            return 0.0  # Neutre dans la tolérance douce
         if lateness <= self.retour_tolerance_hard:
             # Pénalité progressive
-            return -(lateness - self.retour_tolerance_soft) * 2
+            return -(lateness - self.retour_tolerance_soft) * 2.0
         # Pénalité forte
-        return -min(100, lateness * 3)
+        return -min(100.0, lateness * 3.0)
 
     def _calculate_distance_reward(self, info: Dict[str, Any]) -> float:
         """Calcule la récompense basée sur la distance avec log-scaling.
@@ -191,13 +191,13 @@ class AdvancedRewardShaping:
             Récompense de distance
 
         """
-        distance = info.get("distance_km", 0)
+        distance: float = float(info.get("distance_km", 0))
 
         if distance < self.short_distance_threshold:
             # Bonus pour distance courte
-            return 20 + (self.short_distance_threshold - distance) * 4
+            return 20.0 + (self.short_distance_threshold - distance) * 4.0
         # Log penalty pour distances longues
-        return max(-self.max_distance_penalty, -np.log(distance) * 10)
+        return max(-self.max_distance_penalty, -np.log(distance) * 10.0)
 
     def _calculate_equity_reward(self, info: Dict[str, Any]) -> float:
         """Calcule la récompense basée sur l'équité de charge.
