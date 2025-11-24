@@ -65,7 +65,8 @@ class InvoiceService:
                         booking.invoice_line_id = None
                         booking.updated_at = datetime.now(UTC)
 
-            # Utiliser une variable temporaire Any pour contourner les vérifications de type strictes
+            # Utiliser une variable temporaire Any pour contourner les
+            # vérifications de type strictes
             invoice_any: Any = invoice
             invoice_any.status = InvoiceStatus.CANCELLED
             invoice_any.cancelled_at = datetime.now(UTC)

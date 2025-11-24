@@ -110,7 +110,8 @@ class AgentOrchestrator:
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
-        # current_app est un LocalProxy, _get_current_object() existe mais pyright ne le reconnaît pas
+        # current_app est un LocalProxy, _get_current_object() existe mais
+        # pyright ne le reconnaît pas
         self._app = (
             app or getattr(current_app, "_get_current_object", lambda: current_app)()
         )
@@ -1094,7 +1095,8 @@ class AgentOrchestrator:
                 """Extrait le scheduled_time d'un step pour le tri."""
                 booking = Booking.query.get(step.get("job_id"))
                 if booking and booking.scheduled_time:
-                    # booking.scheduled_time est une colonne SQLAlchemy, convertir en datetime
+                    # booking.scheduled_time est une colonne SQLAlchemy,
+                    # convertir en datetime
                     return cast(datetime, booking.scheduled_time)
                 return datetime.min
 

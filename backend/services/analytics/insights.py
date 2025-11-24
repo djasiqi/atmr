@@ -77,7 +77,8 @@ def generate_insights(
                     "priority": "low",
                     "title": "Excellente ponctualité",
                     "message": (
-                        f"Votre taux de ponctualité ({on_time_rate:.1f}%) est excellent !"
+                        f"Votre taux de ponctualité ({on_time_rate:.1f}%) "
+                        "est excellent !"
                     ),
                     "action": None,
                 },

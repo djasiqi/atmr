@@ -33,7 +33,8 @@ DRIVER_LOAD_WARNING = 2
 CURRENT_DISTANCE_THRESHOLD = 10
 
 # Imports conditionnels pour éviter les erreurs
-# Note: notification_service n'a pas de classe NotificationService, ce sont des fonctions
+# Note: notification_service n'a pas de classe NotificationService,
+# ce sont des fonctions
 NotificationService: Any = None
 
 # Note: ml_predictor a DelayMLPredictor, pas MLPredictor
