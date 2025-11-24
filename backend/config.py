@@ -11,7 +11,8 @@ from urllib.parse import quote_plus
 
 # ✅ 4.1: Import Vault client (optionnel)
 try:
-    from shared.vault_client import VaultClient, get_vault_client as _get_vault_client
+    from shared.vault_client import VaultClient
+    from shared.vault_client import get_vault_client as _get_vault_client
 
     VAULT_AVAILABLE = True
 except ImportError:
@@ -102,9 +103,7 @@ class Config:
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Options de base compatibles avec toutes les bases de données
-    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[
-        dict[str, int | bool | dict[str, str]]
-    ] = {
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {
         "pool_pre_ping": True,
         "pool_recycle": 1800,
     }
@@ -171,9 +170,7 @@ class DevelopmentConfig(Config):
     )
 
     # ✅ PostgreSQL-specific options pour développement
-    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[  # pyright: ignore
-        dict[str, int | bool | dict[str, str]]
-    ] = {
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
         "pool_size": 10,  # ✅ PERF: Connection pooling (PostgreSQL uniquement)
         "max_overflow": 20,  # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
@@ -239,9 +236,7 @@ class ProductionConfig(Config):
         raise RuntimeError(error_msg)
 
     # ✅ PostgreSQL-specific options
-    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[  # pyright: ignore
-        dict[str, int | bool | dict[str, str]]
-    ] = {
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
         "pool_size": 10,  # ✅ PERF: Connection pooling (PostgreSQL uniquement)
         "max_overflow": 20,  # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
@@ -273,7 +268,7 @@ class TestingConfig(Config):
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite:///:memory:")
     # Options de base uniquement
     # (pas de pool_size/max_overflow pour compatibilité SQLite)
-    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool]] = {
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {
         "pool_pre_ping": True,
         "pool_recycle": 1800,
     }

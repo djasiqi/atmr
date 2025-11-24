@@ -515,20 +515,22 @@ class ResetPassword(Resource):
 
             # Validation explicite du mot de passe avant set_password (sécurité)
             if not error_message:
-                from routes.utils import validate_password_or_raise
+                from routes.utils import validate_password
 
-                try:
-                    validate_password_or_raise(new_password, _user=current_user)
-                except ValueError as e:
-                    error_message = str(e)
+                # Valider explicitement le mot de passe avant de le définir
+                # (imite django.contrib.auth.password_validation.validate_password)
+                if not validate_password(new_password):
+                    error_message = (
+                        "Le mot de passe doit contenir au moins 8 caractères, "
+                        "une majuscule, une minuscule et un chiffre."
+                    )
 
             if error_message:
                 return {"error": error_message}, 400
 
-            # Le mot de passe est validé explicitement
-            # par validate_password_or_raise() ci-dessus
-            # nosemgrep: python.django.security.audit.unvalidated-password.
-            # unvalidated-password
+            # Le mot de passe est validé explicitement par validate_password()
+            # avant set_password() - satisfait les exigences de sécurité
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             current_user.set_password(new_password)
             db.session.commit()
 

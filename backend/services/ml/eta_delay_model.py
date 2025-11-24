@@ -749,9 +749,8 @@ class ETADelayModel:
             # pour numpy/scipy
             # nosec B301: Modèles internes uniquement,
             # provenant de sources de confiance
-            joblib.dump(
-                model_data, f
-            )  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+            # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+            joblib.dump(model_data, f)
 
         logger.info("[ETADelayModel] Modèle sauvegardé: %s", self.model_path)
 
@@ -768,9 +767,8 @@ class ETADelayModel:
                 # pour numpy/scipy
                 # nosec B301: Modèles internes uniquement,
                 # provenant de sources de confiance
-                model_data = joblib.load(
-                    f
-                )  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                model_data = joblib.load(f)
 
             self.regression_model = model_data["regression_model"]
             self.classification_model = model_data.get("classification_model", None)
