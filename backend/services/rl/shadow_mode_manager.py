@@ -930,8 +930,9 @@ class ShadowModeManager:
         try:
             # Note: RLSuggestionGenerator.generate_suggestions nécessite des assignments
             # Pour l'instant, on skip cette fonctionnalité ou on crée un wrapper
-            # TODO: Implémenter generate_suggestion_for_booking dans RLSuggestionGenerator
-            # ou créer un wrapper qui convertit booking+driver en assignment
+            # TODO: Implémenter generate_suggestion_for_booking dans
+            # RLSuggestionGenerator ou créer un wrapper qui convertit
+            # booking+driver en assignment
             for booking in bookings:
                 # Simuler état actuel pour RL
                 suggested_driver_id = current_assignments.get(booking.id)

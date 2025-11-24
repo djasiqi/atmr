@@ -19,7 +19,8 @@ except ImportError:
     # Fallback si Client n'existe pas
     Client = type("Client", (), {"id": None, "company_id": None, "is_active": True})()
 
-# Note: notification_service n'a pas de classe NotificationService, ce sont des fonctions
+# Note: notification_service n'a pas de classe NotificationService,
+# ce sont des fonctions
 NotificationService: Any = None
 
 MONTH_ONE = 1
@@ -74,7 +75,8 @@ def send_reminder_notifications():
         app_logger.info("Début de l'envoi des notifications de rappel")
 
         # Note: NotificationService n'existe pas dans notification_service
-        # Le code attend un objet avec des méthodes send_reminder_notification et send_monthly_invoice_summary
+        # Le code attend un objet avec des méthodes send_reminder_notification
+        # et send_monthly_invoice_summary
         notification_service: Any = (
             NotificationService() if NotificationService else None
         )
@@ -306,7 +308,8 @@ def send_invoice_summary():
         app_logger.info("Début de l'envoi des résumés mensuels")
 
         # Note: NotificationService n'existe pas dans notification_service
-        # Le code attend un objet avec des méthodes send_reminder_notification et send_monthly_invoice_summary
+        # Le code attend un objet avec des méthodes send_reminder_notification
+        # et send_monthly_invoice_summary
         notification_service: Any = (
             NotificationService() if NotificationService else None
         )

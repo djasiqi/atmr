@@ -1429,7 +1429,8 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                                         # Import conditionnel pour éviter les
                                         # erreurs si le module n'existe pas
                                         try:
-                                            # NotificationService n'existe pas dans notification_service
+                                            # NotificationService n'existe pas dans
+                                            # notification_service
                                             # Les fonctions sont directement disponibles
                                             notification_service = None
                                         except ImportError:
@@ -1929,7 +1930,8 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
 
                         collector = DispatchMetricsCollector(company_id)
                         # Calcul rapide du quality score avant RL
-                        # Convertir HeuristicAssignment en Assignment pour _calculate_metrics
+                        # Convertir HeuristicAssignment en Assignment pour
+                        # _calculate_metrics
                         assignments_for_metrics: List[Assignment] = cast(
                             List[Assignment], final_assignments
                         )
@@ -2496,7 +2498,8 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
                     )
 
             # Ajouter les métriques SLO au résultat
-            # DispatchPerformanceMetrics est un dataclass, utiliser une variable temporaire Any pour contourner le type checking
+            # DispatchPerformanceMetrics est un dataclass, utiliser une variable
+            # temporaire Any pour contourner le type checking
             perf_metrics_any: Any = perf_metrics
             perf_metrics_any.slo_check = slo_check
 
