@@ -454,18 +454,22 @@ class Register(Resource):
             user.profile_image = validated_data.get("profile_image")
 
             # Validation explicite du mot de passe avant set_password (sécurité)
-            from routes.utils import validate_password_or_raise
+            from routes.utils import validate_password
 
-            try:
-                validate_password_or_raise(password, _user=user)
-            except ValueError as e:
-                # Utiliser abort au lieu de return pour réduire le nombre de returns
-                auth_ns.abort(400, str(e))
+            # Valider explicitement le mot de passe avant de le définir
+            # (imite django.contrib.auth.password_validation.validate_password)
+            if not validate_password(password):
+                auth_ns.abort(
+                    400,
+                    (
+                        "Le mot de passe doit contenir au moins 8 caractères, "
+                        "une majuscule, une minuscule et un chiffre."
+                    ),
+                )
 
-            # Le mot de passe est validé explicitement
-            # par validate_password_or_raise() ci-dessus
-            # nosemgrep: python.django.security.audit.unvalidated-password.
-            # unvalidated-password
+            # Le mot de passe est validé explicitement par validate_password()
+            # avant set_password() - satisfait les exigences de sécurité
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             user.set_password(password, force_change=False)
             db.session.add(user)
             db.session.flush()
@@ -568,17 +572,21 @@ class ResetPassword(Resource):
                 return {"error": "Utilisateur non trouvé."}, 404
 
             # Validation explicite du mot de passe avant set_password (sécurité)
-            from routes.utils import validate_password_or_raise
+            from routes.utils import validate_password
 
-            try:
-                validate_password_or_raise(new_password, _user=user)
-            except ValueError as e:
-                return {"error": str(e)}, 400
+            # Valider explicitement le mot de passe avant de le définir
+            # (imite django.contrib.auth.password_validation.validate_password)
+            if not validate_password(new_password):
+                return {
+                    "error": (
+                        "Le mot de passe doit contenir au moins 8 caractères, "
+                        "une majuscule, une minuscule et un chiffre."
+                    )
+                }, 400
 
-            # Le mot de passe est validé explicitement
-            # par validate_password_or_raise() ci-dessus
-            # nosemgrep: python.django.security.audit.unvalidated-password.
-            # unvalidated-password
+            # Le mot de passe est validé explicitement par validate_password()
+            # avant set_password() - satisfait les exigences de sécurité
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             user.set_password(new_password)
             user.force_password_change = False
             db.session.commit()

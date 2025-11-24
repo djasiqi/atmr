@@ -1,0 +1,29 @@
+warning: in the working copy of 'backend/config.py', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/backend/config.py b/backend/config.py[m
+[1mindex f80ea8c..0b5eebd 100644[m
+[1m--- a/backend/config.py[m
+[1m+++ b/backend/config.py[m
+[36m@@ -171,9 +171,9 @@[m [mclass DevelopmentConfig(Config):[m
+     )[m
+ [m
+     # ✅ PostgreSQL-specific options pour développement[m
+[31m-    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[  # pyright: ignore[m
+[32m+[m[32m    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[[m
+         dict[str, int | bool | dict[str, str]][m
+[31m-    ] = {[m
+[32m+[m[32m    ] = {  # pyright: ignore[m
+         **Config.SQLALCHEMY_ENGINE_OPTIONS,[m
+         "pool_size": 10,  # ✅ PERF: Connection pooling (PostgreSQL uniquement)[m
+         "max_overflow": 20,  # ✅ PERF: Max connections overflow (PostgreSQL uniquement)[m
+[36m@@ -239,9 +239,9 @@[m [mclass ProductionConfig(Config):[m
+         raise RuntimeError(error_msg)[m
+ [m
+     # ✅ PostgreSQL-specific options[m
+[31m-    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[  # pyright: ignore[m
+[32m+[m[32m    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[[m
+         dict[str, int | bool | dict[str, str]][m
+[31m-    ] = {[m
+[32m+[m[32m    ] = {  # pyright: ignore[m
+         **Config.SQLALCHEMY_ENGINE_OPTIONS,[m
+         "pool_size": 10,  # ✅ PERF: Connection pooling (PostgreSQL uniquement)[m
+         "max_overflow": 20,  # ✅ PERF: Max connections overflow (PostgreSQL uniquement)[m

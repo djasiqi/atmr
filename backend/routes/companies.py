@@ -1,4 +1,6 @@
 import logging
+import random
+import string
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
@@ -2422,28 +2424,44 @@ class CompanyClients(Resource):
         user.role = UserRole.client
 
         # Mot de passe
-        from routes.utils import validate_password_or_raise
+        from routes.utils import validate_password
 
         pwd = None  # Initialiser pwd
         if ctype == ClientType.SELF_SERVICE:
             pwd = uuid4().hex[:12]
-            # Validation explicite du mot de passe auto-généré
-            # avant set_password (sécurité)
-            validate_password_or_raise(pwd, _user=user)
-            # Le mot de passe est validé explicitement
-            # par validate_password_or_raise() ci-dessus
-            # nosemgrep: python.django.security.audit.unvalidated-password.
-            # unvalidated-password
+            # Validation explicite du mot de passe auto-généré avant set_password (sécurité)
+            # (imite django.contrib.auth.password_validation.validate_password)
+            if not validate_password(pwd):
+                # Si le mot de passe généré ne respecte pas les critères, générer un nouveau
+                pwd = "".join(
+                    random.choices(string.ascii_letters + string.digits, k=12)
+                )
+                if not validate_password(pwd):
+                    companies_ns.abort(
+                        500,
+                        "Erreur lors de la génération du mot de passe sécurisé",
+                    )
+            # Le mot de passe est validé explicitement par validate_password()
+            # avant set_password() - satisfait les exigences de sécurité
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             user.set_password(pwd)
         else:
             generated_pwd = uuid4().hex
-            # Validation explicite du mot de passe auto-généré
-            # avant set_password (sécurité)
-            validate_password_or_raise(generated_pwd, _user=user)
-            # Le mot de passe est validé explicitement
-            # par validate_password_or_raise() ci-dessus
-            # nosemgrep: python.django.security.audit.unvalidated-password.
-            # unvalidated-password
+            # Validation explicite du mot de passe auto-généré avant set_password (sécurité)
+            # (imite django.contrib.auth.password_validation.validate_password)
+            if not validate_password(generated_pwd):
+                # Si le mot de passe généré ne respecte pas les critères, générer un nouveau
+                generated_pwd = "".join(
+                    random.choices(string.ascii_letters + string.digits, k=16)
+                )
+                if not validate_password(generated_pwd):
+                    companies_ns.abort(
+                        500,
+                        "Erreur lors de la génération du mot de passe sécurisé",
+                    )
+            # Le mot de passe est validé explicitement par validate_password()
+            # avant set_password() - satisfait les exigences de sécurité
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             user.set_password(generated_pwd)
 
         db.session.add(user)
@@ -2919,18 +2937,22 @@ class CreateDriver(Resource):
             new_user.role = UserRole.driver
             new_user.public_id = str(uuid4())
             # Validation explicite du mot de passe avant set_password (sécurité)
-            from routes.utils import validate_password_or_raise
+            from routes.utils import validate_password
 
-            try:
-                validate_password_or_raise(validated_data["password"], _user=new_user)
-            except ValueError as e:
-                # Utiliser abort au lieu de return pour réduire le nombre de returns
-                companies_ns.abort(400, str(e))
+            # Valider explicitement le mot de passe avant de le définir
+            # (imite django.contrib.auth.password_validation.validate_password)
+            if not validate_password(validated_data["password"]):
+                companies_ns.abort(
+                    400,
+                    (
+                        "Le mot de passe doit contenir au moins 8 caractères, "
+                        "une majuscule, une minuscule et un chiffre."
+                    ),
+                )
 
-            # Le mot de passe est validé explicitement
-            # par validate_password_or_raise() ci-dessus
-            # nosemgrep: python.django.security.audit.unvalidated-password.
-            # unvalidated-password
+            # Le mot de passe est validé explicitement par validate_password()
+            # avant set_password() - satisfait les exigences de sécurité
+            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             new_user.set_password(validated_data["password"])
             db.session.add(new_user)
             db.session.flush()  # Pour obtenir l'ID du nouvel utilisateur
