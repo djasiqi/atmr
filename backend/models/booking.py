@@ -88,7 +88,7 @@ class Booking(db.Model):
     )
 
     amount: Mapped[float] = mapped_column(Float, nullable=False)
-    status: Mapped[BookingStatus] = Column(
+    status: Mapped[BookingStatus] = mapped_column(
         SAEnum(BookingStatus, name="booking_status"),
         index=True,
         nullable=False,
@@ -110,7 +110,7 @@ class Booking(db.Model):
     company_id = Column(
         Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    driver_id: Mapped[Optional[int]] = Column(
+    driver_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("driver.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
@@ -148,7 +148,7 @@ class Booking(db.Model):
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at: Mapped[datetime] = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -156,7 +156,7 @@ class Booking(db.Model):
     )
 
     billed_to_type = Column(String(50), nullable=False, server_default="patient")
-    billed_to_company_id: Mapped[Optional[int]] = Column(
+    billed_to_company_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("company.id", ondelete="SET NULL"), nullable=True
     )
     billed_to_contact = Column(String(120))

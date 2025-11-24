@@ -982,9 +982,9 @@ def build_time_matrix(
 
     # sec -> minutes (ceil), min=1 hors diagonale
     time_matrix_min: List[List[int]] = []
-    for i, row in enumerate(matrix_sec):
+    for i, row_float in enumerate(matrix_sec):
         row_min: List[int] = []
-        for j, t in enumerate(row):
+        for j, t in enumerate(row_float):
             if i == j:
                 row_min.append(0)
             else:

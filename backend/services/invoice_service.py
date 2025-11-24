@@ -150,14 +150,14 @@ class InvoiceService:
 
     def generate_invoice(
         self,
-        company_id,
-        client_id,
-        period_year,
-        period_month,
-        bill_to_client_id=None,
-        reservation_ids=None,
-        overrides=None,
-    ):
+        company_id: int,
+        client_id: int,
+        period_year: int,
+        period_month: int,
+        bill_to_client_id: int | None = None,
+        reservation_ids: list[int] | None = None,
+        overrides: Dict[str, Any] | None = None,
+    ) -> Invoice:
         """Génère une nouvelle facture pour un client et une période.
 
         Args:
@@ -180,7 +180,7 @@ class InvoiceService:
             billing_settings = self._get_billing_settings(company_id)
 
             overrides_map: Dict[int, Dict[str, Any]] = {}
-            if overrides and isinstance(overrides, dict):
+            if overrides:
                 for key, value in overrides.items():
                     try:
                         reservation_id = int(key)
@@ -670,7 +670,7 @@ class InvoiceService:
             app_logger.error("Erreur lors de la génération du rappel: %s", str(e))
             raise
 
-    def _get_billing_settings(self, company_id):
+    def _get_billing_settings(self, company_id: int) -> CompanyBillingSettings:
         """Récupère les paramètres de facturation d'une entreprise."""
         settings = CompanyBillingSettings.query.filter_by(company_id=company_id).first()
         if not settings:
@@ -682,8 +682,8 @@ class InvoiceService:
         return settings
 
     def _get_reservations_for_period(
-        self, company_id, client_id, period_year, period_month
-    ):
+        self, company_id: int, client_id: int, period_year: int, period_month: int
+    ) -> Any:
         """Récupère les réservations d'un client pour une période donnée."""
         start_date = datetime(period_year, period_month, 1)
         end_date = (
@@ -703,7 +703,9 @@ class InvoiceService:
             )
         ).all()
 
-    def _generate_invoice_number(self, company_id, period_year, period_month):
+    def _generate_invoice_number(
+        self, company_id: int, period_year: int, period_month: int
+    ) -> str:
         """Génère un numéro de facture unique."""
         billing_settings = self._get_billing_settings(company_id)
 
@@ -734,7 +736,7 @@ class InvoiceService:
         db.session.commit()
         return invoice_number
 
-    def check_overdue_invoices(self):
+    def check_overdue_invoices(self) -> None:
         """Vérifie et met à jour les factures en retard."""
         try:
             overdue_invoices = Invoice.query.filter(
@@ -786,7 +788,7 @@ class InvoiceService:
             )
             raise
 
-    def process_automatic_reminders(self):
+    def process_automatic_reminders(self) -> None:
         """Traite les rappels automatiques."""
         try:
             companies_with_auto_reminders = CompanyBillingSettings.query.filter_by(
@@ -802,7 +804,7 @@ class InvoiceService:
             )
             raise
 
-    def _process_company_reminders(self, company_id):
+    def _process_company_reminders(self, company_id: int) -> None:
         """Traite les rappels automatiques pour une entreprise."""
         try:
             billing_settings = self._get_billing_settings(company_id)

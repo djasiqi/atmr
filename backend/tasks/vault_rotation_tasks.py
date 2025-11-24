@@ -55,6 +55,7 @@ def rotate_jwt_secret(self: Task) -> dict[str, Any]:
     Returns:
         dict avec status, environment, rotated_at
     """
+    result: Dict[str, Any]
     if not HVAC_AVAILABLE:
         logger.warning("[4.1 Vault Rotation] hvac non installé, rotation JWT ignorée")
         result = {"status": "skipped", "reason": "hvac_not_available"}
@@ -159,7 +160,7 @@ def rotate_jwt_secret(self: Task) -> dict[str, Any]:
         # ⚠️ IMPORTANT: Vider le cache pour forcer rechargement
         vault_client.clear_cache()
 
-        result: Dict[str, Any] = {
+        result = {
             "status": "success",
             "environment": env_path,
             "rotated_at": datetime.now(UTC).isoformat(),
@@ -229,6 +230,7 @@ def rotate_encryption_key(self: Task) -> dict[str, Any]:
     Returns:
         dict avec status, environment, rotated_at
     """
+    result: Dict[str, Any]
     if not HVAC_AVAILABLE:
         logger.warning(
             "[4.1 Vault Rotation] hvac non installé, rotation encryption ignorée"
@@ -370,7 +372,7 @@ def rotate_encryption_key(self: Task) -> dict[str, Any]:
         # Notifier le EncryptionService de la nouvelle clé
         # (à faire manuellement ou via reload)
 
-        result: Dict[str, Any] = {
+        result = {
             "status": "success",
             "environment": env_path,
             "rotated_at": datetime.now(UTC).isoformat(),
@@ -444,6 +446,7 @@ def rotate_flask_secret_key(self: Task) -> dict[str, Any]:
     Returns:
         dict avec status, environment, rotated_at
     """
+    result: Dict[str, Any]
     if not HVAC_AVAILABLE:
         logger.warning(
             "[4.1 Vault Rotation] hvac non installé, rotation SECRET_KEY ignorée"
@@ -553,7 +556,7 @@ def rotate_flask_secret_key(self: Task) -> dict[str, Any]:
         # ⚠️ IMPORTANT: Vider le cache pour forcer rechargement
         vault_client.clear_cache()
 
-        result: Dict[str, Any] = {
+        result = {
             "status": "success",
             "environment": env_path,
             "rotated_at": datetime.now(UTC).isoformat(),

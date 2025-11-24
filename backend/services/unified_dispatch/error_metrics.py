@@ -19,15 +19,15 @@ PROMETHEUS_AVAILABLE = False
 _CounterType: Any = None
 
 try:
-    from prometheus_client import Counter
+    from prometheus_client import Counter as _Counter
 
-    _CounterType = Counter
+    _CounterType = _Counter
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     pass
 
 # Exposer le type avec un nom public (type Any pour éviter les conflits)
-Counter: Any = _CounterType
+Counter = _CounterType
 
 logger = logging.getLogger(__name__)
 

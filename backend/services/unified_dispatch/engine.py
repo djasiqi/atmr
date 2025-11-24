@@ -281,14 +281,15 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
     # ✅ Context manager pour métriques Prometheus
     # Note: dispatch_run_id sera disponible après création du DispatchRun
     # On utilisera le context manager plus tard dans la fonction
+    _dispatch_metrics_context: Any = None
     try:
         from services.unified_dispatch.dispatch_prometheus_metrics import (
-            dispatch_metrics_context as _dispatch_metrics_context,
+            dispatch_metrics_context,
         )
 
+        _dispatch_metrics_context = dispatch_metrics_context
         _ = _dispatch_metrics_context  # Utilisé plus tard dans la fonction
     except ImportError:
-        _dispatch_metrics_context: Any = None
         _ = _dispatch_metrics_context
 
     # ✅ D1: Créer span racine pour le dispatch
@@ -1173,7 +1174,7 @@ def run(  # pyright: ignore[reportGeneralTypeIssues]
             if "final_assignments" not in locals():
                 final_assignments: List[Any] = []
             else:
-                final_assignments = []  # Réinitialiser la variable existante
+                final_assignments.clear()  # Réinitialiser la variable existante
             assigned_set = set()
 
         # Pour méta/debug

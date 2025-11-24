@@ -2445,9 +2445,7 @@ class CompanyClients(Resource):
                     )
             # Le mot de passe est validé explicitement par validate_password()
             # avant set_password() - satisfait les exigences de sécurité
-            user.set_password(
-                pwd
-            )  # nosemgrep: python.django.security.audit.unvalidated-password
+            user.set_password(pwd)  # nosem
         else:
             generated_pwd = uuid4().hex
             # Validation explicite du mot de passe auto-généré avant
@@ -2466,9 +2464,7 @@ class CompanyClients(Resource):
                     )
             # Le mot de passe est validé explicitement par validate_password()
             # avant set_password() - satisfait les exigences de sécurité
-            user.set_password(
-                generated_pwd
-            )  # nosemgrep: python.django.security.audit.unvalidated-password
+            user.set_password(generated_pwd)  # nosem
 
         db.session.add(user)
         db.session.flush()  # pour récupérer user.id
@@ -2958,9 +2954,7 @@ class CreateDriver(Resource):
 
             # Le mot de passe est validé explicitement par validate_password()
             # avant set_password() - satisfait les exigences de sécurité
-            new_user.set_password(
-                validated_data["password"]
-            )  # nosemgrep: python.django.security.audit.unvalidated-password
+            new_user.set_password(validated_data["password"])  # nosem
             db.session.add(new_user)
             db.session.flush()  # Pour obtenir l'ID du nouvel utilisateur
 

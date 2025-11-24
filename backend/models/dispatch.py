@@ -214,7 +214,7 @@ class Assignment(db.Model):
         Integer, ForeignKey("driver.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
-    status: Mapped[AssignmentStatus] = Column(
+    status: Mapped[AssignmentStatus] = mapped_column(
         SAEnum(AssignmentStatus, name="assignment_status"),
         nullable=False,
         default=AssignmentStatus.SCHEDULED,
@@ -374,7 +374,7 @@ class DriverStatus(db.Model):
         index=True,
     )
 
-    state: Mapped[DriverState] = Column(
+    state: Mapped[DriverState] = mapped_column(
         SAEnum(DriverState, name="driver_state"),
         nullable=False,
         default=DriverState.AVAILABLE,
@@ -393,7 +393,7 @@ class DriverStatus(db.Model):
         Integer, ForeignKey("assignment.id", ondelete="SET NULL"), nullable=True
     )
 
-    last_update: Mapped[datetime] = Column(
+    last_update: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
 
@@ -556,10 +556,10 @@ class RealtimeEvent(db.Model):
         index=True,
     )
 
-    event_type: Mapped[RealtimeEventType] = Column(
+    event_type: Mapped[RealtimeEventType] = mapped_column(
         SAEnum(RealtimeEventType, name="realtime_event_type"), nullable=False
     )
-    entity_type: Mapped[RealtimeEntityType] = Column(
+    entity_type: Mapped[RealtimeEntityType] = mapped_column(
         SAEnum(RealtimeEntityType, name="realtime_entity_type"), nullable=False
     )
 

@@ -69,7 +69,7 @@ def check_overdues_and_trigger_reminders():
     max_retries=2,
     autoretry_for=(Exception,),
 )
-def send_reminder_notifications():
+def send_reminder_notifications() -> None:
     """Tâche pour envoyer les notifications de rappel par email."""
     try:
         app_logger.info("Début de l'envoi des notifications de rappel")
@@ -302,7 +302,7 @@ def cleanup_old_invoices():
     max_retries=2,
     autoretry_for=(Exception,),
 )
-def send_invoice_summary():
+def send_invoice_summary() -> None:
     """Tâche pour envoyer un résumé mensuel des factures aux entreprises."""
     try:
         app_logger.info("Début de l'envoi des résumés mensuels")
