@@ -85,7 +85,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Upload coverage artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: frontend-coverage-report
           path: frontend/coverage/
@@ -131,7 +131,7 @@ jobs:
           fi
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: frontend-build
           path: frontend/build/
@@ -248,7 +248,7 @@ jobs:
           CYPRESS_baseUrl: http://localhost:3000
 
       - name: Upload Cypress screenshots
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: failure()
         with:
           name: cypress-screenshots
@@ -256,7 +256,7 @@ jobs:
           retention-days: 7
 
       - name: Upload Cypress videos
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: always()
         with:
           name: cypress-videos
