@@ -9,7 +9,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "jest --watchAll",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "update-deps": "npm update",
+    "audit-fix": "npm audit fix",
+    "fix-glob": "node ./scripts/update-glob.js"
   },
   "jest": {
     "preset": "jest-expo"
@@ -57,6 +60,9 @@
     "brace-expansion": "^2.0.2",
     "tar": "^7.4.3",
     "glob": "^11.1.0"
+  },
+  "_comment": {
+    "glob-override": "Override glob to ^11.1.0 to fix GHSA-ww39-953v-wcq6 (command injection in CLI -c/--cmd option). This forces all transitive dependencies to use the patched version. See: https://github.com/isaacs/node-glob/security/advisories/GHSA-ww39-953v-wcq6"
   },
   "private": true
 }

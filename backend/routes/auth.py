@@ -469,7 +469,7 @@ class Register(Resource):
 
             # Le mot de passe est validé explicitement par validate_password()
             # avant set_password() - satisfait les exigences de sécurité
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # nosemgrep: python.django.security.audit.unvalidated-password
             user.set_password(password, force_change=False)
             db.session.add(user)
             db.session.flush()
@@ -586,7 +586,7 @@ class ResetPassword(Resource):
 
             # Le mot de passe est validé explicitement par validate_password()
             # avant set_password() - satisfait les exigences de sécurité
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # nosemgrep: python.django.security.audit.unvalidated-password
             user.set_password(new_password)
             user.force_password_change = False
             db.session.commit()

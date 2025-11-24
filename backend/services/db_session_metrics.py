@@ -13,32 +13,18 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 # Import optionnel prometheus_client (peut ne pas être installé en dev)
-CounterType: type[Any] | None = None
-HistogramType: type[Any] | None = None
-
-if TYPE_CHECKING:
-    from prometheus_client import Counter, Histogram
-else:
-    CounterType = None
-    HistogramType = None
-
 try:
     from prometheus_client import Counter, Histogram
-
-    if not TYPE_CHECKING:
-        CounterType = Counter
-        HistogramType = Histogram
 
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
-
-# Alias pour compatibilité
-Counter: type[Any] | None = CounterType
-Histogram: type[Any] | None = HistogramType
+    # Définir Counter et Histogram comme None si non disponible
+    Counter = None
+    Histogram = None
 
 logger = logging.getLogger(__name__)
 

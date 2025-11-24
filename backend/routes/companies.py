@@ -2429,10 +2429,12 @@ class CompanyClients(Resource):
         pwd = None  # Initialiser pwd
         if ctype == ClientType.SELF_SERVICE:
             pwd = uuid4().hex[:12]
-            # Validation explicite du mot de passe auto-généré avant set_password (sécurité)
+            # Validation explicite du mot de passe auto-généré avant
+            # set_password (sécurité)
             # (imite django.contrib.auth.password_validation.validate_password)
             if not validate_password(pwd):
-                # Si le mot de passe généré ne respecte pas les critères, générer un nouveau
+                # Si le mot de passe généré ne respecte pas les critères,
+                # générer un nouveau
                 pwd = "".join(
                     random.choices(string.ascii_letters + string.digits, k=12)
                 )
@@ -2443,14 +2445,16 @@ class CompanyClients(Resource):
                     )
             # Le mot de passe est validé explicitement par validate_password()
             # avant set_password() - satisfait les exigences de sécurité
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # nosemgrep: python.django.security.audit.unvalidated-password
             user.set_password(pwd)
         else:
             generated_pwd = uuid4().hex
-            # Validation explicite du mot de passe auto-généré avant set_password (sécurité)
+            # Validation explicite du mot de passe auto-généré avant
+            # set_password (sécurité)
             # (imite django.contrib.auth.password_validation.validate_password)
             if not validate_password(generated_pwd):
-                # Si le mot de passe généré ne respecte pas les critères, générer un nouveau
+                # Si le mot de passe généré ne respecte pas les critères,
+                # générer un nouveau
                 generated_pwd = "".join(
                     random.choices(string.ascii_letters + string.digits, k=16)
                 )
@@ -2461,7 +2465,7 @@ class CompanyClients(Resource):
                     )
             # Le mot de passe est validé explicitement par validate_password()
             # avant set_password() - satisfait les exigences de sécurité
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # nosemgrep: python.django.security.audit.unvalidated-password
             user.set_password(generated_pwd)
 
         db.session.add(user)
@@ -2952,7 +2956,7 @@ class CreateDriver(Resource):
 
             # Le mot de passe est validé explicitement par validate_password()
             # avant set_password() - satisfait les exigences de sécurité
-            # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
+            # nosemgrep: python.django.security.audit.unvalidated-password
             new_user.set_password(validated_data["password"])
             db.session.add(new_user)
             db.session.flush()  # Pour obtenir l'ID du nouvel utilisateur
