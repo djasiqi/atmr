@@ -7,7 +7,7 @@ le monitoring et l'audit de sécurité.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import Column, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -84,7 +84,7 @@ class SecretRotation(db.Model):
     def to_dict(self) -> dict[str, Any]:
         """Convertit en dictionnaire pour export API."""
         # rotated_at est nullable=False mais peut être None avant commit
-        rotated_at_value: datetime | None = self.rotated_at
+        rotated_at_value: datetime | None = cast(datetime | None, self.rotated_at)
         return {
             "id": self.id,
             "secret_type": self.secret_type,

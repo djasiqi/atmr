@@ -3,7 +3,7 @@
 # Constantes pour éviter les valeurs magiques
 import logging
 from datetime import date, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 from sqlalchemy import and_
 
@@ -42,7 +42,7 @@ def generate_insights(
         Liste d'insights avec type, message et priorité
 
     """
-    insights = []
+    insights: List[Dict[str, Any]] = []
 
     if not analytics or not analytics.get("trends"):
         return insights
@@ -69,16 +69,19 @@ def generate_insights(
         )
     elif on_time_rate >= ON_TIME_RATE_THRESHOLD:
         insights.append(
-            {
-                "type": "success",
-                "category": "punctuality",
-                "priority": "low",
-                "title": "Excellente ponctualité",
-                "message": (
-                    f"Votre taux de ponctualité ({on_time_rate:.1f}%) est excellent !"
-                ),
-                "action": None,
-            }
+            cast(
+                Dict[str, Any],
+                {
+                    "type": "success",
+                    "category": "punctuality",
+                    "priority": "low",
+                    "title": "Excellente ponctualité",
+                    "message": (
+                        f"Votre taux de ponctualité ({on_time_rate:.1f}%) est excellent !"
+                    ),
+                    "action": None,
+                },
+            )
         )
 
     # Insight 2: Retard moyen
@@ -114,16 +117,19 @@ def generate_insights(
 
             if evolution > EVOLUTION_THRESHOLD:
                 insights.append(
-                    {
-                        "type": "success",
-                        "category": "trend",
-                        "priority": "medium",
-                        "title": "Amélioration continue",
-                        "message": (
-                            f"Votre score de qualité s'améliore (+{evolution:.1f}%)"
-                        ),
-                        "action": None,
-                    }
+                    cast(
+                        Dict[str, Any],
+                        {
+                            "type": "success",
+                            "category": "trend",
+                            "priority": "medium",
+                            "title": "Amélioration continue",
+                            "message": (
+                                f"Votre score de qualité s'améliore (+{evolution:.1f}%)"
+                            ),
+                            "action": None,
+                        },
+                    )
                 )
             elif evolution < EVOLUTION_DEGRADATION_THRESHOLD:
                 insights.append(
@@ -164,47 +170,56 @@ def generate_insights(
         avg_daily_bookings = total_bookings / days_count
         if avg_daily_bookings < AVG_DAILY_BOOKINGS_THRESHOLD:
             insights.append(
-                {
-                    "type": "info",
-                    "category": "volume",
-                    "priority": "low",
-                    "title": "Volume faible",
-                    "message": (
-                        f"Moyenne de {avg_daily_bookings:.1f} courses/jour. "
-                        f"Opportunité de croissance."
-                    ),
-                    "action": None,
-                }
+                cast(
+                    Dict[str, Any],
+                    {
+                        "type": "info",
+                        "category": "volume",
+                        "priority": "low",
+                        "title": "Volume faible",
+                        "message": (
+                            f"Moyenne de {avg_daily_bookings:.1f} courses/jour. "
+                            f"Opportunité de croissance."
+                        ),
+                        "action": None,
+                    },
+                )
             )
         elif avg_daily_bookings > AVG_DAILY_BOOKINGS_THRESHOLD:
             insights.append(
-                {
-                    "type": "success",
-                    "category": "volume",
-                    "priority": "low",
-                    "title": "Volume élevé",
-                    "message": (
-                        f"Moyenne de {avg_daily_bookings:.1f} courses/jour. "
-                        f"Excellent volume !"
-                    ),
-                    "action": None,
-                }
+                cast(
+                    Dict[str, Any],
+                    {
+                        "type": "success",
+                        "category": "volume",
+                        "priority": "low",
+                        "title": "Volume élevé",
+                        "message": (
+                            f"Moyenne de {avg_daily_bookings:.1f} courses/jour. "
+                            f"Excellent volume !"
+                        ),
+                        "action": None,
+                    },
+                )
             )
 
     # Insight 6: Score de qualité global
     quality_score = summary.get("avg_quality_score", 0)
     if quality_score >= QUALITY_SCORE_THRESHOLD:
         insights.append(
-            {
-                "type": "success",
-                "category": "quality",
-                "priority": "low",
-                "title": "Score de qualité excellent",
-                "message": (
-                    f"Score global de {quality_score:.1f}/100. Excellent travail !"
-                ),
-                "action": None,
-            }
+            cast(
+                Dict[str, Any],
+                {
+                    "type": "success",
+                    "category": "quality",
+                    "priority": "low",
+                    "title": "Score de qualité excellent",
+                    "message": (
+                        f"Score global de {quality_score:.1f}/100. Excellent travail !"
+                    ),
+                    "action": None,
+                },
+            )
         )
     elif quality_score < QUALITY_SCORE_THRESHOLD:
         insights.append(
@@ -257,7 +272,7 @@ def detect_patterns(company_id: int, lookback_days: int = 30) -> Dict[str, Any]:
         }
 
     # Grouper par jour de la semaine (0=lundi, 6=dimanche)
-    by_weekday = {i: [] for i in range(7)}
+    by_weekday: Dict[int, List[Dict[str, Any]]] = {i: [] for i in range(7)}
     for s in stats:
         weekday = s.date.weekday()
         by_weekday[weekday].append(

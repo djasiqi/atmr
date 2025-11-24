@@ -74,7 +74,7 @@ class DBConflictCounter:
 
     def __init__(self):
         super().__init__()
-        self._counter = 0
+        self._counter: int = 0
 
     @classmethod
     def get_instance(cls) -> "DBConflictCounter":
@@ -576,7 +576,7 @@ def _apply_assignments_inner(
             company_id,
         )
 
-    result = {
+    result: Dict[str, Any] = {
         "applied": applied_ids,
         "skipped": skipped,
         "conflicts": conflicts,

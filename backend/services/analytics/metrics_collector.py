@@ -81,7 +81,7 @@ class MetricsCollector:
             avg_per_driver = (
                 total_bookings / active_drivers
                 if active_drivers > ACTIVE_DRIVERS_ZERO
-                else ACTIVE_DRIVERS_ZERO.ACTIVE_DRIVERS_ZERO
+                else float(ACTIVE_DRIVERS_ZERO)
             )
 
             # Métriques de distance
@@ -89,7 +89,7 @@ class MetricsCollector:
             avg_distance = (
                 total_distance / total_bookings
                 if total_bookings > TOTAL_BOOKINGS_ZERO
-                else TOTAL_BOOKINGS_ZERO.TOTAL_BOOKINGS_ZERO
+                else float(TOTAL_BOOKINGS_ZERO)
             )
 
             # Score de qualité (0-100)

@@ -4,7 +4,7 @@
 import logging
 import random
 from collections import deque
-from typing import Any
+from typing import Any, List, Tuple, cast
 
 import numpy as np
 
@@ -29,11 +29,18 @@ except ImportError:
 
 
 # Imports conditionnels pour N-step
+NStepBuffer: Any = None
+NStepPrioritizedBuffer: Any = None
 try:
-    from services.rl.n_step_buffer import NStepBuffer, NStepPrioritizedBuffer
+    from services.rl.n_step_buffer import NStepBuffer as _NStepBuffer
+    from services.rl.n_step_buffer import (
+        NStepPrioritizedBuffer as _NStepPrioritizedBuffer,
+    )
+
+    NStepBuffer = _NStepBuffer
+    NStepPrioritizedBuffer = _NStepPrioritizedBuffer
 except ImportError:
-    NStepBuffer = None
-    NStepPrioritizedBuffer = None
+    pass
 
 
 class ImprovedDQNAgent:
@@ -126,7 +133,7 @@ class ImprovedDQNAgent:
                 msg = "N-step buffers are required but not available"
                 raise ImportError(msg)
             if use_prioritized_replay:
-                self.memory = NStepPrioritizedBuffer(
+                self.memory: Any = NStepPrioritizedBuffer(
                     buffer_size, n_step, n_step_gamma, alpha, beta_start, beta_end
                 )
             else:
@@ -141,7 +148,7 @@ class ImprovedDQNAgent:
         # Métriques
         self.training_step = 0
         self.episode_count = 0
-        self.losses = []
+        self.losses: List[float] = []
 
         print("🖥️  Improved DQN Agent using device: {device}")
         print("✅ Agent DQN amélioré créé:")
@@ -340,7 +347,7 @@ class ImprovedDQNAgent:
                 isinstance(sample_result, tuple)
                 and len(sample_result) == TUPLE_SIZE_TWO
             ):
-                batch, weights = sample_result
+                batch, weights = cast(Tuple[List[Any], List[float]], sample_result)
             else:
                 return 0.0
             if not batch:
@@ -469,9 +476,9 @@ class ImprovedDQNAgent:
             self._soft_update_target_network()
 
         self.training_step += 1
-        self.losses.append(loss.item())
+        self.losses.append(float(loss.item()))
 
-        return loss.item()
+        return float(loss.item())
 
     def _soft_update_target_network(self) -> None:
         """Mise à jour douce du réseau cible."""

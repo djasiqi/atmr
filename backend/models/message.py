@@ -59,7 +59,9 @@ class Message(db.Model):
         Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
-    sender_role = Column(SAEnum(SenderRole, name="sender_role"), nullable=False)
+    sender_role: Mapped[SenderRole] = Column(
+        SAEnum(SenderRole, name="sender_role"), nullable=False
+    )
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Support pour images et PDF

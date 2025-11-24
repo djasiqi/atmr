@@ -7,7 +7,7 @@ Ce modèle est essentiel pour :
 - Compliance et traçabilité
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import Boolean, Float, Integer, String, Text
@@ -151,8 +151,6 @@ class AutonomousAction(db.Model):
             Nombre d'actions dans la dernière heure
 
         """
-        from datetime import timedelta
-
         one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
 
         query = cls.query.filter(
@@ -166,7 +164,7 @@ class AutonomousAction(db.Model):
         if action_type:
             query = query.filter(cls.action_type == action_type)
 
-        return query.count()
+        return int(query.count())
 
     @classmethod
     def count_actions_today(
@@ -197,4 +195,4 @@ class AutonomousAction(db.Model):
         if action_type:
             query = query.filter(cls.action_type == action_type)
 
-        return query.count()
+        return int(query.count())

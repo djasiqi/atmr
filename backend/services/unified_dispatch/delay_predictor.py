@@ -265,7 +265,7 @@ class DelayPredictor:
         """Calcule la confiance de la prédiction basée sur la qualité des données.
         Retourne un score entre 0 et 1.
         """
-        confidence = 1
+        confidence: float = 1.0
 
         # Réduire si coordonnées manquantes ou par défaut
         if not getattr(booking, "pickup_lat", None) or not getattr(

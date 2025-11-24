@@ -166,7 +166,8 @@ def estimate_trip_duration(assignment: Dict[str, Any]) -> int:
 
     # Estimer trajet selon distance si disponible
     # Sinon, utiliser moyenne de 20 min
-    trip_duration = assignment.get("estimated_duration_minutes", 20)
+    trip_duration_raw = assignment.get("estimated_duration_minutes", 20)
+    trip_duration: int = int(trip_duration_raw) if trip_duration_raw is not None else 20
 
     return pickup_service + trip_duration + dropoff_service
 

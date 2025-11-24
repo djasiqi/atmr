@@ -70,8 +70,8 @@ class RLDispatchOptimizer:
         self.config = OptimalHyperparameters.get_optimal_config(config_context)
         logger.info("[RLOptimizer] Configuration chargée: %s", config_context)
 
-        self.agent = None
-        self.env = None
+        self.agent: Optional[ImprovedDQNAgent] = None
+        self.env: Optional[DispatchEnv] = None
         self._driver_index_map: List[int] = []
         self._booking_index_map: List[int] = []
 

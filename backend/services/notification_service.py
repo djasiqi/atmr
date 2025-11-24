@@ -50,7 +50,7 @@ def send_push_message(
             "https://exp.host/--/api/v2/push/send", json=message, timeout=timeout
         )
         resp.raise_for_status()
-        return resp.json()
+        return cast(Dict[str, Any], resp.json())
     except Exception as e:
         app_logger.warning("[notify] Expo push failed: %s", e)
         return {"ok": False, "error": str(e)}

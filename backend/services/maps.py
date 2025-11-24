@@ -415,11 +415,12 @@ def _dm_request(
 
         # ✅ 2.3: Utiliser retry uniformisé avec fallback gracieux
         try:
-            return retry_http_request(
+            result = retry_http_request(
                 _fetch_matrix,
                 max_retries=max_retries,
                 base_delay_ms=retry_backoff_ms,
             )
+            return cast(List[List[int | None]], result)
         except Exception as e:
             app_logger.warning(
                 "⚠️ DistanceMatrix request error (final après retries): %s", e

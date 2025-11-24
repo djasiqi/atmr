@@ -110,7 +110,7 @@ class Invoice(db.Model):
     )
 
     # Statut
-    status = Column(
+    status: Mapped[InvoiceStatus] = Column(
         SAEnum(InvoiceStatus, name="invoice_status"),
         nullable=False,
         default=InvoiceStatus.DRAFT,
@@ -356,7 +356,7 @@ class InvoicePayment(db.Model):
 
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     paid_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    method = Column(
+    method: Mapped[PaymentMethod] = Column(
         SAEnum(
             PaymentMethod,
             name="payment_method",

@@ -36,24 +36,27 @@ except ImportError:
 XGBOOST_AVAILABLE = False
 LIGHTGBM_AVAILABLE = False
 
-try:
-    import xgboost as xgb  # type: ignore[import-untyped]
+xgb: Any = None
+lgb: Any = None
 
+try:
+    import xgboost as _xgb  # type: ignore[import-untyped]
+
+    xgb = _xgb
     XGBOOST_AVAILABLE = True
     logger.info("[ETADelayModel] XGBoost disponible")
 except ImportError:
-    xgb = None
     logger.warning(
         "[ETADelayModel] XGBoost non disponible. Installer avec: pip install xgboost"
     )
 
 try:
-    import lightgbm as lgb  # type: ignore[import-untyped]
+    import lightgbm as _lgb  # type: ignore[import-untyped]
 
+    lgb = _lgb
     LIGHTGBM_AVAILABLE = True
     logger.info("[ETADelayModel] LightGBM disponible")
 except ImportError:
-    lgb = None
     logger.warning(
         "[ETADelayModel] LightGBM non disponible. Installer avec: pip install lightgbm"
     )
@@ -554,14 +557,19 @@ class ETADelayModel:
             ).count()
 
             # Normaliser: 0 = vide, 1 = très dense
-            normalized_density = min(1.0, bookings_in_zone / ZONE_DENSITY_MAX_BOOKINGS)
+            bookings_count = (
+                int(bookings_in_zone) if bookings_in_zone is not None else 0
+            )
+            normalized_density: float = float(
+                min(1.0, bookings_count / ZONE_DENSITY_MAX_BOOKINGS)
+            )
 
             logger.debug(
                 (
                     "[ETADelayModel] Zone density: %d bookings in zone "
                     "(lat:%.4f, lon:%.4f) → density=%.2f"
                 ),
-                bookings_in_zone,
+                bookings_count,
                 pickup_lat,
                 pickup_lon,
                 normalized_density,

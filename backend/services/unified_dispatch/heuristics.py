@@ -108,7 +108,7 @@ class TemporalConflictCounter:
 
     def __init__(self):
         super().__init__()
-        self._counter = 0
+        self._counter: int = 0
 
     @classmethod
     def get_instance(cls) -> "TemporalConflictCounter":
@@ -404,7 +404,7 @@ def _priority_weight(b: Booking, weights: Dict[str, float]) -> float:
     - retard potentiel (pickup imminent) => +,
     - retour déclenché à la demande => + léger (l'urgent est géré à part).
     """
-    score = 0
+    score: float = 0.0
 
     # Exemples de signaux - adaptez selon vos champs réels:
     if getattr(b, "medical_facility", None):
@@ -662,9 +662,9 @@ def _score_driver_for_booking(
     # Proximité -> transformer to_pickup_min en score (0..1)
     # 0-5 min ~ 1 ; 30min+ ~ 0
     if to_pickup_min <= TO_PICKUP_MIN_THRESHOLD:
-        prox_score = 1
+        prox_score: float = 1.0
     elif to_pickup_min >= TO_PICKUP_MIN_THRESHOLD:
-        prox_score = 0
+        prox_score = 0.0
     else:
         prox_score = max(0, 1 - (to_pickup_min - 5) / 25)
     prox_score *= coord_quality_factor
@@ -725,7 +725,7 @@ def _score_driver_for_booking(
         preferred_bonus * 1.0
     )  # Poids fort (1.0) pour prioriser significativement
 
-    breakdown = {
+    breakdown: Dict[str, Any] = {
         "proximity": prox_score * w.proximity,
         "fairness": (1 - fairness_pen) * w.driver_load_balance,
         "priority": pr * w.priority,
@@ -2773,12 +2773,14 @@ def assign(
                 # Calculer la distance au bureau pour prioriser les plus proches
                 if company_coords:
                     p_coord, _ = _booking_coords(b)
-                    distance_to_office = haversine_minutes(
-                        company_coords,
-                        p_coord,
-                        avg_kmh=25,
-                        min_minutes=1,
-                        max_minutes=180,
+                    distance_to_office = float(
+                        haversine_minutes(
+                            company_coords,
+                            p_coord,
+                            avg_kmh=25,
+                            min_minutes=1,
+                            max_minutes=180,
+                        )
                     )
                 else:
                     distance_to_office = 999.0

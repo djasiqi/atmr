@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, Dict, cast
 
 try:
     import hvac  # type: ignore[import-untyped]  # noqa: F401
@@ -159,7 +159,7 @@ def rotate_jwt_secret(self: Task) -> dict[str, Any]:
         # ⚠️ IMPORTANT: Vider le cache pour forcer rechargement
         vault_client.clear_cache()
 
-        result = {
+        result: Dict[str, Any] = {
             "status": "success",
             "environment": env_path,
             "rotated_at": datetime.now(UTC).isoformat(),
@@ -370,7 +370,7 @@ def rotate_encryption_key(self: Task) -> dict[str, Any]:
         # Notifier le EncryptionService de la nouvelle clé
         # (à faire manuellement ou via reload)
 
-        result = {
+        result: Dict[str, Any] = {
             "status": "success",
             "environment": env_path,
             "rotated_at": datetime.now(UTC).isoformat(),
@@ -553,7 +553,7 @@ def rotate_flask_secret_key(self: Task) -> dict[str, Any]:
         # ⚠️ IMPORTANT: Vider le cache pour forcer rechargement
         vault_client.clear_cache()
 
-        result = {
+        result: Dict[str, Any] = {
             "status": "success",
             "environment": env_path,
             "rotated_at": datetime.now(UTC).isoformat(),

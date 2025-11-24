@@ -3,7 +3,7 @@
 # Constantes pour éviter les valeurs magiques
 import logging
 from datetime import date, timedelta
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 QUALITY_THRESHOLD = 85
 ON_TIME_RATE_THRESHOLD = 70
@@ -165,11 +165,14 @@ class ReportGenerator:
                 or insight.get("priority") == "high"
             ):
                 recommendations.append(
-                    {
-                        "priority": insight.get("priority"),
-                        "title": insight.get("title"),
-                        "description": insight.get("message"),
-                    }
+                    cast(
+                        Dict[str, str],
+                        {
+                            "priority": insight.get("priority") or "",
+                            "title": insight.get("title") or "",
+                            "description": insight.get("message") or "",
+                        },
+                    )
                 )
 
         if not recommendations:

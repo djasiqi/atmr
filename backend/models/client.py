@@ -64,7 +64,7 @@ class Client(db.Model):
         ForeignKey("company.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
-    client_type = Column(
+    client_type: Mapped[ClientType] = Column(
         SAEnum(ClientType, name="client_type"),
         nullable=False,
         default=ClientType.SELF_SERVICE,
@@ -106,7 +106,7 @@ class Client(db.Model):
     default_billed_to_type = Column(
         String(50), nullable=False, server_default="patient"
     )
-    default_billed_to_company_id = Column(
+    default_billed_to_company_id: Mapped[Optional[int]] = Column(
         Integer, ForeignKey("company.id", ondelete="SET NULL"), nullable=True
     )
     default_billed_to_contact: Mapped[str] = mapped_column(String(120), nullable=True)
@@ -124,7 +124,7 @@ class Client(db.Model):
         Numeric(10, 2), nullable=True
     )
 
-    is_active = Column(Boolean, nullable=False, server_default="true")
+    is_active: Mapped[bool] = Column(Boolean, nullable=False, server_default="true")
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -185,7 +185,7 @@ class Client(db.Model):
             # comme fallback
             domicile = getattr(self, "domicile_address", None)
             if domicile and str(domicile).strip():
-                return domicile
+                return cast(Optional[str], domicile)
             msg = (
                 "L'adresse de facturation (ou de domicile) est obligatoire "
                 "pour les clients liés à une entreprise."
@@ -216,9 +216,7 @@ class Client(db.Model):
 
     # ✅ D2: Propriétés hybrides pour chiffrement/déchiffrement automatique
     @hybrid_property
-    def contact_phone_secure(  # pyright: ignore[reportRedeclaration]
-        self,
-    ) -> Optional[str]:
+    def contact_phone_secure(self) -> Optional[str]:  # type: ignore[no-redef]
         """Téléphone de contact déchiffré."""
         try:
             from security.crypto import get_encryption_service
@@ -254,7 +252,7 @@ class Client(db.Model):
             self.contact_phone = value
 
     @hybrid_property
-    def gp_name_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
+    def gp_name_secure(self) -> Optional[str]:  # type: ignore[no-redef]
         """Nom du médecin traitant déchiffré."""
         try:
             from security.crypto import get_encryption_service
@@ -285,7 +283,7 @@ class Client(db.Model):
             self.gp_name = value
 
     @hybrid_property
-    def gp_phone_secure(self) -> Optional[str]:  # pyright: ignore[reportRedeclaration]
+    def gp_phone_secure(self) -> Optional[str]:  # type: ignore[no-redef]
         """Téléphone du médecin traitant déchiffré."""
         try:
             from security.crypto import get_encryption_service
@@ -318,9 +316,7 @@ class Client(db.Model):
             self.gp_phone = value
 
     @hybrid_property
-    def billing_address_secure(  # pyright: ignore[reportRedeclaration]
-        self,
-    ) -> Optional[str]:
+    def billing_address_secure(self) -> Optional[str]:  # type: ignore[no-redef]
         """Adresse de facturation déchiffrée."""
         try:
             from security.crypto import get_encryption_service

@@ -148,7 +148,7 @@ def is_driver_available_at(company_id: int, driver_id: int, dt: datetime) -> boo
                 DriverShift.driver_id == driver_id,
                 DriverShift.start_local <= local_dt,
                 DriverShift.end_local >= local_dt,
-                DriverShift.status.in_([ShiftStatus.SCHEDULED, ShiftStatus.ACTIVE]),
+                DriverShift.status.in_([ShiftStatus.PLANNED, ShiftStatus.ACTIVE]),
             )
         ).first()
 

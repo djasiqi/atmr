@@ -179,7 +179,7 @@ class RLSuggestionGenerator:
         """Génère des suggestions en utilisant le modèle DQN."""
         import torch
 
-        suggestions = []
+        suggestions: List[Dict[str, Any]] = []
 
         try:
             for assignment in assignments[:max_suggestions]:
@@ -583,7 +583,7 @@ class RLSuggestionGenerator:
             )
             c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
 
-            return R * c
+            return float(R * c)
 
     def _is_model_loaded(self) -> bool:
         """Vérifie si le modèle DQN est chargé.
