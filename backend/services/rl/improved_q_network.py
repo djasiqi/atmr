@@ -2,31 +2,19 @@
 # pyright: reportMissingImports=false
 """Q-Network amélioré pour l'agent DQN avec architecture plus sophistiquée."""
 
-from typing import TYPE_CHECKING, Any, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 # Import des Noisy Networks
-NoisyQNetworkType: type[Any] | None = None
-NoisyDuelingQNetworkType: type[Any] | None = None
-
-if TYPE_CHECKING:
-    from .noisy_networks import NoisyDuelingQNetwork, NoisyQNetwork
-
 try:
     from .noisy_networks import NoisyDuelingQNetwork, NoisyQNetwork
-
-    NoisyQNetworkType = NoisyQNetwork
-    NoisyDuelingQNetworkType = NoisyDuelingQNetwork
 except ImportError:
     # Fallback si le module n'est pas disponible
-    pass
-
-# Alias pour compatibilité
-NoisyQNetwork: type[Any] | None = NoisyQNetworkType
-NoisyDuelingQNetwork: type[Any] | None = NoisyDuelingQNetworkType
+    NoisyQNetwork = None
+    NoisyDuelingQNetwork = None
 
 
 class ImprovedQNetwork(nn.Module):

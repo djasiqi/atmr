@@ -58,7 +58,10 @@
     "test:ci": "CI=true react-scripts test --coverage --watchAll=false",
     "test:coverage": "react-scripts test --coverage --watchAll=false",
     "eject": "react-scripts eject",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "update-deps": "npm update",
+    "audit-fix": "npm audit fix",
+    "fix-glob": "node ./scripts/update-glob.js"
   },
   "eslintConfig": {
     "extends": [
@@ -121,5 +124,8 @@
     "webpack-dev-server": "^5.2.2",
     "@sentry/browser": "^8.47.0",
     "glob": "^11.1.0"
+  },
+  "_comment": {
+    "glob-override": "Override glob to ^11.1.0 to fix GHSA-ww39-953v-wcq6 (command injection in CLI -c/--cmd option). This forces all transitive dependencies (react-scripts, etc.) to use the patched version. See: https://github.com/isaacs/node-glob/security/advisories/GHSA-ww39-953v-wcq6"
   }
 }

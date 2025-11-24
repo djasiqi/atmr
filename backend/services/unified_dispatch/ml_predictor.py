@@ -531,9 +531,8 @@ class DelayMLPredictor(object):
             # joblib utilise pickle en interne mais avec des optimisations
             # pour numpy/scipy
             # nosec B301: Modèles internes uniquement, provenant de sources de confiance
-            joblib.dump(
-                model_data, f
-            )  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+            # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+            joblib.dump(model_data, f)
 
         logger.info("[MLPredictor] Model saved to %s", self.model_path)
 
@@ -551,9 +550,8 @@ class DelayMLPredictor(object):
                 # pour numpy/scipy
                 # nosec B301: Modèles internes uniquement,
                 # provenant de sources de confiance
-                model_data = joblib.load(
-                    f
-                )  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                model_data = joblib.load(f)
 
             self.model = model_data["model"]
             self.feature_names = model_data["feature_names"]

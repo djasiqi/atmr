@@ -10,28 +10,16 @@ Ce module fournit des métriques pour surveiller les erreurs critiques :
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 # Import optionnel prometheus_client (peut ne pas être installé en dev)
-CounterType: type[Any] | None = None
-
-if TYPE_CHECKING:
-    from prometheus_client import Counter
-else:
-    CounterType = None
-
 try:
     from prometheus_client import Counter
-
-    if not TYPE_CHECKING:
-        CounterType = Counter
 
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
-
-# Alias pour compatibilité
-Counter: type[Any] | None = CounterType
+    Counter = None
 
 logger = logging.getLogger(__name__)
 
