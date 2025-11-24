@@ -2,6 +2,7 @@
 
 Objectif: Conformité juridique + audit RGPD.
 """
+# pyright: reportUnnecessaryTypeIgnoreComment=false
 
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from ext import db
 logger = logging.getLogger(__name__)
 
 
-class AuditLog(db.Model):
+class AuditLog(db.Model):  # type: ignore[name-defined]
     """✅ D2: Modèle d'audit append-only (pas de UPDATE/DELETE).
 
     Note: Les enregistrements ne sont jamais modifiés/supprimés.

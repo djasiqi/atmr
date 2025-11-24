@@ -54,7 +54,9 @@ class ProactiveAlertsService:
     - Intégration avec notification_service
     """
 
-    def __init__(self, notification_service=None, delay_predictor=None):
+    def __init__(
+        self, notification_service: Any = None, delay_predictor: Any = None
+    ) -> None:
         """Initialise le service d'alertes proactives.
 
         Args:
@@ -223,7 +225,9 @@ class ProactiveAlertsService:
                 probability = 0.9  # Probabilité élevée
 
             # Ajuster selon la confiance du modèle
-            probability = probability * confidence + (1 - confidence) * 0.5
+            probability = (
+                probability * float(confidence) + (1 - float(confidence)) * 0.5
+            )
 
             logger.debug(
                 (
@@ -235,7 +239,7 @@ class ProactiveAlertsService:
                 probability,
             )
 
-            return min(0.95, max(0.5, probability))
+            return float(min(0.95, max(0.5, probability)))
 
         except Exception as e:
             logger.warning(

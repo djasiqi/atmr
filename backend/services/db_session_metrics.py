@@ -23,17 +23,22 @@ _CounterType: Any = None
 _HistogramType: Any = None
 
 try:
-    from prometheus_client import Counter, Histogram
+    from prometheus_client import (
+        Counter as _Counter,
+    )
+    from prometheus_client import (
+        Histogram as _Histogram,
+    )
 
-    _CounterType = Counter
-    _HistogramType = Histogram
+    _CounterType = _Counter
+    _HistogramType = _Histogram
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     pass
 
 # Exposer les types avec des noms publics (type Any pour éviter les conflits)
-Counter: Any = _CounterType
-Histogram: Any = _HistogramType
+Counter = _CounterType
+Histogram = _HistogramType
 
 logger = logging.getLogger(__name__)
 

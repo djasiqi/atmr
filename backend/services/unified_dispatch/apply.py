@@ -72,7 +72,7 @@ class DBConflictCounter:
 
     _instance: "DBConflictCounter | None" = None
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self._counter: int = 0
 
@@ -417,7 +417,7 @@ def _apply_assignments_inner(
                     if cur is None:
                         # ✅ PERF: Préparer pour bulk_insert_mappings
                         new_assignment = {
-                            "booking_id": int(payload["booking_id"]),
+                            "booking_id": cast(int, payload["booking_id"]),
                             "driver_id": payload["driver_id"],
                             "status": payload.get("status", AssignmentStatus.SCHEDULED),
                             "created_at": now,

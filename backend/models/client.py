@@ -64,7 +64,7 @@ class Client(db.Model):
         ForeignKey("company.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
-    client_type: Mapped[ClientType] = Column(
+    client_type: Mapped[ClientType] = mapped_column(
         SAEnum(ClientType, name="client_type"),
         nullable=False,
         default=ClientType.SELF_SERVICE,
@@ -106,7 +106,7 @@ class Client(db.Model):
     default_billed_to_type = Column(
         String(50), nullable=False, server_default="patient"
     )
-    default_billed_to_company_id: Mapped[Optional[int]] = Column(
+    default_billed_to_company_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("company.id", ondelete="SET NULL"), nullable=True
     )
     default_billed_to_contact: Mapped[str] = mapped_column(String(120), nullable=True)
@@ -124,7 +124,9 @@ class Client(db.Model):
         Numeric(10, 2), nullable=True
     )
 
-    is_active: Mapped[bool] = Column(Boolean, nullable=False, server_default="true")
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

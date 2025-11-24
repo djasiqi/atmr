@@ -58,15 +58,16 @@ def record_rotation(
         raise ValueError(msg)
 
     try:
-        # Créer l'instance avec setattr pour éviter les problèmes de type checker
+        # Créer l'instance avec une variable temporaire Any pour éviter les problèmes de type checker
         rotation = SecretRotation()
-        rotation.secret_type = secret_type
-        rotation.status = status
-        rotation.rotated_at = datetime.now(UTC)
-        rotation.environment = environment
-        rotation.rotation_metadata = metadata
-        rotation.error_message = error_message
-        rotation.task_id = task_id
+        rotation_any: Any = rotation
+        rotation_any.secret_type = secret_type
+        rotation_any.status = status
+        rotation_any.rotated_at = datetime.now(UTC)
+        rotation_any.environment = environment
+        rotation_any.rotation_metadata = metadata
+        rotation_any.error_message = error_message
+        rotation_any.task_id = task_id
 
         db.session.add(rotation)
         db.session.commit()
@@ -258,7 +259,7 @@ def get_days_since_last_rotation(
 
         delta = datetime.now(UTC) - last.rotated_at
         # delta.days est toujours un int, pas None
-        return delta.days
+        return int(delta.days)
 
     except Exception as e:
         logger.exception(

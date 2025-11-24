@@ -16,17 +16,22 @@ _NoisyQNetworkType: Any = None
 _NoisyDuelingQNetworkType: Any = None
 
 try:
-    from .noisy_networks import NoisyDuelingQNetwork, NoisyQNetwork
+    from .noisy_networks import (
+        NoisyDuelingQNetwork as _NoisyDuelingQNetwork,
+    )
+    from .noisy_networks import (
+        NoisyQNetwork as _NoisyQNetwork,
+    )
 
-    _NoisyQNetworkType = NoisyQNetwork
-    _NoisyDuelingQNetworkType = NoisyDuelingQNetwork
+    _NoisyQNetworkType = _NoisyQNetwork
+    _NoisyDuelingQNetworkType = _NoisyDuelingQNetwork
     _NOISY_NETWORKS_AVAILABLE = True
 except ImportError:
     pass
 
 # Exposer les types avec des noms publics (type Any pour éviter les conflits)
-NoisyQNetwork: Any = _NoisyQNetworkType
-NoisyDuelingQNetwork: Any = _NoisyDuelingQNetworkType
+NoisyQNetwork = _NoisyQNetworkType
+NoisyDuelingQNetwork = _NoisyDuelingQNetworkType
 
 
 class ImprovedQNetwork(nn.Module):

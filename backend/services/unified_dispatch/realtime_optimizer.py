@@ -93,7 +93,11 @@ class RealtimeOptimizer:
         self._last_check: datetime | None = None
         self._opportunities: List[OptimizationOpportunity] = []
         self._lock = threading.Lock()
-        self._app = app or current_app._get_current_object()
+        # current_app est un LocalProxy, _get_current_object() existe mais
+        # pyright ne le reconnaît pas
+        self._app = (
+            app or getattr(current_app, "_get_current_object", lambda: current_app)()
+        )
 
     def start_monitoring(self) -> None:
         """Démarre le monitoring en arrière-plan."""

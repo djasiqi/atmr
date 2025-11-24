@@ -23,6 +23,8 @@ from shared.geo_utils import haversine_tuple as _haversine_km
 from shared.otel_setup import get_tracer  # ✅ D1: OpenTelemetry
 from shared.retry import retry_with_backoff  # ✅ 2.3: Retry uniformisé
 
+# pyright: reportUnnecessaryTypeIgnoreComment=false
+
 # ✅ D3: Import chaos injector (optionnel, évite erreur si module absent)
 try:
     from chaos.injectors import get_chaos_injector
@@ -33,7 +35,7 @@ except ImportError:
         osrm_down = False
         latency_ms = 0
 
-    def get_chaos_injector() -> Any:
+    def get_chaos_injector() -> Any:  # type: ignore[misc]
         return _DummyInjector()
 
 
@@ -83,7 +85,7 @@ try:
     from redis.exceptions import ConnectionError as _RedisConnError  # type: ignore
 except Exception:  # redis absent ou API inattendue
     # Définir une classe de fallback
-    class _RedisConnError(Exception):
+    class _RedisConnError(Exception):  # type: ignore[no-redef]
         pass
 
 

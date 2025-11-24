@@ -91,7 +91,7 @@ class Driver(db.Model):
     # États
     is_active = Column(Boolean, nullable=False, server_default="true")
     is_available = Column(Boolean, nullable=False, server_default="true")
-    driver_type: Mapped[DriverType] = Column(
+    driver_type: Mapped[DriverType] = mapped_column(
         SAEnum(DriverType, name="driver_type"), nullable=False, server_default="REGULAR"
     )
 
@@ -276,14 +276,14 @@ class DriverShift(db.Model):
     end_local = Column(DateTime(timezone=False), nullable=False, index=True)
 
     timezone = Column(String(64), nullable=False, server_default="Europe/Zurich")
-    type: Mapped[ShiftType] = Column(
+    type: Mapped[ShiftType] = mapped_column(
         SAEnum(
             ShiftType, name="shift_type", values_callable=lambda x: [e.value for e in x]
         ),
         nullable=False,
         server_default=ShiftType.REGULAR.value,
     )
-    status: Mapped[ShiftStatus] = Column(
+    status: Mapped[ShiftStatus] = mapped_column(
         SAEnum(
             ShiftStatus,
             name="shift_status",
@@ -348,7 +348,7 @@ class DriverUnavailability(db.Model):
     start_local = Column(DateTime(timezone=False), nullable=False, index=True)
     end_local = Column(DateTime(timezone=False), nullable=False, index=True)
 
-    reason: Mapped[UnavailabilityReason] = Column(
+    reason: Mapped[UnavailabilityReason] = mapped_column(
         SAEnum(
             UnavailabilityReason,
             name="unavailability_reason",
@@ -411,7 +411,7 @@ class DriverBreak(db.Model):
 
     start_local = Column(DateTime(timezone=False), nullable=False, index=True)
     end_local = Column(DateTime(timezone=False), nullable=False, index=True)
-    type: Mapped[BreakType] = Column(
+    type: Mapped[BreakType] = mapped_column(
         SAEnum(
             BreakType, name="break_type", values_callable=lambda x: [e.value for e in x]
         ),
@@ -598,7 +598,7 @@ class DriverVacation(db.Model):
     )
     start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    vacation_type: Mapped[VacationType] = Column(
+    vacation_type: Mapped[VacationType] = mapped_column(
         SAEnum(VacationType, name="vacation_type"),
         nullable=False,
         server_default=VacationType.VACANCES.value,

@@ -102,7 +102,7 @@ class DemandPredictor:
     - Heures de pointe
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         if SKLEARN_AVAILABLE:
             self.scaler = StandardScaler()  # type: ignore[call-arg]

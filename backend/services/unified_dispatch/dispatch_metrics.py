@@ -282,7 +282,7 @@ class DispatchMetricsCollector:
 
         for assignment in assignments:
             # Récupérer l'ID du chauffeur
-            driver_id = assignment.driver_id
+            driver_id = int(assignment.driver_id)
 
             booking = db.session.get(Booking, assignment.booking_id)
             if not booking:
@@ -368,7 +368,7 @@ class DispatchMetricsCollector:
         driver_counts: Dict[int, int] = {}
 
         for assignment in assignments:
-            driver_id = assignment.driver_id
+            driver_id = int(assignment.driver_id)
             driver_counts[driver_id] = driver_counts.get(driver_id, 0) + 1
 
         if not driver_counts:
@@ -449,10 +449,10 @@ class DispatchMetricsCollector:
         bookings_map = {b.id: b for b in all_bookings}
 
         for assignment in assignments:
-            booking = bookings_map.get(assignment.booking_id)
+            booking = bookings_map.get(int(assignment.booking_id))
             if booking:
                 # Distance en km
-                distance_m = getattr(booking, "distance_meters", 0) or 0
+                distance_m = float(getattr(booking, "distance_meters", 0) or 0)
                 total_distance += distance_m / 1000
 
                 # Chauffeurs d'urgence
@@ -500,7 +500,7 @@ class DispatchMetricsCollector:
         Returns:
             Tuple de (score, dominant_factors)
         """
-        score = 0
+        score: float = 0.0
 
         # Calculer chaque contribution
         assignment_contrib = (assignment_rate / 100) * 30

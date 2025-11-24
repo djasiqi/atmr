@@ -106,7 +106,7 @@ class TemporalConflictCounter:
 
     _instance: "TemporalConflictCounter | None" = None
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self._counter: int = 0
 
