@@ -13,17 +13,32 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import contextmanager
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 # Import optionnel prometheus_client (peut ne pas être installé en dev)
+CounterType: type[Any] | None = None
+HistogramType: type[Any] | None = None
+
+if TYPE_CHECKING:
+    from prometheus_client import Counter, Histogram
+else:
+    CounterType = None
+    HistogramType = None
+
 try:
     from prometheus_client import Counter, Histogram
+
+    if not TYPE_CHECKING:
+        CounterType = Counter
+        HistogramType = Histogram
 
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
-    Counter = None
-    Histogram = None
+
+# Alias pour compatibilité
+Counter: type[Any] | None = CounterType
+Histogram: type[Any] | None = HistogramType
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +46,13 @@ logger = logging.getLogger(__name__)
 
 # Métriques Prometheus pour sessions DB
 # (créées uniquement si prometheus_client disponible)
+# Déclarer les variables avec type union pour permettre None
+DB_TRANSACTION_TOTAL: Any | None = None
+DB_TRANSACTION_DURATION: Any | None = None
+DB_SESSION_ERRORS_TOTAL: Any | None = None
+DB_CONTEXT_MANAGER_USAGE: Any | None = None
+DB_DIRECT_SESSION_USAGE: Any | None = None
+
 if PROMETHEUS_AVAILABLE and Counter is not None and Histogram is not None:
     DB_TRANSACTION_TOTAL = Counter(
         "db_transaction_total",
@@ -82,12 +104,6 @@ if PROMETHEUS_AVAILABLE and Counter is not None and Histogram is not None:
         logger.debug(
             "[DB Session Metrics] Failed to initialize metrics with 0.0: %s", e
         )
-else:
-    DB_TRANSACTION_TOTAL = None
-    DB_TRANSACTION_DURATION = None
-    DB_SESSION_ERRORS_TOTAL = None
-    DB_CONTEXT_MANAGER_USAGE = None
-    DB_DIRECT_SESSION_USAGE = None
 
 
 @contextmanager

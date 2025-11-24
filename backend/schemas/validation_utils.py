@@ -27,7 +27,7 @@ def validate_request(
     """
     try:
         # Validation stricte: rejette les champs inconnus par défaut
-        validated = schema.load(data, unknown="EXCLUDE" if strict else "INCLUDE")
+        validated = schema.load(data, unknown="exclude" if strict else "include")
         # Cast pour type checker (schema.load retourne Any)
         return cast(Dict[str, Any], validated)
     except ValidationError as err:
@@ -169,7 +169,7 @@ def validate_query_params(
 
     # Valider avec le schéma (même logique que validate_request)
     try:
-        validated = schema.load(data, unknown="EXCLUDE" if strict else "INCLUDE")
+        validated = schema.load(data, unknown="exclude" if strict else "include")
         return cast(Dict[str, Any], validated)
     except ValidationError as err:
         formatted_errors = _format_validation_errors(cast(Dict[str, Any], err.messages))

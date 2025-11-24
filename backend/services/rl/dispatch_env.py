@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, ClassVar, Dict, List, Tuple
+from typing import Any, ClassVar, Dict, List, Tuple, cast
 
 import gymnasium as gym
 import numpy as np
@@ -340,7 +340,7 @@ class DispatchEnv(gym.Env):
             if not self.action_space.contains(action):
                 return self._invalid_action_penalty()
 
-            reward = 0
+            reward: float = 0.0
 
             # Action 0 = attendre (ne rien faire)
             if action == ACTION_ZERO:
@@ -515,7 +515,7 @@ class DispatchEnv(gym.Env):
             # Vérifier les autres contraintes
             load_ok = driver.get("load", 0) < MAX_DRIVER_LOAD  # Max 10 courses
 
-            return time_window_ok and load_ok
+            return bool(time_window_ok and load_ok)
         except Exception as e:
             logging.warning("[DispatchEnv] Erreur vérification contraintes: %s", e)
             return False
@@ -550,7 +550,7 @@ class DispatchEnv(gym.Env):
             traffic_density = self._get_traffic_density()
             traffic_factor = 1 + (traffic_density * 0.5)
 
-            return travel_time * traffic_factor
+            return cast(float, travel_time * traffic_factor)
         except Exception as e:
             logging.warning("[DispatchEnv] Erreur calcul temps trajet: %s", e)
             return 30  # Fallback: 30 minutes par défaut
@@ -709,15 +709,18 @@ class DispatchEnv(gym.Env):
 
         # Calculer la récompense avec le système avancé
         if self.reward_shaping is not None:
-            reward = self.reward_shaping.calculate_reward(
-                state=self._get_observation(),
-                action=0,  # Action d'assignation
-                next_state=self._get_observation(),
-                info=info,
+            reward: float = cast(
+                float,
+                self.reward_shaping.calculate_reward(
+                    state=self._get_observation(),
+                    action=0,  # Action d'assignation
+                    next_state=self._get_observation(),
+                    info=info,
+                ),
             )
         else:
             # Fallback: récompense simple
-            reward = 100 if not is_late else -50
+            reward = 100.0 if not is_late else -50.0
 
         # Mettre à jour les statistiques de retard
         if is_late:
@@ -767,7 +770,7 @@ class DispatchEnv(gym.Env):
             Récompense (négative pour annulations)
 
         """
-        reward = 0
+        reward: float = 0.0
         expired = []
 
         for booking in self.bookings:
@@ -829,7 +832,7 @@ class DispatchEnv(gym.Env):
         )
         c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
 
-        return R * c
+        return cast(float, R * c)
 
     def _end_of_day_return(self, driver: Dict[str, Any]) -> None:
         """Gère le retour du chauffeur en fin de journée.

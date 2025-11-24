@@ -10,15 +10,28 @@ Ce module fournit des métriques pour surveiller les erreurs critiques :
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING, Any
 
 # Import optionnel prometheus_client (peut ne pas être installé en dev)
+CounterType: type[Any] | None = None
+
+if TYPE_CHECKING:
+    from prometheus_client import Counter
+else:
+    CounterType = None
+
 try:
     from prometheus_client import Counter
+
+    if not TYPE_CHECKING:
+        CounterType = Counter
 
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
-    Counter = None
+
+# Alias pour compatibilité
+Counter: type[Any] | None = CounterType
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +39,12 @@ logger = logging.getLogger(__name__)
 
 # Métriques Prometheus pour erreurs de dispatch (créées uniquement si
 # prometheus_client disponible)
+# Déclarer les variables avec type union pour permettre None
+DISPATCH_ERRORS_TOTAL: Any | None = None
+DISPATCH_COMPANY_NOT_FOUND_TOTAL: Any | None = None
+DISPATCH_FK_VIOLATION_TOTAL: Any | None = None
+DISPATCH_INTEGRITY_ERROR_TOTAL: Any | None = None
+
 if PROMETHEUS_AVAILABLE and Counter is not None:
     DISPATCH_ERRORS_TOTAL = Counter(
         "dispatch_errors_total",
@@ -78,11 +97,6 @@ if PROMETHEUS_AVAILABLE and Counter is not None:
         logger.debug(
             "[Dispatch Error Metrics] Failed to initialize metrics with 0.0: %s", e
         )
-else:
-    DISPATCH_ERRORS_TOTAL = None
-    DISPATCH_COMPANY_NOT_FOUND_TOTAL = None
-    DISPATCH_FK_VIOLATION_TOTAL = None
-    DISPATCH_INTEGRITY_ERROR_TOTAL = None
 
 
 def track_company_not_found(

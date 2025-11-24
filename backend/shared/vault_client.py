@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 try:
     import hvac  # type: ignore[import-untyped]  # Dépendance optionnelle
@@ -160,7 +160,7 @@ class VaultClient:
 
                 if time.time() - timestamp < self.cache_ttl:
                     logger.debug("[4.1 Vault] Secret récupéré depuis cache: %s", path)
-                    return value
+                    return cast(Optional[str], value)
                 del _cache[cache_key]
 
         # Essayer Vault
@@ -187,7 +187,7 @@ class VaultClient:
                         _cache[cache_key] = (value, time.time())
 
                     logger.debug("[4.1 Vault] Secret récupéré depuis Vault: %s", path)
-                    return value
+                    return cast(Optional[str], value)
 
             except Exception as e:
                 logger.warning(

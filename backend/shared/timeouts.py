@@ -38,7 +38,7 @@ from __future__ import annotations
 import functools
 import logging
 import threading
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, cast
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +150,7 @@ def timeout(seconds: float) -> Callable[[Callable[..., T]], Callable[..., T]]:
 
                 # Retourner le résultat
                 if result_container:
-                    return result_container[0]
+                    return cast(T, result_container[0])
 
                 # Cas où la fonction ne retourne rien (None)
                 return None  # type: ignore[return-value]

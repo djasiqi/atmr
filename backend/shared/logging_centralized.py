@@ -8,12 +8,13 @@ avec format JSON structuré.
 import json
 import logging
 import os
+import sys
 from datetime import UTC, datetime
 from typing import Any
 
-try:
+if sys.version_info >= (3, 12):
     from typing import override
-except ImportError:  # pragma: no cover
+else:
     from typing_extensions import override
 
 import requests

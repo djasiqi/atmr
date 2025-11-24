@@ -2,7 +2,7 @@
 import os
 from datetime import timedelta
 from pathlib import Path
-from typing import ClassVar
+from typing import Callable, ClassVar
 from urllib.parse import quote_plus
 
 # Il est préférable de ne charger les variables d'environnement que si nécessaire
@@ -11,12 +11,12 @@ from urllib.parse import quote_plus
 
 # ✅ 4.1: Import Vault client (optionnel)
 try:
-    from shared.vault_client import get_vault_client as _get_vault_client
+    from shared.vault_client import VaultClient, get_vault_client as _get_vault_client
 
     VAULT_AVAILABLE = True
 except ImportError:
     VAULT_AVAILABLE = False
-    _get_vault_client = None
+    _get_vault_client: Callable[[], "VaultClient"] | None = None
 
 base_dir = Path(__file__).resolve().parent
 
@@ -42,7 +42,7 @@ def _get_secret_from_vault_or_env(
     Returns:
         Valeur du secret ou None
     """
-    if VAULT_AVAILABLE and _get_vault_client:
+    if VAULT_AVAILABLE and _get_vault_client is not None:
         try:
             vault = _get_vault_client()
             value = vault.get_secret(
@@ -102,7 +102,9 @@ class Config:
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Options de base compatibles avec toutes les bases de données
-    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool]] = {
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[
+        dict[str, int | bool | dict[str, str]]
+    ] = {
         "pool_pre_ping": True,
         "pool_recycle": 1800,
     }
@@ -256,7 +258,7 @@ class ProductionConfig(Config):
     REMEMBER_COOKIE_SAMESITE = os.getenv("REMEMBER_COOKIE_SAMESITE", "Lax")
 
     # ✅ Prod: URL backend publique (depuis env)
-    PDF_BASE_URL = os.getenv("PDF_BASE_URL")
+    PDF_BASE_URL: str | None = os.getenv("PDF_BASE_URL")
     if not PDF_BASE_URL:
         pass  # PDF_BASE_URL sera validé au runtime si nécessaire
 

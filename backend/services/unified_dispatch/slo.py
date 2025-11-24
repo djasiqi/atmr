@@ -262,4 +262,4 @@ def reset_slo_tracker() -> None:
     # Réinitialiser l'instance existante plutôt que d'appeler __init__ directement
     _global_slo_tracker.window_minutes = 15
     _global_slo_tracker.breach_threshold = 3
-    _global_slo_tracker.breaches.clear()
+    _global_slo_tracker._breaches.clear()

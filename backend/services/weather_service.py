@@ -18,7 +18,7 @@ Conversion en weather_factor (0 - 1):
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 # Constantes pour éviter les valeurs magiques
 SNOW_ZERO = 0
@@ -176,26 +176,26 @@ class WeatherService:
             factor += min(0.3, 0.1 + rain * 0.02)
 
         # 2. Vent (20% du facteur)
-        wind_speed = weather_data.get("wind_speed", 0)
+        wind_speed: float = float(weather_data.get("wind_speed", 0))
         if wind_speed > WIND_SPEED_THRESHOLD:  # > WIND_SPEED_THRESHOLD km/h = fort
             factor += 0.2
         elif wind_speed > WIND_SPEED_THRESHOLD:  # WIND_SPEED_THRESHOLD-50 km/h = modéré
             factor += 0.1
 
         # 3. Visibilité (20% du facteur)
-        visibility = weather_data.get("visibility", 10000)
+        visibility: float = float(weather_data.get("visibility", 10000))
         if visibility < VISIBILITY_THRESHOLD:  # < 1km = brouillard épais
             factor += 0.2
         elif visibility < VISIBILITY_THRESHOLD:  # 1-5km = visibilité réduite
             factor += 0.1
 
         # 4. Nuages (10% du facteur)
-        clouds = weather_data.get("clouds", 0)
+        clouds: float = float(weather_data.get("clouds", 0))
         if clouds > CLOUDS_THRESHOLD:  # Très couvert
             factor += 0.05
 
         # 5. Température extrême (10% du facteur)
-        temp = weather_data.get("temperature", 15)
+        temp: float = float(weather_data.get("temperature", 15))
         if temp < TEMP_EXTREME_MIN or temp > TEMP_THRESHOLD:  # Extrême
             factor += 0.1
         elif temp < TEMP_MODERATE_MIN or temp > TEMP_MODERATE_MAX:  # Froid/chaud
@@ -251,7 +251,7 @@ class WeatherService:
             del _weather_cache[key]
             return None
 
-        return cached_data["data"]
+        return cast(dict[str, Any], cached_data["data"])
 
     @staticmethod
     def _put_in_cache(key: str, data: dict[str, Any]) -> None:
@@ -298,4 +298,4 @@ def get_weather_factor(lat: float, lon: float) -> float:
 
     """
     weather = WeatherService.get_weather(lat, lon)
-    return weather.get("weather_factor", 0.5)
+    return cast(float, weather.get("weather_factor", 0.5))

@@ -9,7 +9,7 @@ import logging
 import threading
 import time
 from collections import defaultdict
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, cast
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ class ChaosMetrics:
         with _chaos_metrics_lock:
             if chaos_type is None:
                 return dict(_chaos_metrics["injections_total"])
-            return _chaos_metrics["injections_total"].get(chaos_type, 0)
+            return cast(int, _chaos_metrics["injections_total"].get(chaos_type, 0))
 
     @staticmethod
     def get_fallback_stats() -> Dict[str, Dict[str, int]]:
